@@ -1,20 +1,20 @@
 /**
- * Mask-canvas helpers used by the inpaint pipeline.
+ * 修复管道使用的遮罩画布辅助函数。
  *
- * Pure utility functions — they take a canvas (or layer-shape) as
- * input and return a fresh canvas, with no module-level state.
+ * 纯工具函数 — 接收画布（或图层形状）作为输入，返回新画布，
+ * 无模块级状态。
  */
 
 /**
- * Dilate (positive `px`) or erode (negative `px`) a binary alpha mask.
+ * 膨胀（正 `px`）或腐蚀（负 `px`）一个二进制 alpha 遮罩。
  *
- * Strategy: blur the source by `|px|`, then re-threshold the result.
- * - Dilation keeps anything with non-trivial blurred alpha (low cutoff).
- * - Erosion keeps only pixels that retained near-full alpha after blur.
+ * 策略：以 `|px|` 模糊源图像，然后重新阈值化结果。
+ * - 膨胀保留模糊 alpha 非零的任何内容（低截止值）。
+ * - 腐蚀仅保留模糊后 alpha 仍然接近 255 的像素。
  *
- * @param {HTMLCanvasElement} src   Source mask canvas.
- * @param {number}            px    Pixels to dilate (>0) or erode (<0). 0 = copy.
- * @returns {HTMLCanvasElement}     Fresh canvas with the same dimensions.
+ * @param {HTMLCanvasElement} src   源遮罩画布。
+ * @param {number}            px    膨胀（>0）或腐蚀（<0）的像素数。0 = 复制。
+ * @returns {HTMLCanvasElement}     具有相同尺寸的新画布。
  */
 export function dilateMask(src, px) {
   const w = src.width, h = src.height;
@@ -48,25 +48,24 @@ export function dilateMask(src, px) {
 
 
 /**
- * Re-derive an inpaint-result layer's alpha from its cached AI image +
- * the hard mask, applying a feather + optional dilate/erode of the
- * boundary. Mutates `layer.canvas` in place via `layer.ctx`.
+ * 从缓存的 AI 图像和硬遮罩重新推导修复结果图层的 alpha，
+ * 应用羽化和可选的膨胀/腐蚀边界。通过 `layer.ctx` 就地修改
+ * `layer.canvas`。
  *
- * The layer must carry an `inpaintSource = { ai, mask }` cache from the
- * original inpaint call so we can re-shape the alpha cheaply (no
- * second model call required).
+ * 图层必须携带来自原始修复调用的 `inpaintSource = { ai, mask }` 缓存，
+ * 以便能够低成本地重新塑造 alpha（无需第二次模型调用）。
  *
  * @param {{canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D,
  *          inpaintSource?: {ai: CanvasImageSource, mask: HTMLCanvasElement}}} layer
- * @param {number} featherPx     Gaussian blur radius applied to the mask alpha.
- * @param {number} [edgeShiftPx] Dilate (+) or erode (-) the mask before blurring.
+ * @param {number} featherPx     应用于遮罩 alpha 的高斯模糊半径。
+ * @param {number} [edgeShiftPx] 模糊前膨胀（+）或腐蚀（-）遮罩。
  */
 export function applyInpaintFeather(layer, featherPx, edgeShiftPx = 0) {
   if (!layer || !layer.inpaintSource) return;
   const { ai, mask } = layer.inpaintSource;
   const w = layer.canvas.width;
   const h = layer.canvas.height;
-  // 1) Optional dilate/erode, then optional blur, into a fresh mask.
+  // 1) 可选的膨胀/腐蚀，然后可选模糊，生成新遮罩。
   let shaped = mask;
   if (edgeShiftPx !== 0) shaped = dilateMask(mask, edgeShiftPx);
   const softMask = document.createElement('canvas');
@@ -79,7 +78,7 @@ export function applyInpaintFeather(layer, featherPx, edgeShiftPx = 0) {
   } else {
     smCtx.drawImage(shaped, 0, 0, w, h);
   }
-  // 2) Draw the AI image fresh, then multiply alpha by the soft mask.
+  // 2) 重新绘制 AI 图像，然后将 alpha 乘以软遮罩。
   const ctx = layer.ctx;
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';

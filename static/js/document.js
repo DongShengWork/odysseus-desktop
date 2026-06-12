@@ -1,8 +1,8 @@
-// static/js/document.js
+// static/js/document.js — 文档编辑器模块
 /**
- * Document editor module — multi-document tabbed panel alongside chat.
- * Supports multiple open documents with tab switching, per-doc state,
- * and theme-aware styling.
+ * 文档编辑器模块 — 聊天旁边的多文档标签面板。
+ * 支持多个打开文档的标签切换、每个文档独立状态，
+ * 以及主题感知样式。
  */
 
 
@@ -16,6 +16,7 @@ import spinnerModule from './spinner.js';
 import { openLibrary, closeLibrary, isLibraryOpen, initLibrary } from './documentLibrary.js';
 import signatureModule from './signature.js';
 import * as Modals from './modalManager.js';
+import { t } from './i18n.js';
 
   let API_BASE = '';
   let isOpen = false;
@@ -25,20 +26,20 @@ import * as Modals from './modalManager.js';
   let _autoTitleDebounce = null;
   let _autoSaveDebounce = null;
   let _animationInProgress = false;
-  let _animationCancel = null;      // function to cancel current animation
-  let _htmlPreviewActive = false;   // true when inline HTML preview iframe is showing
+  let _animationCancel = null;      // 取消当前动画的函数
+  let _htmlPreviewActive = false;   // 内联 HTML 预览 iframe 显示时为 true
   let _emailAccountsCache = null;
   let _emailAccountsCacheAt = 0;
   let _emailHeaderManualExpandUntil = 0;
 
-  // Diff mode state
+  // 差异模式状态
   let _diffModeActive = false;
   let _diffOldContent = null;
   let _diffNewContent = null;
   let _diffChunks = [];          // [{id, oldLines, newLines, startLine, resolved, accepted}]
   let _diffUnresolvedCount = 0;
 
-  // Language auto-detection config
+  // 语言自动检测配置
   const AUTO_DETECT_DELAY = 500;
   const AUTO_DETECT_MIN_CHARS = 30;
   const AUTO_DETECT_MIN_RELEVANCE = 8;
@@ -51,15 +52,15 @@ import * as Modals from './modalManager.js';
     csv: 'csv',
   };
 
-  // Languages rendered in the sandboxed preview iframe. SVG and XML markup
-  // render as inline content in an HTML document, so they share the HTML
-  // "Run / Preview" path. (hljs maps detected `xml` → `html` already; this also
-  // covers the doc being explicitly typed svg/xml.)
+  // 在沙盒预览 iframe 中渲染的语言。SVG和XML标记
+  // 作为 HTML 文档中的内联内容渲染，因此它们共享 HTML
+  // "Run / Preview" 路径。（hljs 已将检测到的 `xml` 映射为 `html`；这也
+  // 覆盖了文档被显式指定为 svg/xml 的情况。）
   const _isRenderLang = (l) => ['html', 'svg', 'xml'].includes((l || '').toLowerCase());
-  // Languages that get the segmented Code / Run-or-View toggle in the toolbar
-  // (the same UX as markdown's Edit / Preview switch). CSV's "run" view is the
-  // table; Python/JS/etc.'s is the code-run output; HTML/SVG/XML render via
-  // the iframe preview.
+  // 在工具栏中获得分段 Code / Run-or-View 切换的语言
+  // （与 markdown 的 Edit / Preview 切换相同的用户体验）。CSV 的"run"视图是
+  // 表格；Python/JS 等是代码运行输出；HTML/SVG/XML 通过
+  // iframe 预览渲染。
   const _hasViewToggle = (l) => {
     const lang = (l || '').toLowerCase();
     return [
@@ -96,11 +97,11 @@ import * as Modals from './modalManager.js';
     const accounts = await _getEmailAccountsCached();
     const activeAccount = accounts.find(a => String(a.id) === String(activeAccountId));
     if (!activeAccount || _accountCanSend(activeAccount)) return activeAccountId;
-    if (uiModule) uiModule.showToast('Selected email account is receive-only; using your SMTP account.');
+    if (uiModule) uiModule.showToast(t('document.email_receive_only_warning'));
     return null;
   }
 
-  // Inject tab menu styles immediately (must exist before any hover)
+  // 立即注入标签菜单样式（必须在任何悬停之前存在）
   {
     const s = document.createElement('style');
     s.id = 'doc-tab-menu-styles';
@@ -108,9 +109,9 @@ import * as Modals from './modalManager.js';
     document.head.appendChild(s);
   }
 
-  // Multi-document state
-  let activeDocId = null;           // currently visible doc
-  let _lastSessionId = '';          // session context for "+" button
+  // 多文档状态
+  let activeDocId = null;           // 当前可见的文档
+  let _lastSessionId = '';          // "+" 按钮的会话上下文
   const docs = new Map();           // docId -> { id, title, language, content, version, sessionId }
 
   const _docOpenKey = (sessionId) => 'odysseus-doc-open-' + sessionId;
@@ -130,7 +131,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Switch chat to agent mode if not already */
+  /** 如果尚未切换，将聊天切换到 agent 模式 */
   function _ensureAgentMode() {
     const ab = document.getElementById('mode-agent-btn');
     const cb = document.getElementById('mode-chat-btn');
@@ -157,47 +158,47 @@ import * as Modals from './modalManager.js';
     window.addEventListener('hashchange', _maybeOpenDocFromHash);
   }
 
-  /** Update overflow-doc-btn accent indicator, toolbar indicator, and session list icon */
+  /** 更新 overflow-doc-btn 强调指示器、工具栏指示器和会话列表图标 */
   function _syncDocIndicator() {
     const btn = document.getElementById('overflow-doc-btn');
-    // Has docs = at least one non-empty doc in the map
+    // 有文档 = 映射中至少有一个非空文档
     const hasDocs = docs.size > 0;
     if (btn) btn.classList.toggle('has-docs', hasDocs);
-    // Show/hide the toolbar doc indicator when docs exist
+    // 当文档存在时显示/隐藏工具栏文档指示器
     const indicator = document.getElementById('doc-indicator-btn');
     if (indicator) indicator.classList.toggle('visible', hasDocs);
-    // Hide overflow menu item when indicator is shown outside
+    // 当指示器在外面显示时隐藏溢出菜单项
     if (btn) btn.style.display = hasDocs ? 'none' : '';
-    // Update session list icon
+    // 更新会话列表图标
     const sid = sessionModule?.getCurrentSessionId();
     if (sid && sessionModule.setSessionHasDocs) {
       sessionModule.setSessionHasDocs(sid, hasDocs);
     }
   }
 
-  // ---- Tab bar rendering ----
+  // ---- 标签栏渲染 ----
 
   function updateArrowVisibility(scrollArea, leftBtn, rightBtn) {
     const atLeft = scrollArea.scrollLeft <= 0;
     const atRight = scrollArea.scrollLeft + scrollArea.clientWidth >= scrollArea.scrollWidth - 1;
     leftBtn.style.display = atLeft ? 'none' : '';
     rightBtn.style.display = atRight ? 'none' : '';
-    // Toggle the edge-mask classes so the fade gradient drops to flat on the
-    // side that has nothing to scroll to. Without this the left/right fade
-    // reads as a permanent shadow even when no arrow is showing.
+// 切换边缘遮罩类，使渐变在对端无可滚动内容时变为平面——
+// 否则即使没有箭头显示，左右渐变也会呈现为永久阴影。
+//
     scrollArea.classList.toggle('is-at-left', atLeft);
     scrollArea.classList.toggle('is-at-right', atRight);
   }
 
-  // Mobile swipe-to-dismiss for the doc sheet. Mirrors the shared bottom-sheet
-  // gesture in ui.js (finger-following drag, velocity-based dismiss, rubber-band
-  // on up-drag, spring snap-back) so it feels identical to the other windows —
-  // but dismisses through the doc panel's own closePanel() lifecycle.
+  // 移动端下滑关闭文档面板。镜像了 ui.js 中的共享底栏手势
+  // （手指跟随拖动、速度感知关闭、向上拖动弹性效果
+  // 弹簧回弹）使其与其他窗口感觉一致 —
+  // 但通过文档面板自己的 closePanel() 生命周期来关闭。
   function _wireSwipeDismiss(el) {
     if (!el) return;
-    const DISMISS_THRESHOLD = 50;    // px
-    const VELOCITY_THRESHOLD = 0.3;  // px/ms — fast flick dismisses below threshold
-    const RUBBER_RESISTANCE = 0.35;  // resistance when dragging up past origin
+    const DISMISS_THRESHOLD = 50;    // 像素
+    const VELOCITY_THRESHOLD = 0.3;  // 像素/毫秒 — 快速滑动可在低于阈值时关闭
+    const RUBBER_RESISTANCE = 0.35;  // 向上拖动超过原点时的阻力
     let startY = 0, startX = 0, lastY = 0, lastT = 0, velocity = 0;
     let dragging = false, cancelled = false;
     const getPane = () => document.getElementById('doc-editor-pane');
@@ -221,8 +222,8 @@ import * as Modals from './modalManager.js';
         if (dx > 40 && dx > Math.abs(dy) * 2) { cancelled = true; return; } // horizontal → tab scroll
         if (Math.abs(dy) > 8) {
           dragging = true;
-          // Clear the open animation — its `both` fill-mode otherwise pins
-          // transform and overrides our inline finger-following transform.
+// 清除打开动画——否则其 `both` fill-mode 会锁定
+// transform 并覆盖我们的行内手指跟随 transform。
           pane.style.animation = 'none';
           pane.style.transition = 'none';
           pane.style.willChange = 'transform';
@@ -258,47 +259,47 @@ import * as Modals from './modalManager.js';
     const tabBar = document.getElementById('doc-tab-bar');
     if (!tabBar) return;
 
-    // Build tab HTML with scroll arrows
-    // When doc panel is on right (default), + goes on far left; on left, + goes inside scroll area
+    // 使用滚动箭头构建标签 HTML
+    // 当文档面板在右侧（默认）时，+ 在最左侧；在左侧时，+ 在滚动区域内
     const paneEl = document.querySelector('.doc-editor-pane');
     const isDocLeft = paneEl && paneEl.classList.contains('doc-left');
     let html = '';
-    html += '<button class="doc-tab-arrow doc-tab-arrow-left" id="doc-tab-left" title="Scroll left">&#x2039;</button>';
+    html += `<button class="doc-tab-arrow doc-tab-arrow-left" id="doc-tab-left" title="${t('document.scroll_left')}">&#x2039;</button>`;
     html += '<div class="doc-tab-scroll" id="doc-tab-scroll">';
     const curSession = sessionModule?.getCurrentSessionId() || '';
     let _anyTab = false;
     for (const [id, doc] of docs) {
-      // Only show tabs for the current session
+// 仅显示当前会话的标签页
       if (doc.sessionId && curSession && doc.sessionId !== curSession) continue;
       _anyTab = true;
       const isActive = id === activeDocId;
-      const title = doc.title || 'Untitled';
+      const title = doc.title || t('document.untitled');
       const shortTitle = title.length > 24 ? title.slice(0, 22) + '...' : title;
-      const menuBtn = `<button class="doc-tab-menu-btn" data-doc-id="${id}" title="Document actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="19" r="2.5"/></svg></button>`;
+      const menuBtn = `<button class="doc-tab-menu-btn" data-doc-id="${id}" title="${t('document.tab_actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="19" r="2.5"/></svg></button>`;
       const ver = doc.version || doc.version_count || 1;
-      const verChip = `<span class="doc-tab-version" data-doc-id="${id}" title="Version history">v${ver}</span>`;
-      // Language icon before the title — same family as the meta-line / picker
-      // icons. Hidden via :empty CSS when the doc has no useful language.
+      const verChip = `<span class="doc-tab-version" data-doc-id="${id}" title="${t('document.tab_version_history')}">v${ver}</span>`;
+      // 标题前的语言图标 — 与元行/选择器同族
+      // 图标。当文档没有有用语言时通过 :empty CSS 隐藏。
       const lic = (doc.language && doc.language !== 'text')
         ? langIcon(doc.language, 12, { style: 'opacity:0.65;flex-shrink:0;color:currentColor;margin-right:4px;' })
         : '';
       const langChip = `<span class="doc-tab-lang">${lic}</span>`;
       html += `<div class="doc-tab${isActive ? ' active' : ''}" draggable="true" data-doc-id="${id}" title="${title}">
         ${verChip}${langChip}<span class="doc-tab-title">${shortTitle}</span>
-        <button class="doc-tab-close" data-doc-id="${id}" title="Unlink from chat (kept in the Library)">&times;</button>
+        <button class="doc-tab-close" data-doc-id="${id}" title="${t('document.tab_unlink')}">&times;</button>
       </div>`;
     }
-    // Empty state (panel open, no doc yet): show a ghost "Untitled" tab so it's
-    // obvious you're in a fresh document rather than staring at a blank pane.
+// 空状态（面板已打开，尚无文档）：显示一个幽灵"未命名"标签页，
+// 使用户清楚处于新文档状态而非面对空白面板。
     if (!_anyTab && isOpen && !activeDocId) {
-      html += `<div class="doc-tab active doc-tab-ghost" title="New document — start typing"><span class="doc-tab-title">Untitled</span></div>`;
+      html += `<div class="doc-tab active doc-tab-ghost" title="${t('document.tab_new_hint')}"><span class="doc-tab-title">${t('document.untitled')}</span></div>`;
     }
-    html += `<button class="doc-tab-new" id="doc-tab-new-btn" title="New document"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
+    html += `<button class="doc-tab-new" id="doc-tab-new-btn" title="${t('document.tab_new')}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
     html += '</div>';
-    html += '<button class="doc-tab-arrow doc-tab-arrow-right" id="doc-tab-right" title="Scroll right">&#x203A;</button>';
+    html += `<button class="doc-tab-arrow doc-tab-arrow-right" id="doc-tab-right" title="${t('document.scroll_right')}">&#x203A;</button>`;
     tabBar.innerHTML = html;
 
-    // Wire scroll arrows
+// 绑定滚动箭头
     const scrollArea = document.getElementById('doc-tab-scroll');
     const leftBtn = document.getElementById('doc-tab-left');
     const rightBtn = document.getElementById('doc-tab-right');
@@ -309,13 +310,13 @@ import * as Modals from './modalManager.js';
       scrollArea.addEventListener('scroll', () => updateArrowVisibility(scrollArea, leftBtn, rightBtn));
     }
 
-    // Mobile: the tab bar doubles as a drag zone — swipe down to dismiss.
+    // 移动端：标签栏兼作拖拽区域 — 下滑关闭。
     if (!tabBar._swipeWired) { tabBar._swipeWired = true; _wireSwipeDismiss(tabBar); }
 
-    // Bring the clicked tab fully into view — the scroll area has an 18px
-    // fade-mask at each edge plus the < / > arrow buttons; without this, the
-    // rightmost tab stays partially under the fade so the user can't see its
-    // close button or version chip.
+    // 将被点击的标签完全带入视图 — 滚动区域每边有 18px
+    // 的渐变遮罩加上 < / > 箭头按钮；没有这个，
+    // 最右侧的标签会部分留在渐变下，用户看不到它的
+    // 关闭按钮或版本标记。
     const _scrollTabIntoView = (tab, behavior = 'smooth') => {
       const sa = document.getElementById('doc-tab-scroll');
       if (!sa || !tab) return;
@@ -330,14 +331,14 @@ import * as Modals from './modalManager.js';
         sa.scrollTo({ left: Math.max(0, sa.scrollLeft + tabLeft - visLeft), behavior });
       }
     };
-    // Wire tab clicks (delayed to allow dblclick on title)
+// 绑定标签页点击（延迟以允许双击标题）
     let _tabClickTimer = null;
     tabBar.querySelectorAll('.doc-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        // Check if click was on or inside the close/play button
+// 检查点击是否在或接近关闭/播放按钮
         if (e.target.closest('.doc-tab-close') || e.target.closest('.doc-tab-play') || e.target.closest('.doc-tab-menu-btn') || e.target.closest('.doc-tab-version')) return;
         if (_isEditingTabTitle) return;
-        // If clicking the title span, delay to allow dblclick
+// 如果点击标题 span，延迟以允许双击
         if (e.target.classList.contains('doc-tab-title')) {
           clearTimeout(_tabClickTimer);
           _tabClickTimer = setTimeout(() => { switchToDoc(tab.dataset.docId); _scrollTabIntoView(tab); }, 250);
@@ -358,8 +359,8 @@ import * as Modals from './modalManager.js';
       });
     });
 
-    // Wire close buttons — use delegation from tab bar for reliability
-    // Remove previous handler to prevent accumulation across renderTabs calls
+// 绑定关闭按钮——使用标签栏事件委托以确保可靠性
+// 移除先前的处理器以防止跨 renderTabs 调用累积
     if (tabBar._closeHandler) tabBar.removeEventListener('click', tabBar._closeHandler);
     tabBar._closeHandler = (e) => {
       const verBtn = e.target.closest('.doc-tab-version');
@@ -394,10 +395,10 @@ import * as Modals from './modalManager.js';
     };
     tabBar.addEventListener('click', tabBar._closeHandler);
 
-    // Wire drag-to-reorder
+// 绑定拖拽重排序
     initTabDragReorder(tabBar);
 
-    // Wire new doc button
+// 绑定新建文档按钮
     const newBtn = document.getElementById('doc-tab-new-btn');
     if (newBtn) {
       newBtn.addEventListener('click', async () => {
@@ -416,14 +417,14 @@ import * as Modals from './modalManager.js';
       });
     }
 
-    // Scroll active tab into view after DOM is laid out
+// DOM 布局完成后将活动标签页滚动到可见区域
     requestAnimationFrame(() => {
       const at = document.getElementById('doc-tab-scroll')?.querySelector('.doc-tab.active');
       _scrollTabIntoView(at, 'auto');
     });
   }
 
-  /** Start inline editing of a tab title */
+  /** 开始内联编辑标签标题 */
   function startTitleEdit(titleSpan, docId, doc) {
     if (_isEditingTabTitle) return;
     _isEditingTabTitle = true;
@@ -470,7 +471,7 @@ import * as Modals from './modalManager.js';
     });
   }
 
-  /** Drag-to-reorder tabs */
+  /** 拖拽重排标签 */
   function initTabDragReorder(tabBar) {
     let dragId = null;
 
@@ -505,7 +506,7 @@ import * as Modals from './modalManager.js';
         const targetId = tab.dataset.docId;
         if (!dragId || dragId === targetId) return;
 
-        // Reorder the docs Map: move dragId before targetId
+        // 重新排序文档 Map：将 dragId 移到 targetId 之前
         const entries = [...docs.entries()];
         const fromIdx = entries.findIndex(([k]) => k === dragId);
         const toIdx = entries.findIndex(([k]) => k === targetId);
@@ -522,7 +523,7 @@ import * as Modals from './modalManager.js';
     });
   }
 
-  /** Show empty state when no documents exist yet */
+  /** 当没有文档存在时显示空状态 */
   function showEmptyState() {
     activeDocId = null;
     const textarea = document.getElementById('doc-editor-textarea');
@@ -530,7 +531,7 @@ import * as Modals from './modalManager.js';
     const badge = document.getElementById('doc-version-badge');
 
     if (textarea) textarea.value = '';
-    if (textarea) textarea.placeholder = 'Start typing or paste text to create a document...';
+    if (textarea) textarea.placeholder = t('document.editor_placeholder');
     if (textarea) textarea.disabled = false;
     if (langSelect) langSelect.value = '';
     if (badge) badge.textContent = '';
@@ -563,16 +564,16 @@ import * as Modals from './modalManager.js';
     if (overlay) overlay.style.display = 'none';
   }
 
-  /** Show/hide the unified action button in the header based on current language */
+  /** 根据当前语言显示/隐藏标题中的统一操作按钮 */
   function _isFormBackedDoc(content) {
     const c = content || '';
     return /<!--\s*pdf_form_source\s+upload_id="[^"]+"/.test(c)
         || /<!--\s*pdf_source\s+upload_id="[^"]+"/.test(c);
   }
 
-  // Force the on-screen keyboard down on touch. Firefox mobile ignores a plain
-  // blur, so use the readonly trick (a readonly field shows no keyboard), then
-  // drop readonly so the user can type again.
+  // 在触摸设备上强制关闭屏幕键盘。Firefox 移动版会忽略普通的
+  // blur，因此使用 readonly 技巧（readonly 字段不显示键盘），然后
+  // 移除 readonly 以便用户可以再次输入。
   function _dismissDocKb() {
     if (!(('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0)) return;
     const ta = document.getElementById('doc-editor-textarea');
@@ -609,18 +610,18 @@ import * as Modals from './modalManager.js';
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
-      if (uiModule) uiModule.showError('Export failed: ' + e.message);
-      else alert('Export failed: ' + e.message);
+      if (uiModule) uiModule.showError(t('document.export_failed') + e.message);
+      else alert(t('document.export_failed') + e.message);
     }
   }
 
   async function _saveActiveDocBeforeExport() {
-    // Flush in-flight edits from BOTH editing surfaces so the server-side
-    // export reads the values the user actually sees:
-    //  - Markdown view: textarea.value may differ from doc.content if the
-    //    user typed but the existing 2s autosave hasn't fired.
-    //  - PDF view: there may be a pending debounced _pdfPaneSaveTimer that
-    //    hasn't flushed the user's input changes yet.
+    // 从两个编辑界面刷新进行中的编辑，以便服务端
+    // 导出读取用户实际看到的值：
+    //  - Markdown 视图：如果用户输入但现有的 2s 自动保存
+    //    尚未触发，textarea.value 可能与 doc.content 不同。
+    //  - PDF 视图：可能有待处理的防抖 _pdfPaneSaveTimer
+    //    尚未刷新用户的输入更改。
     if (_pdfPaneSaveTimer) {
       clearTimeout(_pdfPaneSaveTimer);
       await _savePdfPaneToMarkdown();
@@ -652,17 +653,17 @@ import * as Modals from './modalManager.js';
     overlay.innerHTML = `
       <div class="modal-content" style="width:min(780px,94vw);max-height:86vh;">
         <div class="modal-header">
-          <h4>Export filled PDF</h4>
-          <button id="pdf-export-close" class="modal-close" title="Close">×</button>
+          <h4>${t('document.pdf_export_title')}</h4>
+          <button id="pdf-export-close" class="modal-close" title="${t('common.close')}">×</button>
         </div>
-        <div id="pdf-export-summary" style="font-size:0.78rem;opacity:0.7;margin:0 0 6px;">Loading field values…</div>
+        <div id="pdf-export-summary" style="font-size:0.78rem;opacity:0.7;margin:0 0 6px;">${t('document.pdf_export_loading')}</div>
         <div id="pdf-export-body" class="modal-body" style="font-size:0.85rem;">
-          <div style="opacity:0.6;">Fetching mapping…</div>
+          <div style="opacity:0.6;">${t('document.pdf_export_fetching')}</div>
         </div>
         <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid var(--border);margin-top:6px;align-items:center;">
           <span id="pdf-export-status" style="font-size:0.75rem;opacity:0.7;margin-right:auto;"></span>
-          <button id="pdf-export-cancel" class="confirm-btn confirm-btn-secondary">Cancel</button>
-          <button id="pdf-export-download" class="confirm-btn confirm-btn-primary" disabled>Download PDF</button>
+          <button id="pdf-export-cancel" class="confirm-btn confirm-btn-secondary">${t('common.cancel')}</button>
+          <button id="pdf-export-download" class="confirm-btn confirm-btn-primary" disabled>${t('document.pdf_export_download')}</button>
         </div>
       </div>
     `;
@@ -686,12 +687,12 @@ import * as Modals from './modalManager.js';
       const filledNow = data.filled || 0;
       const total = data.total || fields.length;
       overlay.querySelector('#pdf-export-summary').textContent =
-        `${filledNow} of ${total} fields filled. Review and adjust below before downloading.`;
+        t('document.pdf_export_summary', { filled: filledNow, total: total });
 
       const body = overlay.querySelector('#pdf-export-body');
       body.innerHTML = '';
 
-      // Group by page
+      // 按页分组
       const byPage = new Map();
       for (const f of fields) {
         const p = f.page || 1;
@@ -700,17 +701,17 @@ import * as Modals from './modalManager.js';
       }
       const pages = Array.from(byPage.keys()).sort((a, b) => a - b);
 
-      // Jump bar: page links + scroll-to-top/bottom shortcuts
+      // 跳转栏：页面链接 + 滚动到顶部/底部快捷方式
       const jumpBar = document.createElement('div');
       jumpBar.style.cssText = 'position:sticky;top:0;background:var(--panel);padding:6px 0;margin-bottom:8px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:0.72rem;z-index:1;';
-      jumpBar.innerHTML = '<span style="opacity:0.6;margin-right:4px;">Jump to:</span>';
+      jumpBar.innerHTML = `<span style="opacity:0.6;margin-right:4px;">${t('document.pdf_export_jump_to')}</span>`;
       const pageAnchors = {};
       const _smallBtnClass = 'confirm-btn confirm-btn-secondary';
       const _smallBtnStyle = 'padding:2px 8px;font-size:0.72rem;';
       for (const p of pages) {
         const a = document.createElement('button');
         a.textContent = String(p);
-        a.title = `Jump to page ${p}`;
+        a.title = t('document.pdf_export_page', { p: p });
         a.className = _smallBtnClass;
         a.style.cssText = _smallBtnStyle;
         a.addEventListener('click', () => pageAnchors[p]?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -721,14 +722,14 @@ import * as Modals from './modalManager.js';
       sep.textContent = '|';
       jumpBar.appendChild(sep);
       const topBtn = document.createElement('button');
-      topBtn.textContent = '↑ Top';
+      topBtn.textContent = t('document.pdf_export_top');
       topBtn.className = _smallBtnClass;
       topBtn.style.cssText = _smallBtnStyle;
       topBtn.addEventListener('click', () => body.scrollTo({ top: 0, behavior: 'smooth' }));
       jumpBar.appendChild(topBtn);
       const botBtn = document.createElement('button');
-      botBtn.textContent = '↓ Bottom';
-      botBtn.title = 'Jump to the last page (signature fields are usually here)';
+      botBtn.textContent = t('document.pdf_export_bottom');
+      botBtn.title = t('document.pdf_export_bottom_hint');
       botBtn.className = _smallBtnClass;
       botBtn.style.cssText = _smallBtnStyle;
       botBtn.addEventListener('click', () => body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' }));
@@ -740,7 +741,7 @@ import * as Modals from './modalManager.js';
         sec.className = 'pdf-export-section';
         sec.id = `pdf-export-page-${p}`;
         pageAnchors[p] = sec;
-        sec.innerHTML = `<div class="pdf-export-section-title">Page ${p}</div>`;
+        sec.innerHTML = `<div class="pdf-export-section-title">${t('document.pdf_export_page', { p: p })}</div>`;
         for (const f of byPage.get(p)) {
           const row = document.createElement('div');
           row.className = 'pdf-export-row';
@@ -762,7 +763,7 @@ import * as Modals from './modalManager.js';
             thumb.style.cssText = 'max-height:32px;max-width:140px;object-fit:contain;border:1px solid var(--border);border-radius:3px;background:#fff;display:none;';
             const clearBtn = document.createElement('button');
             clearBtn.textContent = '×';
-            clearBtn.title = 'Remove signature from this field';
+            clearBtn.title = t('document.pdf_export_remove_sign');
             clearBtn.className = 'confirm-btn confirm-btn-secondary';
             clearBtn.style.cssText = 'padding:0 8px;font-size:0.85rem;line-height:1;display:none;';
             const apply = (sig) => {
@@ -770,16 +771,16 @@ import * as Modals from './modalManager.js';
               thumb.src = sig.dataUrl;
               thumb.style.display = '';
               clearBtn.style.display = '';
-              btn.textContent = 'Change';
+              btn.textContent = t('document.pdf_export_change');
             };
             const clear = () => {
               delete wrap.dataset.signatureId;
               thumb.removeAttribute('src');
               thumb.style.display = 'none';
               clearBtn.style.display = 'none';
-              btn.textContent = 'Sign here';
+              btn.textContent = t('document.pdf_export_sign_here');
             };
-            btn.textContent = 'Sign here';
+            btn.textContent = t('document.pdf_export_sign_here');
             btn.addEventListener('click', async () => {
               const sig = await signatureModule.pick();
               if (sig) apply(sig);
@@ -804,8 +805,8 @@ import * as Modals from './modalManager.js';
             ti.dataset.fieldName = f.name;
             ti.dataset.fieldType = f.type;
             const today = document.createElement('button');
-            today.textContent = 'Today';
-            today.title = "Set to today's date";
+            today.textContent = t('document.pdf_export_today');
+            today.title = t('document.pdf_export_today_date');
             today.className = 'confirm-btn confirm-btn-secondary';
             today.style.cssText = 'padding:3px 8px;font-size:0.72rem;';
             today.addEventListener('click', () => {
@@ -827,7 +828,7 @@ import * as Modals from './modalManager.js';
             input.className = 'pdf-export-input';
             const blank = document.createElement('option');
             blank.value = '';
-            blank.textContent = '— (none) —';
+            blank.textContent = t('document.pdf_export_none_option');
             input.appendChild(blank);
             for (const o of f.options) {
               const opt = document.createElement('option');
@@ -869,7 +870,7 @@ import * as Modals from './modalManager.js';
           }
         }
         downloadBtn.disabled = true;
-        overlay.querySelector('#pdf-export-status').textContent = 'Building PDF…';
+        overlay.querySelector('#pdf-export-status').textContent = t('document.pdf_export_building');
         try {
           const r = await fetch(`${API_BASE}/api/document/${activeDocId}/export-pdf`, {
             method: 'POST',
@@ -894,35 +895,35 @@ import * as Modals from './modalManager.js';
           setTimeout(() => URL.revokeObjectURL(url), 1000);
           close();
         } catch (e) {
-          overlay.querySelector('#pdf-export-status').textContent = 'Error: ' + e.message;
+          overlay.querySelector('#pdf-export-status').textContent = t('document.pdf_export_error') + e.message;
           downloadBtn.disabled = false;
         }
       });
     } catch (e) {
       overlay.querySelector('#pdf-export-body').innerHTML =
-        `<div style="color:#c00;">Failed to load preview: ${(e && e.message) || e}</div>`;
+        `<div style="color:#c00;">${t('document.pdf_export_load_failed')}${(e && e.message) || e}</div>`;
     }
   }
 
-  // Tracks which form-backed docs the user has toggled into PDF view
-  // (per-doc, in-memory). Survives switches between docs in the same session.
+  // 跟踪用户已将哪些表单支持的文档切换到 PDF 视图
+  // （每个文档，内存中）。在同会话中切换文档时保持。
   const _pdfViewState = new Map();
   const _pdfPaneFieldsByDoc = new Map(); // docId -> [{name, type, inputEl, ...}]
   const _pdfPaneAnnotationsByDoc = new Map(); // docId -> [{id, page, x, y, w, h, el, wrap}]
-  const _pdfUndoStackByDoc = new Map(); // docId -> markdown snapshots
+  const _pdfUndoStackByDoc = new Map(); // docId -> markdown 快照
   let _pdfPaneSaveTimer = null;
 
-  // Match a freeform-annotation bullet line in the markdown source.
-  // Coords are percentages of page width/height (0–100) so they scale with
-  // however wide the PDF pane is rendered. `kind` and `lh` (line-height)
-  // are optional for backward compat with earlier annotation formats.
+  // 匹配 markdown 源代码中的自由格式注释项目符号行。
+  // 坐标是页面宽/高的百分比（0-100），因此它们随着
+  // PDF 面板渲染的宽度而变化。`kind` 和 `lh`（行高）
+  // 是可选参数，用于向后兼容早期的注释格式。
   function _annotationRegexGlobal() {
     return /^[ \t]*-\s+(.*?)\s*<!--\s*annotation\s+id=([\w-]+)\s+page=(\d+)\s+x=([\d.]+)\s+y=([\d.]+)\s+w=([\d.]+)\s+h=([\d.]+)(?:\s+kind=(\w+))?(?:\s+lh=([\d.]+))?\s*-->[ \t]*$/gm;
   }
 
-  // Bullet lines are single-line, so newlines in the value are escaped to
-  // \n (backslash-n) for storage and unescaped on parse. Backslashes are
-  // escaped first so the reverse mapping is unambiguous.
+  // 项目符号行是单行的，因此值中的换行符被转义为
+  // \n（反斜杠-n）进行存储，解析时反转义。反斜杠
+  // 先被转义，使得反向映射是无歧义的。
   function _escapeAnnotationValue(s) {
     return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/\n/g, '\\n');
   }
@@ -958,9 +959,9 @@ import * as Modals from './modalManager.js';
     return `- ${escaped} <!-- annotation id=${a.id} page=${a.page} x=${a.x.toFixed(2)} y=${a.y.toFixed(2)} w=${a.w.toFixed(2)} h=${a.h.toFixed(2)} kind=${kind} lh=${lh.toFixed(2)} -->`;
   }
 
-  // Strip every annotation bullet + the "## Annotations" section, then
-  // re-emit them at the end. Cleanest way to keep the section in sync with
-  // the live set of refs without diffing line-by-line.
+  // 移除每个注释项目符号 + "## Annotations" 部分，然后
+  // 在末尾重新输出。保持该部分与实时引用集同步
+  // 的最干净方式，无需逐行比较。
   function _writeAnnotations(md, annotations) {
     let out = (md || '').replace(_annotationRegexGlobal(), '');
     out = out.replace(/\n##\s+Annotations\s*\r?\n+/g, '\n');
@@ -1036,22 +1037,22 @@ import * as Modals from './modalManager.js';
       _renderPdfPane();
       return true;
     } catch (e) {
-      _setPdfSaveStatus('error', e.message || 'Undo failed');
+      _setPdfSaveStatus('error', e.message || t('document.status_undo_failed'));
       return true;
     }
   }
 
-  // Active drop mode for the PDF toolbar — toolbar buttons set this; the
-  // next click on a page consumes it. null means clicks do nothing.
+  // PDF 工具栏的活动放置模式 — 工具栏按钮设置此模式；
+  // 页面上的下一次点击使用它。null 表示点击无操作。
   let _pdfDropMode = null;
-  // Per-doc last-used line spacing for text annotations. Once the user picks
-  // 1.6 for one box, every text box dropped after that defaults to 1.6.
-  const _pdfLastLineHeight = new Map(); // docId -> number
+  // 每个文档的文本注释上次使用的行距。一旦用户选择了
+  // 1.6，之后放置的每个文本框都默认使用 1.6。
+  const _pdfLastLineHeight = new Map(); // docId -> 数字
   function _setPdfDropMode(mode) {
     _pdfDropMode = mode;
     const pane = document.getElementById('doc-pdf-view');
     if (pane) pane.style.cursor = mode ? 'crosshair' : '';
-    // Highlight the active toolbar button so users see which mode is on.
+// 高亮活动工具栏按钮，让用户看到当前激活的模式。
     for (const id of ['doc-pdf-add-text-btn', 'doc-pdf-add-check-btn', 'doc-pdf-add-sign-btn']) {
       const b = document.getElementById(id);
       if (!b) continue;
@@ -1061,12 +1062,12 @@ import * as Modals from './modalManager.js';
       b.style.outline = want ? '2px solid var(--accent-primary, var(--red))' : '';
     }
   }
-  // Cache of signature data URLs by id, populated lazily as the PDF view
-  // renders inline signatures and as the user picks new ones.
+  // 按 ID 缓存的签名数据 URL，在 PDF 视图
+  // 渲染行内签名和用户选择新签名时延迟填充。
   const _sigCache = new Map();
 
-  // Mirror of Python _encode_name in src/pdf_form_doc.py — keep in sync.
-  // Percent-encode everything that's not A-Za-z0-9 _ . -
+  // src/pdf_form_doc.py 中 Python _encode_name 的镜像 — 保持同步。
+  // 对非 A-Za-z0-9 _ . - 的所有内容进行百分号编码
   function _encodeFieldName(name) {
     let out = '';
     for (const ch of name || '') {
@@ -1080,9 +1081,9 @@ import * as Modals from './modalManager.js';
     return out;
   }
 
-  // Proximity-based handle visibility — show ×/drag/resize handles whenever
-  // the cursor gets within ~30px of an annotation, not only when it's inside.
-  // Attached once to the pane; reads the current doc's refs at fire time.
+  // 基于接近度的句柄可见性 — 当光标距注释约 30px 时
+  // 显示 ×/拖拽/调整大小句柄，而不仅仅在内部时。
+  // 仅附加到面板一次；在触发时读取当前文档的引用。
   let _pdfPaneProximityWired = false;
   function _wirePdfPaneProximity(pane) {
     if (_pdfPaneProximityWired || !pane) return;
@@ -1124,9 +1125,9 @@ import * as Modals from './modalManager.js';
     if (!pane || !activeDocId) return;
     _wirePdfPaneProximity(pane);
     const docId = activeDocId;
-    // Keep the save pill across re-renders by detaching/re-attaching it
+    // 通过分离/重新附加来在重新渲染间保留保存标记
     const savedPill = document.getElementById('doc-pdf-save-pill');
-    pane.innerHTML = '<div style="color:#bbb;font-size:13px;text-align:center;padding:40px;">Loading PDF…</div>';
+    pane.innerHTML = `<div style="color:#bbb;font-size:13px;text-align:center;padding:40px;">${t('document.pdf_view_loading')}</div>`;
     if (savedPill) pane.appendChild(savedPill);
     let data;
     try {
@@ -1134,7 +1135,7 @@ import * as Modals from './modalManager.js';
       if (!res.ok) throw new Error(await _pdfResponseErrorMessage(res));
       data = await res.json();
     } catch (e) {
-      pane.innerHTML = `<div style="color:#fbb;padding:40px;text-align:center;">Failed to load PDF view: ${_escHtml(e.message || String(e))}</div>`;
+      pane.innerHTML = `<div style="color:#fbb;padding:40px;text-align:center;">${t('document.pdf_view_load_failed')}${_escHtml(e.message || String(e))}</div>`;
       if (savedPill) pane.appendChild(savedPill);
       return;
     }
@@ -1143,14 +1144,14 @@ import * as Modals from './modalManager.js';
     pane.innerHTML = '';
     if (savedPill) pane.appendChild(savedPill);
     const fieldRefs = [];
-    // Reset annotation refs for this doc before the page loop — we rebuild them
-    // page by page from the live markdown.
+    // 在页面循环之前重置此文档的注释引用 — 我们重建它们
+    // 从实时 markdown 逐页重建。
     const annotationRefs = [];
     _pdfPaneAnnotationsByDoc.set(docId, annotationRefs);
     const liveMd = (docs.get(docId) && docs.get(docId).content) || '';
     const allAnnotations = _parseAnnotations(liveMd);
-    // Recover the last-used line spacing from existing text annotations so the
-    // pref survives page reload, not just the in-memory life of this session.
+    // 从现有文本注释中恢复上次使用的行距，以便
+    // 首选项在页面重载后保留，而不仅仅是此会话的内存生命周期。
     if (!_pdfLastLineHeight.has(docId)) {
       for (let i = allAnnotations.length - 1; i >= 0; i--) {
         const a = allAnnotations[i];
@@ -1161,8 +1162,8 @@ import * as Modals from './modalManager.js';
       }
     }
     for (const page of data.pages) {
-      // Lock the wrap to the page's exact aspect ratio so percentage-positioned
-      // inputs stay aligned no matter how wide the panel is rendered.
+      // 将包装锁定到页面的精确宽高比，以便百分比定位的
+      // 输入保持对齐，无论面板渲染多宽。
       const pageWrap = document.createElement('div');
       pageWrap.style.cssText = `position:relative;margin:0 auto 16px auto;width:${page.width}px;max-width:calc(100% - 24px);aspect-ratio:${page.width} / ${page.height};background:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.4);container-type:size;`;
       const img = document.createElement('img');
@@ -1171,9 +1172,9 @@ import * as Modals from './modalManager.js';
       img.draggable = false;
       pageWrap.appendChild(img);
 
-      // Scale-aware overlay so inputs track if the page wrap shrinks below
-      // its natural width (we set width:page.width but max-width:100% caps it).
-      // Each field is positioned via percentages of the page rect.
+      // 缩放感知叠加层，使输入在页面包装缩小到
+      // 其自然宽度以下时保持跟踪（设置 width:page.width 但 max-width:100% 限制）。
+      // 每个字段通过页面矩形的百分比定位。
       for (const f of page.fields) {
         const [x0, y0, x1, y1] = f.rect_px;
         const wPct = ((x1 - x0) / page.width) * 100;
@@ -1184,15 +1185,15 @@ import * as Modals from './modalManager.js';
         let el;
         const baseStyle = `position:absolute;left:${lPct}%;top:${tPct}%;width:${wPct}%;height:${hPct}%;box-sizing:border-box;font-family:inherit;`;
         if (isSig) {
-          // Inline signature: click to pick / change. The selected signature
-          // ID is mirrored into the markdown bullet as `signature:<id>` via
-          // the existing debounced save flow, which the export route reads.
+          // 行内签名：点击选择/更改。所选签名
+          // ID 通过现有的防抖保存流程镜像到 markdown 项目符号中
+          // 作为 `signature:<id>`，导出路由会读取它。
           el = document.createElement('div');
           el.style.cssText = baseStyle + 'cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;';
           el.dataset.fieldName = f.name;
           el.dataset.fieldType = 'signature';
 
-          // Parse pre-existing selection from value: `signature:<id>` shape
+          // 从值解析预选：`signature:<id>` 格式
           const initialSigId = (typeof f.value === 'string' && f.value.startsWith('signature:'))
             ? f.value.slice('signature:'.length).trim() : '';
           const renderSigUI = async (sigId) => {
@@ -1201,7 +1202,7 @@ import * as Modals from './modalManager.js';
               el.dataset.signatureId = sigId;
               const img = document.createElement('img');
               img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;';
-              // Look up the signature data URL via the saved-list cache or fetch
+              // 通过保存列表缓存或获取来查找签名数据 URL
               try {
                 if (!_sigCache.has(sigId)) {
                   const r = await fetch(`${API_BASE}/api/signatures`);
@@ -1224,7 +1225,7 @@ import * as Modals from './modalManager.js';
               el.style.background = 'color-mix(in srgb, var(--accent, var(--red)) 10%, transparent)';
               const span = document.createElement('span');
               span.style.cssText = 'color:var(--accent, var(--red));font-size:11px;';
-              span.textContent = 'Sign here';
+              span.textContent = t('document.pdf_export_sign_here');
               el.appendChild(span);
             }
           };
@@ -1259,9 +1260,9 @@ import * as Modals from './modalManager.js';
           el = document.createElement('input');
           el.type = 'text';
           el.value = f.value == null ? '' : String(f.value);
-          // Pick a font-size that roughly fits the field height. Smaller
-          // multiplier than line-height to leave breathing room and match
-          // what AcroForm renderers typically use.
+          // 选择大致适合字段高度的字体大小。较小的
+          // 乘数（比行高小）以留出呼吸空间并匹配
+// AcroForm 渲染器通常使用的格式。
           const fontPx = Math.max(8, Math.min(14, Math.round((y1 - y0) * 0.4)));
           el.style.cssText = baseStyle + `border:1px solid color-mix(in srgb, var(--accent, var(--red)) 45%, transparent);background:rgba(255,255,255,0.85);font-size:${fontPx}px;padding:0 2px;`;
         }
@@ -1272,18 +1273,18 @@ import * as Modals from './modalManager.js';
           el.addEventListener('change', _schedulePdfPaneSave);
         }
         pageWrap.appendChild(el);
-        // Signature fields are also persisted via the markdown bullet — the
-        // click handler invokes _schedulePdfPaneSave directly after picking.
+        // 签名字段也通过 markdown 项目符号持久化 —
+        // 点击处理程序在选择后直接调用 _schedulePdfPaneSave。
         fieldRefs.push({ name: f.name, type: isSig ? 'signature' : f.type, el });
 
-        // Date-field shortcut: any text field whose name or label hints at
-        // a date gets a small "Today" button anchored to its right edge.
+        // 日期字段快捷方式：任何名称或标签暗示
+        // 日期的文本字段会得到一个固定在其右边缘的小 "Today" 按钮。
         const isDate = f.type === 'text' && /\b(date|dated)\b/i.test(`${f.name} ${f.label}`);
         if (isDate) {
           const today = document.createElement('button');
           today.type = 'button';
-          today.textContent = 'Today';
-          today.title = "Set to today's date";
+          today.textContent = t('document.pdf_export_today');
+          today.title = t('document.pdf_export_today_date');
           today.style.cssText = `position:absolute;left:calc(${lPct}% + ${wPct}%);top:${tPct}%;height:${hPct}%;margin-left:4px;padding:0 6px;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 55%, transparent);background:rgba(255,255,255,0.95);color:var(--accent, var(--red));border-radius:3px;cursor:pointer;font-size:10px;line-height:1;white-space:nowrap;`;
           today.addEventListener('click', () => {
             const d = new Date();
@@ -1296,34 +1297,34 @@ import * as Modals from './modalManager.js';
           pageWrap.appendChild(today);
         }
       }
-      // Freeform annotations for this page
+      // 此页面的自由格式注释
       for (const ann of allAnnotations) {
         if (ann.page !== page.page) continue;
         const built = _buildAnnotation(pageWrap, ann);
         annotationRefs.push(built.ref);
       }
-      // Click on empty page area drops a new annotation when a drop mode is
-      // active (toolbar buttons set the mode). Without a mode, clicking does
-      // nothing — keeps page interactions predictable so users don't get
-      // surprise boxes from stray clicks.
+      // 当放置模式处于活动状态时（工具栏按钮设置模式），
+      // 点击空白页面区域放置新注释。没有模式时，点击
+      // 无操作 — 保持页面交互可预测，用户不会
+      // 因误点击而产生意外框。
       pageWrap.addEventListener('click', (ev) => {
         if (ev.target !== pageWrap && ev.target.tagName !== 'IMG') return;
         if (!_pdfDropMode) return;
         const rect = pageWrap.getBoundingClientRect();
         const xPct = ((ev.clientX - rect.left) / rect.width) * 100;
         const yPct = ((ev.clientY - rect.top) / rect.height) * 100;
-        // Default sizes per kind. Center the box on the click so the value
-        // shows up where the user pointed (text input width is wider than tall,
-        // so centering vertically is what matters).
+        // 每种类型的默认大小。将框居中于点击位置，以便值
+        // 显示在用户指向的位置（文本输入宽度大于高度，
+        // 因此垂直居中才是关键）。
         const sizes = {
           text: { w: 8, h: 2.5 },
           check: { w: 2.5, h: 2.5 },
           signature: { w: 22, h: 6 },
         };
         const size = sizes[_pdfDropMode] || sizes.text;
-        // Check stamps drop centered on the click (you point at the box you
-        // want to tick). Text + signature anchor top-left at the click so the
-        // first character lands exactly where the cursor was.
+        // 复选标记在点击位置居中放置（你指向要
+        // 标记的框）。文本+签名在点击位置左上角锚定，
+        // 因此第一个字符正好落在光标所在位置。
         const centered = _pdfDropMode === 'check';
         const x = Math.max(0, Math.min(100 - size.w, centered ? xPct - size.w / 2 : xPct));
         const y = Math.max(0, Math.min(100 - size.h, centered ? yPct - size.h / 2 : yPct));
@@ -1333,8 +1334,8 @@ import * as Modals from './modalManager.js';
           x, y, w: size.w, h: size.h,
           value: _pdfDropMode === 'check' ? '[ ]' : '',
           kind: _pdfDropMode,
-          // For text drops, inherit the doc's last-used line spacing so the
-          // user's "1.6" choice sticks across every new box they place.
+          // 对于文本放置，继承文档上次使用的行距，以便
+          // 用户的 "1.6" 选择在他们放置的每个新框中保持一致。
           lineHeight: _pdfDropMode === 'text' ? (_pdfLastLineHeight.get(docId) || 1.3) : undefined,
         };
         _pushPdfUndoSnapshot(docId);
@@ -1343,13 +1344,13 @@ import * as Modals from './modalManager.js';
         if (_pdfDropMode === 'text') {
           built.ref.el.focus();
         } else if (_pdfDropMode === 'signature') {
-          // Trigger the signature picker right away — users always want to
-          // pick the signature when they place the box.
+          // 立即触发签名选择器 — 用户在放置框时
+          // 总是想选择签名。
           built.ref.el.click();
         }
         _schedulePdfPaneSave();
-        // Mode stays armed — keep placing more until the user clicks the
-        // toolbar button again to turn it off.
+        // 模式保持武装 — 继续放置更多，直到用户再次点击
+        // 工具栏按钮将其关闭。
       });
 
       pane.appendChild(pageWrap);
@@ -1357,9 +1358,9 @@ import * as Modals from './modalManager.js';
     _pdfPaneFieldsByDoc.set(docId, fieldRefs);
   }
 
-  // Render one annotation as a positioned wrapper with type-appropriate
-  // content (text input / checkbox / signature picker) plus delete and drag
-  // handles. Returns { ref } so the caller can track it for save.
+  // 将注释渲染为带有适当类型内容的定位包装器
+  // （文本输入/复选框/签名选择器）以及删除和拖拽
+  // 手柄。返回 { ref }，调用者可以跟踪它进行保存。
   function _buildAnnotation(pageWrap, ann) {
     const kind = ann.kind || 'text';
     const wrap = document.createElement('div');
@@ -1370,58 +1371,58 @@ import * as Modals from './modalManager.js';
 
     let input;
     if (kind === 'check') {
-      // Stamp-style checkmark drawn as an SVG so it scales with the box —
-      // a glyph at fixed font-size always over- or under-fills.
+      // 印章式复选标记绘制为 SVG，以便随框缩放 —
+      // 固定字体大小的字形总是过度或不足填充。
       input = document.createElement('div');
       input.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;user-select:none;pointer-events:none;`;
       input.innerHTML = `<svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block;"><path d="M4 12 L10 18 L20 6" fill="none" stroke="#111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     } else if (kind === 'signature') {
       input = document.createElement('div');
       input.style.cssText = `width:100%;height:100%;box-sizing:border-box;border:1px dashed color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:color-mix(in srgb, var(--accent, var(--red)) 10%, transparent);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;font-size:10px;color:var(--accent, var(--red));`;
-      input.textContent = (ann.value && ann.value.startsWith('signature:')) ? '' : 'Sign here';
+      input.textContent = (ann.value && ann.value.startsWith('signature:')) ? '' : t('document.pdf_export_sign_here');
       input.dataset.signatureId = (ann.value && ann.value.startsWith('signature:')) ? ann.value.slice(10) : '';
     } else {
-      // Multi-line text input. Browser resize disabled — we use the custom
-      // bottom-right handle for resizing so position metadata stays in sync.
-      // Font size uses cqh (container-query height) so the text scales with
-      // the rendered page when the doc panel resizes — keeps annotations
-      // visually anchored to the PDF instead of looking small/large after
-      // a fullscreen toggle.
+      // 多行文本输入。浏览器调整大小已禁用 — 我们使用自定义
+      // 右下角手柄进行大小调整，以便位置元数据保持同步。
+      // 字体大小使用 cqh（容器查询高度），因此文本随
+      // 文档面板调整大小时渲染页面缩放 — 保持注释
+      // 在视觉上锚定到 PDF，而不是在
+      // 全屏切换后看起来过大/过小。
       input = document.createElement('textarea');
       input.value = ann.value || '';
-      input.placeholder = 'Type…';
+      input.placeholder = t('document.pdf_annotation_type');
       input.rows = 1;
       input.spellcheck = false;
       const lh = ann.lineHeight || 1.3;
       input.style.cssText = `width:100%;height:100%;box-sizing:border-box;border:1px dashed color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:color-mix(in srgb, var(--accent, var(--red)) 10%, transparent);font-family:inherit;font-size:1.5cqh;line-height:${lh};padding:1px 4px;color:#111;resize:none;overflow:auto;white-space:pre-wrap;`;
     }
 
-    // Touch devices have no cursor, so the hover/proximity reveal never fires —
-    // there, show the handles permanently and make them finger-sized so the
-    // box edges are actually grabbable.
+    // 触摸设备没有光标，因此悬停/接近显示永远不会触发 —
+    // 在那里，永久显示手柄并使其适合手指大小，以便
+    // 框边缘实际上可以抓取。
     const _isTouch = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
-    const HS = _isTouch ? 28 : 20;       // handle size (px)
-    // Sit the handles just outside the box — inner edge meets the corner (no
-    // gap, no overlap) so they don't cover the text you're typing but stay close.
+    const HS = _isTouch ? 28 : 20;       // 手柄大小（像素）
+    // 将手柄放在框外 — 内边缘与角相接（无间隙、
+    // 无重叠），这样它们不会覆盖你正在输入的文本但保持接近。
     const OFF = -HS;
-    const HIDE = _isTouch ? '' : 'none'; // initial display ('' = shown on touch)
+    const HIDE = _isTouch ? '' : 'none'; // 初始显示（'' = 触摸时显示）
 
-    // × delete button
+    // × 删除按钮
     const del = document.createElement('button');
     del.type = 'button';
     del.textContent = '✖';
-    del.title = 'Delete annotation';
+    del.title = t('document.pdf_annotation_delete');
     del.style.cssText = `position:absolute;top:${OFF}px;right:${OFF}px;width:${HS}px;height:${HS}px;padding:0 0 0 1px;border:1px solid var(--accent, var(--red));background:#fff;color:var(--accent, var(--red));border-radius:50%;cursor:pointer;font-size:11px;line-height:1;display:${HIDE};font-weight:bold;touch-action:none;`;
 
-    // ☰ drag handle — same size as the × button.
+    // ☰ 拖拽手柄 — 与 × 按钮相同大小。
     const grip = document.createElement('div');
-    grip.title = 'Drag to move';
+    grip.title = t('document.pdf_annotation_drag');
     grip.textContent = '☰';
     grip.style.cssText = `position:absolute;top:${OFF}px;left:${OFF}px;width:${HS}px;height:${HS}px;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:#fff;color:var(--accent, var(--red));border-radius:3px;cursor:move;font-size:11px;line-height:${HS - 2}px;text-align:center;display:${HIDE};touch-action:none;`;
 
-    // ↘ resize handle — same size as the × button.
+    // ↘ 调整大小手柄 — 与 × 按钮相同大小。
     const resize = document.createElement('div');
-    resize.title = 'Drag to resize';
+    resize.title = t('document.pdf_annotation_resize');
     resize.style.cssText = `position:absolute;bottom:${OFF}px;right:${OFF}px;width:${HS}px;height:${HS}px;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:#fff;color:var(--accent, var(--red));border-radius:3px;cursor:nwse-resize;display:${HIDE};touch-action:none;`;
     resize.innerHTML = '<svg width="14" height="14" viewBox="0 0 10 10" style="display:block;margin:auto;height:100%;"><path d="M2 8 L8 2 M5 8 L8 5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>';
 
@@ -1430,12 +1431,12 @@ import * as Modals from './modalManager.js';
       menuBtn = document.createElement('button');
       menuBtn.type = 'button';
       menuBtn.textContent = '…';
-      menuBtn.title = 'Text annotation options';
+      menuBtn.title = t('document.pdf_annotation_options');
       menuBtn.style.cssText = `position:absolute;bottom:${OFF}px;left:${OFF}px;width:${HS}px;height:${HS}px;padding:0;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:#fff;color:var(--accent, var(--red));border-radius:50%;cursor:pointer;font-size:15px;line-height:0.8;display:${HIDE};font-weight:bold;touch-action:none;`;
     }
 
-    // Set handle visibility together; clicking/tapping the annotation itself
-    // brings hidden controls back.
+    // 一起设置手柄可见性；点击/轻触注释本身
+    // 将隐藏的控件恢复。
     const _setHandlesVisible = (show) => {
       const dismissed = wrap.dataset.controlsDismissed === '1';
       const v = (show && !dismissed) ? '' : 'none';
@@ -1457,7 +1458,7 @@ import * as Modals from './modalManager.js';
     const ref = { id: ann.id, page: ann.page, x: ann.x, y: ann.y, w: ann.w, h: ann.h, el: input, wrap, kind, _setHandlesVisible };
 
     if (kind === 'check') {
-      // Stamp checkmark — value is fixed, nothing to listen for.
+      // 印章复选标记 — 值是固定的，无需监听。
       ref.value = '✓';
     } else if (kind === 'signature') {
       const _renderSig = async (sigId) => {
@@ -1467,7 +1468,7 @@ import * as Modals from './modalManager.js';
           input.style.background = 'color-mix(in srgb, var(--accent, var(--red)) 10%, transparent)';
           input.style.border = '1px dashed color-mix(in srgb, var(--accent, var(--red)) 65%, transparent)';
           const span = document.createElement('span');
-          span.textContent = 'Sign here';
+          span.textContent = t('document.pdf_export_sign_here');
           input.appendChild(span);
           return;
         }
@@ -1501,19 +1502,19 @@ import * as Modals from './modalManager.js';
           _schedulePdfPaneSave();
         }
       });
-      // Render any pre-existing signature value
+      // 渲染任何预先存在的签名值
       _renderSig(input.dataset.signatureId);
     } else {
-      // Grow the wrap to fit typed content. Width grows for the longest line,
-      // height grows for total content height. Never shrinks — user-driven
-      // resizes (the corner handle) are preserved.
+      // 扩展包装以适应输入内容。宽度随最长行增长，
+      // 高度随总内容高度增长。永不会缩小 — 用户驱动的
+      // 调整大小（角落手柄）被保留。
       let _mirror = null;
       const _autoGrow = () => {
         const pageRect = pageWrap.getBoundingClientRect();
         if (!pageRect.height || !pageRect.width) return;
 
-        // --- Width: measure the longest line via a hidden mirror div with
-        // the same typography as the textarea ---
+        // --- 宽度：通过具有相同排版的隐藏镜像 div
+        // 测量最长行 ---
         if (!_mirror) {
           _mirror = document.createElement('div');
           _mirror.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-family:inherit;padding:1px 4px;left:-9999px;top:-9999px;';
@@ -1536,7 +1537,7 @@ import * as Modals from './modalManager.js';
           wrap.style.width = ref.w + '%';
         }
 
-        // --- Height: same trick as before, briefly let textarea fit content ---
+        // --- 高度：与之前相同的技巧，短暂地让 textarea 适应内容 ---
         const prev = input.style.height;
         input.style.height = 'auto';
         const neededHpx = input.scrollHeight + 4;
@@ -1568,11 +1569,11 @@ import * as Modals from './modalManager.js';
       input.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') input.blur();
       });
-      // Initial fit in case the saved value is taller than the saved height
-      // (e.g. line-height was bumped up after the box was placed).
+      // 初始适应，以防保存的值比保存的高度高
+      // （例如，放置框后行高被调大了）。
       requestAnimationFrame(_autoGrow);
-      // Expose so the line-spacing slider can re-fit each annotation when
-      // the doc-wide spacing is changed.
+      // 暴露出来，以便行距滑块在文档全局间距
+      // 更改时可以重新适应每个注释。
       ref._autoGrow = _autoGrow;
     }
 
@@ -1581,15 +1582,15 @@ import * as Modals from './modalManager.js';
       _pushPdfUndoSnapshot();
       _removeAnnotation(ref);
     });
-    // Drag to reposition. Coordinates are stored as percentages of the page
-    // wrap so they survive resizing.
+    // 拖拽重新定位。坐标存储为页面包装的百分比
+    // 以便在调整大小时保持。
     grip.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       _pushPdfUndoSnapshot();
       try { grip.setPointerCapture(ev.pointerId); } catch (_) {}
-      // Hide the × and resize handles while moving so they don't obscure the
-      // box — easier to see exactly where it lands. Restored on release.
+      // 移动时隐藏 × 和调整大小手柄，以免遮挡
+      // 框 — 更容易看到它确切落在哪里。释放时恢复。
       del.style.display = 'none';
       resize.style.display = 'none';
       if (menuBtn) menuBtn.style.display = 'none';
@@ -1613,13 +1614,13 @@ import * as Modals from './modalManager.js';
       document.addEventListener('pointerup', onUp);
     });
 
-    // Drag bottom-right corner to resize. Width/height stored as percentages.
+    // 拖拽右下角调整大小。宽/高存储为百分比。
     resize.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       _pushPdfUndoSnapshot();
       try { resize.setPointerCapture(ev.pointerId); } catch (_) {}
-      // Hide the × and move handles while resizing — clean view of the box edge.
+      // 调整大小时隐藏 × 和移动手柄 — 框边缘的清晰视图。
       del.style.display = 'none';
       grip.style.display = 'none';
       if (menuBtn) menuBtn.style.display = 'none';
@@ -1643,19 +1644,19 @@ import * as Modals from './modalManager.js';
       document.addEventListener('pointerup', onUp);
     });
 
-    // Text options menu — opened from the floating … button so the spacing
-    // controls are not always visible while typing.
+    // 文本选项菜单 — 从浮动的 … 按钮打开，因此
+    // 空格控件在输入时不会总是可见。
     if (kind === 'text') {
       const popover = document.createElement('div');
       popover.className = 'pdf-annotation-text-menu';
       popover.style.cssText = `position:absolute;bottom:${OFF + HS + 4}px;left:${OFF}px;display:none;background:#fff;border:1px solid var(--accent, var(--red));border-radius:4px;padding:6px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);z-index:10;flex-direction:column;align-items:stretch;gap:6px;font-size:10px;color:#222;white-space:nowrap;`;
       popover.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;">
-          <span>Line spacing</span>
+          <span>${t('document.pdf_annotation_line_spacing')}</span>
           <input type="range" min="1" max="3" step="0.05" value="${ann.lineHeight || 1.3}" style="width:90px;accent-color:var(--accent, var(--red));" />
           <input type="number" class="lh-val" min="0.5" max="5" step="0.01" value="${(ann.lineHeight || 1.3).toFixed(2)}" style="width:54px;font-size:10px;padding:1px 7px 1px 3px;border:1px solid var(--accent, var(--red));border-radius:3px;text-align:right;accent-color:var(--accent, var(--red));" />
         </div>
-        <button type="button" class="pdf-ann-today" style="height:22px;padding:0 7px;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 55%, transparent);background:color-mix(in srgb, var(--accent, var(--red)) 10%, transparent);color:var(--accent, var(--red));border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit;text-align:left;">Today</button>
+        <button type="button" class="pdf-ann-today" style="height:22px;padding:0 7px;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 55%, transparent);background:color-mix(in srgb, var(--accent, var(--red)) 10%, transparent);color:var(--accent, var(--red));border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit;text-align:left;">${t('document.pdf_export_today')}</button>
       `;
       const slider = popover.querySelector('input[type="range"]');
       const valInput = popover.querySelector('.lh-val');
@@ -1667,16 +1668,16 @@ import * as Modals from './modalManager.js';
           popover.dataset.lhUndoCaptured = '1';
         }
         v = Math.max(0.5, Math.min(5, v));
-        // Apply to every text annotation in the doc so spacing stays
-        // consistent — exports were "all over the place" because each box
-        // could have its own lh; treat it as a doc-level setting.
+        // 应用于文档中的每个文本注释，以便间距保持
+        // 一致 — 导出曾经"到处都是"，因为每个框
+        // 可以有自己的行高；将其视为文档级设置。
         const allRefs = _pdfPaneAnnotationsByDoc.get(activeDocId) || [];
         for (const r of allRefs) {
           if (r.kind !== 'text') continue;
           r.lineHeight = v;
           if (r.el && r.el.style) r.el.style.lineHeight = String(v);
-          // Spacing change can push content past the box height — fire each
-          // ref's auto-grow so the wrap expands to fit the new line height.
+          // 间距变化可能将内容推出框高度 — 触发每个
+          // 引用的自动扩展，以便包装扩展以适应新的行高。
           if (typeof r._autoGrow === 'function') r._autoGrow();
         }
         ref.lineHeight = v;
@@ -1688,7 +1689,7 @@ import * as Modals from './modalManager.js';
       };
       slider.addEventListener('input', () => _applyLh(parseFloat(slider.value), true));
       valInput.addEventListener('input', () => _applyLh(parseFloat(valInput.value), false));
-      // Reject invalid typed values on blur — snap back to the live ref value.
+      // 在失去焦点时拒绝无效输入值 — 弹回实时引用值。
       valInput.addEventListener('blur', () => {
         const v = parseFloat(valInput.value);
         if (!Number.isFinite(v)) valInput.value = (ref.lineHeight || 1.3).toFixed(2);
@@ -1711,7 +1712,7 @@ import * as Modals from './modalManager.js';
         _schedulePdfPaneSave();
         input.focus({ preventScroll: true });
       });
-      // Stop popover clicks from bubbling to pageWrap (would create new ann)
+      // 阻止弹出框点击冒泡到 pageWrap（会创建新注释）
       popover.addEventListener('mousedown', (e) => e.stopPropagation());
       popover.addEventListener('click', (e) => e.stopPropagation());
       menuBtn?.addEventListener('click', (e) => {
@@ -1742,10 +1743,10 @@ import * as Modals from './modalManager.js';
     _schedulePdfPaneSave();
   }
 
-  // Prompt user for an instruction and ask the backend's VL pipeline to
-  // propose annotations for every blank/labeled spot on the PDF. Resulting
-  // annotations are appended into the doc's markdown and the PDF pane is
-  // re-rendered so the user can review / edit / drag / delete each one.
+  // 提示用户输入指令，并要求后端的 VL 流水线
+  // 为 PDF 上的每个空白/标签位置提出注释建议。生成的
+  // 注释添加到文档的 markdown 中，PDF 面板
+  // 重新渲染，以便用户可以查看/编辑/拖拽/删除每个注释。
   async function _aiFillAnnotations() {
     const docId = activeDocId;
     if (!docId) return;
@@ -1753,13 +1754,13 @@ import * as Modals from './modalManager.js';
     if (!doc) return;
 
     const instruction = window.prompt(
-      'What should the AI fill in?\n(e.g. "My name is Jane Doe, address 123 Main St, dob 1990-01-15")'
+      t('document.pdf_ai_fill_prompt')
     );
     if (!instruction || !instruction.trim()) return;
 
     _setPdfSaveStatus('saving');
     const btn = document.getElementById('doc-pdf-ai-fill-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Thinking…'; }
+    if (btn) { btn.disabled = true; btn.textContent = t('document.pdf_ai_fill_thinking'); }
     try {
       const res = await fetch(`${API_BASE}/api/document/${docId}/ai-fill-annotations`, {
         method: 'POST',
@@ -1774,11 +1775,11 @@ import * as Modals from './modalManager.js';
       const proposed = (data && data.annotations) || [];
       if (!proposed.length) {
         _setPdfSaveStatus('idle');
-        if (uiModule && uiModule.showToast) uiModule.showToast('AI found nothing to fill');
+        if (uiModule && uiModule.showToast) uiModule.showToast(t('document.pdf_ai_fill_nothing'));
         return;
       }
-      // Merge into markdown via the same _writeAnnotations path: parse current,
-      // append proposed (each gets a fresh id), persist, then re-render.
+      // 通过相同的 _writeAnnotations 路径合并到 markdown：解析当前，
+      // 追加提议（每个获得新 ID），持久化，然后重新渲染。
       const existing = _parseAnnotations(doc.content || '');
       const combined = existing.slice();
       for (const a of proposed) {
@@ -1806,13 +1807,13 @@ import * as Modals from './modalManager.js';
         throw new Error(t || r2.statusText);
       }
       _setPdfSaveStatus('saved');
-      if (uiModule && uiModule.showToast) uiModule.showToast(`AI added ${proposed.length} annotations`);
+      if (uiModule && uiModule.showToast) uiModule.showToast(t('document.pdf_ai_fill_added', { n: proposed.length }));
       _renderPdfPane();
     } catch (e) {
       console.error('AI fill failed:', e);
       _setPdfSaveStatus('error', `AI fill failed: ${e.message || e}`);
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'AI fill'; }
+      if (btn) { btn.disabled = false; btn.textContent = t('document.pdf_ai_fill_button'); }
     }
   }
 
@@ -1827,10 +1828,10 @@ import * as Modals from './modalManager.js';
     if (!pill) return;
     const palette = {
       idle:   { txt: '',           bg: 'transparent',           fg: 'transparent' },
-      dirty:  { txt: 'Editing…',   bg: 'var(--panel)',          fg: 'var(--fg)' },
-      saving: { txt: 'Saving…',    bg: 'var(--panel)',          fg: 'var(--fg)' },
-      saved:  { txt: 'Saved',      bg: 'rgba(34,197,94,0.85)',  fg: '#fff' },
-      error:  { txt: msg || 'Save failed', bg: 'var(--red)',    fg: 'var(--bg)' },
+      dirty:  { txt: t('document.status_editing'),   bg: 'var(--panel)',          fg: 'var(--fg)' },
+      saving: { txt: t('document.status_saving'),    bg: 'var(--panel)',          fg: 'var(--fg)' },
+      saved:  { txt: t('document.status_saved'),      bg: 'rgba(34,197,94,0.85)',  fg: '#fff' },
+      error:  { txt: msg || t('document.status_save_failed'), bg: 'var(--red)',    fg: 'var(--bg)' },
     };
     const p = palette[status] || palette.idle;
     pill.textContent = p.txt;
@@ -1839,7 +1840,7 @@ import * as Modals from './modalManager.js';
     pill.style.display = p.txt ? '' : 'none';
     if (status === 'saved') {
       setTimeout(() => {
-        if (pill.textContent === 'Saved') _setPdfSaveStatus('idle');
+        if (pill.textContent === t('document.status_saved')) _setPdfSaveStatus('idle');
       }, 1200);
     }
   }
@@ -1856,9 +1857,9 @@ import * as Modals from './modalManager.js';
     let md = doc.content || '';
     let changed = 0;
     for (const ref of fields) {
-      // Server-side render percent-encodes everything outside [A-Za-z0-9_.-].
-      // Match that exactly so spaces / newlines / parens / commas / `?` in
-      // raw AcroForm names don't break the regex.
+      // 服务端渲染对 [A-Za-z0-9_.-] 之外的所有内容进行百分号编码。
+      // 精确匹配，以便原始 AcroForm 名称中的
+      // 空格/换行/括号/逗号/`?` 不会破坏正则表达式。
       const encName = _encodeFieldName(ref.name);
       const re = new RegExp(
         `^(\\s*-\\s+)(.*?)(\\s*<!--\\s*field=${encName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\s+type=\\w+\\s*-->\\s*)$`,
@@ -1887,8 +1888,8 @@ import * as Modals from './modalManager.js';
         changed++;
       }
     }
-    // Rewrite the freeform-annotations section from the live ref set so
-    // creates / edits / moves / deletes all persist in one shot.
+    // 从实时引用集重写自由格式注释部分，以便
+    // 创建/编辑/移动/删除全部一次性持久化。
     md = _writeAnnotations(md, annotations.map(a => {
       let value = '';
       if (a.kind === 'check') {
@@ -1930,13 +1931,13 @@ import * as Modals from './modalManager.js';
       _setPdfSaveStatus('saved');
       return true;
     } catch (e) {
-      _setPdfSaveStatus('error', e.message || 'Save failed');
+      _setPdfSaveStatus('error', e.message || t('document.status_save_failed'));
       console.warn('PDF-pane save failed:', e);
       return false;
     }
   }
 
-  // Flush any pending debounced save before navigating away
+  // 在导航离开之前刷新所有待处理的防抖保存
   window.addEventListener('beforeunload', () => {
     if (_pdfPaneSaveTimer) {
       clearTimeout(_pdfPaneSaveTimer);
@@ -1945,8 +1946,8 @@ import * as Modals from './modalManager.js';
   });
 
   async function _refreshPdfPreviewIframe() {
-    // Re-render the pane from the backend's current parsed values.
-    // Flush any debounced user edit first so we don't clobber it.
+    // 从后端当前的解析值重新渲染面板。
+    // 首先刷新任何防抖的用户编辑，以免覆盖它。
     const pane = document.getElementById('doc-pdf-view');
     if (!pane || !activeDocId) return;
     if (pane.style.display === 'none') return;
@@ -1969,14 +1970,14 @@ import * as Modals from './modalManager.js';
       _renderPdfPane();
       btn?.classList.add('active');
     } else {
-      // Flush any pending debounced edit before tearing down the field refs.
+      // 在拆除字段引用之前刷新任何待处理的防抖编辑。
       if (_pdfPaneSaveTimer) {
         clearTimeout(_pdfPaneSaveTimer);
         await _savePdfPaneToMarkdown();
       }
       _pdfViewState.set(activeDocId, false);
       pane.style.display = 'none';
-      // Preserve the save pill across renders
+      // 在渲染间保留保存标记
       const savedPill = document.getElementById('doc-pdf-save-pill');
       pane.innerHTML = '';
       if (savedPill) pane.appendChild(savedPill);
@@ -1987,30 +1988,30 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  // Hide the top header bar when nothing in it is visible. With Undo + the type
-  // picker moved to the footer, a plain doc on mobile would otherwise show an
-  // empty bar (the "second footer"). Reflow-free (reads inline display only) so
-  // it's safe to call from _syncHeaderActions on every stream patch. On desktop
-  // the bar always shows (it still hosts Fullscreen + the version badge); on
-  // mobile it shows only when a contextual control is active.
+  // 当顶部标题栏中没有任何可见内容时隐藏它。Undo 和类型选择器
+  // 移到页脚后，移动端的纯文档会显示一个
+  // 空栏（"第二页脚"）。无重排（仅读取内联显示）因此
+  // 可以在每个 stream 补丁上从 _syncHeaderActions 安全调用。桌面端
+  // 该栏始终显示（它仍承载 Fullscreen + 版本标记）；
+  // 移动端仅在上下文控件活动时显示。
   function _syncHeaderBarVisibility() {
     const hdr = document.getElementById('doc-editor-actions');
     if (!hdr) return;
-    // Email docs hide the whole header (they use their own send footer) — never
-    // resurrect it here.
+    // 邮件文档隐藏整个标题（它们使用自己的发送页脚）— 永远不要
+    // 在这里恢复它。
     if (docs.get(activeDocId)?.language === 'email') { hdr.style.display = 'none'; return; }
     const vis = (id) => {
       const e = document.getElementById(id);
       if (!e || !e.parentElement) return false;
-      // Only count items still LIVING in the header itself — the runtime
-      // rearrangement (~line 3217) moves several buttons into the footer, and
-      // we don't want a button parked elsewhere to keep this top row alive.
+      // 只计算仍然存在于标题本身的项目 — 运行时
+      // 重排（~3217 行）将几个按钮移入页脚，并且
+      // 我们不希望停放在其他位置的按钮使这一顶行保持活跃。
       if (!hdr.contains(e)) return false;
       return e.style.display !== 'none';
     };
-    // Hide the whole header when nothing visible lives here anymore. Without
-    // this every desktop view rendered an empty doc-editor-header above the
-    // real action footer — a duplicate row.
+    // 当这里不再有可见内容时隐藏整个标题。没有这个
+    // 每个桌面视图都会在真正的操作页脚上方渲染一个空的
+    // doc-editor-header — 一个重复的行。
     const visible = vis('doc-stream-indicator')
       || vis('doc-version-badge')
       || vis('doc-export-pdf-btn')
@@ -2028,33 +2029,33 @@ import * as Modals from './modalManager.js';
       || docs.get(activeDocId)?.content
       || '';
     const isForm = _isFormBackedDoc(live);
-    // Footer main button: for a doc opened from an email attachment, morph the
-    // Copy button into "Reply" (send the filled file back to the sender via the
-    // signed-reply flow). Otherwise it's the normal Copy action. The click
-    // handler branches on data-mode.
+    // 页脚主按钮：对于从邮件附件打开的文档，将
+    // Copy 按钮变形为 "Reply"（通过签名回复流程将
+    // 填充的文件发回给发件人）。否则是普通的 Copy 操作。点击
+    // 处理程序根据 data-mode 分支。
     const _copyBtn = document.getElementById('doc-footer-copy-btn');
     if (_copyBtn) {
       const _ad = docs.get(activeDocId);
       const _replyable = !!(_ad && _ad.sourceEmailUid && _ad.sourceEmailFolder);
       if (_replyable && _copyBtn.dataset.mode !== 'reply') {
         _copyBtn.dataset.mode = 'reply';
-        _copyBtn.title = 'Reply to the sender with this filled file attached';
-        _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Attach';
+        _copyBtn.title = t('document.email_reply_title');
+        _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>' + t('document.email_attach_text');
       } else if (!_replyable && _copyBtn.dataset.mode !== 'copy') {
         _copyBtn.dataset.mode = 'copy';
-        _copyBtn.title = 'Copy document';
-        _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy';
+        _copyBtn.title = t('document.email_copy_title');
+        _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' + t('common.copy');
       }
     }
-    // Standalone Export PDF / PDF-toggle icon buttons are retired — for a
-    // form-backed doc the language selector itself toggles between
-    // "pdf" (rendered view) and "markdown" (source view).
+    // 独立的 Export PDF / PDF-toggle 图标按钮已废弃 — 对于
+    // 表单支持的文档，语言选择器本身在
+    // "pdf"（渲染视图）和 "markdown"（源视图）之间切换。
     if (exportBtn) exportBtn.style.display = 'none';
     if (pdfViewBtn) pdfViewBtn.style.display = 'none';
     if (true) {
       const explicit = _pdfViewState.get(activeDocId);
       const active = isForm && explicit !== false;
-      // Sync the language select's displayed value to the current view.
+      // 将语言选择器的显示值与当前视图同步。
       if (isForm && langSelect) {
         const want = active ? 'pdf' : 'markdown';
         if (langSelect.value !== want) langSelect.value = want;
@@ -2086,7 +2087,7 @@ import * as Modals from './modalManager.js';
     const _playIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
     const _codeIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
 
-    // Check active states
+    // 检查活动状态
     const _mdPreview = document.getElementById('doc-md-preview');
     const _csvPreview = document.getElementById('doc-csv-preview');
     const _htmlPreview = document.getElementById('doc-html-preview');
@@ -2099,29 +2100,29 @@ import * as Modals from './modalManager.js';
     let show = false;
     actionBtn.classList.remove('active');
 
-    // The markdown Edit/Preview toggle is a two-icon switch; other modes use
-    // the single dynamic preview button.
+    // markdown Edit/Preview 切换是双图标开关；其他模式使用
+    // 单个动态预览按钮。
     const mdToggle = document.getElementById('doc-md-view-toggle');
     if (mdToggle) mdToggle.style.display = (lang === 'markdown') ? 'inline-flex' : 'none';
     const renderToggle = document.getElementById('doc-render-view-toggle');
     if (renderToggle) {
       renderToggle.style.display = _hasViewToggle(lang) ? 'inline-flex' : 'none';
-      // Swap the "run" side's icon to match what the language actually does:
-      //   CSV → 4-quadrant grid (table view)
-      //   HTML / SVG / XML → eye (rendered preview)
-      //   Python / JS / TS / bash → play triangle (run code)
+      // 交换 "run" 侧的图标以匹配语言实际功能：
+      //   CSV → 四象限网格（表格视图）
+      //   HTML / SVG / XML → 眼睛（渲染预览）
+      //   Python / JS / TS / bash → 播放三角形（运行代码）
       const runBtn = renderToggle.querySelector('[data-renderview="run"]');
       if (runBtn) {
         let icon, title;
         if (lang === 'csv') {
           icon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>';
-          title = 'Table view';
+          title = t('document.code_table_view');
         } else if (_isRenderLang(lang)) {
           icon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-          title = 'Preview';
+          title = t('document.code_preview');
         } else {
           icon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
-          title = 'Run';
+          title = t('document.code_run');
         }
         if (runBtn.dataset.lastIcon !== lang) {
           runBtn.innerHTML = icon;
@@ -2129,26 +2130,26 @@ import * as Modals from './modalManager.js';
           runBtn.dataset.lastIcon = lang;
         }
       }
-      // Swap the "code" side's icon too — CSV's "code" really means "edit
-      // the underlying spreadsheet text", so a pencil reads better than the
-      // </> brackets used for actual code.
+      // 也交换 "code" 侧的图标 — CSV 的 "code" 实际上意味着
+      // "编辑底层电子表格文本"，因此铅笔比
+      // 实际代码使用的 </> 括号更易读。
       const codeBtn = renderToggle.querySelector('[data-renderview="code"]');
       if (codeBtn) {
         const codeIco = (lang === 'csv')
           ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>'
           : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
-        const codeTitle = (lang === 'csv') ? 'Edit' : 'Edit code';
+        const codeTitle = (lang === 'csv') ? t('document.code_edit') : t('document.code_edit_code');
         if (codeBtn.dataset.lastIcon !== lang) {
           codeBtn.innerHTML = codeIco;
           codeBtn.title = codeTitle;
           codeBtn.dataset.lastIcon = lang;
         }
       }
-      // Reflect which side is currently active so the toggle shows the same
-      // visual feedback markdown's Edit/Preview switch does (background tint
-      // + the "punch" pop animation from .md-view-toggle .md-view-opt.active).
-      // For CSV the run side = table view; for HTML/SVG/XML = iframe preview;
-      // for runnable langs = output panel open.
+      // 反映当前活动的一侧，以便切换显示与
+      // markdown 的 Edit/Preview 开关相同的视觉反馈（背景色调
+      // + .md-view-toggle .md-view-opt.active 的"punch"弹出动画）。
+      // 对于 CSV，run 端 = 表格视图；HTML/SVG/XML = iframe 预览；
+      // 对于可运行语言 = 输出面板打开。
       let _viewActive = false;
       if (lang === 'csv') _viewActive = _csvActive;
       else if (_isRenderLang(lang)) _viewActive = _htmlActive;
@@ -2168,11 +2169,11 @@ import * as Modals from './modalManager.js';
     } else if (lang === 'csv') {
       show = true;
       actionBtn.innerHTML = _csvActive ? _penIco : '<span style="font-size:12px;font-weight:600;">⊞</span>';
-      actionBtn.title = _csvActive ? 'Edit' : 'Table View';
+      actionBtn.title = _csvActive ? t('document.code_edit') : t('document.code_table_view');
       if (_csvActive) actionBtn.classList.add('active');
     } else if (_isRenderLang(lang)) {
-      // SVG/HTML/XML use the segmented Code </> | Run ▶ light-switch toggle
-      // (like markdown's edit/preview switch) instead of the single button.
+      // SVG/HTML/XML 使用分段 Code </> | Run ▶ 开关切换
+      // （像 markdown 的 edit/preview 开关）而不是单个按钮。
       show = false;
       if (renderToggle) {
         renderToggle.querySelector('[data-renderview="code"]')?.classList.toggle('active', !_htmlActive);
@@ -2181,22 +2182,22 @@ import * as Modals from './modalManager.js';
     } else if (canRun) {
       show = true;
       actionBtn.innerHTML = _outputActive ? _codeIco : _playIco;
-      actionBtn.title = _outputActive ? 'Hide output' : 'Run';
+      actionBtn.title = _outputActive ? t('document.code_hide_output') : t('document.code_run');
       if (_outputActive) actionBtn.classList.add('active');
     }
 
-    // The unified segmented Code/Run-or-View toggle (`#doc-render-view-toggle`)
-    // covers CSV / Python / JS / bash / HTML / SVG / XML. When it's shown,
-    // suppress the single morph button to avoid two redundant controls.
+    // 统一分段 Code/Run-or-View 切换 (`#doc-render-view-toggle`)
+    // 覆盖 CSV / Python / JS / bash / HTML / SVG / XML。显示时，
+    // 抑制单个变形按钮以避免两个冗余控件。
     if (_hasViewToggle(lang)) show = false;
     actionBtn.style.display = show ? '' : 'none';
 
-    // Now that the contextual buttons' visibility is settled, collapse the bar
-    // if it ended up empty (the common plain-doc-on-mobile case).
+    // 上下文按钮的可见性已确定后，如果栏最终为空则折叠它
+    // （常见的移动端纯文档情况）。
     _syncHeaderBarVisibility();
   }
 
-  // ── Email document type helpers ──
+  // ── 邮件文档类型辅助函数 ──
 
   function _parseEmailHeader(content) {
     const empty = { to: '', cc: '', bcc: '', subject: '', inReplyTo: '', references: '', sourceUid: '', sourceFolder: '', attachments: [], body: content || '' };
@@ -2238,25 +2239,25 @@ import * as Modals from './modalManager.js';
     return header + '\n---\n' + body;
   }
 
-  // ── WYSIWYG email body helpers ──
+  // ── WYSIWYG 邮件正文辅助函数 ──
   function _emailBodyToHtml(text) {
     const t = (text || '').trim();
     if (!t) return '';
-    // If it already contains a formatting/structural HTML tag, it's a saved
-    // WYSIWYG body — use it verbatim. (Checking a leading '<' isn't enough: a
-    // rich body often starts with plain text, e.g. "Hi <b>there</b>".)
+    // 如果已包含格式化/结构化 HTML 标签，则是已保存的
+    // WYSIWYG 正文 — 直接使用。（检查前导 '<' 不够：
+    // 富文本正文通常以纯文本开头，例如 "Hi <b>there</b>"。）
     if (/<\/?(b|i|u|s|strong|em|del|strike|a|p|div|br|ul|ol|li|h[1-3]|blockquote|span|code|pre)\b[^>]*>/i.test(t)) return t;
-    // Email body: keep author-typed `:shortcode:` text literal. Issue #345
-    // (shortcode → emoji) is scoped to chat; do not rewrite colons in mail.
+    // 邮件正文：保持作者输入的 `:shortcode:` 文本字面量。Issue #345
+    // （shortcode → emoji）仅限于聊天；不要在邮件中重写冒号。
     try { return markdownModule.mdToHtml(text, { shortcodes: false }); }
     catch (_) {
       const d = document.createElement('div'); d.textContent = text;
       return d.innerHTML.replace(/\n/g, '<br>');
     }
   }
-  // Mirror the rich body's plain text into the hidden textarea so the existing
-  // send / draft / change-detection plumbing (which reads the textarea) stays
-  // valid. The rich body's HTML is read separately on send (body_html).
+  // 将富文本正文的纯文本镜像到隐藏的 textarea 中，以便现有的
+  // send / draft / change-detection 管道（读取 textarea）保持
+  // 有效。富文本正文的 HTML 在发送时单独读取（body_html）。
   function _syncEmailRichbody(rich) {
     const ta = document.getElementById('doc-editor-textarea');
     if (!ta) return;
@@ -2267,14 +2268,14 @@ import * as Modals from './modalManager.js';
     if (rich._wired) { _syncEmailRichbody(rich); return; }
     rich._wired = true;
     rich.addEventListener('input', () => _syncEmailRichbody(rich));
-    // Highlight toolbar buttons (B / I / S, headings, lists) when the caret
-    // sits inside formatted text. queryCommandState reflects the live
-    // selection — we just translate that into .is-active classes the CSS
-    // already understands.
+    // 当光标位于格式化文本中时高亮工具栏按钮（B / I / S、标题、列表）。
+    // queryCommandState 反映实时选择 —
+    // 我们只需将其转换为 CSS 已经理解的 .is-active 类。
+    // 
     const syncActive = () => {
       if (!rich.isConnected || rich.style.display === 'none') return;
-      // Only sync when focus is inside the rich body — otherwise selection
-      // outside it (e.g. clicking the toolbar itself) gives misleading state.
+      // 仅当焦点在富文本正文内时同步 — 否则外部的选择
+      // （例如点击工具栏本身）会给出误导性状态。
       if (!rich.contains(document.activeElement) && document.activeElement !== rich) return;
       const tb = document.getElementById('doc-md-toolbar');
       if (!tb) return;
@@ -2284,8 +2285,8 @@ import * as Modals from './modalManager.js';
         set('[data-md="italic"]', document.queryCommandState('italic'));
         set('[data-md="strike"]', document.queryCommandState('strikeThrough'));
       } catch (_) {}
-      // Block-level: heading / list dropdown toggles read their active state
-      // from the current block tag.
+      // 块级：标题/列表下拉切换从当前块标签
+      // 读取其活动状态。
       const cur = _currentBlockTag(rich);
       const hBtn = tb.querySelector('[data-dd="heading"]');
       if (hBtn) hBtn.classList.toggle('is-active', cur === 'h1' || cur === 'h2' || cur === 'h3');
@@ -2299,7 +2300,7 @@ import * as Modals from './modalManager.js';
     rich.addEventListener('mouseup',  syncActive);
     rich.addEventListener('focus',    syncActive);
     rich.addEventListener('input',    syncActive);
-    // selectionchange fires on the document; filter to selections inside rich.
+    // selectionchange 在文档上触发；过滤到富文本内的选择。
     document.addEventListener('selectionchange', () => {
       const sel = window.getSelection();
       if (sel && sel.rangeCount && rich.contains(sel.anchorNode)) syncActive();
@@ -2420,15 +2421,15 @@ import * as Modals from './modalManager.js';
   }
 
   function _syncEmailHeaderSummary() {
-    const to = document.getElementById('doc-email-to')?.value?.trim() || 'No recipient';
-    const subject = document.getElementById('doc-email-subject')?.value?.trim() || 'No subject';
+    const to = document.getElementById('doc-email-to')?.value?.trim() || t('document.email_no_recipient');
+    const subject = document.getElementById('doc-email-subject')?.value?.trim() || t('document.email_no_subject');
     const cc = document.getElementById('doc-email-cc')?.value?.trim() || '';
     const bcc = document.getElementById('doc-email-bcc')?.value?.trim() || '';
     const summary = document.getElementById('doc-email-collapse-summary');
     if (!summary) return;
     const extras = [];
-    if (cc) extras.push('Cc');
-    if (bcc) extras.push('Bcc');
+    if (cc) extras.push(t('document.email_cc_label'));
+    if (bcc) extras.push(t('document.email_bcc_label'));
     summary.textContent = `${to} · ${subject}${extras.length ? ` · ${extras.join('/')}` : ''}`;
     summary.title = summary.textContent;
   }
@@ -2441,7 +2442,7 @@ import * as Modals from './modalManager.js';
     header.classList.toggle('doc-email-header-collapsed', !!collapsed);
     if (btn) {
       btn.setAttribute('aria-expanded', String(!collapsed));
-      btn.title = collapsed ? 'Show email fields' : 'Hide email fields';
+      btn.title = collapsed ? t('document.email_show_fields') : t('document.email_hide_fields');
     }
     const doc = activeDocId && docs.get(activeDocId);
     if (doc && manual) doc._emailHeaderCollapsed = !!collapsed;
@@ -2464,20 +2465,20 @@ import * as Modals from './modalManager.js';
   function _showEmailFields(doc) {
     const emailHeader = document.getElementById('doc-email-header');
     const emailActions = document.getElementById('doc-email-actions');
-    // Show MD toolbar for email too (B, I, etc.)
+    // 邮件也显示 MD 工具栏（B、I 等）
     const mdToolbar = document.getElementById('doc-md-toolbar');
     if (mdToolbar) {
       mdToolbar.style.display = '';
       if (mdToolbar._syncOverflow) requestAnimationFrame(mdToolbar._syncOverflow);
     }
-    // Hide toolbar items that have no clean WYSIWYG equivalent in email (Code).
+    // 隐藏邮件中没有干净 WYSIWYG 等价物的工具栏项目（Code）。
     document.querySelectorAll('.md-toolbar-email-hide').forEach(el => { el.style.display = 'none'; });
     if (emailHeader) emailHeader.style.display = '';
     if (emailActions) emailActions.style.display = '';
-    // Emails have their own complete footer (Close / More / Send), so hide the
-    // generic documents action bar AND the generic bottom footer. The TYPE
-    // picker is the exception — relocate it into the email footer so the
-    // type-switching affordance is in the same footer slot across all docs.
+    // 邮件有自己的完整页脚（Close / More / Send），因此隐藏
+    // 通用文档操作栏和通用底部页脚。TYPE
+    // 选择器是例外 — 将其重新定位到邮件页脚中，以便
+    // 类型切换功能在所有文档的相同页脚位置。
     const docActions = document.getElementById('doc-editor-actions');
     if (docActions) docActions.style.display = 'none';
     const docFooter = document.getElementById('doc-actions-footer');
@@ -2487,7 +2488,7 @@ import * as Modals from './modalManager.js';
       const _sendSplit = emailActions.querySelector('.email-send-split');
       if (_lang && _sendSplit) emailActions.insertBefore(_lang, _sendSplit);
     }
-    // Colored system-emoji font for email compose
+    // 邮件撰写使用彩色系统表情符号字体
     document.getElementById('doc-editor-textarea')?.classList.add('email-mode');
     document.getElementById('doc-editor-code')?.classList.add('email-mode');
     document.getElementById('doc-editor-highlight')?.classList.add('email-mode');
@@ -2515,10 +2516,10 @@ import * as Modals from './modalManager.js';
     const sourceFolder = document.getElementById('doc-email-source-folder');
     if (sourceUid) sourceUid.value = fields.sourceUid || '';
     if (sourceFolder) sourceFolder.value = fields.sourceFolder || '';
-    // Show/hide unread button only if we have a source UID (came from inbox)
+    // 仅当我们有源 UID 时（来自收件箱）显示/隐藏未读按钮
     const unreadBtn = document.getElementById('doc-email-unread-btn');
     if (unreadBtn) unreadBtn.style.display = fields.sourceUid ? '' : 'none';
-    // Render attachment chips
+    // 渲染附件标签
     const attDiv = document.getElementById('doc-email-attachments');
     if (attDiv) {
       attDiv.innerHTML = '';
@@ -2528,7 +2529,7 @@ import * as Modals from './modalManager.js';
           const isPdf = (att.filename || '').toLowerCase().endsWith('.pdf');
           const sizeKb = att.size > 0 ? `${Math.round(att.size / 1024)} KB` : '';
           const chipHtml = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>${_escHtml(att.filename)}</span><span class="att-size">${sizeKb}</span>`;
-          // Helper: swap chip content for a whirlpool spinner while busy.
+          // 辅助函数：忙碌时将标签内容替换为旋转加载器。
           const _withSpinner = async (chip, fn) => {
             if (chip.dataset.loading === '1') return;
             chip.dataset.loading = '1';
@@ -2544,11 +2545,11 @@ import * as Modals from './modalManager.js';
             finally { chip.dataset.loading = ''; chip.innerHTML = orig; }
           };
           if (isPdf) {
-            // PDF: open in the in-app PDF viewer as a new doc tab
+            // PDF：在应用内 PDF 查看器中作为新文档标签打开
             const chip = document.createElement('button');
             chip.type = 'button';
             chip.className = 'email-attachment-chip email-attachment-chip-pdf';
-            // Full filename on hover — chip ellipsis-truncates long names.
+            // 悬停时显示完整文件名 — 标签省略号截断长名称。
             chip.title = att.filename;
             chip.innerHTML = chipHtml;
             chip.addEventListener('click', () => _withSpinner(chip, async () => {
@@ -2559,23 +2560,23 @@ import * as Modals from './modalManager.js';
                 if (data.doc_id) {
                   await loadDocument(data.doc_id);
                 } else if (uiModule) {
-                  uiModule.showError(data.error || 'Failed to open PDF');
+                  uiModule.showError(data.error || t('document.pdf_view_load_failed') + 'PDF');
                   window.open(`${API_BASE}/api/email/attachment/${encodeURIComponent(fields.sourceUid)}/${att.index}?folder=${folderQs}`, '_blank');
                 }
               } catch (e) {
                 console.error('Open PDF attachment failed:', e);
-                if (uiModule) uiModule.showError('Failed to open PDF');
+                if (uiModule) uiModule.showError(t('document.pdf_view_load_failed') + 'PDF');
               }
             }));
             attDiv.appendChild(chip);
           } else {
-            // Non-PDF: download via fetch+blob+anchor — browser-native download
-            // with target=_blank was unreliable in some browsers (the click did
-            // nothing). The blob path forces a real Save dialog every time.
+            // 非 PDF：通过 fetch+blob+anchor 下载 — 浏览器原生下载
+            // 使用 target=_blank 在某些浏览器中不可靠（点击
+            // 无效果）。blob 路径每次都强制打开真正的保存对话框。
             const chip = document.createElement('button');
             chip.type = 'button';
             chip.className = 'email-attachment-chip';
-            // Full filename on hover for the chip ellipsis-truncated label.
+            // 悬停时显示完整文件名，用于标签省略号截断的标签。
             chip.title = `Download ${att.filename}`;
             chip.innerHTML = chipHtml;
             chip.addEventListener('click', () => _withSpinner(chip, async () => {
@@ -2593,7 +2594,7 @@ import * as Modals from './modalManager.js';
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
               } catch (e) {
                 console.error('Download attachment failed:', e);
-                if (uiModule) uiModule.showError('Download failed: ' + e.message);
+                if (uiModule) uiModule.showError(t('document.pdf_view_load_failed') + 'PDF: ' + e.message);
               }
             }));
             attDiv.appendChild(chip);
@@ -2605,13 +2606,13 @@ import * as Modals from './modalManager.js';
     }
     if (textarea) {
       textarea.value = fields.body;
-      // Store original body for change detection on close
+      // 存储原始正文以用于关闭时的更改检测
       if (doc) doc._originalBody = fields.body;
       syncHighlighting();
     }
-    // WYSIWYG: swap the source editor for the rich body and render the markdown.
-    // The textarea above stays as the plain-text mirror (kept in sync below) so
-    // send / draft / change-detection still read it.
+    // WYSIWYG：将源编辑器替换为富文本正文并渲染 markdown。
+    // 上面的 textarea 保持为纯文本镜像（下面保持同步），因此
+    // send / draft / change-detection 仍然读取它。
     const _rich = document.getElementById('doc-email-richbody');
     const _srcWrap = document.getElementById('doc-editor-wrap');
     if (_rich && _srcWrap) {
@@ -2627,9 +2628,9 @@ import * as Modals from './modalManager.js';
         } catch (_) {}
       }, 50);
     }
-    // Render compose attachments (if any uploaded for this doc)
+    // 渲染撰写附件（如果为此文档上传了任何附件）
     _renderComposeAttachments();
-    // Populate CC/BCC from parsed header, show rows if populated
+    // 从解析的标题填充 CC/BCC，如果已填充则显示行
     const ccRow = document.getElementById('doc-email-cc-row');
     const bccRow = document.getElementById('doc-email-bcc-row');
     const ccToggle = document.getElementById('doc-email-show-cc');
@@ -2668,10 +2669,10 @@ import * as Modals from './modalManager.js';
             size: data.size,
           });
         } else {
-          if (uiModule) uiModule.showError(`Failed to upload ${file.name}: ${data.error || ''}`);
+          if (uiModule) uiModule.showError(t('document.pdf_view_load_failed') + `${file.name}: ${data.error || ''}`);
         }
       } catch (err) {
-        if (uiModule) uiModule.showError(`Failed to upload ${file.name}`);
+        if (uiModule) uiModule.showError(t('document.pdf_view_load_failed') + 'upload ' + file.name);
       }
     }
     _renderComposeAttachments();
@@ -2718,10 +2719,10 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  // Split a To/Cc/Bcc text field into recipients + the in-progress fragment
-  // the user is currently typing (after the last comma). Returns a tuple so
-  // we can show suggestions for just the fragment without disturbing the
-  // already-confirmed recipients.
+  // 将 To/Cc/Bcc 文本字段分割为收件人 + 用户正在输入的
+  // 进行中片段（最后一个逗号之后）。返回元组以便
+  // 我们可以仅为片段显示建议而不干扰
+  // 已确认的收件人。
   function _splitRecipientsAndFragment(rawValue) {
     const cut = (rawValue || '').lastIndexOf(',');
     if (cut < 0) return { confirmed: '', fragment: (rawValue || '').trimStart() };
@@ -2731,26 +2732,26 @@ import * as Modals from './modalManager.js';
     };
   }
 
-  // Replace the in-progress fragment in `input` with the chosen email,
-  // append ", " so the user can type the next recipient immediately, then
-  // hide the suggestion dropdown.
+  // 将 `input` 中的进行中片段替换为所选电子邮件，
+  // 追加 ", " 以便用户可以立即输入下一个收件人，然后
+  // 隐藏建议下拉列表。
   function _commitRecipient(input, sugg, email) {
     if (!input) return;
     const { confirmed } = _splitRecipientsAndFragment(input.value);
-    // Preserve a single trailing space between commas for readability.
+    // 在逗号之间保留一个尾随空格以提高可读性。
     const head = confirmed ? confirmed.replace(/\s+$/, '') + ' ' : '';
     input.value = head + email + ', ';
     if (sugg) sugg.style.display = 'none';
     input.focus();
-    // Caret to end so the next keystroke lands in the right place.
+    // 光标移到末尾，以便下一个按键落在正确位置。
     const end = input.value.length;
     try { input.setSelectionRange(end, end); } catch (_) {}
   }
 
-  // Search contacts for an autocomplete dropdown. `input` is the To/Cc/Bcc
-  // text field, `sugg` is its sibling .email-autocomplete div. Suggestions
-  // are scoped to the LAST comma-separated fragment so already-entered
-  // recipients aren't disturbed.
+  // 搜索联系人以获取自动完成下拉列表。`input` 是 To/Cc/Bcc
+  // 文本字段，`sugg` 是其兄弟 .email-autocomplete div。建议
+  // 范围限定于最后逗号分隔的片段，因此已输入的
+  // 收件人不会被干扰。
   async function _searchContacts(input, sugg) {
     if (!input || !sugg) return;
     const { fragment } = _splitRecipientsAndFragment(input.value);
@@ -2762,8 +2763,8 @@ import * as Modals from './modalManager.js';
         sugg.style.display = 'none';
         return;
       }
-      // Already-entered emails in this field — skip in the dropdown so
-      // users don't accidentally add the same person twice.
+      // 此字段中已输入的电子邮件 — 在下拉列表中跳过，以防
+      // 用户意外添加同一个人两次。
       const already = new Set(
         (input.value || '').split(',').map(s => {
           const m = s.match(/<([^>]+)>/);
@@ -2778,7 +2779,7 @@ import * as Modals from './modalManager.js';
           const item = document.createElement('div');
           item.className = 'contact-suggestion';
           item.innerHTML = `<span class="contact-name">${_escHtml(c.name)}</span><span class="contact-email">${_escHtml(em)}</span>`;
-          // mousedown fires before blur so the click doesn't get lost
+          // mousedown 在 blur 之前触发，因此点击不会丢失
           item.addEventListener('mousedown', (e) => { e.preventDefault(); _commitRecipient(input, sugg, em); });
           item.addEventListener('click', (e) => { e.preventDefault(); _commitRecipient(input, sugg, em); });
           sugg.appendChild(item);
@@ -2786,7 +2787,7 @@ import * as Modals from './modalManager.js';
         }
       }
       if (count === 0) { sugg.style.display = 'none'; return; }
-      // Auto-highlight first suggestion so Enter accepts it.
+      // 自动高亮第一个建议，以便 Enter 接受它。
       const first = sugg.querySelector('.contact-suggestion');
       if (first) first.classList.add('active');
       sugg.style.display = '';
@@ -2795,8 +2796,8 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  // Bind input/keydown/blur for a recipient field so it gets the same
-  // autocomplete-and-commit behavior. Used by To/Cc/Bcc.
+  // 绑定收件人字段的 input/keydown/blur，使其获得相同的
+  // 自动完成和提交行为。由 To/Cc/Bcc 使用。
   function _wireRecipientAutocomplete(inputId, suggId) {
     const input = document.getElementById(inputId);
     const sugg = document.getElementById(suggId);
@@ -2825,10 +2826,10 @@ import * as Modals from './modalManager.js';
         items.forEach(it => it.classList.remove('active'));
         if (items[idx]) items[idx].classList.add('active');
       } else if (e.key === 'Enter') {
-        // If a suggestion is highlighted, commit it. Otherwise — if the
-        // current fragment already looks like a complete email — commit
-        // the raw text so users who type a brand-new address don't have
-        // to add the comma themselves.
+        // 如果高亮了建议，提交它。否则 — 如果当前片段
+        // 已经看起来像完整的电子邮件 — 提交原始文本，
+        // 以便输入全新地址的用户不必
+        // 自己添加逗号。
         if (active) {
           e.preventDefault();
           const em = active.querySelector('.contact-email')?.textContent?.trim();
@@ -2847,7 +2848,7 @@ import * as Modals from './modalManager.js';
       } else if (e.key === 'Escape') {
         sugg.style.display = 'none';
       } else if (e.key === ',' || (e.key === ' ' && input.value.trim().endsWith(','))) {
-        // Typing a comma directly also accepts a highlighted suggestion.
+        // 直接输入逗号也接受高亮的建议。
         if (active) {
           e.preventDefault();
           const em = active.querySelector('.contact-email')?.textContent?.trim();
@@ -2862,27 +2863,27 @@ import * as Modals from './modalManager.js';
     const emailActions = document.getElementById('doc-email-actions');
     if (emailHeader) emailHeader.style.display = 'none';
     if (emailActions) emailActions.style.display = 'none';
-    // Restore toolbar items that were hidden for email (Code dropdown).
+    // 恢复为邮件隐藏的工具栏项目（Code 下拉）。
     document.querySelectorAll('.md-toolbar-email-hide').forEach(el => { el.style.display = ''; });
-    // Restore the generic documents action bar + its bottom footer (Close /
-    // Copy / Export) for non-email docs.
+    // 恢复通用文档操作栏 + 其底部页脚（Close /
+    // Copy / Export）用于非邮件文档。
     const docActions = document.getElementById('doc-editor-actions');
     if (docActions) docActions.style.display = '';
     const docFooter = document.getElementById('doc-actions-footer');
     if (docFooter) docFooter.style.display = '';
-    // Return the type picker to its non-email home (right before the
-    // Copy/Export split) — _showEmailFields moved it into the email footer.
+    // 将类型选择器返回到其非邮件位置（Copy/Export 分割之前）
+    // — _showEmailFields 将其移入了邮件页脚。
     if (docFooter) {
       const _lang = document.getElementById('doc-language-select');
       const _split = docFooter.querySelector('#doc-copy-export-split');
       if (_lang && _split) docFooter.insertBefore(_lang, _split);
     }
-    // Restore the source editor and hide the WYSIWYG email body.
+    // 恢复源编辑器并隐藏 WYSIWYG 邮件正文。
     const _rich = document.getElementById('doc-email-richbody');
     if (_rich) _rich.style.display = 'none';
     const _srcWrap = document.getElementById('doc-editor-wrap');
     if (_srcWrap) _srcWrap.style.display = '';
-    // Drop the email-mode class so editors return to monospace monochrome
+    // 移除 email-mode 类，使编辑器恢复到等宽单色
     document.getElementById('doc-editor-textarea')?.classList.remove('email-mode');
     document.getElementById('doc-editor-code')?.classList.remove('email-mode');
     document.getElementById('doc-editor-highlight')?.classList.remove('email-mode');
@@ -2892,7 +2893,7 @@ import * as Modals from './modalManager.js';
 
   function _bodyMentionsAttachment(text) {
     if (!text) return false;
-    // Only check the user's own text, not quoted replies
+    // 仅检查用户自己的文本，不检查引用的回复
     const parts = text.split(/^>|^On .* wrote:/m);
     const own = parts[0] || '';
     return _ATTACH_RE.test(own);
@@ -2933,8 +2934,8 @@ import * as Modals from './modalManager.js';
     const references = document.getElementById('doc-email-references')?.value?.trim();
     const sourceUid = document.getElementById('doc-email-source-uid')?.value?.trim();
     const sourceFolder = document.getElementById('doc-email-source-folder')?.value?.trim() || 'INBOX';
-    // WYSIWYG: the rich body's HTML becomes the email's HTML part (server
-    // sanitizes it). `body` (plain text mirror) stays the text/plain fallback.
+    // WYSIWYG：富文本正文的 HTML 成为邮件的 HTML 部分（服务器
+    // 进行清理）。`body`（纯文本镜像）保持为 text/plain 后备。
     const _rich = _emailRichbodyActive();
     if (_rich) _syncEmailRichbody(_rich);
     const textarea = document.getElementById('doc-editor-textarea');
@@ -2943,14 +2944,14 @@ import * as Modals from './modalManager.js';
     const doc = docs.get(activeDocId);
     const attachments = (doc?._composeAtts || []).map(a => a.token);
     if (!to || !body) {
-      if (uiModule) uiModule.showError('To and body are required');
+      if (uiModule) uiModule.showError(t('document.email_to_body_required'));
       return;
     }
     if (inReplyTo && !_emailReplyOwnText(body)) {
-      if (uiModule) uiModule.showError('Reply body is empty');
+      if (uiModule) uiModule.showError(t('document.email_reply_empty'));
       return;
     }
-    // Warn if body mentions attachments but none are actually attached
+    // 如果正文提及附件但实际上没有附件时发出警告
     if (attachments.length === 0 && _bodyMentionsAttachment(body)) {
       const proceed = await _confirmMissingAttachment();
       if (!proceed) return;
@@ -2967,15 +2968,15 @@ import * as Modals from './modalManager.js';
       sendSpinner.element.style.cssText = 'display:inline-block;vertical-align:-2px;margin-right:6px;width:14px;height:14px;';
       btn.innerHTML = '';
       btn.appendChild(sendSpinner.element);
-      btn.appendChild(document.createTextNode('Sending'));
+      btn.appendChild(document.createTextNode(t('document.email_sending')));
     }
     try {
       let canceled = false;
       if (uiModule) {
-        uiModule.showToast('Sending', {
+        uiModule.showToast(t('document.email_sending'), {
           duration: 3200,
           leadingIcon: 'spinner',
-          action: 'Cancel',
+          action: t('common.cancel'),
           onAction: () => { canceled = true; },
         });
       }
@@ -2985,7 +2986,7 @@ import * as Modals from './modalManager.js';
       if (canceled) {
         _restoreDetachedEmailDoc(detachedEmailDoc);
         detachedEmailDoc = null;
-        if (uiModule) uiModule.showToast('Send canceled');
+        if (uiModule) uiModule.showToast(t('document.email_send_canceled'));
         return;
       }
 
@@ -3011,10 +3012,10 @@ import * as Modals from './modalManager.js';
       if (!res.ok && data && !data.error) data.error = `Send failed (${res.status})`;
       if (data.success) {
         if (uiModule) {
-          uiModule.showToast('Message sent', {
+          uiModule.showToast(t('document.email_sent'), {
             duration: 7000,
             leadingIcon: 'check',
-            action: 'View Message',
+            action: t('document.email_view_message'),
             onAction: () => {
               import('./emailLibrary.js').then(mod => {
                 const open = mod.openEmailLibrary || (mod.default && mod.default.openEmailLibrary);
@@ -3027,8 +3028,8 @@ import * as Modals from './modalManager.js';
             },
           });
         }
-        // Auto-save recipients to the configured contacts backend (CardDAV).
-        // The compose fields accept plain emails and "Name <email>" chips.
+        // 自动将收件人保存到配置的联系人后端（CardDAV）。
+        // 撰写字段接受普通电子邮件和 "Name <email>" 标签。
         const _contactPieces = [to, cc, bcc].join(',').split(/[,;]/).map(s => s.trim()).filter(Boolean);
         const _seenContacts = new Set();
         for (const piece of _contactPieces) {
@@ -3046,15 +3047,15 @@ import * as Modals from './modalManager.js';
             body: JSON.stringify({ name, email }),
           }).catch(() => {});
         }
-        // Mark the source email as answered if this was a reply
+        // 如果这是回复，将源邮件标记为已回复
         if (sourceUid) {
           fetch(`${API_BASE}/api/email/mark-answered/${sourceUid}?folder=${encodeURIComponent(sourceFolder)}`, { method: 'POST' }).catch(() => {});
-          // Tell the inbox to refresh so the answered state shows
+          // 通知收件箱刷新以显示已回复状态
           window.dispatchEvent(new CustomEvent('email-answered', { detail: { uid: sourceUid } }));
         }
-        // Delete the compose document after successful send. It was usually
-        // already detached from the visible tabs so sending can finish in the
-        // background while the user continues in the next tab.
+        // 成功发送后删除撰写文档。它通常
+        // 已从可见标签分离，因此发送可以在后台完成
+        // 而用户继续在下一个标签中操作。
         if (sendDocId) {
           fetch(`${API_BASE}/api/document/${sendDocId}`, { method: 'DELETE' }).catch(() => {});
           const wasActiveSentDoc = activeDocId === sendDocId;
@@ -3072,12 +3073,12 @@ import * as Modals from './modalManager.js';
       } else {
         _restoreDetachedEmailDoc(detachedEmailDoc);
         detachedEmailDoc = null;
-        if (uiModule) uiModule.showError(data.error || 'Failed to send');
+        if (uiModule) uiModule.showError(data.error || t('document.email_send_failed'));
       }
     } catch (e) {
       _restoreDetachedEmailDoc(detachedEmailDoc);
       detachedEmailDoc = null;
-      if (uiModule) uiModule.showError(e?.message ? `Failed to send email: ${e.message}` : 'Failed to send email');
+      if (uiModule) uiModule.showError(e?.message ? t('document.email_send_failed_generic') + `: ${e.message}` : t('document.email_send_failed_generic'));
     } finally {
       if (sendSpinner) sendSpinner.destroy();
       if (btn) {
@@ -3100,7 +3101,7 @@ import * as Modals from './modalManager.js';
     const body = (_rich ? (_rich.innerText || _rich.textContent || '') : (textarea?.value || '')).trim();
     const bodyHtml = _rich ? _rich.innerHTML : null;
     const btn = document.getElementById('doc-email-draft-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+    if (btn) { btn.disabled = true; btn.textContent = t('common.saving'); }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 18000);
     try {
@@ -3122,22 +3123,22 @@ import * as Modals from './modalManager.js';
       });
       const data = await res.json();
       if (data.success) {
-        if (uiModule) uiModule.showToast('Draft saved to mailbox');
+        if (uiModule) uiModule.showToast(t('document.email_draft_saved'));
       } else {
-        if (uiModule) uiModule.showError(data.error || 'Failed to save draft');
+        if (uiModule) uiModule.showError(data.error || t('document.email_draft_save_failed'));
       }
     } catch (e) {
       const timedOut = e && e.name === 'AbortError';
-      if (uiModule) uiModule.showError(timedOut ? 'Saving draft timed out' : 'Failed to save draft');
+      if (uiModule) uiModule.showError(timedOut ? t('document.email_draft_save_timeout') : t('document.email_draft_save_failed'));
     } finally {
       clearTimeout(timeout);
-      if (btn) { btn.disabled = false; btn.textContent = 'Draft'; }
+      if (btn) { btn.disabled = false; btn.textContent = t('document.email_draft_button'); }
     }
   }
 
   function _discardEmail() {
     if (!activeDocId) return;
-    // Just close — the Draft button handles saving explicitly
+// 仅关闭——"草稿"按钮负责显式保存
     _closeWithoutDeleting(true);
   }
 
@@ -3191,7 +3192,7 @@ import * as Modals from './modalManager.js';
     if (deleteDoc) {
       fetch(`${API_BASE}/api/document/${activeDocId}`, { method: 'DELETE' }).catch(() => {});
     }
-    // Save the current state to the doc first so it persists in the library
+// 先将当前状态保存到文档，以便在资源库中持久化
     saveCurrentToMap();
     if (!deleteDoc) {
       saveDocument({ silent: true }).catch(() => {});
@@ -3239,7 +3240,7 @@ import * as Modals from './modalManager.js';
       return currentBody.length < 2500;
     };
 
-    // Use the current chat model
+// 使用当前聊天模型
     let currentModel = '';
     let currentSessionId = '';
     try {
@@ -3248,7 +3249,7 @@ import * as Modals from './modalManager.js';
     } catch (_) {}
 
     const btn = document.getElementById('doc-email-ai-reply-btn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>Drafting...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>' + t('document.email_ai_reply_drafting'); }
 
     try {
       const res = await fetch(`${API_BASE}/api/email/ai-reply`, {
@@ -3278,14 +3279,14 @@ import * as Modals from './modalManager.js';
           newBody = cleanReply + (currentBody ? '\n\n' + currentBody : '');
         }
         await _streamEmailBodyText(textarea, newBody);
-        if (uiModule) uiModule.showToast(`AI draft inserted (${data.model_used || 'AI'})`);
+        if (uiModule) uiModule.showToast(t('document.email_ai_reply_inserted', { model: data.model_used || 'AI' }));
       } else {
-        if (uiModule) uiModule.showError(data.error || 'Failed to generate reply');
+        if (uiModule) uiModule.showError(data.error || t('document.email_ai_reply_failed'));
       }
     } catch (e) {
-      if (uiModule) uiModule.showError('Failed to generate AI reply');
+      if (uiModule) uiModule.showError(t('document.email_ai_reply_failed'));
     } finally {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>AI Reply'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>' + t('document.email_ai_reply_button'); }
     }
   }
 
@@ -3306,11 +3307,11 @@ import * as Modals from './modalManager.js';
     const attachments = (doc?._composeAtts || []).map(a => a.token);
 
     if (!to || !body) {
-      if (uiModule) uiModule.showError('To and body are required');
+      if (uiModule) uiModule.showError(t('document.email_to_body_required'));
       return;
     }
     if (inReplyTo && !_emailReplyOwnText(body)) {
-      if (uiModule) uiModule.showError('Reply body is empty');
+      if (uiModule) uiModule.showError(t('document.email_reply_empty'));
       return;
     }
     if (attachments.length === 0 && _bodyMentionsAttachment(body)) {
@@ -3318,7 +3319,7 @@ import * as Modals from './modalManager.js';
       if (!proceed) return;
     }
 
-    // Create a small modal with datetime input and quick presets
+// 创建带有日期时间选择和快捷预设的小型模态框
     const overlay = document.createElement('div');
     overlay.className = 'modal';
     overlay.style.display = 'flex';
@@ -3367,7 +3368,7 @@ import * as Modals from './modalManager.js';
     }
 
     const dtInput = overlay.querySelector('#sched-datetime');
-    // Default to 1 hour from now
+// 默认从现在起 1 小时后
     const now = new Date(Date.now() + 60 * 60 * 1000);
     const pad = (n) => String(n).padStart(2, '0');
     dtInput.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -3400,8 +3401,8 @@ import * as Modals from './modalManager.js';
 
     overlay.querySelector('#sched-confirm').addEventListener('click', async () => {
       const localDt = dtInput.value;
-      if (!localDt) { if (uiModule) uiModule.showError('Please pick a time'); return; }
-      // Convert local datetime to UTC ISO
+      if (!localDt) { if (uiModule) uiModule.showError(t('document.scheduler_pick_time')); return; }
+// 将本地日期时间转换为 UTC ISO
       const utcIso = new Date(localDt).toISOString();
       try {
         const activeAccountId = await _resolveComposeSendAccountId();
@@ -3419,15 +3420,15 @@ import * as Modals from './modalManager.js';
         });
         const data = await res.json();
         if (data.success) {
-          if (uiModule) uiModule.showToast(`Scheduled for ${new Date(localDt).toLocaleString()}`);
+          if (uiModule) uiModule.showToast(t('document.scheduler_scheduled', { time: new Date(localDt).toLocaleString() }));
           cleanup();
-          // Close the document
+// 关闭文档
           _closeWithoutDeleting(true);
         } else {
-          if (uiModule) uiModule.showError(data.error || 'Failed to schedule');
+          if (uiModule) uiModule.showError(data.error || t('document.scheduler_failed'));
         }
       } catch (e) {
-        if (uiModule) uiModule.showError('Failed to schedule');
+        if (uiModule) uiModule.showError(t('document.scheduler_failed'));
       }
     });
   }
@@ -3448,10 +3449,10 @@ import * as Modals from './modalManager.js';
     _hideLoadingOverlay();
     if (_diffModeActive) exitDiffMode(true);
 
-    // Save current doc state before switching
+// 切换前保存当前文档状态
     saveCurrentToMap();
 
-    // Auto-delete the doc we're leaving if it's completely empty
+// 如果要离开的文档完全为空，则自动删除
     const prevId = activeDocId;
     if (prevId && prevId !== docId && docs.has(prevId)) {
       const prev = docs.get(prevId);
@@ -3466,20 +3467,20 @@ import * as Modals from './modalManager.js';
     clearSelection();
     const doc = docs.get(docId);
 
-    // Populate editor
+// 填充编辑器
     const titleInput = document.getElementById('doc-title-input');
     const textarea = document.getElementById('doc-editor-textarea');
     const langSelect = document.getElementById('doc-language-select');
     const badge = document.getElementById('doc-version-badge');
 
     if (titleInput) titleInput.value = doc.title || '';
-    // For email docs, _showEmailFields will set textarea to body only (not raw header)
+// 对于 email 文档，_showEmailFields 将设置 textarea 为仅正文（不含原始头信息）
     if (textarea && doc.language !== 'email') textarea.value = doc.content || '';
     if (langSelect) langSelect.value = doc.language || 'markdown';
     if (badge) { const _v = doc.version || 1; badge.textContent = `v${_v}`; badge.style.display = _v > 1 ? '' : 'none'; }
     { const _v = doc.version || 1; const _dbtn = document.getElementById('doc-diff-toggle-btn'); if (_dbtn) _dbtn.style.display = _v > 1 ? '' : 'none'; }
     syncHighlighting();
-    // Deferred re-sync: ensure minHeight is correct after browser layout
+// 延迟重新同步：确保浏览器布局后 minHeight 正确
     requestAnimationFrame(() => {
       const ta2 = document.getElementById('doc-editor-textarea');
       const code2 = document.getElementById('doc-editor-code');
@@ -3490,21 +3491,21 @@ import * as Modals from './modalManager.js';
       }
     });
 
-    // Auto-detect language for docs with no language set
+// 为未设置语言的文档自动检测语言
     if (!doc.userSetLanguage && !doc.language) {
       setTimeout(attemptAutoDetect, 100);
     }
 
-    // Show/hide markdown toolbar based on language. PDF-backed docs are
-    // markdown under the hood, so the toolbar shows up for them too — and
-    // gets the PDF-specific buttons (Text/Check/Sign/AI) revealed below.
+// 根据语言显示/隐藏 markdown 工具栏。PDF 支持的文档底层
+// 是 markdown，因此工具栏也会显示——并在下方显示
+// PDF 特定按钮（文本/勾选/签名/AI）。
     const isMd = (doc.language || 'markdown') === 'markdown';
     const isPdf = _isFormBackedDoc(doc.content || '');
 
-    // For PDF-backed docs, re-run text extraction on the backend so the AI
-    // can see the contents on the very next message. Idempotent + skipped
-    // once per session per doc to avoid hammering the VL model on every
-    // switch — track via a sentinel on the doc object.
+// 对于 PDF 支持的文档，在后端重新运行文本提取，使 AI
+// 能在下一条消息中看到内容。对每个会话每个文档仅执行一次
+// 以避免重复调用视觉模型——通过文档对象上的标记来跟踪。
+//
     if (isPdf && !doc._ocrTriggered) {
       doc._ocrTriggered = true;
       (async () => {
@@ -3513,8 +3514,8 @@ import * as Modals from './modalManager.js';
           if (!r.ok) return;
           const j = await r.json().catch(() => ({}));
           if (j && j.extracted) {
-            // Pull the fresh content into the local cache so subsequent AI
-            // turns and the source view both reflect the extraction.
+// 将最新内容拉入本地缓存，使后续 AI
+// 轮次和源视图都能反映提取结果。
             const dr = await fetch(`${API_BASE}/api/document/${docId}`, { credentials: 'same-origin' });
             if (dr.ok) {
               const full = await dr.json();
@@ -3529,36 +3530,36 @@ import * as Modals from './modalManager.js';
     }
     const mdToolbar = document.getElementById('doc-md-toolbar');
     if (mdToolbar) {
-      // Show for every doc type so users always have access to font-size /
-      // diff toggle / language-specific controls. Items inside the toolbar
-      // gate their own visibility on language (md edit/preview toggle, etc).
+// 为所有文档类型显示，使用户始终可以访问字号/
+// 差异切换/语言特定控件。工具栏内的项目
+// 根据语言控制自身可见性（markdown 编辑/预览切换等）。
       mdToolbar.style.display = '';
       if (mdToolbar._syncOverflow) requestAnimationFrame(mdToolbar._syncOverflow);
     }
-    // Toggle PDF-only toolbar group
+// 切换仅 PDF 工具栏组
     document.querySelectorAll('.md-toolbar-pdf-only').forEach(el => {
       el.style.display = isPdf ? '' : 'none';
     });
-    // Font size does nothing for a PDF (annotations are placed, not styled) —
-    // hide it on PDFs so the toolbar only shows what actually works.
+// 字号对 PDF 无效（注释是放置的，不是样式化的）——
+// 在 PDF 上隐藏，使工具栏只显示实际可用的功能。
     const _fsBtn = document.getElementById('doc-fontsize-btn');
     if (_fsBtn) _fsBtn.style.display = isPdf ? 'none' : '';
-    // Exit CSV preview when switching docs, or auto-show for CSV
+// 切换文档时退出 CSV 预览，或自动为 CSV 显示
     const isCsv = doc.language === 'csv';
     const csvPreview = document.getElementById('doc-csv-preview');
     if (!isCsv) {
       if (csvPreview) csvPreview.style.display = 'none';
     } else {
-      // Auto-show table view for CSV documents
+// 自动为 CSV 文档显示表格视图
       requestAnimationFrame(() => toggleCsvPreview());
     }
 
-    // Exit HTML preview on switch
+// 切换时退出 HTML 预览
     exitHtmlPreview();
 
-    // Show/hide email fields. Markdown preview uses the same editor wrapper
-    // as email source mode, so clear it before showing the rich email body;
-    // otherwise the source wrapper can reappear over the composer.
+// 显示/隐藏 email 字段。Markdown 预览使用与 email 源模式
+// 相同的编辑器包装，因此在显示富文本 email 正文之前清除它；
+// 否则源包装可能覆盖编写器重新出现。
     const isEmail = doc.language === 'email';
     if (isEmail) {
       _setMarkdownPreviewActive(false, { remember: false });
@@ -3569,23 +3570,23 @@ import * as Modals from './modalManager.js';
       _setMarkdownPreviewActive(wantsMarkdownPreview, { remember: false });
     }
 
-    // Hide version panel on switch
+// 切换时隐藏版本面板
     const vp = document.getElementById('doc-version-panel');
     if (vp) vp.classList.add('hidden');
 
     renderTabs();
     _syncHeaderActions();
 
-    // Restore any persisted suggestions for this doc
+// 恢复此文档的任何持久化建议
     if (_activeSuggestions.length === 0) {
       _restoreSuggestionsFromStorage(docId);
     }
 
   }
 
-  // Detach a doc from its chat session so it stops reappearing in that
-  // chat: docs with content are unlinked (kept in the library), empty docs
-  // are deleted. Used by both the tab × and the mobile chip-to-trash close.
+// 将文档从聊天会话中解绑，使其不再在该聊天中重新出现：
+// 有内容的文档解除链接（保留在资源库中），空文档
+// 删除。由标签 × 和移动端芯片拖入垃圾桶的关闭使用。
   function _detachDocFromSession(docId, { toast = false } = {}) {
     const doc = docs.get(docId);
     const hasContent = doc && doc.content && doc.content.trim().length > 0;
@@ -3595,7 +3596,7 @@ import * as Modals from './modalManager.js';
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: '' }),
       }).then(() => {
-        if (toast && uiModule) uiModule.showToast('Document unlinked from session');
+        if (toast && uiModule) uiModule.showToast(t('document.doc_unlinked'));
       }).catch(() => {});
     } else {
       fetch(`${API_BASE}/api/document/${docId}`, { method: 'DELETE' }).catch(() => {});
@@ -3605,10 +3606,10 @@ import * as Modals from './modalManager.js';
   }
 
   async function closeTab(docId) {
-    // Save current editor content to map so the check below uses fresh data
+// 将当前编辑器内容保存到 map，使下面的检查使用最新数据
     saveCurrentToMap();
     _detachDocFromSession(docId, { toast: true });
-    // Find next tab in the current session
+// 在当前会话中查找下一个标签页
     const curSession = sessionModule?.getCurrentSessionId() || '';
     let nextId = null;
     for (const [id, d] of docs) {
@@ -3629,12 +3630,12 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Auto-create a document when user types/pastes into empty editor */
+  /** 用户输入/粘贴到空编辑器时自动创建文档 */
   let _autoCreating = false;
-  // True while createDocument's POST is in flight — suppresses the type-to-
-  // auto-create path so clicking "New document" and immediately typing can't
-  // spawn a SECOND untitled doc (the create round-trip hadn't set activeDocId
-  // yet, so the input handler thought the editor was empty).
+// createDocument 的 POST 请求进行中时为 true——抑制输入自动创建路径
+// 防止点击"新建文档"后立即输入生成第二个未命名文档
+//（创建往返未设置 activeDocId 时，输入处理器认为编辑器为空）。
+//（创建往返未设置 activeDocId，因此输入处理器认为编辑器为空）。
   let _creatingDoc = false;
   async function _autoCreateFromInput(content) {
     if (_autoCreating) return;
@@ -3652,21 +3653,21 @@ import * as Modals from './modalManager.js';
       });
       const doc = await res.json();
       addDocToTabs(doc, sessionId);
-      // Set the content into the map so switchToDoc preserves it
+// 将内容设置到 map 中，使 switchToDoc 保留它
       const d = docs.get(doc.id);
       if (d) d.content = content;
       activeDocId = doc.id;
-      // Update textarea (keep existing content the user typed)
+// 更新 textarea（保留用户输入的内容）
       const textarea = document.getElementById('doc-editor-textarea');
       if (textarea) {
-        textarea.placeholder = 'Document content...';
+        textarea.placeholder = t('document.editor_placeholder_content');
       }
       syncHighlighting();
       renderTabs();
-      // Trigger auto-detect and auto-title
+// 触发自动检测和自动标题
       setTimeout(attemptAutoDetect, 100);
       setTimeout(() => autoTitleFromContent(content), 300);
-      // Auto-save
+// 自动保存
       clearTimeout(_autoSaveDebounce);
       _autoSaveDebounce = setTimeout(() => { saveDocument({ silent: true }); }, 2000);
     } catch (e) {
@@ -3676,7 +3677,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Save current editor state back into the docs map */
+  /** 将当前编辑器状态保存回文档映射 */
   function saveCurrentToMap() {
     if (!activeDocId || !docs.has(activeDocId)) return;
     const doc = docs.get(activeDocId);
@@ -3685,7 +3686,7 @@ import * as Modals from './modalManager.js';
     const langSelect = document.getElementById('doc-language-select');
     if (titleInput) doc.title = titleInput.value;
     if (langSelect) doc.language = langSelect.value;
-    // For email docs, reconstruct full content with header
+// 对于 email 文档，用头信息重建完整内容
     if (doc.language === 'email' && textarea) {
       const to = document.getElementById('doc-email-to')?.value || '';
       const cc = document.getElementById('doc-email-cc')?.value || '';
@@ -3695,35 +3696,35 @@ import * as Modals from './modalManager.js';
       const references = document.getElementById('doc-email-references')?.value || '';
       const sourceUid = document.getElementById('doc-email-source-uid')?.value || '';
       const sourceFolder = document.getElementById('doc-email-source-folder')?.value || '';
-      // Persist the WYSIWYG body as HTML so reopening the draft keeps its
-      // formatting (the textarea mirror is plain text). _emailBodyToHtml detects
-      // the leading '<' on reload and restores it verbatim.
+// 将 WYSIWYG 正文持久化为 HTML，使重新打开草稿时保留
+// 其格式（textarea 镜像为纯文本）。_emailBodyToHtml 在重新加载时
+// 检测到前导 '<' 并按原样恢复。
       const _rich = document.getElementById('doc-email-richbody');
       const _emailBody = (_rich && _rich.style.display !== 'none') ? _rich.innerHTML : textarea.value;
       doc.content = _buildEmailContent(to, subject, inReplyTo, references, _emailBody, sourceUid, sourceFolder, cc, bcc);
     } else if (textarea) {
-      // Don't clobber a PDF/form-backed doc's source when the textarea is empty
-      // (it's hidden behind the rendered PDF view, so its value isn't the source
-      // of truth). Overwriting here dropped the pdf_form_source marker, so after
-      // minimize→restore the doc came back blank.
+// 当 textarea 为空时不覆盖 PDF/表单支持的文档源
+//（它隐藏在渲染的 PDF 视图后面，因此其值不是真实来源）。
+// 在此处覆盖会丢弃 pdf_form_source 标记，因此在
+// 最小化→恢复后文档恢复为空白。
       if (!(textarea.value === '' && _isFormBackedDoc(doc.content))) {
         doc.content = textarea.value;
       }
     }
   }
 
-  // ---- Panel open/close ----
+  // ---- 面板打开/关闭 ----
 
   export function openPanel() {
     if (isOpen) return;
-    // Clear any pane/divider still sliding out from a just-fired close so we
-    // don't end up with two #doc-editor-pane nodes (and a stale close stripping
-    // doc-view). Paired with the isOpen guard in _finishClose above.
+// 清除任何仍在从刚触发的关闭中滑出的面板/分隔条，避免
+// 出现两个 #doc-editor-pane 节点（以及过时的关闭操作剥离 doc-view）。
+// 与上方 _finishClose 中的 isOpen 守卫配对。
     document.getElementById('doc-editor-pane')?.remove();
     document.getElementById('doc-divider')?.remove();
-    // If the doc was minimized as a chip and the user opened the panel via
-    // a different path (toolbar button, indicator), clear that chip — the
-    // doc is becoming visible again.
+// 如果文档已最小化为芯片，但用户通过其他路径（工具栏按钮、指示器）打开面板，
+// 则清除该芯片——文档正在重新变为可见。
+// 文档正在重新变为可见。
     if (Modals.isRegistered('doc-panel') && Modals.isMinimized('doc-panel')) {
       _minimizedDocId = null;
       Modals.unregister('doc-panel');
@@ -3732,54 +3733,54 @@ import * as Modals from './modalManager.js';
     if (!container) return;
 
     isOpen = true;
-    // Doc was opened last → it goes in front of the email windows (clears the
-    // email-front flag; the doc/email z-index alternation lives in CSS).
+// 文档最后打开 → 它位于 email 窗口前面（清除 email-front 标记；
+// 文档/email 的 z-index 交替在 CSS 中）。
     document.body.classList.remove('email-front');
     _ensureAgentMode();
     _markDocVisibleState(_lastSessionId, 'open');
 
     document.body.classList.add('doc-view');
 
-    // Sync toggle button state
+// 同步切换按钮状态
     const toggleBtn = document.getElementById('overflow-doc-btn');
     if (toggleBtn) toggleBtn.classList.add('active');
     const docInd = document.getElementById('doc-indicator-btn');
     if (docInd) docInd.classList.add('active');
 
-    // Create divider — grip in the middle (drag-to-resize), swapped for a
-    // clickable collapse chevron on hover.
+// 创建分隔条——中间手柄（可拖拽调整大小），悬停时切换为
+// 可点击的折叠箭头。
     const divider = document.createElement('div');
     divider.className = 'doc-divider';
     divider.id = 'doc-divider';
-    // Single chevron that swaps direction based on cursor position:
-    //   - cursor INSIDE the doc pane  →  › (collapse / close panel)
-    //   - cursor OUTSIDE the doc pane →  ‹ (fullscreen — grow leftward)
-    // The arrow rotates via CSS so the swap feels clean. The action follows
-    // the glyph, so clicking always does what the arrow promises.
-    // The secondary X button below it is only shown in fullscreen mode and
-    // hides the pane outright (so fullscreen has an escape that isn't just
-    // "exit fullscreen").
-    divider.innerHTML = '<button type="button" class="doc-divider-collapse" title="Collapse panel" data-mode="collapse"><span>›</span></button>' +
-      '<button type="button" class="doc-divider-hide" title="Hide panel" aria-label="Hide panel"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+// 单个箭头，根据光标位置切换方向：
+//   - 光标在文档面板内   →  ›（折叠/关闭面板）
+//   - 光标在文档面板外   →  ‹（全屏——向左扩展）
+// 箭头通过 CSS 旋转，使切换感觉流畅。操作跟随
+// 字形，因此点击始终执行箭头承诺的功能。
+// 下方的辅助 X 按钮仅在全屏模式下显示，
+// 直接隐藏面板（使全屏有一个退出全屏以外的逃逸方式）。
+// "退出全屏"）。
+    divider.innerHTML = `<button type="button" class="doc-divider-collapse" title="${t('document.collapse_panel')}" data-mode="collapse"><span>›</span></button>` +
+      `<button type="button" class="doc-divider-hide" title="${t('document.hide_panel')}" aria-label="${t('document.hide_panel')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
     const _divHide = divider.querySelector('.doc-divider-hide');
     if (_divHide) {
       _divHide.addEventListener('mousedown', (e) => e.stopPropagation());
       _divHide.addEventListener('click', (e) => { e.stopPropagation(); closePanel('down'); });
     }
 
-    // Create the editor pane
+// 创建编辑器面板
     const pane = document.createElement('div');
     pane.id = 'doc-editor-pane';
     pane.className = 'doc-editor-pane';
-    // ── Mobile: make toolbar/footer buttons work on the FIRST tap with the
-    // keyboard up ──
-    // Normally a tap while the keyboard is open is eaten by the OS keyboard
-    // dismissal and the button's click never fires ("nothing triggers"). Keep
-    // the field focused through the press so the tap isn't consumed, then
-    // re-dispatch the click on release so the action fires on the first tap.
-    // The action handler itself decides whether to then drop the keyboard
-    // (Undo/Export/Close do; Format/Copy keep it). Touch only — desktop is
-    // untouched.
+// ── 移动端：使工具栏/页脚按钮在键盘打开时首次点击即生效 ──
+// 键盘打开时 ──
+// 键盘打开时的点击通常被系统键盘关闭事件吞没，
+// 按钮的 click 永远不会触发（"什么都没有触发"）。通过按下时聚焦
+// 该字段使点击不被消耗，然后在释放时
+// 重新分发 click，使操作在首次点击时触发。
+// 操作处理器自身决定是否随后收起键盘
+//（撤销/导出/关闭执行；格式/复制保留）。仅触摸——桌面不受影响。
+// 不受影响。
     {
       let _kbBtn = null;
       pane.addEventListener('pointerdown', (e) => {
@@ -3805,15 +3806,15 @@ import * as Modals from './modalManager.js';
       <input type="hidden" id="doc-title-input" value="" />
       <div class="doc-mobile-grabber" id="doc-mobile-grabber" aria-hidden="true"></div>
       <div class="doc-editor-header" id="doc-editor-actions">
-        <button id="doc-undo-btn" class="doc-action-icon-btn" title="Undo (Ctrl+Z)" style="gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span style="font-size:11px;">Undo</span></button>
-        <button id="doc-header-preview-btn" class="doc-action-icon-btn" title="Run / Preview" style="display:none;opacity:0.85;gap:4px;"></button>
+        <button id="doc-undo-btn" class="doc-action-icon-btn" title="${t('document.toolbar_undo')}" style="gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span style="font-size:11px;">${t('document.toolbar_undo')}</span></button>
+        <button id="doc-header-preview-btn" class="doc-action-icon-btn" title="${t('document.toolbar_run_preview')}" style="display:none;opacity:0.85;gap:4px;"></button>
         <span id="doc-stream-indicator" class="doc-stream-indicator" style="display:none"><span class="doc-stream-dot"></span> editing</span>
-        <span id="doc-version-badge" class="doc-version-badge" title="Version history" style="display:none">v1</span>
+        <span id="doc-version-badge" class="doc-version-badge" title="${t('document.tab_version_history')}" style="display:none">v1</span>
         <span style="flex:1"></span>
         <button id="doc-export-pdf-btn" class="doc-action-icon-btn" title="Export PDF" style="display:none;opacity:0.7;gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg> <span style="font-size:11px;">Export PDF</span></button>
-        <button id="doc-pdf-view-btn" class="doc-action-icon-btn" title="Toggle PDF view" style="display:none;opacity:0.7;gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> <span style="font-size:11px;">PDF</span></button>
+        <button id="doc-pdf-view-btn" class="doc-action-icon-btn" title="${t('document.toolbar_toggle_pdf')}" style="display:none;opacity:0.7;gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> <span style="font-size:11px;">${t('document.toolbar_pdf')}</span></button>
         <select id="doc-language-select" class="doc-language-select">
-          <option value="">type</option>
+          <option value="">${t('document.lang_picker_type')}</option>
           <option value="python">python</option>
           <option value="javascript">javascript</option>
           <option value="typescript">typescript</option>
@@ -3845,28 +3846,28 @@ import * as Modals from './modalManager.js';
       </div>
       <div class="doc-tab-bar" id="doc-tab-bar"></div>
       <div id="doc-email-header" class="doc-email-header" style="display:none">
-        <button type="button" id="doc-email-collapse-btn" class="doc-email-collapse-btn" title="Hide email fields" aria-expanded="true">
+        <button type="button" id="doc-email-collapse-btn" class="doc-email-collapse-btn" title="${t('document.email_hide_fields')}" aria-expanded="true">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
           <span id="doc-email-collapse-summary" class="doc-email-collapse-summary">No recipient · No subject</span>
         </button>
         <div id="doc-email-fields" class="doc-email-fields">
           <div class="email-field" style="position:relative">
             <label>To</label>
-            <input type="text" id="doc-email-to" placeholder="recipient@example.com" autocomplete="off" />
+            <input type="text" id="doc-email-to" placeholder="${t('document.email_placeholder_to')}" autocomplete="off" />
             <div id="doc-email-to-suggestions" class="email-autocomplete" style="display:none"></div>
-            <button type="button" id="doc-email-show-cc" class="email-cc-toggle" title="Show Cc/Bcc">Cc</button>
+            <button type="button" id="doc-email-show-cc" class="email-cc-toggle" title="${t('document.email_show_cc')}">${t('document.email_cc_label')}</button>
           </div>
           <div class="email-field" id="doc-email-cc-row" style="display:none;position:relative">
-            <label>Cc</label>
-            <input type="text" id="doc-email-cc" placeholder="cc@example.com" autocomplete="off" />
+            <label>${t('document.email_cc_label')}</label>
+            <input type="text" id="doc-email-cc" placeholder="${t('document.email_placeholder_cc')}" autocomplete="off" />
             <div id="doc-email-cc-suggestions" class="email-autocomplete" style="display:none"></div>
           </div>
           <div class="email-field" id="doc-email-bcc-row" style="display:none;position:relative">
-            <label>Bcc</label>
-            <input type="text" id="doc-email-bcc" placeholder="bcc@example.com" autocomplete="off" />
+            <label>${t('document.email_bcc_label')}</label>
+            <input type="text" id="doc-email-bcc" placeholder="${t('document.email_placeholder_bcc')}" autocomplete="off" />
             <div id="doc-email-bcc-suggestions" class="email-autocomplete" style="display:none"></div>
           </div>
-          <div class="email-field"><label>Subject</label><input type="text" id="doc-email-subject" placeholder="Subject" /></div>
+          <div class="email-field"><label>${t('document.email_subject')}</label><input type="text" id="doc-email-subject" placeholder="${t('document.email_placeholder_subject')}" /></div>
           <div id="doc-email-attachments" class="email-attachments" style="display:none"></div>
           <div id="doc-email-compose-atts" class="email-compose-atts" style="display:none"></div>
         </div>
@@ -3878,49 +3879,49 @@ import * as Modals from './modalManager.js';
       </div>
       <div class="doc-md-toolbar" id="doc-md-toolbar" style="display:none">
         <div class="md-toolbar-items" id="md-toolbar-items">
-          <span class="md-view-toggle" id="doc-md-view-toggle" style="display:none" role="group" aria-label="Edit or preview">
-            <button type="button" class="md-view-opt" data-mdview="edit" title="Edit source"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-            <button type="button" class="md-view-opt" data-mdview="preview" title="Preview"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <span class="md-view-toggle" id="doc-md-view-toggle" style="display:none" role="group" aria-label="${t('document.code_edit') + ' ' + t('document.code_preview').toLowerCase()}">
+            <button type="button" class="md-view-opt" data-mdview="edit" title="${t('document.toolbar_edit_source')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+            <button type="button" class="md-view-opt" data-mdview="preview" title="${t('document.code_preview')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
           </span>
-          <span class="md-view-toggle" id="doc-render-view-toggle" style="display:none" role="group" aria-label="Code or run">
-            <button type="button" class="md-view-opt" data-renderview="code" title="Edit code"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
-            <button type="button" class="md-view-opt" data-renderview="run" title="Run / Preview"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+          <span class="md-view-toggle" id="doc-render-view-toggle" style="display:none" role="group" aria-label="${t('document.toolbar_code_or_run')}">
+            <button type="button" class="md-view-opt" data-renderview="code" title="${t('document.code_edit_code')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+            <button type="button" class="md-view-opt" data-renderview="run" title="${t('document.toolbar_run_preview')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
           </span>
-          <button id="doc-fontsize-btn" class="doc-action-icon-btn" title="Font size" style="position:relative;width:28px;height:26px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg><span class="doc-fontsize-levels"><i data-sz="s">S</i><i data-sz="m">M</i><i data-sz="l">L</i></span></button>
-          <button id="doc-diff-toggle-btn" class="doc-action-icon-btn" title="Compare changes" style="opacity:0.7;display:none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 12H2l5-5 5 5H9"/><path d="M19 12h3l-5 5-5-5h3"/></svg></button>
+          <button id="doc-fontsize-btn" class="doc-action-icon-btn" title="${t('document.toolbar_font_size')}" style="position:relative;width:28px;height:26px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg><span class="doc-fontsize-levels"><i data-sz="s">S</i><i data-sz="m">M</i><i data-sz="l">L</i></span></button>
+          <button id="doc-diff-toggle-btn" class="doc-action-icon-btn" title="${t('document.toolbar_compare_changes')}" style="opacity:0.7;display:none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 12H2l5-5 5 5H9"/><path d="M19 12h3l-5 5-5-5h3"/></svg></button>
           <span class="md-toolbar-sep"></span>
-          <button type="button" data-md="bold" title="Bold (Ctrl+B)"><b>B</b></button>
-          <button type="button" data-md="italic" title="Italic (Ctrl+I)"><i>I</i></button>
-          <button type="button" data-md="strike" title="Strikethrough"><s>S</s></button>
+          <button type="button" data-md="bold" title="${t('document.toolbar_bold')}"><b>B</b></button>
+          <button type="button" data-md="italic" title="${t('document.toolbar_italic')}"><i>I</i></button>
+          <button type="button" data-md="strike" title="${t('document.toolbar_strikethrough')}"><s>S</s></button>
           <span class="md-toolbar-sep"></span>
-          <button type="button" class="md-dd-toggle" data-dd="heading" title="Heading"><b>H</b><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-          <button type="button" class="md-dd-toggle" data-dd="list" title="List"><span style="font-variant-numeric:tabular-nums;">1.</span><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <button type="button" class="md-dd-toggle" data-dd="heading" title="${t('document.toolbar_heading')}"><b>H</b><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <button type="button" class="md-dd-toggle" data-dd="list" title="${t('document.toolbar_list')}"><span style="font-variant-numeric:tabular-nums;">1.</span><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
           <span class="md-toolbar-sep"></span>
-          <button type="button" data-md="link" title="Link"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
-          <button type="button" id="md-toolbar-attach-btn" class="md-toolbar-attach-btn" title="Attach files"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
-          <button type="button" class="md-dd-toggle md-toolbar-email-hide" data-dd="code" title="Code">\`<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-          <button type="button" data-md="hr" title="Horizontal rule">—</button>
+          <button type="button" data-md="link" title="${t('document.toolbar_link')}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
+          <button type="button" id="md-toolbar-attach-btn" class="md-toolbar-attach-btn" title="${t('document.toolbar_attach_files')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+          <button type="button" class="md-dd-toggle md-toolbar-email-hide" data-dd="code" title="${t('document.toolbar_code')}">\`<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <button type="button" data-md="hr" title="${t('document.toolbar_horizontal_rule')}">—</button>
           <span class="md-toolbar-sep"></span>
           <span id="md-toolbar-emoji-slot"></span>
           <span class="md-toolbar-sep md-toolbar-pdf-only" style="display:none"></span>
-          <button type="button" id="doc-pdf-add-text-btn" class="md-toolbar-pdf-only" title="Add text box (then click on PDF)" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg></button>
-          <button type="button" id="doc-pdf-add-check-btn" class="md-toolbar-pdf-only" title="Add checkmark (then click on PDF)" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-          <button type="button" id="doc-pdf-add-sign-btn" class="md-toolbar-pdf-only" title="Add signature (then click on PDF)" style="display:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3l6 6-9 9-3-3z"/><path d="M9 15l-3 1 1-3"/><path d="M4 18l3-3"/><path d="M3 20l3-3"/><path d="M5 22l3-3"/></svg><span class="doc-pdf-sign-label">sign</span></button>
-          <button type="button" id="doc-pdf-refresh-btn" class="md-toolbar-pdf-only" title="Reload PDF view" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+          <button type="button" id="doc-pdf-add-text-btn" class="md-toolbar-pdf-only" title="${t('document.toolbar_add_text_box')}" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg></button>
+          <button type="button" id="doc-pdf-add-check-btn" class="md-toolbar-pdf-only" title="${t('document.toolbar_add_checkmark')}" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+          <button type="button" id="doc-pdf-add-sign-btn" class="md-toolbar-pdf-only" title="${t('document.toolbar_add_signature')}" style="display:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3l6 6-9 9-3-3z"/><path d="M9 15l-3 1 1-3"/><path d="M4 18l3-3"/><path d="M3 20l3-3"/><path d="M5 22l3-3"/></svg><span class="doc-pdf-sign-label">${t('document.toolbar_sign_label')}</span></button>
+          <button type="button" id="doc-pdf-refresh-btn" class="md-toolbar-pdf-only" title="${t('document.toolbar_reload_pdf')}" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
         </div>
         <div class="md-toolbar-overflow-wrapper" id="md-toolbar-overflow-wrapper" style="display:none">
-          <button class="md-toolbar-overflow-toggle" id="md-toolbar-overflow-toggle" title="More formatting"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+          <button class="md-toolbar-overflow-toggle" id="md-toolbar-overflow-toggle" title="${t('document.toolbar_more_formatting')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
           <div class="md-toolbar-overflow-menu" id="md-toolbar-overflow-menu"></div>
         </div>
-        <button type="button" class="md-scroll-arrow md-scroll-left" id="md-scroll-left" title="Scroll left" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
-        <button type="button" class="md-scroll-arrow md-scroll-right" id="md-scroll-right" title="Scroll right" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        <button type="button" class="md-scroll-arrow md-scroll-left" id="md-scroll-left" title="${t('document.scroll_left')}" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <button type="button" class="md-scroll-arrow md-scroll-right" id="md-scroll-right" title="${t('document.scroll_right')}" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
       </div>
       <div id="doc-find-bar" class="doc-find-bar" style="display:none">
-        <input id="doc-find-input" class="doc-find-input" type="text" placeholder="Find..." />
+        <input id="doc-find-input" class="doc-find-input" type="text" placeholder="${t('document.find_placeholder')}" />
         <span id="doc-find-count" class="doc-find-count"></span>
-        <button id="doc-find-prev" class="doc-find-nav" title="Previous">&uarr;</button>
-        <button id="doc-find-next" class="doc-find-nav" title="Next">&darr;</button>
-        <button id="doc-find-close" class="doc-find-close" title="Close">&times;</button>
+        <button id="doc-find-prev" class="doc-find-nav" title="${t('document.find_previous')}">&uarr;</button>
+        <button id="doc-find-next" class="doc-find-nav" title="${t('document.find_next')}">&darr;</button>
+        <button id="doc-find-close" class="doc-find-close" title="${t('document.find_close')}">&times;</button>
       </div>
       <div id="doc-editor-wrap" class="doc-editor-wrap">
         <div id="doc-line-numbers" class="doc-line-numbers">1</div>
@@ -3933,15 +3934,15 @@ import * as Modals from './modalManager.js';
            the existing send/draft/change-detection paths keep working. -->
       <div id="doc-email-richbody" class="doc-email-richbody" contenteditable="true" spellcheck="true" style="display:none" data-no-swipe-dismiss></div>
       <div id="doc-email-actions" class="doc-email-actions" style="display:none">
-        <button id="doc-email-discard-btn" class="email-discard-btn" title="Close email" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span>Close</span></button>
+        <button id="doc-email-discard-btn" class="email-discard-btn" title="${t('document.email_close')}" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span>${t('common.close')}</span></button>
         <span style="flex:1"></span>
         <div class="email-send-split">
-          <button id="doc-email-send-btn" class="email-send-btn email-send-main" title="Send email (Ctrl+Enter)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send</button>
-          <button id="doc-email-send-caret" class="email-send-btn email-send-caret" title="More send options" aria-haspopup="true" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <button id="doc-email-send-btn" class="email-send-btn email-send-main" title="${t('document.email_send_title')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>${t('chat.send')}</button>
+          <button id="doc-email-send-caret" class="email-send-btn email-send-caret" title="${t('document.email_more_options')}" aria-haspopup="true" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
           <div id="doc-email-more-menu" class="email-more-menu" style="display:none">
-            <div class="dropdown-item-compact" id="doc-email-draft-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>Save Draft</div>
-            <div class="dropdown-item-compact" id="doc-email-schedule-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>Schedule Send...</div>
-            <div class="dropdown-item-compact" id="doc-email-unread-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>Mark Unread</div>
+            <div class="dropdown-item-compact" id="doc-email-draft-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>${t('document.email_draft_button')}</div>
+            <div class="dropdown-item-compact" id="doc-email-schedule-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>${t('common.schedule') || 'Schedule Send...'}</div>
+            <div class="dropdown-item-compact" id="doc-email-unread-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>${t('common.mark_unread') || 'Mark Unread'}</div>
           </div>
         </div>
       </div>
@@ -3956,14 +3957,14 @@ import * as Modals from './modalManager.js';
            csv / html / pdf) is the one growing to fill. -->
       <div id="doc-actions-footer" class="doc-email-actions">
         <span class="email-send-split" id="doc-copy-export-split">
-          <button type="button" id="doc-footer-copy-btn" class="email-send-btn email-send-main" title="Copy document"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button>
-          <button type="button" id="doc-footer-export-btn" class="email-send-btn email-send-caret" title="Export as…" aria-label="Export options"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg></button>
+          <button type="button" id="doc-footer-copy-btn" class="email-send-btn email-send-main" title="${t('document.email_copy_title')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>${t('common.copy')}</button>
+          <button type="button" id="doc-footer-export-btn" class="email-send-btn email-send-caret" title="${t('document.email_export_as')}" aria-label="${t('common.export')}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg></button>
         </span>
       </div>
       <div id="doc-version-panel" class="doc-version-panel hidden">
         <div class="doc-version-header">
-          <span>Version History</span>
-          <button id="doc-version-close" class="doc-action-icon-btn" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <span>${t('document.tab_version_history')}</span>
+          <button id="doc-version-close" class="doc-action-icon-btn" title="${t('common.close')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div id="doc-version-list" class="doc-version-list"></div>
       </div>
@@ -3974,14 +3975,14 @@ import * as Modals from './modalManager.js';
       </div>
     `;
 
-    // Consolidate into a SINGLE action bar: move Undo + the type picker out of
-    // the top header into the bottom footer (left side, next to Close) so a
-    // regular doc shows one bar, not two. The rest of the header (run/preview,
-    // fullscreen, version, PDF) stays put; the header hides itself when nothing
-    // in it is visible — see _syncHeaderBarVisibility().
-    // Note: `#doc-render-view-toggle` (code↔run for SVG/HTML) intentionally
-    // stays in the top header so it matches `#doc-md-view-toggle` (markdown
-    // edit↔preview) — both view toggles live in the same place.
+// 整合为单一操作栏：将撤销和类型选择器从头部的顶部
+// 移到底部页脚（左侧，关闭旁边），使常规文档
+// 显示一个栏而不是两个。头部的其余部分（运行/预览、
+// 全屏、版本、PDF）保持不变；头部在没有可见内容时
+// 隐藏自身——参见 _syncHeaderBarVisibility()。
+// 注意：`#doc-render-view-toggle`（SVG/HTML 的代码↔运行）有意
+// 留在顶部头部，使其与 `#doc-md-view-toggle`（markdown
+// 编辑↔预览）对齐——两个视图切换位于同一位置。
     {
       const _footer = pane.querySelector('#doc-actions-footer');
       const _split = _footer && _footer.querySelector('#doc-copy-export-split');
@@ -3991,17 +3992,17 @@ import * as Modals from './modalManager.js';
       const _exportPdf = pane.querySelector('#doc-export-pdf-btn');
       const _pdfView = pane.querySelector('#doc-pdf-view-btn');
       if (_footer && _split) {
-        // Footer order (left → right): Undo, Run/Preview, Lang, …, Copy/Export.
-        // The X close was here too but is now redundant with the per-tab close
-        // button in the title strip — removed.
+// 页脚顺序（左→右）：撤销、运行/预览、语言、…、复制/导出。
+// X 关闭曾在此处，但现在与标题条中的每标签关闭按钮
+// 冗余——已移除。
         if (_undo) _footer.insertBefore(_undo, _footer.firstChild);
         const _anchor = _undo;
         if (_preview && _anchor) _anchor.after(_preview);
         if (_lang) _split.before(_lang);
-        // Pull every remaining header-only control into the footer so we
-        // only ever render ONE bottom action row. The standalone top header
-        // was leaving a duplicate row above (with fullscreen + version badge
-        // + stream indicator). Each item keeps its own display: toggling.
+// 将所有仅头部的控件拉入页脚，使我们
+// 始终只渲染一个底部操作行。独立的顶部头部
+// 留下了一个重复行（带有全屏 + 版本徽章
+// + 流指示器）。每个项目保持其自身的 display: toggling。
         const _streamInd = pane.querySelector('#doc-stream-indicator');
         const _versionBadge = pane.querySelector('#doc-version-badge');
         if (_split) {
@@ -4011,9 +4012,9 @@ import * as Modals from './modalManager.js';
           if (_streamInd)    _split.before(_streamInd);
         }
       }
-      // iOS keeps the soft keyboard up when you tap a <button> (it doesn't blur
-      // the focused textarea), so it lingers after you've typed. Dismiss it on
-      // any footer control tap.
+// iOS 在点击 <button> 时保持软键盘打开（它不会使
+// 聚焦的 textarea 失焦），因此在你输入后它仍然存在。在任何
+// 页脚控件点击时收起它。
       if (_footer) _footer.addEventListener('pointerdown', (e) => {
         if (!e.target.closest('button, select')) return;
         const _ta = document.getElementById('doc-editor-textarea');
@@ -4021,8 +4022,8 @@ import * as Modals from './modalManager.js';
       });
     }
 
-    // Insert after chat-container (appears on right by default)
-    // If sidebar is on the right, insert before chat-container instead
+// 插入到 chat-container 之后（默认显示在右侧）
+// 如果侧边栏在右侧，则插入到 chat-container 之前
     const sidebar = document.getElementById('sidebar');
     const isRight = sidebar && sidebar.classList.contains('right-side');
     if (isRight) {
@@ -4035,7 +4036,7 @@ import * as Modals from './modalManager.js';
       divider.after(pane);
     }
 
-    // Slide-in animation from the correct side
+// 从正确方向滑入动画
     const fromLeft = pane.classList.contains('doc-left');
     pane.style.transform = fromLeft ? 'translateX(-40px)' : 'translateX(40px)';
     pane.style.opacity = '0';
@@ -4050,15 +4051,15 @@ import * as Modals from './modalManager.js';
       }, { once: true });
     });
 
-    // Wire up divider drag to resize
+// 绑定分隔条拖拽调整大小
     initDividerDrag(divider, pane, isRight);
-    // Divider chevron — single button with three modes (the glyph is the
-     // same `›` in markup; CSS rotates 180° for the left-pointing variant).
-     //   • cursor INSIDE the doc pane  →  collapse  (›, slide back, closes panel)
-     //   • cursor OUTSIDE the doc pane →  fullscreen (‹, slide outward, expands)
-     //   • already fullscreen          →  unfullscreen (›, points back in)
-     // The user can also drag the chevron vertically along the divider to
-     // reposition it.
+// 分隔条箭头——单按钮三种模式（字形在标记中相同
+// 为 `›`；CSS 旋转 180° 得到向左指变体）。
+//   • 光标在文档面板内  →  折叠（›，向后滑动，关闭面板）
+//   • 光标在文档面板外  →  全屏（‹，向外滑动，扩展）
+//   • 已全屏             →  退出全屏（›，指回内部）
+// 用户也可以沿分隔条拖动箭头来重新定位。
+// 重新定位它。
     const _divCollapse = divider.querySelector('.doc-divider-collapse');
     if (_divCollapse) {
       _divCollapse.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -4072,14 +4073,14 @@ import * as Modals from './modalManager.js';
       });
       const HYSTERESIS = 24;
       const _applyMode = (ev) => {
-        // Fullscreen state takes precedence — once the pane is fullscreen the
-        // chevron always offers the "exit fullscreen" affordance regardless
-        // of cursor position.
+// 全屏状态优先——一旦面板全屏，箭头始终提供
+// "退出全屏"功能，无论光标位置。
+// 无论光标位置如何。
         const isFull = pane.classList.contains('doc-fullscreen');
         if (isFull) {
           if (_divCollapse.dataset.mode !== 'unfullscreen') {
             _divCollapse.dataset.mode = 'unfullscreen';
-            _divCollapse.title = 'Exit fullscreen';
+            _divCollapse.title = t('document.fullscreen_exit');
           }
           return;
         }
@@ -4089,22 +4090,22 @@ import * as Modals from './modalManager.js';
         const cur = _divCollapse.dataset.mode;
         if (ev.clientX > midX + HYSTERESIS && cur !== 'collapse') {
           _divCollapse.dataset.mode = 'collapse';
-          _divCollapse.title = 'Collapse panel';
+          _divCollapse.title = t('document.collapse_panel');
         } else if (ev.clientX < midX - HYSTERESIS && cur !== 'fullscreen') {
           _divCollapse.dataset.mode = 'fullscreen';
-          _divCollapse.title = 'Fullscreen';
+          _divCollapse.title = t('document.fullscreen_enter');
         }
       };
       const _onMove = (ev) => _applyMode(ev);
       document.addEventListener('pointermove', _onMove, { passive: true });
-      // Reflect the fullscreen state immediately on toggle (no cursor move).
+// 切换时立即反映全屏状态（无需光标移动）。
       const _classObs = new MutationObserver(() => _applyMode());
       _classObs.observe(pane, { attributes: true, attributeFilter: ['class'] });
 
-      // Drag-to-reposition: hold + drag vertically moves the chevron along
-      // the divider. Stored as a percent so resizing the pane keeps it
-      // proportional. Only kicks in after a small movement so a normal tap
-      // still registers as a click.
+// 拖拽重新定位：按住并垂直拖动沿分隔条移动箭头。
+// 存储为百分比，使调整面板大小时保持比例。
+// 仅在轻微移动后激活，使正常点击仍能
+// 注册为点击。
       const DRAG_THRESHOLD = 4;
       let _startY = 0, _moved = false, _pid = null;
       _divCollapse.addEventListener('pointerdown', (ev) => {
@@ -4145,11 +4146,11 @@ import * as Modals from './modalManager.js';
       _obs.observe(document.body, { childList: true, subtree: true });
     }
 
-    // Mobile grab handle — swipe down to dismiss (like the other sheet windows).
+// 移动端抓取柄——向下滑动关闭（类似其他工作表窗口）。
     _wireSwipeDismiss(document.getElementById('doc-mobile-grabber'));
     document.getElementById('doc-mobile-grabber')?.addEventListener('click', () => closePanel('down'));
 
-    // Wire up events
+// 绑定事件
     document.getElementById('doc-close-btn')?.addEventListener('click', () => closePanel('down'));
     document.getElementById('doc-footer-close-btn')?.addEventListener('click', () => { if (activeDocId) closeTab(activeDocId); });
     document.getElementById('doc-import-btn')?.addEventListener('click', () => openLibrary());
@@ -4158,21 +4159,21 @@ import * as Modals from './modalManager.js';
       else copyDocument();
     });
     document.getElementById('doc-footer-export-btn')?.addEventListener('click', (e) => showExportMenu(null, e.currentTarget.getBoundingClientRect()));
-    // Mobile footer: Close the current doc + Copy its content (replaces the
-    // per-tab × on small screens, mirroring the email reader's Close footer).
+// 移动端页脚：关闭当前文档 + 复制其内容（在小屏幕上
+// 替代每标签 ×，镜像 email 阅读器的关闭页脚）。
     document.getElementById('doc-mobile-close')?.addEventListener('click', () => { if (activeDocId) closeTab(activeDocId); });
     document.getElementById('doc-mobile-copy')?.addEventListener('click', () => copyDocument());
-    // Save, copy, run, export, delete, preview toggles are now in per-tab context menu
+// 保存、复制、运行、导出、删除、预览切换现在在每标签右键菜单中
     document.getElementById('doc-version-badge').addEventListener('click', toggleVersionHistory);
     document.getElementById('doc-version-close').addEventListener('click', _closeVersionPanel);
-    // Reflect the current language as a small icon left of the type select.
+// 在类型选择旁边显示当前语言的小图标。
     const _syncLangIcon = () => {
       const iconEl = document.getElementById('doc-language-icon');
       const v = document.getElementById('doc-language-select')?.value || '';
       if (iconEl) iconEl.innerHTML = v ? langIcon(v, 14, { style: 'opacity:0.75;' }) : '';
     };
-    // Intercept programmatic `langSelect.value = …` so the icon updates without
-    // having to instrument every set-site in this file.
+// 拦截编程式的 `langSelect.value = …`，使图标无需
+// 在此文件中修改每个设置点即可更新。
     (function _interceptLangSelectValue() {
       const ls = document.getElementById('doc-language-select');
       if (!ls) return;
@@ -4186,12 +4187,12 @@ import * as Modals from './modalManager.js';
       _syncLangIcon();  // initial paint
     })();
 
-    // ── Custom language picker ────────────────────────────────────────────
-    // Native <option> can't render SVG. So we build a custom dropdown that
-    // shows each language's icon + label, while keeping the underlying
-    // <select> in place as the source of truth (all existing code that
-    // reads/writes langSelect.value keeps working). The native select is
-    // visually-hidden but still focusable for accessibility / keyboard.
+// ── 自定义语言选择器 ────────────────────────────────────
+// 原生 <option> 无法渲染 SVG。因此我们构建一个自定义下拉菜单，
+// 显示每种语言的图标 + 标签，同时保留底层
+// <select> 作为真实来源（所有读写 langSelect.value 的现有代码
+// 继续有效）。原生 select 在视觉上隐藏，但仍然可聚焦以支持无障碍/键盘。
+// 视觉上隐藏但仍可聚焦以支持无障碍/键盘。
     let _syncLangPicker = () => {};
     (function _initLangPicker() {
       const ls = document.getElementById('doc-language-select');
@@ -4211,8 +4212,8 @@ import * as Modals from './modalManager.js';
       menu.setAttribute('role', 'listbox');
       menu.style.display = 'none';
 
-      // Build the menu rows from the <select>'s real <option>s — single
-      // source of truth, future additions to the select auto-propagate.
+// 从 <select> 的真实 <option> 构建菜单行——单一
+// 真实来源，未来对 select 的添加会自动传播。
       const _buildMenu = () => {
         menu.innerHTML = '';
         for (const opt of ls.options) {
@@ -4223,9 +4224,9 @@ import * as Modals from './modalManager.js';
           row.setAttribute('role', 'option');
           const ic = opt.value
             ? langIcon(opt.value, 14, { style: 'opacity:0.85;' })
-            // Empty value = the "type" placeholder option — small dot so the
-            // row still aligns with the others (and the picker shows _some_
-            // mark when no type is set yet).
+// 空值 = "类型"占位符选项——小圆点使
+// 行仍与其他行对齐（且选择器在未设置类型时显示
+// 某个标记）。
             : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5;"><circle cx="12" cy="12" r="3"/></svg>';
           row.innerHTML = ic +
                           `<span class="doc-langpicker-label">${uiModule.esc(opt.textContent || opt.value)}</span>`;
@@ -4247,12 +4248,12 @@ import * as Modals from './modalManager.js';
         const sel = Array.from(ls.options).find(o => o.value === v) || ls.options[0];
         const ic = v
           ? langIcon(v, 14, { style: 'opacity:0.85;flex-shrink:0;' })
-          // No language picked yet → small dot mark so the trigger isn't bare.
+// 尚未选择语言 → 小圆点标记，使触发器不显得空荡。
           : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5;flex-shrink:0;"><circle cx="12" cy="12" r="3"/></svg>';
         trigger.innerHTML = ic +
-          `<span class="doc-langpicker-label">${uiModule.esc(sel?.textContent || 'type')}</span>` +
+          `<span class="doc-langpicker-label">${uiModule.esc(sel?.textContent || t('document.lang_picker_type'))}</span>` +
           '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:4px;opacity:0.6;"><polyline points="6 9 12 15 18 9"/></svg>';
-        // Highlight the current row in the open menu.
+// 在打开菜单中高亮当前行。
         menu.querySelectorAll('.doc-langpicker-item').forEach(r => {
           r.classList.toggle('is-selected', r.dataset.value === v);
         });
@@ -4279,15 +4280,15 @@ import * as Modals from './modalManager.js';
         e.stopPropagation();
         const open = menu.style.display !== 'none';
         if (open) { _close(); return; }
-        // Position the menu under the trigger (fixed so it escapes any
-        // overflow-clipped ancestor like the footer).
+// 将菜单定位在触发器下方（固定定位，使其脱离
+// 任何溢出裁剪的祖先容器，如页脚）。
         const r = trigger.getBoundingClientRect();
         menu.style.display = 'block';
         menu.style.position = 'fixed';
         menu.style.left = r.left + 'px';
         menu.style.top = (r.bottom + 4) + 'px';
         menu.style.minWidth = r.width + 'px';
-        // If it would overflow the bottom of the viewport, flip above.
+// 如果超出视口底部，翻转到上方。
         requestAnimationFrame(() => {
           const mr = menu.getBoundingClientRect();
           if (mr.bottom > window.innerHeight - 8) {
@@ -4299,14 +4300,14 @@ import * as Modals from './modalManager.js';
         document.addEventListener('keydown', _escKey, true);
       });
 
-      // Hide the native select but keep it in the layout for screen readers
-      // / programmatic value sets / focus management. The icon span next to
-      // it is removed since the trigger now carries the current icon.
+// 隐藏原生 select 但保留在布局中以供屏幕阅读器
+// /编程式值设置/焦点管理。旁边的图标 span
+// 被移除，因为触发器现在承载当前图标。
       ls.classList.add('doc-langpicker-native-hidden');
       const iconSpan = document.getElementById('doc-language-icon');
       if (iconSpan) iconSpan.remove();
       ls.parentNode.insertBefore(trigger, ls);
-      // Menu is body-mounted so position:fixed coords work cleanly.
+// 菜单挂载在 body 上，使 position:fixed 坐标干净地工作。
       document.body.appendChild(menu);
 
       _syncLangPicker();
@@ -4315,74 +4316,74 @@ import * as Modals from './modalManager.js';
       _syncLangIcon();
       _syncLangPicker();
       const val = document.getElementById('doc-language-select').value;
-      // For form-backed docs, the select toggles between PDF view and the
-      // markdown source instead of changing the underlying language.
+// 对于表单支持的文档，select 在 PDF 视图和
+// markdown 源代码之间切换，而不是更改底层语言。
       const live = document.getElementById('doc-editor-textarea')?.value
         || docs.get(activeDocId)?.content || '';
       if (_isFormBackedDoc(live) && (val === 'pdf' || val === 'markdown')) {
         _setPdfViewActive(val === 'pdf');
         return;
       }
-      // Mark user explicitly chose a language — stop auto-detection
+// 标记用户明确选择了语言——停止自动检测
       if (activeDocId && docs.has(activeDocId)) {
         docs.get(activeDocId).userSetLanguage = (val !== '');
       }
       updateLanguage();
       syncHighlighting();
-      // Show/hide markdown toolbar
+// 显示/隐藏 markdown 工具栏
       const lang = document.getElementById('doc-language-select').value;
       const mdToolbar = document.getElementById('doc-md-toolbar');
       if (mdToolbar) {
-        // Toolbar stays visible for every type now; only the items inside
-        // gate themselves on language.
+// 工具栏现在对所有类型保持可见；只有内部项目
+// 根据语言控制自身。
         mdToolbar.style.display = '';
         if (mdToolbar._syncOverflow) requestAnimationFrame(mdToolbar._syncOverflow);
       }
-      // If switching away from markdown, exit preview
+// 如果从 markdown 切换走，退出预览
       if (lang !== 'markdown') {
         _setMarkdownPreviewActive(false);
       }
-      // If switching away from CSV, exit table preview
+// 如果从 CSV 切换走，退出表格预览
       if (lang !== 'csv') {
         const csvPreview = document.getElementById('doc-csv-preview');
         const wrap2 = document.getElementById('doc-editor-wrap');
         if (csvPreview) csvPreview.style.display = 'none';
         if (wrap2) wrap2.style.display = '';
       }
-      // If switching away from html, exit HTML preview
+// 如果从 html 切换走，退出 HTML 预览
       if (!_isRenderLang(lang)) exitHtmlPreview();
-      // Show/hide email fields
+// 显示/隐藏 email 字段
       if (lang === 'email') {
         const doc = activeDocId && docs.get(activeDocId);
         if (doc) _showEmailFields(doc);
       } else {
         _hideEmailFields();
       }
-      // Sync header action buttons for new language
+// 为新语言同步头部操作按钮
       _syncHeaderActions();
     });
 
-    // Email send/draft buttons
-    // Inject emoji picker button into markdown toolbar
+// Email 发送/草稿按钮
+// 将 emoji 选择器按钮注入 markdown 工具栏
     const emojiSlot = document.getElementById('md-toolbar-emoji-slot');
     if (emojiSlot && !emojiSlot.querySelector('.emoji-picker-btn')) {
-      // Resolve the live target on click: the WYSIWYG email contenteditable
-      // when active, otherwise the plain markdown textarea.
+// 在点击时解析实时目标：WYSIWYG email contenteditable
+// 激活时，否则为纯文本 markdown textarea。
       emojiSlot.appendChild(emojiPicker.createEmojiButton(
         () => _emailRichbodyActive() || document.getElementById('doc-editor-textarea')
       ));
     }
 
     document.getElementById('doc-email-send-btn')?.addEventListener('click', () => {
-      // Pressing Send must never leave the "more options" menu showing.
+// 按发送键时"更多选项"菜单绝对不能保持显示。
       const _m = document.getElementById('doc-email-more-menu');
       if (_m) _m.style.display = 'none';
       document.getElementById('doc-email-send-caret')?.setAttribute('aria-expanded', 'false');
       _sendEmail();
     });
 
-    // Ctrl+Enter / Cmd+Enter sends the email when an email doc is active
-    // Bind once at module level via a guard to avoid duplicate listeners on re-open
+// Ctrl+Enter / Cmd+Enter 在活动 email 文档时发送邮件
+// 在模块级别通过守卫绑定一次，避免重新打开时重复监听
     if (!window._emailCtrlEnterBound) {
       window._emailCtrlEnterBound = true;
       document.addEventListener('keydown', (e) => {
@@ -4438,7 +4439,7 @@ import * as Modals from './modalManager.js';
       window.visualViewport.addEventListener('resize', _maybeAutoCollapseEmailHeader);
     }
 
-    // Split-button caret toggles the send-options menu (drops up).
+// 分割按钮箭头切换发送选项菜单（向上弹出）。
     document.getElementById('doc-email-send-caret')?.addEventListener('click', (e) => {
       e.stopPropagation();
       const menu = document.getElementById('doc-email-more-menu');
@@ -4450,9 +4451,9 @@ import * as Modals from './modalManager.js';
     });
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('doc-email-more-menu');
-      // Keep the menu open ONLY while interacting with the caret itself or the
-      // menu. Any other click — including the Send button (which sits in the
-      // same .email-send-split) — closes it, so the popup is tied to the arrow.
+// 仅在交互箭头自身或菜单时保持菜单打开。
+// 任何其他点击——包括发送按钮（位于相同
+// .email-send-split 中）——关闭它，使弹出框与箭头绑定。
       if (menu && !e.target.closest('#doc-email-send-caret, #doc-email-more-menu')) {
         menu.style.display = 'none';
         document.getElementById('doc-email-send-caret')?.setAttribute('aria-expanded', 'false');
@@ -4469,7 +4470,7 @@ import * as Modals from './modalManager.js';
       document.getElementById('doc-email-send-caret')?.setAttribute('aria-expanded', 'false');
     }, true);
 
-    // Attachments
+// 附件
     document.getElementById('doc-email-attach-btn')?.addEventListener('click', () => {
       document.getElementById('doc-email-file-input')?.click();
     });
@@ -4478,7 +4479,7 @@ import * as Modals from './modalManager.js';
     });
     document.getElementById('doc-email-file-input')?.addEventListener('change', _handleAttachUpload);
 
-    // Cc/Bcc toggle
+// 抄送/密送切换
     document.getElementById('doc-email-show-cc')?.addEventListener('click', () => {
       _setEmailHeaderCollapsed(false, { manual: false });
       const ccRow = document.getElementById('doc-email-cc-row');
@@ -4489,21 +4490,21 @@ import * as Modals from './modalManager.js';
       _syncEmailHeaderSummary();
     });
 
-    // Autocomplete for To / Cc / Bcc — typed fragment after the last
-    // comma triggers contact search; Enter / Tab / click on a suggestion
-    // appends "<email>, " so the user can keep typing more recipients.
+// 收件人/抄送/密送的自动完成——最后一个逗号之后的
+// 输入片段触发联系人搜索；Enter/Tab/点击建议
+// 追加 "<email>, "，以便用户可以继续输入更多收件人。
     _wireRecipientAutocomplete('doc-email-to',  'doc-email-to-suggestions');
     _wireRecipientAutocomplete('doc-email-cc',  'doc-email-cc-suggestions');
     _wireRecipientAutocomplete('doc-email-bcc', 'doc-email-bcc-suggestions');
 
-    // Header unified action button (preview or run depending on language)
+// 头部统一操作按钮（根据语言显示预览或运行）
     document.getElementById('doc-header-preview-btn').addEventListener('click', () => {
       const lang = (document.getElementById('doc-language-select')?.value || '').toLowerCase();
       if (lang === 'markdown') toggleMarkdownPreview();
       else if (lang === 'csv') toggleCsvPreview();
       else if (_isRenderLang(lang)) toggleHtmlPreview();
       else {
-        // Runnable language — toggle output
+// 可运行语言——切换输出
         const outputPanel = document.getElementById('doc-run-output');
         if (outputPanel && outputPanel.style.display !== 'none') {
           outputPanel.style.display = 'none';
@@ -4514,7 +4515,7 @@ import * as Modals from './modalManager.js';
       _syncHeaderActions();
     });
 
-    // Markdown Edit/Preview two-icon switch — click a side to go to that view.
+// Markdown 编辑/预览双图标切换——点击一侧切换到该视图。
     document.getElementById('doc-md-view-toggle')?.addEventListener('click', (e) => {
       const opt = e.target.closest('.md-view-opt');
       if (!opt) return;
@@ -4525,9 +4526,9 @@ import * as Modals from './modalManager.js';
       _syncHeaderActions();
     });
 
-    // Unified Code / Run-or-View two-icon switch — language-aware: CSV flips
-    // between code and the table view, Python/JS/etc. between code and run
-    // output, HTML/SVG/XML between code and the iframe preview.
+// 统一代码/运行或查看双图标切换——语言感知：CSV 在代码和表格视图之间切换，
+// Python/JS/等在代码和运行输出之间，HTML/SVG/XML 在代码和 iframe 预览之间。
+// 输出，HTML/SVG/XML 在代码和 iframe 预览之间。
     document.getElementById('doc-render-view-toggle')?.addEventListener('click', (e) => {
       const opt = e.target.closest('.md-view-opt');
       if (!opt) return;
@@ -4542,8 +4543,8 @@ import * as Modals from './modalManager.js';
         const isOn = htmlPrev && htmlPrev.style.display !== 'none';
         if (wantRun !== isOn) toggleHtmlPreview();
       } else {
-        // Runnable language (python / js / ts / bash …) — clicking Run is
-        // a one-shot execute; clicking Code dismisses the output pane.
+// 可运行语言（python / js / ts / bash …）——点击运行是
+// 一次性执行；点击代码关闭输出面板。
         if (wantRun) {
           document.getElementById('doc-header-preview-btn')?.click();
         } else {
@@ -4554,7 +4555,7 @@ import * as Modals from './modalManager.js';
       _syncHeaderActions();
     });
 
-    // Font size toggle (S → M → L)
+// 字号切换（S → M → L）
     const fontBtn = document.getElementById('doc-fontsize-btn');
     const editorWrap = document.getElementById('doc-editor-wrap');
     const _fontSizes = ['s', 'm', 'l'];
@@ -4569,10 +4570,10 @@ import * as Modals from './modalManager.js';
       });
       if (fontBtn) {
         fontBtn.dataset.size = _fontSizes[_fontIdx];
-        // Keep the original behaviour: the icon itself grows with the size.
+// 保持原始行为：图标本身随字号变大。
         const svg = fontBtn.querySelector('svg');
         if (svg) { const sz = _iconSizes[_fontIdx]; svg.setAttribute('width', sz); svg.setAttribute('height', sz); }
-        // Show only the active size letter (just S, or just M, or just L).
+// 仅显示活动尺寸字母（仅 S、或仅 M、或仅 L）。
         fontBtn.querySelectorAll('.doc-fontsize-levels [data-sz]').forEach(el => {
           const active = el.dataset.sz === _fontSizes[_fontIdx];
           el.classList.toggle('active', active);
@@ -4582,14 +4583,14 @@ import * as Modals from './modalManager.js';
       localStorage.setItem('odysseus-doc-fontsize', _fontIdx);
     }
     _applyDocFont();
-    // Click cycles through the sizes (S → M → L → S).
+// 点击循环切换尺寸（S → M → L → S）。
     if (fontBtn) fontBtn.addEventListener('click', () => {
       _fontIdx = (_fontIdx + 1) % 3;
       _applyDocFont();
       syncHighlighting();
     });
 
-    // Undo button in header
+// 头部撤销按钮
     const docUndoBtn = document.getElementById('doc-undo-btn');
     if (docUndoBtn) docUndoBtn.addEventListener('click', async () => {
       const pdfPane = document.getElementById('doc-pdf-view');
@@ -4603,7 +4604,7 @@ import * as Modals from './modalManager.js';
       }
     });
 
-    // Diff toggle button — compare current content against previous version
+// 差异切换按钮——将当前内容与上一版本比较
     const diffToggleBtn = document.getElementById('doc-diff-toggle-btn');
     if (diffToggleBtn) diffToggleBtn.addEventListener('click', async () => {
       if (_diffModeActive) {
@@ -4615,64 +4616,64 @@ import * as Modals from './modalManager.js';
       if (!ta) return;
       const current = ta.value;
 
-      // Fetch version history and compare against previous version
+// 获取版本历史并与上一版本比较
       try {
         const res = await fetch(`${API_BASE}/api/document/${activeDocId}/versions`);
         if (!res.ok) throw new Error('Failed');
         const versions = await res.json();
         if (versions.length < 2) {
-          if (uiModule) uiModule.showToast('No previous version to compare');
+          if (uiModule) uiModule.showToast(t('document.version_no_previous'));
           return;
         }
-        // versions are sorted desc — [0] is latest, [1] is previous
+// 版本按降序排列——[0] 是最新，[1] 是上一版本
         const prevContent = versions[1].content || '';
         if (prevContent === current) {
-          if (uiModule) uiModule.showToast('No changes from previous version');
+          if (uiModule) uiModule.showToast(t('document.version_no_changes'));
           return;
         }
         enterDiffMode(prevContent, current);
       } catch {
-        if (uiModule) uiModule.showError('Failed to load version history');
+        if (uiModule) uiModule.showError(t('document.version_load_failed'));
       }
     });
 
-    // Export PDF (form-backed markdown docs)
+// 导出 PDF（表单支持的 markdown 文档）
     document.getElementById('doc-export-pdf-btn')?.addEventListener('click', _downloadFilledPdf);
 
-    // Toggle inline PDF view (form-backed markdown docs). Default for a
-    // form-backed doc is "active" — the toggle reads back the visible state.
+// 切换内联 PDF 视图（表单支持的 markdown 文档）。
+// 表单支持文档的默认值是"活动"——切换读取可见状态。
     document.getElementById('doc-pdf-view-btn')?.addEventListener('click', () => {
       const pane = document.getElementById('doc-pdf-view');
       const visible = pane && pane.style.display !== 'none';
       _setPdfViewActive(!visible);
     });
 
-    // Toolbar buttons toggle: clicking the active mode clears it. Otherwise
-    // the mode stays armed across multiple placements until the user turns
-    // it off explicitly.
+// 工具栏按钮切换：点击活动模式清除它。否则
+// 模式在多个位置之间保持激活，直到用户显式
+// 关闭它。
     document.getElementById('doc-pdf-add-text-btn')?.addEventListener('click', () => _setPdfDropMode(_pdfDropMode === 'text' ? null : 'text'));
     document.getElementById('doc-pdf-add-check-btn')?.addEventListener('click', () => _setPdfDropMode(_pdfDropMode === 'check' ? null : 'check'));
     document.getElementById('doc-pdf-add-sign-btn')?.addEventListener('click', () => _setPdfDropMode(_pdfDropMode === 'signature' ? null : 'signature'));
     document.getElementById('doc-pdf-refresh-btn')?.addEventListener('click', () => _renderPdfPane());
 
-    // Markdown formatting toolbar
+// Markdown 格式工具栏
     initMdToolbar();
 
-    // Wire highlighting sync
+// 绑定高亮同步
     const ta = document.getElementById('doc-editor-textarea');
     const pre = document.getElementById('doc-editor-highlight');
     if (ta && pre) {
       ta.addEventListener('input', () => {
-        // Typing invalidates any pinned selection highlight
+// 输入会使任何固定的选择高亮失效
         if (_selections.length) clearSelection();
-        // Auto-create a document if user types/pastes with no active doc.
-        // Skip while a createDocument POST is in flight — otherwise typing
-        // during the round-trip spawns a duplicate untitled doc.
+// 如果用户在没有活动文档时输入/粘贴，自动创建文档。
+// 当 createDocument POST 进行中时跳过——否则
+// 往返期间的输入会产生重复的未命名文档。
         if (!activeDocId && !_creatingDoc && ta.value.trim()) {
           _autoCreateFromInput(ta.value);
           return;
         }
-        // Sync text content immediately (prevents visual duplication from scroll desync)
+// 立即同步文本内容（防止滚动不同步导致视觉重复）
         const codeEl = document.getElementById('doc-editor-code');
         if (codeEl && !codeEl.dataset.hasDiff) {
           codeEl.textContent = ta.value + '\n';
@@ -4683,7 +4684,7 @@ import * as Modals from './modalManager.js';
           pre.scrollLeft = ta.scrollLeft;
         }
         updateLineNumbers(ta.value);
-        // Debounce expensive operations (syntax highlighting, auto-detect, auto-save)
+// 对昂贵操作（语法高亮、自动检测、自动保存）进行防抖
         clearTimeout(_hlDebounce);
         _hlDebounce = setTimeout(syncHighlighting, 80);
         clearTimeout(_autoDetectDebounce);
@@ -4700,30 +4701,30 @@ import * as Modals from './modalManager.js';
         pre.scrollLeft = ta.scrollLeft;
         syncGutterScroll();
         syncSelectionOverlay();
-        // Re-position find rects so they track the textarea on scroll.
+// 重新定位查找矩形，使其在滚动时跟随 textarea。
         if (_findMatches && _findMatches.length) {
           const _q = document.getElementById('doc-find-input')?.value || '';
           if (_q) renderFindRects(_findMatches.map(s => [s, s + _q.length]), _findIdx);
         }
       });
-      // Tab key inserts a real tab; Escape clears selection
+// Tab 键插入真实制表符；Escape 清除选择
       ta.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           if (_diffModeActive) { exitDiffMode(true); return; }
-          // First Esc clears any pinned selection without closing the
-          // panel. Second Esc (no selection left) minimises the panel
-          // to a dock chip. The previous all-in-one path made one Esc
-          // press both clear and close, which was annoying because the
-          // user lost their working doc by hitting Esc to dismiss a
-          // mistaken highlight.
+// 首次 Esc 清除任何固定选择而不关闭
+// 面板。第二次 Esc（无选择剩余）将面板最小化
+// 为停靠芯片。之前的一键路径使一次 Esc
+// 同时清除和关闭，这很烦人，因为用户通过按 Esc
+// 消除错误的高亮而丢失了正在工作的文档。
+// 错误的高亮。
           if (_selections.length > 0) {
             clearSelection();
             e.preventDefault();
             e.stopPropagation();
             return;
           }
-          // No pinned selection — Esc MINIMIZES the panel (tabs it
-          // down to a dock chip) — same as the chevron button.
+// 无固定选择——Esc 将面板最小化（折叠
+// 为停靠芯片）——与箭头按钮相同。
           e.preventDefault();
           e.stopPropagation();
           closePanel('down');
@@ -4733,7 +4734,7 @@ import * as Modals from './modalManager.js';
           e.preventDefault();
           document.execCommand('insertText', false, '\t');
         }
-        // Markdown shortcuts (only when language is markdown)
+// Markdown 快捷键（仅在语言为 markdown 时）
         const lang = document.getElementById('doc-language-select')?.value;
         if (lang === 'markdown' && (e.ctrlKey || e.metaKey)) {
           if (e.key === 'b') { e.preventDefault(); applyMdFormat('bold'); }
@@ -4742,7 +4743,7 @@ import * as Modals from './modalManager.js';
         }
       });
 
-      // ── In-document find (Ctrl+F) ──
+// ── 文档内查找（Ctrl+F）──
       let _findMatches = [];
       let _findIdx = -1;
 
@@ -4750,11 +4751,11 @@ import * as Modals from './modalManager.js';
         const bar = document.getElementById('doc-find-bar');
         if (!bar) return;
         bar.style.display = 'flex';
-        // The highlight overlay is normally display:none (single-layer
-        // rendering — textarea owns the visible text). Find marks live
-        // inside that overlay, so we have to re-show it while find is
-        // active. The body class lets a CSS rule un-hide it without
-        // touching every per-language stylesheet path.
+// 高亮覆盖层通常 display:none（单层渲染——
+// textarea 拥有可见文本）。查找标记位于
+// 该覆盖层内，因此在查找激活时我们必须重新显示它。
+// body 类让 CSS 规则显示它，无需
+// 触碰每个语言样式表路径。
         document.body.classList.add('doc-find-active');
         const inp = document.getElementById('doc-find-input');
         if (inp) { inp.focus(); inp.select(); }
@@ -4815,7 +4816,7 @@ import * as Modals from './modalManager.js';
         }
         if (cnt) cnt.textContent = `${_findIdx + 1} / ${_findMatches.length}`;
         const matchPos = _findMatches[_findIdx];
-        // Highlight the match in the textarea without stealing focus from the input
+// 在 textarea 中高亮匹配项，不抢占输入焦点
         ta.setSelectionRange(matchPos, matchPos + q.length);
         const linesBefore = text.slice(0, matchPos).split('\n').length;
         const lineH = parseFloat(getComputedStyle(ta).lineHeight) || 18;
@@ -4825,8 +4826,8 @@ import * as Modals from './modalManager.js';
           codeEl.dataset.findCurrent = String(_findIdx);
           applyFindMarks(codeEl);
         }
-        // Dedicated overlay rects on top of the textarea — bulletproof
-        // visibility across markdown / email / code modes.
+// 在 textarea 上方使用专用覆盖矩形——
+// 在 markdown/email/代码模式之间具有可靠的可见性。
         renderFindRects(_findMatches.map(s => [s, s + q.length]), _findIdx);
         if (focusTextarea) ta.focus();
       }
@@ -4840,7 +4841,7 @@ import * as Modals from './modalManager.js';
         else if (e.key === 'Enter') { e.preventDefault(); _doFind(e.shiftKey ? 'prev' : 'next', false); }
       });
 
-      // Intercept Ctrl+F on the editor pane
+// 在编辑器面板拦截 Ctrl+F
       pane.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
           e.preventDefault();
@@ -4849,9 +4850,9 @@ import * as Modals from './modalManager.js';
         }
       });
 
-      // Delete (or Backspace) over the doc PANEL itself (not while typing in
-      // a field) deletes the active document. Matches the email-reader Delete
-      // behavior so the keyboard shortcut is consistent across surfaces.
+// 在文档面板本身上按 Delete（或 Backspace）
+//（不是在字段中输入时）删除活动文档。匹配 email 阅读器
+// 的 Delete 行为，使键盘快捷键在各界面保持一致。
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Delete' && e.key !== 'Backspace') return;
         if (!isPanelOpen()) return;
@@ -4861,17 +4862,17 @@ import * as Modals from './modalManager.js';
         deleteActiveDocument();
       });
 
-      // Drag-and-drop file attachment for email compose docs. The whole pane
-      // is the drop target; visual highlight while a drag is hovering. Files
-      // dropped get uploaded via the same compose-upload endpoint as the
-      // file picker.
+// 拖放文件附件用于 email 编写文档。整个面板
+// 是放置目标；拖拽悬停时显示视觉高亮。放入的
+// 文件通过相同的编写上传端点上传
+// 如文件选择器一样。
       let _dragDepth = 0;
       const _isEmailDrag = (e) => {
         const doc = docs.get(activeDocId);
         if (!doc || doc.language !== 'email') return false;
         const dt = e.dataTransfer;
         if (!dt) return false;
-        // Files-only — don't trigger on text drags etc.
+// 仅文件——不在文本拖拽等情况下触发。
         return dt.types && Array.from(dt.types).includes('Files');
       };
       pane.addEventListener('dragenter', (e) => {
@@ -4899,15 +4900,15 @@ import * as Modals from './modalManager.js';
         if (files && files.length) await _uploadComposeFiles(files);
       });
 
-      // Track selection for AI-assisted editing
+// 跟踪选择用于 AI 辅助编辑
       ta.addEventListener('mouseup', () => {
         setTimeout(updateSelectionState, 50);
       });
       ta.addEventListener('keyup', (e) => {
         if (e.shiftKey) updateSelectionState();
       });
-      // ESC clears any pinned selections — matches the badge's clear
-      // button so users have a keyboard shortcut for the same action.
+// ESC 清除任何固定选择——匹配徽章的清除
+// 按钮，使用户有相同操作的键盘快捷键。
       ta.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && _selections.length > 0) {
           e.preventDefault();
@@ -4919,17 +4920,17 @@ import * as Modals from './modalManager.js';
 
     renderTabs();
 
-    // If no docs loaded, show empty state with helpful placeholder
+// 如果没有加载文档，显示带有有用占位符的空状态
     if (docs.size === 0 || !activeDocId) {
       showEmptyState();
     }
   }
 
-  /** Apply markdown formatting to the textarea selection */
+  /** 将 markdown 格式应用于文本区选择 */
   let _lastMdFormat = { action: null, t: 0 };
-  // Styled two-field link dialog (display text + URL). Resolves {url, text}
-  // or null on cancel. Reuses the styled-prompt CSS. Text is optional — left
-  // empty it falls back to the selected text, then the URL itself.
+// 样式的双字段链接对话框（显示文本 + URL）。解析为 {url, text}
+// 或取消时返回 null。复用 styled-prompt CSS。文本可选——留空
+// 时回退到选中的文本，再回退到 URL 本身。
   function _promptLink(defaultText = '') {
     return new Promise(resolve => {
       const overlay = document.createElement('div');
@@ -4970,14 +4971,14 @@ import * as Modals from './modalManager.js';
       urlEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
       textEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); urlEl.focus(); } });
       document.addEventListener('keydown', onKey, true);
-      // Focus the URL field when the text is prefilled; otherwise start at text.
+// 当文本已预填充时聚焦 URL 字段；否则从文本开始。
       requestAnimationFrame(() => { (defaultText ? urlEl : textEl).focus(); });
     });
   }
 
-  // Email WYSIWYG link insertion. We snapshot the Range first (the dialog steals
-  // focus and would otherwise collapse it) and insert via direct DOM ops, since
-  // execCommand is unreliable once focus has moved to the modal.
+// Email WYSIWYG 链接插入。我们先快照 Range（对话框会窃取
+// 焦点，否则会使其折叠），通过直接 DOM 操作插入，因为
+// execCommand 在焦点移到模态框后不可靠。
   async function _wysiwygInsertLink(rich) {
     const selObj = window.getSelection();
     let savedRange = null;
@@ -5002,14 +5003,14 @@ import * as Modals from './modalManager.js';
     const a = document.createElement('a');
     a.href = url;
     if (selText && linkText === selText) {
-      // Unchanged selection — wrap it to keep any inline formatting.
+// 未更改的选择——包裹它以保留任何内联格式。
       a.appendChild(savedRange.extractContents());
     } else {
       savedRange.deleteContents();
       a.textContent = linkText;
     }
     savedRange.insertNode(a);
-    // Place the caret right after the inserted link.
+// 将插入符放在插入链接之后。
     const after = document.createRange();
     after.setStartAfter(a);
     after.collapse(true);
@@ -5021,34 +5022,34 @@ import * as Modals from './modalManager.js';
   }
 
   function applyMdFormat(action) {
-    // Guard against a duplicate/"ghost" click firing the same toggle twice in
-    // quick succession — that would wrap then immediately unwrap, so the
-    // markers appear for a split second and vanish.
+// 防止重复/"幽灵"点击快速连续触发同一切换两次——
+// 那会导致先包裹然后立即取消包裹，使标记闪现
+// 片刻后消失。
     const _now = Date.now();
     if (_lastMdFormat.action === action && _now - _lastMdFormat.t < 350) return;
     _lastMdFormat = { action, t: _now };
-    // Email WYSIWYG: format the live rich text via execCommand instead of
-    // inserting markdown markers into the (hidden) source textarea.
+// Email WYSIWYG：通过 execCommand 格式化实时富文本，而不是
+// 在（隐藏的）源 textarea 中插入 markdown 标记。
     const _rich = _emailRichbodyActive();
     if (_rich) {
       _rich.focus();
-      // Link needs an async styled URL prompt — handle it separately so we can
-      // save/restore the selection (opening the modal collapses it otherwise).
+// 链接需要异步样式 URL 提示——单独处理以便我们
+// 可以保存/恢复选择（否则打开模态框会使其折叠）。
       if (action === 'link') { _wysiwygInsertLink(_rich); return; }
       const _cmd = { bold: 'bold', italic: 'italic', strike: 'strikeThrough',
                      ul: 'insertUnorderedList', ol: 'insertOrderedList', hr: 'insertHorizontalRule' };
       try {
         if (_cmd[action]) document.execCommand(_cmd[action]);
         else if (action === 'h1' || action === 'h2' || action === 'h3') {
-          // Toggle: if the block is already this heading, revert to a normal
-          // paragraph; otherwise apply (or switch to) the heading.
+// 切换：如果块已经是此标题，恢复为普通段落；
+// 否则应用（或切换为）该标题。
           const cur = _currentBlockTag(_rich);
           document.execCommand('formatBlock', false, (cur === action) ? 'div' : action);
         } else if (action === 'code') {
           const cur = _currentBlockTag(_rich);
           document.execCommand('formatBlock', false, (cur === 'pre') ? 'div' : 'pre');
         }
-        // quote/check/codeblock have no clean execCommand — skipped in WYSIWYG v1.
+// 引用/复选框/代码块没有干净的 execCommand——WYSIWYG v1 中跳过。
       } catch (_) {}
       _syncEmailRichbody(_rich);
       if (_rich._syncActive) _rich._syncActive();
@@ -5063,7 +5064,7 @@ import * as Modals from './modalManager.js';
     const before = val.substring(0, start);
     const after = val.substring(end);
 
-    // Inline wrap toggles: bold, italic, strike, code
+// 内联包裹切换：粗体、斜体、删除线、代码
     const wrapMarks = { bold: '**', italic: '*', strike: '~~', code: '`' };
     if (wrapMarks[action]) {
       const m = wrapMarks[action];
@@ -5071,27 +5072,27 @@ import * as Modals from './modalManager.js';
       return;
     }
 
-    // Numbered list — special handling for incrementing numbers
+// 编号列表——处理递增数字的特殊逻辑
     if (action === 'ol') {
       _applyOrderedList(ta, start, end);
       return;
     }
 
-    // Headings get their own toggle so applying the same level removes it and
-    // a different level switches cleanly (rather than stacking # markers).
+// 标题有自己的切换逻辑，应用相同级别则移除，
+// 不同级别则干净切换（而不是堆叠 # 标记）。
     if (action === 'h1' || action === 'h2' || action === 'h3') {
       _applyHeadingToggle(ta, start, { h1: '# ', h2: '## ', h3: '### ' }[action]);
       return;
     }
 
-    // Line prefix toggles: quote, lists, checkbox
+// 行前缀切换：引用、列表、复选框
     const prefixMap = { quote: '> ', ul: '- ', check: '- [ ] ' };
     if (prefixMap[action]) {
       _applyLinePrefixToggle(ta, start, end, prefixMap[action]);
       return;
     }
 
-    // Non-toggle actions
+// 非切换操作
     let insert = '';
     let sS = start, sE = start;
     switch (action) {
@@ -5105,26 +5106,26 @@ import * as Modals from './modalManager.js';
         }
         break;
       case 'codeblock': {
-        // Toggle: find if current line/selection is inside a ``` block
+// 切换：查找当前行/选择是否在 ``` 块内
         const linesBefore = val.substring(0, start).split('\n');
         const linesAfter = val.substring(end).split('\n');
-        // Look backward for opening ```
+// 向后查找开头的 ```
         let openIdx = -1;
         for (let i = linesBefore.length - 1; i >= 0; i--) {
           if (/^```/.test(linesBefore[i].trimEnd())) { openIdx = i; break; }
         }
-        // Look forward for closing ```
+// 向前查找结尾的 ```
         let closeIdx = -1;
         for (let i = 0; i < linesAfter.length; i++) {
           if (/^```\s*$/.test(linesAfter[i].trimEnd())) { closeIdx = i; break; }
         }
         if (openIdx >= 0 && closeIdx >= 0) {
-          // Unwrap: remove the opening and closing fence lines
+// 取消包裹：移除开头和结尾的围栏行
           const openLineStart = linesBefore.slice(0, openIdx).join('\n').length + (openIdx > 0 ? 1 : 0);
           const openLineEnd = openLineStart + linesBefore[openIdx].length + 1; // +1 for \n
           const closeLineStart = end + linesAfter.slice(0, closeIdx).join('\n').length + (closeIdx > 0 ? 1 : 0);
           const closeLineEnd = closeLineStart + linesAfter[closeIdx].length + (closeIdx < linesAfter.length - 1 ? 1 : 0);
-          // Remove closing first (so indices stay valid), then opening
+// 先移除结尾（使索引保持有效），然后移除开头
           _replaceRange(ta, closeLineStart, closeLineEnd, '');
           _replaceRange(ta, openLineStart, openLineEnd, '');
           const inner = val.substring(openLineEnd, closeLineStart);
@@ -5132,7 +5133,7 @@ import * as Modals from './modalManager.js';
           ta.selectionEnd = openLineStart + inner.length;
           return;
         }
-        // Wrap in code block
+// 包裹在代码块中
         const nl = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
         insert = nl + '```\n' + (sel || '') + '\n```\n';
         sS = start + nl.length + 4;
@@ -5152,7 +5153,7 @@ import * as Modals from './modalManager.js';
     ta.selectionEnd = sE;
   }
 
-  /** Replace a range in the textarea using execCommand to preserve undo stack */
+  /** 使用 execCommand 替换文本区中的范围以保留撤销栈 */
   function _replaceRange(ta, from, to, text) {
     ta.focus();
     ta.selectionStart = from;
@@ -5160,11 +5161,11 @@ import * as Modals from './modalManager.js';
     const before = ta.value;
     let ok = false;
     try { ok = document.execCommand('insertText', false, text); } catch (_) { ok = false; }
-    // execCommand('insertText') keeps native undo working. It silently no-ops on
-    // some mobile browsers though — so ONLY when it changed nothing do we splice
-    // the value directly (using the pre-edit value + original range, so we never
-    // double-insert). execCommand fires its own input event; the splice path
-    // dispatches one manually.
+// execCommand('insertText') 保持原生撤销功能。但在某些移动浏览器上
+// 静默无操作——因此仅当它没有更改任何内容时
+// 我们直接拼接值（使用编辑前的值 + 原始范围，因此不会
+// 双重插入）。execCommand 触发其自身的 input 事件；拼接路径
+// 手动分发一个。
     if (!ok && ta.value === before) {
       ta.value = before.slice(0, from) + text + before.slice(to);
       ta.selectionStart = ta.selectionEnd = from + text.length;
@@ -5172,11 +5173,11 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Toggle inline wrap markers (**, *, ~~, `) */
+  /** 切换内联包裹标记 (**, *, ~~, `) */
   function _applyWrapToggle(ta, before, sel, after, start, end, mark, action) {
     const mLen = mark.length;
 
-    // Case 1: selection is wrapped inside — e.g. selected "**bold**" → unwrap to "bold"
+// 情况 1：选择内容被包裹在里面——例如选中 "**bold**" → 取消包裹为 "bold"
     if (sel.startsWith(mark) && sel.endsWith(mark) && sel.length > mLen * 2) {
       const inner = sel.slice(mLen, -mLen);
       _replaceRange(ta, start, end, inner);
@@ -5185,7 +5186,7 @@ import * as Modals from './modalManager.js';
       return;
     }
 
-    // Case 2: markers are outside selection — e.g. **|bold|** → unwrap
+// 情况 2：标记在选择外部——例如 **|bold|** → 取消包裹
     if (before.endsWith(mark) && after.startsWith(mark)) {
       _replaceRange(ta, start - mLen, end + mLen, sel);
       ta.selectionStart = start - mLen;
@@ -5193,8 +5194,8 @@ import * as Modals from './modalManager.js';
       return;
     }
 
-    // Case 3: wrap — add markers. With no selection, insert empty markers and
-    // drop the cursor between them (don't inject the action name as text).
+// 情况 3：包裹——添加标记。无选择时插入空标记和
+// 将光标放在它们之间（不注入操作名称作为文本）。
     const inner = sel;
     const wrapped = mark + inner + mark;
     _replaceRange(ta, start, end, wrapped);
@@ -5202,10 +5203,10 @@ import * as Modals from './modalManager.js';
     ta.selectionEnd = start + mLen + inner.length;
   }
 
-  /** Toggle line prefix (headings, quotes, lists) */
-  // The block-level tag (h1/h2/h3/pre/p/…) containing the current selection in
-  // a contenteditable root — used to decide whether a heading toggle should
-  // apply or revert.
+  /** 切换行前缀（标题、引用、列表） */
+// 包含当前选择的块级标签（h1/h2/h3/pre/p/…），位于
+// contenteditable 根中——用于决定标题切换是
+// 应用还是恢复。
   function _currentBlockTag(root) {
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return '';
@@ -5219,9 +5220,9 @@ import * as Modals from './modalManager.js';
     return '';
   }
 
-  // Heading toggle for the markdown textarea: strips any existing leading
-  // `#{1,6} `, then removes it (toggle off) if it was the same level, or applies
-  // the new level otherwise.
+// Markdown textarea 的标题切换：先去除任何现有的
+// 前导 `#{1,6} `，然后如果是相同级别则移除（切换关闭），
+// 否则应用新级别。
   function _applyHeadingToggle(ta, caret, prefix) {
     const val = ta.value;
     const lineStart = val.lastIndexOf('\n', caret - 1) + 1;
@@ -5250,7 +5251,7 @@ import * as Modals from './modalManager.js';
     const lineStart = val.lastIndexOf('\n', start - 1) + 1;
 
     if (sel) {
-      // Multi-line: toggle prefix on each line
+// 多行：切换每行的前缀
       const lines = sel.split('\n');
       const nonEmpty = lines.filter(l => l.trim());
       const allPrefixed = nonEmpty.length > 0 && nonEmpty.every(l => l.startsWith(prefix));
@@ -5261,20 +5262,20 @@ import * as Modals from './modalManager.js';
       ta.selectionStart = start;
       ta.selectionEnd = start + result.length;
     } else {
-      // No selection: toggle prefix on the current line
+// 无选择：切换当前行的前缀
       const lineBefore = val.substring(lineStart, start);
 
       if (lineBefore.startsWith(prefix)) {
-        // Remove prefix
+// 移除前缀
         _replaceRange(ta, lineStart, lineStart + prefix.length, '');
       } else {
-        // Add prefix at line start
+// 在行首添加前缀
         _replaceRange(ta, lineStart, lineStart, prefix);
       }
     }
   }
 
-  /** Toggle ordered list with incrementing numbers */
+  /** 切换带递增数字的有序列表 */
   function _applyOrderedList(ta, start, end) {
     const val = ta.value;
     const sel = val.substring(start, end);
@@ -5296,7 +5297,7 @@ import * as Modals from './modalManager.js';
         const prefixLen = lineBefore.match(/^\d+\.\s/)[0].length;
         _replaceRange(ta, lineStart, lineStart + prefixLen, '');
       } else {
-        // Find the previous numbered line to continue the sequence
+// 查找上一个编号行以继续序列
         const prevText = val.substring(0, lineStart);
         const prevMatch = prevText.match(/(\d+)\.\s[^\n]*\n$/);
         const num = prevMatch ? parseInt(prevMatch[1]) + 1 : 1;
@@ -5305,21 +5306,21 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Wire up the markdown formatting toolbar */
-  // Grouped formatting dropdown (headings / code / lists). Menu is appended to
-  // <body> so the draggable panel's transform can't clip its fixed position.
+  /** 绑定 markdown 格式工具栏 */
+// 分组格式下拉菜单（标题/代码/列表）。菜单追加到
+// <body>，使可拖拽面板的 transform 不会裁剪其固定位置。
   let _mdDdOpenedAt = 0;
   function _showMdDropdown(toggleBtn) {
     const kind = toggleBtn.dataset.dd;
     const now = Date.now();
     const existing = document.getElementById('doc-md-dd-menu');
-    // Mobile fires a duplicate/ghost click right after the real one. If it lands
-    // on the same toggle it would re-toggle the menu shut the instant it opened.
-    // Ignore a same-kind re-invocation within 400ms so the menu stays up.
+// 移动端在真实点击后立即触发重复/"幽灵"点击。如果它落在
+// 同一切换上，会在菜单打开瞬间重新切换关闭。
+// 在 400ms 内忽略同类型的重复调用，使菜单保持打开。
     if (existing && existing.dataset.dd === kind && (now - _mdDdOpenedAt) < 400) return;
     const prevKind = existing && existing.dataset.dd;
     if (existing) existing.remove();
-    if (existing && prevKind === kind) return; // same toggle clicked → just close
+    if (existing && prevKind === kind) return; // 同一开关再次点击 → 直接关闭
     _mdDdOpenedAt = now;
 
     const groups = {
@@ -5348,7 +5349,7 @@ import * as Modals from './modalManager.js';
       const lbl = document.createElement('span');
       lbl.textContent = label;
       it.append(icoSpan, lbl);
-      // Don't let the menu item steal focus from the editor (preserve selection).
+// 不让菜单项从编辑器窃取焦点（保留选择）。
       it.addEventListener('mousedown', (ev) => ev.preventDefault());
       it.addEventListener('click', (ev) => { ev.stopPropagation(); menu.remove(); applyMdFormat(md); });
       menu.appendChild(it);
@@ -5363,7 +5364,7 @@ import * as Modals from './modalManager.js';
         ev.stopImmediatePropagation?.();
       }
       if (ev && ev.type === 'click') {
-        // Ignore the ghost/duplicate click mobile fires right after opening.
+// 忽略移动端在打开后立即触发的幽灵/重复点击。
         if (Date.now() - _mdDdOpenedAt < 400) return;
         if (menu.contains(ev.target) || toggleBtn.contains(ev.target)) return;
       }
@@ -5391,15 +5392,15 @@ import * as Modals from './modalManager.js';
     const overflowMenu = document.getElementById('md-toolbar-overflow-menu');
     const undoBtn = document.getElementById('md-toolbar-undo');
 
-    // Click handler for format buttons + the grouped dropdown toggles. The menu
-    // is appended to <body> (not nested in the toolbar) so the draggable panel's
-    // CSS transform doesn't reparent its fixed positioning or clip it.
-    // Keep the editor's focus + selection when a format button / dropdown
-    // toggle is pressed. Without this the button steals focus on press, which
-    // collapses the textarea selection (so B/I/S apply to nothing) and, on
-    // mobile, drops the keyboard — whose viewport resize then instantly closes
-    // any dropdown that just opened. Preventing the default mousedown keeps the
-    // textarea focused, so formatting hits the live selection and menus stay up.
+// 格式按钮 + 分组下拉切换的点击处理器。菜单
+// 追加到 <body>（不嵌套在工具栏内），使可拖拽面板的
+// CSS transform 不会重新定位其固定位置或裁剪它。
+// 当格式按钮/下拉切换被按下时保留编辑器焦点+选择。
+// 否则按钮在按下时窃取焦点，折叠 textarea 选择
+//（使 B/I/S 应用为空），在移动端还会收起键盘——
+// 其视口调整随后立即关闭刚打开的任何下拉菜单。
+// 阻止默认 mousedown 保持 textarea 聚焦，
+// 使格式化命中实时选择，菜单保持打开。
     toolbar.addEventListener('mousedown', (e) => {
       if (e.target.closest('[data-md], .md-dd-toggle, .emoji-picker-btn')) e.preventDefault();
     });
@@ -5413,7 +5414,7 @@ import * as Modals from './modalManager.js';
       applyMdFormat(btn.dataset.md);
     });
 
-    // Undo button
+// 撤销按钮
     if (undoBtn) {
       undoBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -5422,10 +5423,10 @@ import * as Modals from './modalManager.js';
       });
     }
 
-    // Overflow collapse logic
+// 溢出折叠逻辑
     let _mdMenuOpen = false;
-    // Horizontal-scroll affordance: the toolbar scrolls its icons; edge arrows
-    // appear when there's more off either side and smoothly scroll to that edge.
+// 水平滚动提示：工具栏滚动其图标；边缘箭头
+// 在任一侧有更多内容时出现，并平滑滚动到该边缘。
     const scrollLeftBtn = document.getElementById('md-scroll-left');
     const scrollRightBtn = document.getElementById('md-scroll-right');
     function updateScrollArrows() {
@@ -5473,24 +5474,24 @@ import * as Modals from './modalManager.js';
       if (_mdMenuOpen) { closeMdMenu(); overflowWrapper.appendChild(overflowMenu); }
     });
 
-    // Re-check overflow on resize
+// 在调整大小时重新检查溢出
     let _mdResizeTimer;
     window.addEventListener('resize', () => {
       clearTimeout(_mdResizeTimer);
       _mdResizeTimer = setTimeout(syncMdOverflow, 100);
     });
 
-    // Show toolbar if language is already markdown
+// 如果语言已是 markdown，显示工具栏
     const lang = document.getElementById('doc-language-select')?.value;
     if (lang === 'markdown') toolbar.style.display = '';
 
-    // Initial sync after layout
+// 布局后初始同步
     requestAnimationFrame(syncMdOverflow);
-    // Expose for external calls (e.g. after fullscreen toggle)
+// 暴露供外部调用（例如全屏切换后）
     toolbar._syncOverflow = syncMdOverflow;
   }
 
-  /** Collapse action buttons into overflow "..." menu (3 most-used visible) */
+/** 将操作按钮折叠到溢出 "..." 菜单中（3 个最常用的可见） */
   const _DOC_RECENTS_KEY = 'odysseus-doc-actions-recent';
   const _DOC_MAX_VISIBLE = 2;
 
@@ -5518,15 +5519,15 @@ import * as Modals from './modalManager.js';
       allBtns.forEach(b => { b.classList.remove('doc-collapsed'); });
       menu.innerHTML = '';
 
-      // Filter to currently visible buttons
+// 过滤到当前可见的按钮
       const available = allBtns.filter(b => b.style.display !== 'none');
 
-      // Sort by recent usage, defaults: copy, export, save
+// 按最近使用排序，默认：复制、导出、保存
       const recent = _getDocRecent();
       const defaults = ['doc-copy-btn', 'doc-export-btn', 'doc-save-btn'];
       const order = recent.length > 0 ? recent : defaults;
 
-      // Auto-pin: md preview when language is markdown
+// 自动固定：当语言为 markdown 时，md 预览
       const lang = document.getElementById('doc-language-select')?.value;
       const pinned = [];
       if (lang === 'markdown') {
@@ -5542,20 +5543,20 @@ import * as Modals from './modalManager.js';
         return 0;
       });
 
-      // Pinned + top N (deduplicated) — pinned count against the max
+// 固定 + 前 N（去重）——固定计入最大数量
       const visible = [...pinned];
       for (const btn of sorted) {
         if (visible.length >= _DOC_MAX_VISIBLE) break;
         if (!visible.includes(btn)) visible.push(btn);
       }
-      // Ensure we never exceed MAX_VISIBLE
+// 确保不超过 MAX_VISIBLE
       while (visible.length > _DOC_MAX_VISIBLE) visible.pop();
       const overflow = sorted.filter(b => !visible.includes(b));
 
-      // Show visible, hide overflow
+// 显示可见，隐藏溢出
       overflow.forEach(b => b.classList.add('doc-collapsed'));
 
-      // Reorder DOM: visible buttons before wrapper
+// 重新排序 DOM：可见按钮在包装之前
       for (const btn of visible) {
         actionsEl.insertBefore(btn, wrapper);
       }
@@ -5568,7 +5569,7 @@ import * as Modals from './modalManager.js';
           item.innerHTML = btn.innerHTML + '<span>' + (btn.title || '') + '</span>';
           item.addEventListener('click', (e) => {
             _trackDocAction(btn.id);
-            // Export button has its own submenu
+// 导出按钮有自己的子菜单
             if (btn.id === 'doc-export-btn') {
               e.stopPropagation();
               const savedRect = item.getBoundingClientRect();
@@ -5596,7 +5597,7 @@ import * as Modals from './modalManager.js';
       e.stopPropagation();
       _menuOpen = !_menuOpen;
       if (_menuOpen) {
-        // Move to body to escape overflow:hidden on doc-editor-pane
+// 移动到 body 以脱离 doc-editor-pane 的 overflow:hidden
         document.body.appendChild(menu);
         const rect = toggle.getBoundingClientRect();
         menu.style.position = 'fixed';
@@ -5612,11 +5613,11 @@ import * as Modals from './modalManager.js';
       if (_menuOpen) { closeMenu(); wrapper.appendChild(menu); }
     });
 
-    // Also track when visible buttons are clicked directly
+// 同时跟踪直接点击可见按钮时
     allBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         _trackDocAction(btn.id);
-        // Defer re-sort so the click handler fires first
+// 延迟重新排序，使点击处理器先触发
         setTimeout(syncOverflow, 100);
       });
     });
@@ -5625,7 +5626,7 @@ import * as Modals from './modalManager.js';
     _syncOverflow = syncOverflow;
   }
 
-  /** Divider drag to resize the editor pane */
+  /** 分隔条拖拽调整编辑器面板大小 */
   function initDividerDrag(divider, pane, isRight) {
     let dragging = false;
     divider.addEventListener('mousedown', (e) => {
@@ -5647,7 +5648,7 @@ import * as Modals from './modalManager.js';
         dragging = false;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        // Re-sync highlighting and line numbers after resize
+// 调整大小后重新同步语法高亮和行号
         syncHighlighting();
         const ta = document.getElementById('doc-editor-textarea');
         if (ta) updateLineNumbers(ta.value);
@@ -5655,20 +5656,20 @@ import * as Modals from './modalManager.js';
     });
   }
 
-  /** Close the editor panel */
-  // When the doc panel is "tab/chevron down" minimized, it lives as a chip
-  // in the bottom dock instead of a red toolbar indicator. We remember which
-  // doc was active so the chip can restore it.
+  /** 关闭编辑器面板 */
+// 当文档面板以"标签/箭头向下"方式最小化时，它作为芯片
+// 存在于底部停靠栏中，而不是红色工具栏指示器。我们记住哪个
+// 文档是活动的，以便芯片可以恢复它。
   let _minimizedDocId = null;
 
   function _ensureDocChipRegistered() {
     if (Modals.isRegistered('doc-panel')) return;
     Modals.register('doc-panel', {
-      // The ✕ / drag-to-trash on the minimized chip is a real close — detach
-      // the doc from the chat session so it doesn't reappear in that chat.
+// 最小化芯片上的 ✕ / 拖入垃圾桶是真正的关闭——将文档
+// 从聊天会话中解绑，使其不在该聊天中重新出现。
       closeFn: () => {
-        // Content was already saved to the map when the panel was minimized,
-        // so just detach (don't re-read the now-removed editor).
+// 面板最小化时内容已保存到 map，
+// 因此只需解绑（不要重新读取现已移除的编辑器）。
         const id = _minimizedDocId;
         _minimizedDocId = null;
         if (id) _detachDocFromSession(id);
@@ -5676,9 +5677,9 @@ import * as Modals from './modalManager.js';
       restoreFn: () => {
         const id = _minimizedDocId;
         _minimizedDocId = null;
-        // openPanel builds the pane shell; switchToDoc re-renders the
-        // saved doc content into it (including PDF render-pages, syntax
-        // highlighting, etc.). Without switchToDoc, the pane is empty.
+// openPanel 构建面板外壳；switchToDoc 将保存的
+// 文档内容重新渲染到其中（包括 PDF 渲染页面、语法
+// 高亮等）。没有 switchToDoc，面板是空的。
         openPanel();
         if (id && docs.has(id)) {
           try { switchToDoc(id); } catch (e) { console.error('Restore doc failed:', e); }
@@ -5697,10 +5698,10 @@ import * as Modals from './modalManager.js';
       return;
     }
     isOpen = false;
-    // On touch, closing the doc should leave the keyboard DOWN. The tap blurs
-    // the textarea (keyboard starts down), but a stray refocus during teardown
-    // (the view behind regaining focus, etc.) was bouncing it back up. Blur any
-    // focused field now and again after the close settles to keep it down.
+// 在触摸时，关闭文档应保持键盘关闭。点击使
+// textarea 失焦（键盘开始关闭），但拆卸过程中的意外重新聚焦
+//（后面视图重新获得焦点等）会使其弹回。现在模糊任何
+// 已聚焦的字段，并在关闭完成后再次模糊以保持键盘关闭。
     if (direction !== 'down' && (('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0)) {
       const _dropKb = () => {
         const ae = document.activeElement;
@@ -5710,13 +5711,13 @@ import * as Modals from './modalManager.js';
       requestAnimationFrame(_dropKb);
       setTimeout(_dropKb, 80);
     }
-    // Save current state
+// 保存当前状态
     saveCurrentToMap();
 
-    // A "down" close means minimize, not close. Register the chip and flip
-    // the dock state to minimized so a chip appears at the bottom. Any
-    // other direction is a real close — make sure any leftover chip from a
-    // prior minimize cycle is cleared too.
+// "向下"关闭意味着最小化，而非关闭。注册芯片并翻转
+// 停靠状态为最小化，使芯片出现在底部。任何
+// 其他方向是真正的关闭——确保同时清除任何之前
+// 最小化循环留下的芯片。
     if (direction === 'down') {
       _minimizedDocId = activeDocId;
       _markDocVisibleState(_lastSessionId, 'minimized');
@@ -5734,11 +5735,11 @@ import * as Modals from './modalManager.js';
     const divider = document.getElementById('doc-divider');
 
     const _finishClose = () => {
-      // If the panel was reopened during the slide-out animation (close →
-      // reopen fast, e.g. close a draft then immediately compose a new one),
-      // bail — otherwise this stale close strips doc-view after the new open
-      // re-added it, and the fresh pane drops into the desktop split layout
-      // (renders as a narrow "sidebar" on mobile).
+// 如果面板在滑出动画期间重新打开（关闭 →
+// 快速重新打开，例如关闭草稿然后立即编写新的），
+// 退出——否则这个过时的关闭在新打开重新添加
+// doc-view 后会剥离它，新面板会降级到桌面分屏布局
+//（在移动端呈现为窄"侧边栏"）。
       if (isOpen) { if (pane) pane.remove(); if (divider) divider.remove(); return; }
       document.body.classList.remove('doc-view');
       const container = document.getElementById('chat-container');
@@ -5753,10 +5754,10 @@ import * as Modals from './modalManager.js';
     };
 
     if (pane) {
-      // Determine slide direction
+// 确定滑动方向
       let transform;
       if (direction === 'down') {
-        // Full slide off-screen on mobile (sheet dismiss); small nudge on desktop.
+// 在移动端完全滑出屏幕（工作表关闭）；在桌面端小幅轻推。
         transform = window.innerWidth <= 768 ? 'translateY(100%)' : 'translateY(30px)';
       } else {
         const fromLeft = pane.classList.contains('doc-left');
@@ -5767,14 +5768,14 @@ import * as Modals from './modalManager.js';
       pane.style.opacity = '0';
       if (divider) { divider.style.transition = 'opacity 0.1s ease-in'; divider.style.opacity = '0'; }
       pane.addEventListener('transitionend', _finishClose, { once: true });
-      // Safety fallback
+// 安全回退
       setTimeout(_finishClose, 200);
     } else {
       _finishClose();
     }
   }
 
-  /** Swap doc panel side (called when sidebar side changes) */
+/** 切换文档面板侧（当侧边栏侧变化时调用） */
   export function swapSide() {
     if (!isOpen) return;
     const pane = document.getElementById('doc-editor-pane');
@@ -5786,27 +5787,27 @@ import * as Modals from './modalManager.js';
     const isRight = sidebar && sidebar.classList.contains('right-side');
 
     if (isRight) {
-      // Sidebar moved right → doc goes left (before chat)
+// 侧边栏移到右侧 → 文档到左侧（chat 之前）
       pane.classList.add('doc-left');
       container.parentNode.insertBefore(pane, container);
       container.parentNode.insertBefore(divider, container);
     } else {
-      // Sidebar moved left → doc goes right (after chat)
+// 侧边栏移到左侧 → 文档到右侧（chat 之后）
       pane.classList.remove('doc-left');
       container.after(divider);
       divider.after(pane);
     }
 
-    // Re-init divider drag for the new side
+// 为新侧重新初始化分隔条拖拽
     initDividerDrag(divider, pane, isRight);
   }
 
-  // ---- Document CRUD ----
+  // ---- 文档增删改查 ----
 
-  /** Create a new document for the current session */
-  // Create a new blank document, reusing the current/last session or
-  // auto-creating one. Same flow as the tab-bar "+" — the single entry point
-  // the sidebar Library "+" should use too.
+  /** 为当前会话创建新文档 */
+// 创建新的空白文档，复用当前/上一个会话或
+// 自动创建一个。与标签栏 "+" 相同的流程——侧边栏
+// 资源库 "+" 也应使用的单一入口点。
   export async function newDocument() {
     let sessionId = docs.get(activeDocId)?.sessionId
       || _lastSessionId
@@ -5821,9 +5822,9 @@ import * as Modals from './modalManager.js';
   export async function createDocument(sessionId) {
     if (_creatingDoc) return;
     _creatingDoc = true;
-    // If the panel was in empty-state, the user may type into the editor
-    // during the create round-trip — preserve that text into the new doc
-    // instead of letting switchToDoc blank it.
+// 如果面板处于空状态，用户可能在创建往返期间
+// 输入到编辑器中——将该文本保留到新文档中，
+// 而不是让 switchToDoc 清空它。
     const wasEmpty = !activeDocId;
     try {
       const res = await fetch(`${API_BASE}/api/document`, {
@@ -5839,14 +5840,14 @@ import * as Modals from './modalManager.js';
       const doc = await res.json();
       addDocToTabs(doc, sessionId);
       if (!isOpen) openPanel();
-      // Re-enable editor if it was in empty state
+// 如果处于空状态，重新启用编辑器
       let textarea = document.getElementById('doc-editor-textarea');
       if (textarea) {
         textarea.disabled = false;
-        textarea.placeholder = 'Document content...';
+        textarea.placeholder = t('document.editor_placeholder_content');
       }
-      // Capture text typed during the round-trip (only when starting from the
-      // empty editor — don't steal another doc's content).
+// 捕获往返期间输入的文本（仅当从空编辑器开始时——
+// 不要窃取其他文档的内容）。
       const typed = (wasEmpty && textarea && textarea.value.trim()) ? textarea.value : '';
       switchToDoc(doc.id);
       if (typed) {
@@ -5868,23 +5869,23 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Load an existing document into a tab */
-  /** Inject a freshly-created doc dict (from a POST response) directly into
-   * the tabs without re-fetching it via GET. Fixes a race where GET
-   * /api/document/{id} can 404 right after a successful POST — we already
-   * have the full doc payload from the create response, no need to round-trip.
+  /** 将现有文档加载到标签中 */
+  /** 将新创建的文档字典（来自POST响应）直接注入到
+   * 标签中，无需通过GET重新获取。修复了GET
+   * /api/document/{id} 在成功POST后可能出现404的竞态条件 — 我们已经
+   * 从创建响应中获得了完整文档负载，无需往返请求。
    */
   export function injectFreshDoc(doc) {
     if (!doc || !doc.id) return;
     const sessionId = doc.session_id || _lastSessionId || null;
     addDocToTabs(doc, sessionId);
-    // Use _ensureDocPaneMounted (not `if (!isOpen) openPanel()`): when a draft
-    // is composed from the email modal, `isOpen` can be stale-true while the
-    // actual pane was torn down — a bare openPanel() early-returns and the doc
-    // mounts into a wrong/half-built pane (rendered as a narrow sidebar on
-    // mobile instead of its own full-screen window). This remounts it cleanly.
+// 使用 _ensureDocPaneMounted（而非 `if (!isOpen) openPanel()`）：当从
+// email 模态框编写草稿时，`isOpen` 可能是陈旧的 true，而
+// 实际面板已被拆除——简单的 openPanel() 会提前返回，
+// 文档挂载到错误/半建的面板中（在移动端呈现为窄侧边栏
+// 而不是自己的全屏窗口）。这会干净地重新挂载。
     _ensureDocPaneMounted();
-    // Defer to next frame so the panel DOM exists before switchToDoc populates
+// 延迟到下一帧，使面板 DOM 在 switchToDoc 填充前存在
     requestAnimationFrame(() => requestAnimationFrame(() => {
       switchToDoc(doc.id);
     }));
@@ -5925,10 +5926,10 @@ import * as Modals from './modalManager.js';
     _autoSaveDebounce = setTimeout(() => { saveDocument({ silent: true }); }, 800);
   }
 
-  // Force the panel into a genuinely-open state. `isOpen` can be true while the
-  // pane was torn down by another full-screen view (e.g. opening a doc from the
-  // email modal): in that case openPanel() early-returns and nothing mounts, so
-  // the doc silently never appears. Reset the stale flag and re-open for real.
+// 强制面板进入真正打开状态。`isOpen` 可以是 true，但面板
+// 已被另一个全屏视图拆除（例如从 email 模态框打开文档）：
+// 此时 openPanel() 提前返回，什么都不挂载，因此
+// 文档静默地从不出现。重置陈旧标志并真正重新打开。
   function _ensureDocPaneMounted() {
     if (!isOpen || !document.getElementById('doc-editor-pane')) {
       isOpen = false;
@@ -5937,7 +5938,7 @@ import * as Modals from './modalManager.js';
   }
 
   export async function loadDocument(docId) {
-    // If already in tabs, just switch
+// 如果已在标签中，直接切换
     if (docs.has(docId)) {
       _ensureDocPaneMounted();
       switchToDoc(docId);
@@ -5961,16 +5962,16 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  // Deep-link: #document-<id> opens that document on load / URL-bar nav.
-  // Clicks on in-chat document anchors are handled separately (they call
-  // preventDefault, so they don't change the hash); this covers refresh
-  // and pasted/typed document URLs, which previously did nothing.
+// 深度链接：#document-<id> 在加载/URL 栏导航时打开该文档。
+// 聊天中文档锚点的点击单独处理（它们调用
+// preventDefault，因此不改变哈希）；这覆盖刷新
+// 和粘贴/输入的文档 URL，此前它们无效。
   function _maybeOpenDocFromHash() {
     const m = (window.location.hash || '').match(/^#document-(.+)$/);
     if (m) loadDocument(m[1]);
   }
 
-  /** Open panel and ensure a document exists, creating a session if needed */
+  /** 打开面板并确保文档存在，必要时创建会话 */
   export async function ensureDocPanel() {
     let sessionId = _lastSessionId
       || (sessionModule && sessionModule.getCurrentSessionId());
@@ -5986,15 +5987,15 @@ import * as Modals from './modalManager.js';
     await loadSessionDocs(sessionId);
   }
 
-  /** Create a session and sync it with the sessions module */
+  /** 创建会话并与sessions模块同步 */
   async function _autoCreateSession() {
-    // Materialize pending chat first if one exists
+// 如果有待处理的聊天，先将其具体化
     if (sessionModule && sessionModule.hasPendingChat && sessionModule.hasPendingChat()) {
       await sessionModule.materializePendingSession();
       const id = sessionModule.getCurrentSessionId();
       if (id) { _lastSessionId = id; return id; }
     }
-    // Preserve the current model when creating a doc session
+// 创建文档会话时保留当前模型
     const curModel = sessionModule?.getCurrentModel ? sessionModule.getCurrentModel() : null;
     const sessions = sessionModule ? sessionModule.getSessions() : [];
     const match = curModel && sessions.find(s => s.model === curModel && s.endpoint_url);
@@ -6011,7 +6012,7 @@ import * as Modals from './modalManager.js';
     const payload = await res.json();
     const sessionId = payload.id;
     _lastSessionId = sessionId;
-    // Tell sessions module so chat uses the same session
+// 告诉会话模块，使聊天使用相同的会话
     if (sessionModule && sessionModule.setCurrentSessionId) {
       sessionModule.setCurrentSessionId(sessionId);
     }
@@ -6019,30 +6020,30 @@ import * as Modals from './modalManager.js';
     return sessionId;
   }
 
-  /** Load all documents for a session into tabs */
+  /** 将会话的所有文档加载到标签中 */
   export async function loadSessionDocs(sessionId, opts = {}) {
     _lastSessionId = sessionId;
     const restoreMode = !!opts.restoreMode;
     const shouldRestoreOpen = localStorage.getItem(_docOpenKey(sessionId)) === '1';
     const shouldRestoreMinimized = localStorage.getItem(_docMinimizedKey(sessionId)) === '1';
-    // Clear docs from other sessions so tabs are per-session,
-    // but keep session-less docs (e.g. email compose) — they're independent
+// 清除其他会话的文档，使标签按会话组织，
+// 但保留无会话文档（例如 email 编写）——它们是独立的
     for (const [id, doc] of [...docs]) {
       if (doc.sessionId && doc.sessionId !== sessionId) docs.delete(id);
     }
     activeDocId = null;
 
-    // Show loading state while fetching
+// 获取时显示加载状态
     if (isOpen) _showLoadingOverlay();
 
     try {
       const res = await fetch(`${API_BASE}/api/documents/${sessionId}`);
       const allDocs = await res.json();
       _hideLoadingOverlay();
-      // Only load active docs
+// 仅加载活动文档
       const activeDocs = allDocs.filter(d => d.is_active);
       if (activeDocs.length === 0) {
-        // No docs yet — show empty editor, doc will be created when user types
+// 尚无文档——显示空编辑器，用户输入时将创建文档
         if (!restoreMode || shouldRestoreOpen) {
           if (!isOpen) openPanel();
           showEmptyState();
@@ -6056,7 +6057,7 @@ import * as Modals from './modalManager.js';
         }
       }
       _syncDocIndicator();
-      // Switch to the most recently active one (or first)
+// 切换到最近活动的（或第一个）
       const target = activeDocs[0];
       if (restoreMode && shouldRestoreMinimized && !shouldRestoreOpen) {
         activeDocId = null;
@@ -6066,36 +6067,36 @@ import * as Modals from './modalManager.js';
         Modals.minimize('doc-panel');
         return;
       }
-      // Removed: the old "if restoreMode && !shouldRestoreOpen → stay
-      // closed" branch. Users expect that entering a chat with an
-      // attached document opens the panel automatically, not just shows
-      // an indicator. The minimised branch above still respects an
-      // explicit user choice to dock the panel; everything else falls
-      // through to the "open panel" path below.
+// 已移除：旧的 "if restoreMode && !shouldRestoreOpen → 保持
+// 关闭"分支。用户期望进入带
+// 附加文档的聊天时自动打开面板，而不是仅显示
+// 一个指示器。上面的最小化分支仍然尊重
+// 用户显式停靠面板的选择；其他所有情况
+// 都落入下面的"打开面板"路径。
       if (false) {
         activeDocId = null;
         _minimizedDocId = null;
         if (Modals.isRegistered('doc-panel')) Modals.unregister('doc-panel');
         return;
       }
-      // Always open when there are docs — the minimised branch above
-      // already returned for users who explicitly docked the panel.
-      // The previous `if (!restoreMode || shouldRestoreOpen)` gate left
-      // the panel closed on first entry to a chat with docs, which
-      // hides the doc unless the user manually opens the panel.
+// 有文档时始终打开——上面的最小化分支
+// 已为显式停靠面板的用户返回。
+// 之前的 `if (!restoreMode || shouldRestoreOpen)` 门
+// 在首次进入带文档的聊天时保持面板关闭，
+// 隐藏文档除非用户手动打开面板。
       _markDocVisibleState(sessionId, 'open');
       if (!isOpen) openPanel();
       switchToDoc(target.id);
     } catch (e) {
       _hideLoadingOverlay();
       console.error('Failed to load session documents:', e);
-      // Open empty panel on error too
+// 出错时也打开空面板
       if (!isOpen) openPanel();
       showEmptyState();
     }
   }
 
-  /** Add a document to the tabs map */
+  /** 将文档添加到标签映射 */
   function addDocToTabs(doc, sessionId) {
     const existing = docs.get(doc.id);
     docs.set(doc.id, {
@@ -6107,7 +6108,7 @@ import * as Modals from './modalManager.js';
       sessionId: sessionId || doc.session_id,
       userSetLanguage: !!doc.language,
       _composeAtts: existing?._composeAtts,
-      // Provenance for the "Send signed reply" flow
+// "发送签名回复"流的溯源
       sourceEmailUid:       doc.source_email_uid || null,
       sourceEmailFolder:    doc.source_email_folder || null,
       sourceEmailAccountId: doc.source_email_account_id || null,
@@ -6115,7 +6116,7 @@ import * as Modals from './modalManager.js';
     });
   }
 
-  /** Populate the editor with document data (used internally) */
+  /** 用文档数据填充编辑器（内部使用） */
   function populateEditor(doc) {
     const titleInput = document.getElementById('doc-title-input');
     const textarea = document.getElementById('doc-editor-textarea');
@@ -6130,17 +6131,17 @@ import * as Modals from './modalManager.js';
     syncHighlighting();
   }
 
-  /** Post-process hljs markdown output: colorize [brackets] and heading # markers */
+  /** 后处理hljs markdown输出：着色[方括号]和标题#标记 */
   function _postProcessMarkdown(codeEl) {
     const walker = document.createTreeWalker(codeEl, NodeFilter.SHOW_TEXT);
     const textNodes = [];
     while (walker.nextNode()) textNodes.push(walker.currentNode);
     for (const node of textNodes) {
       const text = node.textContent;
-      // Skip nodes already inside hljs spans (like [link text] which is .hljs-string)
+// 跳过已在 hljs span 内的节点（如 [link text] 是 .hljs-string）
       if (node.parentElement !== codeEl && node.parentElement.className &&
           /hljs-(string|link|code|section)/.test(node.parentElement.className)) continue;
-      // Match standalone [bracketed text] not followed by (url)
+// 匹配独立的 [方括号文本] 后不跟 (url)
       if (/\[[^\]]+\](?!\()/.test(text)) {
         const frag = document.createDocumentFragment();
         let last = 0;
@@ -6158,7 +6159,7 @@ import * as Modals from './modalManager.js';
         if (last > 0) node.parentNode.replaceChild(frag, node);
       }
     }
-    // Colorize heading # markers inside .hljs-section spans
+// 在 .hljs-section span 中着色标题 # 标记
     codeEl.querySelectorAll('.hljs-section').forEach(span => {
       const text = span.textContent;
       const hashMatch = text.match(/^(#{1,6})\s/);
@@ -6172,15 +6173,15 @@ import * as Modals from './modalManager.js';
     });
   }
 
-  // Find-result rectangles drawn ON TOP of the textarea — bypasses
-  // the syntax-highlight overlay entirely so visibility works in
-  // markdown, email, and any other mode regardless of single-layer-
-  // rendering quirks. Same mirror-measurement approach as pinned
-  // selections so wrap matches the textarea exactly.
+// 查找结果矩形绘制在 textarea 上方——完全绕过
+// 语法高亮覆盖层，使可见性在
+// markdown、email 和任何其他模式中都有效，不受单层渲染
+// 怪异行为的影响。与固定选择相同的镜像测量方法，
+// 使换行与 textarea 精确匹配。
   //
-  // `matches` is an array of [start, end] offsets; `currentIdx` is
-  // the focused one (gets brighter accent). Pass empty matches to
-  // clear all rects.
+// `matches` 是 [start, end] 偏移量数组；`currentIdx` 是
+// 聚焦的匹配项（获得更亮的强调色）。传入空 matches 清除
+// 所有矩形。
   function renderFindRects(matches, currentIdx) {
     const wrap = document.getElementById('doc-editor-wrap');
     if (!wrap) return;
@@ -6216,13 +6217,13 @@ import * as Modals from './modalManager.js';
     const scrollTop = textarea.scrollTop;
     for (let i = 0; i < matches.length; i++) {
       const [s, e] = matches[i];
-      // Line-band style: highlight the FULL visual row containing the
-      // match. Cheap, always-visible, doesn't need character-precise
-      // mirror measurement that varies across email/markdown/code modes.
+// 行带样式：高亮包含匹配的整行。
+// 廉价、始终可见，不需要逐字符精确的
+// 镜像测量（在 email/markdown/代码模式中可能不同）。
       mirror.textContent = text.substring(0, s);
       const startTop = mirror.scrollHeight - paddingTop;
-      // Find the wrap-row's end by measuring with one extra char beyond
-      // the match end and stepping back to the last whitespace boundary.
+// 通过在匹配结束位置之后多测量一个字符并回退到
+// 最后一个空白边界来找到换行行尾。
       mirror.textContent = text.substring(0, e);
       const endHeight = mirror.scrollHeight - paddingTop;
       mirror.textContent = '';
@@ -6239,12 +6240,12 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Wrap find-matches in the syntax-highlighted overlay with <mark> spans.
-   * Walks text nodes so existing hljs spans are preserved. Matches that cross
-   * syntax tokens are skipped (rare for user searches). */
+  /** 在语法高亮叠加层中用<mark>标签包裹查找匹配项。
+   * 遍历文本节点以保留现有hljs标签。跨语法标记的匹配项
+   * 将被跳过（用户搜索中很少见）。 */
   function applyFindMarks(codeEl) {
     if (!codeEl) return;
-    // Remove prior find marks (unwrap)
+// 移除先前的查找标记（取消包裹）
     codeEl.querySelectorAll('mark.doc-find-mark').forEach(m => {
       const parent = m.parentNode;
       while (m.firstChild) parent.insertBefore(m.firstChild, m);
@@ -6281,49 +6282,49 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Sync highlighted overlay with textarea content */
+  /** 将高亮叠加层与文本区内容同步 */
   function syncHighlighting() {
     const textarea = document.getElementById('doc-editor-textarea');
     const codeEl = document.getElementById('doc-editor-code');
     const pre = document.getElementById('doc-editor-highlight');
     if (!textarea || !codeEl) return;
 
-    // Don't overwrite inline diff markers
+// 不覆盖内联差异标记
     if (codeEl.dataset.hasDiff) return;
 
     const text = textarea.value;
-    // Trailing newline prevents scroll mismatch on last line
+// 尾随换行防止最后一行滚动不匹配
     codeEl.textContent = text + '\n';
 
     const lang = document.getElementById('doc-language-select')?.value;
-    // hljs has no 'svg' grammar — highlight it as xml (the dropdown value stays
-    // 'svg' so the preview/run routing still treats it as renderable markup).
+// hljs 没有 'svg' 语法——将其作为 xml 高亮（下拉值保持
+// 'svg'，使预览/运行路由仍然将其视为可渲染标记）。
     const _hlLang = lang === 'svg' ? 'xml' : lang;
     codeEl.className = _hlLang ? `language-${_hlLang}` : '';
     if (window.hljs && _hlLang) {
       codeEl.removeAttribute('data-highlighted');
       window.hljs.highlightElement(codeEl);
     }
-    // Markdown post-processing: colorize standalone [brackets] and heading markers
+// Markdown 后处理：着色独立 [方括号] 和标题标记
     if (lang === 'markdown') {
       _postProcessMarkdown(codeEl);
     }
 
-    // Reapply find highlights after hljs rewrote the DOM
+// hljs 重写 DOM 后重新应用查找高亮
     if (codeEl.dataset.findQuery) applyFindMarks(codeEl);
 
-    // Keep scroll in sync
+// 保持滚动同步
     if (pre) {
       codeEl.style.minHeight = textarea.scrollHeight + 'px';
       pre.scrollTop = textarea.scrollTop;
       pre.scrollLeft = textarea.scrollLeft;
     }
 
-    // Update line numbers
+// 更新行号
     updateLineNumbers(text);
   }
 
-  /** Update the line number gutter */
+  /** 更新行号 gutter */
   let _lineNumberResizeObserver = null;
   let _lineNumberObservedTextarea = null;
   let _lineNumberResizeRaf = null;
@@ -6490,7 +6491,7 @@ import * as Modals from './modalManager.js';
     syncGutterScroll();
   }
 
-  /** Sync line number gutter scroll with textarea */
+  /** 将行号 gutter 滚动与文本区同步 */
   function syncGutterScroll() {
     const textarea = document.getElementById('doc-editor-textarea');
     const gutter = document.getElementById('doc-line-numbers');
@@ -6499,20 +6500,20 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Attempt language auto-detection using hljs.highlightAuto() */
-  /** Quick heuristic check for markdown before falling back to hljs */
+  /** 使用 hljs.highlightAuto() 尝试自动检测语言 */
+  /** 在回退到hljs之前进行快速启发式markdown检测 */
   function _looksLikeMarkdown(text) {
     const lines = text.slice(0, 2000).split('\n');
     let score = 0;
     for (const line of lines) {
       if (/^#{1,6}\s/.test(line)) score += 3;         // headings
-      else if (/^\s*[-*+]\s/.test(line)) score += 1;  // list items
-      else if (/^\s*\d+\.\s/.test(line)) score += 1;  // ordered list
-      else if (/^\s*>/.test(line)) score += 1;         // blockquote
-      else if (/\[.+\]\(.+\)/.test(line)) score += 2; // links
-      else if (/^```/.test(line)) score += 2;          // fenced code
-      else if (/\*\*.+\*\*/.test(line)) score += 1;   // bold
-      else if (/^---\s*$/.test(line)) score += 1;      // horizontal rule
+      else if (/^\s*[-*+]\s/.test(line)) score += 1;  // 列表项
+      else if (/^\s*\d+\.\s/.test(line)) score += 1;  // 有序列表
+      else if (/^\s*>/.test(line)) score += 1;         // 引用块
+      else if (/\[.+\]\(.+\)/.test(line)) score += 2; // 链接
+      else if (/^```/.test(line)) score += 2;          // 围栏代码
+      else if (/\*\*.+\*\*/.test(line)) score += 1;   // 粗体
+      else if (/^---\s*$/.test(line)) score += 1;      // 分割线
     }
     return score >= 3;
   }
@@ -6528,9 +6529,9 @@ import * as Modals from './modalManager.js';
     const text = textarea.value;
     if (text.length < AUTO_DETECT_MIN_CHARS) return;
 
-    // SVG heuristic — a standalone <svg> root (optionally after an XML decl /
-    // doctype). hljs would tag this generic "xml"; we want it labeled svg so it
-    // routes to the preview iframe with a correct type.
+// SVG 启发式——独立的 <svg> 根（可选地跟在 XML 声明/
+// doctype 之后）。hljs 会将其标记为通用 "xml"；我们希望标记为 svg，
+// 使其以正确类型路由到预览 iframe。
     if (/^\s*(<\?xml[^>]*>\s*)?(<!doctype[^>]*>\s*)?<svg[\s>]/i.test(text)) {
       const langSelect = document.getElementById('doc-language-select');
       if (langSelect && langSelect.value !== 'svg') {
@@ -6543,7 +6544,7 @@ import * as Modals from './modalManager.js';
       return;
     }
 
-    // Markdown heuristic first — hljs often fails to detect it
+// Markdown 启发式优先——hljs 经常无法检测到它
     if (_looksLikeMarkdown(text)) {
       const langSelect = document.getElementById('doc-language-select');
       if (langSelect && langSelect.value !== 'markdown') {
@@ -6579,19 +6580,19 @@ import * as Modals from './modalManager.js';
     if (mdToolbar2) mdToolbar2.style.display = (mapped === 'markdown') ? '' : 'none';
   }
 
-  // ---- Selection-based AI editing ----
+  // ---- 基于选择的 AI 编辑 ----
 
-  // Tracked selection state — when set, the next chat message auto-includes this context
+// 跟踪选择状态——当设置时，下一条聊天消息自动包含此上下文
   let _selections = [];  // [{ text, startLine, endLine, start, end }, ...]
 
-  // Pinned-selection overlays are positioned in pixel coords measured
-  // against the textarea's current size. When the window shrinks (or
-  // the sidebar collapses, or the panel resizes), the text wraps to
-  // more rows but the overlay rectangles stay where they were —
-  // visibly drifting off the real highlighted text. Re-render on any
-  // size change so the overlays follow the new wrap. Debounced via
-  // rAF to coalesce the rapid-fire ResizeObserver pulses during a
-  // drag-resize.
+// 固定选择覆盖层以像素坐标定位，测量基于
+// textarea 的当前大小。当窗口缩小（或
+// 侧边栏折叠，或面板调整大小）时，文本换行到更多行，
+// 但覆盖矩形停留在原处——
+// 视觉上偏离真正的高亮文本。在任何
+// 大小更改时重新渲染，使覆盖层跟随新换行。通过
+// rAF 防抖，以合并拖拽调整大小期间快速触发的
+// ResizeObserver 脉冲。
   let _selResizeScheduled = false;
   function _scheduleSelRerender() {
     if (_selResizeScheduled || _selections.length === 0) return;
@@ -6604,10 +6605,10 @@ import * as Modals from './modalManager.js';
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', _scheduleSelRerender);
   }
-  // Observe the textarea itself so internal layout changes (sidebar
-  // collapse, panel snap, mobile keyboard show/hide) also trigger a
-  // re-render. The observer attaches lazily on first selection so we
-  // don't churn before the editor mounts.
+// 观察 textarea 自身，使内部布局变化（侧边栏折叠、
+// 面板捕捉、移动端键盘显示/隐藏）也触发
+// 重新渲染。观察器在首次选择时延迟附加，
+// 避免在编辑器挂载之前产生开销。
   let _selResizeObserver = null;
   function _ensureSelResizeObserver() {
     if (_selResizeObserver || typeof ResizeObserver === 'undefined') return;
@@ -6617,11 +6618,11 @@ import * as Modals from './modalManager.js';
     _selResizeObserver.observe(ta);
   }
 
-  // Detect whether the textarea is currently wrapping any line. If
-  // every logical line fits on one visual row, the overlay positions
-  // are exact and pinned selections are safe regardless of fullscreen
-  // state. We compute rendered-row-count from scrollHeight/line-height
-  // and compare against the number of \n-separated lines.
+// 检测 textarea 当前是否有任何行换行。如果
+// 每个逻辑行都适合一个视觉行，覆盖层位置
+// 是精确的，固定选择无论全屏
+// 状态如何都是安全的。我们从 scrollHeight/line-height 计算
+// 渲染行数，并与 \n 分隔的行数比较。
   function _textareaWraps(ta) {
     if (!ta) return false;
     const style = getComputedStyle(ta);
@@ -6634,15 +6635,15 @@ import * as Modals from './modalManager.js';
     return renderedRows > logicalLines;
   }
 
-  /** Update selection tracking, show badge + persistent highlight.
-   *  Each new selection is added (pinned). Click without selecting to clear all. */
+  /** 更新选择跟踪，显示标记 + 持久高亮。
+   *  每个新选择都被添加（固定）。无选择点击以清除全部。 */
   function updateSelectionState() {
-    // Pinned selections are safe whenever the overlay measurement can
-    // be exact. That holds in two cases: (1) fullscreen — width is
-    // stable, or (2) no line wrapping — every logical \n-line fits on
-    // one visual row, so character-precise mirror measurement isn't
-    // needed. Outside both cases, panel resizes / wrap shifts make
-    // overlays drift, so we no-op.
+// 当覆盖层测量可以精确时，固定选择是安全的。
+// 这在两种情况下成立：(1) 全屏——宽度
+// 稳定，或 (2) 无行换行——每个逻辑 \n 行适合一个
+// 视觉行，因此逐字符精确的镜像测量不是
+// 必需的。在两种情况之外，面板调整大小/换行偏移使
+// 覆盖层漂移，因此我们无操作。
     const _pane = document.querySelector('.doc-editor-pane');
     const _isFs = !!(_pane && _pane.classList.contains('doc-fullscreen'));
     const _ta0 = document.getElementById('doc-editor-textarea');
@@ -6658,7 +6659,7 @@ import * as Modals from './modalManager.js';
     const end = textarea.selectionEnd;
 
     if (start === end) {
-      // Simple click — don't clear, user might be clicking into chat
+// 简单点击——不清除，用户可能点击到聊天中
       return;
     }
 
@@ -6667,7 +6668,7 @@ import * as Modals from './modalManager.js';
     const startLine = text.substring(0, start).split('\n').length;
     const endLine = text.substring(0, end).split('\n').length;
 
-    // Check for overlap with existing selection — replace if overlapping
+// 检查与现有选择的重叠——如果重叠则替换
     const overlapIdx = _selections.findIndex(s =>
       (start >= s.start && start <= s.end) || (end >= s.start && end <= s.end) ||
       (start <= s.start && end >= s.end)
@@ -6683,7 +6684,7 @@ import * as Modals from './modalManager.js';
     renderAllSelectionHighlights();
   }
 
-  /** Show a selection indicator badge with count + clear button */
+  /** 显示带计数+清除按钮的选择指示器标记 */
   function showSelectionBadge() {
     let badge = document.getElementById('doc-selection-badge');
     if (!badge) {
@@ -6691,9 +6692,9 @@ import * as Modals from './modalManager.js';
       badge.id = 'doc-selection-badge';
       badge.className = 'doc-selection-badge';
       badge.title = 'Selected regions — type in chat to edit';
-      // Sits directly under the formatting toolbar so it reads as part
-      // of the toolbar row, not buried in the page header. Falls back
-      // to the editor header if the toolbar isn't on screen.
+// 直接位于格式工具栏下方，使其读取为工具栏行的一部分
+// 而非埋在页面标题中。如果工具栏不在屏幕上，则回退到
+// 编辑器标题。
       const toolbar = document.getElementById('doc-md-toolbar');
       if (toolbar && toolbar.parentNode) {
         toolbar.insertAdjacentElement('afterend', badge);
@@ -6720,23 +6721,23 @@ import * as Modals from './modalManager.js';
     });
   }
 
-  /** Markdown / prose docs get character-precise highlights (like a
-   *  normal browser selection but persistent). Code docs get line-based
-   *  highlights — when working in code you usually operate on whole
-   *  lines, and the character-based version reads as jittery against
-   *  monospace alignment. */
+  /** Markdown/文本文档获得字符精确高亮（像
+   *  普通浏览器选择但是持久化的）。代码文档获得基于行的
+   *  高亮 — 在代码中工作时通常操作整行，
+   *  字符基础的版本在等宽对齐下看起来抖动。 */
+*  等宽对齐。 */
   function _isCodeDoc() {
     const lang = (document.getElementById('doc-language-select')?.value || '').toLowerCase();
     if (!lang) return false;
-    // Prose / preview types that should get character-precise highlights.
+// 应获得逐字符精确高亮的散文/预览类型。
     const prose = new Set(['markdown', 'md', 'text', 'txt', 'email', 'html', 'csv']);
     return !prose.has(lang);
   }
 
-  /** Measure the visual x,y position of a character index inside the
-   *  mirror element by inserting a zero-width marker span there and
-   *  reading its bounding rect. Returns {x, y} relative to the mirror's
-   *  content-box origin. */
+  /** 测量字符索引在镜像元素中的视觉x,y位置
+   *  通过在其中插入零宽标记span并
+   *  读取其边界矩形。返回相对于镜像内容框原点的{x, y}。 */
+*  content-box 原点。 */
   function _measurePos(mirror, text, pos) {
     mirror.innerHTML = '';
     if (pos > 0) mirror.appendChild(document.createTextNode(text.substring(0, pos)));
@@ -6748,31 +6749,31 @@ import * as Modals from './modalManager.js';
     return { x: r.left - m.left, y: r.top - m.top };
   }
 
-  /** Render persistent highlight overlays for all selections */
-  // Re-anchor pinned selections against the live textarea content. After
-  // an undo or any other path that shrinks/shifts the text, captured
-  // {start, end} positions can point at unrelated content (or past the
-  // end of the buffer). We:
-  //   1. Verify the captured text still sits at [start, end].
-  //   2. If not, look for the captured text elsewhere in the doc and
-  //      re-anchor. Prefers the nearest occurrence to the old position.
-  //   3. If the captured text is gone entirely, drop the selection.
-  //   4. Refresh derived fields (startLine/endLine) when re-anchored.
-  // Cheap O(N) per selection; only runs when _selections is non-empty.
+  /** 为所有选择渲染持久高亮叠加层 */
+// 根据实时 textarea 内容重新锚定固定选择。在
+// 撤销或任何其他缩小/移动文本的路径之后，捕获的
+// {start, end} 位置可能指向不相关的内容（或超出
+// 缓冲区末尾）。我们：
+//   1. 验证捕获的文本仍在 [start, end] 处。
+//   2. 如果不在，在文档中其他位置查找捕获的文本并
+//      重新锚定。优先选择最靠近旧位置的匹配。
+//   3. 如果捕获的文本完全消失，则丢弃选择。
+//   4. 重新锚定时刷新派生字段（startLine/endLine）。
+// 每个选择 O(N) 成本；仅在 _selections 非空时运行。
   function _validateSelections(text) {
     if (_selections.length === 0) return;
     const survivors = [];
     for (const s of _selections) {
       const captured = s.text || '';
       if (!captured) continue;
-      // Fast path: still at the same offsets.
+// 快速路径：仍在相同的偏移量处。
       if (text.substring(s.start, s.end) === captured) {
         survivors.push(s);
         continue;
       }
-      // Re-anchor: find the captured text and pick the occurrence
-      // nearest to the old start so multi-match docs don't snap to the
-      // wrong one. indexOf scans are cheap for typical doc sizes.
+// 重新锚定：查找捕获的文本并选择最靠近
+// 旧开始的匹配，使多匹配文档不会跳到
+// 错误的位置。indexOf 扫描对于典型文档大小是廉价的。
       let best = -1, bestDist = Infinity;
       let from = 0;
       while (true) {
@@ -6799,16 +6800,16 @@ import * as Modals from './modalManager.js';
   function renderAllSelectionHighlights() {
     const wrap = document.getElementById('doc-editor-wrap');
     if (!wrap) return;
-    // Remove old overlays
+// 移除旧覆盖层
     wrap.querySelectorAll('.doc-selection-overlay').forEach(el => el.remove());
 
     const textarea = document.getElementById('doc-editor-textarea');
     if (!textarea || _selections.length === 0) return;
 
     const text = textarea.value;
-    // Pre-render guard: re-anchor or drop selections whose text has
-    // shifted (undo, programmatic edits, etc.) so the overlays never
-    // draw on the wrong region.
+// 预渲染守卫：重新锚定或丢弃文本已偏移的选择
+//（撤销、编程编辑等），使覆盖层永远不会
+// 绘制在错误区域上。
     _validateSelections(text);
     if (_selections.length === 0) return;
     const style = getComputedStyle(textarea);
@@ -6816,18 +6817,18 @@ import * as Modals from './modalManager.js';
     const paddingLeft = parseFloat(style.paddingLeft) || 48;
     const lineHeight = parseFloat(style.lineHeight) || (parseFloat(style.fontSize) * 1.45);
 
-    // Shared mirror for measurement — same box model as the textarea
-    // so any measurement we take lines up 1:1 with the rendered text.
+// 用于测量的共享镜像——与 textarea 相同的盒模型，
+// 因此我们进行的任何测量与渲染文本 1:1 对齐。
     let mirror = document.getElementById('doc-selection-mirror');
     if (!mirror) {
       mirror = document.createElement('div');
       mirror.id = 'doc-selection-mirror';
-      // box-sizing:border-box is critical — without it the mirror's
-      // actual box width = (width prop) + horizontal padding, which is
-      // wider than the textarea's text-render area. Text wraps at a
-      // different column inside the mirror, so every measured y-offset
-      // drifts from where the real text sits. border-box makes
-      // mirror.box = textarea.clientWidth exactly.
+// box-sizing:border-box 是关键——没有它，镜像的
+// 实际盒子宽度 = (width prop) + 水平内边距，这比
+// textarea 的文本渲染区域宽。文本在镜像内
+// 以不同的列换行，因此每个测量的 y 偏移
+// 从真实文本所在位置漂移。border-box 使
+// mirror.box = textarea.clientWidth 精确相等。
       mirror.style.cssText = 'position:absolute;top:0;left:0;right:0;visibility:hidden;pointer-events:none;' +
         'white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;overflow:hidden;box-sizing:border-box;';
       wrap.appendChild(mirror);
@@ -6848,7 +6849,7 @@ import * as Modals from './modalManager.js';
 
     for (const sel of _selections) {
       if (codeDoc) {
-        // Line-based: span every line that contains any selected char.
+// 基于行：覆盖每个包含任何选中字符的行。
         const beforeStart = text.substring(0, sel.start);
         const lastNewline = beforeStart.lastIndexOf('\n');
         const startLineBegin = lastNewline + 1;
@@ -6872,10 +6873,10 @@ import * as Modals from './modalManager.js';
         overlay.style.height = height + 'px';
         wrap.appendChild(overlay);
       } else {
-        // Character-precise: measure the actual selection start/end via
-        // a marker span. Render one rect for single-line selections, or
-        // three rects (first partial, middle full, last partial) for
-        // multi-line selections.
+// 逐字符精确：通过标记 span 测量实际选择的开始/结束。
+// 为单行选择渲染一个矩形，或
+// 为多行选择渲染三个矩形（第一部分、中间整行、最后部分）。
+// 多行选择。
         const startPos = _measurePos(mirror, text, sel.start);
         const endPos = _measurePos(mirror, text, sel.end);
         mirror.innerHTML = '';
@@ -6892,29 +6893,29 @@ import * as Modals from './modalManager.js';
         };
 
         if (Math.abs(endPos.y - startPos.y) < 1) {
-          // Single visual line.
+// 单视觉行。
           addRect(startPos.y, startPos.x, endPos.x - startPos.x, lineHeight);
         } else {
-          // First line: from selection start to right edge.
+// 第一行：从选择开始到右边缘。
           addRect(startPos.y, startPos.x, null, lineHeight);
-          // Middle lines (if any): full-width band between the two.
+// 中间行（如果有）：两者之间的整行宽度条带。
           const middleTop = startPos.y + lineHeight;
           const middleHeight = endPos.y - middleTop;
           if (middleHeight > 0) addRect(middleTop, 0, null, middleHeight);
-          // Last line: from left edge to selection end.
+// 最后一行：从左边缘到选择结束。
           addRect(endPos.y, 0, endPos.x, lineHeight);
         }
       }
     }
   }
 
-  /** Sync all selection highlight positions on scroll */
+  /** 滚动时同步所有选择高亮位置 */
   function syncSelectionOverlay() {
     if (_selections.length === 0) return;
     renderAllSelectionHighlights();
   }
 
-  /** Clear all selections, badge, and highlights */
+  /** 清除所有选择、标记和高亮 */
   function clearSelection() {
     _selections = [];
     const badge = document.getElementById('doc-selection-badge');
@@ -6924,15 +6925,15 @@ import * as Modals from './modalManager.js';
   }
 
   /**
-   * Get all selection contexts for chat injection.
-   * Called by chat module before sending a message.
-   * Returns null if no selections, or array of { text, startLine, endLine }.
+   * 获取聊天注入的所有选择上下文。
+   * 由聊天模块在发送消息前调用。
+   * 如果没有选择则返回 null，或返回 { text, startLine, endLine } 数组。
    */
   export function getSelectionContext() {
     if (_selections.length === 0) return null;
-    // Re-anchor / drop stale selections before handing them to chat —
-    // shipping text from a stale offset would mean the AI sees content
-    // from a different region than what the user thinks they highlighted.
+// 在传递给聊天之前重新锚定/丢弃过时选择——
+// 从过时偏移量发送文本意味着 AI 看到的内容
+// 来自与用户认为已高亮的内容不同的区域。
     const _ta = document.getElementById('doc-editor-textarea');
     if (_ta) _validateSelections(_ta.value);
     if (_selections.length === 0) return null;
@@ -6941,17 +6942,17 @@ import * as Modals from './modalManager.js';
       clearSelection();
       return ctx;
     }
-    // Multiple selections — return array
+// 多个选择——返回数组
     const ctx = [..._selections];
     clearSelection();
     return ctx;
   }
 
-  // ── Inline Suggestion Comments (Google Docs style) ──
+  // ── 内联建议注释（Google Docs 风格） ──
 
   let _activeSuggestions = []; // [{ id, find, replace, reason, highlightEl, bubbleEl }]
 
-  /** Persist suggestions to localStorage for the active doc */
+  /** 将建议持久化到活动文档的 localStorage */
   function _saveSuggestionsToStorage() {
     if (!activeDocId) return;
     const data = _activeSuggestions.map(s => ({ id: s.id, find: s.find, replace: s.replace, reason: s.reason }));
@@ -6962,7 +6963,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Restore suggestions from localStorage for a doc */
+  /** 从 localStorage 恢复文档的建议 */
   function _restoreSuggestionsFromStorage(docId) {
     try {
       const raw = localStorage.getItem('odysseus-suggestions-' + docId);
@@ -6976,12 +6977,12 @@ import * as Modals from './modalManager.js';
     } catch {}
   }
 
-  /** Handle doc_suggestions SSE event — show one suggestion at a time.
+  /** 处理 doc_suggestions SSE 事件 — 一次显示一个建议。
    *
-   *  If a previous batch is already pending approval, NEW suggestions are
-   *  appended to the live queue rather than replacing it. The agent (or a
-   *  follow-up batch) can keep adding edits while the user reviews; the count
-   *  and "n of m" header update on the fly. */
+   *  如果之前的批次已等待批准，新的建议
+   *  会追加到实时队列中而不是替换它。Agent（或
+   *  后续批次）可以在用户审查时继续添加编辑；计数
+   *  和"n of m"标题会实时更新。 */
   export function handleDocSuggestions(data) {
     if (_diffModeActive) exitDiffMode(true);
     if (!data.suggestions || !data.suggestions.length) return;
@@ -6992,8 +6993,8 @@ import * as Modals from './modalManager.js';
     const hadPending = _activeSuggestions.length > 0;
     const existingIds = new Set(_activeSuggestions.map(s => s.id));
 
-    // Append new suggestions, skipping any IDs already in the queue so a
-    // re-sent batch doesn't duplicate.
+// 追加新建议，跳过队列中已有的任何 ID，
+// 使重新发送的批次不重复。
     let added = 0;
     for (const sugg of data.suggestions) {
       if (existingIds.has(sugg.id)) continue;
@@ -7010,15 +7011,15 @@ import * as Modals from './modalManager.js';
 
     _saveSuggestionsToStorage();
 
-    // If nothing was pending before, kick off the visual flow. Otherwise the
-    // currently-shown suggestion stays on screen and the queue size update is
-    // reflected in the next card's header.
+// 如果之前没有待处理的建议，启动视觉流程。否则
+// 当前显示的建议保留在屏幕上，队列大小更新
+// 反映在下一张卡片标题中。
     if (!hadPending) {
       _suggestionIndex = 0;
       _showCurrentSuggestion();
     } else {
-      // Refresh just the counter in the active card so the user sees the
-      // queue grew while they were deliberating.
+// 仅刷新活动卡片中的计数器，使用户看到
+// 在他们思考期间队列已增长。
       const active = document.getElementById('doc-suggestion-active');
       if (active) {
         const counter = active.querySelector('.doc-suggestion-counter');
@@ -7030,13 +7031,13 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Render the current suggestion card (one at a time) + inline diff in document */
+/** 渲染当前建议卡片（一次一个）+ 文档中的内联差异 */
   function _showCurrentSuggestion() {
     const wrap = document.getElementById('doc-editor-wrap');
     const pane = document.querySelector('.doc-editor-pane');
     if (!wrap || !pane) return;
 
-    // Remove previous card and inline diff
+// 移除之前的卡片和内联差异
     const old = document.getElementById('doc-suggestion-active');
     if (old) { if (old._cleanup) old._cleanup(); old.remove(); }
     _clearSuggestionHighlight();
@@ -7050,12 +7051,12 @@ import * as Modals from './modalManager.js';
     const remaining = _activeSuggestions.length;
     const num = _suggestionTotal - remaining + 1;
 
-    // Show inline diff in the document
+// 在文档中显示内联差异
     _showInlineDiff(sugg.find, sugg.replace);
 
     const textarea = document.getElementById('doc-editor-textarea');
 
-    // Scroll to the change text
+// 滚动到更改文本
     if (textarea) {
       const text = textarea.value;
       const idx = text.indexOf(sugg.find);
@@ -7067,7 +7068,7 @@ import * as Modals from './modalManager.js';
       }
     }
 
-    // Position card next to the highlighted text
+// 将卡片放在高亮文本旁边
     function _positionCard(card) {
       if (!textarea) return;
       const text = textarea.value;
@@ -7095,12 +7096,12 @@ import * as Modals from './modalManager.js';
         }
       }
 
-      // Also position the highlight overlay
+// 同时定位高亮覆盖层
       _clearSuggestionHighlight();
       _highlightSuggestionText(sugg.find);
     }
 
-    // Build the card
+// 构建卡片
     const card = document.createElement('div');
     card.id = 'doc-suggestion-active';
     card.className = 'doc-suggestion-card';
@@ -7122,7 +7123,7 @@ import * as Modals from './modalManager.js';
       </div>
     `;
 
-    // Wire buttons
+// 绑定按钮
     card.querySelector('.doc-suggestion-close').addEventListener('click', clearAllSuggestions);
     card.querySelector('.doc-suggestion-prev').addEventListener('click', () => {
       const current = _activeSuggestions.shift();
@@ -7159,21 +7160,21 @@ import * as Modals from './modalManager.js';
     sugg.cardEl = card;
     document.body.appendChild(card);
 
-    // Position after a tick so scroll has taken effect
+// 在一个 tick 后定位，使滚动生效
     requestAnimationFrame(() => _positionCard(card));
 
-    // Reposition on scroll/resize so the card stays anchored
+// 滚动/调整大小时重新定位，使卡片保持锚定
     const _reposition = () => { if (card.isConnected) _positionCard(card); };
     if (textarea) textarea.addEventListener('scroll', _reposition);
     window.addEventListener('resize', _reposition);
-    // Store cleanup refs on the card
+// 存储清理引用到卡片上
     card._cleanup = () => {
       if (textarea) textarea.removeEventListener('scroll', _reposition);
       window.removeEventListener('resize', _reposition);
     };
   }
 
-  /** Show inline diff by modifying the code highlight element directly */
+/** 通过直接修改代码高亮元素显示内联差异 */
   function _showInlineDiff(findText, replaceText) {
     const codeEl = document.getElementById('doc-editor-code');
     const textarea = document.getElementById('doc-editor-textarea');
@@ -7186,7 +7187,7 @@ import * as Modals from './modalManager.js';
     const before = text.substring(0, idx);
     const after = text.substring(idx + findText.length);
 
-    // Character-level diff
+// 逐字符差异
     let cPre = 0;
     while (cPre < findText.length && cPre < replaceText.length && findText[cPre] === replaceText[cPre]) cPre++;
     let cSuf = 0;
@@ -7198,7 +7199,7 @@ import * as Modals from './modalManager.js';
     const delPart = findText.substring(cPre, findText.length - cSuf);
     const addPart = replaceText.substring(cPre, replaceText.length - cSuf);
 
-    // Replace codeEl content with diff-marked version
+// 用差异标记版本替换 codeEl 内容
     codeEl.innerHTML = '';
     codeEl.appendChild(document.createTextNode(before));
     if (commonBefore) codeEl.appendChild(document.createTextNode(commonBefore));
@@ -7219,11 +7220,11 @@ import * as Modals from './modalManager.js';
     if (commonAfter) codeEl.appendChild(document.createTextNode(commonAfter));
     codeEl.appendChild(document.createTextNode(after + '\n'));
 
-    // Mark that we have an active diff so syncHighlighting doesn't overwrite it
+// 标记我们有活动差异，使 syncHighlighting 不覆盖它
     codeEl.dataset.hasDiff = '1';
   }
 
-  /** Clear inline diff — restore normal highlighting */
+/** 清除内联差异——恢复正常高亮 */
   function _clearInlineDiff() {
     const codeEl = document.getElementById('doc-editor-code');
     if (codeEl && codeEl.dataset.hasDiff) {
@@ -7232,17 +7233,17 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  // ---- Diff mode (line-level review) ----
+// ---- 差异模式（行级审查）----
 
-  const DIFF_MODE_THRESHOLD = 3; // min changed lines to trigger diff mode
+  const DIFF_MODE_THRESHOLD = 3; // 触发差异模式的最小更改行数
 
-  /** Line-level LCS diff algorithm */
+/** 行级 LCS 差异算法 */
   function _computeLineDiff(oldText, newText) {
     const oldLines = oldText.split('\n');
     const newLines = newText.split('\n');
     const m = oldLines.length, n = newLines.length;
 
-    // Build LCS table
+// 构建 LCS 表
     const dp = Array.from({ length: m + 1 }, () => new Uint16Array(n + 1));
     for (let i = 1; i <= m; i++) {
       for (let j = 1; j <= n; j++) {
@@ -7252,7 +7253,7 @@ import * as Modals from './modalManager.js';
       }
     }
 
-    // Backtrack to produce diff entries
+// 回溯以生成差异条目
     const entries = [];
     let i = m, j = n;
     while (i > 0 || j > 0) {
@@ -7271,7 +7272,7 @@ import * as Modals from './modalManager.js';
     return entries;
   }
 
-  /** Group diff entries into chunks (contiguous change blocks) */
+/** 将差异条目分组为 chunks（连续更改块） */
   function _buildDiffChunks(entries) {
     const chunks = [];
     let chunkId = 0;
@@ -7283,7 +7284,7 @@ import * as Modals from './modalManager.js';
         lineIdx++;
         i++;
       } else {
-        // Gather contiguous non-equal entries into a chunk
+// 收集连续的不等条目到一个 chunk 中
         const startLine = lineIdx;
         const oldLines = [], newLines = [];
         while (i < entries.length && entries[i].type !== 'equal') {
@@ -7305,7 +7306,7 @@ import * as Modals from './modalManager.js';
     return chunks;
   }
 
-  /** Enter diff mode — show line-level diff for review */
+/** 进入差异模式——显示行级差异以供审查 */
   function enterDiffMode(oldContent, newContent) {
     if (_diffModeActive) exitDiffMode(true);
 
@@ -7332,12 +7333,12 @@ import * as Modals from './modalManager.js';
     _renderDiffToolbar();
     _renderDiffGutter();
 
-    // Update header button
+// 更新头部按钮
     const diffBtn = document.getElementById('doc-diff-toggle-btn');
     if (diffBtn) diffBtn.classList.add('active');
   }
 
-  /** Render the line-level diff into the code highlight element */
+/** 将行级差异渲染到代码高亮元素中 */
   function _renderDiffOverlay(entries) {
     const codeEl = document.getElementById('doc-editor-code');
     const gutter = document.getElementById('doc-line-numbers');
@@ -7347,7 +7348,7 @@ import * as Modals from './modalManager.js';
     let gutterHtml = '';
     let oldNum = 0, newNum = 0;
 
-    // Pre-assign chunk IDs to entries by walking chunks and entries together
+// 通过同时遍历 chunks 和 entries 为条目预分配 chunk ID
     let chunkIdx = 0;
     let entryIdx = 0;
     const entryChunkMap = new Array(entries.length).fill(-1);
@@ -7355,7 +7356,7 @@ import * as Modals from './modalManager.js';
       if (entries[entryIdx].type === 'equal') {
         entryIdx++;
       } else {
-        // This is the start of a change block — assign all contiguous non-equal entries to the current chunk
+// 这是更改块的开始——将所有连续的不等条目分配到当前 chunk
         const cid = chunkIdx < _diffChunks.length ? _diffChunks[chunkIdx].id : -1;
         while (entryIdx < entries.length && entries[entryIdx].type !== 'equal') {
           entryChunkMap[entryIdx] = cid;
@@ -7396,7 +7397,7 @@ import * as Modals from './modalManager.js';
     if (gutter) gutter.textContent = gutterHtml;
     codeEl.dataset.hasDiff = '1';
 
-    // Sync textarea to show the combined view (old + new interleaved) for scroll sizing
+// 同步 textarea 以显示组合视图（旧 + 新交错）用于滚动大小
     const textarea = document.getElementById('doc-editor-textarea');
     if (textarea) {
       const allLines = entries.map(e => e.line);
@@ -7404,7 +7405,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Render the diff toolbar above the editor */
+/** 在编辑器上方渲染差异工具栏 */
   function _renderDiffToolbar() {
     let toolbar = document.getElementById('doc-diff-toolbar');
     if (toolbar) toolbar.remove();
@@ -7436,7 +7437,7 @@ import * as Modals from './modalManager.js';
     if (wrap) wrap.parentNode.insertBefore(toolbar, wrap);
   }
 
-  /** Render per-chunk accept/reject buttons in a gutter overlay */
+/** 在边栏覆盖层中渲染每个 chunk 的接受/拒绝按钮 */
   function _renderDiffGutter() {
     let gutterEl = document.getElementById('doc-diff-gutter');
     if (gutterEl) gutterEl.remove();
@@ -7448,8 +7449,8 @@ import * as Modals from './modalManager.js';
     const codeEl = document.getElementById('doc-editor-code');
     if (!codeEl) return;
 
-    // Insert chunk action buttons directly next to the first changed line of each chunk
-    // This way they scroll naturally with the content
+// 在每个 chunk 的第一个更改行旁边直接插入 chunk 操作按钮
+// 这样它们自然随内容滚动
     requestAnimationFrame(() => {
       for (const chunk of _diffChunks) {
         if (chunk.resolved) continue;
@@ -7475,14 +7476,14 @@ import * as Modals from './modalManager.js';
         actions.appendChild(acceptBtn);
         actions.appendChild(rejectBtn);
 
-        // Insert at the start of the first line span
+// 插入到第一行 span 的开头
         firstEl.style.position = 'relative';
         firstEl.appendChild(actions);
       }
     });
   }
 
-  /** Update the toolbar status text */
+/** 更新工具栏状态文本 */
   function _updateDiffStatus(statusEl) {
     const el = statusEl || document.getElementById('diff-toolbar-status');
     if (!el) return;
@@ -7490,7 +7491,7 @@ import * as Modals from './modalManager.js';
     el.textContent = `${resolved} / ${_diffChunks.length} changes resolved`;
   }
 
-  /** Resolve a single chunk */
+/** 解析单个 chunk */
   function _resolveChunk(chunkId, accept) {
     const chunk = _diffChunks.find(c => c.id === chunkId);
     if (!chunk || chunk.resolved) return;
@@ -7499,7 +7500,7 @@ import * as Modals from './modalManager.js';
     chunk.accepted = accept;
     _diffUnresolvedCount--;
 
-    // Fade resolved lines in the overlay
+// 在覆盖层中淡化已解析的行
     const codeEl = document.getElementById('doc-editor-code');
     if (codeEl) {
       codeEl.querySelectorAll(`[data-chunk-id="${chunkId}"]`).forEach(el => {
@@ -7507,13 +7508,13 @@ import * as Modals from './modalManager.js';
       });
     }
 
-    // Remove the gutter buttons for this chunk
+// 移除此 chunk 的边栏按钮
     const gutterActions = document.querySelector(`.diff-chunk-actions[data-chunk-id="${chunkId}"]`);
     if (gutterActions) gutterActions.remove();
 
     _updateDiffStatus();
 
-    // Persist partial progress so refresh doesn't lose individually-resolved chunks
+// 持久化部分进度，使刷新不丢失单独解析的 chunk
     _applyResolvedChunksToTextarea();
     saveDocument({ silent: true });
 
@@ -7522,8 +7523,8 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Compute current content from old + resolved chunk decisions; unresolved chunks
-   *  default to the original (rejected) until the user decides. Updates textarea. */
+/** 从旧内容 + 已解析的 chunk 决策计算当前内容；未解析的 chunk
+*  默认为原始内容（拒绝）直到用户决定。更新 textarea。 */
   function _applyResolvedChunksToTextarea() {
     const textarea = document.getElementById('doc-editor-textarea');
     if (!textarea) return;
@@ -7543,7 +7544,7 @@ import * as Modals from './modalManager.js';
           else chunkNew.push(entries[i].line);
           i++;
         }
-        // Resolved+accepted → use new; resolved+rejected OR unresolved → keep old
+// 已解析+接受 → 使用新内容；已解析+拒绝 或 未解析 → 保留旧内容
         if (chunk && chunk.resolved && chunk.accepted) {
           result.push(...chunkNew);
         } else {
@@ -7554,7 +7555,7 @@ import * as Modals from './modalManager.js';
     textarea.value = result.join('\n');
   }
 
-  /** Resolve all chunks at once */
+/** 一次性解析所有 chunk */
   function _resolveAllChunks(accept) {
     for (const chunk of _diffChunks) {
       if (!chunk.resolved) {
@@ -7566,7 +7567,7 @@ import * as Modals from './modalManager.js';
     exitDiffMode(false);
   }
 
-  /** Exit diff mode and apply resolved changes */
+/** 退出差异模式并应用已解析的更改 */
   function exitDiffMode(discard) {
     if (!_diffModeActive) return;
     _diffModeActive = false;
@@ -7577,10 +7578,10 @@ import * as Modals from './modalManager.js';
     if (wrap) wrap.classList.remove('diff-mode');
 
     if (discard) {
-      // Reject all — restore original content
+// 全部拒绝——恢复原始内容
       if (textarea) textarea.value = _diffOldContent || '';
     } else {
-      // Build final content from resolved chunks
+// 从已解析的 chunk 构建最终内容
       const oldLines = (_diffOldContent || '').split('\n');
       const newLines = (_diffNewContent || '').split('\n');
       const entries = _computeLineDiff(_diffOldContent || '', _diffNewContent || '');
@@ -7593,9 +7594,9 @@ import * as Modals from './modalManager.js';
           result.push(entries[i].line);
           i++;
         } else {
-          // Find the matching chunk
+// 找到匹配的 chunk
           const chunk = _diffChunks[chunkIdx++];
-          // Skip all entries belonging to this chunk
+// 跳过属于此 chunk 的所有条目
           const chunkOld = [], chunkNew = [];
           while (i < entries.length && entries[i].type !== 'equal') {
             if (entries[i].type === 'delete') chunkOld.push(entries[i].line);
@@ -7612,16 +7613,16 @@ import * as Modals from './modalManager.js';
       if (textarea) textarea.value = result.join('\n');
     }
 
-    // Restore editor state
+// 恢复编辑器状态
     if (textarea) textarea.readOnly = false;
     if (codeEl) delete codeEl.dataset.hasDiff;
 
-    // Clean up toolbar and any remaining chunk action buttons
+// 清理工具栏和任何剩余的 chunk 操作按钮
     const toolbar = document.getElementById('doc-diff-toolbar');
     if (toolbar) toolbar.remove();
     document.querySelectorAll('.diff-chunk-actions').forEach(el => el.remove());
 
-    // Reset state
+// 重置状态
     _diffOldContent = null;
     _diffNewContent = null;
     _diffChunks = [];
@@ -7635,17 +7636,17 @@ import * as Modals from './modalManager.js';
     saveDocument({ silent: true });
   }
 
-  /** Check if diff mode is active */
+/** 检查差异模式是否活动 */
   function isDiffModeActive() { return _diffModeActive; }
 
   let _suggestionTotal = 0;
   let _suggestionIndex = 0;
 
-  // Override handleDocSuggestions to track total
+// 覆盖 handleDocSuggestions 以跟踪总数
   const _origHandleDocSuggestions = handleDocSuggestions;
-  // (total is set inside handleDocSuggestions before _showCurrentSuggestion)
+//（total 在 handleDocSuggestions 内设置后由 _showCurrentSuggestion 读取）
 
-  /** Apply a single suggestion edit without removing from queue */
+/** 应用单个建议编辑而不从队列中移除 */
   function _applySuggestion(sugg) {
     const textarea = document.getElementById('doc-editor-textarea');
     if (textarea && sugg.find && textarea.value.includes(sugg.find)) {
@@ -7655,7 +7656,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Animate transition to next suggestion */
+/** 动画过渡到下一个建议 */
   function _animateNext() {
     _saveSuggestionsToStorage();
     const old = document.getElementById('doc-suggestion-active');
@@ -7677,7 +7678,7 @@ import * as Modals from './modalManager.js';
     return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  /** Accept a suggestion — apply the edit */
+/** 接受建议——应用编辑 */
   function acceptSuggestion(id) {
     const sugg = _activeSuggestions.find(s => s.id === id);
     if (!sugg) return;
@@ -7689,7 +7690,7 @@ import * as Modals from './modalManager.js';
       saveDocument({ silent: true });
     }
 
-    // Animate card out
+// 动画卡片移出
     sugg.cardEl.style.transition = 'opacity 0.2s, transform 0.2s';
     sugg.cardEl.style.opacity = '0';
     sugg.cardEl.style.transform = 'translateX(10px)';
@@ -7698,14 +7699,14 @@ import * as Modals from './modalManager.js';
     _activeSuggestions = _activeSuggestions.filter(s => s.id !== id);
     _clearSuggestionHighlight();
 
-    // Remove container if empty
+// 如果为空则移除容器
     if (_activeSuggestions.length === 0) {
       const container = document.getElementById('doc-suggestions-container');
       if (container) container.style.display = 'none';
     }
   }
 
-  /** Dismiss a suggestion — just remove the card */
+/** 忽略建议——仅移除卡片 */
   function dismissSuggestion(id) {
     const sugg = _activeSuggestions.find(s => s.id === id);
     if (!sugg) return;
@@ -7723,7 +7724,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Clear all suggestion cards */
+/** 清除所有建议卡片 */
   function clearAllSuggestions() {
     _activeSuggestions = [];
     _suggestionTotal = 0;
@@ -7734,12 +7735,12 @@ import * as Modals from './modalManager.js';
     if (old) { if (old._cleanup) old._cleanup(); old.remove(); }
     const container = document.getElementById('doc-suggestions-container');
     if (container) { container.innerHTML = ''; container.style.display = 'none'; }
-    // Restore line numbers
+// 恢复行号
     const ta = document.getElementById('doc-editor-textarea');
     if (ta) updateLineNumbers(ta.value);
   }
 
-  /** Highlight the referenced text in the editor when hovering a suggestion */
+/** 悬停建议时在编辑器中高亮引用的文本 */
   function _highlightSuggestionText(findText) {
     _clearSuggestionHighlight();
     const textarea = document.getElementById('doc-editor-textarea');
@@ -7783,16 +7784,16 @@ import * as Modals from './modalManager.js';
     highlight.style.height = height + 'px';
     wrap.appendChild(highlight);
 
-    // Don't auto-scroll here — caller handles scrolling
+// 此处不自动滚动——调用者处理滚动
   }
 
-  /** Remove hover highlight */
+/** 移除悬停高亮 */
   function _clearSuggestionHighlight() {
     const hl = document.getElementById('doc-suggestion-hover-hl');
     if (hl) hl.remove();
   }
 
-  /** Run the document's code using the in-browser code runner */
+/** 使用浏览器内代码运行器运行文档代码 */
   function runDocument() {
     const textarea = document.getElementById('doc-editor-textarea');
     if (!textarea || !textarea.value.trim()) return;
@@ -7801,7 +7802,7 @@ import * as Modals from './modalManager.js';
     const langSelect = document.getElementById('doc-language-select');
     const lang = (langSelect ? langSelect.value : '').toLowerCase();
 
-    // Get or create the output panel below the editor
+// 获取或创建编辑器下方的输出面板
     let outputPanel = document.getElementById('doc-run-output');
     if (!outputPanel) {
       outputPanel = document.createElement('div');
@@ -7814,7 +7815,7 @@ import * as Modals from './modalManager.js';
     outputPanel.innerHTML = '';
 
     if (_isRenderLang(lang)) {
-      // HTML / SVG / XML — render inline in the sandboxed preview iframe.
+// HTML / SVG / XML — 在沙箱预览 iframe 中内联渲染。
       outputPanel.style.display = 'none';
       toggleHtmlPreview();
       return;
@@ -7845,7 +7846,7 @@ import * as Modals from './modalManager.js';
     setTimeout(() => { if (outputPanel) outputPanel.style.display = 'none'; }, 5000);
   }
 
-  /** Copy document content to clipboard */
+/** 复制文档内容到剪贴板 */
   async function copyDocument() {
     const textarea = document.getElementById('doc-editor-textarea');
     if (!textarea || !textarea.value) return;
@@ -7859,37 +7860,37 @@ import * as Modals from './modalManager.js';
     if (uiModule) uiModule.showToast('Copied to clipboard');
   }
 
-  /* ---- Per-tab context menu ---- */
+  /* ---- 每个标签上下文菜单 ---- */
 
-  let _docTabMenu = null; // singleton dropdown element
+  let _docTabMenu = null; // 单例下拉元素
 
   function _closeDocTabMenu() {
     if (_docTabMenu) { _docTabMenu.style.display = 'none'; }
   }
 
   function showDocTabMenu(btnEl, docId) {
-    // Toggle off if already open for this doc
+// 如果已为此文档打开则切换关闭
     if (_docTabMenu && _docTabMenu.style.display === 'block' && _docTabMenu._docId === docId) {
       _closeDocTabMenu();
       return;
     }
 
-    // Capture button position before any DOM changes
+// 在任何 DOM 更改之前捕获按钮位置
     const _menuAnchorRect = btnEl.getBoundingClientRect();
 
-    // Switch to this doc if not already active
+// 如果尚未激活则切换到此文档
     if (docId !== activeDocId) switchToDoc(docId);
 
     const doc = docs.get(docId);
     if (!doc) return;
 
-    // Create singleton menu container once
+// 创建一次性单例菜单容器
     if (!_docTabMenu) {
       _docTabMenu = document.createElement('div');
       _docTabMenu.className = 'doc-tab-dropdown';
       _docTabMenu.style.cssText = 'position:fixed;z-index:1000;min-width:0;width:max-content;padding:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);backdrop-filter:blur(12px);font-size:12px;display:none;';
       document.body.appendChild(_docTabMenu);
-      // Close on outside click
+// 在外部点击时关闭
       document.addEventListener('click', (e) => {
         if (_docTabMenu && !_docTabMenu.contains(e.target) && !e.target.closest('.doc-tab-menu-btn')) {
           _closeDocTabMenu();
@@ -7936,7 +7937,7 @@ import * as Modals from './modalManager.js';
     }
     const _downloadIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
     items += `<div class="dropdown-item-compact doc-tab-action" data-action="download">${_di(_downloadIco)}<span>Download</span></div>`;
-    // "Send signed reply" — only if this doc was opened from an email attachment
+// "发送签名回复"——仅当此文档从 email 附件打开时
     if (doc.sourceEmailUid && doc.sourceEmailFolder) {
       const _sendBackIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
       items += `<div class="dropdown-item-compact doc-tab-action" data-action="signed-reply">${_di(_sendBackIco)}<span>Send signed reply</span></div>`;
@@ -7950,7 +7951,7 @@ import * as Modals from './modalManager.js';
     _docTabMenu.style.display = 'block';
     _docTabMenu._docId = docId;
 
-    // Position: anchor to the tab bar bottom, aligned to button horizontally
+// 定位：锚定到标签栏底部，水平对齐到按钮
     const rect = _menuAnchorRect;
     const tabBar = document.getElementById('doc-tab-bar');
     const barBottom = tabBar ? tabBar.getBoundingClientRect().bottom : rect.bottom;
@@ -7959,7 +7960,7 @@ import * as Modals from './modalManager.js';
     _docTabMenu.style.left = rect.left + 'px';
     _docTabMenu.style.top = (barBottom + 2) + 'px';
 
-    // Clamp to viewport edges
+// 限制到视口边缘
     requestAnimationFrame(() => {
       const menuRect = _docTabMenu.getBoundingClientRect();
       if (menuRect.right > window.innerWidth - 8) {
@@ -7973,7 +7974,7 @@ import * as Modals from './modalManager.js';
       }
     });
 
-    // Wire action clicks
+// 绑定操作点击
     _docTabMenu.querySelectorAll('.doc-tab-action').forEach(item => {
       item.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -8002,14 +8003,14 @@ import * as Modals from './modalManager.js';
   }
 
   /**
-   * "Send signed reply" — flatten the current PDF (form fields + signature
-   * stamps + freeform annotations), drop it into the compose-uploads dir,
-   * then either:
-   *   1. add the attachment to an existing open email draft for the same
-   *      source thread (so multiple signed docs accumulate into one reply), or
-   *   2. create a fresh email-language draft document pre-filled with To /
-   *      Subject / In-Reply-To / References and the first attachment.
-   * Switches the doc panel to that draft so the user can review + send.
+* "发送签名回复"——展平当前 PDF（表单字段 + 签名
+* 印章 + 自由注释），放入编写上传目录，
+* 然后：
+*   1. 将附件添加到同一源线程的现有打开 email 草稿
+*      （使多个签名文档累积到一个回复中），或
+*   2. 创建新的 email 语言草稿文档，预填充收件人/
+*      主题/In-Reply-To/References 和第一个附件。
+* 将文档面板切换到该草稿，以便用户审核 + 发送。
    */
   async function _sendSignedReply(docId) {
     const doc = docs.get(docId);
@@ -8037,7 +8038,7 @@ import * as Modals from './modalManager.js';
     const reply = result.reply || {};
     const mid = reply.source_message_id || doc.sourceEmailMessageId || '';
 
-    // 1) Already have a draft tab open for this source thread? Append.
+// 1) 已有为此源线程打开的草稿标签页？追加。
     for (const [, d] of docs) {
       if (d.language === 'email' && d._draftForMessageId === mid && mid) {
         d._composeAtts = (d._composeAtts || []).concat([att]);
@@ -8048,7 +8049,7 @@ import * as Modals from './modalManager.js';
       }
     }
 
-    // 2) Otherwise create a fresh email draft.
+// 2) 否则创建新的 email 草稿。
     const headerLines = [
       `To: ${reply.to || ''}`,
       `Subject: ${reply.subject || ''}`,
@@ -8061,7 +8062,7 @@ import * as Modals from './modalManager.js';
 
     let draftId = null;
     try {
-      // Use the source PDF's session if available; else fall back to current.
+// 如果可用则使用源 PDF 的会话；否则回退到当前。
       let sessionId = doc.sessionId
         || _lastSessionId
         || (sessionModule && sessionModule.getCurrentSessionId());
@@ -8088,8 +8089,8 @@ import * as Modals from './modalManager.js';
       return;
     }
 
-    // Tag the draft (in-memory only) with the thread message-id so future
-    // signed PDFs from the same email get appended to this same draft.
+// 用线程消息 ID 标记草稿（仅内存），使来自同一 email 的
+// 未来签名 PDF 被追加到此相同草稿。
     addDocToTabs({
       id: draftId,
       title: reply.subject || 'Signed reply',
@@ -8109,7 +8110,7 @@ import * as Modals from './modalManager.js';
     if (uiModule) uiModule.showToast(`Reply draft ready — "${att.filename}" attached`);
   }
 
-  /** Save manual edits */
+/** 保存手动编辑 */
   export async function saveDocument({ silent = false } = {}) {
     if (!activeDocId) return;
     const textarea = document.getElementById('doc-editor-textarea');
@@ -8124,7 +8125,7 @@ import * as Modals from './modalManager.js';
       const doc = await res.json();
       const badge = document.getElementById('doc-version-badge');
       if (badge) { const _v = doc.version_count || 1; badge.textContent = `v${_v}`; badge.style.display = _v > 1 ? '' : 'none'; }
-      // Update map
+// 更新 map
       if (docs.has(activeDocId)) {
         docs.get(activeDocId).version = doc.version_count || 1;
         docs.get(activeDocId).content = textarea.value;
@@ -8137,7 +8138,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Export/download the active document */
+/** 导出/下载活动文档 */
   let _docxReady = null;
   function ensureDocx() {
     if (_docxReady) return _docxReady;
@@ -8200,12 +8201,12 @@ import * as Modals from './modalManager.js';
     URL.revokeObjectURL(a.href);
   }
 
-  // "Import from device" — open a file picker, upload, and immediately open
-  // the resulting doc in THIS panel (vs. dumping it in the library and
-  // making the user click through). Mirrors the library's extension logic
-  // for text/code; routes PDFs through the dedicated import-pdf endpoint
-  // that handles AcroForm fields. Spreadsheets fall back to the library
-  // flow which already knows how to split sheets.
+// "从设备导入"——打开文件选择器，上传，立即在此面板中打开
+// 结果文档（而不是倒入资源库让用户再点击）。
+// 对文本/代码镜像资源库扩展逻辑；
+// 通过处理 AcroForm 字段的专用 import-pdf 端点路由 PDF。
+// 电子表格回退到已知如何分割工作表的资源库流程。
+// 流程，它已经知道如何分割工作表。
   function _importFromDevice() {
     const EXT_TO_LANG = {
       '.py':'python','.js':'javascript','.ts':'typescript','.html':'html','.htm':'html',
@@ -8227,7 +8228,7 @@ import * as Modals from './modalManager.js';
       const baseTitle = dotIdx > 0 ? name.slice(0, dotIdx) : name;
       const isSpreadsheet = ['.xlsx','.xls','.ods'].includes(ext);
       const isPdf = ext === '.pdf';
-      // Spreadsheets need the library's per-sheet split — defer to it.
+// 电子表格需要资源库的每表分割——委托给它。
       if (isSpreadsheet) {
         openLibrary();
         requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById('doclib-import-file-btn')?.click()));
@@ -8266,8 +8267,8 @@ import * as Modals from './modalManager.js';
           docId = j.id || j.doc_id;
         }
         if (docId) {
-          // Fetch the full doc so addDocToTabs has the proper content +
-          // language fields (it's used downstream by switchToDoc).
+// 获取完整文档，使 addDocToTabs 具有正确的内容 +
+// 语言字段（下游 switchToDoc 使用）。
           try {
             const dr = await fetch(`${API_BASE}/api/document/${docId}`, { credentials: 'same-origin' });
             const full = dr.ok ? await dr.json() : { id: docId, title: baseTitle };
@@ -8275,7 +8276,7 @@ import * as Modals from './modalManager.js';
             addDocToTabs(full, full.session_id || sid);
             switchToDoc(full.id || docId);
           } catch (_) {
-            // Fallback — at least try to switch (may fail silently if not loaded).
+// 回退——至少尝试切换（可能静默失败如果未加载）。
             addDocToTabs({ id: docId, title: baseTitle }, _lastSessionId || '');
             switchToDoc(docId);
           }
@@ -8293,11 +8294,11 @@ import * as Modals from './modalManager.js';
 
   function showExportMenu(e, anchorRect) {
     if (e) e.stopPropagation();
-    // Remove existing menu if any
+// 如果存在则移除已有菜单
     const existing = document.getElementById('doc-export-menu');
     if (existing) { existing.remove(); return; }
 
-    // Position from provided rect, clicked element, or fallback to language select
+// 从提供的 rect、点击的元素或回退到语言选择定位
     const rect = anchorRect
       || (e && e.target && e.target.closest('button')?.getBoundingClientRect())
       || document.getElementById('doc-language-select')?.getBoundingClientRect();
@@ -8323,15 +8324,15 @@ import * as Modals from './modalManager.js';
     menu.style.zIndex = '9999';
 
     const langLabel = lang ? lang.toUpperCase() : 'TXT';
-    // Form-backed markdown doc → primary export is the filled PDF, not the
-    // markdown source. Promote it to the top of the menu.
+// 表单支持的 markdown 文档 → 主导出是填充的 PDF，不是
+// markdown 源代码。将其提升到菜单顶部。
     const liveContent = document.getElementById('doc-editor-textarea')?.value
       || docs.get(activeDocId)?.content || '';
     const isForm = _isFormBackedDoc(liveContent);
     const options = [];
-    // Import lives at the top of the same dropdown — it's a sibling action
-    // ("bring something IN" vs "send something OUT"), and the footer was
-    // getting too cramped for dedicated icons.
+// 导入位于同一下拉菜单顶部——它是兄弟操作
+//（"引入" vs "输出"），页脚
+// 已经太拥挤无法容纳专用图标。
     options.push({ label: 'Import from library', fn: () => openLibrary() });
     options.push({ label: 'Import from device', fn: () => _importFromDevice(), _divider: true });
     if (isForm) options.push({ label: 'Filled PDF (.pdf)', fn: _downloadFilledPdf });
@@ -8356,8 +8357,8 @@ import * as Modals from './modalManager.js';
     });
 
     document.body.appendChild(menu);
-    // Flip above the anchor when there's no room below — the Export button now
-    // lives in the bottom footer, so the menu would otherwise drop off-screen.
+// 当下方没有空间时翻转到锚点上方——导出按钮现在
+// 位于底部页脚，因此菜单否则会掉到屏幕下方。
     const mh = menu.offsetHeight;
     if (rect.bottom + mh > window.innerHeight - 8) {
       menu.style.top = 'auto';
@@ -8416,7 +8417,7 @@ import * as Modals from './modalManager.js';
     }
     const lang = document.getElementById('doc-language-select')?.value || '';
     const text = textarea.value || '';
-    // Render content as HTML for PDF
+// 将内容渲染为 HTML 用于 PDF
     let html;
     if (lang === 'markdown' && markdownModule?.mdToHtml) {
       html = markdownModule.mdToHtml(text, { shortcodes: false }); // export: keep :shortcodes: literal
@@ -8450,7 +8451,7 @@ import * as Modals from './modalManager.js';
     }
     const text = textarea.value || '';
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = window.docx;
-    // Parse text into paragraphs, handle markdown headings
+// 将文本解析为段落，处理 markdown 标题
     const paragraphs = text.split('\n').map(line => {
       const h1 = line.match(/^# (.+)/);
       const h2 = line.match(/^## (.+)/);
@@ -8458,7 +8459,7 @@ import * as Modals from './modalManager.js';
       if (h1) return new Paragraph({ text: h1[1], heading: HeadingLevel.HEADING_1 });
       if (h2) return new Paragraph({ text: h2[1], heading: HeadingLevel.HEADING_2 });
       if (h3) return new Paragraph({ text: h3[1], heading: HeadingLevel.HEADING_3 });
-      // Handle bold/italic
+// 处理粗体/斜体
       const runs = [];
       const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/);
       for (const part of parts) {
@@ -8486,7 +8487,7 @@ import * as Modals from './modalManager.js';
     if (uiModule) uiModule.showToast('Exported as DOCX');
   }
 
-  /** Delete the active document */
+/** 删除活动文档 */
   async function deleteActiveDocument() {
     if (!activeDocId) return;
     const doc = docs.get(activeDocId);
@@ -8498,11 +8499,11 @@ import * as Modals from './modalManager.js';
     try {
       const res = await fetch(`${API_BASE}/api/document/${activeDocId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
-      // Remove tab
+// 移除标签页
       const tab = document.querySelector(`.doc-tab[data-doc-id="${activeDocId}"]`);
       if (tab) tab.remove();
       docs.delete(activeDocId);
-      // Switch to another doc or close panel
+// 切换到另一个文档或关闭面板
       const remaining = Array.from(docs.keys());
       if (remaining.length > 0) {
         switchToDoc(remaining[0]);
@@ -8517,16 +8518,16 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Toggle fullscreen on doc editor pane */
+/** 在文档编辑器面板上切换全屏 */
   function toggleFullscreen() {
     const pane = document.getElementById('doc-editor-pane');
     const container = document.getElementById('chat-container');
     if (!pane) return;
-    // Note: the divider stays in the DOM during fullscreen so its chevron can
-    // act as the exit-fullscreen affordance (the CSS rule
-    // `body:has(.doc-editor-pane.doc-fullscreen) .doc-divider-collapse` slides
-    // it into a forced-inside position). Hiding the divider here would hide
-    // the chevron with it.
+// 注意：分隔条在全屏期间保留在 DOM 中，使其箭头可以
+// 作为退出全屏的功能（CSS 规则
+// `body:has(.doc-editor-pane.doc-fullscreen) .doc-divider-collapse` 将其
+// 滑动到强制内部位置）。此处隐藏分隔条会同时隐藏
+// 其箭头。
     if (pane.classList.contains('doc-fullscreen')) {
       pane.classList.remove('doc-fullscreen');
       if (container) container.style.display = '';
@@ -8534,12 +8535,12 @@ import * as Modals from './modalManager.js';
       pane.classList.add('doc-fullscreen');
       if (container) container.style.display = 'none';
     }
-    // Re-check md toolbar overflow after layout change
+// 布局更改后重新检查 markdown 工具栏溢出
     const mdToolbar = document.getElementById('doc-md-toolbar');
     if (mdToolbar?._syncOverflow) requestAnimationFrame(mdToolbar._syncOverflow);
   }
 
-  /** Toggle markdown preview */
+/** 切换 markdown 预览 */
   function _setMarkdownPreviewActive(active, { remember = true } = {}) {
     const preview = document.getElementById('doc-md-preview');
     const wrap = document.getElementById('doc-editor-wrap');
@@ -8581,7 +8582,7 @@ import * as Modals from './modalManager.js';
     _setMarkdownPreviewActive(!(preview && preview.style.display !== 'none'));
   }
 
-  /** Parse CSV text into a 2D array (handles quoted fields) */
+/** 将 CSV 文本解析为二维数组（处理带引号字段） */
   function parseCSV(text) {
     const rows = [];
     let row = [];
@@ -8609,7 +8610,7 @@ import * as Modals from './modalManager.js';
     return rows;
   }
 
-  /** Escape a CSV field (quote if it contains comma, quote, or newline) */
+/** 转义 CSV 字段（如果包含逗号、引号或换行则加引号） */
   function csvEscapeField(val) {
     if (val.includes(',') || val.includes('"') || val.includes('\n')) {
       return '"' + val.replace(/"/g, '""') + '"';
@@ -8617,15 +8618,15 @@ import * as Modals from './modalManager.js';
     return val;
   }
 
-  /** Rebuild CSV text from the live table DOM */
+/** 从实时表格 DOM 重建 CSV 文本 */
   function syncTableToTextarea(preview, textarea) {
     const table = preview.querySelector('.csv-table');
     if (!table) return;
     const lines = [];
-    // Header
+// 表头
     const ths = table.querySelectorAll('thead th');
     if (ths.length) lines.push([...ths].map(th => csvEscapeField(th.textContent)).join(','));
-    // Body
+// 正文
     table.querySelectorAll('tbody tr').forEach(tr => {
       const cells = [...tr.querySelectorAll('td')].map(td => csvEscapeField(td.textContent));
       lines.push(cells.join(','));
@@ -8634,7 +8635,7 @@ import * as Modals from './modalManager.js';
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  /** Toggle CSV table preview */
+/** 切换 CSV 表格预览 */
   function toggleCsvPreview() {
     const preview = document.getElementById('doc-csv-preview');
     const wrap = document.getElementById('doc-editor-wrap');
@@ -8644,9 +8645,9 @@ import * as Modals from './modalManager.js';
     if (preview.style.display === 'none') {
       const rows = parseCSV(textarea.value || '');
       if (rows.length === 0) {
-        // Re-route the "no data" message to the shared run-output block so
-        // every doc type surfaces errors/empty-state in the same place
-        // (instead of stamping it inside the table view itself).
+// 将"无数据"消息重路由到共享的 run-output 块，使
+// 每个文档类型在同一位置显示错误/空状态
+//（而不是在表格视图内印章）。
         let outputPanel = document.getElementById('doc-run-output');
         if (!outputPanel) {
           outputPanel = document.createElement('div');
@@ -8677,15 +8678,15 @@ import * as Modals from './modalManager.js';
         html += '</div>';
         preview.innerHTML = html;
 
-        // Sync edits back to textarea
+// 将编辑同步回 textarea
         const table = preview.querySelector('.csv-table');
         if (table) {
           table.addEventListener('input', () => syncTableToTextarea(preview, textarea));
-          // Prevent Enter from creating <br> inside cells
+// 防止 Enter 在单元格内创建 <br>
           table.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              // Move to next row, same column
+// 移动到下一行，相同列
               const cell = e.target.closest('td,th');
               if (!cell) return;
               const colIdx = [...cell.parentElement.children].indexOf(cell);
@@ -8703,7 +8704,7 @@ import * as Modals from './modalManager.js';
           });
         }
 
-        // Add row button
+// 添加行按钮
         const addBtn = preview.querySelector('.csv-add-row-btn');
         if (addBtn && table) {
           addBtn.addEventListener('click', () => {
@@ -8726,14 +8727,14 @@ import * as Modals from './modalManager.js';
       preview.style.display = 'none';
       wrap.style.display = '';
     }
-    // Update the segmented Code/Run toggle's active class so the icon
-    // highlights match the new state — without this, opening a CSV that
-    // auto-shows the table view left the Edit (code) side wrongly marked
-    // active and the user had to flip the toggle to resync.
+// 更新分段代码/运行切换的活动类，使图标
+// 高亮匹配新状态——否则打开自动显示表格视图的 CSV
+// 会将编辑（代码）侧错误地标记为活动，
+// 用户必须翻转切换才能重新同步。
     _syncHeaderActions();
   }
 
-  /** Toggle inline HTML preview (iframe) */
+/** 切换内联 HTML 预览（iframe） */
   function toggleHtmlPreview() {
     const iframe = document.getElementById('doc-html-preview');
     const wrap = document.getElementById('doc-editor-wrap');
@@ -8741,7 +8742,7 @@ import * as Modals from './modalManager.js';
     if (!iframe || !wrap || !textarea) return;
 
     if (!_htmlPreviewActive) {
-      // Show preview — hide markdown preview if active
+// 显示预览——如果活动则隐藏 markdown 预览
       const mdPreview = document.getElementById('doc-md-preview');
       if (mdPreview) mdPreview.style.display = 'none';
       const code = textarea.value || '';
@@ -8755,7 +8756,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Exit HTML preview back to code view */
+/** 退出 HTML 预览回到代码视图 */
   function exitHtmlPreview() {
     const iframe = document.getElementById('doc-html-preview');
     const wrap = document.getElementById('doc-editor-wrap');
@@ -8766,13 +8767,13 @@ import * as Modals from './modalManager.js';
     renderTabs();
   }
 
-  // ---- Streaming animation engine ----
+// ---- 流式动画引擎 ----
 
   /**
-   * Simple diff: find the first and last differing positions between two strings.
-   * Returns { prefixLen, oldMid, newMid } where:
-   *   oldText = prefix + oldMid + suffix
-   *   newText = prefix + newMid + suffix
+* 简单差异：查找两个字符串之间的第一个和最后一个不同位置。
+* 返回 { prefixLen, oldMid, newMid }，其中：
+*   oldText = prefix + oldMid + suffix
+*   newText = prefix + newMid + suffix
    */
   function simpleDiff(oldText, newText) {
     let i = 0;
@@ -8794,20 +8795,20 @@ import * as Modals from './modalManager.js';
   }
 
   /**
-   * Animate the transition from oldText to newText in the editor textarea.
-   * First deletes the old differing section char-by-char, then types the new one.
+* 在编辑器 textarea 中动画从 oldText 过渡到 newText。
+* 首先逐字符删除旧的不同部分，然后输入新部分。
    */
   /**
-   * Compute a line-level diff between two texts.
-   * Returns array of { type: 'same'|'del'|'add', text: string }
+* 计算两个文本之间的行级差异。
+* 返回数组 { type: 'same'|'del'|'add', text: string }
    */
   function lineDiff(oldText, newText) {
     const oldLines = oldText.split('\n');
     const newLines = newText.split('\n');
 
-    // Simple LCS-based diff (Myers-like, but O(n*m) for clarity)
+// 简单基于 LCS 的差异（Myers 风格，但 O(n*m) 为清晰起见）
     const m = oldLines.length, n = newLines.length;
-    // For very large diffs, skip detailed diff
+// 对于非常大的差异，跳过详细差异
     if (m * n > 500000) return null;
 
     const dp = Array.from({ length: m + 1 }, () => new Uint16Array(n + 1));
@@ -8849,7 +8850,7 @@ import * as Modals from './modalManager.js';
     const diff = lineDiff(oldText, newText);
     if (!diff) return false; // too large for diff
 
-    // Count changes
+// 统计更改
     const delCount = diff.filter(d => d.type === 'del').length;
     const addCount = diff.filter(d => d.type === 'add').length;
     if (delCount + addCount === 0) return true;
@@ -8862,11 +8863,11 @@ import * as Modals from './modalManager.js';
     if (wrap) wrap.classList.add('animating');
 
     try {
-      // Build diff overlay HTML
+// 构建差异覆盖层 HTML
       const overlay = document.createElement('div');
       overlay.className = 'doc-diff-overlay';
 
-      // Stats bar
+// 统计栏
       const stats = document.createElement('div');
       stats.className = 'doc-diff-stats';
       stats.innerHTML = `<span class="diff-stat-del">\u2212${delCount}</span> <span class="diff-stat-add">+${addCount}</span>`;
@@ -8875,12 +8876,12 @@ import * as Modals from './modalManager.js';
       const content = document.createElement('div');
       content.className = 'doc-diff-content';
 
-      // Render diff lines — show context around changes
+// 渲染差异行——显示更改周围的上下文
       let inContext = false;
       let skipped = 0;
       diff.forEach((line, idx) => {
         if (line.type === 'same') {
-          // Show 2 lines of context around changes
+// 显示更改周围 2 行上下文
           const nearChange = diff.slice(Math.max(0, idx - 2), idx + 3).some(d => d.type !== 'same');
           if (nearChange) {
             if (skipped > 0) {
@@ -8914,11 +8915,11 @@ import * as Modals from './modalManager.js';
 
       overlay.appendChild(content);
 
-      // Insert overlay over the textarea
+// 在 textarea 上方插入覆盖层
       const editorArea = textarea.parentElement;
       if (editorArea) editorArea.appendChild(overlay);
 
-      // Show diff for a moment, then fade to final content
+// 显示差异片刻，然后淡入最终内容
       overlay.offsetHeight; // force reflow
       overlay.classList.add('visible');
 
@@ -8949,20 +8950,20 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  // --- Streaming helpers: open panel & feed content as AI generates ---
+// --- 流式助手：打开面板并在 AI 生成时提供内容 ---
   let _streamDocId = null;
 
-  /** Sync the markdown toolbar + header actions for a streaming doc, so the
-   *  Edit/Preview toggle and formatting tools appear without a manual refresh. */
+/** 为流式文档同步 markdown 工具栏 + 头部操作，使
+*  编辑/预览切换和格式工具出现而无需手动刷新。 */
   function _syncStreamDocChrome(doc) {
     if (!doc) return;
     const lang = (doc.language || 'markdown').toLowerCase();
     const isMd = lang === 'markdown';
     const isPdf = _isFormBackedDoc(doc.content || '');
-    // Show the toolbar for any doc type that has a view toggle of its own
-    // (markdown edit↔preview, or code↔run for renderable code types). The
-    // `data-mode` attribute lets CSS hide markdown-only buttons (bold,
-    // italic, headings, etc.) when we're in a code-mode doc.
+// 为有任何自己视图切换的文档类型显示工具栏
+//（markdown 编辑↔预览，或代码↔运行用于可渲染代码类型）。
+// `data-mode` 属性允许 CSS 在代码模式文档中隐藏 markdown 专用按钮
+//（粗体、斜体、标题等）。
     const renderable = ['svg', 'html', 'css', 'csv', 'python', 'javascript', 'typescript',
                         'json', 'xml', 'bash', 'sh', 'yaml', 'toml', 'sql'];
     const isCodeRenderable = renderable.includes(lang);
@@ -8976,22 +8977,22 @@ import * as Modals from './modalManager.js';
     _syncHeaderActions();
   }
 
-  /** Open the document panel immediately for a doc being streamed in */
+/** 立即为正在流式传入的文档打开文档面板 */
   export function streamDocOpen(title, language) {
-    // Discard any pending AI-edit diff before this stream changes the active
-    // document. When the AI streams a NEW document while an unapproved diff is
-    // open on the current one, streamDocOpen reassigns activeDocId below; if the
-    // stale diff isn't cleared first, a later exitDiffMode applies the old doc's
-    // content to the new one and overwrites it (issue #2467). activeDocId still
-    // points at the previously-active doc here, so exitDiffMode(true) restores
-    // and saves THAT doc — same guard handleDocUpdate/switchToDoc use.
+// 在此流更改活动文档之前丢弃任何待处理的 AI 编辑差异。
+// 当 AI 在当前文档有未批准差异时流式传入新文档，
+// streamDocOpen 在下文中重新分配 activeDocId；如果不先清除
+// 过时差异，稍后的 exitDiffMode 会将旧文档的内容
+// 应用到新文档上并覆盖它（issue #2467）。
+// activeDocId 此时仍指向之前活动的文档，因此 exitDiffMode(true) 恢复
+// 并保存该文档——与 handleDocUpdate/switchToDoc 使用的相同守卫。
     if (_diffModeActive) exitDiffMode(true);
-    // If already streaming a doc, reuse it (don't create a second temp doc)
+// 如果已经在流式传输文档，复用（不创建第二个临时文档）
     if (_streamDocId && docs.has(_streamDocId)) {
       const existing = docs.get(_streamDocId);
       if (title) existing.title = title;
       if (language) existing.language = language;
-      // Update UI fields
+// 更新 UI 字段
       const titleInput = document.getElementById('doc-title-input');
       const langSelect = document.getElementById('doc-language-select');
       if (title && titleInput) titleInput.value = title;
@@ -9005,7 +9006,7 @@ import * as Modals from './modalManager.js';
     }
 
     const sessionId = sessionModule?.getCurrentSessionId() || '';
-    // Reuse existing doc with same title in this session, or create a temp one
+// 复用此会话中相同标题的现有文档，或创建一个临时文档
     let docId = null;
     if (title) {
       for (const [existingId, existingDoc] of docs) {
@@ -9032,7 +9033,7 @@ import * as Modals from './modalManager.js';
 
     if (!isOpen) openPanel();
 
-    // Force doc button visible
+// 强制文档按钮可见
     const toggleBtn = document.getElementById('overflow-doc-btn');
     if (toggleBtn) {
       toggleBtn.style.display = '';
@@ -9052,15 +9053,15 @@ import * as Modals from './modalManager.js';
     const textarea = document.getElementById('doc-editor-textarea');
     if (textarea) {
       textarea.disabled = false;
-      textarea.placeholder = 'Document content...';
+      textarea.placeholder = t('document.editor_placeholder_content');
       textarea.value = '';
     }
-    // Show streaming indicator
+// 显示流式指示器
     const indicator = document.getElementById('doc-stream-indicator');
     if (indicator) indicator.style.display = '';
 
-    // Show email fields immediately when streaming an email doc so the user
-    // doesn't have to refresh for the editor to flip into email mode.
+// 流式传输 email 文档时立即显示 email 字段，使用户
+// 无需刷新编辑器即可进入 email 模式。
     if (language === 'email') {
       const streamDoc = docs.get(_streamDocId);
       if (streamDoc) _showEmailFields(streamDoc);
@@ -9073,7 +9074,7 @@ import * as Modals from './modalManager.js';
     renderTabs();
   }
 
-  /** Simulate streaming effect for doc edits */
+/** 模拟流式效果的文档编辑 */
   let _editAnimFrame = null;
   function _animateDocEdit(textarea, newContent) {
     if (_editAnimFrame) cancelAnimationFrame(_editAnimFrame);
@@ -9090,7 +9091,7 @@ import * as Modals from './modalManager.js';
 
     const oldContent = textarea.value;
 
-    // Find common prefix and suffix to isolate the changed region
+// 查找共同前缀和后缀以隔离更改区域
     let prefixLen = 0;
     while (prefixLen < oldContent.length && prefixLen < newContent.length &&
            oldContent[prefixLen] === newContent[prefixLen]) prefixLen++;
@@ -9103,14 +9104,14 @@ import * as Modals from './modalManager.js';
     const insertedText = newContent.slice(prefixLen, newContent.length - suffixLen);
     const suffix = oldContent.slice(oldContent.length - suffixLen);
 
-    // Phase 1: delete characters one by one, then Phase 2: insert
+// 阶段 1：逐字符删除，然后阶段 2：插入
     const deleteChunk = Math.max(2, Math.ceil(deletedText.length / 30));
     const insertChunk = Math.max(2, Math.ceil(insertedText.length / 30));
     let deletePos = deletedText.length;
     let insertPos = 0;
     let phase = deletedText.length > 0 ? 'delete' : 'insert';
 
-    // Scroll to the edit region
+// 滚动到编辑区域
     const linesBefore = oldContent.slice(0, prefixLen).split('\n').length;
     const lineH = parseFloat(getComputedStyle(textarea).lineHeight) || 20;
     textarea.scrollTop = Math.max(0, (linesBefore - 3) * lineH);
@@ -9139,7 +9140,7 @@ import * as Modals from './modalManager.js';
         if (insertPos < insertedText.length) {
           _editAnimFrame = requestAnimationFrame(tick);
         } else {
-          // Done — set final content
+// 完成——设置最终内容
           textarea.value = newContent;
           _editAnimFrame = null;
           if (indicator) indicator.style.display = 'none';
@@ -9151,7 +9152,7 @@ import * as Modals from './modalManager.js';
     _editAnimFrame = requestAnimationFrame(tick);
   }
 
-  /** Append streaming content to the currently-streaming doc */
+/** 追加流式内容到当前流式文档 */
   let _streamHlDebounce = null;
   export function streamDocDelta(content) {
     if (!_streamDocId) return;
@@ -9166,14 +9167,14 @@ import * as Modals from './modalManager.js';
       const textarea = document.getElementById('doc-editor-textarea');
       if (textarea) {
         textarea.value = content;
-        // Auto-scroll to bottom as content streams in
+// 内容流入时自动滚动到底部
         textarea.scrollTop = textarea.scrollHeight;
       }
-      // Update text and line numbers immediately, debounce expensive highlighting
+// 立即更新文本和行号，防抖昂贵的高亮操作
       const codeEl = document.getElementById('doc-editor-code');
       if (codeEl) codeEl.textContent = content + '\n';
       updateLineNumbers(content);
-      // Show blinking cursor at end of content
+// 在内容末尾显示闪烁光标
       let cursor = document.getElementById('doc-stream-cursor');
       if (!cursor) {
         cursor = document.createElement('span');
@@ -9187,17 +9188,17 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Finalize streaming — called when doc_update arrives with the real ID.
-   *  Returns the old _streamDocId so handleDocUpdate can migrate temp→real. */
+/** 完成流式传输——当 doc_update 带着真实 ID 到达时调用。
+*  返回旧的 _streamDocId，使 handleDocUpdate 可以迁移临时→真实。 */
   export function streamDocFinalize() {
     const oldId = _streamDocId;
     _streamDocId = null;
-    // Hide streaming indicator + cursor
+// 隐藏流式指示器 + 光标
     const indicator = document.getElementById('doc-stream-indicator');
     if (indicator) indicator.style.display = 'none';
     const cursor = document.getElementById('doc-stream-cursor');
     if (cursor) cursor.remove();
-    // Final highlighting pass + auto-detect language
+// 最终高亮处理 + 自动检测语言
     clearTimeout(_streamHlDebounce);
     syncHighlighting();
     attemptAutoDetect();
@@ -9221,23 +9222,23 @@ import * as Modals from './modalManager.js';
     return true;
   }
 
-  /** Handle SSE doc_update event from AI */
+/** 处理来自 AI 的 SSE doc_update 事件 */
   export function handleDocUpdate(data) {
     const streamingId = streamDocFinalize();
-    // Discard any pending AI-edit diff before this update changes the active
-    // document. The diff state (_diffModeActive/_diffOldContent/...) is a
-    // module-global singleton bound to whatever doc was active when the diff
-    // opened; if we switch documents without clearing it, a later tab switch or
-    // Accept/Reject-All flushes the stale diff's content into the now-active
-    // doc and silently overwrites it (issue #2467). activeDocId still points at
-    // the previously-active doc here, so exitDiffMode(true) restores and saves
-    // THAT doc before we reassign activeDocId below — mirroring switchToDoc()
-    // and enterDiffMode().
+// 在此更新更改活动文档之前丢弃任何待处理的 AI 编辑差异。
+// 差异状态（_diffModeActive/_diffOldContent/...）是模块级单例，
+// 绑定到打开差异时活动的任何文档；如果在不清理的情况下切换文档，
+// 稍后的标签切换或接受/拒绝全部会将过时差异的内容刷新到现在
+// 活动的文档中并静默覆盖它（issue #2467）。
+// activeDocId 此时仍指向之前活动的文档，因此 exitDiffMode(true) 恢复并
+// 保存该文档——在我们下方重新分配 activeDocId 之前——镜像 switchToDoc()
+// 和 enterDiffMode()。
+// 和 enterDiffMode()。
     if (_diffModeActive) exitDiffMode(true);
     let docId = data.doc_id;
     const newContent = data.content || '';
 
-    // Migrate streaming temp doc to real ID
+// 将流式临时文档迁移到真实 ID
     if (streamingId && streamingId.startsWith('_streaming_') && docs.has(streamingId)) {
       const tempDoc = docs.get(streamingId);
       docs.delete(streamingId);
@@ -9247,16 +9248,16 @@ import * as Modals from './modalManager.js';
       if (data.language) tempDoc.language = data.language;
       tempDoc.content = newContent;
       docs.set(docId, tempDoc);
-      // Fix activeDocId reference
+// 修正 activeDocId 引用
       if (activeDocId === streamingId) activeDocId = docId;
     }
 
-    // Deduplicate: if a new doc has same title as existing doc in this session, update it instead
+// 去重：如果新文档与此会话中的现有文档标题相同，则更新它
     if (!docs.has(docId)) {
       const curSession = sessionModule?.getCurrentSessionId() || '';
       let reuseId = null;
 
-      // First: match by title
+// 第一：按标题匹配
       if (data.title) {
         for (const [existingId, existingDoc] of docs) {
           if (existingDoc.title === data.title && existingDoc.sessionId === curSession) {
@@ -9266,7 +9267,7 @@ import * as Modals from './modalManager.js';
         }
       }
 
-      // Second: if no title match, reuse an empty untitled doc in this session
+// 第二：如果没有标题匹配，复用此会话中的空未命名文档
       if (!reuseId) {
         for (const [existingId, existingDoc] of docs) {
           if (existingDoc.sessionId === curSession &&
@@ -9281,12 +9282,12 @@ import * as Modals from './modalManager.js';
       if (reuseId) docId = reuseId;
     }
 
-    // Capture old content before updating the map
+// 在更新 map 之前捕获旧内容
     const textarea = document.getElementById('doc-editor-textarea');
     const oldContent = (docId === activeDocId && textarea) ? textarea.value : '';
     const isExistingDoc = docs.has(docId);
 
-    // Add or update in docs map
+// 在 docs map 中添加或更新
     if (isExistingDoc) {
       const doc = docs.get(docId);
       doc.content = newContent;
@@ -9306,12 +9307,12 @@ import * as Modals from './modalManager.js';
 
     _syncDocIndicator();
 
-    // Auto-title from content if still "Untitled" and AI didn't provide a title
+// 如果仍是"Untitled"且 AI 未提供标题，从内容自动生成标题
     if (!data.title) autoTitleFromContent(newContent, docId);
 
     if (!isOpen) openPanel();
 
-    // Force doc button visible (overrides appearance settings & toolbar collapse)
+// 强制文档按钮可见（覆盖外观设置和工具栏折叠）
     const toggleBtn = document.getElementById('overflow-doc-btn');
     if (toggleBtn) {
       toggleBtn.style.display = '';
@@ -9321,31 +9322,31 @@ import * as Modals from './modalManager.js';
     const docInd = document.getElementById('doc-indicator-btn');
     if (docInd) docInd.classList.add('visible');
 
-    // Switch to this doc's tab
+// 切换到此文档的标签页
     activeDocId = docId;
 
     const badge = document.getElementById('doc-version-badge');
     const titleInput = document.getElementById('doc-title-input');
     const langSelect = document.getElementById('doc-language-select');
 
-    // Re-enable editor if it was in empty state
+// 如果处于空状态，重新启用编辑器
     if (textarea) {
       textarea.disabled = false;
-      textarea.placeholder = 'Document content...';
+      textarea.placeholder = t('document.editor_placeholder_content');
     }
     if (badge) badge.textContent = `v${data.version || 1}`;
     if (data.title && titleInput) titleInput.value = data.title;
-    // Set language from data, or fall back to what the doc already has (e.g. from streaming)
+// 从数据设置语言，或回退到文档已有的（例如流式传输的）
     const docLang = data.language || (docs.has(docId) && docs.get(docId).language) || '';
     if (docLang && langSelect) langSelect.value = docLang;
     if (!docLang) attemptAutoDetect();
     const isEmailUpdate = (docLang || '').toLowerCase() === 'email';
     const markdownPreviewWasVisible = _isMarkdownPreviewVisible();
 
-    // Animate content update for edits; apply directly for creates/streaming
+// 为编辑动画更新内容；为创建/流式直接应用
     const isEdit = !isEmailUpdate && isExistingDoc && oldContent && oldContent !== newContent && !streamingId;
     if (isEdit && textarea) {
-      // Count changed lines to decide between animation and diff mode
+// 计算更改行数以决定动画和差异模式
       const oldLines = oldContent.split('\n');
       const newLines = newContent.split('\n');
       let changedLines = 0;
@@ -9357,7 +9358,7 @@ import * as Modals from './modalManager.js';
         if (markdownPreviewWasVisible) _setMarkdownPreviewActive(false, { remember: false });
         enterDiffMode(oldContent, newContent);
       } else if (markdownPreviewWasVisible && _refreshMarkdownPreviewIfVisible(docId, newContent)) {
-        // Preview is the visible surface, so refresh it instead of animating a hidden editor.
+// 预览是可见表面，因此刷新它而不是动画隐藏的编辑器。
       } else {
         _animateDocEdit(textarea, newContent);
       }
@@ -9375,7 +9376,7 @@ import * as Modals from './modalManager.js';
       }
     }
 
-    // Flash the editor wrap to indicate content was updated
+// 闪烁编辑器包装以指示内容已更新
     const wrap = document.getElementById('doc-editor-wrap');
     if (wrap && !isEdit) {
       wrap.classList.remove('doc-updated-flash');
@@ -9384,7 +9385,7 @@ import * as Modals from './modalManager.js';
       wrap.addEventListener('animationend', () => wrap.classList.remove('doc-updated-flash'), { once: true });
     }
 
-    // Auto-detect language for docs with no language set
+// 为未设置语言的文档自动检测语言
     const updatedDoc = docs.get(docId);
     if (isEmailUpdate && updatedDoc) {
       updatedDoc.language = 'email';
@@ -9395,12 +9396,12 @@ import * as Modals from './modalManager.js';
       setTimeout(attemptAutoDetect, 100);
     }
 
-    // Show/hide format-specific buttons and auto-toggle previews
+// 显示/隐藏格式特定的按钮并自动切换预览
     const finalLang = docLang || (updatedDoc && updatedDoc.language) || '';
     const mdToolbar = document.getElementById('doc-md-toolbar');
-    // Toolbar shown for every doc type — items inside self-gate on language.
+// 工具栏对所有文档类型显示——内部项目根据语言自我控制。
     if (mdToolbar) mdToolbar.style.display = '';
-    // Auto-show table view for CSV after streaming
+// 流式传输后自动为 CSV 显示表格视图
     if (finalLang === 'csv') {
       requestAnimationFrame(() => {
         const csvPreview = document.getElementById('doc-csv-preview');
@@ -9410,12 +9411,12 @@ import * as Modals from './modalManager.js';
 
     renderTabs();
 
-    // Refresh the header buttons (Run/Preview ▶, edit toggles) for the active
-    // doc after ANY update — otherwise an AI-created html/svg/code doc wouldn't
-    // show its ▶ Run button until the page was refreshed.
+// 在任何更新后刷新活动文档的头部按钮（运行/预览 ▶、编辑切换）——
+// 否则 AI 创建的 html/svg/代码文档不会显示其 ▶ 运行按钮
+// 直到页面刷新。
     if (docId === activeDocId) {
       _syncHeaderActions();
-      // Form-backed (PDF) docs: re-fetch the rendered preview if it's showing.
+// 表单支持（PDF）文档：如果正在显示，重新获取渲染预览。
       if (_isFormBackedDoc(newContent)) {
         const explicit = _pdfViewState.get(docId);
         if (explicit !== false) _refreshPdfPreviewIframe();
@@ -9423,19 +9424,19 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Toggle version history panel */
+/** 切换版本历史面板 */
   let _versionClickOutside = null;
-  let _versionSavedContent = null;  // stash current content for preview/revert
+  let _versionSavedContent = null;  // 暂存当前内容用于预览/还原
   async function toggleVersionHistory() {
     const panel = document.getElementById('doc-version-panel');
     if (!panel || !activeDocId) return;
 
     if (panel.classList.contains('hidden')) {
-      // Stash current content so we can restore on close
+// 暂存当前内容以便在关闭时恢复
       const ta = document.getElementById('doc-editor-textarea');
       _versionSavedContent = ta ? ta.value : null;
 
-      // Position next to sidebar on desktop
+// 在桌面端定位到侧边栏旁边
       const sidebar = document.getElementById('sidebar');
       const isMobile = window.innerWidth <= 768;
       if (!isMobile && sidebar) {
@@ -9449,21 +9450,21 @@ import * as Modals from './modalManager.js';
           panel.style.right = 'auto';
         }
       } else if (isMobile) {
-        // Clear any stale inline positioning from a prior desktop open so the
-        // mobile bottom-sheet (CSS) isn't pushed off-screen.
+// 清除任何来自先前桌面打开的陈旧内联定位，
+// 使移动端底部工作表（CSS）不被推到屏幕外。
         panel.style.left = '';
         panel.style.right = '';
         panel.style.top = '';
       }
 
-      // Move panel to body so it's not clipped by doc pane overflow
+// 将面板移动到 body，使其不被文档面板溢出裁剪
       if (panel.parentElement !== document.body) {
         document.body.appendChild(panel);
       }
 
       panel.classList.remove('hidden');
       await loadVersionHistory();
-      // Close on click outside
+// 在外部点击时关闭
       setTimeout(() => {
         _versionClickOutside = (e) => {
           if (!panel.contains(e.target) && e.target.id !== 'doc-version-badge') {
@@ -9480,7 +9481,7 @@ import * as Modals from './modalManager.js';
   function _closeVersionPanel() {
     const panel = document.getElementById('doc-version-panel');
     if (panel) panel.classList.add('hidden');
-    // Restore to latest (stashed) content
+// 恢复到最新（暂存的）内容
     if (_versionSavedContent !== null) {
       const ta = document.getElementById('doc-editor-textarea');
       if (ta) ta.value = _versionSavedContent;
@@ -9493,13 +9494,13 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Build a short diff summary between two strings */
+/** 在两个字符串之间构建简短差异摘要 */
   function _buildDiffSummary(oldText, newText) {
     if (!oldText && !newText) return '';
     const oldLines = (oldText || '').split('\n');
     const newLines = (newText || '').split('\n');
     const added = [], removed = [];
-    // Simple line diff — collect changed lines
+// 简单行差异——收集更改的行
     const maxCheck = Math.max(oldLines.length, newLines.length);
     for (let i = 0; i < maxCheck; i++) {
       const ol = oldLines[i], nl = newLines[i];
@@ -9507,7 +9508,7 @@ import * as Modals from './modalManager.js';
       if (ol !== undefined && (nl === undefined || ol !== nl)) removed.push(ol.trim());
       if (nl !== undefined && (ol === undefined || ol !== nl)) added.push(nl.trim());
     }
-    // Show up to 3 changes
+// 最多显示 3 个更改
     const parts = [];
     for (const line of removed.slice(0, 2)) {
       if (line) parts.push(`<span class="diff-del">${_escHtml(line.slice(0, 60))}</span>`);
@@ -9523,7 +9524,7 @@ import * as Modals from './modalManager.js';
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  /** Load version history list */
+/** 加载版本历史列表 */
   async function loadVersionHistory() {
     if (!activeDocId) return;
     const list = document.getElementById('doc-version-list');
@@ -9533,7 +9534,7 @@ import * as Modals from './modalManager.js';
       const res = await fetch(`${API_BASE}/api/document/${activeDocId}/versions`);
       const versions = await res.json();
 
-      // Build diff summaries between consecutive versions
+// 在连续版本之间构建差异摘要
       const diffs = [];
       for (let i = 0; i < versions.length; i++) {
         if (i < versions.length - 1) {
@@ -9555,7 +9556,7 @@ import * as Modals from './modalManager.js';
         </div>
       `).join('');
 
-      // Wire restore buttons
+// 绑定恢复按钮
       list.querySelectorAll('.doc-version-restore').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -9563,11 +9564,11 @@ import * as Modals from './modalManager.js';
         });
       });
 
-      // Wire click to preview version + active state
+// 绑定点击以预览版本 + 活动状态
       list.querySelectorAll('.doc-version-item').forEach(item => {
         item.addEventListener('click', (e) => {
           if (e.target.classList.contains('doc-version-restore')) return;
-          // Toggle active state
+// 切换活动状态
           list.querySelectorAll('.doc-version-item.active').forEach(el => el.classList.remove('active'));
           item.classList.add('active');
           previewVersion(parseInt(item.dataset.version));
@@ -9578,7 +9579,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Preview a specific version in the editor (without saving) */
+/** 在编辑器中预览特定版本（不保存） */
   async function previewVersion(num) {
     if (!activeDocId) return;
     try {
@@ -9592,7 +9593,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Restore an old version (creates new version) */
+/** 恢复旧版本（创建新版本） */
   async function restoreVersion(num) {
     if (!activeDocId) return;
     try {
@@ -9601,9 +9602,9 @@ import * as Modals from './modalManager.js';
       });
       const doc = await res.json();
       populateEditor(doc);
-      // Clear stash — restored content IS the new latest
+// 清除暂存——恢复的内容即是新最新版本
       _versionSavedContent = null;
-      // Update map
+// 更新 map
       if (docs.has(activeDocId)) {
         const d = docs.get(activeDocId);
         d.content = doc.current_content || '';
@@ -9617,7 +9618,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Update document title via PATCH */
+/** 通过 PATCH 更新文档标题 */
   async function updateTitle(overrideDocId, overrideTitle) {
     const docId = overrideDocId || activeDocId;
     if (!docId) return;
@@ -9638,7 +9639,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Auto-detect title from content if still "Untitled" */
+/** 如果仍是"Untitled"，从内容自动检测标题 */
   function autoTitleFromContent(content, docId) {
     const id = docId || activeDocId;
     if (!id) return;
@@ -9650,19 +9651,19 @@ import * as Modals from './modalManager.js';
 
     let title = null;
 
-    // Markdown header: # Title
+// Markdown 标题：# 标题
     const mdMatch = text.match(/^#{1,3}\s+(.+)/m);
     if (mdMatch) {
       title = mdMatch[1].trim();
     }
 
-    // HTML heading: <h1>Title</h1>
+// HTML 标题：<h1>标题</h1>
     if (!title) {
       const htmlMatch = text.match(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/i);
       if (htmlMatch) title = htmlMatch[1].trim();
     }
 
-    // First non-empty line as fallback (only if short enough to be a title)
+// 第一行非空内容作为回退（仅当足够短以成为标题时）
     if (!title) {
       const firstLine = text.split('\n').find(l => l.trim().length > 0);
       if (firstLine) {
@@ -9675,7 +9676,7 @@ import * as Modals from './modalManager.js';
 
     if (!title) return;
 
-    // Clean up: strip trailing punctuation like : or ...
+// 清理：去除尾随标点如 : 或 ...
     title = title.replace(/[:#*`]+$/g, '').trim();
     if (title.length > 50) title = title.slice(0, 48) + '...';
     if (!title) return;
@@ -9685,7 +9686,7 @@ import * as Modals from './modalManager.js';
     if (titleInput && id === activeDocId) titleInput.value = title;
   }
 
-  /** Update document language via PATCH */
+/** 通过 PATCH 更新文档语言 */
   async function updateLanguage() {
     if (!activeDocId) return;
     const select = document.getElementById('doc-language-select');
@@ -9705,7 +9706,7 @@ import * as Modals from './modalManager.js';
     }
   }
 
-  /** Clear all tab state (e.g. on session switch) */
+/** 清除所有标签状态（例如会话切换时） */
   export function clearAll() {
     docs.clear();
     activeDocId = null;
@@ -9722,7 +9723,7 @@ import * as Modals from './modalManager.js';
     return activeDocId;
   }
 
-  /** Find an open email tab by source UID + folder. Returns docId or null. */
+/** 通过源 UID + 文件夹查找打开的 email 标签页。返回 docId 或 null。 */
   export function findEmailDocId(uid, folder) {
     if (uid == null) return null;
     const wantUid = String(uid);

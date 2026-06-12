@@ -1,18 +1,18 @@
-"""Compute intelligent llama.cpp serve profiles from detected hardware.
+"""根据检测到的硬件计算智能的 llama.cpp 推理配置。
 
-Given a system (VRAM/RAM/arch) and a model, produce 1-4 ready-to-launch
-profiles — Quality / Balanced / Speed — with concrete llama.cpp flags
-(n_gpu_layers, n_cpu_moe, cache-type, context). This turns the by-hand tuning
-(how many MoE layers fit on the GPU, when to spend VRAM on a q8 KV cache vs more
-context, how much headroom to leave for a vision encoder) into a formula.
+给定一个系统（VRAM/RAM/架构）和一个模型，生成 1-4 个可直接启动的
+配置 — 质量 / 平衡 / 速度 — 包含具体的 llama.cpp 参数
+（n_gpu_layers, n_cpu_moe, cache-type, context）。这将手动调优
+（多少 MoE 层适合放在 GPU 上、何时用 VRAM 换取 q8 KV 缓存 vs 更多
+上下文、为视觉编码器预留多少余量）转化为公式。
 
-Pure/deterministic — no benchmarking, no I/O. Reuses the same VRAM math as
-fit.py/models.py so "what the Cookbook recommends" and "what it serves" agree.
+纯确定性的 — 无基准测试、无 I/O。重用与 fit.py/models.py 相同的 VRAM 数学，
+使得 "Cookbook 推荐" 与 "实际推理" 保持一致。
 
-NOTE: token/s figures are NOT computed here — real speed on partial-offload MoE
-is CPU-bound and not reliably predictable from specs. The UI labels profiles by
-their tradeoff (Quality/Balanced/Speed), and the VRAM fit (the part that decides
-whether it even loads) is what's computed from real numbers.
+注意：token/s 数据不在此处计算 — 部分卸载 MoE 的实际速度
+由 CPU 决定，无法通过规格可靠预测。UI 通过权衡标签
+（质量/平衡/速度）标识配置，而 VRAM 适配（决定是否
+能加载的部分）基于真实数字计算。
 """
 
 from services.hwfit.models import (
@@ -22,38 +22,38 @@ from services.hwfit.models import (
     is_prequantized,
 )
 
-# GGUF KV-cache cost per token, in bytes-per-active-billion-param, by cache type.
-# q4_0 is ~half of q8_0 is ~half of f16. The 8e-6 base in estimate_memory_gb is
-# the q8_0-ish figure; scale from there.
+# GGUF KV-cache 每 token 开销，以每活跃十亿参数的字节数为单位，按缓存类型划分。
+# q4_0 ≈ q8_0 的一半 ≈ f16 的一半。estimate_memory_gb 中的 8e-6 基础值
+# 是近似 q8_0 的数值；其他地方据此缩放。
 _KV_FACTOR = {"q4_0": 0.5, "q8_0": 1.0, "f16": 2.0}
 
-# Quant ladder from highest quality/size down. A profile that wants "best quant
-# that fits fully on GPU" walks this until one fits.
+# 量化阶梯，从最高质量/体积向下排列。需要"最适合全量放入 GPU 的量化"
+# 的配置会遍历此列表直到找到合适的。
 _QUANT_LADDER = ["Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q3_K_M", "Q2_K"]
 
 
 def _weights_gb(model, quant, fixed_gb=None):
-    """VRAM for the full weights. When fixed_gb is given (serving a specific GGUF
-    file already on disk), use its real size — the quant is whatever the file is,
-    not something we get to pick."""
+    """完整权重的 VRAM 占用。当给出 fixed_gb（磁盘上已有特定的 GGUF
+    文件），使用其真实大小 — 量化级别由文件决定，
+    我们无法另行选择。"""
     if fixed_gb and fixed_gb > 0:
         return float(fixed_gb)
     return params_b(model) * QUANT_BPP.get(quant, 0.58)
 
 
 def _kv_gb(model, ctx, kv_type):
-    """KV-cache VRAM at a context length and cache type."""
+    """指定上下文长度和缓存类型下的 KV-cache VRAM 占用。"""
     kv_params = _active_params_b(model)
     return 0.000008 * kv_params * ctx * _KV_FACTOR.get(kv_type, 1.0)
 
 
 def _n_layers(model):
-    """Best-effort total transformer block count (for n-cpu-moe math)."""
+    """尽力获取 transformer 块总数（用于 n-cpu-moe 计算）。"""
     for k in ("num_hidden_layers", "n_layers", "num_layers", "block_count"):
         v = model.get(k)
         if isinstance(v, (int, float)) and v > 0:
             return int(v)
-    # Fallback heuristic by size — most MoE/dense LLMs land 28-64 layers.
+    # 按规模回退 — 大多数 MoE/dense LLM 在 28-64 层之间。
     pb = params_b(model)
     if pb >= 60:
         return 64
@@ -65,43 +65,43 @@ def _n_layers(model):
 
 
 def _cpu_moe_for_budget(model, quant, kv_gb, vram_budget_gb, fixed_gb=None):
-    """How many MoE layers must move to CPU so weights+KV fit vram_budget_gb.
+    """需要将多少 MoE 层移至 CPU 才能使 weights+KV 适配 vram_budget_gb。
 
-    Returns (n_cpu_moe, fits_fully). When the model already fits, n_cpu_moe=0.
-    Each offloaded layer frees roughly weights/n_layers of VRAM. We only model
-    this for MoE (where --n-cpu-moe applies); dense models just report whether
-    they fit at the given n_gpu_layers=999.
+    返回 (n_cpu_moe, fits_fully)。当模型已适配时，n_cpu_moe=0。
+    每卸载一层大约释放 weights/n_layers 的 VRAM。我们仅对 MoE
+    建模此行为（--n-cpu-moe 适用）；Dense 模型仅报告在
+    n_gpu_layers=999 时是否适配。
     """
     weights = _weights_gb(model, quant, fixed_gb)
-    needed = weights + kv_gb + 0.6  # +0.6 GB runtime/compute buffers
+    needed = weights + kv_gb + 0.6  # +0.6 GB 运行时/计算缓冲
     if needed <= vram_budget_gb:
         return 0, True
     if not model.get("is_moe"):
-        # Dense: no per-expert offload knob; either it fits or it spills via -ngl.
+        # Dense：没有 per-expert 卸载开关；要么适配要么通过 -ngl 溢出到内存。
         return 0, False
     layers = _n_layers(model)
     per_layer = weights / max(layers, 1)
     overflow = needed - vram_budget_gb
     import math
     n = math.ceil(overflow / max(per_layer, 1e-6))
-    n = max(0, min(n, layers))   # clamp
+    n = max(0, min(n, layers))   # 裁剪到合法范围
     return n, False
 
 
 def compute_serve_profiles(system, model, serve_weights_gb=None, serve_quant=None):
-    """Return a list of profile dicts for llama.cpp serving of `model` on `system`.
+    """返回在 `system` 上用 llama.cpp 推理 `model` 的配置字典列表。
 
-    Each profile: {key, label, quant, n_gpu_layers, n_cpu_moe, cache_type, ctx,
-                   est_vram_gb, fits, note}. Empty list if no GGUF path makes
-    sense (caller should fall back to manual flags).
+    每个配置: {key, label, quant, n_gpu_layers, n_cpu_moe, cache_type, ctx,
+               est_vram_gb, fits, note}。如果没有合理的 GGUF 路径，
+    返回空列表（调用方应回退到手动参数）。
 
-    DOWNLOAD mode (default): the quant isn't chosen yet, so profiles vary it
-    (Quality=Q6, Balanced=Q4, Speed=Q2…) to show download options.
+    下载模式（默认）：量化级别尚未选定，因此配置会变化
+    （质量=Q6, 平衡=Q4, 速度=Q2...）以展示下载选项。
 
-    SERVE mode (serve_weights_gb set): a specific GGUF file already exists on
-    disk — its quant is FIXED. Profiles then keep that quant/size and differ only
-    in the actual serving knobs (n_cpu_moe, KV-cache type, context). serve_quant
-    is the file's quant label (e.g. "Q4_K_M") just for display.
+    推理模式（设置了 serve_weights_gb）：磁盘上已有特定 GGUF 文件 —
+    其量化级别是固定的。配置保持该量化/大小，仅变化
+    实际的推理参数（n_cpu_moe、KV-cache 类型、上下文）。serve_quant
+    是文件的量化标签（例如 "Q4_K_M"），仅用于显示。
     """
     vram = float(system.get("gpu_vram_gb") or 0)
     if vram <= 0:
@@ -109,10 +109,10 @@ def compute_serve_profiles(system, model, serve_weights_gb=None, serve_quant=Non
 
     serve_mode = bool(serve_weights_gb and serve_weights_gb > 0)
 
-    # Never propose more context than the model was trained for — asking llama.cpp
-    # for ctx > n_ctx_train triggers a "training context overflow" and, with a
-    # quantized KV cache, an oversized allocation that can crash the GPU
-    # (radv/amdgpu ErrorDeviceLost). Cap every profile at the model's real limit.
+    # 永远不要提议超过模型训练上下文上限的上下文 — 要求 llama.cpp
+    # 设置 ctx > n_ctx_train 会触发 "training context overflow"，并且对于
+    # 量化 KV 缓存，会产生过大的分配，可能导致 GPU 崩溃
+    # （radv/amdgpu ErrorDeviceLost）。将每个配置的上限限制在模型的实际上限。
     model_ctx_max = 0
     for k in ("context_length", "max_position_embeddings", "n_ctx_train", "context"):
         v = model.get(k)
@@ -120,9 +120,9 @@ def compute_serve_profiles(system, model, serve_weights_gb=None, serve_quant=Non
             model_ctx_max = int(v)
             break
     if model_ctx_max <= 0:
-        model_ctx_max = 131072  # conservative default when the catalog omits it
+        model_ctx_max = 131072  # 当目录中缺少该字段时的保守默认值
 
-    # Vision models need headroom for the image encoder (~1 GB on top of weights).
+    # 视觉模型需要为图像编码器预留额外空间（约 1 GB，在权重之外）。
     is_vision = bool(
         model.get("is_multimodal") or model.get("vision") or model.get("mmproj")
         or "vl" in str(model.get("name", "")).lower()
@@ -130,22 +130,22 @@ def compute_serve_profiles(system, model, serve_weights_gb=None, serve_quant=Non
     headroom = 1.1 if is_vision else 0.4
     budget = max(vram - headroom, 1.0)
 
-    # Prequantized (AWQ/GPTQ/FP8) served via GGUF fallback use a fixed ~Q4 quant;
-    # GGUF models can pick their quant. Pick a sensible per-profile quant.
+    # 预量化模型（AWQ/GPTQ/FP8）通过 GGUF 降级推理时使用固定 ~Q4 量化；
+    # GGUF 模型可以选择它们的量化。为每个配置选择合理的量化。
     fixed_quant = model.get("quantization") if is_prequantized(model) else None
 
     is_moe = bool(model.get("is_moe"))
 
     def _pick_quant(prefer, require_full_fit):
-        """Choose a quant for a profile.
+        """为配置选择量化级别。
 
-        - fixed_quant (AWQ/GPTQ/FP8 served via GGUF): always that.
-        - require_full_fit=True (Speed): walk DOWN from `prefer` to the best quant
-          whose weights fit fully on the GPU (no offload) — fastest.
-        - require_full_fit=False (Quality on MoE): keep `prefer` even if it must
-          offload experts to CPU; that's the whole point of n-cpu-moe on a card
-          too small to hold the weights. For dense models we can't offload
-          per-expert, so fall back to the largest fully-fitting quant.
+        - fixed_quant（通过 GGUF 推理的 AWQ/GPTQ/FP8）：始终使用该值。
+        - require_full_fit=True（速度模式）：从 `prefer` 向下寻找权重能
+          完全放入 GPU（无卸载）的最高量化 — 最快。
+        - require_full_fit=False（MoE 上的质量模式）：保留 `prefer` 即使
+          需要将专家卸载到 CPU 也是如此；这对于显存不足以容纳权重的显卡
+          正是 n-cpu-moe 的意义所在。对于 Dense 模型我们无法按专家
+          卸载，因此回退到能完全放入的最大量化。
         """
         if fixed_quant:
             return fixed_quant
@@ -155,11 +155,11 @@ def compute_serve_profiles(system, model, serve_weights_gb=None, serve_quant=Non
                 if _weights_gb(model, q) + 0.6 <= budget:
                     return q
             return _QUANT_LADDER[-1]
-        # MoE quality: keep the preferred (big) quant; offload handles overflow.
+        # MoE 质量：保留首选（大）量化；卸载处理溢出。
         return prefer
 
     if serve_mode:
-        # Fixed file on disk — quant can't change. Vary only the serving knobs.
+        # 磁盘上的固定文件 — 量化不可更改。仅变化推理参数。
         fq = serve_quant or model.get("quantization") or "GGUF"
         specs = [
             # key, label, prefer_quant, full_fit, kv_type, ctx, note
@@ -183,16 +183,16 @@ def compute_serve_profiles(system, model, serve_weights_gb=None, serve_quant=Non
 
     profiles = []
     for key, label, prefer_q, full_fit, kv_type, ctx, note in specs:
-        # In serve mode the quant is fixed (the file's); in download mode we pick.
+        # 推理模式下量化是固定的（文件决定的）；下载模式下我们选择。
         quant = prefer_q if serve_mode else _pick_quant(prefer_q, full_fit)
-        # Shrink context if even the chosen KV won't fit alongside weights.
-        # Start from the smaller of the profile's target and the model's limit.
+        # 缩小上下文，如果即便选定的 KV 也无法与权重一起放入 GPU。
+        # 从配置目标和模型限制中较小的一个开始。
         cur_ctx = min(ctx, model_ctx_max)
         while cur_ctx >= 8192:
             kv = _kv_gb(model, cur_ctx, kv_type)
             n_cpu_moe, fits = _cpu_moe_for_budget(model, quant, kv, budget, fixed_gb=serve_weights_gb)
             est = _weights_gb(model, quant, serve_weights_gb) + kv + 0.6
-            # If a non-MoE model can't fit even fully offloaded, try less context.
+            # 如果非 MoE 模型即使完全卸载也无法适配，尝试更少的上下文长度。
             if model.get("is_moe") or fits or cur_ctx <= 8192:
                 profiles.append({
                     "key": key,
@@ -202,13 +202,13 @@ def compute_serve_profiles(system, model, serve_weights_gb=None, serve_quant=Non
                     "n_cpu_moe": n_cpu_moe,
                     "cache_type": kv_type,
                     "ctx": cur_ctx,
-                    # When experts offload, GPU-resident VRAM tops out at the
-                    # budget (weights beyond it live in system RAM), so cap the
-                    # estimate at `budget`, not the full card — this also leaves
-                    # the vision-encoder headroom visible in the number.
+                    # 当专家被卸载时，GPU 常驻 VRAM 上限是预算
+                    # （超出部分存储在系统 RAM 中），因此将
+                    # 估算值限制在 `budget` 而非整张卡 — 这同时让
+                    # 视觉编码器的余量在数字上可见。
                     "est_vram_gb": round(min(est, budget), 1),
-                    # For MoE we treat it as fitting via offload; report whether
-                    # it fit WITHOUT offload as the "clean" flag.
+                    # 对于 MoE，我们将其视为通过卸载适配；报告
+                    # 它是否在未卸载时适配作为 "干净" 标志。
                     "fits": fits or bool(model.get("is_moe")),
                     "offloads": n_cpu_moe > 0,
                     "note": note,
@@ -216,8 +216,8 @@ def compute_serve_profiles(system, model, serve_weights_gb=None, serve_quant=Non
                 break
             cur_ctx //= 2
 
-    # De-dupe identical profiles (e.g. tiny model where all three collapse to the
-    # same all-GPU config) — keep the first/highest-quality label.
+    # 去除重复的相同配置（例如小型模型三条配置都坍缩为
+    # 相同的全 GPU 配置）— 保留第一条/最高质量标签。
     seen = set()
     deduped = []
     for p in profiles:

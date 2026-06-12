@@ -1,9 +1,8 @@
 """
 embedding_lanes.py
 
-Helpers for keeping FastEmbed fallback vectors separate from user-configured
-embedding vectors. ChromaDB fixes a collection's dimension on first insert, so
-different embedding models must never share one collection.
+将 FastEmbed 回退向量与用户配置的嵌入向量分开管理的辅助函数。
+ChromaDB 在首次插入时固定集合的维度，因此不同的嵌入模型绝不能共享同一个集合。
 """
 
 from __future__ import annotations
@@ -59,7 +58,7 @@ class EmbeddingLane:
 
 
 def reset_embedding_lane_state() -> None:
-    """Reset process-local embedding lane state after endpoint config changes."""
+    """在端点配置变更后重置进程本地嵌入通道状态。"""
     try:
         from src.embeddings import reset_http_embed_state
         reset_http_embed_state()
@@ -241,7 +240,7 @@ def _create_lane(chroma_client, base_name: str, lane_name: str, client: Any) -> 
 
 
 def build_embedding_lanes(base_name: str) -> List[EmbeddingLane]:
-    """Return healthy lanes in retrieval preference order: custom, fastembed."""
+    """按检索优先级返回健康的通道：custom，fastembed。"""
     from src.chroma_client import get_chroma_client
 
     chroma_client = get_chroma_client()
@@ -264,7 +263,7 @@ def build_embedding_lanes(base_name: str) -> List[EmbeddingLane]:
 
 
 def migrate_legacy_collection(base_name: str, lanes: Sequence[EmbeddingLane]) -> None:
-    """Backfill empty lanes from a legacy unsuffixed collection, if present."""
+    """从旧版未加后缀的集合回填空通道数据（如果存在）。"""
     if not lanes:
         return
 

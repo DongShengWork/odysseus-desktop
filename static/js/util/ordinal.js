@@ -1,5 +1,5 @@
-// Pure (browser-free) English ordinal suffix, e.g. 1 -> "st", 21 -> "st",
-// 22 -> "nd", 23 -> "rd", 11/12/13 -> "th". Extracted so it can be unit-tested.
+// 纯函数（无浏览器依赖）英文序数后缀，例如 1 -> "st", 21 -> "st",
+// 22 -> "nd", 23 -> "rd", 11/12/13 -> "th"。提取出来以便进行单元测试。
 export function ordinalSuffix(n) {
   const a = Math.abs(Math.trunc(Number(n) || 0));
   const mod100 = a % 100;

@@ -1,4 +1,4 @@
-"""Webhook, API Token, and sync chat routes."""
+"""Webhook、API Token 和同步聊天路由。"""
 
 import asyncio
 import uuid

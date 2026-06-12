@@ -1,4 +1,4 @@
-"""Search and content caching with LRU eviction."""
+"""搜索和内容缓存，使用 LRU 淘汰策略。"""
 
 import hashlib
 import logging
@@ -10,35 +10,35 @@ from core.constants import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-# Cache directories
+# 缓存目录
 CACHE_DIR = Path(DATA_DIR) / "cache"
 SEARCH_CACHE_DIR = CACHE_DIR / "search"
 CONTENT_CACHE_DIR = CACHE_DIR / "content"
 CACHE_MAX_ENTRIES = 1000
 
-# Create cache directories. Guarded so an unwritable path (e.g. a read-only
-# mount) degrades to no-disk-cache instead of crashing module import.
+# 创建缓存目录。警惕不可写路径（例如只读挂载），
+# 降级为无磁盘缓存而不是在模块导入时崩溃。
 try:
     SEARCH_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     CONTENT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 except OSError as _e:
     logger.warning("Search cache directory unavailable (%s); disk cache disabled", _e)
 
-# Track cache size for LRU eviction
+# 追踪缓存大小用于 LRU 淘汰
 search_cache_index: Dict[str, datetime] = {}
 content_cache_index: Dict[str, datetime] = {}
 
-# Cache metrics (shared across modules)
+    # 全局缓存指标
 cache_metrics = {"hits": 0, "misses": 0, "evictions": 0}
 
 
 def generate_cache_key(data: str) -> str:
-    """Generate a unique cache key using SHA-256 hash."""
+    """使用 SHA-256 哈希生成唯一的缓存键。"""
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 def cleanup_cache(cache_dir: Path, cache_index: Dict[str, datetime], max_age: timedelta):
-    """Remove expired cache entries and enforce LRU policy."""
+    """移除过期的缓存条目并强制执行 LRU 策略。"""
     current_time = datetime.now()
     files_in_dir = {f.name.split(".")[0]: f for f in cache_dir.glob("*.cache")}
 

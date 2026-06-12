@@ -1,11 +1,11 @@
 /**
- * Static markup for misc floating popups that live above the canvas.
+ * 画布上方各种浮动弹窗的静态标记。
  *
- * All pure DOM. Caller wires every ID via document.getElementById /
- * el.querySelector after appending.
+ * 全部为纯 DOM。调用者在追加后通过 document.getElementById /
+ * el.querySelector 绑定每个 ID。
  */
 
-/** Keyboard-shortcuts popover. */
+/** 键盘快捷键弹出窗口。 */
 export function shortcutsPopupHTML() {
   return `
       <div id="ge-shortcuts-handle" style="display:flex;align-items:center;gap:6px;margin:-4px -6px 4px;padding:4px 6px;cursor:grab;user-select:none;touch-action:none;">
@@ -65,8 +65,8 @@ export function shortcutsPopupHTML() {
 
 
 /**
- * History panel — sidebar listing all undo entries.
- * @param {string} historyIcon  Inline SVG markup for the title icon.
+ * 历史记录面板——列出所有撤销条目的侧边栏。
+ * @param {string} historyIcon  标题图标的行内 SVG 标记。
  */
 export function historyPanelHTML(historyIcon) {
   return `
@@ -83,8 +83,7 @@ export function historyPanelHTML(historyIcon) {
 
 
 /**
- * Empty-canvas size-prompt modal — body markup (caller controls show /
- * hide and wires the Cancel / Create buttons).
+ * 空白画布尺寸提示模态框——主体标记（调用者控制显示/隐藏并绑定取消/创建按钮）。
  */
 export function canvasSizePromptHTML() {
   return `

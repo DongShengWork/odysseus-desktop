@@ -1,22 +1,22 @@
 /**
- * Iterative 4-connected flood fill on RGBA pixel data.
+ * RGBA 像素数据的迭代式 4 连通区域泛洪填充。
  *
- * Pure function — takes the source pixel array + seed + tolerance and
- * returns a mask canvas with white where the fill landed. The legacy
- * gallery editor's magic-wand tool delegates to this.
+ * 纯函数 — 接收源像素数组 + 种子点 + 容差，
+ * 返回一个遮罩画布，其中填充区域为白色。旧版
+ * 画廊编辑器的魔棒工具委托给此函数。
  *
- * @param {Uint8ClampedArray|Uint8Array} src   RGBA bytes (length = w*h*4).
- * @param {number} w                           Pixel width.
- * @param {number} h                           Pixel height.
- * @param {number} seedX                       Floored seed X.
- * @param {number} seedY                       Floored seed Y.
- * @param {number} tolerance                   Tolerance 0..100. Internally
- *                                             squared and scaled to RGB+A
- *                                             space (max ≈ 195k at 100).
- * @returns {HTMLCanvasElement|null}           A `w × h` mask canvas with
- *                                             white-opaque pixels for
- *                                             visited cells, or null if
- *                                             the seed is out of bounds.
+ * @param {Uint8ClampedArray|Uint8Array} src   RGBA 字节（长度 = w*h*4）。
+ * @param {number} w                           像素宽度。
+ * @param {number} h                           像素高度。
+ * @param {number} seedX                       向下取整的种子 X。
+ * @param {number} seedY                       向下取整的种子 Y。
+ * @param {number} tolerance                   容差 0..100。内部会平方并
+ *                                             缩放到 RGB+A 空间
+ *                                             （100 时最大值约 195k）。
+ * @returns {HTMLCanvasElement|null}           一个 `w × h` 的遮罩画布，
+ *                                             访问过的单元格为不透明白色
+ *                                             像素，若种子点超出边界则
+ *                                             返回 null。
  */
 export function floodFillMask(src, w, h, seedX, seedY, tolerance) {
   if (seedX < 0 || seedY < 0 || seedX >= w || seedY >= h) return null;
@@ -25,8 +25,8 @@ export function floodFillMask(src, w, h, seedX, seedY, tolerance) {
   const sr = src[seedIdx], sg = src[seedIdx + 1];
   const sb = src[seedIdx + 2], sa = src[seedIdx + 3];
 
-  // 0..100 → squared RGB+A distance threshold. Max single-channel diff
-  // is 255, so sqrt(4 * 255²) ≈ 510; squared cap ≈ 195k at tol = 100.
+  // 0..100 → 平方 RGB+A 距离阈值。单通道最大差值
+  // 为 255，因此 sqrt(4 * 255²) ≈ 510；tol=100 时平方上限 ≈ 195k。
   const tol = Math.pow(tolerance * 4.42, 2);
 
   const visited = new Uint8Array(w * h);
@@ -45,8 +45,8 @@ export function floodFillMask(src, w, h, seedX, seedY, tolerance) {
       const o = idx * 4;
       const dr = src[o] - sr, dg = src[o + 1] - sg;
       const db = src[o + 2] - sb, da = src[o + 3] - sa;
-      // RGB + alpha-aware so a click on a transparent pixel selects
-      // the transparent region cleanly.
+      // RGB + 感知 alpha，因此点击透明像素会
+      // 干净地选中透明区域。
       if (dr * dr + dg * dg + db * db + da * da <= tol) {
         visited[idx] = 1;
         stack.push(nx, ny);

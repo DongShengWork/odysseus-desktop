@@ -1,21 +1,21 @@
 """
 secret_storage.py
 
-Fernet-based symmetric encryption for secrets stored in the SQLite DB
-(IMAP / SMTP passwords today; safe to extend). The key lives at
-`data/.app_key`, mode 0o600, generated on first call. `data/` is
-gitignored so the key never ships with the repo.
+基于 Fernet 的对称加密，用于保护存储在 SQLite DB 中的密钥
+（目前为 IMAP/SMTP 密码；可安全扩展）。密钥存放在
+`data/.app_key`，权限模式 0o600，首次调用时自动生成。`data/`
+已在 gitignore 中，因此密钥永远不会随仓库一起发布。
 
-Threat model: protects against SQLite-file exfiltration (stolen
-backup, leaked container layer, sibling-tenant read). Does **not**
-protect against a process compromise — anyone who can read this
-module's memory or the key file has plaintext.
+威胁模型：防止 SQLite 文件泄露（被盗的备份、
+泄露的容器层、同租户读取）。**不**
+防止进程被攻破——任何能够读取本
+模块内存或密钥文件的人都可以获取明文。
 
-Encrypted values carry an `enc:` prefix so the migration is
-idempotent: passing an already-encrypted value to `encrypt()` is a
-no-op; passing a plaintext value to `decrypt()` returns it
-unchanged. That lets legacy rows coexist with new ones until a
-single migration pass rewrites them.
+加密值带有 `enc:` 前缀，因此迁移是
+幂等的：将已加密的值传递给 `encrypt()` 为
+空操作；将明文值传递给 `decrypt()` 返回时
+保持原样。这使得旧行和新行可以共存，直到
+一次统一的迁移遍将它们重写。
 """
 
 import os
@@ -40,8 +40,8 @@ def _load_or_create_key() -> bytes:
     _KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
     key = Fernet.generate_key()
     _KEY_PATH.write_bytes(key)
-    # POSIX: lock the key to 0o600. Windows: no-op (the user-profile data dir is
-    # already ACL-restricted); safe_chmod swallows both cases.
+    # POSIX: 锁定密钥文件权限为 0o600。Windows: 空操作（用户配置文件数据目录
+    # 已受 ACL 限制）；safe_chmod 兼容处理两种情况。
     safe_chmod(_KEY_PATH, 0o600)
     logger.info(f"Generated new app key at {_KEY_PATH}")
     return key
@@ -55,8 +55,8 @@ def _get_fernet() -> Fernet:
 
 
 def encrypt(plaintext: str) -> str:
-    """Encrypt a string. Empty input passes through. Already-encrypted
-    values pass through unchanged so re-encrypting is a no-op."""
+    """加密字符串。空输入直接通过。已加密的
+    值保持原样返回，因此重复加密为空操作。"""
     if not plaintext:
         return plaintext or ""
     if plaintext.startswith(_PREFIX):
@@ -66,9 +66,9 @@ def encrypt(plaintext: str) -> str:
 
 
 def decrypt(value: str) -> str:
-    """Decrypt an `enc:`-prefixed value. Plaintext (legacy) passes
-    through unchanged. Returns "" on decryption failure so a corrupt
-    or rotated-key row degrades to "unconfigured" rather than 500."""
+    """解密 `enc:`-前缀的值。明文（旧版）保持
+    原样返回。解密失败时返回 ""，使得损坏
+    或密钥轮换的行退化为"未配置"状态，而不是 500 错误。"""
     if not value:
         return value or ""
     if not value.startswith(_PREFIX):

@@ -1,8 +1,8 @@
 # core/models.py
 """
-Pure data models — no database logic, no side effects.
+纯数据模型 — 无数据库逻辑，无副作用。
 
-These are simple datacontainers. All persistence is handled by SessionManager.
+这些是简单的数据容器。所有持久化由 SessionManager 处理。
 """
 
 from dataclasses import dataclass
@@ -11,38 +11,38 @@ from typing import Dict, List, Any, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from .session_manager import SessionManager
 
-# Module-level session manager reference (set at app startup)
+# 模块级别的会话管理器引用（在应用启动时设置）
 _session_manager: Optional["SessionManager"] = None
 
 
 def set_session_manager(manager: "SessionManager"):
-    """Set the global session manager reference."""
+    """设置全局会话管理器引用。"""
     global _session_manager
     _session_manager = manager
 
 
 @dataclass
 class ChatMessage:
-    """A single chat message."""
+    """单条聊天消息。"""
     role: str
     content: str
     metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dict for API responses."""
+        """转换为字典以用于 API 响应。"""
         result = {"role": self.role, "content": self.content}
         if self.metadata:
             result["metadata"] = self.metadata
         return result
 
     def get(self, key: str, default=None):
-        """Dict-like access for compatibility."""
+        """类字典访问以保持兼容性。"""
         return getattr(self, key, default)
 
 
 @dataclass
 class Session:
-    """A chat session — pure data container."""
+    """聊天会话 — 纯数据容器。"""
     id: str
     name: str
     endpoint_url: str
@@ -63,27 +63,26 @@ class Session:
 
     def add_message(self, message: ChatMessage):
         """
-        Add a message to this session.
+        向此会话中添加一条消息。
 
-        Delegates to SessionManager for persistence if available,
-        otherwise just appends to history.
+        如果可用，委托给 SessionManager 进行持久化，
+        否则仅追加到历史记录中。
         """
         self.history.append(message)
         self.message_count = len(self.history)
 
-        # Delegate to session manager for persistence
+        # 委托给会话管理器进行持久化
         if _session_manager:
             _session_manager._persist_message(self.id, message)
 
     def get_context_messages(self) -> List[Dict[str, Any]]:
-        """Get messages in format for LLM API.
+        """获取用于发送给 LLM API 的消息格式。
 
-        Slash-command / setup replies are persisted to history so they render
-        in the transcript, but they are UI chatter (e.g. ``/setup ...`` and its
-        status lines) the user never meant as conversation. They carry
-        ``metadata.source == "slash"``; exclude them here so they never reach
-        the model. Display/history-load paths use the raw ``history`` and are
-        unaffected.
+        斜杠命令 / setup 回复会被持久化到历史记录中以便在
+        对话记录中展示，但它们属于 UI 对话内容（例如 ``/setup ...``
+        及其状态行），用户从未将其视为对话的一部分。这些消息带有
+        ``metadata.source == "slash"`` 标记；在此排除它们，使其
+        永远不会送达模型。显示/历史加载路径使用原始的 ``history``，不受影响。
         """
         return [
             msg.to_dict()
@@ -92,5 +91,5 @@ class Session:
         ]
 
     def get(self, key: str, default=None):
-        """Dict-like access for compatibility."""
+        """类字典访问以保持兼容性。"""
         return getattr(self, key, default)

@@ -1,16 +1,16 @@
 """
 index_documents.py
 
-A standalone script to index documents from the personal_docs directory
-into the vector database using RAGManager. This script scans for text files,
-processes them with proper chunking, and adds them to the vector database
-with progress reporting and final statistics.
+一个独立的脚本，将 personal_docs 目录中的文档索引到
+使用 RAGManager 的向量数据库中。此脚本扫描文本文件，
+使用适当的分块处理它们，并将其添加到向量数据库，
+提供进度报告和最终统计信息。
 
 Features:
-1. Imports RAGManager from rag_manager
-2. Scans personal_docs directory for .txt, .md, .json files
-3. Reads each file, chunks it (1000 chars with 200 overlap), and adds to vector database
-4. Shows progress during processing and final statistics
+1. 从 rag_manager 导入 RAGManager
+2. 扫描 personal_docs 目录中的 .txt, .md, .json 文件
+3. 读取每个文件，进行分块（1000 字符，200 重叠），并添加到向量数据库
+4. 显示处理进度和最终统计
 """
 
 import os
@@ -22,7 +22,7 @@ from typing import List, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.constants import PERSONAL_DIR
 
-# Configure logging for the script
+# 配置脚本的日志
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -33,9 +33,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    """Main function to index documents from personal_docs directory."""
+    """主函数：从 personal_docs 目录索引文档。"""
     
-    # Import RAGManager
+    # 导入 RAGManager
     try:
         from src.rag_manager import RAGManager
         logger.info("Successfully imported RAGManager")
@@ -44,29 +44,29 @@ def main():
         logger.error("Make sure rag_manager.py is in the same directory and accessible")
         return
     
-    # Initialize RAGManager
+    # 初始化 RAGManager
     rag_manager = RAGManager()
     
-    # Directory to scan
+    # 要扫描的目录
     docs_directory = PERSONAL_DIR
     directory_path = Path(docs_directory)
     
-    # Check if directory exists
+    # 检查目录是否存在
     if not directory_path.exists():
         logger.error(f"Directory '{docs_directory}' not found!")
         logger.info(f"Please create the directory and add your documents: mkdir {docs_directory}")
         return
     
-    # Supported file extensions
+    # 支持的文件扩展名
     supported_extensions = {'.txt', '.md', '.json'}
     logger.info(f"Scanning '{docs_directory}' for {', '.join(sorted(supported_extensions))} files...")
     
-    # Find all supported files
+    # 查找所有支持的文件
     files_to_index = []
     for ext in supported_extensions:
         files_to_index.extend(directory_path.rglob(f"*{ext}"))
     
-    # Sort files for consistent processing
+    # 排序文件以保持处理顺序一致
     files_to_index.sort()
     
     if not files_to_index:
@@ -78,13 +78,13 @@ def main():
     for file_path in files_to_index:
         logger.info(f"  - {file_path}")
     
-    # Index the documents
+    # 索引文档
     logger.info("\nStarting document indexing process...")
     
     try:
         result = rag_manager.index_personal_documents(docs_directory)
         
-        # Display results
+        # 显示结果
         logger.info("\n" + "="*50)
         if result["success"]:
             logger.info("✅ Document indexing completed successfully!")
@@ -96,7 +96,7 @@ def main():
             if "message" in result:
                 logger.error(f"   Error: {result['message']}")
         
-        # Show final statistics
+        # 显示最终统计
         logger.info("\n" + "-"*30)
         logger.info("Database Statistics:")
         

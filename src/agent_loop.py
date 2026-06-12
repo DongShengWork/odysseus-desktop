@@ -1,9 +1,9 @@
 """
 agent_loop.py
 
-Streaming agent loop for odysseus-ui.
-Wraps stream_llm() with multi-round tool execution.
-The LLM decides when to use tools by writing fenced code blocks.
+odysseus-ui 的流式 agent 循环。
+用多轮工具执行包装 stream_llm()。
+LLM 通过写围栏代码块来决定何时使用工具。
 """
 
 import asyncio
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 def _load_mcp_disabled_map() -> Dict[str, set]:
-    """Load per-server disabled tool sets from the database."""
+    """从数据库加载每个 MCP 服务端禁用的工具集合。"""
     from core.database import McpServer, SessionLocal
     disabled_map: Dict[str, set] = {}
     db = SessionLocal()
@@ -57,8 +57,8 @@ def _load_mcp_disabled_map() -> Dict[str, set]:
         db.close()
     return disabled_map
 
-# System prompt that tells the LLM about available tools.
-# Always injected — the LLM decides whether to use them.
+# 告诉 LLM 可用工具的系统提示。
+# 始终注入 — LLM 自行决定是否使用。
 _AGENT_PREAMBLE = """\
 You are an AI assistant with tool access. You can run shell commands, execute Python, search the web, \
 read/write files, create and edit documents, generate images, manage memories, and more. \
@@ -286,8 +286,8 @@ def _domain_rules_for_tools(tool_names: set) -> list[str]:
         rules.append(_LINK_RULES)
     return rules
 
-# Each tool section is keyed by tool name(s) it covers.
-# Sections with multiple tools use a tuple key.
+# 每个工具部分以它覆盖的工具名称作为键。
+# 覆盖多个工具的部分使用元组键。
 TOOL_SECTIONS = {
     "bash": """\
 ```bash
@@ -500,9 +500,9 @@ Blocked paths/routes (refused for safety): /api/auth/, /api/users/, /api/tokens/
 }
 
 def get_builtin_overrides() -> dict:
-    """User overrides for built-in tool descriptions (TOOL_SECTIONS).
-    Stored globally in settings.json so the user can preview + edit how
-    the assistant is told to use a native tool, with a revert path."""
+    """内置工具描述（TOOL_SECTIONS）的用户覆盖项。
+    全局存储在 settings.json 中，方便用户预览和编辑
+    助手使用原生工具的说明，并带有回退路径。"""
     try:
         from src.settings import get_setting
         ov = get_setting("builtin_tool_overrides", {})
@@ -513,15 +513,15 @@ def get_builtin_overrides() -> dict:
 
 
 def _section_text(name: str, default: str) -> str:
-    """Effective TOOL_SECTIONS text for a tool — user override if set,
-    else the shipped default."""
+    """获取工具的实际 TOOL_SECTIONS 文本 — 有用户覆盖项则用它，
+    否则使用内置默认值。"""
     ov = get_builtin_overrides()
     val = ov.get(name)
     return val if isinstance(val, str) and val.strip() else default
 
 
 def _assemble_prompt(tool_names: set, disabled_tools: set = None, compact: bool = False) -> str:
-    """Build the system prompt with only the specified tools included."""
+    """构建仅包含指定工具的系统提示。"""
     disabled = disabled_tools or set()
     included = tool_names - disabled
 
@@ -573,20 +573,20 @@ def _assemble_prompt(tool_names: set, disabled_tools: set = None, compact: bool 
     return "\n\n".join(parts)
 
 
-# Legacy: full prompt with all tools (fallback when RAG unavailable)
+# 旧版：包含所有工具的完整提示（当 RAG 不可用时的回退方案）
 AGENT_SYSTEM_PROMPT = _assemble_prompt(set(TOOL_SECTIONS.keys()))
 
 
 _cached_base_prompt = None
 _cached_base_prompt_key = None
 
-# Constants — moved out of hot paths to avoid per-request/per-round allocation
-# Hosts whose endpoints natively support OpenAI-style function calling.
-# When the active endpoint is one of these, the agent sends FUNCTION_TOOL_SCHEMAS
-# (so the model emits `tool_calls` directly) instead of relying on the model
-# to copy fenced-block examples from prompt text. Smaller models — DeepSeek
-# especially — often fail to follow the fenced-block convention and emit raw
-# JSON, which the agent then can't parse as a tool call.
+# 从热路径中移出的常量 — 避免每次请求/每轮分配
+# 原生支持 OpenAI 风格函数调用的端点主机。
+# 当活动端点是其中之一时，agent 发送 FUNCTION_TOOL_SCHEMAS
+# （以便模型直接输出 tool_calls），而不是依赖模型
+# 从提示文本中复制围栏代码块示例。较小的模型 — 尤其是
+# DeepSeek — 经常无法遵循围栏代码块约定，输出原始
+# JSON，agent 随后无法将其解析为工具调用。
 _API_HOSTS = frozenset([
     "api.openai.com", "api.anthropic.com",
     "openrouter.ai", "api.groq.com",
@@ -597,9 +597,9 @@ _API_HOSTS = frozenset([
     "ollama.com", "api.venice.ai",
     "api.githubcopilot.com",
     # Local OpenAI-compatible endpoints (llama.cpp, vLLM, LM Studio, etc.).
-    # Without these, `_is_api_model` falls back to keyword sniffing on the
-    # model name, so well-behaved local servers don't get native tool
-    # schemas and the agent silently degrades to fenced-block parsing.
+    # 没有这些，_is_api_model 会退回到基于
+    # 模型名称的关键词嗅探，因此运行良好的本地服务器得不到原生工具
+    # schemas，agent 会静默降级到围栏代码块解析。
     "localhost", "127.0.0.1", "host.docker.internal",
 ])
 _MCP_KEYWORDS = frozenset(["mcp", "browse", "browser", "website", "calendar", "event", "email",
@@ -614,12 +614,7 @@ _TOOL_SELECTION_TIMEOUT_SECONDS = 1.5
 
 
 def _is_ollama_openai_compat_url(endpoint_url: str) -> bool:
-    """Return True for local Ollama's OpenAI-compatible /v1 surface.
-
-    Ollama's /v1 endpoint accepts the OpenAI chat shape, but model-level tool
-    streaming is uneven. Some local models terminate after a token when schemas
-    are present. Keep native schemas opt-in via ModelEndpoint.supports_tools.
-    """
+    """判断本地 Ollama 的 OpenAI 兼容 /v1 接口。"""
     try:
         parsed = urlparse(endpoint_url or "")
     except Exception:
@@ -629,7 +624,7 @@ def _is_ollama_openai_compat_url(endpoint_url: str) -> bool:
 
 
 def _endpoint_lookup_keys(endpoint_url: str) -> List[str]:
-    """Candidate ModelEndpoint.base_url keys for a runtime chat URL."""
+    """运行时聊天 URL 对应的候选 ModelEndpoint.base_url 键。"""
     raw = (endpoint_url or "").strip()
     keys: List[str] = []
 
@@ -651,7 +646,7 @@ def _endpoint_lookup_keys(endpoint_url: str) -> List[str]:
         pass
     return keys
 
-# Admin tool keywords — if the last user message contains any of these, include admin tools
+# 管理工具关键词 — 如果最后一条用户消息包含以下任一关键词，则包含管理工具
 _ADMIN_KEYWORDS = [
     "session", "sessions", "chat", "chats", "conversation", "conversations",
     "delete", "fork", "truncate",
@@ -660,15 +655,15 @@ _ADMIN_KEYWORDS = [
     "task", "tasks", "schedule", "cron", "setting", "settings", "preference",
     "configure", "config", "setup", "manage", "admin", "pipeline", "second opinion",
     "list models", "switch model", "change model", "theme", "create theme",
-    # Documents — "show/list/read my docs", "open my notes file", etc.
-    # Without these, manage_documents never reaches the prompt and the
-    # agent flails (curl, bash) instead of using the right tool.
+    # 文档相关关键词 — "显示/列出/读取 我的文档"、"打开我的笔记文件" 等。
+    # 没有这些关键词，manage_documents 永远不会出现在提示中，
+    # agent 会乱用 curl/bash 而不是使用正确的工具。
     "document", "documents", "doc", "docs", "library", "tidy",
     "note", "notes", "todo", "todos", "reminder", "reminders",
 ]
 
 def _detect_admin_intent(messages: List[Dict]) -> bool:
-    """Check if the last user message suggests admin/management tool usage."""
+    """检查最后一条用户消息是否暗示需要使用管理工具。"""
     for msg in reversed(messages):
         if msg.get("role") == "user":
             content = msg.get("content", "")
@@ -680,7 +675,7 @@ def _detect_admin_intent(messages: List[Dict]) -> bool:
 
 
 def _extract_last_user_message(messages: List[Dict]) -> str:
-    """Return the most recent user message as plain text."""
+    """获取最近一条用户消息的纯文本内容。"""
     for msg in reversed(messages):
         if msg.get("role") == "user":
             content = msg.get("content", "")
@@ -703,16 +698,15 @@ _EXPLICIT_CONTINUATION_RE = re.compile(
 
 
 def _is_explicit_continuation(text: str) -> bool:
-    """Only these terse replies may inherit older user turns for tool retrieval."""
+    """仅这些简短回复可继承较早的用户轮次以进行工具检索。"""
     return bool(_EXPLICIT_CONTINUATION_RE.match(str(text or "").strip()))
 
 
 def _assistant_requested_followup(messages: List[Dict]) -> bool:
-    """True when the previous assistant turn asked for missing task details.
+    """上一条助手回复是否请求了缺失的任务详情。
 
-    This allows natural replies like "buy milk" after "What would you like on
-    your to-do list?" to inherit the prior domain, without letting random
-    greetings inherit stale Cookbook/email/document context.
+    这允许如"买牛奶"这种自然回复在"你的待办清单上要加什么？"之后继承
+    先前的领域，而不会让随机问候继承过时的 Cookbook/email/document 上下文。
     """
     seen_latest_user = False
     for msg in reversed(messages):
@@ -740,13 +734,7 @@ def _assistant_requested_followup(messages: List[Dict]) -> bool:
 
 
 def _classify_agent_request(messages: List[Dict], last_user: str) -> Dict[str, object]:
-    """Classify only whether this turn deserves domain tool retrieval.
-
-    Normal chat should not inherit old Cookbook/email/document context. Recent
-    context is used only for explicit continuations ("yes", "do it", "1").
-    This function does not inject tools directly; selected tools later decide
-    which domain rule packs get appended to the system prompt.
-    """
+    """仅判断本轮是否应进行领域工具检索。"""
     text = str(last_user or "").strip()
     continuation = _is_explicit_continuation(text) or _assistant_requested_followup(messages)
     retrieval_query = _recent_context_for_retrieval(messages) if continuation else text
@@ -802,15 +790,7 @@ def _classify_agent_request(messages: List[Dict], last_user: str) -> Dict[str, o
 
 
 def _recent_context_for_retrieval(messages: List[Dict], max_user: int = 3, max_chars: int = 600) -> str:
-    """Build the tool-retrieval query from the last few USER turns, not just
-    the latest one.
-
-    A contextless follow-up ("yes", "and?", "do it in November") carries no
-    tool signal on its own, so RAG/keyword retrieval drops the tools the
-    conversation is actually about — the model then "forgets" it has e.g.
-    manage_calendar and improvises with bash/app_api. Concatenating the recent
-    user turns lets the follow-up inherit the topic so just-used tools stay
-    surfaced. Newest-first, so the latest turn survives the length cap."""
+    """从最近几条用户轮次构建工具检索查询，而非仅最新一条。"""
     collected = []
     for msg in reversed(messages):
         if msg.get("role") != "user":
@@ -840,7 +820,7 @@ def _build_system_prompt(
     owner: Optional[str] = None,
     suppress_local_context: bool = False,
 ) -> List[Dict]:
-    """Build agent system prompt, inject MCP/document context, merge consecutive system msgs."""
+    """构建 agent 系统提示，注入 MCP/文档上下文，合并连续的系统消息。"""
     global _cached_base_prompt, _cached_base_prompt_key
     if suppress_local_context:
         active_document = None
@@ -1248,11 +1228,7 @@ def _build_base_prompt(
     compact: bool = False,
     suppress_local_context: bool = False,
 ):
-    """Build the agent prompt with only relevant tools included.
-
-    If relevant_tools is provided (from RAG retrieval), only those tools
-    are shown with full descriptions. Otherwise falls back to full prompt.
-    """
+    """构建仅包含相关工具的 agent 提示。"""
     from src.tool_index import ALWAYS_AVAILABLE
 
     disabled = set(disabled_tools or [])
@@ -1339,7 +1315,7 @@ def _build_base_prompt(
 
 
 def _resolve_tool_blocks(round_response: str, native_tool_calls: list, round_num: int, is_api_model: bool = False):
-    """Choose native function calls or fenced code block parsing. Returns (tool_blocks, used_native)."""
+    """选择原生函数调用或围栏代码块解析。返回 (tool_blocks, used_native)。"""
     used_native = False
     if native_tool_calls:
         tool_blocks = []
@@ -1391,21 +1367,7 @@ def _append_tool_results(
     round_num: int,
     round_reasoning: str = "",
 ):
-    """Append tool execution results back into the message history for the next LLM round.
-
-    `round_reasoning` (DeepSeek / vLLM reasoning-parser deltas) is echoed
-    back via `reasoning_content` on the assistant message — DeepSeek's API
-    rejects follow-up requests in thinking mode that don't include the
-    prior reasoning.
-
-    NOTE: it is NOT universally ignored. Nemotron's chat template re-injects
-    EVERY prior `reasoning_content` as a <think> block, and this agent loop is
-    trimmed only once (before the loop), so across rounds the reasoning piles
-    up unbounded — bloating context and feeding the model its own prior
-    reasoning, which reinforces repetition/looping. So keep reasoning_content
-    on the MOST RECENT assistant turn only: enough for DeepSeek continuity,
-    without the per-round accumulation.
-    """
+    """将工具执行结果追加回消息历史，供下一轮 LLM 使用。"""
     # Strip reasoning_content from earlier assistant turns; only the newest keeps it.
     for _m in messages:
         if _m.get("role") == "assistant":
@@ -1474,7 +1436,7 @@ def _compute_final_metrics(
     backend_gen_tps: float = 0,
     backend_prefill_tps: float = 0,
 ) -> dict:
-    """Compute token counts, TPS, and build the final metrics dict."""
+    """计算 token 计数、TPS，构建最终指标字典。"""
     if has_real_usage:
         input_tokens = real_input_tokens
         output_tokens = real_output_tokens
@@ -1528,10 +1490,9 @@ def _compute_final_metrics(
     return metrics
 
 
-# ── Completion verifier ──
-# Tools whose effects produce a checkable artifact. A turn that used one of
-# these is "effectful" and worth an independent completion check; pure
-# read-only / Q&A turns are not.
+# ── 完成验证器 ──
+# 这些工具的效果会产生可检查的产物。使用了其中之一的轮次是
+# 有"效果"的，值得独立检查；纯只读/问答轮次不需要。
 _VERIFIER_EFFECTFUL_TOOLS = {
     "create_document", "update_document", "edit_document",
     "bash", "python", "write_file",
@@ -1540,9 +1501,7 @@ _VERIFIER_MAX_ROUNDS = 2  # cap re-verify cycles per turn — never loop forever
 
 
 def _build_actions_snapshot(tool_events: list, limit: int = 8000) -> str:
-    """Compact record of what the agent actually did this turn, for the
-    verifier to judge against. One block per tool execution: the command and
-    a head of its output."""
+    """记录本轮 agent 实际做了什么，供验证器判断。"""
     parts = []
     for ev in tool_events:
         tool = ev.get("tool", "?")
@@ -1561,13 +1520,8 @@ async def _run_verifier_subagent(
     instruction: str, actions_snapshot: str,
     *, endpoint_url: str, model: str, headers: dict,
 ) -> list:
-    """Fresh-context completion verifier. A second model instance with NO
-    shared history reads the user's request + a record of what the agent did
-    and judges whether the task is genuinely complete. The independent context
-    is the whole point: a model checking its own work rationalizes; one that
-    didn't do the work reads it cold. Returns a list of failure reasons
-    (empty = pass, or silently empty on any error so it can't block a valid
-    completion)."""
+    """全新上下文的完成验证器。使用无共享历史的第二个模型实例读取用户
+    请求 + agent 做了什么，判断任务是否真的完成了。"""
     from src.llm_core import llm_call_async
     prompt = (
         "You are an independent verifier. Another assistant just claimed the "

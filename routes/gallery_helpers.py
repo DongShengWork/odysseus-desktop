@@ -1,8 +1,8 @@
-"""gallery_helpers.py — extracted helpers, models, and small utilities.
+"""gallery_helpers.py — 提取的辅助函数、模型和小型工具。
 
-Imported by gallery_routes.py."""
+由 gallery_routes.py 导入。"""
 
-"""Gallery routes — browsable library for photos and AI-generated images."""
+"""画廊路由 — 照片和 AI 生成图片的可浏览图库。"""
 
 import logging
 from datetime import datetime

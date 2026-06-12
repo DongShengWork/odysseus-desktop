@@ -1,11 +1,10 @@
 # src/research_handler.py
-"""Handler for research service integration with expandable UI support.
+"""研究服务集成处理器，支持可展开的 UI。
 
-Uses the IterResearch-style DeepResearcher (LLM-in-the-loop) as the primary
-engine, falling back to the legacy ResearchOrchestrator or basic web search
-if needed.
+使用 IterResearch 风格的 DeepResearcher（LLM-in-the-loop）作为主要
+引擎，在需要时回退到旧版 ResearchOrchestrator 或基本网页搜索。
 
-Includes a task registry so research survives page refreshes and can be cancelled.
+包含任务注册表，使得研究在页面刷新后仍然存活，并且可以被取消。
 """
 import asyncio
 import json
@@ -33,7 +32,7 @@ def _bounded_int(value, *, default: int, minimum: int, maximum: int) -> int:
 
 
 def _format_probe_failure(model: str, exc: Exception) -> str:
-    """Turn a failed research model probe into a user-facing message."""
+    """将失败的研究模型探测转换为面向用户的消息。"""
     detail = getattr(exc, "detail", None)
     status = getattr(exc, "status_code", None)
     err = str(detail if detail is not None else exc).strip()
@@ -63,7 +62,7 @@ def _research_json_path(session_id: str) -> Optional[Path]:
 
 
 class ResearchHandler:
-    """Handles research service operations with iterative deep research."""
+    """处理研究服务操作，支持迭代深度研究。"""
 
     def __init__(self):
         self._legacy_engine = None
@@ -72,7 +71,7 @@ class ResearchHandler:
         RESEARCH_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     def _initialize_legacy_engine(self):
-        """Initialize the legacy research engine as a fallback."""
+        """初始化旧版研究引擎作为回退。"""
         try:
             from research_engine import ResearchOrchestrator, Config
             config = Config(max_searches=12, max_content_per_page=15000)
@@ -86,32 +85,31 @@ class ResearchHandler:
             self._legacy_engine = None
 
     # ------------------------------------------------------------------
-    # Query synthesis & planning
+    # 查询综合与规划
     # ------------------------------------------------------------------
 
     async def synthesize_query(
         self, sess, latest_message: str,
         llm_endpoint: str, llm_model: str, llm_headers: dict = None,
     ) -> str:
-        """Synthesize the conversation into a single focused research query.
+        """将对话综合为单个集中的研究查询。
 
-        Reads the session history and latest message to produce a clear,
-        specific research question that captures the user's full intent.
-        Falls back to the latest message if synthesis fails.
+        读取会话历史和最新消息，生成一个清晰、
+        具体的能捕捉用户完整意图的研究问题。
+        如果综合失败，回退到最新消息。
         """
-        # Build conversation context from history
+        # 从历史中构建对话上下文
         history = getattr(sess, 'history', [])
 
-        # A bare affirmation ("yes", "ok", "go ahead") is the user accepting the
-        # clarifying-question round, NOT a research topic — researching the word
-        # "yes" is the classic failure here. When synthesis can't run or fails,
-        # fall back to the earliest substantive user message (the original ask)
-        # rather than the literal follow-up.
+        # 裸确认（"yes", "ok", "go ahead"）是用户接受
+        # 澄清问题轮次的回应，而非研究主题 — 研究 "yes" 这个单词
+        # 是这里典型的失败情况。当综合无法运行或失败时，
+        # 回退到最早的用户实质性消息（原始提问）
+        # 而非字面跟进消息。
         #
-        # Match on an explicit affirmation/continuation phrase only (plus the
-        # empty/punctuation-only case). We deliberately do NOT use a length
-        # heuristic: a short answer like "UK", "C++", or "Rust" is a real topic
-        # in a clarification flow and must be left untouched.
+        # 仅匹配明确的确认/继续短语（加上空/仅标点的情况）。
+        # 我们有意识地不使用长度启发式：像 "UK"、"C++" 或 "Rust" 这样的
+        # 短回答在澄清流程中是真正的主题，必须保持不变。
         _AFFIRMATIONS = {
             "yes", "y", "yeah", "yep", "yup", "sure", "sure thing", "ok", "okay",
             "k", "kk", "go", "go ahead", "go for it", "do it", "please",
@@ -125,8 +123,8 @@ class ResearchHandler:
         def _fallback() -> str:
             normalized = _normalize(latest_message)
             if normalized and normalized not in _AFFIRMATIONS:
-                return latest_message  # short or long, it's a real topic
-            # Affirmation, or empty/punctuation-only: use the original ask.
+                return latest_message  # 短或长，它是真正的主题
+            # 确认，或空/仅标点：使用原始提问。
             for m in history:
                 c = (m.content or "").strip()
                 if m.role == "user" and c and _normalize(c) not in _AFFIRMATIONS:
@@ -134,9 +132,9 @@ class ResearchHandler:
             return latest_message
 
         if len(history) <= 1:
-            return _fallback()  # No conversation to synthesize
+            return _fallback()  # 没有对话可综合
 
-        # Take last 6 messages max for context
+        # 最多取最近 6 条消息用作上下文
         recent = history[-6:]
         convo = "\n".join(
             f"{'User' if m.role == 'user' else 'Assistant'}: {m.content[:500]}"
@@ -173,7 +171,7 @@ class ResearchHandler:
     async def generate_plan(
         self, query: str, llm_endpoint: str, llm_model: str, llm_headers: dict = None,
     ) -> Optional[dict]:
-        """Generate a research plan for user review before starting research."""
+        """生成研究计划供用户在开始研究前审查。"""
         try:
             from src.deep_research import RESEARCH_PLAN_PROMPT, current_date_context
             from src.llm_core import llm_call_async
@@ -191,11 +189,11 @@ class ResearchHandler:
             )
             response = strip_thinking(response)
 
-            # Try to parse structured plan
+            # 尝试解析结构化计划
             import json as _json
             parsed = None
             try:
-                # Try to extract JSON from response
+                # 尝试从响应中提取 JSON
                 _clean = response.strip()
                 if _clean.startswith("```"):
                     _clean = re.sub(r'^```(?:json)?\s*', '', _clean)
@@ -218,7 +216,7 @@ class ResearchHandler:
             return None
 
     # ------------------------------------------------------------------
-    # Task registry — background research with persistence
+    # 任务注册表 — 带持久化的后台研究
     # ------------------------------------------------------------------
 
     def start_research(
@@ -241,20 +239,19 @@ class ResearchHandler:
         extraction_concurrency: int = None,
         owner: str = "",
     ) -> dict:
-        """Start research as a background task. Returns task info dict.
+        """将研究作为后台任务启动。返回任务信息字典。
 
-        max_rounds is the safety cap; the AI's _should_stop decision (after
-        min_rounds) terminates the loop earlier in normal operation.
+        max_rounds 是安全上限；AI 的 _should_stop 决策（在
+        min_rounds 之后）在正常操作中会提前终止循环。
         """
         if _research_json_path(session_id) is None:
             raise ValueError("Invalid research session_id")
 
-        # Resolve the hard wall-clock timeout from settings when the caller
-        # didn't pin one. Local / edge models routinely need more than the
-        # old 600s default to finish a deep-research synthesis. A setting of
-        # 0 disables the cap entirely (unlimited run); any other value is
-        # bounded to [60, 86400] so a misconfigured settings.json can't
-        # explode into a multi-day hang.
+        # 当调用方未指定硬超时，从设置中解析。
+        # 本地/边缘模型通常需要超过旧的 600 秒默认值才能完成深度研究综合。
+        # 设置为 0 完全禁用上限（无限制运行）；任何其他值
+        # 被限制在 [60, 86400] 范围内，因此错误配置的 settings.json 不会
+        # 导致持续多天的挂起。
         if hard_timeout is None:
             from src.settings import get_setting
             try:
@@ -262,7 +259,7 @@ class ResearchHandler:
             except (TypeError, ValueError):
                 raw_timeout = 1800
             if raw_timeout <= 0:
-                hard_timeout = None  # 0 = no wall-clock cap (asyncio.wait_for timeout=None)
+                hard_timeout = None  # 0 = 无挂钟时间上限（asyncio.wait_for timeout=None）
             else:
                 hard_timeout = _bounded_int(
                     raw_timeout,
@@ -271,7 +268,7 @@ class ResearchHandler:
                     maximum=86400,
                 )
 
-        # Cancel any existing research for this session
+        # 取消此会话的任何现有研究
         if session_id in self._active_tasks:
             existing = self._active_tasks[session_id]
             if existing.get("status") == "running":
@@ -286,7 +283,7 @@ class ResearchHandler:
             "result": None,
             "started_at": time.time(),
             "category": category,
-            # SECURITY: track ownership so all reads / saves can filter by user.
+            # SECURITY: 跟踪所有权以便所有读取/保存可以按用户过滤。
             "owner": owner or "",
         }
         self._active_tasks[session_id] = entry
@@ -305,8 +302,8 @@ class ResearchHandler:
                 on_complete(*args, **kwargs)
 
         async def _run():
-            # Hard wall-clock timeout — saves partial results if an LLM call hangs
-            # hard_timeout passed from start_research()
+            # 硬挂钟超时 — 如果 LLM 调用挂起则保存部分结果
+            # hard_timeout 从 start_research() 传入
             try:
                 result = await asyncio.wait_for(
                     self.call_research_service(
@@ -329,7 +326,7 @@ class ResearchHandler:
                 entry["result"] = result
                 entry["status"] = "done"
                 self._save_result(session_id, entry)
-                # Persist to DB via callback (ensures result survives even if SSE disconnected)
+                # 通过回调持久化到数据库（确保即使 SSE 断开结果也能保留）
                 try:
                     sources = entry.get("sources", [])
                     researcher = entry.get("researcher")
@@ -340,7 +337,7 @@ class ResearchHandler:
             except asyncio.TimeoutError:
                 logger.error(f"Research hard timeout ({hard_timeout}s) for session {session_id}")
                 entry["status"] = "error"
-                # If we have partial results, save what we have
+                # 如果有部分结果，保存已有的
                 researcher = entry.get("researcher")
                 if researcher and researcher.evolving_report:
                     entry["result"] = self._format_research_report(
@@ -363,7 +360,7 @@ class ResearchHandler:
                 raise
             except Exception as e:
                 logger.error(f"Background research failed: {e}", exc_info=True)
-                # Preserve partial findings if available (mirrors timeout branch)
+                # 保留部分发现如果可用（镜像超时分支）
                 researcher = entry.get("researcher")
                 if researcher and researcher.evolving_report:
                     _elapsed = time.time() - entry["started_at"]
@@ -389,7 +386,7 @@ class ResearchHandler:
         return {"session_id": session_id, "status": "running", "query": query}
 
     def get_status(self, session_id: str) -> Optional[dict]:
-        """Get current research status for a session."""
+        """获取会话的当前研究状态。"""
         avg = self.get_avg_duration()
         if session_id in self._active_tasks:
             entry = self._active_tasks[session_id]
@@ -402,7 +399,7 @@ class ResearchHandler:
             if avg is not None:
                 result["avg_duration"] = round(avg, 1)
             return result
-        # Check disk for completed research (skip consumed results)
+        # 检查磁盘上的已完成研究（跳过已消费的结果）
         path = _research_json_path(session_id)
         if path is None:
             return None
@@ -422,7 +419,7 @@ class ResearchHandler:
         return None
 
     def cancel_research(self, session_id: str) -> bool:
-        """Cancel running research for a session."""
+        """取消会话中正在运行的研究。"""
         if session_id not in self._active_tasks:
             return False
         entry = self._active_tasks[session_id]
@@ -438,12 +435,12 @@ class ResearchHandler:
         return True
 
     def get_result(self, session_id: str) -> Optional[str]:
-        """Get the completed research result."""
+        """获取已完成的研究结果。"""
         if session_id in self._active_tasks:
             entry = self._active_tasks[session_id]
             if entry["status"] in ("done", "error", "cancelled"):
                 return entry.get("result")
-        # Check disk (skip consumed results)
+        # 检查磁盘（跳过已消费的结果）
         path = _research_json_path(session_id)
         if path is None:
             return None
@@ -458,8 +455,8 @@ class ResearchHandler:
         return None
 
     def get_sources(self, session_id: str) -> Optional[list]:
-        """Get deduplicated source list from research findings."""
-        # Check in-memory first
+        """从研究发现中获取去重后的源列表。"""
+        # 首先检查内存
         if session_id in self._active_tasks:
             entry = self._active_tasks[session_id]
             if entry.get("sources"):
@@ -467,7 +464,7 @@ class ResearchHandler:
             researcher = entry.get("researcher")
             if researcher and researcher.findings:
                 return self._extract_sources(researcher.findings)
-        # Check disk
+        # 检查磁盘
         path = _research_json_path(session_id)
         if path is None:
             return None
@@ -480,13 +477,13 @@ class ResearchHandler:
         return None
 
     def get_raw_findings(self, session_id: str) -> Optional[list]:
-        """Get raw per-source findings for display."""
+        """获取用于展示的每个原始来源发现。"""
         if session_id in self._active_tasks:
             entry = self._active_tasks[session_id]
             researcher = entry.get("researcher")
             if researcher and researcher.findings:
                 return self._extract_raw_findings(researcher.findings)
-        # Check disk
+        # 检查磁盘
         path = _research_json_path(session_id)
         if path is None:
             return None
@@ -500,7 +497,7 @@ class ResearchHandler:
 
     @staticmethod
     def _extract_sources(findings: list) -> list:
-        """Extract deduplicated [{url, title}] from findings, filtering low-quality ones."""
+        """从发现中提取去重的 [{url, title}]，过滤低质量的。"""
         seen = set()
         sources = []
         for f in findings:
@@ -520,7 +517,7 @@ class ResearchHandler:
 
     @staticmethod
     def _extract_raw_findings(findings: list) -> list:
-        """Extract [{url, title, summary}] for per-source findings display, filtering junk."""
+        """提取 [{url, title, summary}] 用于每个来源的发现展示，过滤垃圾。"""
         try:
             items = []
             for f in findings:
@@ -539,7 +536,7 @@ class ResearchHandler:
             return []
 
     def get_avg_duration(self) -> Optional[float]:
-        """Compute average research duration from completed results on disk."""
+        """从磁盘上已完成的结果计算平均研究时长。"""
         durations = []
         try:
             for p in RESEARCH_DATA_DIR.glob("*.json"):
@@ -559,9 +556,9 @@ class ResearchHandler:
         return None
 
     def clear_result(self, session_id: str):
-        """Mark result as consumed so it won't be re-rendered on refresh.
+        """将结果标记为已消费，使其不会在刷新时重新渲染。
 
-        Keeps the JSON on disk so visual reports can be generated later.
+        保留磁盘上的 JSON 以便以后可以生成可视化报告。
         """
         self._active_tasks.pop(session_id, None)
         path = _research_json_path(session_id)
@@ -576,13 +573,13 @@ class ResearchHandler:
                 pass
 
     def _save_result(self, session_id: str, entry: dict):
-        """Persist completed research result to disk."""
+        """将已完成的研究结果持久化到磁盘。"""
         try:
             path = _research_json_path(session_id)
             if path is None:
                 logger.error("Refusing to save research result for invalid session_id: %r", session_id)
                 return
-            # Extract and cache sources + raw findings
+            # 提取并缓存源和原始发现
             sources = []
             raw_findings = []
             researcher = entry.get("researcher")
@@ -602,7 +599,7 @@ class ResearchHandler:
                 "category": entry.get("category"),
                 "started_at": entry["started_at"],
                 "completed_at": time.time(),
-                # SECURITY: stamp owner so route handlers can filter by user.
+                # SECURITY: 标记所有者以便路由处理器可以按用户过滤。
                 "owner": entry.get("owner", ""),
             }
             path.write_text(json.dumps(data), encoding="utf-8")
@@ -616,7 +613,7 @@ class ResearchHandler:
             logger.error(f"Failed to save research result: {e}")
 
     def _get_session_json(self, session_id: str) -> Optional[dict]:
-        """Load the saved research JSON for a session, if it exists."""
+        """加载会话保存的研究 JSON（如果存在）。"""
         path = _research_json_path(session_id)
         if path is None:
             return None
@@ -628,7 +625,7 @@ class ResearchHandler:
         return None
 
     def get_report_html(self, session_id: str) -> Optional[str]:
-        """Generate the visual HTML report for a session (always fresh from JSON)."""
+        """为会话生成可视化 HTML 报告（始终从 JSON 重新生成最新版）。"""
         json_path = _research_json_path(session_id)
         if json_path is None:
             return None
@@ -657,7 +654,7 @@ class ResearchHandler:
             return None
 
     def hide_image(self, session_id: str, image_url: str) -> bool:
-        """Add image_url to the persisted hidden_images list for a research."""
+        """将 image_url 添加到研究的持久化 hidden_images 列表中。"""
         path = _research_json_path(session_id)
         if path is None:
             return False
@@ -677,7 +674,7 @@ class ResearchHandler:
             return False
 
     def unhide_all_images(self, session_id: str) -> bool:
-        """Clear the hidden_images list for a research."""
+        """清除研究的 hidden_images 列表。"""
         path = _research_json_path(session_id)
         if path is None:
             return False
@@ -695,7 +692,7 @@ class ResearchHandler:
 
     @staticmethod
     async def _probe_endpoint(endpoint: str, model: str, headers: dict = None):
-        """Quick probe to verify the LLM endpoint/model responds before research."""
+        """在研究开始之前快速探测 LLM 端点/模型是否响应。"""
         from src.llm_core import llm_call_async
         try:
             logger.info(f"Probing {model} at {endpoint} (has_auth={bool(headers and 'Authorization' in (headers or {}))})")
@@ -733,20 +730,20 @@ class ResearchHandler:
         extraction_concurrency: int = None,
     ) -> str:
         """
-        Run iterative deep research using the LLM-in-the-loop DeepResearcher.
+        使用 LLM-in-the-loop DeepResearcher 运行迭代深度研究。
 
         Args:
-            query: Research question
-            llm_endpoint: LLM endpoint URL for chat completions
-            llm_model: Model name/ID
-            max_time: Maximum research time in seconds (default 5 minutes)
-            _task_entry: Internal - registry entry to store researcher ref
-            prior_report: Previous report to continue from.
-            prior_findings: Previous findings to build on.
-            prior_urls: URLs already visited (won't re-fetch).
+            query: 研究问题
+            llm_endpoint: LLM 端点 URL，用于对话补全
+            llm_model: 模型名称/ID
+            max_time: 最大研究时间（秒，默认 5 分钟）
+            _task_entry: 内部 - 用于存储 researcher 引用的注册表条目
+            prior_report: 要继续的前一份报告。
+            prior_findings: 要基于的先前发现。
+            prior_urls: 已经访问过的 URL（不会重新获取）。
 
         Returns:
-            Formatted research report with expandable section and summary
+            格式化的研究报告，带可展开部分和摘要
         """
         is_continuation = bool(prior_report)
         logger.info(f"{'Continuing' if is_continuation else 'Starting'} IterResearch Deep Research")
@@ -756,7 +753,7 @@ class ResearchHandler:
         if is_continuation:
             logger.info(f"Prior: {len(prior_findings or [])} findings, {len(prior_urls or set())} URLs")
 
-        # Probe the endpoint before committing to a long research run
+        # 在投入长时间的研究运行之前探测端点
         if progress_callback:
             progress_callback({"phase": "probing", "model": llm_model})
         await self._probe_endpoint(llm_endpoint, llm_model, llm_headers)
@@ -824,7 +821,7 @@ class ResearchHandler:
             for key, value in stats.items():
                 logger.info(f"  {key}: {value}")
 
-            # Store raw report and stats for visual report generation
+            # 存储原始报告和统计信息用于视觉报告生成
             if _task_entry is not None:
                 _task_entry["raw_report"] = strip_thinking(report)
                 _task_entry["stats"] = stats
@@ -839,8 +836,8 @@ class ResearchHandler:
         self, query: str, llm_endpoint: str, llm_model: str,
         max_time: int, primary_error: str,
     ) -> str:
-        """Fall back to legacy engine, then to basic web search."""
-        # Try legacy orchestrator
+        """回退到旧版引擎，然后到基本网页搜索。"""
+        # 尝试旧版编排器
         if self._legacy_engine:
             try:
                 import asyncio
@@ -855,11 +852,11 @@ class ResearchHandler:
             except Exception as e:
                 logger.error(f"Legacy engine also failed: {e}")
 
-        # Fall back to basic web search
+        # 回退到基本网页搜索
         return self._handle_research_failure(query, primary_error)
 
     def _get_legacy_stats(self) -> dict:
-        """Get statistics from the legacy research engine."""
+        """从旧版研究引擎获取统计信息。"""
         if not self._legacy_engine:
             return {}
         try:
@@ -876,7 +873,7 @@ class ResearchHandler:
     def _format_research_report(
         self, query: str, full_report: str, stats: dict, elapsed: float,
     ) -> str:
-        """Format research report (markdown only — sources/findings handled by frontend)."""
+        """格式化研究报告（仅 markdown — 源/发现由前端处理）。"""
         full_report = strip_thinking(full_report)
         summary_lines = [
             f"**Duration:** {elapsed:.1f}s",
@@ -899,7 +896,7 @@ class ResearchHandler:
         return formatted
 
     def _format_error_response(self, error_msg: str, query: str) -> str:
-        """Format error response in a user-friendly way."""
+        """以用户友好的方式格式化错误响应。"""
         return f"""## Research Engine Unavailable
 
 **Query:** {query}
@@ -918,7 +915,7 @@ class ResearchHandler:
 """
 
     def _handle_research_failure(self, query: str, error: str) -> str:
-        """Handle research failure with fallback to basic search."""
+        """处理研究失败，回退到基本搜索。"""
         try:
             logger.info("Attempting fallback to basic web search...")
             from src.search import comprehensive_web_search

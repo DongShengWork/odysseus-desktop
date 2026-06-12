@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Minimal OpenAI-compatible image generation API server using diffusers.
+"""使用 diffusers 的最小 OpenAI 兼容图像生成 API 服务器。
 
-Serves /v1/images/generations and /v1/models for compatibility with
-Odysseus's image generation tool.
+提供 /v1/images/generations 和 /v1/models 端点，兼容
+Odysseus 的图像生成工具。
 
-Usage:
+用法：
     python3 scripts/diffusion_server.py --model /path/to/model --port 8100
 """
 import os
 import sys
 import importlib
 import importlib.machinery
-# Block xformers — create a fake module that reports as not installed
+# 阻止 xformers — 创建一个报告为未安装的假模块
 _fake = type(sys)("xformers")
 _fake.__version__ = "0.0.0"
 _fake.__spec__ = importlib.machinery.ModuleSpec("xformers", None)
@@ -54,19 +54,18 @@ async def lifespan(application):
 
 app = FastAPI(title="Diffusion Server", lifespan=lifespan)
 
-# Conservative defaults — server is designed for server-to-server use from
-# the Odysseus backend. Wildcard CORS + the 127.0.0.1 default bind used to
-# leave the server reachable via DNS-rebinding from any browser tab on the
-# same host. The CLI flags below extend these allowlists for operators who
-# need browser access; the safe defaults handle the common case.
+# 保守的默认值 — 服务器设计用于从 Odysseus 后端进行服务器到服务器的使用。
+# 通配符 CORS + 127.0.0.1 默认绑定过去会让服务器在同主机上的任何浏览器标签页
+# 通过 DNS 重新绑定可达。下面的 CLI 标志扩展了这些允许列表，供需要浏览器
+# 访问的操作员使用；安全默认值处理常见情况。
 _DEFAULT_ALLOWED_HOSTS = ["127.0.0.1", "localhost", "::1"]
-_DEFAULT_CORS_ORIGINS: list = []  # default-deny
+_DEFAULT_CORS_ORIGINS: list = []  # 默认拒绝
 
 
 def _compute_allowed_hosts(bind_host: str, extras=None) -> list:
-    """Allowed Host header values: the bind address + loopback variants +
-    any operator-supplied --allowed-host values. Duplicates and empty
-    strings are dropped; order is stable for predictable middleware setup."""
+    """允许的 Host 头值：绑定地址 + 回环变体 +
+    操作员提供的任何 --allowed-host 值。重复和空字符串
+    被丢弃；顺序是稳定的，以便可预测的中间件设置。"""
     seen = []
     for h in (bind_host, *_DEFAULT_ALLOWED_HOSTS, *(extras or [])):
         h = (h or "").strip()
@@ -76,9 +75,9 @@ def _compute_allowed_hosts(bind_host: str, extras=None) -> list:
 
 
 def _compute_cors_origins(extras=None) -> list:
-    """CORS allowlist: default-deny (empty), extended only by explicit
-    --allowed-origin values. Server-to-server callers don't set an Origin
-    header so they're unaffected; this only narrows browser access."""
+    """CORS 允许列表：默认拒绝（空），仅由显式的
+    --allowed-origin 值扩展。服务器到服务器的调用者不设置 Origin
+    头，所以不受影响；这仅限制浏览器访问。"""
     seen = []
     for o in (*_DEFAULT_CORS_ORIGINS, *(extras or [])):
         o = (o or "").strip()
@@ -88,12 +87,11 @@ def _compute_cors_origins(extras=None) -> list:
 
 
 def _configure_security_middleware(application, allowed_hosts, allowed_origins):
-    """Replace `application`'s user middleware stack with the diffusion server
-    security middleware: the TrustedHost allowlist and, when origins are
-    supplied, CORS. Used at module load and by the __main__ CLI path before
-    serving starts. Raises before mutating if the middleware stack has already
-    been built. Order is preserved: TrustedHost first, then CORS (added last ->
-    outermost)."""
+    """用扩散服务器的安全中间件替换 `application` 的用户中间件栈：
+    TrustedHost 允许列表，以及提供来源时的 CORS。在模块加载时
+    和 __main__ CLI 路径在服务开始前使用。如果中间件栈已经构建，
+    会在变更前抛出异常。顺序被保留：TrustedHost 优先，然后 CORS
+    （最后添加 → 最外层）。"""
     if application.middleware_stack is not None:
         raise RuntimeError("security middleware must be configured before the app starts serving")
     application.user_middleware.clear()
@@ -107,8 +105,8 @@ def _configure_security_middleware(application, allowed_hosts, allowed_origins):
         )
 
 
-# Install defaults at module load so importing the app for tests / direct
-# uvicorn invocation still benefits from the Host-header allowlist.
+# 在模块加载时安装默认值，以便导入应用进行测试/直接
+# uvicorn 调用仍然受益于 Host 头允许列表。
 _configure_security_middleware(app, _DEFAULT_ALLOWED_HOSTS, _DEFAULT_CORS_ORIGINS)
 
 
@@ -122,7 +120,7 @@ class ImageRequest(BaseModel):
 
 
 def _fix_meta_tensors(pipe, dtype):
-    """Replace any meta tensors with real zero tensors on CPU so .to(cuda) works."""
+    """将任何元张量替换为 CPU 上的真实零张量，以便 .to(cuda) 工作。"""
     for name, component in pipe.components.items():
         if not hasattr(component, 'parameters'):
             continue
@@ -131,7 +129,7 @@ def _fix_meta_tensors(pipe, dtype):
             if param.device.type == 'meta':
                 with torch.no_grad():
                     new_param = torch.zeros(param.shape, dtype=dtype, device='cpu')
-                    # Walk to the actual module holding this param
+                    # 遍历持有此参数的实际模块
                     parts = pname.split('.')
                     mod = component
                     for p in parts[:-1]:
@@ -154,11 +152,11 @@ def load_model():
 
     logger.info(f"Loading model from {model_path} (dtype={_args.dtype}, offload={use_offload})...")
 
-    # Ensure HF token is available for gated repos
+    # 确保 HF token 可用于需要授权的仓库
     _hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     if _hf_token:
         logger.info("HF token found in environment")
-        # Login so all huggingface_hub calls use the token
+        # 登录使所有 huggingface_hub 调用使用 token
         try:
             from huggingface_hub import login
             login(token=_hf_token, add_to_git_credential=False)
@@ -168,7 +166,7 @@ def load_model():
     else:
         logger.warning("No HF_TOKEN set — gated models will fail")
 
-    # Detect pipeline class from model_index.json
+    # 从 model_index.json 检测管道类
     model_index = Path(model_path) / "model_index.json"
     pipeline_cls = None
     cls_name_from_index = ""
@@ -184,14 +182,14 @@ def load_model():
         except Exception as e:
             logger.warning(f"Could not parse model_index.json: {e}")
 
-    # Build candidate list: detected class first, then DiffusionPipeline (auto-detect from model_index.json)
-    # Only try Flux-specific pipelines if model name suggests Flux
+    # 构建候选列表：检测到的类优先，然后是 DiffusionPipeline（从 model_index.json 自动检测）
+    # 只有当模型名称暗示 Flux 时才尝试 Flux 特定的管道
     candidates = []
     if pipeline_cls:
         candidates.append((pipeline_cls, pipeline_cls.__name__))
-    # DiffusionPipeline reads model_index.json and auto-selects the right pipeline
+    # DiffusionPipeline 读取 model_index.json 并自动选择正确的管道
     candidates.append((diffusers.DiffusionPipeline, "DiffusionPipeline"))
-    # Flux-specific fallbacks only if model name hints at Flux
+    # 仅当模型名称暗示 Flux 时，Flux 特定的回退方案
     _model_lower = Path(model_path).name.lower()
     if "flux" in _model_lower:
         for name in ("Flux2Pipeline", "FluxPipeline"):
@@ -208,10 +206,10 @@ def load_model():
             logger.debug(f"GPU cache clear failed: {e}")
 
     def _load_pipe(cls, name):
-        """Try loading pipeline, handling meta tensor issues."""
+        """尝试加载管道，处理元张量问题。"""
         global _pipe
 
-        # First try normal load
+        # 首先尝试正常加载
         try:
             _pipe = cls.from_pretrained(model_path, torch_dtype=torch_dtype)
         except Exception as e:
@@ -220,7 +218,7 @@ def load_model():
             _cleanup()
             return False
 
-        # Materialize any meta tensors before moving to device
+        # 在移动到设备之前实现任何元张量
         _fix_meta_tensors(_pipe, torch_dtype)
 
         if use_offload:
@@ -234,7 +232,7 @@ def load_model():
                 _cleanup()
                 return False
 
-        # Try full CUDA
+        # 尝试完整 CUDA
         try:
             _pipe = _pipe.to("cuda")
             logger.info(f"Loaded as {name} on CUDA")
@@ -248,7 +246,7 @@ def load_model():
             logger.error(f"{name} doesn't fit in VRAM. Use --cpu-offload to enable offloading.")
             return False
 
-        # OOM — reload and try with CPU offload
+        # 显存不足 — 重新加载并尝试 CPU offload
         try:
             logger.info(f"Reloading {name} with CPU offload...")
             _pipe = cls.from_pretrained(model_path, torch_dtype=torch_dtype)
@@ -261,7 +259,7 @@ def load_model():
             _pipe = None
             _cleanup()
 
-        # Last resort — sequential offload
+        # 最后手段 — 顺序 offload
         try:
             logger.info(f"Reloading {name} with sequential CPU offload...")
             _pipe = cls.from_pretrained(model_path, torch_dtype=torch_dtype)
@@ -282,7 +280,7 @@ def load_model():
             loaded = True
             break
 
-    # Last resort: override unknown pipeline class
+    # 最后手段：覆盖未知的管道类
     if not loaded and cls_name_from_index and not hasattr(diffusers, cls_name_from_index):
         for fallback in ("Flux2Pipeline", "FluxPipeline", "StableDiffusionPipeline"):
             fb_cls = getattr(diffusers, fallback, None)
@@ -292,12 +290,12 @@ def load_model():
                     loaded = True
                     break
 
-    # Last resort: try from_single_file for raw safetensors / ckpt models
+    # 最后手段：为原始 safetensors / ckpt 模型尝试 from_single_file
     if not loaded:
-        # Find the single-file weight (safetensors preferred, then ckpt/bin)
+        # 查找单文件权重（优先 safetensors，然后是 ckpt/bin）
         single_file = None
         from huggingface_hub import hf_hub_download, list_repo_files
-        # Check if it's a HF repo with a single safetensors file
+        # 检查是否是带单个 safetensors 文件的 HF repo
         try:
             files = list_repo_files(model_path)
             sf_files = [f for f in files if f.endswith('.safetensors') and '/' not in f]
@@ -308,7 +306,7 @@ def load_model():
                 single_file = hf_hub_download(model_path, target)
         except Exception as e:
             logger.warning(f"Could not list repo files for single-file fallback: {e}")
-        # Also check local path
+        # 也检查本地路径
         if not single_file:
             local_path = Path(model_path)
             if local_path.is_dir():
@@ -322,7 +320,7 @@ def load_model():
 
         if single_file:
             logger.info(f"Trying from_single_file with: {single_file}")
-            # Detect model family from path/filename to prioritize the right pipeline + config
+            # 从路径/文件名检测模型系列，优先选择正确的管道 + 配置
             _path_lower = (model_path + "/" + (single_file or "")).lower()
             _SD35_CONFIGS = ["stabilityai/stable-diffusion-3.5-large", "stabilityai/stable-diffusion-3.5-medium"]
             _SD3_CONFIGS = ["stabilityai/stable-diffusion-3-medium-diffusers"]
@@ -330,7 +328,7 @@ def load_model():
             _FLUX_CONFIGS = ["black-forest-labs/FLUX.1-schnell", "black-forest-labs/FLUX.1-dev"]
             _SDXL_CONFIGS = ["stabilityai/stable-diffusion-xl-base-1.0"]
 
-            # Build ordered pipeline candidates based on model name hints
+            # 基于模型名称提示构建有序的管道候选
             _pipeline_configs = []
             if "sd3.5" in _path_lower or "stable-diffusion-3.5" in _path_lower:
                 _pipeline_configs.append(("StableDiffusion3Pipeline", _SD35_CONFIGS))
@@ -344,7 +342,7 @@ def load_model():
                 _pipeline_configs.append(("Flux2Pipeline", _FLUX2_CONFIGS))
             elif "sdxl" in _path_lower or "xl" in _path_lower:
                 _pipeline_configs.append(("StableDiffusionXLPipeline", _SDXL_CONFIGS))
-            # Always add all pipelines as fallbacks
+            # 始终添加所有管道作为回退
             _pipeline_configs.extend([
                 ("Flux2Pipeline", _FLUX2_CONFIGS),
                 ("StableDiffusion3Pipeline", _SD35_CONFIGS + _SD3_CONFIGS),
@@ -352,7 +350,7 @@ def load_model():
                 ("StableDiffusionXLPipeline", _SDXL_CONFIGS + [None]),
                 ("StableDiffusionPipeline", [None]),
             ])
-            # Deduplicate while preserving order
+            # 去重同时保持顺序
             _seen = set()
             _deduped = []
             for item in _pipeline_configs:
@@ -360,9 +358,9 @@ def load_model():
                     _seen.add(item[0])
                     _deduped.append(item)
             _pipeline_configs = _deduped
-            # Pre-download config files (json/txt only) so from_single_file doesn't choke
+            # 预下载配置文件（仅 json/txt），以便 from_single_file 不会出错
             def _ensure_config_local(repo_id):
-                """Download only config files from a repo, return local path or None."""
+                """仅从仓库下载配置文件，返回本地路径或 None。"""
                 try:
                     from huggingface_hub import snapshot_download
                     local = snapshot_download(
@@ -376,7 +374,7 @@ def load_model():
                     return local
                 except Exception as e1:
                     logger.warning(f"Could not download configs from {repo_id}: {e1}")
-                    # Try without allow_patterns (some hf_hub versions have bugs with filters on gated repos)
+                    # 尝试不使用 allow_patterns（某些 hf_hub 版本在受限仓库上有过滤器 bug）
                     try:
                         from huggingface_hub import snapshot_download as _sd2
                         local = _sd2(
@@ -401,7 +399,7 @@ def load_model():
                     try:
                         kwargs = {"torch_dtype": torch_dtype}
                         if config:
-                            # Use local path instead of repo ID so diffusers doesn't re-download
+                            # 使用本地路径而不是 repo ID，这样 diffusers 不会重新下载
                             local_config = _ensure_config_local(config)
                             if not local_config:
                                 continue
@@ -425,7 +423,7 @@ def load_model():
     if not loaded:
         raise RuntimeError(f"Could not load model from {model_path}. Check diffusers version and model format.")
 
-    # Memory optimizations
+    # 内存优化
     if _args.attention_slicing:
         try:
             _pipe.enable_attention_slicing()
@@ -441,7 +439,7 @@ def load_model():
 
     logger.info(f"Model loaded: {_model_id}")
 
-    # Load LoRA weights if specified
+    # 如果指定了 LoRA 权重，加载它们
     if _args.lora:
         for lora_path in _args.lora.split(','):
             lora_path = lora_path.strip()
@@ -453,7 +451,7 @@ def load_model():
                 logger.info(f"Loaded LoRA: {lora_name} from {lora_path}")
             except Exception as e:
                 logger.warning(f"Failed to load LoRA {lora_path}: {e}")
-        # Set LoRA scale
+        # 设置 LoRA scale
         try:
             _pipe.set_adapters([Path(p.strip()).stem for p in _args.lora.split(',') if p.strip()],
                               adapter_weights=[_args.lora_scale] * len([p for p in _args.lora.split(',') if p.strip()]))
@@ -480,14 +478,14 @@ def generate_image(req: ImageRequest):
     if _pipe is None:
         return {"error": "Model not loaded"}
 
-    # Parse size
+    # 解析尺寸
     try:
         w, h = req.size.split("x")
         width, height = int(w), int(h)
     except Exception:
         width, height = _args.width, _args.height
 
-    # Map quality to num_inference_steps
+    # 将 quality 映射到 num_inference_steps
     default_steps = _args.steps or 8
     steps_map = {"low": 4, "medium": default_steps, "high": 20, "auto": 12}
     steps = steps_map.get(req.quality, default_steps)
@@ -495,16 +493,16 @@ def generate_image(req: ImageRequest):
     logger.info(f"Generating: {req.prompt[:80]}... ({width}x{height}, {steps} steps)")
     start = time.time()
 
-    # Detect if pipeline is inpaint-only (requires image + mask)
+    # 检测管道是否是仅 inpaint（需要 image + mask）
     _is_inpaint_pipe = 'inpaint' in type(_pipe).__name__.lower()
 
     images = []
     for _ in range(req.n):
         if _is_inpaint_pipe:
-            # Inpaint pipelines need an image + mask — create blank ones for txt2img
+            # Inpaint 管道需要 image + mask — 为 txt2img 创建空白图像
             from PIL import Image as _PILGen
             _blank = _PILGen.new('RGB', (width, height), (128, 128, 128))
-            _mask = _PILGen.new('L', (width, height), 255)  # full white = regenerate everything
+            _mask = _PILGen.new('L', (width, height), 255)  # 全部白色 = 重新生成所有内容
             result = _pipe(
                 prompt=req.prompt,
                 image=_blank,
@@ -524,7 +522,7 @@ def generate_image(req: ImageRequest):
             )
         img = result.images[0]
 
-        # Convert to base64
+        # 转换为 base64
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         b64 = base64.b64encode(buf.getvalue()).decode()
@@ -541,20 +539,20 @@ def generate_image(req: ImageRequest):
 
 class InpaintRequest(BaseModel):
     image: str  # base64 PNG
-    mask: str   # base64 PNG (white = inpaint area)
+    mask: str   # base64 PNG（白色 = 修复区域）
     prompt: str
     width: int = 0
     height: int = 0
     steps: int = 0
-    strength: float = 0.75  # how much to change (0=nothing, 1=full regeneration)
-    feather: int = 8  # mask edge feathering in pixels
+    strength: float = 0.75  # 改变的幅度（0=不变，1=完全重新生成）
+    feather: int = 8  # 遮罩边缘羽化，以像素为单位
 
 
 _inpaint_pipe = None
 _img2img_pipe = None
 
 def _get_inpaint_pipe():
-    """Lazy-load an inpaint or img2img pipeline from the same model."""
+    """从同一模型延迟加载 inpaint 或 img2img 管道。"""
     global _inpaint_pipe, _img2img_pipe
     if _inpaint_pipe:
         return _inpaint_pipe, 'inpaint'
@@ -565,12 +563,12 @@ def _get_inpaint_pipe():
     model_path = _args.model
     torch_dtype = DTYPE_MAP.get(_args.dtype, torch.bfloat16)
 
-    # Check if the main pipeline IS already an inpaint pipeline
+    # 检查主管道是否已经是 inpaint 管道
     pipe_cls_name = type(_pipe).__name__
     if 'inpaint' in pipe_cls_name.lower():
         _inpaint_pipe = _pipe
         logger.info(f"Main pipeline is already inpaint: {pipe_cls_name}")
-        # Also try to get img2img from it
+        # 也尝试从中获取 img2img
         try:
             img2img_cls_name = pipe_cls_name.replace('Inpaint', 'Img2Img')
             img2img_cls = getattr(diffusers, img2img_cls_name, None)
@@ -581,7 +579,7 @@ def _get_inpaint_pipe():
             logger.debug(f"Could not create img2img from inpaint: {e}")
         return _inpaint_pipe, 'inpaint'
 
-    # Try loading a dedicated inpaint pipeline from the same components
+    # 尝试从相同组件加载专用的 inpaint 管道
     inpaint_names = [
         pipe_cls_name.replace('Pipeline', 'InpaintPipeline'),
         'StableDiffusion3InpaintPipeline',
@@ -598,7 +596,7 @@ def _get_inpaint_pipe():
             except Exception as e:
                 logger.debug(f"{name} from_pipe failed: {e}")
 
-    # Try img2img pipeline
+    # 尝试 img2img 管道
     img2img_names = [
         pipe_cls_name.replace('Pipeline', 'Img2ImgPipeline'),
         'StableDiffusion3Img2ImgPipeline',
@@ -612,7 +610,7 @@ def _get_inpaint_pipe():
         if cls:
             try:
                 if harmonize_gpu is not None:
-                    # Load fresh on separate GPU
+                    # 在单独的 GPU 上重新加载
                     logger.info(f"Loading {name} on cuda:{harmonize_gpu}...")
                     _img2img_pipe = cls.from_pretrained(_args.model, torch_dtype=torch_dtype)
                     _img2img_pipe = _img2img_pipe.to(f"cuda:{harmonize_gpu}")
@@ -623,7 +621,7 @@ def _get_inpaint_pipe():
             except Exception as e:
                 logger.debug(f"{name} failed: {e}")
                 try:
-                    # Some pipelines need from_pretrained instead of from_pipe
+                    # 某些管道需要 from_pretrained 而不是 from_pipe
                     _img2img_pipe = cls.from_pretrained(_args.model, torch_dtype=torch_dtype)
                     if _args.cpu_offload:
                         _img2img_pipe.enable_model_cpu_offload()
@@ -640,19 +638,19 @@ def _get_inpaint_pipe():
 
 @app.post("/v1/images/inpaint")
 def inpaint_image(req: InpaintRequest):
-    """Inpaint masked region. Tries: native inpaint → img2img+composite → txt2img+composite."""
+    """对遮罩区域进行修复。尝试：原生 inpaint → img2img+合成 → txt2img+合成。"""
     if _pipe is None:
         return {"error": "Model not loaded"}
 
     from PIL import Image as PILImage
 
-    # Decode input image and mask
+    # 解码输入图像和遮罩
     img_bytes = base64.b64decode(req.image)
     mask_bytes = base64.b64decode(req.mask)
     init_image = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
     mask_image = PILImage.open(io.BytesIO(mask_bytes)).convert("L")
 
-    # Feather value — applied after cropping to avoid edge clipping
+    # 羽化值 — 在裁剪后应用以避免边缘裁剪
     feather = max(0, min(60, req.feather))
 
     width = req.width or init_image.width
@@ -666,13 +664,12 @@ def inpaint_image(req: InpaintRequest):
 
     strength = max(0.1, min(1.0, req.strength))
 
-    # Try to get a dedicated inpaint or img2img pipeline
+    # 尝试获取专用的 inpaint 或 img2img 管道
     alt_pipe, alt_type = _get_inpaint_pipe()
 
-    # SDXL inpaint expects ~1024 on the short side. Running at canvas
-    # native resolution can produce grey / muted output when the model's
-    # latent grid is far larger than what it was trained on. Cap to a
-    # model-friendly box (multiples of 8), inpaint there, upscale back.
+    # SDXL inpaint 期望短边约 1024。在画布原生分辨率运行可能会
+    # 产生灰色/暗淡的输出，当模型的潜在网格远大于训练时。
+    # 限制在模型友好的尺寸（8 的倍数），在此修复，然后放大回去。
     max_side = 1024
     scale = min(max_side / max(width, height), 1.0)
     work_w = max(64, ((int(width  * scale) + 7) // 8) * 8)
@@ -681,10 +678,10 @@ def inpaint_image(req: InpaintRequest):
     work_mask = mask_image.resize((work_w, work_h), PILImage.BILINEAR)
     logger.info(f"Inpaint working size: {work_w}x{work_h} (from {width}x{height})")
 
-    # SDXL VAE in fp16/bfloat16 commonly produces NaN/overflow that
-    # decodes to flat grey output. Upcast the VAE to fp32 before the
-    # call; cheap (only the VAE decode runs in fp32, the heavy UNet
-    # stays in the requested dtype). One-time per pipeline.
+    # SDXL VAE 在 fp16/bfloat16 下通常会产生 NaN/溢出，
+    # 解码为纯灰色输出。在调用前将 VAE 升格到 fp32；
+    # 成本低廉（仅 VAE 解码运行在 fp32，重量级 UNet
+    # 保持在请求的 dtype）。每个管道一次。
     if alt_pipe is not None and not getattr(alt_pipe, '_ge_vae_upcast', False):
         try:
             alt_pipe.upcast_vae()
@@ -695,10 +692,9 @@ def inpaint_image(req: InpaintRequest):
 
     try:
         if alt_type == 'inpaint' and alt_pipe:
-            # Use dedicated inpaint pipeline. guidance_scale 7.5 is the
-            # SDXL default — the previous 3.5 was producing muted / grey
-            # results, especially on style-transfer prompts with large
-            # masks.
+            # 使用专用 inpaint 管道。guidance_scale 7.5 是
+            # SDXL 默认值 — 之前的 3.5 产生了暗淡/灰色的
+            # 结果，尤其是在有大型遮罩的风格迁移提示上。
             logger.info("Using dedicated inpaint pipeline")
             result = alt_pipe(
                 prompt=req.prompt,
@@ -713,7 +709,7 @@ def inpaint_image(req: InpaintRequest):
         elif alt_type == 'img2img' and alt_pipe:
             raise TypeError("Skip to img2img fallback")
         else:
-            # Try the main pipeline with inpaint args
+            # 尝试使用带 inpaint 参数的主管
             result = _pipe(
                 prompt=req.prompt,
                 image=work_init,
@@ -725,8 +721,8 @@ def inpaint_image(req: InpaintRequest):
                 guidance_scale=7.5,
             )
     except TypeError:
-        # Pipeline doesn't support native inpainting — use crop-to-mask + img2img + composite
-        # This preserves context by only regenerating the masked region with surrounding padding
+        # 管道不支持原生修复 — 使用裁剪到遮罩 + img2img + 合成
+        # 这通过仅重新生成带有周围填充的遮罩区域来保留上下文
         import numpy as np
         logger.info(f"Pipeline doesn't support inpainting — using crop+img2img (strength={strength}) + composite")
 
@@ -734,7 +730,7 @@ def inpaint_image(req: InpaintRequest):
         init_resized = init_image.resize((width, height))
         mask_arr = np.array(mask_resized)
 
-        # Find bounding box of the mask
+        # 查找遮罩的边界框
         ys, xs = np.where(mask_arr > 10)
         if len(xs) == 0 or len(ys) == 0:
             logger.warning("Empty mask — returning original image")
@@ -744,7 +740,7 @@ def inpaint_image(req: InpaintRequest):
 
         x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
 
-        # Add generous padding (50% of mask size, min 64px) so model sees surrounding context
+        # 添加充足的填充（遮罩大小的 50%，最少 64px），以便模型看到周围的上下文
         pad_x = max(64, int((x2 - x1) * 0.5))
         pad_y = max(64, int((y2 - y1) * 0.5))
         cx1 = max(0, x1 - pad_x)
@@ -752,17 +748,17 @@ def inpaint_image(req: InpaintRequest):
         cx2 = min(width, x2 + pad_x)
         cy2 = min(height, y2 + pad_y)
 
-        # Make crop square and round to multiple of 64 (SD3 VAE requirement)
+        # 使裁剪为方形并四舍五入到 64 的倍数（SD3 VAE 要求）
         crop_size = max(cx2 - cx1, cy2 - cy1)
-        crop_size = max(256, ((crop_size + 63) // 64) * 64)  # min 256, round up to 64
-        # Center the square crop on the mask center
+        crop_size = max(256, ((crop_size + 63) // 64) * 64)  # min 256, 向上取整到 64
+        # 将方形裁剪居中于遮罩中心
         cx_mid = (cx1 + cx2) // 2
         cy_mid = (cy1 + cy2) // 2
         cx1 = max(0, cx_mid - crop_size // 2)
         cy1 = max(0, cy_mid - crop_size // 2)
         cx2 = min(width, cx1 + crop_size)
         cy2 = min(height, cy1 + crop_size)
-        # Adjust if we hit image edges
+        # 如果碰到图像边缘则调整
         if cx2 - cx1 < crop_size:
             cx1 = max(0, cx2 - crop_size)
         if cy2 - cy1 < crop_size:
@@ -772,13 +768,13 @@ def inpaint_image(req: InpaintRequest):
 
         logger.info(f"Mask bbox: ({x1},{y1})-({x2},{y2}), crop region: ({cx1},{cy1})-({cx2},{cy2}) = {cw}x{ch}")
 
-        # Crop the original image and mask to the region
+        # 将原始图像和遮罩裁剪到该区域
         crop_img = init_resized.crop((cx1, cy1, cx2, cy2))
         crop_mask = mask_resized.crop((cx1, cy1, cx2, cy2))
 
-        # Use img2img pipeline if available, otherwise fall back
+        # 如果有 img2img 管道则使用，否则回退
         _i2i_pipe = alt_pipe if alt_type == 'img2img' else None
-        # Ensure crop image is properly sized (multiple of 8)
+        # 确保裁剪图像的尺寸正确（8 的倍数）
         crop_img = crop_img.resize((cw, ch))
         try:
             if _i2i_pipe:
@@ -791,7 +787,7 @@ def inpaint_image(req: InpaintRequest):
                     guidance_scale=7.0,
                 )
             else:
-                # Try main pipeline with image arg
+                # 尝试使用带 image 参数的主管
                 result = _pipe(
                     prompt=req.prompt,
                     image=crop_img,
@@ -801,7 +797,7 @@ def inpaint_image(req: InpaintRequest):
                 )
             generated_crop = result.images[0].resize((cw, ch))
         except TypeError:
-            # No img2img support at all — txt2img on crop size
+            # 完全没有 img2img 支持 — 在裁剪尺寸上使用 txt2img
             logger.info("No img2img support — txt2img on crop region")
             result = _pipe(
                 prompt=req.prompt,
@@ -812,21 +808,21 @@ def inpaint_image(req: InpaintRequest):
             )
             generated_crop = result.images[0].resize((cw, ch))
 
-        # Apply feathering to the cropped mask for soft blending edges
+        # 对裁剪的遮罩应用羽化以实现软边缘混合
         if feather > 0:
             from PIL import ImageFilter
-            # PIL GaussianBlur radius is ~half of CSS blur pixels, so multiply
+            # PIL GaussianBlur 半径约为 CSS 模糊像素的一半，所以乘以
             blur_radius = feather * 1.5
             crop_mask = crop_mask.filter(ImageFilter.GaussianBlur(radius=blur_radius))
             logger.info(f"Applied {feather}px feather (PIL radius={blur_radius:.0f}) to crop mask")
 
-        # Composite: blend generated crop into original using the feathered mask
+        # 合成：使用羽化遮罩将生成的裁剪混合到原始图像中
         orig_arr = np.array(init_resized).astype(float)
         gen_full = orig_arr.copy()
         crop_gen_arr = np.array(generated_crop).astype(float)
         crop_mask_arr = np.array(crop_mask) / 255.0
 
-        # Blend only in the crop region
+        # 仅在裁剪区域内混合
         region = gen_full[cy1:cy2, cx1:cx2]
         blended_region = region * (1 - crop_mask_arr[:, :, None]) + crop_gen_arr * crop_mask_arr[:, :, None]
         gen_full[cy1:cy2, cx1:cx2] = blended_region
@@ -841,7 +837,7 @@ def inpaint_image(req: InpaintRequest):
         return {"image": b64, "elapsed": round(elapsed, 2)}
 
     img = result.images[0]
-    # Upscale back to the canvas size if we worked at a smaller resolution.
+    # 如果我们在较小的分辨率下工作，则放大回画布大小。
     if (img.width, img.height) != (width, height):
         img = img.resize((width, height), PILImage.LANCZOS)
     buf = io.BytesIO()
@@ -855,15 +851,15 @@ def inpaint_image(req: InpaintRequest):
 class HarmonizeRequest(BaseModel):
     image: str  # base64 PNG
     prompt: str
-    # Two-stage harmonize:
-    #   1) Reinhard color transfer inside `body_mask` (matches L*a*b* mean/std
-    #      of the masked region to the unmasked surroundings). Pixel-sharp.
-    #   2) Optional narrow inpaint on `seam_mask` (alpha edge band) to fix
-    #      jagged cutouts and seams. Only the edge band is regenerated.
-    color_match: float = 0.65  # 0..1 — how much of the color shift to apply
-    seam_fix: float = 0.0      # 0..1 — strength of the seam inpaint pass
-    body_mask: str | None = None  # base64 PNG, white = layer body
-    seam_mask: str | None = None  # base64 PNG, white = layer alpha edge band
+    # 两阶段协调：
+    #   1) 在 `body_mask` 内的 Reinhard 颜色迁移（将遮罩区域的 L*a*b* 均值/标准差
+    #      匹配到未遮罩的周围环境）。像素级精确。
+    #   2) 在 `seam_mask`（alpha 边缘带）上可选窄修复，以修复
+    #      锯齿状的剪切和接缝。仅重新生成边缘带。
+    color_match: float = 0.65  # 0..1 — 应用颜色偏移的比例
+    seam_fix: float = 0.0      # 0..1 — 接缝修复通道的强度
+    body_mask: str | None = None  # base64 PNG, 白色 = 图层体
+    seam_mask: str | None = None  # base64 PNG, 白色 = 图层 alpha 边缘带
     steps: int = 0
     # Legacy fields (older clients): if `mask` is sent without body/seam,
     # we treat it as body_mask. `strength` maps to color_match.
@@ -873,12 +869,12 @@ class HarmonizeRequest(BaseModel):
 
 
 def _rgb_to_lalphabeta(rgb_f):
-    """RGB → L*alpha*beta (Ruderman et al., the colour space Reinhard's
-    original paper used). Pure numpy — no cv2. Input/output: float32 arrays
-    of shape (..., 3); input in 0..255, output unbounded log-RGB-style."""
+    """RGB → L*alpha*beta (Ruderman et al., Reinhard 原始论文使用的色彩空间)。
+    纯 numpy — 无 cv2。输入/输出：形状为 (..., 3) 的 float32 数组；
+    输入在 0..255 范围内，输出无界 log-RGB 风格。"""
     import numpy as np
     eps = 1.0
-    # Linearise to LMS cone space
+    # 线性化到 LMS 锥体空间
     M_rgb2lms = np.array([
         [0.3811, 0.5783, 0.0402],
         [0.1967, 0.7244, 0.0782],
@@ -896,7 +892,7 @@ def _rgb_to_lalphabeta(rgb_f):
 
 
 def _lalphabeta_to_rgb(lab):
-    """Inverse of _rgb_to_lalphabeta. Returns RGB float32 in 0..255 (clipped)."""
+    """_rgb_to_lalphabeta 的逆。返回 0..255（裁剪后）的 RGB float32。"""
     import numpy as np
     M_lab2lms = np.array([
         [np.sqrt(3)/3.0,  np.sqrt(6)/6.0,  np.sqrt(2)/2.0],
@@ -915,15 +911,15 @@ def _lalphabeta_to_rgb(lab):
 
 
 def _reinhard_color_transfer(source_rgb, body_mask_l, blend: float = 1.0):
-    """Match the masked region's color statistics to the unmasked
-    surroundings using Reinhard's L*alpha*beta transfer. Pure numpy.
+    """使用 Reinhard 的 L*alpha*beta 迁移将遮罩区域的颜色统计
+    匹配到未遮罩的周围环境。纯 numpy。
 
-    `blend` (0..1) controls how much of the shift to apply.
+    `blend`（0..1）控制应用偏移的比例。
     """
     import numpy as np
     from PIL import Image as _PILImg
 
-    src_np = np.asarray(source_rgb).astype(np.float32)  # H,W,3 in 0..255
+    src_np = np.asarray(source_rgb).astype(np.float32)  # H,W,3 在 0..255 范围内
     h, w, _ = src_np.shape
 
     mask_np = np.asarray(body_mask_l).astype(np.float32) / 255.0
@@ -946,16 +942,16 @@ def _reinhard_color_transfer(source_rgb, body_mask_l, blend: float = 1.0):
     shifted[interior] = (lab[interior] - in_mean) * (out_std / in_std) + out_mean
     rgb_shifted = _lalphabeta_to_rgb(shifted)
 
-    # Lerp source ↔ shifted, weighted by mask × blend so the edge of the
-    # mask fades back to source smoothly.
+    # 通过遮罩 × blend 在源和偏移之间进行线性插值，使遮罩边缘
+    # 平滑渐变回源。
     m3 = (mask_np * blend)[..., None]
     out = src_np * (1 - m3) + rgb_shifted * m3
     return _PILImg.fromarray(np.clip(out, 0, 255).astype(np.uint8), mode='RGB')
 
 
 def _decode_mask_b64(b64_str, target_size):
-    """Decode a base64-encoded grayscale PNG. Returns PIL 'L' image at
-    `target_size`, or None if empty/invalid."""
+    """解码 base64 编码的灰度 PNG。返回目标尺寸的 PIL 'L' 图像，
+    如果为空/无效则返回 None。"""
     if not b64_str:
         return None
     try:
@@ -973,19 +969,18 @@ def _decode_mask_b64(b64_str, target_size):
 
 @app.post("/v1/images/harmonize")
 def harmonize_image(req: HarmonizeRequest):
-    """Two-stage layer harmonization.
+    """两阶段图层协调。
 
-    Stage 1 — Reinhard color transfer inside `body_mask`: matches the
-    masked region's L*a*b* mean/std to the unmasked surroundings. Pixel-
-    sharp, no model regen. Controlled by `color_match` (0..1).
+    阶段 1 — 在 `body_mask` 内进行 Reinhard 颜色迁移：将遮罩区域的
+    L*a*b* 均值/标准差匹配到未遮罩的周围环境。像素级精确，
+    无模型重新生成。由 `color_match`（0..1）控制。
 
-    Stage 2 — Optional narrow inpaint on `seam_mask` (alpha edge band):
-    only the band is regenerated; layer interiors stay identical to the
-    color-shifted result. Controlled by `seam_fix` (0..1). Skipped if
-    `seam_fix=0` or no inpaint pipeline is available.
+    阶段 2 — 在 `seam_mask`（alpha 边缘带）上可选窄修复：
+    仅重新生成带；图层内部与颜色偏移结果保持完全一致。
+    由 `seam_fix`（0..1）控制。如果 `seam_fix=0` 或无修复管道可用，则跳过。
 
-    Backwards compat: if only `mask` is provided (no body/seam), it's
-    treated as body_mask. `strength` (old field) maps to `color_match`.
+    向后兼容：如果只提供了 `mask`（没有 body/seam），
+    将其视为 body_mask。`strength`（旧字段）映射到 `color_match`。
     """
     if _pipe is None:
         return {"error": "Model not loaded"}
@@ -996,7 +991,7 @@ def harmonize_image(req: HarmonizeRequest):
     source_full = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
     orig_w, orig_h = source_full.size
 
-    # Resolve old-vs-new field names.
+    # 解析新旧字段名。
     body_b64 = req.body_mask or req.mask
     seam_b64 = req.seam_mask
     color_match = req.color_match
@@ -1008,8 +1003,8 @@ def harmonize_image(req: HarmonizeRequest):
     body_mask_full = _decode_mask_b64(body_b64, (orig_w, orig_h))
     seam_mask_full = _decode_mask_b64(seam_b64, (orig_w, orig_h))
 
-    # If neither mask was supplied: legacy whole-image fallback. The user
-    # didn't tell us where the seams are, so we can't do targeted blending.
+    # 如果两个遮罩都没有提供：旧版全图回退。用户没有告诉我们
+    # 接缝在哪里，所以我们不能进行有针对性的混合。
     if body_mask_full is None and seam_mask_full is None:
         logger.info("Harmonize: no masks — falling back to legacy whole-image path")
         return _legacy_whole_image_harmonize(req, source_full)
@@ -1020,7 +1015,7 @@ def harmonize_image(req: HarmonizeRequest):
     )
     start = time.time()
 
-    # ── Stage 1: Reinhard color transfer (pixel-sharp, no regen) ──
+    # ── 阶段 1: Reinhard 颜色迁移（像素级精确，无重新生成）──
     if body_mask_full is not None and color_match > 0.01:
         try:
             stage1 = _reinhard_color_transfer(source_full, body_mask_full, blend=color_match)
@@ -1030,7 +1025,7 @@ def harmonize_image(req: HarmonizeRequest):
     else:
         stage1 = source_full
 
-    # ── Stage 2: narrow seam inpaint (only the alpha edge band) ──
+    # ── 阶段 2: 窄接缝修复（仅 alpha 边缘带）──
     final = stage1
     if seam_mask_full is not None and seam_fix > 0.01:
         alt_pipe, alt_type = _get_inpaint_pipe()
@@ -1046,8 +1041,8 @@ def harmonize_image(req: HarmonizeRequest):
                 h = ((int(orig_h * scale) + 63) // 64) * 64
                 init_small = stage1.resize((w, h), PILImage.LANCZOS)
                 seam_small = seam_mask_full.resize((w, h), PILImage.BILINEAR)
-                # Cap the inpaint strength — seam_fix=1.0 → strength=0.50,
-                # so even max setting can't fully redraw the band.
+                # 限制修复强度 — seam_fix=1.0 → strength=0.50,
+                # 因此即使最大设置也不能完全重绘带。
                 inpaint_strength = max(0.10, min(0.50, seam_fix * 0.50))
                 steps = req.steps or (_args.steps or 12)
                 logger.info(f"Harmonize stage 2: seam inpaint at {w}x{h}, strength={inpaint_strength:.2f}")
@@ -1063,8 +1058,8 @@ def harmonize_image(req: HarmonizeRequest):
                 )
                 ai_small = result.images[0]
                 ai_full = ai_small.resize((orig_w, orig_h), PILImage.LANCZOS) if (w, h) != (orig_w, orig_h) else ai_small
-                # Composite back using the seam mask as alpha — outside the
-                # seam band stays pixel-identical to stage1.
+                # 使用接缝遮罩作为 alpha 进行合成 — 接缝带之外
+                # 的区域与阶段 1 保持像素级一致。
                 final = PILImage.composite(ai_full, stage1, seam_mask_full)
             except Exception as e:
                 logger.warning(f"Harmonize stage 2 failed, returning stage 1 only: {e}")
@@ -1079,8 +1074,8 @@ def harmonize_image(req: HarmonizeRequest):
 
 
 def _legacy_whole_image_harmonize(req, source_full):
-    """Old behaviour: no masks supplied → run img2img on the entire image.
-    Kept for cases where the client wants a global re-render."""
+    """旧行为：没有提供遮罩 → 在整个图像上运行 img2img。
+    保留用于客户端想要全局重新渲染的情况。"""
     from PIL import Image as PILImage
 
     orig_w, orig_h = source_full.size
@@ -1155,11 +1150,10 @@ if __name__ == "__main__":
              "on a specific origin to call the server.")
     _args = parser.parse_args()
 
-    # Replace the module-load middleware stack with the CLI-configured one so
-    # operator-supplied --allowed-host / --allowed-origin values take effect
-    # before the first request is served. user_middleware is consulted lazily
-    # when the middleware stack is built on the first request, so mutating it
-    # here is safe.
+    # 将模块加载时的中间件栈替换为 CLI 配置的栈，以便
+    # 操作员提供的 --allowed-host / --allowed-origin 值在第一个请求
+    # 被服务之前生效。user_middleware 在第一个请求构建中间件栈时
+    # 被惰性查询，因此在这里修改它是安全的。
     final_hosts = _compute_allowed_hosts(_args.host, _args.allowed_host)
     final_origins = _compute_cors_origins(_args.allowed_origin)
     _configure_security_middleware(app, final_hosts, final_origins)

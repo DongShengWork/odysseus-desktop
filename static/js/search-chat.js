@@ -1,4 +1,4 @@
-// Search Chat Module — Ctrl+K command palette for searching conversations
+// 搜索聊天模块 — Ctrl+K 命令面板，用于搜索对话
 
 import uiModule from './ui.js';
 import sessionModule from './sessions.js';
@@ -69,12 +69,12 @@ function renderResults(data, query) {
 
   if (!data || data.length === 0) {
     container.innerHTML = query
-      ? '<div class="search-empty">No results found</div>'
+      ? '<div class="search-empty">未找到结果</div>'
       : '';
     return;
   }
 
-  // Group by session
+  // 按会话分组
   const grouped = {};
   for (const r of data) {
     if (!grouped[r.session_id]) {
@@ -88,7 +88,7 @@ function renderResults(data, query) {
   for (const [sessionId, group] of Object.entries(grouped)) {
     html += `<div class="search-group-header">${escapeHtml(group.name)}</div>`;
     for (const item of group.items) {
-      const roleLabel = item.role === 'user' ? 'You' : 'AI';
+      const roleLabel = item.role === 'user' ? '你' : 'AI';
       html += `<div class="search-result-item" data-index="${idx}" data-session="${escapeHtml(sessionId)}">
         <div class="search-result-role">${roleLabel}</div>
         <div class="search-result-snippet">${highlightMatch(item.content_snippet, query)}</div>
@@ -99,7 +99,7 @@ function renderResults(data, query) {
   }
   container.innerHTML = html;
 
-  // Click handlers
+  // 点击处理器
   container.querySelectorAll('.search-result-item').forEach(item => {
     item.addEventListener('click', () => {
       const sid = item.dataset.session;
@@ -122,7 +122,7 @@ function updateSelection() {
   items.forEach((item, i) => {
     item.classList.toggle('selected', i === selectedIndex);
   });
-  // Scroll selected into view
+  // 将选中项滚动到可见区域
   if (selectedIndex >= 0 && items[selectedIndex]) {
     items[selectedIndex].scrollIntoView({ block: 'nearest' });
   }
@@ -168,7 +168,7 @@ function handleInput(e) {
       const data = await res.json();
       renderResults(data, query);
     } catch (err) {
-      console.error('Search error:', err);
+      console.error('搜索错误：', err);
     }
   }, 300);
 }
@@ -182,7 +182,7 @@ export function init(apiBase) {
     input.addEventListener('keydown', handleKeydown);
   }
 
-  // Close on overlay click (not popup click)
+  // 点击浮层外部关闭（非弹窗点击）
   const overlay = el('search-overlay');
   if (overlay) {
     overlay.addEventListener('click', (e) => {

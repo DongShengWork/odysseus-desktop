@@ -1,4 +1,4 @@
-# app.py — slim orchestrator
+# app.py — 精简编排器
 import mimetypes
 import os
 
@@ -18,21 +18,21 @@ def register_static_mime_types() -> None:
 
 register_static_mime_types()
 
-# Windows: force HuggingFace/fastembed to COPY model files instead of symlinking.
-# On a network-share/UNC data dir Windows can't follow HF's symlinks ([WinError
-# 1463]), so the ONNX embedding model fails to load. huggingface_hub reads this
-# at import time, so set it before anything pulls it in. (Mirrored in
-# src/embeddings.py for non-server entrypoints.)
+# Windows：强制 HuggingFace/fastembed 复制模型文件而非使用符号链接。
+# 在网络共享/UNC 数据目录中，Windows 无法跟随 HF 的符号链接（[WinError
+# 1463]），导致 ONNX 嵌入模型加载失败。huggingface_hub 在导入时读取此变量，
+# 因此在任何代码引入之前就要设置好。（在 src/embeddings.py 中
+# 对非服务器入口点也有镜像设置。）
 if os.name == "nt":
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 from dotenv import load_dotenv
-# encoding="utf-8-sig" tolerates a UTF-8 BOM in .env — a common Windows gotcha
-# when the file is saved from Notepad. Without this, the first key parses as
-# "﻿AUTH_ENABLED" instead of "AUTH_ENABLED", so AUTH_ENABLED=false (etc.)
-# is silently ignored and the user is unexpectedly forced to log in (issue #142).
-# utf-8-sig reads plain UTF-8 (no BOM) identically, so this is safe everywhere.
+# encoding="utf-8-sig" 可以容忍 .env 文件中的 UTF-8 BOM —— 这是 Windows 上
+# 用记事本保存文件时的常见陷阱。如果不加这个参数，第一个键会被解析为
+# "﻿AUTH_ENABLED" 而非 "AUTH_ENABLED"，导致 AUTH_ENABLED=false 等配置
+# 被静默忽略，用户会被意外强制要求登录（issue #142）。
+# utf-8-sig 对普通 UTF-8（无 BOM）文件的读取行为完全一致，因此可安全用于所有平台。
 load_dotenv(encoding="utf-8-sig")
 
 import asyncio
@@ -48,7 +48,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Core imports
+# 核心模块导入
 from core.constants import (
     BASE_DIR, STATIC_DIR, SESSIONS_FILE,
     REQUEST_TIMEOUT, OPENAI_API_KEY, AUTH_FILE,
@@ -67,24 +67,24 @@ from src.app_helpers import abs_join
 from src.generated_images import GENERATED_IMAGE_HEADERS, resolve_generated_image_path
 from starlette.responses import RedirectResponse
 
-# ========= LOGGING =========
+# ========= 日志 =========
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
 logger = logging.getLogger(__name__)
 
-# ========= APP =========
-# Lifespan is defined below (after all helpers it references are in scope)
-# and passed to FastAPI so we can use the modern context-manager lifecycle
-# instead of the deprecated @app.on_event("startup"/"shutdown") decorators.
+# ========= 应用 =========
+# Lifespan 在下面定义（在其引用的所有辅助函数都就位之后），
+# 然后传递给 FastAPI，这样我们可以使用现代化的上下文管理器生命周期，
+# 而不是已弃用的 @app.on_event("startup"/"shutdown") 装饰器。
 app = FastAPI(
     title="AI Chat Application",
     description="Comprehensive AI chat with memory, research, and multi-modal capabilities",
     version="1.0.0",
 )
 
-# ========= CORS =========
+# ========= 跨域 =========
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
 app.add_middleware(
     CORSMiddleware,
@@ -104,16 +104,15 @@ app.add_middleware(
     ],
 )
 
-# ========= SECURITY HEADERS MIDDLEWARE =========
+# ========= 安全头中间件 =========
 app.add_middleware(SecurityHeadersMiddleware)
 
 
-# ========= REQUEST TIMEOUT (FALLBACK FOR HUNG HANDLERS) =========
-# If a single request takes longer than REQUEST_HARD_TIMEOUT, abort it and
-# return 504 instead of holding the event loop hostage. Whitelisted paths
-# (streaming, long-running shell exec, research) are exempt because they
-# legitimately stay open. Without this, a single hung subprocess.run or
-# missing-timeout httpx call locks up the entire server for everyone.
+# ========= 请求超时（挂起处理器的后备方案）=========
+# 如果单个请求耗时超过 REQUEST_HARD_TIMEOUT，则中止并返回 504，
+# 而不是让事件循环被卡住。白名单路径（流式传输、长时间运行的 shell 执行、
+# research）被豁免，因为它们合法需要保持长连接。如果没有这个机制，
+# 一个挂起的 subprocess.run 或缺少超时的 httpx 调用就会让整个服务器对所有用户都锁死。
 import asyncio as _asyncio
 from starlette.middleware.base import BaseHTTPMiddleware as _BaseHTTPMiddleware
 from starlette.responses import JSONResponse as _JSONResponse
@@ -148,7 +147,7 @@ class _RequestTimeoutMiddleware(_BaseHTTPMiddleware):
 
 app.add_middleware(_RequestTimeoutMiddleware)
 
-# ========= AUTH =========
+# ========= 认证 =========
 from routes.auth_routes import setup_auth_routes, SESSION_COOKIE
 
 auth_manager = AuthManager()
@@ -173,14 +172,12 @@ if AUTH_ENABLED:
         "/login",
     }
     AUTH_EXEMPT_PREFIXES = ["/static"]
-    # Dynamic paths whose own handler proves identity via a path-embedded
-    # secret instead of the session/bearer auth. The route handler at
-    # routes/task_routes.py validates the per-task `webhook_token` itself
-    # and returns 404 on mismatch, so the path is the credential — the
-    # UI labels these URLs "no auth needed" precisely because external
-    # callers (Zapier, n8n, curl) can't supply a session cookie. Without
-    # this exemption AuthMiddleware rejects every POST with 401 before
-    # the token is ever checked.
+    # 动态路径：其处理程序通过路径内嵌的密钥来验证身份，
+    # 而不依赖 session/bearer 认证。routes/task_routes.py 中的路由处理程序
+    # 自行验证每个任务的 `webhook_token`，不匹配则返回 404，
+    # 因此路径本身就是凭证 —— UI 将这些 URL 标注为"无需认证"，正是因为
+    # 外部调用者（Zapier、n8n、curl）无法提供 session cookie。
+    # 如果没有此豁免，AuthMiddleware 会在密钥被检查之前就将每个 POST 请求以 401 拒绝。
     import re as _re
     AUTH_EXEMPT_PATTERNS = [
         _re.compile(r"^/api/tasks/[^/]+/webhook/[^/]+/?$"),
@@ -193,11 +190,11 @@ if AUTH_ENABLED:
             return True
         return any(p.match(path) for p in AUTH_EXEMPT_PATTERNS)
 
-    # In-memory token cache: prefix → list[(token_id, token_hash, owner, scopes)]. The DB
-    # query was running on every API-bearer request and scanning bcrypt
-    # checks linearly. With this cache, we hit the DB only when the cache
-    # version bumps (token created/revoked) — see _token_cache_invalidate
-    # in app.state, called by routes/api_token_routes.
+    # 内存令牌缓存：前缀 → [(token_id, token_hash, owner, scopes)]。
+    # 之前每个 API-bearer 请求都要查询数据库并线性扫描 bcrypt 校验。
+    # 有了这个缓存后，仅在缓存版本更新时（令牌创建/撤销）才会访问数据库
+    # —— 参见 app.state 中的 _token_cache_invalidate，
+    # 由 routes/api_token_routes 调用。
     _token_cache: dict = {}
     _token_cache_lock = _asyncio.Lock()
     _token_cache_dirty = True
@@ -225,10 +222,10 @@ if AUTH_ENABLED:
         _token_cache.update(new_map)
         app.state._token_cache_dirty = False
 
-    # Headers that prove a request was forwarded by a proxy/tunnel (cloudflared,
-    # nginx, Caddy, Tailscale Funnel, …). cloudflared connects to the app FROM
-    # 127.0.0.1, so without this check every tunneled request would look like
-    # loopback and could bypass auth.
+    # 这些请求头用于判断请求是否被代理/隧道转发（cloudflared、
+    # nginx、Caddy、Tailscale Funnel 等）。cloudflared 从 127.0.0.1
+    # 连接到应用，如果没有此检查，每个隧道转发的请求都会看起来像是
+    # 本地回环，从而可能绕过认证。
     _PROXY_FWD_HEADERS = (
         "cf-connecting-ip", "cf-ray", "cf-visitor",
         "x-forwarded-for", "x-forwarded-host", "x-real-ip", "forwarded",
@@ -253,29 +250,27 @@ if AUTH_ENABLED:
     class AuthMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
             path = request.url.path
-            # A genuine CORS preflight (OPTIONS + Access-Control-Request-Method)
-            # carries no credentials by design and must reach CORSMiddleware to be
-            # answered. AuthMiddleware is the outermost middleware, so gating the
-            # preflight on auth 401s it before CORS can respond -- which blocks
-            # every cross-origin browser/WebView client before the real request
-            # is sent. Let real preflights through (only OPTIONS w/ the ACRM
-            # header; never a credentialed request).
+            # 真正的 CORS 预检请求（OPTIONS + Access-Control-Request-Method）
+            # 设计上不携带凭证，必须到达 CORSMiddleware 才能得到响应。
+            # AuthMiddleware 是最外层中间件，如果在预检阶段就要求认证，
+            # 会导致 CORS 无法响应 —— 这会阻止所有跨域浏览器/WebView 客户端
+            # 在发送实际请求之前就被拦截。放行真正的预检请求（仅带 ACRM
+            # 头的 OPTIONS 请求；绝不是带凭证的请求）。
             if is_cors_preflight(request.method, request.headers):
                 return await call_next(request)
             if _is_auth_exempt(path):
                 return await call_next(request)
-            # In-process internal-tool token bypass. Used by the agent
-            # tool layer when it HTTP-loopbacks to admin-gated routes
-            # (no admin cookie available in that context). Restricted to
-            # loopback clients + matching token to keep it locked down.
+            # 进程内 internal-tool 令牌绕过。当 agent 工具层通过
+            # HTTP 回环调用受管理员权限保护的路由时使用
+            # （该上下文中没有 admin cookie 可用）。限制为
+            # 回环客户端 + 匹配令牌以确保安全。
             try:
                 from core.middleware import INTERNAL_TOOL_HEADER, INTERNAL_TOOL_TOKEN as _ITT
                 _hdr = request.headers.get(INTERNAL_TOOL_HEADER)
                 if _hdr and secrets.compare_digest(_hdr, _ITT) and _is_trusted_loopback(request):
-                    # Impersonation: when the agent's loopback call sets
-                    # X-Odysseus-Owner, attribute the request to that user only
-                    # if they exist. Authorization checks remain separate; this
-                    # is just owner attribution for notes/calendar/etc.
+                    # 身份模拟：当 agent 的回环调用设置了 X-Odysseus-Owner 时，
+                    # 仅在该用户存在的情况下将请求归属于该用户。
+                    # 授权检查保持独立；这只是用于 notes/calendar 等的所有者归属。
                     _impersonate = (request.headers.get("X-Odysseus-Owner") or "").strip()
                     _auth_mgr = getattr(request.app.state, "auth_manager", None) or auth_manager
                     if _impersonate and _impersonate in getattr(_auth_mgr, "users", {}):
@@ -286,24 +281,23 @@ if AUTH_ENABLED:
                     return await call_next(request)
             except Exception:
                 pass
-            # Allow DIRECT localhost requests (internal service calls from
-            # heartbeats etc.). Tunnel/proxy-forwarded requests are excluded by
-            # _is_trusted_loopback so LOCALHOST_BYPASS can't be abused over a
-            # Cloudflare tunnel / reverse proxy. Keep LOCALHOST_BYPASS=false for
-            # network-exposed deployments regardless.
+            # 允许直接 localhost 请求（来自心跳等的内部服务调用）。
+            # 隧道/代理转发的请求会被 _is_trusted_loopback 排除，
+            # 这样 LOCALHOST_BYPASS 就不会通过 Cloudflare 隧道/反向代理被滥用。
+            # 无论如何，对于网络暴露的部署应保持 LOCALHOST_BYPASS=false。
             if LOCALHOST_BYPASS and _is_trusted_loopback(request):
                 return await call_next(request)
             if not auth_manager.is_configured:
-                # No users yet — redirect to login for first-time setup
+                # 暂无用户 —— 重定向到登录页进行首次设置
                 if not path.startswith("/api/"):
                     return RedirectResponse(url="/login", status_code=302)
                 return JSONResponse(status_code=401, content={"error": "Setup required"})
 
-            # --- Bearer token auth (API tokens for external integrations) ---
+            # --- Bearer 令牌认证（供外部集成使用的 API 令牌）---
             auth_header = request.headers.get("authorization", "")
             if auth_header.startswith("Bearer ody_"):
                 raw_token = auth_header[7:]
-                # Sanity check: tokens are "ody_" + 43 chars of base64
+                # 合理性检查：令牌格式为 "ody_" + 43 个 base64 字符
                 if len(raw_token) < 12 or len(raw_token) > 100:
                     return JSONResponse(status_code=401, content={"error": "Invalid API token"})
                 prefix = raw_token[:8]
@@ -323,9 +317,9 @@ if AUTH_ENABLED:
                             matched_scopes = scopes or []
                             break
                     if matched_id:
-                        # Update last_used_at off the hot path. Doing it
-                        # inline used to keep the request open across an
-                        # extra commit; do it fire-and-forget instead.
+                        # 在热路径之外更新 last_used_at。内联执行
+                        # 会使请求在额外的一次提交中保持打开状态；
+                        # 改为 fire-and-forget 方式。
                         async def _touch_last_used(tid: str):
                             def _do():
                                 _db = SessionLocal()
@@ -341,8 +335,8 @@ if AUTH_ENABLED:
                             except Exception:
                                 pass
                         _asyncio.create_task(_touch_last_used(matched_id))
-                        # Keep bearer-token callers out of normal cookie/user
-                        # routes. API-aware routes can read api_token_owner.
+                        # 将 bearer 令牌调用者排除在普通 cookie/user
+                        # 路由之外。API 感知的路由可以读取 api_token_owner。
                         request.state.current_user = "api"
                         request.state.api_token = True
                         request.state.api_token_id = matched_id
@@ -351,17 +345,17 @@ if AUTH_ENABLED:
                         return await call_next(request)
                 except Exception:
                     logger.warning("API token auth error", exc_info=False)
-                # Invalid bearer token — reject immediately
+                # 无效的 bearer 令牌 —— 立即拒绝
                 return JSONResponse(status_code=401, content={"error": "Invalid API token"})
 
-            # --- Cookie-based session auth ---
+            # --- 基于 Cookie 的 session 认证 ---
             token = request.cookies.get(SESSION_COOKIE)
             if not auth_manager.validate_token(token):
                 if path.startswith("/api/"):
                     return JSONResponse(status_code=401, content={"error": "Not authenticated"})
                 return RedirectResponse(url="/login", status_code=302)
 
-            # Attach current username to request state for downstream routes
+            # 将当前用户名附加到请求状态中，供下游路由使用
             request.state.current_user = auth_manager.get_username_for_token(token)
             request.state.api_token = False
             return await call_next(request)
@@ -371,7 +365,7 @@ if AUTH_ENABLED:
 else:
     logger.info("Auth middleware disabled (set AUTH_ENABLED=true to enable)")
 
-# ========= STATIC FILES =========
+# ========= 静态文件 =========
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 
@@ -393,14 +387,14 @@ class _RevalidatingStatic(StaticFiles):
 
 app.mount("/static", _RevalidatingStatic(directory="static"), name="static")
 
-# ========= GENERATED IMAGES =========
+# ========= 生成图片 =========
 @app.get("/api/generated-image/{filename}")
 async def serve_generated_image(filename: str, request: Request):
     """Serve generated images from the data directory."""
     img_path = resolve_generated_image_path(filename)
-    # SECURITY: filename is the only key, so anyone who knows / guesses a
-    # 12-hex content hash could pull another user's image bytes. Require
-    # auth and verify ownership via the gallery row (when one exists).
+    # 安全性：filename 是唯一键，因此知道/猜出 12 位十六进制内容哈希
+    # 的人可能会拉取到其他用户的图片数据。需要认证并通过 gallery 行
+    # （如果存在）验证所有权。
     try:
         from src.auth_helpers import get_current_user
         from core.database import SessionLocal as _SL, GalleryImage as _GI
@@ -409,8 +403,8 @@ async def serve_generated_image(filename: str, request: Request):
             _db = _SL()
             try:
                 _row = _db.query(_GI).filter(_GI.filename == filename).first()
-                # Generated-but-not-yet-imported images have no row → allow.
-                # Row exists with a different owner → 404 (don't confirm existence).
+                # 已生成但尚未导入的图片没有对应行 → 允许访问。
+                # 行存在但所有者不同 → 404（不确认存在性）。
                 if _row is not None and _row.owner and _row.owner != _user:
                     raise HTTPException(status_code=404, detail="Image not found")
             finally:
@@ -426,30 +420,27 @@ async def serve_generated_image(filename: str, request: Request):
         "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm",
         "mkv": "video/x-matroska", "m4v": "video/mp4",
     }.get(ext, "application/octet-stream")
-    # Generated-image filenames are content hashes → the bytes for a given
-    # filename never change. Cache them hard so the gallery doesn't
-    # re-download every full-size image each time it's opened. `immutable`
-    # tells the browser it never needs to revalidate within the max-age.
+    # 生成图片的文件名是内容哈希 → 给定文件名的字节永远不会改变。
+    # 将其硬缓存，这样画廊每次打开时不需要重新下载每张全尺寸图片。
+    # `immutable` 告诉浏览器在 max-age 内永远不需要重新验证。
     return FileResponse(
         str(img_path),
         media_type=mime,
         headers=GENERATED_IMAGE_HEADERS,
     )
 
-# ========= YOUTUBE INIT =========
+# ========= YouTube 初始化 =========
 from services.youtube import init_youtube
 init_youtube()
 
-# ========= RAG (vector document RAG) =========
-# VectorRAG (ChromaDB-backed personal-document semantic search). Initialized
-# lazily via get_rag_manager() — returns None if ChromaDB isn't reachable
-# (no server running on the configured host:port), in which case personal-doc
-# routes return a clean 503 instead of busy-retrying every request.
+# ========= RAG（向量文档检索增强生成）=========
+# VectorRAG（基于 ChromaDB 的个人文档语义搜索）。通过 get_rag_manager()
+# 延迟初始化 —— 如果 ChromaDB 不可达（配置的 host:port 上没有运行服务器），
+# 则返回 None，此时个人文档路由返回干净的 503 而非每次都重试。
 #
-# Note: this was previously hardcoded off because chromadb 1.4.1 / pydantic
-# 2.12 were mutually incompatible at the time. With the current pins
-# (chromadb 1.5.x + pydantic 2.13.x) the init works and Personal Docs
-# (POST /api/personal/add_directory etc.) is functional again.
+# 注意：之前因为 chromadb 1.4.1 / pydantic 2.12 互不兼容而被硬编码关闭。
+# 使用当前的版本约束（chromadb 1.5.x + pydantic 2.13.x）初始化正常工作，
+# Personal Docs（POST /api/personal/add_directory 等）已恢复可用。
 from src.rag_singleton import get_rag_manager
 rag_manager = get_rag_manager()
 rag_available = rag_manager is not None
@@ -461,10 +452,10 @@ else:
         "(ChromaDB may not be reachable yet — routes will retry lazily)"
     )
 
-# ========= IMPORT CONFIG =========
+# ========= 导入配置 =========
 from src.config import config
 
-# ========= COMPONENT INITIALIZATION =========
+# ========= 组件初始化 =========
 from src.app_initializer import initialize_managers
 
 components = initialize_managers(BASE_DIR, rag_manager)
@@ -490,7 +481,7 @@ from services.tts import get_tts_service
 tts_service = get_tts_service()
 logger.info("TTS service initialized (provider managed via admin settings)")
 
-# ========= EXCEPTION HANDLERS =========
+# ========= 异常处理器 =========
 @app.exception_handler(SessionNotFoundError)
 async def session_not_found_handler(request: Request, exc: SessionNotFoundError):
     return JSONResponse(status_code=404, content={"error": "SESSION_NOT_FOUND", "message": str(exc)})
@@ -507,45 +498,45 @@ async def llm_service_error_handler(request: Request, exc: LLMServiceError):
 async def web_search_error_handler(request: Request, exc: WebSearchError):
     return JSONResponse(status_code=502, content={"error": "WEB_SEARCH_ERROR", "message": str(exc)})
 
-# ========= WEBHOOK MANAGER =========
+# ========= Webhook 管理器 =========
 from src.webhook_manager import WebhookManager
 
 webhook_manager = WebhookManager(api_key_manager=api_key_manager)
 
-# ========= INCLUDE ROUTERS =========
+# ========= 注册路由 =========
 
 # Auth
 auth_router = setup_auth_routes(auth_manager)
 app.include_router(auth_router)
 
-# Uploads
+# 上传
 from routes.upload_routes import setup_upload_routes
 upload_router, upload_cleanup_func = setup_upload_routes(upload_handler)
 app.include_router(upload_router)
 upload_cleanup_task = None
 
-# Emoji SVG proxy (same-origin, lazy-cached Twemoji) — lets the chat render
-# emojis as flat SVG instead of system color glyphs.
+# Emoji SVG 代理（同源、延迟缓存的 Twemoji）—— 让聊天中将
+# emoji 渲染为扁平 SVG 而非系统彩色字形。
 from routes.emoji_routes import setup_emoji_routes
 app.include_router(setup_emoji_routes())
 
-# Sessions
+# 会话
 from routes.session_routes import setup_session_routes
 session_config = {"REQUEST_TIMEOUT": REQUEST_TIMEOUT, "OPENAI_API_KEY": OPENAI_API_KEY, "SESSIONS_FILE": SESSIONS_FILE}
 app.include_router(setup_session_routes(session_manager, session_config, webhook_manager=webhook_manager))
 
-# Admin Danger Zone wipes (Settings → System → Danger Zone)
+# 管理员危险区域清除（设置 → 系统 → 危险区域）
 from routes.admin_wipe_routes import setup_admin_wipe_routes
 app.include_router(setup_admin_wipe_routes(session_manager))
 
-# Memory
+# 记忆
 from routes.memory_routes import setup_memory_routes
 memory_router = setup_memory_routes(memory_manager, session_manager, memory_vector=memory_vector)
 app.include_router(memory_router)
 from routes.skills_routes import setup_skills_routes
 app.include_router(setup_skills_routes(skills_manager))
 
-# Chat
+# 聊天
 from routes.chat_routes import setup_chat_routes
 app.include_router(setup_chat_routes(
     session_manager, chat_handler, chat_processor,
@@ -555,47 +546,47 @@ app.include_router(setup_chat_routes(
     skills_manager=skills_manager,
 ))
 
-# Research (background deep-research tasks)
+# 研究（后台深度研究任务）
 from routes.research_routes import setup_research_routes
 app.include_router(setup_research_routes(research_handler, session_manager=session_manager))
 
-# History
+# 历史
 from routes.history_routes import setup_history_routes
 app.include_router(setup_history_routes(session_manager))
 
-# Search
+# 搜索
 from routes.search_routes import setup_search_routes
 app.include_router(setup_search_routes(config))
 
-# Presets
+# 预设
 from routes.preset_routes import setup_preset_routes
 app.include_router(setup_preset_routes(preset_manager))
 
-# Diagnostics
+# 诊断
 from routes.diagnostics_routes import setup_diagnostics_routes
 app.include_router(setup_diagnostics_routes(rag_manager, rag_available, research_handler))
 
-# Cleanup
+# 清理
 from routes.cleanup_routes import setup_cleanup_routes
 app.include_router(setup_cleanup_routes(session_manager))
 
-# Personal docs
+# 个人文档
 from routes.personal_routes import setup_personal_routes
 app.include_router(setup_personal_routes(personal_docs_mgr, rag_manager, rag_available))
 
-# Embedding model management
+# 嵌入模型管理
 from routes.embedding_routes import setup_embedding_routes
 app.include_router(setup_embedding_routes())
 
-# Models
+# 模型
 from routes.model_routes import setup_model_routes
 app.include_router(setup_model_routes(model_discovery))
 
-# GitHub Copilot device-flow login
+# GitHub Copilot 设备码登录
 from routes.copilot_routes import setup_copilot_routes
 app.include_router(setup_copilot_routes())
 
-# ChatGPT Subscription device-flow login
+# ChatGPT 订阅设备码登录
 from routes.chatgpt_subscription_routes import setup_chatgpt_subscription_routes
 app.include_router(setup_chatgpt_subscription_routes())
 
@@ -610,24 +601,24 @@ from routes.stt_routes import setup_stt_routes
 app.include_router(setup_stt_routes(stt_service))
 logger.info("STT service initialized (provider managed via settings)")
 
-# Documents (artifacts/canvas)
+# 文档（artifacts/canvas）
 from routes.document_routes import setup_document_routes
 document_router = setup_document_routes(session_manager, upload_handler)
 app.include_router(document_router)
 
-# Signatures (reusable image stamps)
+# 签名（可复用的图片印章）
 from routes.signature_routes import setup_signature_routes
 app.include_router(setup_signature_routes())
 
-# Gallery (image library)
+# 画廊（图片库）
 from routes.gallery_routes import setup_gallery_routes
 app.include_router(setup_gallery_routes())
 
-# Persisted image-editor drafts (server-backed projects)
+# 持久化图片编辑器草稿（基于服务器的项目）
 from routes.editor_draft_routes import setup_editor_draft_routes
 app.include_router(setup_editor_draft_routes())
 
-# Scheduled tasks + event bus
+# 定时任务 + 事件总线
 from src.task_scheduler import TaskScheduler
 task_scheduler = TaskScheduler(session_manager)
 from src.event_bus import set_task_scheduler
@@ -638,32 +629,32 @@ app.include_router(setup_task_routes(task_scheduler))
 from routes.assistant_routes import setup_assistant_routes
 app.include_router(setup_assistant_routes(task_scheduler))
 
-# Calendar (CalDAV)
+# 日历（CalDAV）
 from routes.calendar_routes import setup_calendar_routes
 calendar_router = setup_calendar_routes()
 app.include_router(calendar_router)
 
-# Shell (user-facing command execution)
+# Shell（面向用户的命令执行）
 from routes.shell_routes import setup_shell_routes
 app.include_router(setup_shell_routes())
 
-# Cookbook (model download/serve/cache, cookbook state sync)
+# Cookbook（模型下载/服务/缓存，cookbook 状态同步）
 from routes.cookbook_routes import setup_cookbook_routes
 app.include_router(setup_cookbook_routes())
 
-# Hardware model fitting (cookbook "What Fits?" tab)
+# 硬件模型适配（cookbook "What Fits?" 标签页）
 from routes.hwfit_routes import setup_hwfit_routes
 app.include_router(setup_hwfit_routes())
 
-# Model A/B Comparison
+# 模型 A/B 对比
 from routes.compare_routes import setup_compare_routes
 app.include_router(setup_compare_routes(session_manager))
 
-# User Preferences
+# 用户偏好
 from routes.prefs_routes import setup_prefs_routes
 app.include_router(setup_prefs_routes())
 
-# Backup (export/import user data)
+# 备份（导出/导入用户数据）
 from routes.backup_routes import setup_backup_routes
 app.include_router(setup_backup_routes(memory_manager, preset_manager, skills_manager))
 
@@ -671,7 +662,7 @@ from routes.font_routes import setup_font_routes
 app.include_router(setup_font_routes())
 
 
-# MCP (Model Context Protocol)
+# MCP（模型上下文协议）
 from src.mcp_manager import McpManager
 from src.agent_tools import set_mcp_manager
 from routes.mcp_routes import setup_mcp_routes
@@ -681,7 +672,7 @@ set_mcp_manager(mcp_manager)
 app.include_router(setup_mcp_routes(mcp_manager))
 logger.info("MCP routes initialized")
 
-# AI Interaction tools (debates, pipelines, self-managing AI, UI control)
+# AI 交互工具（讨论、流水线、自管理 AI、UI 控制）
 from src.ai_interaction import set_session_manager as set_ai_session_manager, set_memory_manager as set_ai_memory_manager, set_rag_manager as set_ai_rag_manager
 set_ai_session_manager(session_manager)
 set_ai_memory_manager(memory_manager, memory_vector)
@@ -692,26 +683,25 @@ logger.info("AI interaction tools initialized (session, memory, RAG, UI control)
 from routes.webhook_routes import setup_webhook_routes
 app.include_router(setup_webhook_routes(webhook_manager, auth_manager, session_manager, api_key_manager))
 
-# API Tokens
+# API 令牌
 from routes.api_token_routes import setup_api_token_routes
 app.include_router(setup_api_token_routes())
 
 logger.info("Webhook & API token routes initialized")
 
-# Notes (Google Keep-style notes/todos)
+# 笔记（Google Keep 风格的笔记/待办事项）
 from routes.note_routes import setup_note_routes
 app.include_router(setup_note_routes(task_scheduler))
 
-# Email
+# 邮件
 from routes.email_routes import setup_email_routes
 email_router = setup_email_routes()
 app.include_router(email_router)
 
-# Codex integration — HTTP surface for the Codex plugin/MCP bridge. Reuses
-# api_token scopes (todos:read|write, email:read|draft|send) so external
-# Codex sessions can only touch the data the user explicitly allowed. Mounted
-# AFTER email so the codex_routes can borrow the email router for shared
-# search/threading helpers.
+# Codex 集成 —— Codex 插件/MCP 桥接的 HTTP 接口。复用
+# api_token 作用域（todos:read|write, email:read|draft|send），
+# 使外部 Codex 会话只能访问用户明确授权的数据。在 Email 之后挂载，
+# 以便 codex_routes 可以借用 email router 的共享搜索/线程辅助功能。
 from routes.codex_routes import setup_codex_routes, setup_claude_routes
 app.include_router(setup_codex_routes(
     email_router=email_router,
@@ -724,14 +714,14 @@ app.include_router(setup_claude_routes())
 from routes.vault_routes import setup_vault_routes
 app.include_router(setup_vault_routes())
 
-# Contacts (CardDAV)
+# 通讯录（CardDAV）
 from routes.contacts_routes import setup_contacts_routes
 app.include_router(setup_contacts_routes())
 
 from companion import setup_companion_routes
 app.include_router(setup_companion_routes())
 
-# ========= ROUTES (kept in app.py) =========
+# ========= 路由（保留在 app.py 中）=========
 
 def _serve_html_with_nonce(request: Request, file_path: str) -> HTMLResponse:
     """Read an HTML file and inject the CSP nonce into inline <script> tags."""
@@ -759,10 +749,9 @@ async def serve_notes(request: Request):
 async def serve_calendar(request: Request):
     return await serve_index(request)
 
-# Per-tool deep-link routes — all serve the same SPA, the JS auto-opens
-# the matching modal based on window.location.pathname. Each route also
-# gets a unique favicon + page title via inline script in index.html so
-# bookmarks render with tool-specific icons.
+# 每个工具深度链接路由 —— 全部服务于同一个 SPA，JS 会根据
+# window.location.pathname 自动打开对应的模态框。每个路由在 index.html 中
+# 通过内联脚本获取独特的 favicon + 页面标题，使书签能显示特定工具的图标。
 @app.get("/cookbook")
 async def serve_cookbook(request: Request):
     return await serve_index(request)
@@ -838,15 +827,15 @@ async def runtime_info() -> Dict[str, object]:
         "ollama_base_url": ollama_url,
     }
 
-# ========= LIFECYCLE =========
+# ========= 生命周期 =========
 
 @asynccontextmanager
 async def _lifespan(app):
     """Modern lifespan context manager replacing deprecated @app.on_event."""
-    # ── STARTUP ──
+    # ── 启动 ──
     await _startup_event()
     yield
-    # ── SHUTDOWN ──
+    # ── 关闭 ──
     await _shutdown_event()
 
 app.router.lifespan_context = _lifespan
@@ -856,8 +845,8 @@ async def _startup_event():
     global upload_cleanup_task
     logger.info("Application starting up...")
     webhook_manager.set_loop(asyncio.get_running_loop())
-    # Wipe any leftover incognito sessions from previous process — they're
-    # ephemeral by design and must not survive a restart.
+    # 清除上一个进程遗留的隐身会话 —— 它们按设计是临时的，
+    # 不能存活过重启。
     try:
         from core.database import SessionLocal as _SL, Session as _DbSess, ChatMessage as _DbMsg
         _db = _SL()
@@ -873,21 +862,21 @@ async def _startup_event():
             _db.close()
     except Exception as e:
         logger.debug(f"Incognito purge skipped: {e}")
-    # Strong refs to fire-and-forget startup tasks. Without this, Python may
-    # GC tasks created with `asyncio.create_task(...)` before they finish.
+    # 对 fire-and-forget 启动任务的强引用。如果不这样做，Python 可能会
+    # 在 `asyncio.create_task(...)` 创建的任务完成之前就将其 GC 回收。
     _startup_tasks: list[asyncio.Task] = getattr(app.state, "_startup_tasks", [])
     app.state._startup_tasks = _startup_tasks
     if upload_cleanup_func:
         upload_cleanup_task = asyncio.create_task(upload_cleanup_func())
-    # Always-on monitor that auto-continues the agent when a background bash
-    # job (#!bg) finishes — re-invokes the turn with the job output.
+    # 常驻监控：当后台 bash 任务（#!bg）完成时自动继续 agent
+    # —— 用任务输出重新调用该轮对话。
     try:
         from src.bg_monitor import start_bg_monitor
         _startup_tasks.append(start_bg_monitor())
     except Exception as _e:
         logger.warning("Failed to start background-job monitor: %s", _e)
-    # MCP servers can be slow or blocked by local tooling. Connect them after
-    # the web server is accepting traffic instead of delaying the whole UI.
+    # MCP 服务器可能很慢或被本地工具阻塞。在 Web 服务器接受流量
+    # 之后再连接它们，而不是延迟整个 UI 的启动。
     async def _startup_mcp_connections():
         try:
             from src.builtin_mcp import register_builtin_servers
@@ -903,11 +892,10 @@ async def _startup_event():
 
     _startup_tasks.append(asyncio.create_task(_startup_mcp_connections()))
 
-    # Pre-warm the RAG tool index off the request path. Loading the local
-    # embedding model + opening ChromaDB + indexing the built-in tools is a
-    # one-time ~1-3s cost that otherwise lands on the user's FIRST message
-    # (showing up as a big `tool_selection` time). Doing it here makes the
-    # first turn as fast as subsequent ones (warm embed ≈ a few ms).
+    # 在请求路径之外预热 RAG 工具索引。加载本地嵌入模型 +
+    # 打开 ChromaDB + 索引内置工具的是一次性的 ~1-3s 开销，
+    # 否则会落在用户的第一个消息上（表现为巨大的 `tool_selection` 时间）。
+    # 在这里完成使第一轮对话和后续一样快（预热后嵌入只需几毫秒）。
     async def _warmup_tool_index():
         try:
             from src.tool_index import get_tool_index
@@ -919,7 +907,7 @@ async def _startup_event():
             logger.warning(f"Tool index warmup failed (non-critical): {type(e).__name__}: {e}")
 
     _startup_tasks.append(asyncio.create_task(_warmup_tool_index()))
-    # Warmup: ping all known LLM endpoints to prime connections
+    # 预热：ping 所有已知的 LLM 端点以建立连接
     async def _warmup_endpoints():
         try:
             import httpx
@@ -938,7 +926,7 @@ async def _startup_event():
 
     _startup_tasks.append(asyncio.create_task(_warmup_endpoints()))
 
-    # Keep-alive: ping endpoints every 60 seconds to prevent cold starts
+    # 保持连接：每 60 秒 ping 一次端点以防止冷启动
     async def _keepalive_loop():
         while True:
             try:
@@ -946,12 +934,12 @@ async def _startup_event():
                 await _warmup_endpoints()
             except Exception as e:
                 logger.warning(f"Keepalive loop error: {e}")
-                await asyncio.sleep(300)  # Back off on error
+                await asyncio.sleep(300)  # 出错时退避等待
 
     _startup_tasks.append(asyncio.create_task(_keepalive_loop()))
 
     async def _ensure_default_tasks():
-        # Create/reconcile default automation tasks + personal assistant for every user.
+        # 为每个用户创建/协调默认自动化任务 + 个人助手。
         owners = set()
         try:
             import json as _json
@@ -962,9 +950,9 @@ async def _startup_event():
         except Exception as e:
             logger.debug(f"Default task auth-owner scan: {e}")
 
-        # Also reconcile owners already present in scheduled_tasks. This cleans
-        # up stale/demo/deleted-user built-ins that are no longer in auth.json;
-        # otherwise their old scheduled rows can keep firing forever.
+        # 同时协调 scheduled_tasks 中已存在的所有者。这样可以清理
+        # 过时的/演示/已删除用户的内置任务，这些任务已不在 auth.json 中；
+        # 否则它们的旧计划行会永远触发。
         try:
             from core.database import SessionLocal, ScheduledTask
             from src.task_scheduler import HOUSEKEEPING_DEFAULTS
@@ -993,13 +981,13 @@ async def _startup_event():
         except Exception as e:
             logger.debug(f"Default tasks: {e}")
 
-    # Reconcile built-in tasks before the runner starts. Otherwise legacy
-    # scheduled built-ins can fire once before being converted to event tasks.
+    # 在 runner 启动前协调内置任务。否则旧版计划内置任务
+    # 可能会在转换为事件任务之前触发一次。
     await _ensure_default_tasks()
 
-    # Disk-backed skills are not covered by the DB legacy-owner sweep. Repair
-    # ownerless or deleted/test-owner SKILL.md files so strict owner filtering
-    # does not make an existing library look empty after auth/account changes.
+    # 磁盘存储的技能不受 DB 旧版所有者扫描覆盖。修复无所有者或已删除/
+    # 测试所有者的 SKILL.md 文件，这样严格的所有者过滤不会在 auth/账户
+    # 变更后让现有库看起来是空的。
     try:
         import json as _json
         auth_path = AUTH_FILE
@@ -1019,9 +1007,9 @@ async def _startup_event():
     except Exception as e:
         logger.debug(f"Skill owner backfill skipped: {e}")
 
-    # Start scheduled task runner — skip when running under a cron-driven
-    # deployment where an external worker drives task firing. Mirrors
-    # `ODYSSEUS_INPROCESS_POLLERS` from the email pollers.
+    # 启动计划任务运行器 —— 在 cron 驱动部署中跳过，
+    # 这种情况下由外部 worker 驱动任务触发。与邮件轮询器中的
+    # `ODYSSEUS_INPROCESS_POLLERS` 镜像。
     _tasks_inprocess = os.environ.get("ODYSSEUS_INPROCESS_TASKS", "1").strip().lower()
     if _tasks_inprocess not in ("0", "false", "no", "off", ""):
         await task_scheduler.start()
@@ -1030,9 +1018,9 @@ async def _startup_event():
             "In-process task scheduler disabled (ODYSSEUS_INPROCESS_TASKS=0); "
             "drive task firing externally (e.g. cron)."
         )
-    # Periodic null-owner sweep — re-runs the legacy-owner assignment hourly
-    # so any data created while auth was disabled / localhost-bypassed gets
-    # claimed by the admin instead of staying world-visible (M19).
+    # 定期空所有者清扫 —— 每小时重新运行旧版所有者分配，
+    # 这样在 auth 被禁用或 localhost-bypass 期间创建的任何数据
+    # 都会被管理员认领，而不是保持全局可见（M19）。
     async def _null_owner_sweep_loop():
         while True:
             try:
@@ -1045,11 +1033,11 @@ async def _startup_event():
 
     _startup_tasks.append(asyncio.create_task(_null_owner_sweep_loop()))
 
-    # Nightly skill audit — at ~02:00 local, test + judge a batch of the
-    # least-recently-checked skills, auto-fixing/escalating weak ones (never
-    # deletes). Rotates through the library so each night covers different
-    # skills. Gated by the `skill_audit_nightly` setting (default on); hour via
-    # `skill_audit_hour` (default 2), batch size via `skill_audit_batch` (8).
+    # 夜间技能审计 —— 在本地时间约 02:00，测试 + 评估一组
+    # 最近最少检查的技能，自动修复/升级较弱的技能（从不删除）。
+    # 在库中轮流进行，每晚覆盖不同的技能。
+    # 由 `skill_audit_nightly` 设置控制（默认开启）；时间通过
+    # `skill_audit_hour`（默认 2），批次大小通过 `skill_audit_batch`（8）。
     async def _skill_audit_nightly_loop():
         from datetime import timedelta
         while True:
@@ -1075,12 +1063,12 @@ async def _startup_event():
 
     _startup_tasks.append(asyncio.create_task(_skill_audit_nightly_loop()))
 
-    # Cookbook serve lifecycle — kills scheduler-launched serves whose
-    # window-end has passed. Paired with the cookbook_serve builtin
-    # action; both are no-ops unless a scheduled task actually launches
-    # something with end_after_min set. Removing this line + the
-    # cookbook_serve entry in BUILTIN_ACTIONS + src/cookbook_serve_lifecycle.py
-    # removes the feature.
+    # Cookbook 服务生命周期 —— 终止调度器启动的、窗口结束时间
+    # 已过的服务。与 cookbook_serve 内置操作配对使用；
+    # 除非计划任务实际启动了设置了 end_after_min 的服务，
+    # 否则两者都是空操作。移除此行 +
+    # BUILTIN_ACTIONS 中的 cookbook_serve 条目 + src/cookbook_serve_lifecycle.py
+    # 即可移除此功能。
     from src.cookbook_serve_lifecycle import cookbook_serve_lifecycle_loop
     _startup_tasks.append(asyncio.create_task(cookbook_serve_lifecycle_loop()))
 
@@ -1094,17 +1082,17 @@ async def _shutdown_event():
             await upload_cleanup_task
         except asyncio.CancelledError:
             pass
-    # Stop task scheduler (no-op if it never started under the gate)
+    # 停止任务调度器（如果未在 gate 下启动则为空操作）
     try:
         await task_scheduler.stop()
     except Exception:
         pass
-    # Close webhook manager
+    # 关闭 webhook 管理器
     try:
         await webhook_manager.close()
     except Exception as e:
         logger.warning(f"Webhook manager shutdown error: {e}")
-    # Disconnect all MCP servers
+    # 断开所有 MCP 服务器
     try:
         await mcp_manager.disconnect_all()
     except Exception as e:

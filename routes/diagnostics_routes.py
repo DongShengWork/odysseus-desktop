@@ -1,4 +1,4 @@
-"""Diagnostics routes — /api/db/stats, /api/rag/stats, /api/test/youtube, /api/test-research."""
+"""诊断路由 — /api/db/stats、/api/rag/stats、/api/test/youtube、/api/test-research。"""
 
 import logging
 from typing import Dict, Any

@@ -1,8 +1,8 @@
 """
 memory_server.py
 
-MCP server exposing memory management (list, add, edit, delete, search).
-Imports MemoryManager and MemoryVectorStore from the Odysseus codebase.
+MCP 服务器，暴露内存管理功能（列表、添加、编辑、删除、搜索）。
+从 Odysseus 代码库导入 MemoryManager 和 MemoryVectorStore。
 """
 
 import asyncio
@@ -18,14 +18,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 server = Server("memory")
 
-# Late-initialized managers (set during first tool call)
+# 延迟初始化的管理器（在首次工具调用时设置）
 _memory_manager = None
 _memory_vector = None
 _initialized = False
 
 
 def _ensure_init():
-    """Lazy-init memory managers on first use."""
+    """首次使用时延迟初始化内存管理器。"""
     global _memory_manager, _memory_vector, _initialized
     if _initialized:
         return

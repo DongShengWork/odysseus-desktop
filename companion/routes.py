@@ -1,19 +1,18 @@
-"""Companion bridge — /api/companion/*.
+"""Companion 桥接 — /api/companion/*。
 
-A thin, additive layer so a LAN client (e.g. a phone) can discover what a server
-offers and pair to it, without duplicating any LLM logic.
+一个薄附加层，让 LAN 客户端（例如手机）可以发现服务器提供的内容
+并与之配对，而不重复任何 LLM 逻辑。
 
-Auth is enforced globally by AuthMiddleware (app.py), so reaching a handler here
-means the caller is authenticated by either a cookie session or a Bearer `ody_`
-API token. The read endpoints (ping/info/models) accept either; the pairing
-endpoints are admin-cookie only.
+认证由 AuthMiddleware (app.py) 全局强制执行，因此到达此处处理程序的
+调用方已通过 cookie 会话或 Bearer `ody_` API 令牌进行身份验证。读取端点
+(ping/info/models) 接受两种方式；配对端点仅限 admin cookie。
 
-Pairing CSRF posture: minting happens ONLY on POST. The session cookie is
-SameSite=Lax (routes/auth_routes.py), which a browser does not send on a
-cross-site POST, so an admin's cookie can't be used by a malicious page to mint
-a token -- the same protection the existing POST /api/tokens relies on. Minting
-on a GET would be unsafe (Lax cookies ride top-level GET navigations), so GET
-/pair only renders a form.
+配对 CSRF 防护：令牌仅在 POST 时生成。会话 cookie 使用
+SameSite=Lax (routes/auth_routes.py)，浏览器不会在跨站点 POST 时
+发送它，因此管理员的 cookie 不会被恶意页面用于生成令牌 —
+这与现有 POST /api/tokens 的保护方式相同。在 GET 上生成令牌
+是不安全的（Lax cookie 会在顶级 GET 导航中携带），因此 GET /pair
+仅呈现表单。
 """
 
 import html
@@ -28,12 +27,12 @@ from companion import pairing as _pairing
 
 
 def token_owner(request: Request) -> str | None:
-    """The real owner to attribute a request to, for read-scoping.
+    """请求归属的真实所有者，用于读取作用域。
 
-    Cookie sessions resolve to the logged-in username via get_current_user.
-    Bearer-token callers come through as the sandboxed pseudo-user "api"; their
-    real owner is stamped on request.state.api_token_owner by the auth
-    middleware. Returns None when no owner can be resolved.
+    Cookie 会话通过 get_current_user 解析为登录用户名。
+    Bearer 令牌调用方以沙盒伪用户 "api" 身份传入；其真实所有者
+    由认证中间件标记在 request.state.api_token_owner 上。
+    当无法解析所有者时返回 None。
     """
     if getattr(request.state, "api_token", False):
         return getattr(request.state, "api_token_owner", None)
@@ -41,24 +40,23 @@ def token_owner(request: Request) -> str | None:
 
 
 def owner_can_see(row_owner, owner) -> bool:
-    """Owner-scope rule for read endpoints.
+    """读取端点的所有者作用域规则。
 
-    A caller sees a row when it is their own, or when it is a legacy null-owner
-    ("shared") row. A caller must NEVER see another owner's row. Mirrors the
-    `owner_filter` rule used elsewhere, expressed as a pure predicate so it can
-    be tested directly and used as a defensive in-Python check alongside the
-    SQL filter.
+    调用方可以看到自己的行，或者是旧的空所有者（"共享"）行。调用方
+    绝不能看到其他所有者的行。与别处使用的 `owner_filter` 规则一致，
+    以纯谓词形式表达，因此可以单独测试，并可与 SQL 过滤器一起用作
+    防御性 Python 内检查。
     """
     return row_owner is None or row_owner == owner
 
 
 def mint_pairing_token(owner: str, invalidate=None) -> tuple[str, str]:
-    """Mint a pairing token AND invalidate the auth middleware's in-memory token
-    cache, so the new token is accepted on the very next request without a server
-    restart. Returns (token_id, raw_token); the raw token is shown once.
+    """生成配对令牌并清除认证中间件的内存令牌缓存，以便新令牌在
+    下一个请求时即可被接受，无需服务器重启。返回 (token_id, raw_token)；
+    raw_token 仅显示一次。
 
-    `invalidate` is the app's request.app.state.invalidate_token_cache callable
-    (passed in so this stays a pure, testable unit).
+    `invalidate` 是应用的 request.app.state.invalidate_token_cache 可调用对象
+    （传入以保持此函数为纯的可测试单元）。
     """
     token_id, raw_token = _pairing.mint_token(owner)
     if callable(invalidate):
@@ -71,8 +69,8 @@ def setup_companion_routes() -> APIRouter:
 
     @router.get("/ping")
     def ping(request: Request):
-        """Cheap, auth-validated health check. A 200 with ok=true confirms the
-        host/port and credential are valid; middleware returns 401 otherwise."""
+        """轻量级、经过认证验证的健康检查。返回 200 且 ok=true 以确认
+        主机/端口和凭据有效；否则中间件返回 401。"""
         from core.constants import APP_VERSION
         return {
             "ok": True,
@@ -83,8 +81,8 @@ def setup_companion_routes() -> APIRouter:
 
     @router.get("/info")
     def info(request: Request):
-        """Server identity + coarse capability flags. `owner` is the caller's own
-        identity (the token's owner for bearer callers)."""
+        """服务器身份 + 粗略能力标志。`owner` 是调用方自己的
+        身份（对于 bearer 调用方为令牌的所有者）。"""
         from core.constants import APP_VERSION
         return {
             "name": "odysseus",
@@ -95,13 +93,12 @@ def setup_companion_routes() -> APIRouter:
 
     @router.get("/models")
     def models(request: Request):
-        """LLM model endpoints the CALLER can use.
+        """调用方可用的 LLM 模型端点。
 
-        The stock /api/models route scopes to get_current_user, which for a
-        bearer token is the sandboxed pseudo-user "api" (owns nothing). Here we
-        scope to the token's real owner instead, plus legacy null-owner shared
-        rows -- the same rule as owner_filter. Read-only; never returns api_key
-        material.
+        标准 /api/models 路由作用域到 get_current_user，对于
+        bearer 令牌来说就是沙盒伪用户 "api"（没有任何数据）。这里我们
+        作用域到令牌的真实所有者，加上旧的空所有者共享行 —
+        与 owner_filter 规则相同。只读；绝不返回 api_key 信息。
         """
         import json as _json
 
@@ -147,11 +144,11 @@ def setup_companion_routes() -> APIRouter:
 
     @router.get("/pair")
     def pair_page(request: Request):
-        """Admin-only pairing page. Renders a form that POSTs to mint a code.
+        """仅限管理员的配对页面。渲染一个 POST 表单用于生成配对码。
 
-        A GET never mints a credential: SameSite=Lax session cookies ride
-        top-level GET navigations, so minting on GET would be triggerable by a
-        link or <img> (CSRF). The actual mint is the POST handler below.
+        GET 绝不生成凭据：SameSite=Lax 会话 cookie 会在顶级
+        GET 导航中携带，因此在 GET 上生成令牌可能被链接或 <img> 触发
+        (CSRF)。实际的生成由下面的 POST 处理程序完成。
         """
         require_admin(request)
         page = """<!doctype html>
@@ -174,11 +171,11 @@ def setup_companion_routes() -> APIRouter:
 
     @router.post("/pair")
     def pair_create(request: Request):
-        """Mint a pairing code. Admin-cookie only; CSRF-safe because the
-        SameSite=Lax session cookie is not sent on a cross-site POST (same
-        protection as POST /api/tokens). Minting invalidates the token cache so
-        the code works immediately, no restart. `?format=json` returns the
-        payload for an in-app pairing screen."""
+        """生成配对码。仅限 admin cookie；CSRF 安全，因为
+        SameSite=Lax 会话 cookie 不会在跨站点 POST 中发送（与
+        POST /api/tokens 相同的保护）。生成后清除令牌缓存，
+        因此配对码立即生效，无需重启。`?format=json` 返回
+        JSON 负载用于应用内配对界面。"""
         require_admin(request)
         owner = get_current_user(request)
         invalidate = getattr(request.app.state, "invalidate_token_cache", None)
@@ -204,8 +201,8 @@ def setup_companion_routes() -> APIRouter:
 
         import json as _json
         payload_json = _json.dumps(payload, separators=(",", ":"))
-        # Only ever emit a known PNG data-URI into the src; every other value is
-        # html.escaped.
+        # 仅将已知的 PNG data-URI 写入 src；其他所有值都已通过
+        # html.escape 处理。
         qr_block = (
             f'<img src="{html.escape(qr)}" alt="Pairing QR" width="260" height="260">'
             if qr_ok else "<p><em>QR rendering unavailable -- enter the details manually.</em></p>"

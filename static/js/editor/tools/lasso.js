@@ -1,10 +1,10 @@
 /**
- * Lasso tool — freehand polygon selection. Mouse-down starts a fresh
- * polygon; every move appends a point and redraws the dashed outline;
- * mouse-up keeps the selection visible (the panel's action buttons
- * read `state.lassoPoints` to act on it).
+ * 套索工具 — 自由手绘多边形选区。鼠标按下开始新的
+ * 多边形；每次移动添加一个点并重绘虚线轮廓；
+ * 鼠标松开保持选区可见（面板的操作按钮
+ * 读取 `state.lassoPoints` 来对其进行操作）。
  *
- * Owns its own begin/drag/end handlers and reads/writes shared state.
+ * 拥有自己的 begin/drag/end 处理器，读写共享状态。
  *
  * @param {{
  *   composite:                 () => void,
@@ -29,7 +29,7 @@ export function createLassoTool({ composite, drawLassoOverlay, syncToolClearIndi
       e.preventDefault();
       const coords = canvasCoords(e, state.mainCanvas);
       state.lassoPoints.push(coords);
-      // Live overlay: dashed white outline + translucent red fill.
+      // 实时覆盖层：虚线白色轮廓 + 半透明红色填充。
       composite();
       if (state.lassoPoints.length > 1) {
         state.mainCtx.beginPath();
@@ -56,7 +56,7 @@ export function createLassoTool({ composite, drawLassoOverlay, syncToolClearIndi
         syncToolClearIndicators();
         return;
       }
-      // Keep the selection drawn — the panel's action buttons use it.
+      // 保持选区绘制 — 面板的操作按钮使用它。
       composite();
       drawLassoOverlay();
       syncToolClearIndicators();

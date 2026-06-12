@@ -1,15 +1,16 @@
 // ============================================
-// Keyboard Shortcuts — dynamic keybinds
+// 键盘快捷键 — 动态键位绑定
 // ============================================
 
 import { IS_MAC, isAltGrEvent } from './platform.js';
+import { t } from './i18n.js';
 
 const _defaultKeybinds = {
   search: 'ctrl+k', toggle_sidebar: 'ctrl+alt+b', new_session: 'ctrl+alt+n',
   fav_session: 'ctrl+alt+f', delete_session: 'ctrl+alt+d',
   cancel: 'escape', tts: 'alt+shift+t',
   incognito: 'ctrl+alt+i', settings: 'ctrl+,', focus_input: 'ctrl+/',
-  // Open-tool shortcuts (Calendar bound by default; rest unbound).
+  // 打开工具的快捷键（日历默认绑定；其余未绑定）。
   open_calendar: 'ctrl+alt+c', open_compare: '', open_cookbook: '',
   open_research: '', open_gallery: '', open_library: '', open_memory: '',
   open_notes: '', open_tasks: '', open_theme: '',
@@ -17,8 +18,8 @@ const _defaultKeybinds = {
 
 export function _matchesCombo(e, combo, isMac = IS_MAC) {
   if (!combo) return false;
-  // Drop AltGr keystrokes so typing characters on non-US layouts can't fire a
-  // Ctrl+Alt shortcut — e.g. the destructive delete_session. See platform.js.
+  // 丢弃 AltGr 按键，防止非美式键盘布局上输入字符时触发
+  // Ctrl+Alt 快捷键 — 例如破坏性的 delete_session。参见 platform.js。
   if (isAltGrEvent(e, isMac)) return false;
   const parts = combo.split('+');
   const needCtrl = parts.includes('ctrl');
@@ -32,10 +33,10 @@ export function _matchesCombo(e, combo, isMac = IS_MAC) {
 }
 
 /**
- * Initialize keyboard shortcuts.
- * @param {Object} modules - References to app modules and helpers
- * @param {Function} modules.el - Element lookup helper (uiModule.el)
- * @param {Object} modules.Storage - Storage module
+ * 初始化键盘快捷键。
+ * @param {Object} modules - 应用模块和辅助函数的引用
+ * @param {Function} modules.el - 元素查找辅助函数 (uiModule.el)
+ * @param {Object} modules.Storage - 存储模块
  * @param {Object} modules.sessionModule
  * @param {Object} modules.uiModule
  * @param {Object} modules.chatModule
@@ -55,27 +56,27 @@ export function initKeyboardShortcuts(modules) {
 
   window._odysseusKeybinds = { ..._defaultKeybinds };
 
-  // Load saved keybinds
+  // 加载已保存的快捷键绑定
   fetch('/api/auth/settings', { credentials: 'same-origin' })
     .then(r => r.json())
     .then(s => { if (s.keybinds) window._odysseusKeybinds = { ..._defaultKeybinds, ...s.keybinds }; })
     .catch(() => {});
 
-  // ── Esc cancels select mode (capture phase, before modal-close) ──
-  // Every tool's bulk-select bar has a `*-bulk-cancel` button whose click
-  // already runs the correct teardown (clears selection, hides the bar,
-  // re-renders). So a single global handler that clicks whichever cancel
-  // button is currently visible covers all of them — notes, skills,
-  // memory, gallery, sessions, doc library (chats/archive/research/docs),
-  // email, cookbook serve — without each module wiring its own listener.
-  // Capture phase + stopPropagation so Esc cancels select instead of
-  // closing the surrounding modal.
+  // ── Esc 取消选择模式（捕获阶段，在关闭模态框之前） ──
+  // 每个工具的批量选择栏都有一个 `*-bulk-cancel` 按钮，点击它
+  // 会运行正确的清理操作（清除选择、隐藏选择栏、
+  // 重新渲染）。所以一个全局处理器，点击当前可见的取消
+  // 按钮就覆盖了所有情况 — 笔记、技能、
+  // 记忆、图库、会话、文档库（聊天/归档/研究/文档）、
+  // 邮件、Cookbook — 无需每个模块各自绑定监听器。
+  // 捕获阶段 + stopPropagation，使 Esc 取消选择而不是关闭
+  // 周围的模态框。
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const cancels = document.querySelectorAll('[id$="-bulk-cancel"]');
     for (const btn of cancels) {
-      // Do not rely on offsetParent: visible fixed-position or modal-contained
-      // controls can report null. Check the rendered box and hidden ancestors.
+      // 不要依赖 offsetParent：可见的固定定位或模态框中的
+      // 控件可能返回 null。检查渲染框和隐藏的祖先。
       const visible = (() => {
         if (btn.disabled || btn.closest('.hidden,[hidden]')) return false;
         const cs = getComputedStyle(btn);
@@ -92,9 +93,9 @@ export function initKeyboardShortcuts(modules) {
     }
   }, true);
 
-  // ── "Toggle Window" — close whatever tool window is open, or reopen the
-  // last one. Maps each window's modal element to the button/title that
-  // opens it (mirrors modalManager's _AUTO_WIRE, plus email's section title).
+  // ── "切换窗口" — 关闭当前打开的工具窗口，或重新打开
+  // 上一个。将每个窗口的模态元素映射到打开它的按钮/标题
+  //（镜像 modalManager 的 _AUTO_WIRE，再加上邮件的区块标题）。
   const _WINDOW_TRIGGERS = {
     'settings-modal':         'user-bar-settings',
     'theme-modal':            'tool-theme-btn',
@@ -120,7 +121,7 @@ export function initKeyboardShortcuts(modules) {
   };
 
   const _toggleActiveWindow = () => {
-    // Close the first open window (remembering it), else reopen the last one.
+    // 关闭第一个打开的窗口（并记住它），否则重新打开上一个。
     let openId = null;
     for (const id in _WINDOW_TRIGGERS) {
       if (_windowVisible(id)) { openId = id; break; }
@@ -188,7 +189,7 @@ export function initKeyboardShortcuts(modules) {
       fetch(`${API_BASE}/api/session/${sid}/important`, { method: 'POST', body: fd });
       s.is_important = newVal;
       sessionModule.renderSessionList();
-      uiModule.showToast(newVal ? 'Session favorited' : 'Session unfavorited');
+      uiModule.showToast(newVal ? '会话已收藏' : '会话已取消收藏');
       return;
     }
     if (_matchesCombo(e, kb.delete_session)) {
@@ -197,8 +198,8 @@ export function initKeyboardShortcuts(modules) {
       if (!sid) return;
       const s = sessionModule.getSessions().find(x => x.id === sid);
       if (!s) return;
-      if (s.is_important) { uiModule.showToast('Unstar before deleting'); return; }
-      uiModule.styledConfirm('Delete this session?', { confirmText: 'Delete', danger: true }).then(ok => {
+      if (s.is_important) { uiModule.showToast(t('keyboard.unfavorite_first')); return; }
+      uiModule.styledConfirm(t('keyboard.delete_session_confirm'), { confirmText: t('common.delete'), danger: true }).then(ok => {
         if (!ok) return;
         const allSessions = sessionModule.getSessions();
         const idx = allSessions.findIndex(x => x.id === sid);
@@ -248,9 +249,9 @@ export function initKeyboardShortcuts(modules) {
     }
     if (_matchesCombo(e, kb.incognito)) {
       e.preventDefault();
-      // Drive the visible button so the real toggle logic runs (visual
-      // state, welcome-screen guard, checkbox sync) — flipping the hidden
-      // checkbox alone did nothing.
+      // 驱动可见按钮使真正的切换逻辑运行（视觉
+      // 状态、欢迎屏幕守卫、复选框同步）— 仅切换隐藏的
+      // 复选框没有效果。
       const btn = el('incognito-btn');
       if (btn) btn.click();
       return;
@@ -260,8 +261,8 @@ export function initKeyboardShortcuts(modules) {
       _toggleActiveWindow();
       return;
     }
-    // Open-tool shortcuts — click the sidebar tool button so each tool's
-    // own open/toggle logic runs. Unbound (empty) combos never match.
+    // 打开工具的快捷键 — 点击侧边栏工具按钮，使每个工具的
+    // 打开/切换逻辑运行。未绑定（空字符串）的组合键永远不会匹配。
     const _toolBtns = {
       open_calendar: 'tool-calendar-btn',
       open_compare:  'tool-compare-btn',

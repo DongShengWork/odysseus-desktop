@@ -1,21 +1,21 @@
-"""Background job execution for the agent's `bash` tool.
+"""agent `bash` 工具的后台作业执行。
 
-Long commands (installs, ffmpeg, model downloads) should NOT block the chat
-stream — a multi-minute held SSE connection is fragile (model-stops-early,
-timeouts, tab suspend). Instead we launch them **detached** and let an
-always-on monitor re-invoke the agent when they finish ("auto-continue").
+长时间运行的命令（安装、ffmpeg、模型下载）不应阻塞聊天流 —
+多分钟保持的 SSE 连接很脆弱（模型提前停止、超时、标签页挂起）。
+相反，我们以**分离**方式启动它们，让始终运行的监视器在它们完成时
+重新调用 agent（"auto-continue"）。
 
-Design goals:
-  * Restart-safe: status is derived from an on-disk exit-code file, not a live
-    PID, so a uvicorn restart never loses a job or its result.
-  * Idempotent follow-up: a job stays {done, followed_up: False} until the
-    agent has actually been re-invoked, so completion can never silently
-    "do nothing" — the monitor retries on the next tick.
-  * Bounded: a hard max-runtime marks a runaway job failed and STILL triggers
-    a follow-up ("timed out"), so you always hear back.
+设计目标：
+  * 重启安全：状态从磁盘上的退出代码文件推导，而非实时 PID，
+    因此 uvicorn 重启不会丢失作业或其结果。
+  * 幂等跟进：作业保持 {done, followed_up: False} 直到 agent
+    确实被重新调用，因此完成结果不会悄无声息地"什么都不做" —
+    监视器会在下一个周期重试。
+  * 边界限制：硬性最大运行时间将失控作业标记为失败，并仍会触发
+    跟进（"超时"），因此你始终会收到通知。
 
-This module only owns launch + state. The monitor / agent re-invocation lives
-in the caller (so this stays import-light and unit-testable).
+此模块仅负责启动 + 状态管理。监视器 / agent 重新调用由调用者负责
+（因此此模块保持轻量导入和可单元测试）。
 """
 
 from __future__ import annotations
@@ -43,15 +43,15 @@ from src.constants import BG_JOBS_DIR, BG_JOBS_FILE
 _JOBS_DIR = Path(BG_JOBS_DIR)
 _STORE = Path(BG_JOBS_FILE)
 
-# A job that runs longer than this is presumed stuck and reaped (the agent
-# still gets a "timed out" follow-up so nothing hangs forever).
-DEFAULT_MAX_RUNTIME_S = 3600  # 1 hour
-# Cap how much captured output we keep / feed back to the model.
+# 运行时间超过此值的作业被视为卡住并被回收（agent
+# 仍会收到"超时"跟进，因此不会有任何东西永远挂起）。
+DEFAULT_MAX_RUNTIME_S = 3600  # 1 小时
+# 限制我们保留/反馈给模型的捕获输出量。
 _MAX_OUTPUT_CHARS = 16000
-# How long a finished-and-followed-up job (record + its .sh/.cmd.sh/.log/.exit
-# files) is kept before pruning, so neither the store nor data/bg_jobs/ grows
-# without bound. The agent has already consumed the result by then.
-_RETENTION_S = 3600  # 1 hour after follow-up
+# 已完成并已跟进的作业（记录及其 .sh/.cmd.sh/.log/.exit
+# 文件）在被清理前保留多长时间，以防止存储和 data/bg_jobs/
+# 无限增长。此时 agent 已经消费了结果。
+_RETENTION_S = 3600  # 跟进后 1 小时
 
 
 def _load() -> Dict[str, Dict[str, Any]]:
@@ -71,41 +71,38 @@ def _save(jobs: Dict[str, Dict[str, Any]]) -> None:
 
 
 def _pid_alive(pid: Optional[int]) -> bool:
-    # Delegates to the platform-safe probe. NB: a bare os.kill(pid, 0) is unsafe
-    # on Windows — CPython routes it to TerminateProcess, which would KILL the
-    # job we're only trying to check. core.platform_compat.pid_alive handles
-    # both OSes correctly.
+    # 委托给平台安全的探测。注意：裸 os.kill(pid, 0) 在 Windows 上不安全 —
+    # CPython 将其路由到 TerminateProcess，这会杀死我们仅仅想检查的作业。
+    # core.platform_compat.pid_alive 正确处理两个操作系统。
     return pid_alive(pid)
 
 
 def launch(command: str, session_id: str, cwd: Optional[str] = None,
            max_runtime_s: int = DEFAULT_MAX_RUNTIME_S) -> Dict[str, Any]:
-    """Launch `command` detached. Returns the job record (status='running').
+    """以分离方式启动 `command`。返回作业记录 (status='running')。
 
-    Output + the final exit code are written to files so status survives a
-    server restart. The process is put in its own session (setsid) so it
-    outlives the request/stream that started it.
+    输出 + 最终退出代码写入文件，因此状态在服务器重启后仍然存在。
+    进程被放入其自己的会话 (setsid)，因此它会在启动它的请求/流结束后
+    继续存在。
     """
     _JOBS_DIR.mkdir(parents=True, exist_ok=True)
     job_id = uuid.uuid4().hex[:12]
     log_path = _JOBS_DIR / f"{job_id}.log"
     exit_path = _JOBS_DIR / f"{job_id}.exit"
 
-    # The user command goes in its OWN script file, run as a child `bash`. This
-    # is what isolates it: an `exit` inside it only ends that child (so the
-    # wrapper still records the exit code), and — unlike textually wrapping the
-    # command in `( … )` — the wrapper can't be broken by an unbalanced paren or
-    # a trailing line-continuation in the command. `$?` is the child's real
-    # exit status.
+    # 用户命令放在它自己的脚本文件中，作为子进程 `bash` 运行。这样
+    # 可以实现隔离：其中的 `exit` 只结束该子进程（因此
+    # 包装器仍会记录退出代码），而且 — 与在文本中将命令
+    # 包装在 `( … )` 中不同 — 包装器不会被不平衡的括号或
+    # 命令中的尾随行续接符破坏。`$?` 是子进程的真实退出状态。
     bash = find_bash()
     if bash:
-        # POSIX, or Windows with Git Bash/WSL. The user command goes in its OWN
-        # script file, run as a child `bash` — an `exit` inside it only ends
-        # that child (so the wrapper still records the exit code), and an
-        # unbalanced paren / trailing line-continuation in the command can't
-        # break the wrapper. `$?` is the child's real exit status. Paths are
-        # emitted as POSIX (forward-slash) + shell-quoted so Git Bash on Windows
-        # handles drive paths and spaces correctly.
+        # POSIX，或带 Git Bash/WSL 的 Windows。用户命令放在它自己的
+        # 脚本文件中，作为子进程 `bash` 运行 — 其中的 `exit` 只结束
+        # 该子进程（因此包装器仍会记录退出代码），而命令中的不等
+        # 号或尾随行续接符不会破坏包装器。`$?` 是子进程的真实退出状态。
+        # 路径以 POSIX（正斜杠）+ shell 引号形式发出，以便 Git Bash on Windows
+        # 正确处理驱动器路径和空格。
         cmd_path = _JOBS_DIR / f"{job_id}.cmd.sh"
         cmd_path.write_text(command + "\n", encoding="utf-8")
         lp, xp, cp = (shlex.quote(git_bash_path(p)) for p in (log_path, exit_path, cmd_path))
@@ -117,8 +114,8 @@ def launch(command: str, session_id: str, cwd: Optional[str] = None,
         )
         argv = [bash, str(script_path)]
     else:
-        # Windows without any bash installed: cmd.exe wrapper. The command runs
-        # in its own child .cmd so %ERRORLEVEL% is the command's real exit code.
+        # 没有任何 bash 的 Windows：cmd.exe 包装器。命令在其
+        # 自己的子 .cmd 中运行，因此 %ERRORLEVEL% 是命令的真实退出代码。
         child_path = _JOBS_DIR / f"{job_id}.child.cmd"
         child_path.write_text("@echo off\r\n" + command + "\r\n", encoding="utf-8")
         script_path = _JOBS_DIR / f"{job_id}.cmd"
@@ -136,7 +133,7 @@ def launch(command: str, session_id: str, cwd: Optional[str] = None,
         stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
         cwd=cwd or None,
-        **detached_popen_kwargs(),  # detach from the request lifecycle (setsid / DETACHED_PROCESS)
+        **detached_popen_kwargs(),  # 从请求生命周期分离（setsid / DETACHED_PROCESS）
     )
 
     rec = {
@@ -149,7 +146,7 @@ def launch(command: str, session_id: str, cwd: Optional[str] = None,
         "ended_at": None,
         "exit_code": None,
         "max_runtime_s": max_runtime_s,
-        "followed_up": False,       # has the agent been re-invoked with the result?
+        "followed_up": False,       # agent 是否已随结果重新调用？
         "log_path": str(log_path),
         "exit_path": str(exit_path),
     }
@@ -165,7 +162,7 @@ def _read_output(rec: Dict[str, Any]) -> str:
     except Exception:
         return ""
     if len(txt) > _MAX_OUTPUT_CHARS:
-        # Keep head + tail — the interesting bits are usually at both ends.
+        # 保留头部 + 尾部 — 有趣的部分通常位于两端。
         head = txt[: _MAX_OUTPUT_CHARS // 2]
         tail = txt[-_MAX_OUTPUT_CHARS // 2:]
         txt = head + "\n…[truncated]…\n" + tail
@@ -173,8 +170,7 @@ def _read_output(rec: Dict[str, Any]) -> str:
 
 
 def _prune(jobs: Dict[str, Dict[str, Any]], now: float) -> bool:
-    """Drop records (and their on-disk files) for jobs that finished, were
-    followed up, and are older than the retention window. Mutates `jobs`."""
+    """丢弃已完成、已跟进且超过保留窗口的作业记录（及其磁盘文件）。会修改 `jobs`。"""
     stale = [jid for jid, rec in jobs.items()
              if rec.get("followed_up") and rec.get("ended_at")
              and (now - rec["ended_at"]) > _RETENTION_S]
@@ -189,8 +185,8 @@ def _prune(jobs: Dict[str, Dict[str, Any]], now: float) -> bool:
 
 
 def refresh() -> Dict[str, Dict[str, Any]]:
-    """Reconcile every running job against disk. Marks done/failed (incl.
-    timeout). Idempotent — safe to call from a poll loop. Returns the store."""
+    """将每个运行中的作业与磁盘状态进行对账。标记完成/失败（包括超时）。
+    幂等的 — 可以从轮询循环安全调用。返回存储。"""
     jobs = _load()
     changed = False
     now = time.time()
@@ -208,7 +204,7 @@ def refresh() -> Dict[str, Dict[str, Any]]:
             rec["ended_at"] = now
             changed = True
         elif (now - rec.get("started_at", now)) > rec.get("max_runtime_s", DEFAULT_MAX_RUNTIME_S):
-            # Runaway / stuck — reap it but STILL surface a follow-up.
+            # 失控 / 卡住 — 回收它但仍会触发跟进。
             _kill(rec.get("pid"))
             rec["status"] = "failed"
             rec["exit_code"] = -1
@@ -216,8 +212,8 @@ def refresh() -> Dict[str, Dict[str, Any]]:
             rec["timed_out"] = True
             changed = True
         elif not _pid_alive(rec.get("pid")) and not exit_path.exists():
-            # Process vanished without writing an exit code (killed, OOM,
-            # crash). Don't leave it "running" forever.
+            # 进程消失而未写入退出代码（被杀死、OOM、
+            # 崩溃）。不要让它永远保持 "running" 状态。
             rec["status"] = "failed"
             rec["exit_code"] = -1
             rec["ended_at"] = now
@@ -231,13 +227,13 @@ def refresh() -> Dict[str, Dict[str, Any]]:
 
 
 def _kill(pid: Optional[int]) -> None:
-    # Cross-platform process-tree teardown (POSIX killpg / Windows taskkill /T).
+    # 跨平台进程树拆除（POSIX killpg / Windows taskkill /T）。
     kill_process_tree(pid)
 
 
 def pending_followups() -> List[Dict[str, Any]]:
-    """Finished jobs the agent hasn't been re-invoked for yet. The monitor
-    drains these; mark_followed_up() flips the flag only on success."""
+    """已完成但 agent 尚未重新调用的作业。监视器消耗这些作业；
+    mark_followed_up() 仅在成功时翻转标志。"""
     jobs = refresh()
     return [r for r in jobs.values()
             if r.get("status") in ("done", "failed") and not r.get("followed_up")]
@@ -251,7 +247,7 @@ def mark_followed_up(job_id: str) -> None:
 
 
 def get(job_id: str) -> Optional[Dict[str, Any]]:
-    refresh()  # reconcile against disk so status/exit_code are current
+    refresh()  # 与磁盘对账，使 status/exit_code 保持最新
     rec = _load().get(job_id)
     if rec:
         rec = dict(rec)
@@ -264,7 +260,7 @@ def list_for_session(session_id: str) -> List[Dict[str, Any]]:
 
 
 def result_text(rec: Dict[str, Any]) -> str:
-    """Human/agent-readable summary of a finished job, for the follow-up."""
+    """已完成作业的人类/agent 可读摘要，用于跟进。"""
     out = _read_output(rec)
     if rec.get("timed_out"):
         head = f"Background job timed out after {rec.get('max_runtime_s')}s."

@@ -1,8 +1,8 @@
 /**
- * Convert a pointer event's client coordinates into the canvas's
- * internal pixel coordinates, accounting for current display scale.
+ * 将指针事件的客户端坐标转换为画布的
+ * 内部像素坐标，考虑当前显示缩放。
  *
- * Handles both mouse and the first finger of a touch event.
+ * 同时处理鼠标事件和触摸事件的第一个手指。
  *
  * @param {MouseEvent|TouchEvent} e
  * @param {HTMLCanvasElement} canvas

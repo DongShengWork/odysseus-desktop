@@ -1,9 +1,9 @@
-"""Signature routes — CRUD for the user's saved visual signatures.
+"""签名路由 — 用户保存的视觉签名的 CRUD 操作。
 
-Signatures are reusable image stamps (drawn once, applied to many things):
-PDF form fields, email composition, document insertion. Each signature is
-stored as a base64 PNG so it can be embedded inline anywhere without a
-separate fetch.
+签名是可复用的图像戳（绘制一次，应用于多种场景）：
+PDF 表单字段、邮件撰写、文档插入。每个签名
+以 base64 PNG 格式存储，因此可以在任何地方内联嵌入，
+无需单独的请求。
 """
 
 import base64

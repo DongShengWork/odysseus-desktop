@@ -1,12 +1,12 @@
 // static/js/spinner.js
 
 /**
- * ASCII Spinner Module for AI thinking/processing status
+ * ASCII 加载动画模块，用于 AI 思考/处理状态
  */
 
 class Spinner {
-  constructor(message = "AI is processing", style = "right", animation = "spinner") {
-    // Different animation frames
+  constructor(message = "AI 正在处理", style = "right", animation = "spinner") {
+    // 不同的动画帧
     this.animations = {
       spinner: ['|', '/', '-', '\\'],
       wave: ['▁▂▃', '▂▃▄', '▃▄▅', '▄▅▆', '▅▆▅', '▆▅▄', '▅▄▃', '▄▃▂', '▃▂▁']
@@ -15,7 +15,7 @@ class Spinner {
     this.animation = animation;
     this.frames = this.animations[animation] || this.animations.spinner;
     this.message = message;
-    this.style = style; // "left", "right", or "clean"
+    this.style = style; // "left"、"right" 或 "clean"
     this.isRunning = false;
     this.currentFrame = 0;
     this.intervalId = null;
@@ -24,7 +24,7 @@ class Spinner {
   }
 
   /**
-   * Create and return the spinner HTML element
+   * 创建并返回加载动画 HTML 元素
    */
   createElement() {
     if (this.animation === 'sinewave') {
@@ -97,7 +97,7 @@ class Spinner {
 
     ctx.clearRect(0, 0, W, H);
 
-    // wave line
+    // 波形线
     ctx.beginPath();
     for (let i = 0; i <= 80; i++) {
       const frac = i / 80;
@@ -111,7 +111,7 @@ class Spinner {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // dot
+    // 圆点
     const cx = W / 2;
     const cPhase = 0.5 * CYCLES * 2 * Math.PI + this._waveT;
     const cy = midY + Math.sin(cPhase) * AMP;
@@ -171,10 +171,10 @@ class Spinner {
     const STEPS = 50;
     const t = this._wpFrame;
 
-    // Colors from CSS vars — read ONCE and cache. Calling getComputedStyle every
-    // frame forces a full style recalc per frame, which janks/freezes the canvas
-    // animation badly when it's painting over a heavy photo. (Theme changes are
-    // rare; the spinner is short-lived, so a stale cache is fine.)
+    // 从 CSS 变量读取颜色 — 只读一次并缓存。每帧调用 getComputedStyle
+    // 会强制每帧重新计算样式，在绘制大量图片时会导致
+    // canvas 动画严重卡顿/冻结。（主题变更很少发生；
+    // 加载指示器生命周期很短，所以缓存过时也没关系。）
     if (!this._wpColors) {
       const s = getComputedStyle(document.documentElement);
       this._wpColors = {
@@ -193,7 +193,7 @@ class Spinner {
 
     ctx.clearRect(0, 0, W, H);
 
-    // track ring
+    // 轨道环
     ctx.beginPath();
     ctx.arc(cx, cy, maxR - lw / 2, 0, Math.PI * 2);
     ctx.strokeStyle = track;
@@ -204,7 +204,7 @@ class Spinner {
 
     const headPos = (t * 0.008) % 1;
 
-    // overlapping sub-paths for smooth fade
+    // 重叠子路径实现平滑渐隐
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     for (let layer = LAYERS - 1; layer >= 0; layer--) {
@@ -235,7 +235,7 @@ class Spinner {
       ctx.stroke();
     }
 
-    // bright dot at head
+    // 头部的亮点
     const head = spiralPoint(headPos, t * SPIN_SPEED);
     ctx.beginPath();
     ctx.arc(head.x, head.y, Math.max(1, lw * 0.45), 0, Math.PI * 2);
@@ -246,10 +246,10 @@ class Spinner {
 
     this._wpFrame++;
     if (!this.isRunning) return;
-    // Leak-safe self-terminate: stop once our element WAS in the DOM and then
-    // got removed (e.g. a loading row replaced by results). But keep spinning
-    // before it's first appended — start() runs synchronously, before the
-    // caller inserts the element, so it isn't connected on frame 1.
+    // 防泄漏的自我终止：当我们的元素曾经在 DOM 中且后来
+    // 被移除时停止（例如加载行被结果替换）。但在第一次追加之前
+    // 继续保持旋转 — start() 是同步运行的，在调用者插入元素之前，
+    // 所以第 1 帧时它还没有连接到 DOM。
     const connected = !!(this.element && this.element.isConnected);
     if (connected) this._wpWasConnected = true;
     if (connected || !this._wpWasConnected) {
@@ -260,7 +260,7 @@ class Spinner {
   }
 
   /**
-   * Update the spinner display
+   * 更新加载动画显示
    */
   updateDisplay() {
     if (!this.element) return;
@@ -280,7 +280,7 @@ class Spinner {
   }
 
   /**
-   * Start the spinner animation
+   * 启动加载动画
    */
   start(speed = 150) {
     if (this.isRunning) return;
@@ -306,7 +306,7 @@ class Spinner {
   }
 
   /**
-   * Stop the spinner
+   * 停止加载动画
    */
   stop() {
     this.isRunning = false;
@@ -321,7 +321,7 @@ class Spinner {
   }
 
   /**
-   * Update the message while spinner is running
+   * 在加载动画运行期间更新消息文本
    */
   updateMessage(newMessage) {
     this.message = newMessage;
@@ -333,7 +333,7 @@ class Spinner {
   }
 
   /**
-   * Update the spinner label text
+   * 更新加载动画标签文本
    */
   updateLabel(newMessage) {
     this.message = newMessage;
@@ -345,7 +345,7 @@ class Spinner {
   }
 
   /**
-   * Destroy the spinner and clean up
+   * 销毁加载动画并清理
    */
   destroy() {
     this.stop();
@@ -357,21 +357,21 @@ class Spinner {
 }
 
 /**
- * Create a new spinner instance
+ * 创建新的加载动画实例
  */
 export function create(message, style = "right", animation = "wave") {
   return new Spinner(message, style, animation);
 }
 
 /**
- * Create a standalone whirlpool circle spinner (replaces CSS .spinner)
- * Returns { element, start(), stop(), destroy() }
+ * 创建独立的漩涡圆形加载动画（替换 CSS .spinner）
+ * 返回 { element, start(), stop(), destroy() }
  */
 export function createWhirlpool(size = 24) {
   const sp = new Spinner('', 'clean', 'whirlpool');
   sp._wpSize = size;
   const el = sp.createElement();
-  // wrap in a div matching .spinner layout
+  // 包裹在匹配 .spinner 布局的 div 中
   const wrap = document.createElement('div');
   wrap.className = 'spinner-whirlpool';
   wrap.style.cssText = `width:${size}px;height:${size}px;margin:8px auto;`;
@@ -381,12 +381,12 @@ export function createWhirlpool(size = 24) {
 }
 
 /**
- * A consistent inline loading row for list/library empty-states: a label plus
- * the whirlpool spinner. Returns a detached element; the spinner self-stops
- * once the element leaves the DOM (see _drawWhirlpool), so callers can just
- * replace it with results — no manual cleanup needed.
+ * 列表/库空状态的一致内联加载行：标签加
+ * 漩涡加载动画。返回一个分离的元素；加载动画在元素离开 DOM 后
+ * 自动停止（参见 _drawWhirlpool），所以调用者可以直接
+ * 用结果替换它 — 无需手动清理。
  */
-export function createLoadingRow(text = 'Loading…', size = 16) {
+export function createLoadingRow(text = '加载中…', size = 16) {
   const sp = new Spinner('', 'clean', 'whirlpool');
   sp._wpSize = size;
   const canvas = sp.createElement();

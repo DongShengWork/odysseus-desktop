@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only pull request overlap audit helper.
+"""只读的拉取请求重叠审计辅助工具。
 
-This script intentionally does not import the Odysseus application package.
-It only reads local JSON input or invokes read-only `gh` list/API commands.
+此脚本故意不导入 Odysseus 应用程序包。
+它只读取本地 JSON 输入或调用只读的 `gh` list/API 命令。
 """
 from __future__ import annotations
 
@@ -434,10 +434,9 @@ def score_pr(pr: PullRequest, file_counts: Counter, now: datetime) -> ScoredPull
     reasons = []
     text = f"{pr.title} {' '.join(pr.files)}".lower()
 
-    # Heuristic, not a truth model: weights favor direct auth/token
-    # lifecycle fixes first, then confidentiality/persistence/memory risk,
-    # overlap pressure, review state, and actionability. Merge conflicts are
-    # caution signals only; they do not prove importance.
+    # 启发式评分，不是真值模型：权重优先考虑直接的认证/令牌生命周期修复，
+    # 然后是机密性/持久化/内存风险、重叠压力、审查状态和可操作性。
+    # 合并冲突只是警告信号，不证明重要性。
     if direct_auth_token_signal(pr):
         score += 45
         reasons.append("direct auth/token lifecycle signal")

@@ -1,18 +1,16 @@
 /**
- * Image-import wiring — covers all four entry points that drop an
- * image as a new layer:
+ * 图片导入模块 — 覆盖将图片作为新图层导入的四个入口：
  *
- *   #ge-import-topbar    topbar "+ Import" button
- *   #ge-import-file      File button in the Import section
- *   #ge-import-paste     Clipboard button (uses async clipboard API)
- *   #ge-import-gallery   Gallery picker — fetches /api/gallery/library
- *                        and shows a thumbnail grid overlay
+ *   #ge-import-topbar    顶部栏 "+ Import" 按钮
+ *   #ge-import-file      导入区域的 File 按钮
+ *   #ge-import-paste     剪贴板按钮（使用异步剪贴板 API）
+ *   #ge-import-gallery   图库选择器 — 获取 /api/gallery/library
+ *                        并显示缩略图网格覆盖层
  *
- * Plus the shared `handleImportedImage(img)` sink — scales to canvas,
- * centres, creates a new layer, switches to Move tool, hides the
- * import section, refreshes the panel. Returned so the drag-and-drop
- * + paste paths (wired in editor/clipboard-and-drop.js) can use the
- * same sink.
+ * 以及共享的 `handleImportedImage(img)` 汇聚函数 — 缩放至画布、
+ * 居中、创建新图层、切换到移动工具、隐藏导入区域、刷新面板。
+ * 返回该函数，以便拖放 + 粘贴路径（在 editor/clipboard-and-drop.js
+ * 中接线）可以使用同一个汇聚函数。
  *
  * @param {{
  *   container:        HTMLElement,
@@ -28,7 +26,7 @@
 import { state } from './state.js';
 
 export function wireImport({ container, saveState, createLayer, composite, renderLayerPanel, uiModule }) {
-  // Hidden <input type="file"> the topbar + File buttons both click.
+  // 隐藏的 <input type="file">，顶部栏和文件按钮都通过它触发文件选择。
   const importFileInput = document.createElement('input');
   importFileInput.type = 'file';
   importFileInput.accept = 'image/*';
@@ -38,7 +36,7 @@ export function wireImport({ container, saveState, createLayer, composite, rende
   function handleImportedImage(img) {
     if (!state.editorOpen) return;
     saveState('Import image');
-    // Scale down if larger than canvas.
+    // 如果图片比画布大，则等比缩小。
     let w = img.naturalWidth || img.width;
     let h = img.naturalHeight || img.height;
     if (w > state.imgWidth || h > state.imgHeight) {
@@ -47,18 +45,17 @@ export function wireImport({ container, saveState, createLayer, composite, rende
       h = Math.round(h * scale);
     }
     const layer = createLayer('Imported', state.imgWidth, state.imgHeight);
-    // Centre on the canvas.
+    // 在画布上居中。
     const ox = Math.round((state.imgWidth - w) / 2);
     const oy = Math.round((state.imgHeight - h) / 2);
     layer.ctx.drawImage(img, ox, oy, w, h);
     state.layers.push(layer);
     state.activeLayerId = layer.id;
-    // Switch to move tool so the imported layer is immediately
-    // repositionable.
+    // 切换到移动工具，使导入的图层可以立即重新定位。
     state.tool = 'move';
     const tb = container.querySelector('.ge-toolbar');
     if (tb) tb.querySelectorAll('.ge-tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === 'move'));
-    // Hide the import section now that the import is done.
+    // 导入完成后隐藏导入区域。
     const importSec = document.getElementById('ge-import-section');
     if (importSec) importSec.style.display = 'none';
     composite();
@@ -101,8 +98,7 @@ export function wireImport({ container, saveState, createLayer, composite, rende
     }
   });
 
-  // Import from Gallery — fetch /api/gallery/library and show a
-  // thumbnail-grid picker overlay.
+  // 从图库导入 — 获取 /api/gallery/library 并显示缩略图网格选择器覆盖层。
   document.getElementById('ge-import-gallery')?.addEventListener('click', async () => {
     try {
       const res = await fetch('/api/gallery/library?limit=50', { credentials: 'same-origin' });
@@ -110,7 +106,7 @@ export function wireImport({ container, saveState, createLayer, composite, rende
       const items = data.items || [];
       if (!items.length) { if (uiModule) uiModule.showToast('No images in gallery'); return; }
 
-      // Picker overlay.
+      // 选择器覆盖层。
       const overlay = document.createElement('div');
       overlay.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;';
       const panel = document.createElement('div');

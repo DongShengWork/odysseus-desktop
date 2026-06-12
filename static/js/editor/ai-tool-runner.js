@@ -1,20 +1,18 @@
 /**
- * Shared AI-tool runner. Used by Sharpen / Harmonize / Upscale / Style /
- * Bg-Remove / etc. — every tool that flattens the document, POSTs the
- * PNG to a server-side image endpoint, and drops the result back in
- * as a new layer.
+ * 共享 AI 工具运行器。用于 Sharpen / Harmonize / Upscale / Style /
+ * Bg-Remove / 等 — 每个展平文档、将 PNG POST 到服务器端图像端点、
+ * 然后将结果作为新图层放回的工具。
  *
- * Handles all the orchestration around the request:
+ * 处理请求的所有编排：
  *
- *  - Button busy state: swap label for "<verbing>…" + whirlpool
- *    spinner, lock width so the button doesn't visually jump.
- *  - Endpoint+model selection from the tool's own picker (or the
- *    global fallback) so the backend knows which model to invoke.
- *  - Response handling: decode the returned PNG, push it as a new
- *    layer, save state, composite, refresh the layer panel.
- *  - Error reporting: surface failures via toast. Detects "needs
- *    img2img server" and "package not installed" failure modes and
- *    surfaces an action-toast that opens Cookbook to fix.
+ *  - 按钮忙碌状态: 将标签替换为 "<动词>…" + 旋转动画，
+ *    锁定宽度以免按钮视觉上跳动。
+ *  - 从工具自己的选择器（或全局回退）获取端点+模型选择，
+ *    以便后端知道要调用哪个模型。
+ *  - 响应处理: 解码返回的 PNG，将其作为新图层推入，
+ *    保存状态，合成，刷新图层面板。
+ *  - 错误报告: 通过 toast 显示失败。检测"需要 img2img 服务器"
+ *    和"包未安装"失败模式，并弹出操作 toast 打开 Cookbook 修复。
  *
  * @param {{
  *   flatten:                    () => HTMLCanvasElement,
@@ -44,13 +42,12 @@ export function createApplyImageTool({
 }) {
   return async function applyImageTool(endpoint, extraPayload, layerName, btn, opts) {
     const origHTML = btn.innerHTML;
-    const origWidth = btn.offsetWidth;  // lock width so the button doesn't jump
+    const origWidth = btn.offsetWidth;  // 锁定宽度以免按钮跳动
     btn.disabled = true;
     btn.classList.add('ge-btn-processing');
     btn.style.minWidth = origWidth + 'px';
-    // Swap label for a "<verbing>…" text + whirlpool while the
-    // request runs. Falls back to deriving a busy label from
-    // layerName when the caller didn't supply one.
+    // 在请求运行期间将标签替换为"<动词>…"文本 + 旋转动画。
+    // 当调用方未提供 busy label 时回退到从 layerName 推导。
     const busyLabel = (opts && opts.busyLabel) || deriveBusyLabel(layerName);
     btn.innerHTML = '';
     let btnSpinner = null;
@@ -64,9 +61,8 @@ export function createApplyImageTool({
       btn.appendChild(txt);
       btnSpinner.start();
     } catch { btn.textContent = busyLabel; }
-    // Tool-specific model picker — pulled from the per-tool select
-    // (harmonize/style) if available, otherwise the global
-    // fallback. Derived from the endpoint URL.
+    // 工具级模型选择器 — 从工具级 select（harmonize/style）
+    // 获取（如果可用），否则使用全局回退。从端点 URL 推导。
     if (!extraPayload._endpoint) {
       const m = /\/api\/image\/([\w-]+)/.exec(endpoint || '');
       const type = m ? m[1].replace('upscale-ai', 'upscale').replace('remove-bg', 'rembg') : null;
@@ -90,10 +86,10 @@ export function createApplyImageTool({
       }
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      if (!data.image) throw new Error('No image returned');
+      if (!data.image) throw new Error('未返回图像');
       const img = new Image();
       img.onload = () => {
-        if (!state.editorOpen) return; // user closed mid-decode (v2 review HIGH-4)
+        if (!state.editorOpen) return; // 用户在中途解码时关闭（v2 review HIGH-4）
         saveState();
         const layer = createLayer(layerName, state.imgWidth, state.imgHeight);
         layer.ctx.drawImage(img, 0, 0);
@@ -101,12 +97,12 @@ export function createApplyImageTool({
         state.activeLayerId = layer.id;
         composite();
         renderLayerPanel();
-        if (uiModule) uiModule.showToast(layerName + ' complete', 4500);
+        if (uiModule) uiModule.showToast(layerName + ' 完成', 4500);
       };
-      img.onerror = () => { if (uiModule) uiModule.showToast('Failed to load result', 6000); };
+      img.onerror = () => { if (uiModule) uiModule.showToast('加载结果失败', 6000); };
       img.src = 'data:image/png;base64,' + data.image;
     } catch (e) {
-      // Detect known failure modes and surface an action-toast.
+      // 检测已知的失败模式并弹出操作 toast。
       const msg = (e?.message || '').toLowerCase();
       const needsImg2Img = (
         msg.includes('img2img') ||
@@ -121,19 +117,19 @@ export function createApplyImageTool({
       }
       if (uiModule) {
         if (depMatch && uiModule.showToast.length >= 2) {
-          uiModule.showToast(layerName + ' failed: ' + depMatch + ' is not installed on the server.', {
+          uiModule.showToast(layerName + ' 失败: ' + depMatch + ' 未在服务器上安装。', {
             duration: 9000,
-            action: `Install ${depMatch}`,
+            action: `安装 ${depMatch}`,
             onAction: () => openCookbookForDependency(depMatch),
           });
         } else if (needsImg2Img && uiModule.showToast.length >= 2) {
-          uiModule.showToast(layerName + ' failed: ' + e.message, {
+          uiModule.showToast(layerName + ' 失败: ' + e.message, {
             duration: 9000,
-            action: 'Open Cookbook',
+            action: '打开 Cookbook',
             onAction: () => openCookbookForImg2img(),
           });
         } else {
-          uiModule.showToast(layerName + ' failed: ' + e.message, 6000);
+          uiModule.showToast(layerName + ' 失败: ' + e.message, 6000);
         }
       }
     } finally {

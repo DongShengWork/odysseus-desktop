@@ -1,5 +1,5 @@
 /**
- * Research job queue — add, start, monitor, cancel research jobs.
+ * 研究作业队列 — 添加、启动、监控、取消研究作业。
  */
 
 let _jobs = [];
@@ -7,8 +7,8 @@ let _apiBase = '';
 let _renderCb = null;
 let _idCounter = 0;
 
-// Dismissed-from-panel IDs persist across reloads so Clear actually sticks.
-// (Items still live on disk and in the Library; this just hides them here.)
+// 从面板中移除的 ID 在重新加载后保持，使清除操作真正生效。
+// （项目仍保留在磁盘和库中；这里只是在此处隐藏它们。）
 const _DISMISSED_KEY = 'odysseus-research-dismissed';
 function _loadDismissed() {
   try {
@@ -31,16 +31,16 @@ let _activePollInterval = null;
 export function init(apiBase) {
   _apiBase = apiBase;
   _reconnectActive();
-  // Poll for active sessions periodically so research started elsewhere
-  // (e.g. by the agent via trigger_research) gets adopted into the
-  // sidebar — _reconnectActive only ran once at load before, so
-  // agent-started jobs never appeared until a page reload.
+  // 定期轮询活动会话，以便在其他地方启动的研究
+  // （例如通过 trigger_research 由代理启动）能被侧边栏
+  // 接管 — 之前 _reconnectActive 仅在加载时运行一次，
+  // 因此代理启动作业在页面重新加载前从未出现。
   if (_activePollInterval) clearInterval(_activePollInterval);
   _activePollInterval = setInterval(() => { _reconnectActive(); }, 12000);
 }
 
-// Allow an immediate adopt when the chat stream signals a new research
-// session (research_started ui_event) — faster than the 12s poll.
+// 当聊天流发出新的研究会话信号时（research_started ui_event）
+// 允许立即接管 — 比 12 秒轮询更快。
 export function adoptSession(sessionId) {
   if (!sessionId || _jobs.some(j => j.id === sessionId)) return;
   _reconnectActive();
@@ -48,7 +48,7 @@ export function adoptSession(sessionId) {
 
 async function _reconnectActive() {
   try {
-    // Reconnect to running tasks
+    // 重新连接到正在运行的任务
     const res = await fetch(`${_apiBase}/api/research/active`, { credentials: 'same-origin' });
     if (res.ok) {
       const data = await res.json();
@@ -68,7 +68,7 @@ async function _reconnectActive() {
       }
     }
 
-    // Load recent completed research from disk
+    // 从磁盘加载最近完成的研究
     const libRes = await fetch(`${_apiBase}/api/research/library?sort=recent&limit=20`, { credentials: 'same-origin' });
     if (libRes.ok) {
       const libData = await libRes.json();
@@ -127,13 +127,13 @@ export async function startAllQueued() {
   await Promise.all(queued.map(j => _launchJob(j)));
 }
 
-/** Run queued jobs one at a time — waits for each to finish before launching
- *  the next. Useful when you want to avoid hammering the same model server. */
+/** 逐个运行排队的作业 — 等待每个作业完成后再启动
+ *  下一个。适用于避免同时冲击同一模型服务器。 */
 export async function startAllQueuedSequential() {
   const queued = _jobs.filter(j => j.status === 'queued');
   for (const job of queued) {
     await _launchJob(job);
-    // Wait until this specific job is no longer running
+    // 等待此特定作业不再运行
     await new Promise(resolve => {
       const tick = setInterval(() => {
         if (job.status !== 'running') { clearInterval(tick); resolve(); }
@@ -169,7 +169,7 @@ export function removeJob(id) {
   const idx = _jobs.findIndex(j => j.id === id);
   if (idx >= 0) {
     const job = _jobs[idx];
-    // Persist dismissal so it doesn't reappear from the library on reload.
+    // 持久化移除状态，使其在重新加载时不会从库中再次出现。
     if (job.status === 'done') _markDismissed([id]);
     _jobs.splice(idx, 1);
   }
@@ -177,7 +177,7 @@ export function removeJob(id) {
 }
 
 export function clearAll() {
-  // Mark all completed jobs as dismissed so they don't reappear on reload.
+  // 将所有已完成的作业标记为已移除，使其在重新加载时不会再次出现。
   const doneIds = _jobs.filter(j => j.status === 'done').map(j => j.id);
   if (doneIds.length) _markDismissed(doneIds);
   for (const job of _jobs) {

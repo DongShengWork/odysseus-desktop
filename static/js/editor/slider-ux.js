@@ -1,18 +1,14 @@
 /**
- * Slider-UX wiring shared across the editor:
+ * 编辑器内共享的滑块 UX 接线：
  *
- *   1. `is-using` class while a slider is being dragged (eraser-rows
- *      expand to a wider track when in use). Cleared 0.5s after
- *      pointerup so a quick click doesn't snap back instantly.
- *   2. Floating value bubble above the thumb during drag.
- *      Desktop: only the layer-opacity slider gets a bubble (the
- *      eraser-row sliders already show a value chip on the right).
- *      Mobile: every slider in the editor gets a bubble.
- *   3. Click the value chip to type a number directly — replaces
- *      the span with an inline input until blur/Enter.
+ *   1. 拖动滑块时应用 `is-using` 类（橡皮擦行在使用时展开到更宽的轨道）。
+ *      pointerup 后 0.5 秒清除，使快速点击不会立即弹回。
+ *   2. 拖动时滑块上方显示浮动数值气泡。
+ *      桌面端：仅图层不透明度滑块显示气泡（橡皮擦行滑块已在右侧显示数值芯片）。
+ *      移动端：编辑器中的每个滑块都显示气泡。
+ *   3. 点击数值芯片直接输入数字 — 将 span 替换为内联输入框，直到 blur/Enter。
  *
- * Wired ONCE on editor open; the listeners stay alive for the whole
- * session via state.container delegation.
+ * 在编辑器打开时一次性连接；监听器通过 state.container 委托在整个会话中保持活动。
  *
  * @param {{
  *   registerDocClickAway: (handler: (e: Event) => void) => void,
@@ -24,21 +20,21 @@ export function wireSliderUx({ registerDocClickAway }) {
   const container = state.container;
   if (!container) return;
 
-  // ── Floating bubble ──
+  // ── 浮动气泡 ──
   const sliderBubble = document.createElement('div');
   sliderBubble.className = 'ge-slider-bubble';
   sliderBubble.hidden = true;
   let sliderBubbleSlider = null;
 
-  // Find the container row for any slider — works for ge-eraser-row
-  // sliders AND the layer-opacity slider on each layer item.
+  // 查找任何滑块的容器行 — 适用于 ge-eraser-row 滑块
+  // 以及每个图层项上的图层不透明度滑块。
   function bubbleRowFor(slider) {
     return slider.closest('.ge-eraser-row, .ge-layer-item, .ge-control-row, .ge-adj-row');
   }
   function bubbleText(slider) {
     const row = bubbleRowFor(slider);
-    // Pulled-out value chip (after the slider) wins; fall back to
-    // the various `<label> <span>` styles used across the editor.
+    // 拉出的数值芯片（滑块之后）优先；回退到
+    // 编辑器使用的各种 `<label> <span>` 样式。
     const chip = row?.querySelector('.ge-slider-value')
       || row?.querySelector('label > span[id$="-label"]')
       || row?.querySelector('label > .ge-size-label')
@@ -50,10 +46,9 @@ export function wireSliderUx({ registerDocClickAway }) {
     return slider.value;
   }
   function bubblePos(slider, cursorX) {
-    // Bubble is fixed-positioned on document.body so it escapes any
-    // overflow:hidden / overflow:auto on the row's ancestors. The
-    // bubble's X is CLAMPED to the slider's track so it can't follow
-    // a finger that drags way past either end.
+    // 气泡固定定位在 document.body 上，使其脱离行祖先元素上的
+    // 任何 overflow:hidden / overflow:auto。气泡的 X 坐标限制在
+    // 滑块的轨道范围内，不能跟随拖拽远超任一端的手指。
     const sliderRect = slider.getBoundingClientRect();
     const minX = sliderRect.left + 8;
     const maxX = sliderRect.right - 8;
@@ -76,8 +71,8 @@ export function wireSliderUx({ registerDocClickAway }) {
   }
 
   const slidingTimers = new WeakMap();
-  // Desktop: only the layer-opacity slider gets the bubble (eraser-
-  // rows have their own chip). Mobile: every slider gets one.
+  // 桌面端：仅图层不透明度滑块显示气泡（橡皮擦行有自己的芯片）。
+  // 移动端：每个滑块都显示一个。
   const isMobileSliders = window.matchMedia('(max-width: 820px)').matches;
   const SLIDER_SEL = isMobileSliders
     ? '.ge-layer-opacity, .ge-eraser-row input[type="range"], .ge-control-row input[type="range"], .ge-adj-row input[type="range"]'
@@ -90,10 +85,9 @@ export function wireSliderUx({ registerDocClickAway }) {
     if (t) { clearTimeout(t); slidingTimers.delete(slider); }
     slider.classList.add('is-using');
     showSliderBubble(slider, e);
-    // Compensate for the leftward-expanding eraser sliders so the
-    // thumb lands at the cursor's X on the new (wider) track. Layer-
-    // opacity doesn't shift left when it grows, so it uses the
-    // browser default.
+    // 补偿向左扩展的橡皮擦滑块，使滑块在新的（更宽的）轨道上
+    // 落在光标 X 坐标处。图层不透明度在扩展时不向左移动，
+    // 因此使用浏览器默认行为。
     if (slider.matches('.ge-eraser-row input[type="range"]')) {
       const rect = slider.getBoundingClientRect();
       const valFrac = Math.max(0, Math.min(1, 1 - (rect.right - e.clientX) / 140));
@@ -133,12 +127,11 @@ export function wireSliderUx({ registerDocClickAway }) {
     hideSliderBubble();
   });
 
-  // ── Click value chip to type a number ──
-  // Replaces the chip with a tiny inline input until blur/Enter,
-  // then writes back to the slider and dispatches `input` so
-  // previews react. Matches the legacy chip AND the pulled-out
-  // `.ge-slider-value` chip so every slider row in the editor is
-  // click-to-type editable.
+  // ── 点击数值芯片输入数字 ──
+  // 将芯片替换为小型内联输入框，直到 blur/Enter，
+  // 然后写回滑块并分发 `input` 事件使预览响应。
+  // 匹配旧版芯片和拉出的 `.ge-slider-value` 芯片，
+  // 使编辑器中的每个滑块行都可点击输入编辑。
   registerDocClickAway((e) => {
     const chip = e.target.closest(
       '.ge-eraser-row .ge-slider-value, ' +
@@ -159,7 +152,7 @@ export function wireSliderUx({ registerDocClickAway }) {
     inp.className = 'ge-slider-edit';
     chip.style.visibility = 'hidden';
     row.appendChild(inp);
-    // Position the input over where the chip sits.
+    // 将输入框定位在芯片所在位置。
     const crect = chip.getBoundingClientRect();
     const rrect = row.getBoundingClientRect();
     inp.style.left = (crect.left - rrect.left) + 'px';

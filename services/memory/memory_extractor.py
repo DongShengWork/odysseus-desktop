@@ -1,13 +1,13 @@
 """
 memory_extractor.py
 
-Background auto-extraction of facts from chat conversations.
-After each LLM response, this module sends the last few messages to the LLM
-asking it to extract memorable facts, then stores them in both memory.json
-and the FAISS vector index.
+从聊天对话中自动提取事实的后台任务。
+每次 LLM 回复后，本模块将最近的几条消息发送给 LLM，
+要求其提取值得记忆的事实，然后同时存储到 memory.json
+和 FAISS 向量索引中。
 
-Periodically audits all memories via LLM to consolidate duplicates,
-rewrite vague entries, and remove junk.
+定期通过 LLM 审核所有记忆以合并重复项、
+改写模糊条目并删除无用信息。
 """
 
 import hashlib
@@ -21,17 +21,16 @@ logger = logging.getLogger(__name__)
 
 
 def _tidy_state_path(memory_manager) -> str:
-    """Sidecar JSON next to memory.json that remembers the fingerprint of
-    the last successfully-audited state per owner. Lets the audit short-
-    circuit when nothing has changed since the previous tidy — running
-    the LLM again on an already-clean list was wasting 30-120s per call
-    and occasionally timing out on the second pass."""
+    """与 memory.json 并排的 JSON 文件，记录每位 owner
+    上次成功审核状态的指纹。让审核在自上次整理以来
+    无变化时短路 — 对已清理的列表再次运行 LLM 每次
+    浪费 30-120 秒，且第二次调用有时会超时。"""
     return os.path.join(os.path.dirname(memory_manager.memory_file), "memory_tidy_state.json")
 
 
 def _fingerprint_entries(entries) -> str:
-    """Stable hash of an owner's memories — order-independent, depends
-    only on id+text+category. Any add/edit/delete invalidates it."""
+    """某 owner 记忆的稳定哈希 — 与顺序无关，仅取决于
+    id+text+category。任何添加/编辑/删除都会导致失效。"""
     items = sorted(
         (str(e.get("id", "")), e.get("text", ""), e.get("category", ""))
         for e in _memory_dicts(entries)
@@ -85,7 +84,7 @@ EXTRACT_SYSTEM_PROMPT = (
     "Return ONLY valid JSON, no markdown fences."
 )
 
-# How many recent messages to include for extraction
+# 每次提取包含多少条最近消息
 CONTEXT_WINDOW = 6
 
 AUDIT_SYSTEM_PROMPT = (
@@ -109,7 +108,7 @@ AUDIT_SYSTEM_PROMPT = (
     "Return ONLY valid JSON, no markdown fences."
 )
 
-AUDIT_INTERVAL = 5  # audit every N new memories added
+AUDIT_INTERVAL = 5  # 每新增 N 条记忆后触发审核
 _extractions_since_audit = 0
 
 
@@ -148,11 +147,11 @@ def _clean_memory_value(value: str, max_len: int = 80) -> str:
 
 
 def _fallback_memory_candidates(messages) -> list[dict]:
-    """Extract obvious durable facts without relying on the LLM.
+    """不依赖 LLM 提取明显的持久化事实。
 
-    This is deliberately narrow. The LLM remains the main extractor, but
-    simple identity/preference/goal statements should not silently vanish just
-    because the background model judged them too conversational.
+    此方法范围刻意缩小。LLM 仍是主要提取器，但
+    简单的身份/偏好/目标陈述不应因为后台模型
+    认为它们过于对话化而无声地消失。
     """
     candidates = []
     seen = set()
@@ -196,10 +195,10 @@ def _fallback_memory_candidates(messages) -> list[dict]:
         if m:
             preference = _clean_memory_value(m.group(2), 100)
             if preference:
-                # The same pattern catches likes and dislikes; keep the stored
-                # sentiment faithful instead of recording every match as a
-                # preference ("I hate cilantro" must not become "User prefers
-                # cilantro").
+                # 同样的模式会匹配喜欢和讨厌；保持存储的
+                # 情感原文而不是将每个匹配都记录为
+                # 偏好（"I hate cilantro" 不能变成 "User prefers
+                # cilantro"）。
                 verb = m.group(1).lower()
                 if verb in ("hate", "do not like", "don't like"):
                     add(f"User dislikes {preference}.", "preference")
@@ -221,7 +220,7 @@ def _fallback_memory_candidates(messages) -> list[dict]:
 
 
 def _is_text_duplicate(new_text: str, existing: list, threshold: float = 0.6) -> bool:
-    """Check if new_text is too similar to any existing memory (Jaccard similarity)."""
+    """检查 new_text 是否与任何现有记忆过于相似（Jaccard 相似度）。"""
     new_tokens = set(new_text.lower().split())
     if not new_tokens:
         return False
@@ -237,13 +236,12 @@ def _is_text_duplicate(new_text: str, existing: list, threshold: float = 0.6) ->
 
 
 def _parse_extraction_json(raw: str) -> list:
-    """Parse the extraction LLM's reply into a list of facts, tolerating
-    reasoning-model noise.
+    """将提取 LLM 的回复解析为事实列表，容忍推理模型的噪声。
 
-    The model emits <think>…</think> (and sometimes a prose preamble or a
-    ```json fence) AROUND the JSON array; without stripping it, json.loads
-    bombs and the run silently yields "0 candidates". Pure str -> list (no
-    LLM/network); returns [] on any parse failure instead of raising.
+    模型会在 JSON 数组周围输出 <think>…</think>（有时还有散文序言或
+    ```json 代码块）；不剥离这些，json.loads
+    会失败且运行静默地 yield "0 candidates"。纯字符串 -> 列表（无
+    LLM/网络）；解析失败返回 [] 而不是抛出异常。
     """
     text = (raw or "").strip()
     try:
@@ -253,10 +251,10 @@ def _parse_extraction_json(raw: str) -> list:
         pass
     if text.startswith("```"):
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    # JSON may still be embedded in surrounding commentary (leading prose or
-    # trailing remarks like "[...] Done!") — slice from the first '[' to the
-    # last ']' whenever both exist. Slice unconditionally: a reply that starts
-    # with '[' can still carry trailing commentary that breaks json.loads.
+    # JSON 仍可能嵌入在周围的评论文本中（前导散文或
+    # 尾随的备注如 "[...] Done!"）— 当两者都存在时，从第一个 '[' 截取到最后一个
+    # ']'。无条件截取：以 '[' 开头的回复仍可能带有尾随评注，
+    # 会破坏 json.loads。
     _start = text.find("[")
     _end = text.rfind("]")
     if 0 <= _start < _end:
@@ -281,10 +279,10 @@ async def extract_and_store(
     model: str,
     headers: Optional[dict] = None,
 ):
-    """Extract facts from recent conversation and store them.
+    """从最近对话中提取事实并存储。
 
-    Designed to run as a background task (asyncio.create_task).
-    Errors are logged, never raised.
+    设计为后台任务运行（asyncio.create_task）。
+    错误会被记录，永不抛出。
     """
     if not endpoint_url or not model:
         logger.debug("[memory-extract] No model or URL provided, skipping")
@@ -293,23 +291,23 @@ async def extract_and_store(
     try:
         from src.llm_core import llm_call_async
 
-        # Get last N messages from session
+        # 从 session 获取最近 N 条消息
         messages = session.get_context_messages()
         recent = messages[-CONTEXT_WINDOW:] if len(messages) > CONTEXT_WINDOW else messages
 
         if len(recent) < 2:
-            return  # Need at least a user message and assistant response
+            return  # 至少需要一条用户消息和一条助手回复
 
-        # Strip media (images/audio) from messages — background memory extraction
-        # only needs the text. The VL-generated descriptions are already in the
-        # text content of the messages. This avoids sending image tokens to
-        # non-vision models and prevents accidental "vision grounding" triggers.
+        # 从消息中移除媒体内容（图片/音频）— 后台记忆提取
+        # 只需要文本。VL 生成的描述已在消息的文本内容中。
+        # 这避免了向非视觉模型发送图片 token，并防止意外触发
+        # "视觉接地"。
         stripped_recent = []
         for msg in recent:
             role = msg.get("role")
             content = msg.get("content", "")
             if isinstance(content, list):
-                # Filter out multimodal blocks that aren't text
+                # 过滤掉非文本内容块
                 text_only = [b for b in content if isinstance(b, dict) and b.get("type") == "text"]
                 if not text_only and content:
                     continue
@@ -321,17 +319,14 @@ async def extract_and_store(
 
         fallback_facts = _fallback_memory_candidates(stripped_recent)
 
-        # Flatten the window into a SINGLE user message instead of appending the
-        # raw alternating role messages. Passed as raw chat messages, the model
-        # treats the window as a conversation to CONTINUE rather than a transcript
-        # to ANALYZE, so it reliably extracts nothing — typically returning `[]`
-        # (and, depending on the input, sometimes an empty or <think>-only
-        # completion when the window ends on an assistant turn). This was the real
-        # cause of auto-memory logging "0 candidates" on every run. Reframing it as
-        # one "analyze this transcript, return the JSON array" user message makes
-        # the model actually extract. Controlled repro on this model: 0/6 trials
-        # with the old structure vs 6/6 with this one. The skill extractor flattens
-        # for the same reason.
+        # 将窗口展平为单条 USER 消息，而不是追加原始交替角色消息。
+        # 如果作为原始聊天消息传入，模型会将窗口视为需要继续的对话
+        # 而非需要分析的记录，因此它可靠地提取不到任何内容 — 通常返回 `[]`
+        # （且取决于输入，当窗口以助手回合结束时有时会返回空的或仅 <think> 的
+        # 补全）。这就是 auto-memory 每次运行都记录 "0 candidates" 的真实
+        # 原因。将其重新组织为一条 "分析这段记录，返回 JSON 数组" 的用户消息
+        # 使得模型真正开始提取。在本模型上的受控重现：旧结构 0/6 次
+        # 成功，本结构 6/6 次成功。技能提取器出于同样原因也进行展平。
         def _flatten_msg(m):
             c = m.get("content", "")
             if isinstance(c, list):
@@ -357,19 +352,19 @@ async def extract_and_store(
                 model,
                 extraction_messages,
                 temperature=0.1,
-                # A reasoning model spends most of its budget on <think> tokens
-                # BEFORE emitting the JSON, so the old 500 truncated the response
-                # before any JSON appeared → every run logged "0 candidates". The
-                # audit path hit the same wall and raised to 16384; extraction's
-                # output (a short facts list) is small, so an ample ceiling is
-                # enough once thinking has room.
+                # 推理模型在输出 JSON 之前将大部分预算
+                # 花在 <think> 令牌上，因此旧的 500 上限会在
+                # 任何 JSON 出现之前截断响应 → 每次运行都记录 "0 candidates"。审计
+                # 路径遇到了同样的障碍并提升到 16384；提取的
+                # 输出（一个简短的事实列表）体积很小，所以给定思考空间后
+                # 慷慨的上限就够了。
                 max_tokens=4096,
                 headers=headers,
             )
 
-            # Parse JSON, tolerating reasoning-model noise (<think> blocks, a
-            # ```json fence, and leading/trailing commentary). See
-            # _parse_extraction_json — returns [] rather than raising.
+            # 解析 JSON，容忍推理模型的噪声（<think> 块、
+            # ```json 围栏、以及前后评论文本）。参见
+            # _parse_extraction_json — 返回 [] 而不是抛出异常。
             facts = _parse_extraction_json(raw)
         except Exception as e:
             logger.warning(f"LLM memory extraction failed; using fallback candidates if available: {e}")
@@ -384,7 +379,7 @@ async def extract_and_store(
             logger.info("Auto memory extraction ran: 0 candidates")
             return
 
-        # Get owner from session
+        # 从 session 获取 owner
         _owner = getattr(session, 'owner', None)
 
         existing = memory_manager.load_all()
@@ -403,12 +398,12 @@ async def extract_and_store(
             if not fact_text or len(fact_text) < 5:
                 continue
 
-            # Dedup: check vector similarity first (fast), then exact text match.
-            # A runtime embedding/ChromaDB failure (backend OOM, model evicted,
-            # remote endpoint down) must not abort the whole batch — fall through
-            # to the text/fuzzy dedup below instead of losing every validated
-            # fact extracted this session. (`.healthy` is only set at init, so
-            # it does not catch failures that develop later.)
+            # 去重：先检查向量相似度（快速），然后精确文本匹配。
+            # 运行时的 embedding/ChromaDB 失败（后端 OOM、模型被驱逐、
+            # 远程端点宕机）不应中止整批处理 — 回退到
+            # 下面的文本/模糊去重，而不是丢失此会话中提取的每条
+            # 已验证事实。（`.healthy` 仅在初始化时设置，因此
+            # 不会捕获后续发展的失败。）
             if memory_vector and memory_vector.healthy:
                 try:
                     existing_id = memory_vector.find_similar(fact_text, threshold=0.72)
@@ -416,29 +411,28 @@ async def extract_and_store(
                     logger.warning(f"Memory dedup (vector) unavailable, using text fallback: {e}")
                     existing_id = None
                 if existing_id:
-                    # The vector store is a single shared collection with no
-                    # owner metadata, so find_similar can return ANOTHER
-                    # tenant's memory. Only treat it as a duplicate when the
-                    # match is this user's own (or a legacy unowned) memory —
-                    # otherwise the user's freshly-extracted fact would be
-                    # silently dropped. Mirror the owner predicate used by the
-                    # text dedup below; cross-tenant/stale matches fall through.
+                    # 向量存储是单个共享集合，没有
+                    # owner 元数据，因此 find_similar 会返回另一个
+                    # 租户的记忆。仅当匹配项是当前用户自己的（或旧的无主）
+                    # 记忆时才视为重复 — 否则用户新提取的事实会被
+                    # 静默丢弃。镜像下面文本去重使用的 owner 判断；
+                    # 跨租户/过时的匹配会继续。
                     _match = next((e for e in existing if e.get("id") == existing_id), None)
                     if _match is not None and (_match.get("owner") == _owner or _match.get("owner") is None):
                         logger.debug(f"Memory dedup (vector): '{fact_text[:50]}' matches {existing_id}")
                         continue
 
-            # Text dedup fallback: exact match + fuzzy similarity
+            # 文本去重兜底：精确匹配 + 模糊相似度
             user_existing = [e for e in existing if e.get("owner") == _owner or e.get("owner") is None] if _owner else existing
             if memory_manager.find_duplicates(fact_text, user_existing):
                 continue
-            # Fuzzy text similarity check (catches rephrased duplicates when vector index is unavailable)
+            # 模糊文本相似度检查（当向量索引不可用时捕获改写后的重复项）
             if _is_text_duplicate(fact_text, user_existing):
                 logger.debug(f"Memory dedup (fuzzy): '{fact_text[:50]}' too similar to existing")
                 continue
 
             entry = memory_manager.add_entry(fact_text, source="auto", category=category, owner=_owner)
-            # Auto-pin identity facts (name, job, location) — core context
+            # 自动置顶身份事实（姓名、职位、位置）— 核心上下文
             if category == "identity":
                 entry["pinned"] = True
             if hasattr(session, "session_id"):
@@ -448,9 +442,9 @@ async def extract_and_store(
 
             existing.append(entry)
 
-            # Add to vector index. The JSON store (saved below) is the source of
-            # truth and the keyword path can still retrieve this entry, so a vector
-            # write failure must not drop the fact or abort the remaining batch.
+            # 添加到向量索引。JSON 存储（保存在下面）是可靠来源，
+            # 且关键字路径仍然可以检索此条目，因此向量
+            # 写入失败不得丢弃事实或中止剩余批次。
             if memory_vector and memory_vector.healthy:
                 try:
                     memory_vector.add(entry["id"], fact_text)
@@ -492,15 +486,15 @@ async def audit_memories(
     headers: Optional[dict] = None,
     owner: Optional[str] = None,
 ):
-    """Send all memories to the LLM for deduplication and consolidation.
+    """将所有记忆发送给 LLM 进行去重和合并。
 
-    - Merges near-duplicate entries
-    - Rewrites vague entries to be concise
-    - Removes junk / non-personal entries
-    - Rebuilds the vector index afterwards
+    - 合并近似重复的条目
+    - 将模糊条目改写为简洁
+    - 删除垃圾/非个人条目
+    - 之后重建向量索引
 
-    Safe to call manually or from the automatic trigger in extract_and_store.
-    Errors are logged, never raised.
+    可以手动调用，也可以由 extract_and_store 中的自动触发器调用。
+    错误被记录，永不抛出。
     """
     try:
         from src.llm_core import llm_call_async
@@ -512,12 +506,12 @@ async def audit_memories(
 
         before_count = len(existing)
 
-        # Skip the LLM call entirely when this exact set of memories was
-        # already audited — the previous tidy left them in a clean state
-        # and nothing has changed since. Returns instantly so the UI shows
-        # "Already clean" without spending 30-120s on a wasted LLM round.
-        # The fingerprint includes id+text+category; any add/edit/delete
-        # invalidates it and the audit runs normally.
+        # 当这组记忆上次已被审核过且未发生变化时，
+        # 完全跳过 LLM 调用 — 上一次整理已将它们置于干净状态。
+        # 自那时起无任何变化。立即返回，让 UI 显示
+        # "已经是干净的"，避免浪费 30-120 秒的 LLM 轮次。
+        # 指纹包含 id+text+category；任何添加/编辑/删除
+        # 会使指纹失效，审核会正常运行。
         current_fp = _fingerprint_entries(existing)
         last_state = _load_tidy_state(memory_manager).get(owner or "") or {}
         if last_state.get("fingerprint") == current_fp:
@@ -528,7 +522,7 @@ async def audit_memories(
                 "already_tidy": True,
             }
 
-        # Build payload: list of {id, text, category} for the LLM
+        # 为 LLM 构建载荷：{id, text, category} 列表
         memory_payload = [
             {"id": m["id"], "text": m["text"], "category": m.get("category", "fact")}
             for m in existing
@@ -544,18 +538,17 @@ async def audit_memories(
             model,
             audit_messages,
             temperature=0.1,
-            # 16384 (was 2000): the deduped list of all memories can be large,
-            # and a reasoning model spends tokens thinking first — 2000 truncated
-            # the JSON so it never parsed ("bad_json").
+            # 16384（之前是 2000）：去重后的所有记忆列表可能很大，
+            # 且推理模型会先花 token 思考 — 2000 会截断
+            # JSON 导致永不变析（"bad_json"）。
             max_tokens=16384,
             headers=headers,
-            # Bound the call so the Tidy whirlpool can't spin indefinitely on a
-            # slow/large generation.
+            # 限制调用时间，防止 Tidy 漩涡在缓慢/大型生成中无限旋转。
             timeout=120,
         )
 
-        # Parse the JSON list, tolerating reasoning-model noise: <think> blocks,
-        # markdown fences, leading prose, and trailing commas.
+        # 解析 JSON 列表，容忍推理模型噪声：<think> 块、
+        # markdown 围栏、前导散文和尾随逗号。
         import re as _re
         text = (raw or "").strip()
         text = _re.sub(r'<think(?:ing)?>[\s\S]*?</think(?:ing)?>', '', text, flags=_re.I).strip()
@@ -585,7 +578,7 @@ async def audit_memories(
             logger.error(f"Memory audit returned non-JSON: {text[:300]}")
             return {"before": before_count, "after": before_count, "error": "bad_json"}
 
-        # Build lookup of original entries by ID so we can preserve metadata
+        # 按 ID 构建原始条目查找表，以便保留元数据
         originals = {m["id"]: m for m in existing}
 
         final_entries = []
@@ -598,13 +591,13 @@ async def audit_memories(
                 continue
 
             if mid in originals:
-                # Preserve original metadata, update text + category
+                # 保留原始元数据，更新 text + category
                 entry = originals[mid].copy()
                 entry["text"] = new_text
                 if item.get("category"):
                     entry["category"] = item["category"]
             else:
-                # ID not found — skip to avoid inventing entries
+                # 未找到 ID — 跳过，避免虚构条目
                 logger.debug(f"Audit returned unknown id {mid}, skipping")
                 continue
 
@@ -612,11 +605,11 @@ async def audit_memories(
 
         after_count = len(final_entries)
 
-        # Safety net against catastrophic over-deletion. A conservative tidy
-        # should never wipe out half the store in one pass — if the model
-        # returned far fewer entries than it was given (over-consolidation, a
-        # dropped/truncated list, or it ignored ids), treat it as a misfire and
-        # DON'T save. Better to no-op than to silently lose memories.
+        # 灾难性过度删除的安全网。保守的整理
+        # 不应在一次通过中清除一半以上的存储 — 如果模型
+        # 返回的条目远少于传入的（过度合并、列表
+        # 丢失/截断、或忽略了 id），将其视为误触发并
+        # 不保存。宁可无操作，也比静默丢失记忆好。
         if before_count >= 8 and after_count < before_count * 0.5:
             logger.warning(
                 f"Memory audit would cut {before_count} -> {after_count} "
@@ -624,12 +617,12 @@ async def audit_memories(
             )
             return {"before": before_count, "after": before_count, "error": "unsafe_removal"}
 
-        # Merge audited entries back with other users' entries
+        # 将审核后的条目与其他用户的条目合并
         if owner:
             all_entries = memory_manager.load_all()
             audited_ids = {e["id"] for e in final_entries}
             other_entries = [e for e in all_entries if e.get("owner") != owner and (e.get("owner") is not None)]
-            # Also keep legacy entries that weren't part of this audit
+            # 也保留不属于本次审核的旧条目
             for e in all_entries:
                 if e.get("owner") is None and e["id"] not in audited_ids and e["id"] not in {o["id"] for o in other_entries}:
                     other_entries.append(e)
@@ -642,14 +635,14 @@ async def audit_memories(
             f"({before_count - after_count} removed/merged)"
         )
 
-        # Rebuild vector index from the full saved set, not just this owner's
-        # slice — otherwise the shared collection is wiped of every other
-        # owner's entries until they happen to run their own audit.
+        # 从完整保存集重建向量索引，而非仅从此 owner 的
+        # 分片 — 否则共享集合会丢失其他所有
+        # owner 的条目，直到他们恰好运行自己的审计。
         if memory_vector and memory_vector.healthy:
             memory_vector.rebuild(saved_entries)
 
-        # Persist the post-tidy fingerprint so the next call short-circuits
-        # if nothing has changed in the meantime.
+        # 持久化整理后的指纹，以便下一次调用在日志未被修改
+        # 时短路返回。
         _save_tidy_state(memory_manager, owner, _fingerprint_entries(final_entries))
 
         return {"before": before_count, "after": after_count}

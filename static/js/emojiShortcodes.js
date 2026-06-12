@@ -1,27 +1,27 @@
 // static/js/emojiShortcodes.js
 //
-// Emoji shortcode → Unicode conversion (issue #345).
+// Emoji 短代码 → Unicode 转换（issue #345）。
 //
-// Chat models frequently emit GitHub/Slack-style `:shortcode:` text — e.g.
-// `:blush:`, `:fire:`, `:microphone:` — instead of the actual emoji character.
-// Nothing in the render pipeline used to translate these, so they showed up as
-// literal `:blush:` text in the chat bubble.
+// 聊天模型经常发出 GitHub/Slack 风格的 `:shortcode:` 文本 —— 例如
+// `:blush:`、`:fire:`、`:microphone:` —— 而不是实际的表情符号字符。
+// 渲染管道中过去没有翻译这些内容，所以它们会以
+// 字面 `:blush:` 文本形式出现在聊天气泡中。
 //
-// This module turns the common shortcode set into the real Unicode emoji. The
-// chat renderer (markdown.js → svgifyEmoji) runs this BEFORE its existing
-// Unicode-emoji → monochrome-SVG pass, so a converted `:blush:` renders as the
-// same theme-tinted single-color line icon as any other emoji (project rule:
-// never colorful emoji), not as a colored system glyph.
+// 本模块将常见短代码集合转换为真正的 Unicode 表情符号。
+// 聊天渲染器（markdown.js → svgifyEmoji）在现有的
+// Unicode 表情符号 → 单色 SVG 转换之前运行此模块，因此转换后的 `:blush:` 会渲染为
+// 与其他表情符号相同的主题着色单色线条图标（项目规则：
+// 绝不用彩色表情符号），而不是彩色系统字形。
 //
-// Pure and browser-free on purpose: no DOM, no imports, so it can be unit
-// tested with plain `node` (see tests/test_emoji_shortcodes_js.py).
+// 刻意保持纯逻辑且不依赖浏览器：无 DOM、无导入，以便可以通过
+// 普通 `node` 进行单元测试（参见 tests/test_emoji_shortcodes_js.py）。
 
-// Canonical map of common shortcode → Unicode emoji. Names follow the GitHub
-// convention (lowercase, underscore-separated). A handful of well-known aliases
-// (`+1`, `thumbsup`, `grinning_face`, …) point at the same glyph so the most
-// frequent model spellings all resolve.
+// 常见短代码 → Unicode 表情符号的规范映射。名称遵循 GitHub
+// 约定（小写，下划线分隔）。一些众所周知的别名
+// （`+1`、`thumbsup`、`grinning_face` 等）指向相同的字形，使最常见的
+// 模型拼写都能解析。
 export const EMOJI_SHORTCODES = {
-  // ── Smileys & emotion ──
+  // ── 表情与情绪 ──
   grinning: '😀', grinning_face: '😀',
   smiley: '😃', smiley_face: '😃',
   smile: '😄',
@@ -123,7 +123,7 @@ export const EMOJI_SHORTCODES = {
   alien: '👽',
   space_invader: '👾',
   robot: '🤖', robot_face: '🤖',
-  // ── Cats ──
+  // ── 猫 ──
   smiley_cat: '😺',
   smile_cat: '😸',
   joy_cat: '😹',
@@ -136,7 +136,7 @@ export const EMOJI_SHORTCODES = {
   see_no_evil: '🙈',
   hear_no_evil: '🙉',
   speak_no_evil: '🙊',
-  // ── Hands & body ──
+  // ── 手部与身体 ──
   wave: '👋', wave_hand: '👋',
   raised_back_of_hand: '🤚',
   raised_hand_with_fingers_splayed: '🖐️',
@@ -172,7 +172,7 @@ export const EMOJI_SHORTCODES = {
   nail_care: '💅',
   selfie: '🤳',
   muscle: '💪', flexed_biceps: '💪',
-  // ── Hearts & symbols of feeling ──
+  // ── 心形与情感符号 ──
   heart: '❤️', red_heart: '❤️',
   orange_heart: '🧡',
   yellow_heart: '💛',
@@ -193,7 +193,7 @@ export const EMOJI_SHORTCODES = {
   gift_heart: '💝',
   heart_decoration: '💟',
   heavy_heart_exclamation: '❣️',
-  // ── Celebration & misc objects ──
+  // ── 庆祝与杂项物品 ──
   fire: '🔥', flame: '🔥',
   '100': '💯', hundred: '💯',
   sparkles: '✨',
@@ -246,7 +246,7 @@ export const EMOJI_SHORTCODES = {
   orange_circle: '🟠',
   purple_circle: '🟣',
   brown_circle: '🟤',
-  // ── Tech, work, study ──
+  // ── 技术、工作、学习 ──
   rocket: '🚀',
   eyes: '👀',
   eye: '👁️',
@@ -294,7 +294,7 @@ export const EMOJI_SHORTCODES = {
   dart: '🎯', bullseye: '🎯',
   game_die: '🎲',
   jigsaw: '🧩',
-  // ── Food & drink ──
+  // ── 食物与饮品 ──
   pizza: '🍕',
   hamburger: '🍔',
   fries: '🍟',
@@ -304,7 +304,7 @@ export const EMOJI_SHORTCODES = {
   coffee: '☕',
   beer: '🍺',
   wine_glass: '🍷',
-  // ── Animals & nature ──
+  // ── 动物与自然 ──
   dog: '🐶',
   cat: '🐱',
   mouse: '🐭',
@@ -367,7 +367,7 @@ export const EMOJI_SHORTCODES = {
   cloud: '☁️',
   snowflake: '❄️',
   ocean: '🌊',
-  // ── Arrows & signs ──
+  // ── 箭头与符号 ──
   arrow_right: '➡️',
   arrow_left: '⬅️',
   arrow_up: '⬆️',
@@ -393,7 +393,7 @@ export const EMOJI_SHORTCODES = {
   triangular_flag_on_post: '🚩',
   white_flag: '🏳️',
   black_flag: '🏴',
-  // ── People & wearables ──
+  // ── 人物与穿戴 ──
   baby: '👶',
   boy: '👦',
   girl: '👧',
@@ -406,30 +406,30 @@ export const EMOJI_SHORTCODES = {
   graduation_cap: '🎓', mortar_board: '🎓',
 };
 
-// `:name:` where name is letters/digits/`_`/`+`/`-`. Length ≥1 so `:+1:` and
-// `:-1:` match. Global + case-insensitive for replace; a separate non-global
-// literal is used for the cheap presence check so there's no shared lastIndex
-// state to reset.
+// `:name:` 其中 name 为字母/数字/`_`/`+`/`-`。长度 ≥1 以匹配 `:+1:` 和
+// `:-1:`。替换使用全局 + 不区分大小写；存在性检查使用单独的非全局
+// 字面量，因此没有共享的 lastIndex 状态需要重置。
 const SHORTCODE_RE = /:([a-z0-9_+-]{1,40}):/gi;
 
 /**
- * Cheap test for whether `text` could contain any emoji shortcode at all.
- * Lets callers skip the replace pass entirely on the common no-shortcode path.
+ * 廉价检测 `text` 中是否可能包含任何 emoji 短代码。
+ * 允许调用方在常见的无短代码路径上完全跳过替换过程。
  */
 export function hasEmojiShortcode(text) {
   return !!text && text.indexOf(':') !== -1 && /:[a-z0-9_+-]{1,40}:/i.test(text);
 }
 
-// A shortcode must stand on its own — flanked by whitespace, punctuation, a
-// string edge, or markup, never glued to an ASCII word character. Without this
-// guard, real `:name:` shortcodes that happen to sit inside a longer run of
-// digits/letters get converted by mistake and mangle perfectly literal text:
-//   "1:100:2"  → the `:100:` would become 💯  ("1💯2")
-//   "host:fire:port", URL authorities, `key:value:` pairs, etc.
-// Chat models always emit shortcodes delimited by spaces/punctuation (":fire:",
-// "**:microphone:**", "nice :tada:!"), so requiring a boundary keeps every real
-// shortcode working while leaving embedded colon runs untouched. `_` counts as a
-// word char too (identifier-like), but `+`/`-` do not, so "C++ :fire:" still works.
+// 短代码必须独立存在 —— 两侧为空白字符、标点符号、
+// 字符串边缘或标记，绝不能紧贴 ASCII 单词字符。如果没有这个
+// 保护，恰好位于较长数字/字母序列中的真实 `:name:` 短代码
+// 会被错误转换并破坏完全字面的文本：
+//   "1:100:2"  → `:100:` 会变成 💯（"1💯2"）
+//   "host:fire:port"、URL 权限部分、`key:value:` 对等。
+// 聊天模型总是输出以空格/标点分隔的短代码（":fire:"、
+// "**:microphone:**"、"nice :tada:!"），因此要求边界保护
+// 使所有真实短代码正常工作，同时保持嵌入的冒号序列不被触动。
+// `_` 也算作单词字符（类似标识符），但 `+`/`-` 不算，
+// 所以 "C++ :fire:" 仍然有效。
 const _WORDISH = /[A-Za-z0-9_]/;
 function _boundedOnBothSides(str, start, end) {
   const before = start > 0 ? str[start - 1] : '';
@@ -438,18 +438,18 @@ function _boundedOnBothSides(str, start, end) {
 }
 
 /**
- * Replace every known `:shortcode:` in `text` with its Unicode emoji. Unknown
- * shortcodes (`:definitely_not_emoji:`), colon runs that don't form a shortcode
- * (`10:30:45`, `16:9`), and known shortcodes embedded mid-token (`1:100:2`) are
- * all left exactly as-is.
+ * 将 `text` 中每个已知的 `:shortcode:` 替换为其 Unicode 表情符号。
+ * 未知的短代码（`:definitely_not_emoji:`）、不构成短代码的冒号序列
+ * （`10:30:45`、`16:9`）以及嵌入在标记中的已知短代码（`1:100:2`）
+ * 均保持原样不动。
  */
 export function replaceEmojiShortcodes(text) {
   if (!text || text.indexOf(':') === -1) return text;
   return text.replace(SHORTCODE_RE, (whole, name, offset, str) => {
     const key = name.toLowerCase();
     if (!Object.prototype.hasOwnProperty.call(EMOJI_SHORTCODES, key)) return whole;
-    // Only convert when the `:shortcode:` is a standalone token, not glued to a
-    // surrounding word/number (which would mean it's literal text, not an emoji).
+    // 仅当 `:shortcode:` 是独立标记时才转换，而不是紧贴在
+    // 周围的单词/数字上（这意味着它是字面文本，而不是表情符号）。
     if (!_boundedOnBothSides(str, offset, offset + whole.length)) return whole;
     return EMOJI_SHORTCODES[key];
   });

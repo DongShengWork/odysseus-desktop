@@ -1,22 +1,18 @@
-// Model Picker — chatbox model selector dropdown
-// Extracted from sessions.js
+// 模型选择器 — 聊天框模型选择下拉菜单
+// 从 sessions.js 提取
 
 import { providerLogo } from './providers.js';
 import uiModule from './ui.js';
 import settingsModule from './settings.js';
 import { sortModelObjects } from './modelSort.js';
+import { t } from './i18n.js';
 
 const API_BASE = window.location.origin;
 
-// ── Recent + Favorites persistence ──
-// Recent is auto-tracked (last 5 picks, most-recent-first) and lives in its
-// own key. Favorites is the SAME key the sidebar Models section uses, so a
-// favorite toggled here shows up there and vice-versa.
-const RECENT_KEY = 'odysseus-model-recent';
-const FAVORITES_KEY = 'odysseus-model-favorites';
-const RECENT_MAX = 5;
-// Catalogs at or below this size are small enough that hiding everything
-// behind search would be a regression — keep listing them in browse mode.
+// ── 最近使用 + 收藏持久化 ──
+// 最近使用自动追踪（最近 5 次选择，最近在前），存放在自己的 key 中。
+// 收藏与侧边栏模型区域使用相同的 key，因此此处切换收藏也会同步显示。
+// 达到或低于此大小的目录足够小，隐藏到搜索后面会是一种倒退 — 在浏览模式下保持列出它们。
 const BROWSE_ALL_LIMIT = 12;
 
 function _loadList(key) {
@@ -42,7 +38,7 @@ function _toggleFavorite(mid) {
   if (i >= 0) favs.splice(i, 1);
   else favs.push(mid);
   _saveList(FAVORITES_KEY, favs);
-  // Keep the sidebar Models section (same key) in sync if it's mounted.
+  // 保持侧边栏模型区域同步（相同 key）如果它已挂载。
   try {
     if (window.modelsModule && typeof window.modelsModule.refreshModels === 'function') {
       window.modelsModule.refreshModels();
@@ -51,7 +47,7 @@ function _toggleFavorite(mid) {
   return i < 0; // true when now favorited
 }
 
-// ── Shared keyboard nav for model pickers ──
+// ── 模型选择器共享键盘导航 ──
 function _handlePickerKeydown(e, listEl, itemSelector, closeFn) {
   if (e.key === 'Escape') { closeFn(); return; }
   if (e.key === 'Enter') {
@@ -74,7 +70,7 @@ function _handlePickerKeydown(e, listEl, itemSelector, closeFn) {
   }
 }
 
-// Dependencies injected via initModelPicker()
+// 通过 initModelPicker() 注入的依赖
 let _deps = null;
 let _autoSelectingDefault = false;
 
@@ -92,13 +88,13 @@ function _modelExists(modelId, url) {
 }
 
 /**
- * Initialize the model picker dropdown.
+ * 初始化模型选择器下拉菜单。
  * @param {Object} deps
- * @param {function} deps.getCurrentSessionId - returns current session ID
- * @param {function} deps.getSessions - returns sessions array
- * @param {function} deps.getPendingChat - returns _pendingChat object
- * @param {function} deps.setPendingChat - sets _pendingChat object
- * @param {function} deps.createDirectChat - creates a new direct chat session
+ * @param {function} deps.getCurrentSessionId - 返回当前会话 ID
+ * @param {function} deps.getSessions - 返回会话数组
+ * @param {function} deps.getPendingChat - 返回 _pendingChat 对象
+ * @param {function} deps.setPendingChat - 设置 _pendingChat 对象
+ * @param {function} deps.createDirectChat - 创建新的直接聊天会话
  */
 export function initModelPicker(deps) {
   _deps = deps;
@@ -116,7 +112,7 @@ function _initModelPickerDropdown() {
 
   function _close() {
     if (menu.classList.contains('hidden')) return;
-    // Restore scroll button
+    // 恢复滚动按钮
     const _scrollBtn = document.getElementById('scroll-bottom-btn');
     if (_scrollBtn) _scrollBtn.style.display = '';
     menu.classList.add('closing');
@@ -126,7 +122,7 @@ function _initModelPickerDropdown() {
       menu.classList.add('hidden');
       search.value = '';
     }, { once: true });
-    // Fallback if animationend doesn't fire
+    // 如果 animationend 未触发时的回退方案
     setTimeout(() => {
       if (!menu.classList.contains('hidden')) {
         menu.classList.remove('closing');
@@ -157,9 +153,8 @@ function _initModelPickerDropdown() {
     } catch (_) {}
   }
 
-  // Local endpoint health — only probed for LOCAL endpoints, since
-  // cloud APIs are essentially always up. Cached briefly on the
-  // server side too (8s TTL). Picker opens trigger a refresh.
+  // 本地端点健康检查 — 仅探测本地端点，因为云端 API 基本总是可用。
+  // 服务端也有短暂缓存（8 秒 TTL）。打开选择器时会触发刷新。
   let _localProbe = {};            // {endpoint_id: {alive, latency_ms, error}}
   let _localProbeFetchedAt = 0;
   const _LOCAL_PROBE_TTL_MS = 5000;
@@ -179,23 +174,20 @@ function _initModelPickerDropdown() {
     const result = [];
     const seen = new Set();
     items.forEach(item => {
-      // Previously: offline endpoints were skipped entirely, so a server
-      // that briefly went down disappeared from the picker — confusing
-      // when the user can still see it (offline-tagged) in Settings.
-      // Now: include offline-endpoint models too but flag them
-      // `stale: true` so the row renderer dims them + shows the offline
-      // pill. The user can still click and try anyway (matches the
-      // existing "local server appears offline" path on line 301).
+      // 之前：离线端点被完全跳过，因此短暂下线的服务器会从选择器中消失 —
+      // 这会让用户困惑，因为他们仍然可以在设置中看到它（带离线标记）。
+      // 现在：也包含离线端点的模型，但标记为 `stale: true`，
+      // 这样行渲染器会将其变灰并显示离线标签。用户仍然可以点击尝试
+      // （与第 301 行现存的"本地服务器显示为离线"路径一致）。
       const epOffline = !!item.offline;
       const allModels = (item.models || []).concat(item.models_extra || []);
       const allDisplay = (item.models_display || []).concat(item.models_extra_display || []);
-      // Mark local endpoints whose live probe failed.
+      // 标记实时探测失败的本地端点。
       const probeResult = item.endpoint_id ? _localProbe[item.endpoint_id] : null;
       const isLocalDead = !!(probeResult && probeResult.alive === false);
       allModels.forEach((mid, i) => {
-        // Deduplicate by model ID — prefer ONLINE endpoint entries over
-        // offline duplicates so the user gets a working endpoint first
-        // when the same model is exposed by both.
+        // 按模型 ID 去重 — 优先选择在线端点条目而非离线重复项，
+        // 这样当同一模型被多个端点暴露时，用户首先获得可用的端点。
         if (seen.has(mid)) return;
         seen.add(mid);
         result.push({
@@ -212,8 +204,8 @@ function _initModelPickerDropdown() {
           ].filter(Boolean).join(' '),
           stale: isLocalDead || epOffline,
           staleReason: epOffline
-            ? (item.ping_error || 'endpoint offline')
-            : (isLocalDead ? (probeResult.error || 'not responding') : ''),
+            ? (item.ping_error || t('models.endpoint_offline'))
+            : (isLocalDead ? (probeResult.error || t('models.not_responding')) : ''),
           offline: epOffline,
         });
       });
@@ -221,7 +213,7 @@ function _initModelPickerDropdown() {
     return sortModelObjects(result);
   }
 
-  // ── Provider display names and grouping ──
+  // ── 提供者显示名称和分组 ──
   const _PROVIDER_NAMES = {
     '01-ai': 'Yi', 'abacusai': 'Abacus AI', 'adept': 'Adept',
     'ai21': 'AI21 Labs', 'ai21labs': 'AI21 Labs', 'aion-labs': 'Aion Labs',
@@ -277,16 +269,16 @@ function _initModelPickerDropdown() {
     listEl.classList.toggle('is-empty', !hasAnyModel);
     menu.classList.toggle('no-models', !hasAnyModel);
     if (search) {
-      search.placeholder = hasAnyModel ? 'Search models…' : 'No models connected';
+      search.placeholder = hasAnyModel ? t('models.search_placeholder') : t('models.no_models_connected');
     }
     if (searchRow) {
       searchRow.classList.toggle('searching', !!q);
     }
 
-    if (!hasAnyModel) return; // collapsed empty list — nothing to render
+    if (!hasAnyModel) return; // 空列表已折叠 — 无需渲染
 
-    // Unique lookup so Recent/Favorites (stored as bare model IDs) can be
-    // resolved back to full model objects; drops anything no longer offered.
+    // 唯一查找表，使得 Recent/Favorites（存储为裸模型 ID）可以
+    // 解析回完整的模型对象；丢弃不再提供的条目。
     const byId = new Map();
     all.forEach(m => { if (!byId.has(m.mid)) byId.set(m.mid, m); });
 
@@ -310,7 +302,7 @@ function _initModelPickerDropdown() {
       if (m.stale) {
         row.classList.add('model-switch-stale');
         row.style.opacity = '0.45';
-        row.title = `Local server appears offline: ${m.staleReason}. Click to try anyway, or relaunch in Cookbook.`;
+        row.title = t('models.local_server_offline', { reason: m.staleReason });
       }
       const _mlogo = providerLogo(m.mid);
       if (_mlogo) {
@@ -323,30 +315,30 @@ function _initModelPickerDropdown() {
       const nameSpan = document.createElement('span');
       nameSpan.className = 'mp-model-name';
       nameSpan.textContent = m.display;
-      // Long model names are clipped with ellipsis — expose the full name on
-      // hover so the suffix/variant tag is still discoverable (#1982).
+      // 过长的模型名称会被省略号截断 — 悬停时显示完整名称，以便
+      // 后缀/变体标签仍可被查看 (#1982)。
       nameSpan.title = m.display;
       row.appendChild(nameSpan);
-      // Offline state is already conveyed by the row's reduced opacity —
-      // a redundant "offline" pill on top of that just added clutter.
+      // 离线状态已通过行的降低不透明度来传达 —
+      // 在此之上再加一个冗余的"离线"标签只会增加杂乱。
       // (Class kept on `row` so the opacity rule still applies; the text
       // badge is gone.)
       const epSpan = document.createElement('span');
       epSpan.className = 'model-switch-ep';
-      // Don't show endpoint name if it matches the model name (local self-hosted)
+      // 如果端点名称与模型名称匹配（本地自托管），则不显示端点名称
       const _epDisplay = m.epName && !m.display.toLowerCase().includes(m.epName.toLowerCase().split('/').pop()) ? m.epName : '';
       epSpan.textContent = _epDisplay;
       row.appendChild(epSpan);
 
-      // Inline favorite dot — toggles favorite, never picks the model.
+      // 行内收藏圆点 — 切换收藏，不会选择模型。
       const favDot = document.createElement('button');
       favDot.type = 'button';
       favDot.className = 'mp-fav-dot' + (favs.includes(m.mid) ? ' active' : '');
       favDot.textContent = '●';
       const _setFavState = (on) => {
         favDot.classList.toggle('active', on);
-        favDot.title = on ? 'Remove from favorites' : 'Add to favorites';
-        favDot.setAttribute('aria-label', on ? 'Remove from favorites' : 'Add to favorites');
+        favDot.title = on ? t('models.remove_from_favorites') : t('models.add_to_favorites');
+        favDot.setAttribute('aria-label', on ? t('models.remove_from_favorites') : t('models.add_to_favorites'));
         favDot.setAttribute('aria-pressed', on ? 'true' : 'false');
       };
       _setFavState(favs.includes(m.mid));
@@ -357,14 +349,14 @@ function _initModelPickerDropdown() {
         favDot.classList.remove('pulse');
         void favDot.offsetWidth;
         favDot.classList.add('pulse');
-        // Keep our in-memory copy aligned so a follow-up re-render is correct.
+        // 保持内存副本同步，以便后续重新渲染正确。
         const idx = favs.indexOf(m.mid);
         if (nowFav && idx < 0) favs.push(m.mid);
         else if (!nowFav && idx >= 0) favs.splice(idx, 1);
-        if (uiModule && uiModule.showToast) uiModule.showToast(nowFav ? 'Favorited' : 'Unfavorited');
-        // In browse mode the Favorites section membership changed — rebuild
-        // (cheap: Recent + Favorites). In search mode the row stays put, so
-        // the in-place favorite update above is enough.
+        if (uiModule && uiModule.showToast) uiModule.showToast(nowFav ? t('models.favorited') : t('models.unfavorited'));
+        // 浏览模式下，收藏部分成员发生了变化 — 重建列表
+        // （开销很低：仅 Recent + Favorites）。搜索模式下行保持原位，
+        // 所以上述原地收藏更新就足够了。
         if (!q) {
           const st = listEl.scrollTop;
           _populate('');
@@ -377,36 +369,33 @@ function _initModelPickerDropdown() {
       listEl.appendChild(row);
     }
 
-    // ── Search mode: flat, filtered results across the whole catalog ──
+    // ── 搜索模式：整个目录的扁平化过滤结果 ──
     if (q) {
       const matches = all.filter(m => {
         const provName = _providerDisplayName(_providerSlug(m.mid)).toLowerCase();
         return [m.mid, m.display, m.epName, m.providerText, provName]
           .filter(Boolean).join(' ').toLowerCase().includes(q);
       });
-      if (matches.length === 0) _addEmpty('No matching models');
+      if (matches.length === 0) _addEmpty(t('models.no_matching_models'));
       else matches.forEach(_addRow);
       return;
     }
 
-    // ── Browse mode: Favorites (manual) + Recent (auto), with dedupe. ──
-    // Rules:
-    //   1. Never list the same model twice in the dropdown. Favorites
-    //      win over Recent (if you favorited it, that's where it
-    //      belongs — Recent shouldn't show it again as duplicate).
-    //   2. Small catalogs (≤ BROWSE_ALL_LIMIT total) skip the Recent
-    //      section entirely — when there's only ~10 models, the whole
-    //      list fits below as "All models" and a separate Recent
-    //      section just duplicates rows.
+    // ── 浏览模式：收藏（手动）+ 最近使用（自动），带去重。 ──
+    // 规则：
+    //   1. 下拉菜单中同一模型绝不出现两次。收藏优先于最近使用
+    //      （如果你收藏了它，就该在收藏里显示 — 最近使用不应再重复出现）。
+    //   2. 小型目录（≤ BROWSE_ALL_LIMIT）完全跳过最近使用部分 —
+    //      当只有约 10 个模型时，整个列表放在下面的"所有模型"中即可，
+    //      单独的最近使用部分只会重复行。
     const shown = new Set();
     const favModels = favs.map(id => byId.get(id)).filter(Boolean);
     if (favModels.length) {
-      _addSection('Favorites');
+      _addSection(t('models.favorites'));
       favModels.forEach(m => { shown.add(m.mid); _addRow(m); });
     }
-    // Recent: only render when the catalog is big enough that surfacing
-    // a recency shortlist is actually useful, AND only models that
-    // aren't already in Favorites (dedupe).
+    // 最近使用：仅在目录足够大时渲染，此时提供近期快捷列表才有实际意义，
+    // 且仅显示不在收藏中的模型（去重）。
     if (all.length > BROWSE_ALL_LIMIT) {
       const recentModels = _loadRecent()
         .map(id => byId.get(id))
@@ -414,20 +403,20 @@ function _initModelPickerDropdown() {
         .filter(m => !shown.has(m.mid))
         .slice(0, RECENT_MAX);
       if (recentModels.length) {
-        _addSection('Recent');
+        _addSection(t('models.recent'));
         recentModels.forEach(m => { shown.add(m.mid); _addRow(m); });
       }
     }
 
-    // Small catalogs: still list everything so users aren't forced to search.
+    // 小型目录：仍然列出所有内容，避免强迫用户只能搜索。
     if (all.length <= BROWSE_ALL_LIMIT) {
       const rest = all.filter(m => !shown.has(m.mid));
       if (rest.length) {
-        if (shown.size) _addSection('All models');
+        if (shown.size) _addSection(t('models.all_models'));
         rest.forEach(_addRow);
       }
     } else {
-      // Large catalog: show provider groups with collapsible sections.
+      // 大型目录：显示带有可折叠分组的提供者分组。
       const rest = all.filter(m => !shown.has(m.mid));
       const groups = new Map();
       rest.forEach(m => {
@@ -467,7 +456,7 @@ function _initModelPickerDropdown() {
           group.className = 'mp-provider-group' + (_justExpandedProvider === provider ? ' mp-just-expanded' : '');
           models.forEach(m => {
             _addRow(m);
-            // Move the just-appended row into the group container
+            // 将刚追加的行移动到分组容器中
             group.appendChild(listEl.lastElementChild);
           });
           listEl.appendChild(group);
@@ -481,34 +470,34 @@ function _initModelPickerDropdown() {
     const currentSessionId = _deps.getCurrentSessionId();
     const _pendingChat = _deps.getPendingChat();
 
-    // Remember this pick so it surfaces under "Recent" next time the picker
-    // opens — the whole point of quick-switch.
+    // 记住此次选择，以便下次打开选择器时在"最近使用"中显示 —
+    // 这正是快速切换的全部意义。
     if (m && m.mid) _pushRecent(m.mid);
 
-    // Broadcast immediately so listeners (e.g. the tour) can advance without
-    // waiting for the async session-create/PATCH that follows.
+    // 立即广播，以便监听者（例如导览）无需等待后续的异步
+    // session-create/PATCH 即可继续。
     try { document.dispatchEvent(new CustomEvent('odysseus:model-picked', { detail: m })); } catch {}
 
-    // Blur search input before closing to dismiss keyboard on mobile
+    // 关闭前取消搜索输入的焦点，以在移动设备上收起键盘
     if (document.activeElement) document.activeElement.blur();
     _close();
-    // Refocus main textarea — skip on mobile to avoid keyboard bounce
+    // 重新聚焦主文本框 — 在移动设备上跳过以避免键盘弹跳
     if (window.innerWidth >= 768) {
       const _ta = document.getElementById('message');
       if (_ta) setTimeout(() => _ta.focus(), 50);
     }
     if (!currentSessionId && _pendingChat) {
-      // Already have a deferred session — just update the model
+      // 已有延迟会话 — 仅更新模型
       _deps.setPendingChat({ url: m.url, modelId: m.mid, endpointId: m.endpointId });
-      // Header stays as session name — model switch only updates picker
+      // Header 保留为会话名称 — 模型切换仅更新选择器
       updateModelPicker();
-      uiModule.showToast(`Using ${m.display}`);
+      uiModule.showToast(t('models.using_model', { model: m.display }));;
       return;
     } else if (!currentSessionId) {
-      // No session yet — create one with this model
+      // 尚无会话 — 使用此模型创建一个
       await _deps.createDirectChat(m.url, m.mid, m.endpointId);
     } else {
-      // Existing session with no model — PATCH it
+      // 已有会话但无模型 — PATCH 更新
       const fd = new FormData();
       fd.append('model', m.mid);
       fd.append('endpoint_url', m.url);
@@ -516,19 +505,19 @@ function _initModelPickerDropdown() {
       try {
         const res = await fetch(`${API_BASE}/api/session/${currentSessionId}`, { method: 'PATCH', body: fd });
         if (!res.ok) {
-          uiModule.showError('Failed to set model');
+          uiModule.showError(t('models.failed_to_set_model'));
           return;
         }
         const sessions = _deps.getSessions();
         const s = sessions.find(x => x.id === currentSessionId);
         if (s) { s.model = m.mid; s.endpoint_url = m.url; }
-        // Header stays as session name — model info shown in picker only
+        // Header 保留为会话名称 — 模型信息仅在选择器中显示
       } catch (e) {
-        uiModule.showError('Failed to set model: ' + e);
+        uiModule.showError(t('models.failed_to_set_model') + ': ' + e);
         return;
       }
     }
-    // Update picker visibility — model is now set
+    // 更新选择器可见性 — 模型已设置
     updateModelPicker();
     uiModule.showToast(`Using ${m.display}`);
   }
@@ -582,7 +571,7 @@ function _initModelPickerDropdown() {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (menu.classList.contains('hidden') || menu.classList.contains('closing')) {
-      // Force-clear any in-progress close animation
+      // 强制清除任何正在进行的关闭动画
       menu.classList.remove('closing', 'hidden');
       _populate('');
       if (window.modelsModule && window.modelsModule.refreshModels) {
@@ -591,14 +580,13 @@ function _initModelPickerDropdown() {
           updateModelPicker();
         }).catch(() => {});
       }
-      // Kick off a local-endpoint probe — when it returns, re-render
-      // the list so stale local servers get dimmed. Cloud entries
-      // aren't probed; they stay visible.
+      // 启动本地端点探测 — 返回时重新渲染列表，以便
+      // 离线的本地服务器被变灰。云端条目不被探测；它们保持可见。
       _refreshLocalProbe().then(() => {
         if (!menu.classList.contains('hidden')) _populate(search.value || '');
       });
       if (window.innerWidth >= 768) search.focus();
-      // Hide scroll button so it doesn't overlap
+      // 隐藏滚动按钮以避免重叠
       const _scrollBtn = document.getElementById('scroll-bottom-btn');
       if (_scrollBtn) _scrollBtn.style.display = 'none';
     } else {
@@ -626,21 +614,21 @@ function _initModelPickerDropdown() {
 }
 
 /**
- * Update the model picker label to show the current model.
- * Always visible — shows current model name or "Select model" if none.
- * Called after selectSession, createDirectChat, and model switch.
+ * 更新模型选择器标签以显示当前模型。
+ * 始终可见 — 显示当前模型名称，如果没有则显示"选择模型"。
+ * 在 selectSession、createDirectChat 和模型切换后调用。
  */
 export function updateModelPicker() {
   if (!_deps) return;
   const label = document.getElementById('model-picker-label');
   if (!label) return;
-  // Hide model picker when group chat is active
+  // 群聊激活时隐藏模型选择器
   const wrap = document.getElementById('model-picker-wrap');
   if (window.groupModule && window.groupModule.isActive()) {
     if (wrap) { wrap.style.display = 'none'; }
     return;
   }
-  // Reset inline visibility (may have been hidden by typing in previous session)
+  // 重置内联可见性（可能被之前会话中的输入隐藏了）
   if (wrap) {
     wrap.style.display = '';
     wrap.style.opacity = '';
@@ -663,15 +651,13 @@ export function updateModelPicker() {
       modelId = null;
     }
   }
-  // SECURITY: deliberately NOT auto-injecting `odysseus-model-favorites[0]`
-  // here. localStorage favorites are per-browser, not per-user, so on a
-  // shared browser the previous account's first favorited model would
-  // silently pre-populate the chatbox of the next user that signed in. If
-  // we have no session model and no pending-chat pick, fall through to
-  // the "Select model" placeholder below.
+  // 安全：故意不在此处自动注入 `odysseus-model-favorites[0]`。
+  // localStorage 收藏是基于浏览器而非基于用户的，因此在共享浏览器上，
+  // 前一个账户的首个收藏模型会默默地预填入下一位登录用户的聊天框。
+  // 如果没有会话模型且没有待处理的聊天选择，则回退到下方的"选择模型"占位符。
 
-  // Check if selected model is still available — fall back ONLY for pending chats with no user selection
-  // Never override an existing session's model — the user explicitly chose it
+  // 检查所选模型是否仍然可用 — 仅对没有用户选择的待处理聊天进行回退
+  // 绝不要覆盖已有会话的模型 — 那是用户明确选择的
   if (modelId && !currentSessionId && _pendingChat && window.modelsModule && window.modelsModule.getCachedItems) {
     const items = window.modelsModule.getCachedItems();
     const allAvailable = [];
@@ -680,7 +666,7 @@ export function updateModelPicker() {
       (item.models || []).concat(item.models_extra || []).forEach(m => allAvailable.push(m));
     });
     if (allAvailable.length > 0 && !allAvailable.includes(modelId)) {
-      // Model no longer available — switch to first available
+      // 模型不再可用 — 切换到第一个可用的
       const fallback = items.find(item => !item.offline && (item.models || []).length > 0);
       if (fallback) {
         modelId = fallback.models[0];
@@ -710,9 +696,9 @@ export function updateModelPicker() {
     }
   }
 
-  const displayName = modelId ? modelId.split('/').pop() : 'Select model';
-  // The header indicator clips long names with ellipsis; show the full model
-  // identifier on hover (#1982). No tooltip on the "Select model" placeholder.
+  const displayName = modelId ? modelId.split('/').pop() : t('models.select_model');
+  // Header 指示器用省略号截断长名称；悬停时显示完整模型
+  // 标识符 (#1982)。"选择模型"占位符上不显示提示。
   label.title = modelId || '';
   const logo = modelId ? providerLogo(modelId) : null;
   if (logo) {

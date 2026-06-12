@@ -1,4 +1,4 @@
-"""Preset routes — /api/presets GET, /api/presets/custom POST, user templates CRUD."""
+"""预设路由 — /api/presets GET、/api/presets/custom POST、用户模板 CRUD。"""
 
 import logging
 import uuid

@@ -1,5 +1,5 @@
 /**
- * Gallery Module — photo backup + AI-generated image library.
+ * 画廊模块 — 照片备份 + AI 生成图片库。
  */
 
 import uiModule from './ui.js';
@@ -11,7 +11,7 @@ const API_BASE = window.location.origin;
 let _open = false;
 let _galleryResizeHandler = null;
 
-// Auto-refresh gallery when new image is generated
+// 新图片生成时自动刷新画廊
 window.addEventListener('gallery-refresh', () => {
   if (_open) _fetchLibrary(false);
 });
@@ -19,59 +19,58 @@ let _items = [];
 let _total = 0;
 let _totalTagged = 0;
 
-// Update the "X/Y tagged" badge in the AI-tagging settings header.
+// 更新 AI 打标设置头部中的 "X/Y 已打标" 徽章。
 function _updateTagCount() {
   const el = document.getElementById('gallery-tag-count');
-  if (el) el.textContent = _total ? `${_totalTagged}/${_total} tagged` : '';
+  if (el) el.textContent = _total ? `${t('gallery.tagged_count', { tagged: _totalTagged, total: _total })}` : '';
 }
 let _search = '';
-// Stack of active tag filters. Multiple tags AND together — the user
-// builds this up by clicking tag chips or by hitting Enter in the
-// search box, and tears it down with the × on each pill.
+// 活动标签过滤器栈。多个标签 AND 组合 — 用户通过
+// 点击标签芯片或在搜索框中按 Enter 来构建，
+// 通过每个标签上的 × 来拆除。
 let _activeTags = [];
 let _activeModel = null;
 let _activeAlbum = null;
-let _galleryCascaded = false;   // play the domino-in cascade once per open
+let _galleryCascaded = false;   // 每次打开时播放一次多米诺级联动画
 let _favoritesOnly = false;
 let _sort = 'shuffle';
 let _shuffleSeed = Math.floor(Math.random() * 2 ** 31);
 let _offset = 0;
-// Page size — computed from the grid's visible area so taller / wider
-// windows (fullscreen) fetch enough photos to fill the screen instead
-// of leaving blank space below a fixed 24-photo page. Capped at the
-// backend's max (100).
+// 页大小 — 根据网格可见区域计算，使更高/更宽的
+// 窗口（全屏）能获取足够多的照片填满屏幕，
+// 而不是在固定的 24 张照片页面下方留白。上限为
+// 后端的最大值 (100)。
 let _limit = 24;
 function _computeFetchLimit() {
   const grid = document.getElementById('gallery-grid');
-  const COL_W = 168; // 160px min column + 8px gap
-  const ROW_H = 200; // ~160px image + caption + gap
+  const COL_W = 168; // 160px 最小列宽 + 8px 间距
+  const ROW_H = 200; // ~160px 图片 + 标题 + 间距
   const gridW = (grid && grid.clientWidth) || Math.min(window.innerWidth * 0.9, 1100);
   const cols = Math.max(2, Math.floor(gridW / COL_W));
-  // The grid scroll viewport is max-height:60vh.
+  // 网格滚动视口最大高度为 60vh。
   const gridH = window.innerHeight * 0.6;
-  const rows = Math.ceil(gridH / ROW_H) + 2; // +2 buffer rows for scroll
+  const rows = Math.ceil(gridH / ROW_H) + 2; // +2 行缓冲区用于滚动
   return Math.min(100, Math.max(24, cols * rows));
 }
 let _searchDebounce = null;
 let _escHandler = null;
 let _albums = [];
-// Albums tab — search filter + multi-select state. Mirrors what the
-// Photos tab does (_search, _selectMode) but scoped to the albums grid.
+// Albums 标签页 — 搜索过滤器 + 多选状态。与 Photos 标签页
+// (_search, _selectMode) 保持一致，但作用域限定在相册网格。
 let _albumSearch = '';
 let _albumSelectMode = false;
 const _albumSelected = new Set();
 
-// ---- API helpers ----
+// ---- API 辅助函数 ----
 
 async function _fetchLibrary(append) {
-  // Recompute the page size each fetch so resizing / fullscreening the
-  // window between loads pulls the right number of photos.
+  // 每次拉取时重新计算页大小，以便在加载之间调整窗口大小/全屏
+  // 时能拉取正确数量的照片。
   _limit = _computeFetchLimit();
-  // First load with nothing on screen → show skeleton tiles instead of a blank
-  // grid that then snaps to full. BUT: if the last successful load returned
-  // zero items, skip the skeleton entirely — otherwise empty accounts flash
-  // 8-20 placeholder tiles for ~200ms before snapping to the "No photos yet"
-  // message, which read as glitchy.
+  // 首次加载且屏幕无内容时 → 显示骨架占位块，而不是空白网格突然
+  // 填满。但：如果上次成功加载返回了零条结果，则完全跳过骨架 —
+  // 否则空账户会在 ~200ms 内闪烁 8-20 个占位块，然后跳到"暂无照片"
+  // 消息，看起来像故障。
   if (!append && _items.length === 0) {
     let _knownEmpty = false;
     try { _knownEmpty = localStorage.getItem('gallery-known-empty') === '1'; } catch (_) {}
@@ -79,10 +78,9 @@ async function _fetchLibrary(append) {
   }
   if (!append) {
     _offset = 0;
-    // Leave _items untouched until the response arrives — that's the
-    // stale-while-revalidate trick that lets the gallery feel instant on
-    // re-open. The new list replaces _items on success below; if the fetch
-    // fails, the previous photos stay visible.
+    // 在响应返回前保留 _items 不变 — 这是 stale-while-revalidate
+    // 技巧，让重新打开画廊时感觉即时。新列表在下面成功时替换 _items；
+    // 如果拉取失败，之前的照片保持可见。
   }
   const params = new URLSearchParams({ sort: _sort, offset: _offset, limit: _limit });
   if (_sort === 'shuffle') params.set('seed', String(_shuffleSeed));
@@ -99,8 +97,8 @@ async function _fetchLibrary(append) {
     } else {
       _items = data.items || [];
     }
-    // Cache an "empty" verdict so the next open of an empty gallery doesn't
-    // flash skeleton tiles before the real "No photos yet" message.
+    // 缓存"空"判断，这样下次打开空画廊时不会
+    // 在真正的"暂无照片"消息之前闪烁骨架块。
     try {
       const _noFilters = !_search && !_activeTags.length && !_activeModel && !_activeAlbum && !_favoritesOnly;
       if (_noFilters) {
@@ -130,10 +128,9 @@ async function _fetchAlbums() {
 }
 
 
-// v2 review HIGH-7: return a boolean so callers can stop showing
-// "Tags saved" / "Photo deleted" toasts when the server actually
-// returned 4xx/5xx. The previous swallow-and-return-undefined caused
-// silent UI lies on permission failures.
+// v2 review HIGH-7: 返回布尔值，使调用方可以在服务器实际返回
+// 4xx/5xx 时停止显示"标签已保存"/"照片已删除"提示。之前的
+// 吞掉错误返回 undefined 的做法在权限失败时导致静默的 UI 谎言。
 async function _patchImage(id, patch) {
   try {
     const r = await fetch(`${API_BASE}/api/gallery/${id}`, {
@@ -170,10 +167,10 @@ async function _deleteImage(id) {
   }
 }
 
-// ---- Bulk upload with progress ----
+// ---- 批量上传带进度 ----
 
-// Accepts either File[] (uploads all into fallbackAlbumId) or
-// {file, albumId}[] (per-file album targeting — used for folder drops).
+// 接受 File[]（全部上传到 fallbackAlbumId）或
+// {file, albumId}[]（按文件指定相册 — 用于文件夹拖放）。
 async function _bulkUpload(filesOrItems, fallbackAlbumId) {
   const bar = document.getElementById('gallery-upload-bar');
   const progress = document.getElementById('gallery-upload-progress');
@@ -188,10 +185,10 @@ async function _bulkUpload(filesOrItems, fallbackAlbumId) {
   let done = 0, dupes = 0, errors = 0;
   const total = items.length;
 
-  // Concurrency pool — N workers pulling from the queue. 4 is a reasonable
-  // default for a local server: enough to overlap network + EXIF + disk
-  // without flooding SQLite (which serializes writes anyway). Videos in
-  // particular benefit because they're large enough to be I/O-bound.
+  // 并发池 — N 个工作线程从队列中拉取。4 是对本地服务器合理的
+  // 默认值：足以重叠网络 + EXIF + 磁盘操作
+  // 而不会淹没 SQLite（它本身就是串行写入的）。视频
+  // 尤其受益，因为它们足够大，是 I/O 密集型。
   const CONCURRENCY = 4;
   let cursor = 0;
   async function worker() {
@@ -223,8 +220,8 @@ async function _bulkUpload(filesOrItems, fallbackAlbumId) {
   if (status) status.textContent = msg;
   uiModule.showToast(msg);
   setTimeout(() => { bar.style.display = 'none'; }, 3000);
-  // Auto-switch to Recent so the just-uploaded photos are immediately
-  // visible at the top (otherwise Shuffle would scatter them).
+  // 自动切换到"最近"排序，使刚上传的照片立即
+  // 在顶部可见（否则"随机"排序会打散它们）。
   if (done - dupes - errors > 0 && _sort !== 'recent') {
     _sort = 'recent';
     const sortSel = document.getElementById('gallery-sort');
@@ -234,23 +231,22 @@ async function _bulkUpload(filesOrItems, fallbackAlbumId) {
   _fetchAlbums();
 }
 
-// True if this File / filename should be uploaded — images and common videos.
+// 判断此 File / 文件名是否应上传 — 图片和常见视频。
 function _isMediaFile(f) {
   const t = (f?.type || '').toLowerCase();
   if (t.startsWith('image/') || t.startsWith('video/')) return true;
-  // Some Linux file managers and older browsers leave .type blank; fall
-  // back to the extension.
+  // 某些 Linux 文件管理器和旧浏览器可能 .type 为空；回退到扩展名判断。
   const ext = (f?.name || '').toLowerCase().split('.').pop() || '';
   return ['png','jpg','jpeg','webp','gif','mp4','mov','webm','mkv','m4v'].includes(ext);
 }
 
-// True if a URL/filename refers to a video — used to pick <video> vs <img>.
+// 判断 URL/文件名是否指向视频 — 用于选择 <video> 还是 <img>。
 function _isVideoUrl(url) {
   const ext = (url || '').toLowerCase().split('?')[0].split('.').pop();
   return ['mp4','mov','webm','mkv','m4v'].includes(ext);
 }
 
-// Recursively walk a webkit FileSystemEntry, returning all media Files under it.
+// 递归遍历 webkit FileSystemEntry，返回其下所有媒体文件。
 async function _walkEntryForImages(entry) {
   if (entry.isFile) {
     return new Promise(res => {
@@ -272,8 +268,8 @@ async function _walkEntryForImages(entry) {
   return out;
 }
 
-// Handle a native drop: split into folders (→ new/existing albums) and loose files
-// (→ current album). Returns when the whole upload is complete.
+// 处理原生拖放：将文件夹（→ 新建/已有相册）和零散文件
+// （→ 当前相册）分开处理。整个上传完成后返回。
 async function _handleGalleryDrop(e) {
   const dtItems = [...(e.dataTransfer?.items || [])];
   const entries = dtItems
@@ -310,9 +306,9 @@ async function _handleGalleryDrop(e) {
     }
   }
 
-  // Fallback: some drag sources (Linux file managers like Thunar/Nautilus,
-  // or older browsers) don't populate FileSystemEntry but DO populate
-  // dataTransfer.files for loose files. Pick those up too.
+  // 回退处理：某些拖放源（Linux 文件管理器如 Thunar/Nautilus，
+  // 或旧浏览器）不填充 FileSystemEntry 但会填充
+  // dataTransfer.files 中的零散文件。同样拾取这些。
   if (!uploadItems.length) {
     const files = [...(e.dataTransfer?.files || [])].filter(_isMediaFile);
     files.forEach(f => uploadItems.push({ file: f, albumId: _activeAlbum }));
@@ -323,9 +319,9 @@ async function _handleGalleryDrop(e) {
     return;
   }
 
-  // Nothing usable — either an empty folder, an unreadable folder URI, or a
-  // non-image drop. If the dataTransfer types hint at a folder/URI drop,
-  // explain the limitation and point at the Upload album button.
+  // 没有可用内容 — 空文件夹、不可读的文件夹 URI 或非图片拖放。
+  // 如果 dataTransfer 类型暗示是文件夹/URI 拖放，
+  // 解释限制并指向"上传相册"按钮。
   const types = [...(e.dataTransfer?.types || [])];
   const looksLikeFolderUri = !sawFolderEntry && (
     types.includes('text/uri-list') ||
@@ -339,17 +335,17 @@ async function _handleGalleryDrop(e) {
   }
 }
 
-// ---- Render helpers ----
+// ---- 渲染辅助函数 ----
 
 function _renderStats() {
   const el = document.getElementById('gallery-stats');
-  if (el) el.textContent = `${_total} photo${_total !== 1 ? 's' : ''}`;
+  if (el) el.textContent = `${t('gallery.photo_count', { n: _total })}`;
 }
 
 function _renderTags(tags) {
-  // The global "every tag in the gallery" chip row under the search is gone —
-  // it just piled up every user-added tag with no way to remove it. Filter by
-  // tapping a tag on a photo (→ a removable pill in the header) or via search.
+  // 搜索栏下方的全局"画廊中所有标签"芯片行已移除 —
+  // 它只是堆积了每个用户添加的标签，无法移除。现在通过
+  // 点击照片上的标签（→ 头部出现可移除的标签）或通过搜索来过滤。
   const container = document.getElementById('gallery-tag-chips');
   if (!container) return;
   container.innerHTML = '';
@@ -368,15 +364,15 @@ function _renderModels(models) {
 }
 
 function _renderAlbums() {
-  const container = document.getElementById('gallery-album-chips');   // above search: active-filter indicators
-  const filterC = document.getElementById('gallery-filter-chips');    // below search: All / Favorites
+  const container = document.getElementById('gallery-album-chips');   // 搜索栏上方：活动过滤器指示器
+  const filterC = document.getElementById('gallery-filter-chips');    // 搜索栏下方：全部/收藏
   if (!container && !filterC) return;
-  // Below the search bar: the All / Favorites filters PLUS any active tag chips
-  // (so a tag you searched/clicked sits right next to All and the heart).
+  // 搜索栏下方："全部"/"收藏"过滤器 + 活动标签芯片
+  // （这样你搜索/点击的标签就在"全部"和爱心旁边显示）。
   if (filterC) {
-    // Order: All, then the heart, then any active tag chips (to the right of
-    // both), then the active-album chip. No favorites-within-an-album view, so
-    // the heart is hidden while an album is active.
+    // 顺序：全部，然后是爱心，然后是活动标签芯片（在两者
+    // 的右侧），然后是活动相册芯片。相册内没有收藏视图，所以
+    // 当相册活动时隐藏爱心。
     let fhtml = `<button class="gallery-chip${!_activeAlbum && !_favoritesOnly ? ' active' : ''}" data-album="">All</button>`;
     if (!_activeAlbum) {
       fhtml += `<button class="gallery-chip gallery-chip-fav${_favoritesOnly ? ' active' : ''}" data-fav="true" title="Favorites">&#9829;</button>`;
@@ -420,16 +416,16 @@ function _renderAlbums() {
       });
     });
   }
-  // The above-search row is no longer used — all filter chips live below now.
+  // 搜索栏上方的行不再使用 — 所有过滤器芯片现在都在下方。
   if (container) container.innerHTML = '';
 }
 
-// Albums tab — renders the album list as a grid of cover-thumbnailed cards.
-// Clicking an album switches to the Photos tab filtered by that album.
+// Albums 标签页 — 将相册列表渲染为由封面缩略图组成的卡片网格。
+// 点击相册会切换到按该相册过滤的 Photos 标签页。
 //
-// Structure mirrors the Photos tab: persistent toolbar (search + Select)
-// and bulk bar built once, only the inner #gallery-albums-grid-wrap
-// re-renders so the search input keeps focus while typing.
+// 结构与 Photos 标签页一致：持久工具栏（搜索 + 选择）
+// 和批量操作栏一次性构建，只有内部的 #gallery-albums-grid-wrap
+// 重新渲染，这样搜索输入框在输入时保持焦点。
 function _renderAlbumsTab() {
   const container = document.getElementById('gallery-albums-container');
   if (!container) return;
@@ -461,7 +457,7 @@ function _ensureAlbumsToolbar(container) {
     <div id="gallery-albums-grid-wrap"></div>
   `;
 
-  // Wire search — debounced re-render, same pattern as Photos.
+  // 绑定搜索 — 防抖重新渲染，与 Photos 相同的模式。
   const searchInput = container.querySelector('#gallery-albums-search');
   let _albumSearchDebounce = null;
   searchInput.addEventListener('input', () => {
@@ -472,8 +468,8 @@ function _ensureAlbumsToolbar(container) {
     }, 150);
   });
 
-  // Wire Select + bulk bar — Cancel restores the normal click-to-open
-  // behavior; Actions opens a dropdown anchored on the button.
+  // 绑定选择 + 批量操作栏 — 取消恢复正常的点击打开行为；
+  // 操作打开一个锚定在按钮上的下拉菜单。
   container.querySelector('#gallery-albums-select-btn').addEventListener('click', () => {
     _setAlbumSelectMode(!_albumSelectMode);
   });
@@ -498,7 +494,7 @@ function _setAlbumSelectMode(on) {
   _albumSelectMode = on;
   if (!on) _albumSelected.clear();
   const container = document.getElementById('gallery-albums-container');
-  container.querySelector('#gallery-albums-select-btn span').textContent = on ? 'Cancel' : 'Select';
+  container.querySelector('#gallery-albums-select-btn span').textContent = on ? t('common.cancel') : 'Select';
   container.querySelector('#gallery-albums-select-btn').classList.toggle('active', on);
   container.querySelector('#gallery-albums-bulk-bar').classList.toggle('hidden', !on);
   _renderAlbumsGrid();
@@ -539,9 +535,9 @@ function _renderAlbumsGrid() {
   }
 
   let html = '<div class="gallery-albums-grid">';
-  // Action tiles (New / Upload) — hidden in select mode so they don't
-  // visually compete with the selection dots and can't be accidentally
-  // toggled like real albums.
+  // 操作卡片（新建/上传）— 在选择模式下隐藏，以免
+  // 与选择圆点视觉冲突，也不会被误当作
+  // 真实相册来切换选中。
   if (!_albumSelectMode) {
     html += `
       <div class="gallery-album-card gallery-album-card-add" id="gallery-albums-new">
@@ -565,9 +561,9 @@ function _renderAlbumsGrid() {
       </div>`;
   }
   albums.forEach(a => {
-    // Empty albums get the placeholder icon even if cover_url is set —
-    // a stale cover from before the album was emptied looks like the
-    // album still has photos in it.
+    // 空相册即使 cover_url 有值也使用占位图标 —
+    // 相册在被清空前留下的旧封面看起来像是
+    // 相册中还有照片。
     const cover = (a.cover_url && a.count > 0)
       ? `<img src="${_esc(a.cover_url)}" alt="" loading="lazy" />`
       : `<div class="gallery-album-placeholder">
@@ -611,20 +607,20 @@ function _renderAlbumsGrid() {
   _wireAlbumsEvents(wrap);
 }
 
-// Per-card / per-popmenu event wiring — extracted so both the empty
-// state and the real grid can reuse it.
+// 每卡片 / 每弹窗菜单的事件绑定 — 提取出来以便空状态
+// 和真实网格都能复用。
 function _wireAlbumsEvents(scope) {
   const container = document.getElementById('gallery-albums-container');
   if (!container) return;
 
   container.querySelectorAll('.gallery-album-card[data-album]').forEach(card => {
     card.addEventListener('click', (e) => {
-      // Clicks on the menu button or any pop-menu item are handled below;
-      // don't navigate into the album in that case.
+      // 点击菜单按钮或任何弹窗菜单项由下面的处理逻辑处理；
+      // 此情况下不导航进入相册。
       if (e.target.closest('.gallery-album-menu-btn')) return;
       if (e.target.closest('.gallery-album-menu-pop')) return;
-      // In select mode, clicking a card toggles its selection instead
-      // of opening it. Mirrors the Photos tab's behaviour.
+      // 选择模式下，点击卡片切换其选中状态而不是
+      // 打开。与 Photos 标签页的行为一致。
       if (_albumSelectMode) {
         const id = card.dataset.album;
         if (_albumSelected.has(id)) _albumSelected.delete(id);
@@ -637,21 +633,21 @@ function _wireAlbumsEvents(scope) {
       }
       _activeAlbum = card.dataset.album || null;
       _favoritesOnly = false;
-      // Hide any open photo detail before swapping context — otherwise the
-      // previously-viewed photo lingers on top when the user lands back on
-      // the Photos tab.
+      // 切换上下文前隐藏任何已打开的照片详情 — 否则
+      // 之前查看的照片会在用户返回 Photos 标签页时
+      // 悬浮在顶层。
       const _detail = document.getElementById('gallery-detail');
       if (_detail) _detail.style.display = 'none';
       _renderAlbums();
       _fetchLibrary(false);
-      // Switch back to the Photos tab so they immediately see the contents.
+      // 切回 Photos 标签页，让他们立即看到内容。
       const modal = document.getElementById('gallery-modal');
       const photosTab = modal?.querySelector('.gallery-tab[data-tab="images"]');
       photosTab?.click();
     });
   });
 
-  // Hover menu: toggle the per-card pop on ⋯ click, close any others.
+  // 悬停菜单：点击 ⋯ 切换每卡片弹窗，关闭其他弹窗。
   container.querySelectorAll('.gallery-album-menu-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -662,7 +658,7 @@ function _wireAlbumsEvents(scope) {
       if (pop && !wasOpen) pop.hidden = false;
     });
   });
-  // Click anywhere else closes any open pop.
+  // 点击其他任何地方关闭已打开的弹窗。
   if (!container._popDismissWired) {
     document.addEventListener('click', (e) => {
       if (e.target.closest('.gallery-album-menu-btn')) return;
@@ -677,7 +673,7 @@ function _wireAlbumsEvents(scope) {
     pop.querySelector('[data-action="upload"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
       pop.hidden = true;
-      // Spawn an ephemeral file picker scoped to this album.
+      // 生成一个限定到此相册的临时文件选择器。
       const picker = document.createElement('input');
       picker.type = 'file';
       picker.accept = 'image/*,video/*';
@@ -715,7 +711,7 @@ function _wireAlbumsEvents(scope) {
       const album = _albums.find(a => a.id === id);
       const ok = await uiModule.styledConfirm(
         `Delete album "${album?.name || ''}"? Photos inside will stay in your library.`,
-        { confirmText: 'Delete', danger: true },
+        { confirmText: t('common.delete'), danger: true },
       );
       if (!ok) return;
       const r = await fetch(`${API_BASE}/api/gallery/albums/${id}`, {
@@ -735,7 +731,7 @@ function _wireAlbumsEvents(scope) {
 
   document.getElementById('gallery-albums-new')?.addEventListener('click', async () => {
     const name = (uiModule.styledPrompt
-      ? await uiModule.styledPrompt('Name your new album.', { title: 'New album', placeholder: 'e.g. Vacation 2026', confirmText: 'Create' })
+      ? await uiModule.styledPrompt('Name your new album.', { title: 'New album', placeholder: 'e.g. Vacation 2026', confirmText: t('common.create') })
       : prompt('Album name:'));
     if (!name?.trim()) return;
     await fetch(`${API_BASE}/api/gallery/albums`, {
@@ -747,8 +743,8 @@ function _wireAlbumsEvents(scope) {
   });
 
   document.getElementById('gallery-albums-upload')?.addEventListener('click', () => {
-    // <input webkitdirectory> picks a folder; we create an album with the
-    // folder name and upload every image inside.
+    // <input webkitdirectory> 选择一个文件夹；我们以文件夹名创建一个相册
+    // 并上传其中的每张图片。
     const picker = document.createElement('input');
     picker.type = 'file';
     picker.multiple = true;
@@ -762,15 +758,15 @@ function _wireAlbumsEvents(scope) {
         if (uiModule) uiModule.showToast('No images or videos in that folder');
         return;
       }
-      // Derive folder name from the first file's relative path (e.g.
-      // "MyTrip/photo.jpg" → "MyTrip"). Fall back to a prompt.
+      // 从第一个文件的相对路径推导文件夹名称（例如
+      // "MyTrip/photo.jpg" → "MyTrip"）。失败时回退到提示框。
       const rel = images[0].webkitRelativePath || '';
       let folderName = rel.split('/')[0] || '';
       if (!folderName) {
         folderName = prompt('Album name for these photos:') || '';
         if (!folderName.trim()) return;
       }
-      // Reuse an existing album with the same name; otherwise create one.
+      // 复用同名的已有相册；否则创建新的。
       let album = _albums.find(a => a.name === folderName);
       if (!album) {
         const r = await fetch(`${API_BASE}/api/gallery/albums`, {
@@ -799,8 +795,8 @@ function _wireAlbumsEvents(scope) {
 async function _bulkDeleteAlbums(ids) {
   if (!ids.length) return;
   const ok = await uiModule.styledConfirm(
-    `Delete ${ids.length} album${ids.length > 1 ? 's' : ''}? Photos inside will stay in your library.`,
-    { confirmText: 'Delete', danger: true },
+    t('gallery.delete_albums_confirm', { n: ids.length }),
+    { confirmText: t('common.delete'), danger: true },
   );
   if (!ok) return;
   let failed = 0;
@@ -811,19 +807,19 @@ async function _bulkDeleteAlbums(ids) {
     if (!r.ok) failed++;
     else if (_activeAlbum === id) _activeAlbum = null;
   }
-  if (failed) uiModule.showError(`Failed to delete ${failed} of ${ids.length} albums`);
-  else if (uiModule) uiModule.showToast(`Deleted ${ids.length} album${ids.length > 1 ? 's' : ''}`);
+  if (failed) uiModule.showError(t('gallery.failed_delete_albums', { failed: failed, total: ids.length }));
+  else if (uiModule) uiModule.showToast(t('gallery.deleted_albums', { n: ids.length }));
   _setAlbumSelectMode(false);
   await _fetchAlbums();
   _renderAlbumsTab();
   _renderAlbums();
 }
 
-// Fetch the user's persisted editor drafts and render them as a thumbnail
-// grid under the new-canvas / browse buttons. Each card resumes the draft
-// in the editor on click; the × trashes it server-side.
-// Frosted whirlpool overlay over the drafts area while fetching the
-// list. Lives inside the drafts section so it sits above the grid.
+// 获取用户已持久化的编辑器草稿，并将它们渲染为缩略图网格，
+// 放在新画布/浏览按钮下方。每个卡片点击后在编辑器中恢复该草稿；
+// × 在服务端删除它。
+// 获取草稿列表时在草稿区域上方显示磨砂旋涡覆盖层。
+// 位于草稿区域内部，使其位于网格上方。
 let _draftsSpinner = null;
 function _draftsShowLoading(section) {
   if (!section) return;
@@ -836,13 +832,13 @@ function _draftsShowLoading(section) {
       _draftsSpinner.element.style.cssText = 'width:28px;height:28px;margin:0;';
       ov.appendChild(_draftsSpinner.element);
     } catch (_) {
-      ov.textContent = 'Loading…';
+      ov.textContent = t('gallery.loading');
     }
     section.appendChild(ov);
   }
-  // Start the overlay exactly at the grid's top so it covers ONLY the projects
-  // list — not the header's search/select above it (the old fixed 30px offset
-  // assumed a short header and ended up covering half the search/select).
+  // 从网格顶部精确地开始覆盖层，使其只覆盖项目
+  // 列表 — 不覆盖上方头部的搜索/选择（旧的固定 30px 偏移
+  // 假设头部很短，结果覆盖了搜索/选择的一半）。
   const _grid = section.querySelector('.gallery-editor-drafts-grid');
   const _hdr = section.querySelector('.gallery-editor-drafts-header');
   const _top = _grid ? _grid.offsetTop : (_hdr ? _hdr.offsetHeight : 30);
@@ -855,7 +851,7 @@ function _draftsHideLoading(section) {
   if (ov) ov.style.display = 'none';
 }
 
-// Held between renders so search + select state survive a re-render.
+// 在渲染之间保持，使搜索和选择状态在重新渲染后仍然存在。
 let _draftsCache = [];
 let _draftsSearch = '';
 let _draftsSelectMode = false;
@@ -865,9 +861,9 @@ async function _renderEditorDrafts() {
   const section = document.getElementById('gallery-editor-drafts');
   const grid = document.getElementById('gallery-editor-drafts-grid');
   if (!section || !grid) return;
-  // Show a frosted whirlpool overlay over the drafts area while the
-  // list is fetching. The section becomes visible BEFORE the fetch so
-  // the user sees the loading indicator instead of a blank space.
+  // 列表正在获取时，在草稿区域显示磨砂旋涡覆盖层。
+  // 区域在获取之前就变为可见，
+  // 这样用户看到的是加载指示器而不是空白。
   section.hidden = false;
   _draftsShowLoading(section);
   try {
@@ -889,15 +885,15 @@ async function _renderEditorDrafts() {
     return;
   }
   section.hidden = false;
-  // Drop selections for drafts that no longer exist.
+  // 移除以不存在的草稿的选中状态。
   const present = new Set(_draftsCache.map(d => d.id));
   for (const id of [..._draftsSelected]) if (!present.has(id)) _draftsSelected.delete(id);
   _draftsPaint();
   _draftsWireOnce();
 }
 
-// Re-render only the grid (and bulk bar) from cached drafts + search +
-// selection state. Used by search/select-mode/checkbox updates.
+// 仅重新渲染网格（和批量操作栏），使用缓存的草稿 + 搜索 +
+// 选择状态。用于搜索/选择模式/复选框更新。
 function _draftsPaint() {
   const grid = document.getElementById('gallery-editor-drafts-grid');
   if (!grid) return;
@@ -940,8 +936,8 @@ function _draftsPaint() {
         _draftsSyncBulkBar();
         return;
       }
-      // Pass the cached dims as the preset size so the editor can show a
-      // correctly-proportioned placeholder while the draft loads.
+      // 传递缓存的尺寸作为预设大小，这样编辑器在草稿加载时
+      // 可以显示一个比例正确的占位符。
       const draft = _draftsCache.find(d => d.id === id);
       const presetSize = (draft && draft.width && draft.height)
         ? { w: draft.width, h: draft.height }
@@ -955,18 +951,18 @@ function _draftsPaint() {
       const id = btn.dataset.draftId;
       if (!id) return;
       const ok = await uiModule.styledConfirm('Delete this project?', {
-        confirmText: 'Delete', cancelText: 'Cancel', danger: true,
+        confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true,
       });
       if (!ok) return;
-      // Graceful exit: fade + shrink the card before the grid re-renders.
+      // 优雅退出：在网格重新渲染前淡出 + 缩小卡片。
       const card = btn.closest('.gallery-editor-draft-card');
       if (card) card.classList.add('gallery-draft-removing');
       try {
         await fetch(`${API_BASE}/api/editor-drafts/${encodeURIComponent(id)}`, {
           method: 'DELETE', credentials: 'same-origin',
         });
-      } catch (_) { /* swallow — refresh below */ }
-      await new Promise(r => setTimeout(r, 240));   // let the animation finish
+      } catch (_) { /* 吞掉错误 — 下面会刷新 */ }
+      await new Promise(r => setTimeout(r, 240));   // 让动画完成
       _draftsSelected.delete(id);
       _renderEditorDrafts();
     });
@@ -979,13 +975,13 @@ function _draftsSyncBulkBar() {
   const countEl = document.getElementById('gallery-editor-drafts-bulk-count');
   const selectBtn = document.getElementById('gallery-editor-drafts-select');
   if (bar) bar.classList.toggle('hidden', !_draftsSelectMode);
-  if (countEl) countEl.textContent = `${_draftsSelected.size} selected`;
+  if (countEl) countEl.textContent = `${t('gallery.selected_n', { n: _draftsSelected.size })}`;
   if (selectBtn) {
-    selectBtn.textContent = _draftsSelectMode ? 'Cancel' : 'Select';
+    selectBtn.textContent = _draftsSelectMode ? t('common.cancel') : 'Select';
     selectBtn.classList.toggle('active', _draftsSelectMode);
   }
-  // "All" checkbox state — checked when all visible drafts are selected,
-  // indeterminate when only some (matches the Photos tab).
+  // "全选"复选框状态 — 所有可见草稿都选中时勾选，
+  // 部分选中时为不确定状态（与 Photos 标签页一致）。
   const all = document.getElementById('gallery-editor-drafts-select-all');
   if (all) {
     const q = _draftsSearch.trim().toLowerCase();
@@ -1010,8 +1006,8 @@ function _draftsWireOnce() {
     _draftsPaint();
   });
   document.getElementById('gallery-editor-drafts-select-all')?.addEventListener('change', (e) => {
-    // Same "All" checkbox behavior as Photos: checked selects every visible
-    // draft, unchecked clears them (respects the search filter).
+    // 与 Photos 相同的"全选"复选框行为：勾选选中每个可见
+    // 草稿，取消勾选则清除（遵守搜索过滤）。
     const q = _draftsSearch.trim().toLowerCase();
     const visible = _draftsCache.filter(d => !q || String(d.name || '').toLowerCase().includes(q));
     if (e.target.checked) for (const d of visible) _draftsSelected.add(d.id);
@@ -1026,12 +1022,12 @@ function _draftsWireOnce() {
   document.getElementById('gallery-editor-drafts-bulk-delete')?.addEventListener('click', async () => {
     if (!_draftsSelected.size) return;
     const n = _draftsSelected.size;
-    const ok = await uiModule.styledConfirm(`Delete ${n} project${n === 1 ? '' : 's'}?`, {
-      confirmText: 'Delete', cancelText: 'Cancel', danger: true,
+    const ok = await uiModule.styledConfirm(t('gallery.delete_projects_confirm', { n: n }), {
+      confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true,
     });
     if (!ok) return;
     const ids = [..._draftsSelected];
-    // Graceful exit on the selected cards before they're removed.
+    // 选中卡片在被移除前优雅退出。
     const grid = document.getElementById('gallery-editor-drafts-grid');
     if (grid) ids.forEach(id => grid.querySelector(`.gallery-editor-draft-card[data-draft-id="${(window.CSS && CSS.escape) ? CSS.escape(id) : id}"]`)?.classList.add('gallery-draft-removing'));
     await new Promise(r => setTimeout(r, 240));
@@ -1046,7 +1042,7 @@ function _draftsWireOnce() {
   });
 }
 
-// Human-readable "x minutes ago" / "y days ago" for the drafts list.
+// 人类可读的 "x 分钟前" / "y 天前" 用于草稿列表。
 function _humanRelativeDate(when) {
   const diff = (Date.now() - when.getTime()) / 1000;
   if (diff < 60) return 'just now';
@@ -1056,17 +1052,17 @@ function _humanRelativeDate(when) {
   return when.toLocaleDateString();
 }
 
-// Edit tab empty state — shown when the user clicks the tab without a photo
-// loaded. Lets them start a blank canvas or jump back to pick a photo.
+// Edit 标签页空状态 — 当用户点击该标签页但没有照片
+// 加载时显示。让他们可以开始空白画布或跳回选择照片。
 function _renderEditorLanding() {
   const container = document.getElementById('gallery-editor-container');
   if (!container) return;
-  // openEditor()/closeEditor() may have left the container hidden; the Edit
-  // tab is still active so make sure the landing is actually visible.
+  // openEditor()/closeEditor() 可能已将容器隐藏；Edit
+  // 标签页仍处于活动状态，确保入口页实际可见。
   container.style.display = 'flex';
-  // Templates rendered as a native <select>. Browsers handle all the layout
-  // and styling natively — no custom flex grid, no clipping, no empty boxes.
-  // Picking an option fires `change` and goes straight into the editor.
+  // 模板以原生 <select> 渲染。浏览器原生处理所有布局
+  // 和样式 — 不需要自定义 flex 网格，不会裁剪，没有空盒子。
+  // 选择选项触发 `change` 事件并直接进入编辑器。
   const presets = [
     { w: 1024, h: 1024, label: 'Square HD — 1024 × 1024' },
     { w: 1920, h: 1080, label: 'Widescreen — 1920 × 1080' },
@@ -1099,7 +1095,7 @@ function _renderEditorLanding() {
       <div class="gallery-editor-drafts" id="gallery-editor-drafts" hidden>
         <div class="gallery-editor-drafts-header">
           <h4 class="gallery-editor-drafts-title">Saved projects</h4>
-          <input type="search" class="gallery-editor-drafts-search" id="gallery-editor-drafts-search" placeholder="Search projects…" autocomplete="off" />
+          <input type="search" class="gallery-editor-drafts-search" id="gallery-editor-drafts-search" placeholder=t('gallery.search_projects') autocomplete="off" />
           <button class="gallery-select-btn" id="gallery-editor-drafts-select" title="Toggle multi-select">Select</button>
         </div>
         <div class="gallery-bulk-bar hidden" id="gallery-editor-drafts-bulk">
@@ -1111,8 +1107,8 @@ function _renderEditorLanding() {
         <div class="gallery-editor-drafts-grid" id="gallery-editor-drafts-grid"></div>
       </div>
     </div>`;
-  // Each remount of the editor landing rebuilds the drafts header
-  // markup, so the cached event listener references are stale. Reset.
+  // 编辑器入口页的每次重新挂载都会重建草稿头部
+  // 标记，因此缓存的事件监听器引用已过期。重置。
   _draftsWired = false;
   _renderEditorDrafts();
   document.getElementById('gallery-editor-template')?.addEventListener('change', (e) => {
@@ -1122,9 +1118,9 @@ function _renderEditorLanding() {
     if (p) openEditor(null, null, { w: p.w, h: p.h }, `${p.w}×${p.h}`);
   });
   document.getElementById('gallery-editor-new')?.addEventListener('click', async () => {
-    // openEditor() now returns a Promise — it's async because the size
-    // prompt is a styled modal. Await it before checking whether the
-    // editor actually opened (the user may have cancelled).
+    // openEditor() 现在返回 Promise — 它是异步的，因为尺寸
+    // 提示是一个样式化的模态框。在检查编辑器是否实际打开
+    // 之前 await 它（用户可能已取消）。
     await openEditor(null, null, null, 'New canvas');
     if (!isEditorOpen()) _renderEditorLanding();
   });
@@ -1133,8 +1129,8 @@ function _renderEditorLanding() {
   });
 }
 
-// Wire the first-tile Upload affordance in the Photos grid. Opens the same
-// multi-file picker the old Import button used.
+// 绑定 Photos 网格中的首卡片上传入口。打开与旧 Import 按钮
+// 相同的多文件选择器。
 function _wireUploadTile() {
   const tile = document.getElementById('gallery-upload-tile');
   if (!tile) return;
@@ -1150,9 +1146,9 @@ function _wireUploadTile() {
   });
 }
 
-// Shimmer placeholder tiles shown while the FIRST page loads, so the grid
-// doesn't pop from empty → full (re-opens keep the old photos via
-// stale-while-revalidate, so skeletons only show when there's nothing yet).
+// 首次页面加载时显示的闪烁占位块，使网格
+// 不会从空突然跳到满（重新打开时通过 stale-while-revalidate
+// 保留旧照片，所以骨架只在没有任何内容时才显示）。
 function _renderSkeletons(n) {
   const grid = document.getElementById('gallery-grid');
   if (!grid) return;
@@ -1169,9 +1165,9 @@ function _renderGrid() {
   const loadMore = document.getElementById('gallery-load-more');
   if (!grid) return;
 
-  // First tile: always-visible "Upload" affordance. Mirrors the Upload album
-  // tile in the Albums tab so the upload entry point is consistent across
-  // both grids.
+  // 首卡片：始终可见的"上传"入口。与 Albums 标签页中的上传相册
+  // 卡片保持一致，使上传入口在两个
+  // 网格中统一。
   const uploadTile = `
     <div class="gallery-card gallery-card-upload" id="gallery-upload-tile" title="Upload photos or videos">
       <div class="gallery-card-upload-inner">
@@ -1192,13 +1188,13 @@ function _renderGrid() {
     const date = img.taken_at
       ? new Date(img.taken_at).toLocaleDateString()
       : (img.created_at ? new Date(img.created_at).toLocaleDateString() : '');
-    // Card label: prefer the prompt (which doubles as the user-editable
-    // name for uploaded photos). Fall back to a cleaned filename so
-    // imported photos with empty prompts still show something useful
-    // instead of a blank row.
+    // 卡片标签：优先使用 prompt（上传照片时可作为用户可编辑的
+    // 名称）。回退到清理过的文件名，这样
+    // 空 prompt 的导入照片仍然显示有用信息
+    // 而不是空行。
     const fallbackName = (img.filename || '')
-      .replace(/^\d{4,}[_-]/, '')   // drop date-prefix on uploads
-      .replace(/\.[^.]+$/, '')       // drop extension
+      .replace(/^\d{4,}[_-]/, '')   // 删除上传文件的日期前缀
+      .replace(/\.[^.]+$/, '')       // 删除扩展名
       .replace(/[_-]+/g, ' ')
       .trim();
     const labelText = (img.prompt || '').trim() || fallbackName || 'Photo';
@@ -1229,8 +1225,8 @@ function _renderGrid() {
   grid.innerHTML = html;
   _wireUploadTile();
 
-  // Domino-in cascade the first render after opening (not on filter/sort/
-  // load-more re-renders) — mirrors the document library.
+  // 打开后的首次渲染播放多米诺级联动画（不在过滤/排序/
+  // 加载更多重新渲染时） — 与文档库一致。
   if (!_galleryCascaded) {
     _galleryCascaded = true;
     grid.classList.add('gallery-just-opened');
@@ -1241,7 +1237,7 @@ function _renderGrid() {
     loadMore.style.display = _items.length < _total ? 'block' : 'none';
   }
 
-  // Card click → detail (skip the upload tile, it has its own handler)
+  // 卡片点击 → 详情（跳过上传卡片，它有独立的处理逻辑）
   grid.querySelectorAll('.gallery-card[data-id]').forEach(card => {
     card.addEventListener('click', (e) => {
       if (e.target.closest('.gallery-fav-btn')) return;
@@ -1253,7 +1249,7 @@ function _renderGrid() {
     });
   });
 
-  // Download buttons
+  // 下载按钮
   grid.querySelectorAll('.gallery-dl-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -1281,7 +1277,7 @@ function _renderGrid() {
     });
   });
 
-  // Favorite buttons
+  // 收藏按钮
   grid.querySelectorAll('.gallery-fav-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -1299,13 +1295,13 @@ function _renderGrid() {
   });
 }
 
-// ---- Detail overlay ----
+// ---- 详情覆盖层 ----
 
 function _openDetail(img) {
   const detail = document.getElementById('gallery-detail');
   if (!detail) return;
-  // Drop any face-overlay resize listener from the previous photo
-  // before the new render attaches its own.
+  // 在新的渲染附加其监听器之前，
+  // 移除之前照片的人脸覆盖层 resize 监听器。
 
   const _dateSrc = img.taken_at || img.created_at || null;
   const _dateObj = _dateSrc ? new Date(_dateSrc) : null;
@@ -1329,9 +1325,9 @@ function _openDetail(img) {
   const aiTags = img.ai_tags || '';
   const dims = img.width && img.height ? `${img.width} x ${img.height}` : (img.size || 'Unknown');
   const fileSize = img.file_size ? _humanSize(img.file_size) : '';
-  // "Edited" row: only show when updated_at is meaningfully later than
-  // created_at (>10s). Every photo bumps updated_at on insert via the
-  // ORM timestamp mixin, so the gap filters out the trivial case.
+  // "已编辑"行：仅当 updated_at 明显晚于 created_at
+  // (>10s) 时显示。每张照片在插入时通过 ORM 时间戳 mixin
+  // 都会更新 updated_at，所以这个间隔过滤掉平凡的情况。
   let editedHtml = '';
   if (img.updated_at && img.created_at) {
     const u = new Date(img.updated_at);
@@ -1406,7 +1402,7 @@ function _openDetail(img) {
           <label>Name</label>
           <div class="gallery-name-wrap">
             <input type="text" class="gallery-detail-name-input" id="gallery-detail-name-input"
-              value="${_esc(img.prompt || '')}" placeholder="Untitled photo (press Enter to save)" />
+              value="${_esc(img.prompt || '')}" placeholder=t('gallery.untitled_photo') />
             <svg class="gallery-name-enter" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
           </div>
         </div>
@@ -1442,7 +1438,7 @@ function _openDetail(img) {
           </select>
         </div>
         <div class="gallery-detail-section" id="gallery-detail-people-section" style="display:none">
-          <label>People in this photo</label>
+          <label>${t('gallery.people_in_photo')}</label>
           <div id="gallery-detail-people-list" class="gallery-detail-people"></div>
         </div>
       </div>
@@ -1454,10 +1450,10 @@ function _openDetail(img) {
     detail.style.display = 'none';
   });
 
-  // Clickable tag chips — both AI Tags and User Tags. Clicking a chip
-  // closes the detail, sets the tag filter on the main grid, and
-  // re-fetches so the user sees other photos with that tag.
-  // Remove a user tag from this photo (the × on a tag chip).
+  // 可点击的标签芯片 — AI 标签和用户标签。点击芯片
+  // 关闭详情，在主网格上设置标签过滤器，并
+  // 重新获取，让用户看到带该标签的其他照片。
+  // 从此照片中移除用户标签（标签芯片上的 ×）。
   const _removeUserTag = async (tag, chip) => {
     const existing = (img.user_tags || img.tags || '').split(',').map(t => t.trim()).filter(Boolean);
     const remaining = existing.filter(e => e.toLowerCase() !== String(tag).toLowerCase());
@@ -1471,7 +1467,7 @@ function _openDetail(img) {
   detail.querySelectorAll('[data-tag-filter]').forEach(chip => {
     chip.addEventListener('click', (e) => {
       e.stopPropagation();
-      // × removes the tag (user chips only) instead of filtering.
+      // × 移除标签（仅限用户芯片）而不是过滤。
       if (e.target.closest('.gallery-tag-x')) { _removeUserTag(chip.dataset.tagFilter, chip); return; }
       const tag = chip.dataset.tagFilter;
       if (!tag) return;
@@ -1479,7 +1475,7 @@ function _openDetail(img) {
       _activeAlbum = null;
       _favoritesOnly = false;
       detail.style.display = 'none';
-      // Ensure we're looking at the Photos tab.
+      // 确保我们查看的是 Photos 标签页。
       const photosTab = document.querySelector('#gallery-modal .gallery-tab[data-tab="images"]');
       photosTab?.click();
       _fetchLibrary(false);
@@ -1487,12 +1483,12 @@ function _openDetail(img) {
     });
   });
 
-  // Overflow menu — single ⋮ button on the right that hosts all the action
-  // items. Clicking any item closes the menu (per-item handlers also fire).
+  // 溢出菜单 — 右侧单个 ⋮ 按钮，承载所有操作
+  // 项目。点击任何项目都会关闭菜单（每个项目的处理逻辑也会触发）。
   const menuBtn = document.getElementById('gallery-detail-menu-btn');
   const menu = document.getElementById('gallery-detail-menu');
   if (menuBtn && menu) {
-    // `.dropdown { display:none }` isn't tied to [hidden] — set inline display.
+    // `.dropdown { display:none }` 不与 [hidden] 关联 — 设置内联 display。
     const _setMenu = (show) => { menu.hidden = !show; menu.style.display = show ? 'block' : 'none'; };
     _setMenu(false);
     menuBtn.addEventListener('click', (e) => {
@@ -1500,7 +1496,7 @@ function _openDetail(img) {
       _setMenu(menu.hidden);
     });
     menu.addEventListener('click', () => { _setMenu(false); });
-    // Click outside closes the menu.
+    // 点击外部关闭菜单。
     document.addEventListener('click', (e) => {
       if (!menu.hidden && !menu.contains(e.target) && e.target !== menuBtn) _setMenu(false);
     });
@@ -1527,10 +1523,10 @@ function _openDetail(img) {
   document.getElementById('gallery-detail-fav-header')?.addEventListener('click', _toggleDetailFavorite);
 
   document.getElementById('gallery-ai-tag-btn').addEventListener('click', async (e) => {
-    // When the photo already has AI tags this button is "Clear AI tags".
+    // 当照片已有 AI 标签时，此按钮显示为"清除 AI 标签"。
     const clearMode = e.currentTarget.dataset.mode === 'clear';
-    // The button lives in the ⋮ menu which closes on click, so its text never
-    // shows — surface a whirlpool overlay on the image instead.
+    // 按钮位于 ⋮ 菜单中，点击后菜单关闭，因此其文本从不
+    // 显示 — 改为在图片上显示旋涡覆盖层。
     const stage = document.getElementById('gallery-detail-image-wrap') || document.getElementById('gallery-detail-img')?.parentElement;
     let overlay = null, spinner = null;
     if (stage) {
@@ -1559,7 +1555,7 @@ function _openDetail(img) {
       if (data.ok) {
         img.ai_tags = clearMode ? '' : data.ai_tags;
         uiModule.showToast(clearMode ? 'AI tags cleared' : 'AI tags added');
-        _openDetail(img); // re-render detail
+        _openDetail(img); // 重新渲染详情
       } else {
         uiModule.showError(data.error || (clearMode ? 'Clear failed' : 'AI tagging failed'));
       }
@@ -1582,7 +1578,7 @@ function _openDetail(img) {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
     } catch (e) {
-      // Fallback: direct link
+      // 降级方案：直接链接
       const a = document.createElement('a');
       a.href = img.url;
       a.download = img.filename || `image-${img.id}.png`;
@@ -1592,8 +1588,8 @@ function _openDetail(img) {
     }
   });
 
-  // Whirlpool while the (newly opened/navigated) image loads — cached images
-  // report `complete` immediately, so no spinner flash for those.
+  // 当（新打开/导航的）图片加载时显示旋涡 — 缓存的图片
+  // 立即报告 `complete`，因此不会闪烁旋转图标。
   const _imgEl = document.getElementById('gallery-detail-img');
   const _frame = detail.querySelector('.gallery-detail-img-frame');
   if (_imgEl && _frame && _imgEl.tagName === 'IMG' && !_imgEl.complete) {
@@ -1607,7 +1603,7 @@ function _openDetail(img) {
     _imgEl.addEventListener('error', _done, { once: true });
   }
 
-  // Prev/Next navigation
+  // 上一条/下一条导航
   const curIdx = _items.findIndex(i => i.id === img.id);
   const prevBtn = document.getElementById('gallery-detail-prev');
   const nextBtn = document.getElementById('gallery-detail-next');
@@ -1623,9 +1619,9 @@ function _openDetail(img) {
     if (curIdx >= 0 && curIdx < _items.length - 1) _openDetail(_items[curIdx + 1]);
   });
 
-  // Mobile swipe — horizontal one-finger swipe across the image wrap moves
-  // between photos. Skips multi-touch (pinch-zoom) and lets the video
-  // controls handle their own touches.
+  // 移动端滑动 — 在图片区域上水平单指滑动切换
+  // 照片。跳过多点触控（双指缩放）并让视频
+  // 控件处理自己的触摸。
   const wrap = document.getElementById('gallery-detail-image-wrap');
   if (wrap) {
     let sx = 0, sy = 0, st = 0, tracking = false;
@@ -1643,7 +1639,7 @@ function _openDetail(img) {
       const dx = t.clientX - sx;
       const dy = t.clientY - sy;
       const dt = Date.now() - st;
-      // Horizontal flick: > 40px, dominantly horizontal, under 800ms.
+      // 水平轻扫：> 40px，主要为水平方向，800ms 以内。
       if (dt > 800) return;
       if (Math.abs(dx) < 40) return;
       if (Math.abs(dx) < Math.abs(dy) * 1.2) return;
@@ -1677,10 +1673,9 @@ function _openDetail(img) {
   document.getElementById('gallery-edit-btn')?.addEventListener('click', _openInEditor);
   document.getElementById('gallery-edit-direct-btn')?.addEventListener('click', _openInEditor);
 
-  // Rotate — server-side image rotation. Forces a fresh URL afterwards
-  // so the browser doesn't show the old cached version. Shows a
-  // whirlpool over the detail image while the request + reload are in
-  // flight so the user sees the action is processing.
+  // 旋转 — 服务端图片旋转。之后强制使用新的 URL，
+  // 使浏览器不显示旧的缓存版本。在请求和重新加载进行中时，
+  // 在详情图片上方显示旋涡覆盖层，让用户看到操作正在处理中。
   const _rotate = async (angle) => {
     const stage = document.querySelector('.gallery-detail-img-stage') || document.getElementById('gallery-detail-img')?.parentElement;
     let overlay = null;
@@ -1693,7 +1688,7 @@ function _openDetail(img) {
         spinner = spinnerModule.createWhirlpool(36);
         spinner.element.style.cssText = 'width:36px;height:36px;margin:0;';
         overlay.appendChild(spinner.element);
-      } catch (_) { overlay.textContent = 'Rotating…'; }
+      } catch (_) { overlay.textContent = t('gallery.rotating'); }
       if (getComputedStyle(stage).position === 'static') stage.style.position = 'relative';
       stage.appendChild(overlay);
     }
@@ -1709,9 +1704,9 @@ function _openDetail(img) {
         body: JSON.stringify({ angle }),
       });
       if (!r.ok) { cleanup(); uiModule.showError('Rotate failed'); return; }
-      // Cache-bust the image in the detail view, then wait for the new
-      // image to actually load before clearing the spinner so the user
-      // doesn't see a flash of the old/blank image.
+      // 缓存破坏详情视图中的图片 URL，然后等待新图片
+      // 实际加载完成再清除旋转图标，这样用户
+      // 不会看到旧图片/空白图片的闪烁。
       const imgEl = document.getElementById('gallery-detail-img');
       if (imgEl) {
         const newSrc = img.url + (img.url.includes('?') ? '&' : '?') + 't=' + Date.now();
@@ -1731,7 +1726,7 @@ function _openDetail(img) {
   document.getElementById('gallery-rotate-btn')?.addEventListener('click', () => _rotate(90));
   document.getElementById('gallery-rotate-ccw-btn')?.addEventListener('click', () => _rotate(-90));
 
-  // Set as album cover — only present if the photo is currently in an album.
+  // 设为相册封面 — 仅当照片当前在相册中存在时显示。
   document.getElementById('gallery-set-cover-btn')?.addEventListener('click', async () => {
     if (!img.album_id) return;
     try {
@@ -1753,7 +1748,7 @@ function _openDetail(img) {
   });
 
   document.getElementById('gallery-delete-btn').addEventListener('click', async () => {
-    if (!await uiModule.styledConfirm('Delete this photo? This cannot be undone.', { confirmText: 'Delete', danger: true })) return;
+    if (!await uiModule.styledConfirm('Delete this photo? This cannot be undone.', { confirmText: t('common.delete'), danger: true })) return;
     const ok = await _deleteImage(img.id);
     if (!ok) {
       uiModule.showError('Failed to delete photo');
@@ -1767,10 +1762,10 @@ function _openDetail(img) {
     if (uiModule) uiModule.showToast('Photo deleted');
   });
 
-  // Tag input — Enter saves; also strips a leading '#' from each tag so
-  // typing "#person, #beach" stores as "person, beach".
-  // Rename input — saves to the prompt column on Enter/blur via the
-  // dedicated rename endpoint.
+  // 标签输入 — Enter 保存；同时从每个标签中去除前导 '#'
+  // 使输入 "#person, #beach" 存储为 "person, beach"。
+  // 重命名输入 — 通过专用重命名端点，
+  // 在 Enter/blur 时保存到 prompt 列。
   const _nameInput = document.getElementById('gallery-detail-name-input');
   if (_nameInput) {
     const _saveName = async () => {
@@ -1798,8 +1793,8 @@ function _openDetail(img) {
   }
   const _tagInput = document.getElementById('gallery-tag-input');
   if (_tagInput) {
-    // Wire a tag chip's click-to-filter (same behavior as the chips rendered at
-    // open) so chips we add live still work.
+    // 绑定标签芯片的点击过滤功能（与打开时渲染的芯片行为相同）
+    // 使我们实时添加的芯片也能工作。
     const _wireTagChip = (chip) => {
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1815,8 +1810,8 @@ function _openDetail(img) {
         _renderAlbums();
       });
     };
-    // The input is an ADD field: type a tag, press Enter → it's appended to the
-    // photo's tags, the field clears, and a chip appears immediately. No re-render.
+    // 输入框是添加字段：输入标签，按 Enter → 追加到照片的标签中，
+    // 字段清空，芯片立即出现。无需重新渲染。
     const _addTags = async () => {
       const newTags = _tagInput.value.split(',').map(t => t.trim().replace(/^#+/, '').trim()).filter(Boolean);
       _tagInput.value = '';
@@ -1839,7 +1834,7 @@ function _openDetail(img) {
           const b = document.createElement('button');
           b.className = 'gallery-ai-chip gallery-user-chip';
           b.dataset.tagFilter = t;
-          b.title = `Filter to photos tagged “${t}”`;
+          b.title = t('gallery.filter_tagged', { t: t });
           b.textContent = t;
           const x = document.createElement('span');
           x.className = 'gallery-tag-x';
@@ -1855,7 +1850,7 @@ function _openDetail(img) {
     _tagInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); _addTags(); }
     });
-    // Tap-away on mobile still adds whatever's typed.
+    // 移动端失焦时仍会添加已输入的内容。
     _tagInput.addEventListener('blur', () => { if (_tagInput.value.trim()) _addTags(); });
   }
 
@@ -1877,28 +1872,29 @@ function _makeGalleryDraggable(content) {
   makeWindowDraggable(modal, { content, header });
 }
 
-// ---- Open / Close ----
+// ---- 打开 / 关闭 ----
 
-// Re-export the manager for the rail click handler
+// 重新导出管理器供侧边栏点击处理器使用
 import * as Modals from './modalManager.js';
+import { t } from './i18n.js';
 
 export function openGallery() {
-  // If already minimized — restore in place, preserve all state
+  // 如果已最小化 — 在当前位置恢复，保留所有状态
   if (Modals.isRegistered('gallery-modal') && Modals.isMinimized('gallery-modal')) {
     Modals.restore('gallery-modal');
     return;
   }
   if (_open) return;
   _open = true;
-  _galleryCascaded = false;   // replay the domino-in cascade on each open
-  // State is preserved across close/reopen — filters, album, sort, items,
-  // albums, people — so reopening the gallery feels instant. Use the search
-  // input or "All" chip to clear the active filter.
-  // Exception: when sort is shuffle, regenerate the seed every open so the
-  // user gets a fresh order each visit (the whole point of shuffle). Also
-  // CLEAR the cached items so the user doesn't see the stale random order
-  // flash up and then swap to the new order when the fetch resolves —
-  // skeletons during the brief refetch read as intentional, the swap doesn't.
+  _galleryCascaded = false;   // 每次打开时重放多米诺级联动画
+  // 状态在关闭/重新打开后保留 — 过滤器、相册、排序、项目、
+  // 相册列表、人物 — 因此重新打开画廊感觉即时。使用搜索
+  // 输入框或"全部"芯片来清除活动过滤器。
+  // 例外：当排序为随机时，每次打开重新生成种子，让
+  // 用户每次访问获得不同的顺序（这正是随机的意义）。同时
+  // 清除缓存的项目，这样用户不会看到旧的随机顺序
+  // 闪烁一下再在获取解析后换成新顺序 —
+  // 短暂重新拉取期间显示的骨架是故意的，但新旧顺序的交换不是。
   if (_sort === 'shuffle') {
     _shuffleSeed = Math.floor(Math.random() * 2 ** 31);
     _items = [];
@@ -1944,7 +1940,7 @@ export function openGallery() {
         <div class="gallery-album-chips gallery-people-chips" id="gallery-people-chips" style="display:none"></div>
         <div class="gallery-toolbar">
           <div class="gallery-search-wrap">
-            <input type="text" class="gallery-search" id="gallery-search" placeholder="Search photos, tags..." />
+            <input type="text" class="gallery-search" id="gallery-search" placeholder=t('gallery.search_photos') />
             <span class="gallery-search-enter-hint" aria-hidden="true"><svg class="gallery-enter-key" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>to tag</span>
           </div>
           <span class="gallery-toolbar-break" aria-hidden="true"></span>
@@ -2005,17 +2001,17 @@ export function openGallery() {
     restoreFn: () => {},
   });
 
-  // Allow dragging the modal by its header — same pattern as Email Library,
-  // Sessions, etc. The tileManager (corner/edge snap-tiling) listens on
-  // pointer events too; it only shows a ghost on move and snaps on release,
-  // so the two coexist.
+  // 允许通过标题栏拖动模态框 — 与邮件库、会话等相同模式。
+  // tileManager（边角吸附平铺）也监听
+  // 指针事件；它只在移动时显示幽灵框，在放下时吸附，
+  // 所以两者共存。
   _makeGalleryDraggable(modal.querySelector('.modal-content'));
 
   document.getElementById('gallery-close').addEventListener('click', async () => {
     if (isEditorOpen()) {
       const ok = await uiModule.styledConfirm(
         'Close Gallery and the active edit?',
-        { confirmText: 'Close', danger: true },
+        { confirmText: t('common.close'), danger: true },
       );
       if (!ok) return;
       window.__galleryAllowCloseEditor = true;
@@ -2023,12 +2019,12 @@ export function openGallery() {
     closeGallery();
   });
 
-  // Double-click the Edit tab to rename what's being edited. The label
-  // shows up everywhere it's referenced by id (#gallery-editor-tab), so a
-  // simple inline contenteditable swap is enough.
+  // 双击 Edit 标签页可重命名正在编辑的内容。标签通过 id
+  // (#gallery-editor-tab) 在所有引用位置显示，因此
+  // 简单的内联 contenteditable 就足够了。
   const editorTab = modal.querySelector('.gallery-tab[data-tab="editor"]');
-  // Close × on the Edit tab — appears on hover. Confirms if the editor
-  // has an open session (any in-progress edit), otherwise just closes.
+  // Edit 标签页上的关闭 × — 悬停时出现。如果编辑器
+  // 有打开的会话（任何进行中的编辑），则确认；否则直接关闭。
   const editorTabClose = modal.querySelector('#gallery-editor-tab-close');
   if (editorTabClose) {
     editorTabClose.addEventListener('click', async (e) => {
@@ -2036,14 +2032,14 @@ export function openGallery() {
       if (isEditorOpen()) {
         const ok = await uiModule.styledConfirm(
           'Close the edit? Any unsaved changes will be lost.',
-          { confirmText: 'Close', danger: true },
+          { confirmText: t('common.close'), danger: true },
         );
         if (!ok) return;
       }
       window.__galleryAllowCloseEditor = true;
       closeEditor();
       window.__galleryAllowCloseEditor = false;
-      // If user is currently on the Edit tab, swap back to Photos.
+      // 如果用户当前在 Edit 标签页上，切回 Photos。
       const activeTab = modal.querySelector('.gallery-tab.active');
       if (activeTab?.dataset.tab === 'editor') {
         modal.querySelector('.gallery-tab[data-tab="images"]')?.click();
@@ -2061,15 +2057,15 @@ export function openGallery() {
       input.value = current === 'Edit' ? '' : current;
       input.placeholder = 'Edit name';
       input.className = 'gallery-tab-rename-input';
-      // Replace only the label span's contents so the icon SVG next to
-      // it stays visible during the rename.
+      // 仅替换标签 span 的内容，使旁边的图标 SVG
+      // 在重命名期间保持可见。
       labelEl.textContent = '';
       labelEl.appendChild(input);
       input.focus();
       input.select();
       const finish = (commit) => {
         if (commit && input.value.trim()) {
-          labelEl.textContent = `Edit: ${input.value.trim().slice(0, 24)}`;
+          labelEl.textContent = t('gallery.edit_title', { title: input.value.trim().slice(0, 24) });
         } else {
           labelEl.textContent = oldText;
         }
@@ -2082,14 +2078,14 @@ export function openGallery() {
     });
   }
 
-  // ── Tab switching ──
+  // ── 标签页切换 ──
   modal.querySelectorAll('.gallery-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       modal.querySelectorAll('.gallery-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
-      // Always close the photo detail when changing tabs — leaving it open
-      // means it pops back the next time the user returns to Photos.
+      // 切换标签页时始终关闭照片详情 — 让它保持打开意味着
+      // 下次用户返回 Photos 时它又会弹出来。
       const _detail = document.getElementById('gallery-detail');
       if (_detail) _detail.style.display = 'none';
       const imagesContainer = document.getElementById('gallery-images-container');
@@ -2101,13 +2097,13 @@ export function openGallery() {
       if (editorContainer) editorContainer.style.display = target === 'editor' ? 'flex' : 'none';
       if (settingsContainer) settingsContainer.style.display = target === 'settings' ? '' : 'none';
       if (target === 'images') {
-        // Keep active edits alive when leaving the Edit tab. The edit
-        // session is only torn down by the explicit Edit-tab close.
+        // 离开 Edit 标签页时保持活动编辑。编辑
+        // 会话仅由显式的 Edit 标签页关闭操作拆除。
       } else if (target === 'albums') {
         _renderAlbumsTab();
       } else if (target === 'editor') {
-        // If the editor isn't already holding an image, render a chooser so the
-        // tab does something useful instead of opening an empty grey pane.
+        // 如果编辑器尚未持有图片，则渲染选择器，
+        // 让标签页做有用的事情而不是打开空的灰色面板。
         if (!isEditorOpen()) _renderEditorLanding();
       }
     });
@@ -2121,21 +2117,21 @@ export function openGallery() {
       _fetchLibrary(false);
     }, 300);
   });
-  // Pressing Enter in the search box converts the current query into a
-  // stacked tag-filter pill (strips a leading "#"), clears the box, and
-  // re-fetches. Lets the user keep narrowing by tag without having to
-  // click chips.
+  // 在搜索框中按 Enter 将当前查询转换为
+  // 堆叠的标签过滤芯片（去除前导 "#"），清空输入框，并
+  // 重新获取。让用户无需点击芯片就能
+  // 继续按标签缩小范围。
   searchInput.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     const raw = searchInput.value.trim().replace(/^#/, '');
     if (!raw) return;
     if (!_activeTags.includes(raw)) _activeTags.push(raw);
-    // Searching a tag swaps the active filter to All (clear Favorites/album) so
-    // the heart deactivates and All lights up.
+    // 搜索标签时将活动过滤器切换到"全部"（清除收藏/相册），
+    // 使爱心停用，"全部"高亮。
     _favoritesOnly = false;
     _activeAlbum = null;
-    // Filtering by a tag reads best newest-first — switch the sort to Recent.
+    // 按标签过滤时最好按最新优先 — 将排序切换到"最近"。
     if (_sort !== 'recent') {
       _sort = 'recent';
       const sortSel = document.getElementById('gallery-sort');
@@ -2150,8 +2146,8 @@ export function openGallery() {
 
   document.getElementById('gallery-sort').addEventListener('change', (e) => {
     _sort = e.target.value;
-    // New shuffle session each time the user picks Shuffle so it actually
-    // re-shuffles, not just re-renders the same seeded order.
+    // 每次用户选择随机排序时生成新的随机会话，
+    // 使其真正重新随机排列，而不是重新渲染相同的种子顺序。
     if (_sort === 'shuffle') _shuffleSeed = Math.floor(Math.random() * 2 ** 31);
     _fetchLibrary(false);
   });
@@ -2166,21 +2162,21 @@ export function openGallery() {
     _fetchLibrary(true);
   });
 
-  // Infinite scroll: auto-load the next page when the Load-more button nears the
-  // bottom of the gallery's scroll area. The button stays as a manual fallback.
-  // Infinite scroll. A capture-phase scroll listener on document catches scroll
-  // from WHICHEVER element actually scrolls (desktop modal-body or the mobile
-  // scroll wrapper — IntersectionObserver's root was unreliable across the two).
-  // We just test the Load-more button against the viewport bottom.
+  // 无限滚动：当加载更多按钮接近画廊滚动区域底部时自动加载下一页。
+  // 按钮作为手动回退保留。
+  // 在 document 上的捕获阶段滚动监听器捕获来自
+  // 实际滚动的任意元素的滚动（桌面端 modal-body 或移动端的
+  // 滚动包装器 — IntersectionObserver 的 root 在两者之间不可靠）。
+  // 我们只需检测加载更多按钮相对于视口底部的位置。
   let _loadingMore = false;
   let _scrollTick = false;
   const _maybeAutoLoad = () => {
     _scrollTick = false;
     if (!_open || _loadingMore || _items.length >= _total) return;
     const btn = document.getElementById('gallery-load-more');
-    if (!btn || btn.style.display === 'none' || !btn.offsetParent) return;  // hidden / nothing more
+    if (!btn || btn.style.display === 'none' || !btn.offsetParent) return;  // 隐藏 / 没有更多
     const r = btn.getBoundingClientRect();
-    if (r.top <= window.innerHeight + 600) {   // within 600px of the viewport bottom
+    if (r.top <= window.innerHeight + 600) {   // 距离视口底部 600px 内
       _loadingMore = true;
       _offset = _items.length;
       Promise.resolve(_fetchLibrary(true)).finally(() => { _loadingMore = false; });
@@ -2192,37 +2188,37 @@ export function openGallery() {
     requestAnimationFrame(_maybeAutoLoad);
   }, true);
 
-  // When the window grows (e.g. entering fullscreen), the visible grid
-  // can hold more photos than the last page fetched — top up so there's
-  // no blank space. Debounced; only fires when the freshly-computed
-  // page size exceeds what's loaded and the server has more to give.
+  // 当窗口变宽时（例如进入全屏），可见网格
+  // 可以容纳比上次获取更多的照片 — 补充加载以避免
+  // 空白。防抖；仅当重新计算的
+  // 页大小超过已加载的量且服务器还有更多可提供时触发。
   let _resizeTopUpTimer = null;
   const _onGalleryResize = () => {
     clearTimeout(_resizeTopUpTimer);
     _resizeTopUpTimer = setTimeout(() => {
       if (!_open) return;
-      if (_items.length >= _total) return;        // already have everything
-      if (_computeFetchLimit() <= _items.length) return; // viewport not bigger than current load
+      if (_items.length >= _total) return;        // 已有全部内容
+      if (_computeFetchLimit() <= _items.length) return; // 视口没有变大
       _offset = _items.length;
       _fetchLibrary(true);
     }, 300);
   };
   window.addEventListener('resize', _onGalleryResize);
-  // Remember the handler so closeGallery can detach it.
+  // 记住处理器，以便 closeGallery 可以移除它。
   _galleryResizeHandler = _onGalleryResize;
 
-  // ── Import images ──
+  // ── 导入图片 ──
 
-  // "vision model" link → open Settings on the AI tab (where the vision model
-  // is configured).
+  // "视觉模型"链接 → 打开 AI 标签页上的设置（视觉模型
+  // 在此配置）。
   const visionLink = document.getElementById('gallery-vision-link');
   if (visionLink) {
     visionLink.addEventListener('click', (e) => {
       e.preventDefault();
       import('./settings.js').then(m => {
         m.open('ai');
-        // The gallery modal gets a bumped z-index from modalManager; settings
-        // opens with its lower static z-index and lands BEHIND it. Raise it above.
+        // 画廊模态框从 modalManager 获得提升的 z-index；设置
+        // 以其较低的静态 z-index 打开并落到了画廊后面。将其提升到上面。
         const sm = document.getElementById('settings-modal');
         const gm = document.getElementById('gallery-modal');
         if (sm) {
@@ -2233,19 +2229,19 @@ export function openGallery() {
     });
   }
 
-  // ── Tag All Untagged ──
+  // ── 全部未打标图片打标 ──
   let _tagCancelRequested = false;
   let _tagging = false;
   const tagAllBtn = document.getElementById('gallery-tag-all-btn');
   const _tagAllOrigHTML = tagAllBtn ? tagAllBtn.innerHTML : '';
   if (tagAllBtn) {
     tagAllBtn.addEventListener('click', async () => {
-      // While a run is active this button acts as Cancel.
+      // 运行期间此按钮充当取消按钮。
       if (_tagging) {
         _tagCancelRequested = true;
         const _se = document.getElementById('gallery-tag-status');
-        if (_se) _se.textContent = 'Cancelling…';
-        tagAllBtn.textContent = 'Cancelling…';
+        if (_se) _se.textContent = t('gallery.cancelling');
+        tagAllBtn.textContent = t('gallery.cancelling');
         tagAllBtn.disabled = true;
         return;
       }
@@ -2263,14 +2259,14 @@ export function openGallery() {
         listRes = await r.json();
       } catch (e) { uiModule.showError('Failed to fetch tag queue'); return; }
       if (!listRes.ok || !Array.isArray(listRes.image_ids) || listRes.image_ids.length === 0) {
-        uiModule.showToast(`No untagged photos in ${scope}`);
+        uiModule.showToast(t('gallery.no_untagged_photos', { scope: scope }));
         return;
       }
       const total = listRes.image_ids.length;
       const untagged = listRes.total_untagged || total;
       if (!await uiModule.styledConfirm(
-        `Tag ${total} of ${untagged} untagged photo${total > 1 ? 's' : ''} in ${scope}?`,
-        { confirmText: 'Tag All' }
+        t('gallery.tag_all_confirm', { count: total, total: untagged, scope: scope }),
+        { confirmText: t('gallery.tag_all') }
       )) return;
 
       const bar = document.getElementById('gallery-tag-bar');
@@ -2279,14 +2275,14 @@ export function openGallery() {
       const cancelBtn = document.getElementById('gallery-tag-cancel');
       bar.style.display = '';
       progEl.style.width = '0%';
-      // The Start button becomes the Cancel control for the run (kept enabled so
-      // it's clickable; the click handler above routes to cancel via _tagging).
+      // 开始按钮变为运行的取消控件（保持启用以便
+      // 可点击；上面的点击处理器通过 _tagging 路由到取消）。
       _tagging = true;
       _tagCancelRequested = false;
       tagAllBtn.classList.add('active', 'gallery-tag-cancelling');
-      tagAllBtn.textContent = 'Cancel';
-      if (cancelBtn) cancelBtn.style.display = 'none';   // start button covers it now
-      cancelBtn.onclick = () => { _tagCancelRequested = true; statusEl.textContent = 'Cancelling...'; };
+      tagAllBtn.textContent = t('common.cancel');
+      if (cancelBtn) cancelBtn.style.display = 'none';   // 开始按钮现在覆盖它
+      cancelBtn.onclick = () => { _tagCancelRequested = true; statusEl.textContent = t('gallery.cancelling'); };
 
       let done = 0, failed = 0;
       for (const id of listRes.image_ids) {
@@ -2305,8 +2301,8 @@ export function openGallery() {
 
       statusEl.textContent = _tagCancelRequested
         ? `Cancelled after ${done}/${total}${failed ? ` (${failed} failed)` : ''}`
-        : `Done — tagged ${done - failed}/${total}${failed ? ` (${failed} failed)` : ''}`;
-      // Restore the Start button.
+        : t('gallery.tagged_done', { done: done - failed, total: total }) + (failed ? t('gallery.failed_tagging', { failed: failed }) : '');
+      // 恢复开始按钮。
       _tagging = false;
       tagAllBtn.disabled = false;
       tagAllBtn.classList.remove('active', 'gallery-tag-cancelling');
@@ -2314,16 +2310,16 @@ export function openGallery() {
       if (cancelBtn) cancelBtn.style.display = '';
       setTimeout(() => { bar.style.display = 'none'; }, 3000);
       await _fetchLibrary(false);
-      if (uiModule) uiModule.showToast(`Tagged ${done - failed} photo${(done - failed) !== 1 ? 's' : ''}`);
+      if (uiModule) uiModule.showToast(t('gallery.tagged_n', { n: done - failed }));
     });
   }
 
-  // ── Toolbar overflow (⋮) ──
+  // ── 工具栏溢出 (⋮) ──
   const moreBtn = document.getElementById('gallery-toolbar-more-btn');
   const moreMenu = document.getElementById('gallery-toolbar-more-menu');
   if (moreBtn && moreMenu) {
-    // `.dropdown { display:none }` isn't tied to [hidden], so toggling the
-    // attribute alone won't reveal it — set inline display too (inline wins).
+    // `.dropdown { display:none }` 不与 [hidden] 关联，因此仅切换
+    // 属性不会显示它 — 同时设置内联 display（内联优先）。
     const _setMore = (show) => { moreMenu.hidden = !show; moreMenu.style.display = show ? 'block' : 'none'; };
     _setMore(false);
     moreBtn.addEventListener('click', (e) => {
@@ -2335,7 +2331,7 @@ export function openGallery() {
     });
   }
 
-  // ── Clear AI Tags ──
+  // ── 清除 AI 标签 ──
   const clearAiTagsBtn = document.getElementById('gallery-clear-ai-tags-btn');
   if (clearAiTagsBtn) {
     clearAiTagsBtn.addEventListener('click', async () => {
@@ -2343,7 +2339,7 @@ export function openGallery() {
       if (moreMenu) { moreMenu.hidden = true; moreMenu.style.display = 'none'; }
       if (!await uiModule.styledConfirm(
         'Remove all AI-generated tags from every photo? Your own tags are kept.',
-        { confirmText: 'Clear AI Tags', danger: true }
+        { confirmText: t('gallery.clear_ai_tags'), danger: true }
       )) return;
       clearAiTagsBtn.disabled = true;
       try {
@@ -2352,7 +2348,7 @@ export function openGallery() {
         });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Clear failed');
-        uiModule.showToast(`Cleared AI tags on ${d.cleared} photo${d.cleared === 1 ? '' : 's'}`);
+        uiModule.showToast(t('gallery.cleared_ai_tags', { n: d.cleared }));
         await _fetchLibrary(false);
       } catch (e) {
         uiModule.showError(`Failed to clear AI tags: ${e.message || e}`);
@@ -2363,7 +2359,7 @@ export function openGallery() {
   }
 
 
-  // ── Select mode + bulk delete ──
+  // ── 选择模式 + 批量删除 ──
   let _selectMode = false;
   const selectBtn = document.getElementById('gallery-select-btn');
   const bulkBar = document.getElementById('gallery-bulk-bar');
@@ -2378,8 +2374,8 @@ export function openGallery() {
     if (el) el.textContent = sel + ' selected';
     const all = document.getElementById('gallery-bulk-select-all');
     if (all) { all.checked = total > 0 && sel === total; all.indeterminate = sel > 0 && sel < total; }
-    // When something's selected, brighten Actions to the same full --fg color as
-    // the "N selected" count (the button is a dimmer 60% --fg by default).
+    // 有内容选中时，将"操作"按钮变亮到与 "N selected" 计数相同的完整 --fg 颜色
+    // （按钮默认使用较暗的 60%--fg）。
     const actions = document.getElementById('gallery-bulk-actions');
     if (actions) actions.style.color = sel > 0 ? 'var(--fg)' : '';
   }
@@ -2387,12 +2383,12 @@ export function openGallery() {
   function _setSelectMode(on) {
     _selectMode = on;
     selectBtn.classList.toggle('active', on);
-    // The Select button doubles as Cancel while active (mirrors the library).
-    selectBtn.textContent = on ? 'Cancel' : 'Select';
+    // 选择按钮在激活时兼作取消按钮（与文档库一致）。
+    selectBtn.textContent = on ? t('common.cancel') : 'Select';
     bulkBar.classList.toggle('hidden', !on);
-    // Body-level signal so the CSS rule that hides per-thumbnail overlay
-    // buttons (favorite/download) applies to every card — including cards
-    // rendered after select mode was already on (load-more etc).
+    // Body 级别信号，使隐藏每缩略图叠加按钮
+    // (favorite/download) 的 CSS 规则应用到每张卡片 — 包括
+    // 选择模式开启后渲染的卡片（加载更多等）。
     document.body.classList.toggle('gallery-selecting', on);
     document.querySelectorAll('.gallery-select-dot').forEach(d => {
       d.style.display = on ? '' : 'none';
@@ -2408,7 +2404,7 @@ export function openGallery() {
   selectBtn.addEventListener('click', () => _setSelectMode(!_selectMode));
   document.getElementById('gallery-bulk-cancel')?.addEventListener('click', () => _exitSelectMode());
 
-  // Select all / none.
+  // 全选 / 全部取消。
   document.getElementById('gallery-bulk-select-all')?.addEventListener('change', (e) => {
     const on = e.target.checked;
     document.querySelectorAll('.gallery-select-dot').forEach(d => d.classList.toggle('selected', on));
@@ -2424,9 +2420,9 @@ export function openGallery() {
     if (dot) { dot.classList.toggle('selected'); _updateBulkCount(); }
   });
 
-  // Mobile: long-press on a thumbnail enters select mode and marks that
-  // thumbnail as the first selection. Cancelled by movement (so vertical
-  // scrolling still works) or by lifting before the timer fires.
+  // 移动端：长按缩略图进入选择模式并将该
+  // 缩略图标记为首个选中项。通过移动（使垂直
+  // 滚动仍然有效）或在计时器触发前抬起手指来取消。
   if ('ontouchstart' in window) {
     const gridEl = document.getElementById('gallery-grid');
     let lpTimer = null;
@@ -2463,8 +2459,8 @@ export function openGallery() {
     }, { passive: true });
     gridEl.addEventListener('touchend', (e) => {
       if (lpFired) {
-        // Swallow the synthesized click that follows the long-press so the
-        // tap doesn't immediately toggle the same dot back off.
+        // 吞掉长按后跟随的合成 click 事件，使
+        // 轻点不会立即将同一个圆点切换回关闭状态。
         e.preventDefault();
       }
       cancel();
@@ -2472,7 +2468,7 @@ export function openGallery() {
     gridEl.addEventListener('touchcancel', cancel);
   }
 
-  // Drag-and-drop import
+  // 拖放导入
   const grid = document.getElementById('gallery-grid');
   const imagesContainer = document.getElementById('gallery-images-container');
   ['dragenter', 'dragover'].forEach(ev => {
@@ -2485,8 +2481,8 @@ export function openGallery() {
     _handleGalleryDrop(e).catch(err => console.error('Gallery drop error:', err));
   });
 
-  // Same drop handling on the Albums tab: dropped folders become new albums,
-  // loose files go into whatever album is currently active (or stay loose).
+  // Albums 标签页上的相同拖放处理：拖放的文件夹成为新相册，
+  // 零散文件放入当前活动的相册（或保持松散）。
   const albumsContainer = document.getElementById('gallery-albums-container');
   if (albumsContainer) {
     ['dragenter', 'dragover'].forEach(ev => {
@@ -2509,20 +2505,20 @@ export function openGallery() {
   }
 
 
-  // ── Bulk actions menu (Favorite / Add tag / Delete on the selection) ──
-  // Built dynamically like the email library's _showBulkActionsMenu so it
-  // shares the exact same dropdown style/behaviour.
+  // ── 批量操作菜单（收藏/添加标签/删除选中项）──
+  // 动态构建，类似邮件库的 _showBulkActionsMenu，
+  // 共享完全相同的下拉菜单样式/行为。
   const _bulkActionsBtn = document.getElementById('gallery-bulk-actions');
   function _showGalleryBulkMenu(anchor) {
     document.querySelectorAll('.gallery-bulk-menu').forEach(d => d.remove());
-    // Standard Odysseus dropdown (.dropdown + dropdown-item-compact) so it
-    // matches every other menu in the app. Positioned fixed at the button.
+    // 标准 Odysseus 下拉菜单 (.dropdown + dropdown-item-compact)，
+    // 与应用中其他所有菜单保持一致。在按钮位置 fixed 定位。
     const dropdown = document.createElement('div');
     dropdown.className = 'dropdown gallery-bulk-menu';
     const rect = anchor.getBoundingClientRect();
     const left = Math.min(rect.left, window.innerWidth - 200);
-    // Inline the standard dropdown look so it renders correctly even where the
-    // `.dropdown` rule is scoped out (e.g. hover-only media queries on mobile).
+    // 内联标准下拉菜单外观，使其在 `.dropdown` 规则
+    // 被作用域排除的地方也能正确渲染（例如移动端仅悬停媒体查询）。
     dropdown.style.cssText = `position:fixed;display:block;z-index:10001;top:${rect.bottom + 6}px;left:${Math.max(8, left)}px;right:auto;min-width:180px;background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:6px;font-size:11px;`;
     const _favIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-6.7-4.35-9.33-8.04C.9 10.3 1.4 6.9 4.1 5.6c1.9-.9 4 .03 5 1.7 1-1.67 3.1-2.6 5-1.7 2.7 1.3 3.2 4.7 1.43 7.36C18.7 16.65 12 21 12 21z"/></svg>';
     const _tagIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
@@ -2535,7 +2531,7 @@ export function openGallery() {
       { label: 'Download', icon: _dlIco, action: () => _bulkDownload(_selectedIds()) },
       { label: 'Delete', icon: _delIco, danger: true, action: () => _bulkDelete(_selectedIds()) },
       { separator: true },
-      { label: 'Cancel', icon: _cancelIco, action: () => _exitSelectMode() },
+      { label: t('common.cancel'), icon: _cancelIco, action: () => _exitSelectMode() },
     ];
     for (const a of items) {
       if (a.separator) {
@@ -2563,9 +2559,9 @@ export function openGallery() {
 
   _bulkActionsBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    // Toggle: clicking the Actions button while its dropdown is already open
-    // should close it. The outside-click handler explicitly skips clicks on
-    // the anchor, so the button itself has to do its own dismiss.
+    // 切换：当下拉菜单已打开时再次点击操作按钮
+    // 应关闭它。外部点击处理器会显式跳过对
+    // 锚点的点击，因此按钮本身需要自行关闭。
     const existing = document.querySelector('.gallery-bulk-menu');
     if (existing) { existing.remove(); return; }
     if (!_selectedIds().length) { uiModule.showToast('Select photos first'); return; }
@@ -2574,17 +2570,17 @@ export function openGallery() {
 
   async function _bulkDelete(ids) {
     if (!ids.length) return;
-    if (!await uiModule.styledConfirm(`Delete ${ids.length} photo${ids.length > 1 ? 's' : ''}? This cannot be undone.`, { confirmText: 'Delete', danger: true })) return;
+    if (!await uiModule.styledConfirm(`Delete ${ids.length} photo${ids.length > 1 ? 's' : ''}? This cannot be undone.`, { confirmText: t('common.delete'), danger: true })) return;
     const deleted = [], failed = [];
     for (const id of ids) { const ok = await _deleteImage(id); (ok ? deleted : failed).push(id); }
     if (failed.length) uiModule.showError(`Failed to delete ${failed.length} of ${ids.length} photos`);
     _items = _items.filter(i => !deleted.includes(i.id));
     _total = Math.max(0, _total - deleted.length);
     _exitSelectMode();
-    if (uiModule) uiModule.showToast(`${deleted.length} photo${deleted.length > 1 ? 's' : ''} deleted`);
-    // If we just emptied a FILTERED view (e.g. deleted every photo under a tag),
-    // drop the filters and reload the full library so the user isn't stranded on
-    // a blank screen with a now-empty tag/album/favorites filter still active.
+    if (uiModule) uiModule.showToast(t('gallery.photos_deleted', { n: deleted.length }));
+    // 如果我们刚清空了一个过滤视图（例如删除了标签下的所有照片），
+    // 移除过滤器并重新加载完整库，以免用户被困在
+    // 空白屏幕上，而现已为空的标签/相册/收藏过滤器仍处于活动状态。
     if (_items.length === 0 && (_activeTags.length || _activeAlbum || _favoritesOnly)) {
       _activeTags = [];
       _activeAlbum = null;
@@ -2598,11 +2594,11 @@ export function openGallery() {
 
   async function _bulkDownload(ids) {
     if (!ids.length) return;
-    // More than 5 → bundle into a single .zip server-side instead of firing a
-    // flood of individual downloads.
+    // 超过 5 张 → 在服务端打包成单个 .zip，而不是
+    // 发起大量单独的下载。
     if (ids.length > 5) {
       try {
-        if (uiModule) uiModule.showToast(`Zipping ${ids.length} photos…`);
+        if (uiModule) uiModule.showToast(t('gallery.zipping_photos', { n: ids.length }));
         const res = await fetch(`${API_BASE}/api/gallery/download-zip`, {
           method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -2619,13 +2615,13 @@ export function openGallery() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(objUrl), 2000);
         _exitSelectMode();
-        if (uiModule) uiModule.showToast(`Downloaded ${ids.length} photos (zip)`);
+        if (uiModule) uiModule.showToast(t('gallery.downloaded_photos', { n: ids.length }));
       } catch (e) {
         if (uiModule) uiModule.showError('Failed to create zip');
       }
       return;
     }
-    // 5 or fewer → individual downloads.
+    // 5 张或更少 → 单独下载。
     let n = 0;
     for (const id of ids) {
       const it = _items.find(i => i.id === id);
@@ -2642,12 +2638,12 @@ export function openGallery() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
         n++;
-        // Stagger so the browser doesn't drop simultaneous downloads.
+        // 错开下载，防止浏览器丢弃同时发起的下载。
         await new Promise(r => setTimeout(r, 250));
-      } catch (_) { /* skip failures */ }
+      } catch (_) { /* 跳过失败 */ }
     }
     _exitSelectMode();
-    if (uiModule) uiModule.showToast(`Downloading ${n} photo${n === 1 ? '' : 's'}`);
+    if (uiModule) uiModule.showToast(t('gallery.downloading_photos', { n: n }));
   }
 
   async function _bulkFavorite(ids) {
@@ -2659,11 +2655,11 @@ export function openGallery() {
       }
     }
     _renderGrid(); _exitSelectMode();
-    if (uiModule) uiModule.showToast(`Favorited ${n} photo${n > 1 ? 's' : ''}`);
+    if (uiModule) uiModule.showToast(t('gallery.favorited_n', { n: n }));
   }
 
   async function _bulkTag(ids) {
-    const tag = (await uiModule.styledPrompt('', { title: 'Add tag to selected', placeholder: 'tag', confirmText: 'Add', maxLength: 60 }) || '').trim().replace(/^#+/, '').trim();
+    const tag = (await uiModule.styledPrompt('', { title: 'Add tag to selected', placeholder: 'tag', confirmText: t('common.add'), maxLength: 60 }) || '').trim().replace(/^#+/, '').trim();
     if (!tag) return;
     let n = 0;
     for (const id of ids) {
@@ -2677,7 +2673,7 @@ export function openGallery() {
       }
     }
     _exitSelectMode();
-    if (uiModule) uiModule.showToast(`Tagged ${n} photo${n === 1 ? '' : 's'} “${tag}”`);
+    if (uiModule) uiModule.showToast(t('gallery.tagged_n_with_tag', { n: n, tag: tag }));
   }
 
   modal.addEventListener('click', (e) => {
@@ -2687,11 +2683,11 @@ export function openGallery() {
 
   _escHandler = (e) => {
     if (e.key === 'Escape') {
-      // While the image editor is visible, Escape is reserved for the
-      // editor (cancel transform/lasso/crop, dismiss size prompt, etc.).
-      // Don't close the gallery — users would lose their in-progress edit.
-      // We check the editor container's visibility AND the isEditorOpen()
-      // flag so a crop popup, transform handles, etc. all keep Esc.
+      // 当图片编辑器可见时，Escape 保留给
+      // 编辑器（取消变换/套索/裁剪，关闭尺寸提示等）。
+      // 不要关闭画廊 — 用户会丢失进行中的编辑。
+      // 我们检查编辑器容器的可见性和 isEditorOpen()
+      // 标志，使裁剪弹窗、变换手柄等都保留 Esc。
       const editorContainer = document.getElementById('gallery-editor-container');
       const editorVisible = !!(
         editorContainer &&
@@ -2705,10 +2701,10 @@ export function openGallery() {
       }
       const detail = document.getElementById('gallery-detail');
       if (detail && detail.style.display !== 'none') {
-        // Click Back so Esc and the visible button always do the same thing —
-        // future tweaks to Back's teardown automatically apply to Esc too.
-        // stopImmediatePropagation blocks app.js's generic dynamic-modal Esc
-        // handler that would otherwise close the whole gallery underneath us.
+        // 点击"返回"，使 Esc 和可见按钮始终执行相同操作 —
+        // 后续对"返回"拆卸的调整也会自动应用到 Esc。
+        // stopImmediatePropagation 阻止 app.js 的通用动态模态框 Esc
+        // 处理器，否则它会在我们下面关闭整个画廊。
         e.preventDefault();
         e.stopImmediatePropagation();
         const back = document.getElementById('gallery-detail-back');
@@ -2718,7 +2714,7 @@ export function openGallery() {
       }
       return;
     }
-    // Arrow-key navigation inside detail view (ignore when typing in inputs)
+    // 详情视图内的方向键导航（当在输入框中输入时忽略）
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     const detail = document.getElementById('gallery-detail');
     if (!detail || detail.style.display === 'none') return;
@@ -2730,17 +2726,17 @@ export function openGallery() {
       btn.click();
     }
   };
-  // Capture phase + stopImmediatePropagation (see _escHandler) so app.js's
-  // generic dynamic-modal Esc dismiss doesn't close the whole gallery before
-  // we get a chance to close just the photo detail.
+  // 捕获阶段 + stopImmediatePropagation（参见 _escHandler），使 app.js 的
+  // 通用动态模态框 Esc 关闭不会在我们获得机会
+  // 只关闭照片详情之前关闭整个画廊。
   document.addEventListener('keydown', _escHandler, true);
 
   const btn = document.getElementById('tool-gallery-btn');
   if (btn) btn.classList.add('active');
 
-  // 1) Paint cached state immediately so the user sees photos instantly.
-  //    Filters, sort, search box, album chips, and the grid all come from
-  //    module-scope state that we no longer reset on open.
+  // 1) 立即绘制缓存状态，让用户即时看到照片。
+  //    过滤器、排序、搜索框、相册芯片和网格都来自
+  //    模块级状态，我们不再在打开时重置。
   if (_items.length || _albums.length) {
     if (_search) searchInput.value = _search;
     const sortSel = document.getElementById('gallery-sort');
@@ -2749,8 +2745,8 @@ export function openGallery() {
     _renderGrid();
     _renderStats();
   }
-  // 2) Refresh in the background so the cache stays close-to-fresh. If the
-  //    fetch fails or takes a moment, the cached view sticks around.
+  // 2) 在后台刷新，使缓存保持接近最新。如果
+  //    获取失败或需要一些时间，缓存的视图保持不变。
   _fetchAlbums();
   _fetchLibrary(false);
   searchInput.focus();
@@ -2768,8 +2764,8 @@ function _doCloseGallery() {
     window.removeEventListener('resize', _galleryResizeHandler);
     _galleryResizeHandler = null;
   }
-  // Detach the face-overlay resize listener so we don't leak a
-  // handler past close (v2 review HIGH-9).
+  // 移除人脸覆盖层 resize 监听器，避免在关闭后
+  // 泄漏处理器 (v2 review HIGH-9)。
   closeEditor();
   window.__galleryAllowCloseEditor = false;
 
@@ -2808,7 +2804,7 @@ export function isGalleryOpen() {
   return _open;
 }
 
-// ---- Utilities ----
+// ---- 工具函数 ----
 
 function _esc(str) {
   if (!str) return '';

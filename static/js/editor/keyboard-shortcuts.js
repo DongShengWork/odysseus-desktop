@@ -1,27 +1,26 @@
 /**
- * Editor keyboard shortcuts — bound to `document` so shortcuts work
- * without first clicking into the canvas. Gated by `state.editorOpen`
- * so they don't leak into chat input when the editor is closed.
+ * 编辑器键盘快捷键 — 绑定到 `document`，因此无需先点击画布即可使用快捷键。
+ * 由 `state.editorOpen` 控制，确保编辑器关闭时快捷键不会泄漏到聊天输入中。
  *
- * Covers:
- *   ?              toggle the shortcuts cheatsheet
- *   Enter          confirm in-progress transform
- *   Esc            cancel transform / lasso / crop (in priority order)
- *   Ctrl+Z         undo (Shift adds redo)
- *   Ctrl+Shift+D   deselect (clears wand + lasso)
- *   Ctrl+S         save (Shift = save as / export to gallery)
- *   Ctrl+Shift+T   open resize popup
- *   Ctrl+Alt+T     start free transform
- *   Ctrl+Alt+I     invert wand / lasso selection
- *   Ctrl+Alt+J     new empty layer
- *   Ctrl+Alt+A     select all canvas (lasso polygon = full bounds)
- *   Ctrl+C/X       copy / cut wand or lasso selection (image clipboard
- *                  + internal clipboard)
- *   Ctrl+V         (handled by the paste event listener)
- *   Tool keys (V, B, E, L, …) → toolbar click
- *   [ / ]          shrink / grow brush size proportionally
- *   D, C, M (when lasso has 3+ points) → delete / copy / convert mask
- *   Delete / Backspace (wand or lasso) → delete pixels
+ * 涵盖：
+ *   ?              切换快捷键速查表
+ *   Enter          确认进行中的变换
+ *   Esc            取消变换 / 套索 / 裁剪（按优先级顺序）
+ *   Ctrl+Z         撤销（Shift 加为重做）
+ *   Ctrl+Shift+D   取消选择（清除魔棒 + 套索）
+ *   Ctrl+S         保存（Shift = 另存为 / 导出到图片库）
+ *   Ctrl+Shift+T   打开调整大小弹出窗口
+ *   Ctrl+Alt+T     开始自由变换
+ *   Ctrl+Alt+I     反转魔棒 / 套索选区
+ *   Ctrl+Alt+J     新建空图层
+ *   Ctrl+Alt+A     全选画布（套索多边形 = 完整边界）
+ *   Ctrl+C/X       复制 / 剪切魔棒或套索选区（图像剪贴板
+ *                  + 内部剪贴板）
+ *   Ctrl+V         （由粘贴事件监听器处理）
+ *   工具按键 (V, B, E, L, …) → 工具栏点击
+ *   [ / ]          按比例缩小 / 放大画笔大小
+ *   D, C, M（当套索有 3+ 个点时）→ 删除 / 复制 / 转换为蒙版
+ *   Delete / Backspace（魔棒或套索）→ 删除像素
  *
  * @param {{
  *   toolbar:                HTMLDivElement,
@@ -67,8 +66,8 @@ export function wireKeyboardShortcuts(deps) {
 
   document.addEventListener('keydown', (e) => {
     if (!state.editorOpen) return;
-    // `?` toggles the cheatsheet. Don't fire while typing in a text
-    // field — the user might be typing a prompt with a `?`.
+    // `?` 切换速查表。在文本输入框中输入时不要触发
+    // — 用户可能在输入带有 `?` 的提示词。
     if (e.key === '?' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
       e.preventDefault();
       toggleShortcuts();
@@ -80,14 +79,14 @@ export function wireKeyboardShortcuts(deps) {
       return;
     }
     if (e.key === 'Escape') return;
-    // Skip the Ctrl+Alt editor chords for an AltGr keystroke (see platform.js);
-    // only the chord block is skipped, so the layout-character handlers below
-    // still act — AltGr+5 / AltGr+8 stay as the [ ] brush-size shortcut on
-    // AZERTY / QWERTZ.
+    // 对 AltGr 按键跳过 Ctrl+Alt 编辑器组合键（参见 platform.js）；
+    // 仅跳过组合键部分，因此下面的布局字符处理器
+    // 仍然生效 — AltGr+5 / AltGr+8 在 AZERTY / QWERTZ 键盘上
+    // 保持为 [ ] 画笔大小快捷键。
     if ((e.ctrlKey || e.metaKey) && !isAltGrEvent(e)) {
       if (e.key === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
-      // Ctrl+Shift+D = Deselect: clears the wand selection (and
-      // lasso if active) without affecting layers.
+      // Ctrl+Shift+D = 取消选择：清除魔棒选区（以及
+      // 套索如果处于活动状态），不影响图层。
       if (e.shiftKey && (e.key === 'D' || e.key === 'd')) {
         if (state.wandMask || state.lassoPoints.length) {
           e.preventDefault();
@@ -104,33 +103,33 @@ export function wireKeyboardShortcuts(deps) {
           composite();
         }
       }
-      // Save shortcuts — match the hints shown in the Save dropdown.
+      // 保存快捷键 — 与保存下拉菜单中显示的提示匹配。
       if ((e.key === 's' || e.key === 'S') && !e.altKey) {
         e.preventDefault();
         document.getElementById(e.shiftKey ? 'ge-export-gallery' : 'ge-save')?.click();
       }
       if (e.shiftKey && e.key === 'T') { e.preventDefault(); resizeCustomPrompt(); }
       if (e.altKey && e.key === 't') { e.preventDefault(); startTransform(); }
-      // Ctrl+Alt+I — invert current selection. Uses e.code so
-      // Alt-modified key values (e.g. `ˆ` on Mac with Option+I)
-      // don't break the match.
+      // Ctrl+Alt+I — 反转当前选区。使用 e.code 以便
+      // Alt 修饰键产生的值（例如 Mac 上 Option+I 产生的 `ˆ`）
+      // 不会破坏匹配。
       if (e.altKey && e.code === 'KeyI') {
         if (invertSelection()) {
           e.preventDefault();
           e.stopPropagation();
         }
       }
-      // Ctrl+Alt+J — new empty layer.
+      // Ctrl+Alt+J — 新建空图层。
       if (e.altKey && e.code === 'KeyJ') {
         e.preventDefault();
         e.stopPropagation();
         addEmptyLayer();
       }
-      // Wand selection: Delete = erase pixels. Ctrl+X = cut to
-      // clipboard + new layer + erase. Ctrl+C = copy.
-      // (Legacy `&& !_wandActive` clause referenced an undeclared
-      // variable — removed; the wand is selection-only and has no
-      // "active drag" state.)
+      // 魔棒选区：Delete = 擦除像素。Ctrl+X = 剪切到
+      // 剪贴板 + 新建图层 + 擦除。Ctrl+C = 复制。
+      // （旧代码中的 `&& !_wandActive` 子句引用了一个未声明的
+      // 变量 — 已移除；魔棒仅用于选区，没有
+      // "活动拖拽" 状态。）
       if (state.wandMask) {
         if (e.key === 'Delete' || e.key === 'Backspace') {
           e.preventDefault();
@@ -142,7 +141,7 @@ export function wireKeyboardShortcuts(deps) {
           const isCut = e.key === 'x';
           const src = state.layers.find(l => l.id === state.wandLayerId);
           if (!src) return;
-          // Clip source by wand mask into a temp canvas.
+          // 按魔棒蒙版裁剪源图层到临时画布。
           const w = src.canvas.width, h = src.canvas.height;
           const tmp = document.createElement('canvas');
           tmp.width = w; tmp.height = h;
@@ -159,7 +158,7 @@ export function wireKeyboardShortcuts(deps) {
             }
           }, 'image/png');
           if (isCut) {
-            // Cut also moves the selection to a new layer + erases source.
+            // 剪切同时将选区移动到新图层 + 擦除源内容。
             wandCopyToNewLayer();
             wandDeleteSelection();
           }
@@ -177,7 +176,7 @@ export function wireKeyboardShortcuts(deps) {
         const mask = buildLassoMask(w, h, off.x, off.y, feather, grow);
         const srcData = layer.ctx.getImageData(0, 0, w, h);
         const maskData = mask.getContext('2d').getImageData(0, 0, w, h);
-        // Build clipped image.
+        // 构建裁剪后的图像。
         const tmp = document.createElement('canvas');
         tmp.width = w; tmp.height = h;
         const tCtx = tmp.getContext('2d');
@@ -210,11 +209,11 @@ export function wireKeyboardShortcuts(deps) {
           composite();
         }
       }
-      // Ctrl+C with no active selection → copy the entire active layer
-      // to the system clipboard as a PNG. Gives a "just copy this image"
-      // shortcut without having to lasso-select-all first. The
-      // selection-aware Ctrl+C paths above run first (wand + lasso),
-      // so this only fires when neither is active.
+      // Ctrl+C 且没有活动选区 → 将整个活动图层
+      // 作为 PNG 复制到系统剪贴板。提供一个"直接复制此图像"
+      // 的快捷键，无需先套索全选。
+      // 上面的选区感知 Ctrl+C 路径先运行（魔棒 + 套索），
+      // 因此仅当两者都不活动时才会触发此路径。
       if (e.key === 'c' && !e.shiftKey && !state.wandMask && state.lassoPoints.length < 3) {
         const layer = activeLayer();
         if (layer && layer.canvas && layer.canvas.width > 0) {
@@ -229,7 +228,7 @@ export function wireKeyboardShortcuts(deps) {
           return;
         }
       }
-      // Ctrl+Alt+A = select all canvas.
+      // Ctrl+Alt+A = 全选画布。
       if (e.altKey && e.key === 'a' && state.imgWidth > 0 && state.imgHeight > 0) {
         e.preventDefault();
         state.lassoPoints = [
@@ -241,26 +240,25 @@ export function wireKeyboardShortcuts(deps) {
         drawLassoOverlay();
         uiModule.showToast('All selected — Ctrl+C to copy, Del to delete');
       }
-      // Ctrl+V handled by the paste event listener.
-      if (e.key === 'v') { /* no-op here */ }
+      // Ctrl+V 由粘贴事件监听器处理。
+      if (e.key === 'v') { /* 此处不操作 */ }
       return;
     }
-    // Tool shortcuts (only when not typing in an input).
+    // 工具快捷键（仅当不在输入框中输入时生效）。
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     const toolId = toolKeyMap[e.key.toLowerCase()];
     if (toolId) {
       const toolBtn = toolbar.querySelector(`[data-tool="${toolId}"]`);
       if (toolBtn) toolBtn.click();
     }
-    // Bracket keys for brush size — ±10% multiplier mirrors the
-    // exponential slider curve so each press feels the same at any
-    // size.
+    // 方括号键调整画笔大小 — ±10% 倍率与
+    // 指数滑块曲线一致，因此每次按键在任何尺寸下感觉都相同。
     if (e.key === '[' || e.key === ']') {
       const factor = e.key === '[' ? 0.9 : 1.1;
       state.brushSize = Math.max(1, Math.min(800, Math.round(state.brushSize * factor)));
       try { brushSizeSync(null); } catch {}
     }
-    // Lasso shortcuts (when selection exists).
+    // 套索快捷键（当选区存在时）。
     if (state.lassoPoints.length >= 3) {
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); lassoDeleteSelection(); }
       if (e.key === 'd') { e.preventDefault(); lassoDeleteSelection(); }

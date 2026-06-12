@@ -1,21 +1,21 @@
 /**
- * Layer panel renderer — rebuilds the right-side layer list from
- * `state.layers` every time it's called. The full row tree per layer:
+ * 图层面板渲染器 — 每次调用时从 `state.layers` 重建右侧的图层列表。
+ * 每个图层的完整行树：
  *
- *   parent row
- *     [drag handle] [eye] [name] [opacity slider] [FX] [dup] [mask] [merge-down] [×]
- *   adjustment sub-rows (FX entries)
- *     [eye] [name+icon] [opacity slider] [merge] [×]
- *   mask sub-rows
- *     [eye] [name] [merge-up?] [×]
+ *   父行
+ *     [拖拽手柄] [眼睛] [名称] [不透明度滑块] [FX] [复制] [遮罩] [向下合并] [×]
+ *   调节子行（FX 条目）
+ *     [眼睛] [名称+图标] [不透明度滑块] [合并] [×]
+ *   遮罩子行
+ *     [眼睛] [名称] [向上合并?] [×]
  *
- * Reads/writes shared `state` directly (layers, activeLayerId,
- * layerOffsets, imgWidth, imgHeight, lassoPoints/lassoActive,
- * wandMask, maskCanvas/maskCtx, nextLayerId). Function deps are
- * orchestration callbacks still living in galleryEditor.js.
+ * 直接读写共享的 `state`（layers, activeLayerId, layerOffsets,
+ * imgWidth, imgHeight, lassoPoints/lassoActive, wandMask,
+ * maskCanvas/maskCtx, nextLayerId）。函数依赖是仍位于
+ * galleryEditor.js 中的编排回调。
  *
- * Returns `{ render }` so the recursive self-call works via closure
- * over `render` rather than module-state lookup.
+ * 返回 `{ render }`，以便通过闭包递归自调用 `render`
+ * 而非模块状态查找。
  *
  * @param {{
  *   composite:                       () => void,
@@ -45,6 +45,8 @@ import {
 import { applyAdjustment } from './fx/pixel-pass.js';
 import { mergeLayerDownAtIndex } from './wire-merge-buttons.js';
 
+import { t } from './i18n.js';
+
 const EYE_OPEN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>';
 const EYE_OPEN_SM = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -64,13 +66,11 @@ export function createLayerPanelRenderer(deps) {
   }
 
   function render() {
-    // FX panel mirrors the active layer's adjustments — re-sync on
-    // every layer event (activation, add, delete, etc).
+    // FX 面板镜像活动图层的调节 — 在每次图层事件（激活、添加、删除等）时重新同步。
     try { syncFxPanelToActiveLayerIfPresent(); } catch {}
     const list = document.getElementById('ge-layers-list');
     if (!list) return;
-    // Mobile bottom-sheet peek height — header + N rows, capped so a
-    // 20-layer document doesn't get a peek that eats the canvas.
+    // 移动端底部面板露出高度 — 标题 + N 行，上限避免 20 层文档的露出高度占用画布空间。
     const panel = document.querySelector('.ge-right-panel');
     if (panel) {
       requestAnimationFrame(() => {
@@ -86,19 +86,18 @@ export function createLayerPanelRenderer(deps) {
     }
     list.innerHTML = '';
 
-    // Render in reverse order (top layer first).
+    // 按逆向顺序渲染（顶层优先）。
     for (let i = state.layers.length - 1; i >= 0; i--) {
       const layer = state.layers[i];
       const item = document.createElement('div');
-      // Parent row is highlighted ONLY when it's actually the paint
-      // target — activated AND no mask sub-layer is currently active.
+      // 父行仅在实际是绘制目标时才高亮 — 已激活且当前没有遮罩子图层处于活动状态。
       const parentIsPaintTarget = layer.id === state.activeLayerId &&
         !(layer.masks && layer.activeMaskId && layer.masks.some(m => m.id === layer.activeMaskId));
       item.className = 'ge-layer-item' +
         (parentIsPaintTarget ? ' active' : '') +
         (layer.id === state.activeLayerId && !parentIsPaintTarget ? ' active-parent' : '');
       item.dataset.layerId = layer.id;
-      // Hover thumbnail.
+      // 悬停缩略图。
       item.addEventListener('mouseenter', () => showLayerThumb(item, layer));
       item.addEventListener('mouseleave', () => hideLayerThumb());
       item.addEventListener('click', (e) => {
@@ -107,7 +106,7 @@ export function createLayerPanelRenderer(deps) {
           e.stopPropagation();
           return;
         }
-        // Shift+click → load layer transparency as wand selection.
+        // Shift+点击 → 将图层透明度加载为魔棒选区。
         if (e.shiftKey) {
           e.preventDefault();
           loadLayerAlphaAsSelection(layer);
@@ -115,17 +114,16 @@ export function createLayerPanelRenderer(deps) {
         }
         if (state.activeLayerId === layer.id) return;
         state.activeLayerId = layer.id;
-        // Toggle the active class inline (avoid full re-render so the
-        // dblclick listener on the name element stays alive between
-        // clicks — a re-render destroys the element after the first
-        // click and the second lands on a different node).
+        // 内联切换 active 类（避免完全重新渲染，使名称元素上的双击监听器
+        // 在点击之间保持有效 — 重新渲染会在第一次点击后销毁元素，
+        // 第二次点击落在不同节点上）。
         document.querySelectorAll('.ge-layers-list .ge-layer-item').forEach(el => {
           el.classList.toggle('active', el.dataset.layerId === state.activeLayerId);
         });
       });
 
-      // Drag handle — grip dots; dragSortModule.enable() below scopes
-      // drag-init to this handle so row body clicks still activate.
+      // 拖拽手柄 — 抓取点；下面的 dragSortModule.enable() 将拖拽初始化
+      // 限制在此手柄上，使行主体点击仍可激活。
       const handle = document.createElement('span');
       handle.className = 'ge-layer-drag';
       handle.title = 'Drag to reorder';
@@ -170,10 +168,9 @@ export function createLayerPanelRenderer(deps) {
         layer.opacity = parseInt(e.target.value) / 100;
         composite();
       });
-      // Browser :active drops the moment the cursor leaves the slider
-      // hit-area in some browsers; a JS-managed `dragging` class
-      // survives the OS pointer-capture so the slider stays expanded
-      // for the whole drag.
+      // 浏览器 :active 在鼠标离开滑块命中区域时立即丢失（某些浏览器）；
+      // JS 管理的 `dragging` 类在 OS 指针捕获中持续存在，
+      // 使滑块在整个拖拽过程中保持展开。
       opSlider.addEventListener('pointerdown', () => {
         opSlider.classList.add('dragging');
         const onUp = () => {
@@ -186,7 +183,7 @@ export function createLayerPanelRenderer(deps) {
       const controls = document.createElement('div');
       controls.className = 'ge-layer-controls';
 
-      // FX (adjustments) — opens a floating popup bound to this layer.
+      // FX（调节）— 打开绑定到此图层的浮动弹出框。
       const fxBtn = document.createElement('button');
       fxBtn.className = 'ge-layer-btn ge-layer-fx-btn' + (layerHasAdjustments(layer) ? ' active' : '');
       fxBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor"/></svg>';
@@ -222,16 +219,15 @@ export function createLayerPanelRenderer(deps) {
       });
       controls.appendChild(fxBtn);
 
-      // Duplicate — clones pixels + offset + opacity + masks + adjLayers
-      // + visibility; inserts above the original; new copy becomes
-      // active.
+      // 复制 — 克隆像素 + 偏移 + 不透明度 + 遮罩 + 调节图层 + 可见性；
+      // 插入到原始图层上方；新副本成为活动图层。
       const dupBtn = document.createElement('button');
       dupBtn.className = 'ge-layer-btn';
       dupBtn.title = 'Duplicate layer';
       dupBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
       dupBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        saveState(`Duplicate "${layer.name}"`);
+        saveState(t('editor.duplicate_layer', { name: layer.name }));
         const copy = createLayer(layer.name + ' copy', layer.canvas.width, layer.canvas.height);
         copy.ctx.drawImage(layer.canvas, 0, 0);
         copy.opacity = layer.opacity;
@@ -272,9 +268,8 @@ export function createLayerPanelRenderer(deps) {
       });
       controls.appendChild(dupBtn);
 
-      // Add-mask — if a lasso/wand selection is active, bake it into a
-      // mask sub-layer on this layer; otherwise create an empty mask
-      // for the user to paint with the Brush tool.
+      // 添加遮罩 — 如果有套索/魔棒选区，将其烘焙为此图层的遮罩子图层；
+      // 否则创建空遮罩，供用户使用画笔工具绘制。
       const hasLassoSelInitial = state.lassoPoints.length >= 3 && !state.lassoActive;
       const hasWandSelInitial = !!state.wandMask;
       const maskBtn = document.createElement('button');
@@ -286,25 +281,24 @@ export function createLayerPanelRenderer(deps) {
         : 'Add empty mask (paint with Brush)';
       maskBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Activate this layer first so the new mask attaches here.
+        // 先激活此图层，使新遮罩附加到这里。
         state.activeLayerId = layer.id;
-        // Re-check selection state AT CLICK TIME — captured vars may
-        // be stale if a selection was drawn after the panel paint.
+        // 在点击时重新检查选区状态 — 捕获的变量可能过期，
+        // 如果选区在面板渲染后绘制。
         const hasLassoSel = state.lassoPoints.length >= 3 && !state.lassoActive;
         const hasWandSel = !!state.wandMask;
         if (hasLassoSel) {
-          saveState(`Mask from lasso on "${layer.name}"`);
-          // Force a fresh mask sub-layer for this conversion so each
-          // selection becomes its own mask instead of merging into the
-          // previously active one.
+          saveState(t('editor.mask_from_lasso', { name: layer.name }));
+          // 为此转换强制创建新的遮罩子图层，使每个选区成为自己的遮罩，
+          // 而非合并到先前的活动遮罩中。
           layer.activeMaskId = null;
           lassoToMask();
         } else if (hasWandSel) {
-          saveState(`Mask from wand on "${layer.name}"`);
+          saveState(t('editor.mask_from_wand', { name: layer.name }));
           layer.activeMaskId = null;
           wandToMask();
         } else {
-          saveState(`Add mask to "${layer.name}"`);
+          saveState(t('editor.add_mask', { name: layer.name }));
           const c = document.createElement('canvas');
           c.width = state.imgWidth;
           c.height = state.imgHeight;
@@ -326,8 +320,8 @@ export function createLayerPanelRenderer(deps) {
       });
       controls.appendChild(maskBtn);
 
-      // Per-row Merge Down — bakes this layer into the one beneath.
-      // Hidden on the bottom layer in the visual stack (idx 0 forward).
+      // 每行向下合并 — 将此图层烘焙到下方的图层中。
+      // 在视觉堆栈的底层隐藏（idx 0 及之后）。
       if (i > 0) {
         const mergeDownBtn = document.createElement('button');
         mergeDownBtn.className = 'ge-layer-btn';
@@ -335,7 +329,7 @@ export function createLayerPanelRenderer(deps) {
         mergeDownBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg>';
         mergeDownBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          saveState(`Merge "${layer.name}" down`);
+          saveState(t('editor.merge_down', { name: layer.name }));
           mergeLayerDownAtIndex(i);
           composite();
           render();
@@ -344,9 +338,8 @@ export function createLayerPanelRenderer(deps) {
         controls.appendChild(mergeDownBtn);
       }
 
-      // Delete — shown for every layer except when this is the last
-      // remaining one. Base photo is deletable too; Ctrl+Z brings it
-      // back from history. Extra confirm for the base layer.
+      // 删除 — 除最后一个图层外每个图层都显示。底图照片也可删除；
+      // Ctrl+Z 可从历史记录恢复。底图层需要额外确认。
       if (state.layers.length > 1) {
         const delBtn = document.createElement('button');
         delBtn.className = 'ge-layer-btn danger';
@@ -361,8 +354,8 @@ export function createLayerPanelRenderer(deps) {
             );
             if (!ok) return;
           }
-          // Snapshot BEFORE removing so Ctrl+Z can bring it back.
-          saveState(`Delete layer "${layer.name}"`);
+          // 在删除之前拍摄快照，以便 Ctrl+Z 可恢复。
+          saveState(t('editor.delete_layer', { name: layer.name }));
           state.layers.splice(i, 1);
           state.layerOffsets.delete(layer.id);
           if (state.activeLayerId === layer.id) {
@@ -382,9 +375,8 @@ export function createLayerPanelRenderer(deps) {
       item.addEventListener('click', () => {
         if (shouldIgnoreLayerTap()) return;
         state.activeLayerId = layer.id;
-        // Clicking the PARENT row makes layer pixels the paint target
-        // (mask is no longer the target). Mask sub-rows stay in the
-        // panel; clicking one re-targets it.
+        // 点击父行使图层像素成为绘制目标（遮罩不再是目标）。
+        // 遮罩子行保留在面板中；点击一个将其重新设为目标。
         layer.activeMaskId = null;
         state.maskCanvas = null;
         state.maskCtx = null;
@@ -394,7 +386,7 @@ export function createLayerPanelRenderer(deps) {
 
       list.appendChild(item);
 
-      // Adjustment sub-layer rows, indented under the parent.
+      // 调节子图层行，缩进在父行下方。
       if (layer.adjLayers && layer.adjLayers.length) {
         for (const adj of layer.adjLayers) {
           const sub = document.createElement('div');
@@ -433,8 +425,8 @@ export function createLayerPanelRenderer(deps) {
           mergeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
           mergeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Bake just this adjustment into layer.canvas, then drop it.
-            saveState(`Merge ${adjLayerLabel(adj.type)}`);
+            // 仅将此调节烘焙到 layer.canvas 中，然后移除它。
+            saveState(t('editor.merge_adj', { type: adjLayerLabel(adj.type) }));
             const baked = applyAdjustment(layer.canvas, adj);
             layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
             layer.ctx.drawImage(baked, 0, 0);
@@ -450,7 +442,7 @@ export function createLayerPanelRenderer(deps) {
           delBtn.title = 'Delete adjustment';
           delBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            saveState(`Delete ${adjLayerLabel(adj.type)}`);
+            saveState(t('editor.delete_adj', { type: adjLayerLabel(adj.type) }));
             layer.adjLayers = layer.adjLayers.filter(x => x.id !== adj.id);
             layer._adjFinalKey = null;
             composite();
@@ -462,8 +454,8 @@ export function createLayerPanelRenderer(deps) {
           sub.appendChild(sName);
           sub.appendChild(sOp);
           sub.appendChild(sControls);
-          // Single-click on the sub-row (outside the inline controls)
-          // reopens the adj popup with this sub-layer's params staged.
+          // 单击子行（内联控件之外）重新打开调节弹出框，
+          // 暂存此子图层的参数。
           sub.addEventListener('click', (e) => {
             if (shouldIgnoreLayerTap()) {
               e.preventDefault();
@@ -479,7 +471,7 @@ export function createLayerPanelRenderer(deps) {
         }
       }
 
-      // Mask sub-layer rows.
+      // 遮罩子图层行。
       if (layer.masks && layer.masks.length) {
         for (let mi = 0; mi < layer.masks.length; mi++) {
           const mk = layer.masks[mi];
@@ -505,7 +497,7 @@ export function createLayerPanelRenderer(deps) {
           sName.innerHTML = `<span class="ge-adj-sub-icon">${maskIcon}</span><span>${mkName}${mkEmpty}</span>`;
           const sControls = document.createElement('div');
           sControls.className = 'ge-layer-controls';
-          // Merge-up — combine this mask into the one above (lower mi).
+          // 向上合并 — 将此遮罩合并到上方的遮罩中（mi 较小的）。
           if (mi > 0) {
             const mergeBtn = document.createElement('button');
             mergeBtn.className = 'ge-layer-btn';
@@ -515,9 +507,9 @@ export function createLayerPanelRenderer(deps) {
               e.stopPropagation();
               const above = layer.masks[mi - 1];
               if (!above) return;
-              saveState(`Merge mask "${mk.name}" into "${above.name}"`);
-              // Union of alpha — `source-over` already does max for
-              // fully opaque white masks; this also handles partial alpha.
+              saveState(t('editor.merge_mask', { mk: mk.name, above: above.name }));
+              // Alpha 并集 — `source-over` 对完全不透明的白色遮罩已经实现了最大化；
+              // 这也处理了部分 alpha。
               above.ctx.save();
               above.ctx.globalCompositeOperation = 'source-over';
               above.ctx.drawImage(mk.canvas, 0, 0);
@@ -538,12 +530,12 @@ export function createLayerPanelRenderer(deps) {
           delBtn.title = 'Delete mask';
           delBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            saveState(`Delete mask "${mk.name}"`);
+            saveState(t('editor.delete_mask', { name: mk.name }));
             layer.masks = layer.masks.filter(x => x.id !== mk.id);
             if (layer.activeMaskId === mk.id) {
               layer.activeMaskId = layer.masks[layer.masks.length - 1]?.id || null;
             }
-            // Sync global mask plumbing.
+            // 同步全局遮罩管道。
             const a = getActiveMaskLayer();
             if (a) { state.maskCanvas = a.canvas; state.maskCtx = a.ctx; }
             else   { state.maskCanvas = null;     state.maskCtx = null; }
@@ -557,7 +549,7 @@ export function createLayerPanelRenderer(deps) {
           sub.addEventListener('click', (e) => {
             if (e.target.closest('.ge-layer-vis, .ge-layer-btn')) return;
             e.stopPropagation();
-            // Activate this mask: paint/inpaint/generate target.
+            // 激活此遮罩：绘制/修复/生成目标。
             layer.activeMaskId = mk.id;
             state.activeLayerId = layer.id;
             state.maskCanvas = mk.canvas;
@@ -570,17 +562,15 @@ export function createLayerPanelRenderer(deps) {
       }
     }
 
-    // Wire the shared dragSort module — limit drag-init to the grip
-    // handle so row body clicks still activate. Called every render
-    // because `enable()` cleans up the previous instance keyed on
-    // instanceKey.
+    // 连接共享的 dragSort 模块 — 将拖拽初始化限制在抓取手柄上，
+    // 使行主体点击仍可激活。每次渲染都调用，因为 `enable()` 清理了
+    // 以 instanceKey 为键的上一个实例。
     if (dragSortModule) {
       dragSortModule.enable('ge-layers-list', '.ge-layer-item', {
         instanceKey: 'ge-layers',
         handleSelector: '.ge-layer-drag',
         onReorder: (orderedItems) => {
-          // DOM is top→bottom = reverse of array order, so the new
-          // array is the reverse of the DOM order.
+          // DOM 从上到下 = 数组顺序的反向，因此新数组是 DOM 顺序的逆向。
           const byId = new Map(state.layers.map(l => [l.id, l]));
           const newLayers = orderedItems
             .map(el => byId.get(el.dataset.layerId))

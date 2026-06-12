@@ -1,12 +1,11 @@
 /**
- * Clone tool — Alt-click (desktop) or double-tap (mobile) sets the
- * sample source; a regular click+drag stamps from that source onto the
- * active layer. The source point moves WITH the brush so the offset
- * stays constant across the stroke.
+ * 克隆工具 — Alt-点击（桌面端）或双击（移动端）设置采样源；
+ * 普通点击+拖拽从该源采样到当前图层。源点随画笔移动，
+ * 使偏移量在笔划过程中保持不变。
  *
- * begin() handles the source-pick and stroke-start branches; the
- * actual per-sample stamping continues through the shared stroke
- * pipeline (`_strokeTo`) which knows about clone-mode internally.
+ * begin() 处理源选取和笔划开始分支；
+ * 实际的逐采样点绘制通过共享的笔划管线（`_strokeTo`）继续，
+ * 该管线内部了解克隆模式。
  *
  * @param {{
  *   activeLayer: () => object | null,
@@ -23,9 +22,9 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
     begin(e) {
       const layer = activeLayer();
       const coords = canvasCoords(e, state.mainCanvas);
-      // Mobile equivalent of Alt-click: double-tap in screen pixels.
-      // Wider tolerances (500 ms, 40 px) than desktop because finger
-      // taps drift more than mouse clicks.
+      // 移动端等效于 Alt-点击：屏幕像素中的双击。
+      // 比桌面端更宽松的容差（500 毫秒，40 像素），
+      // 因为手指点击比鼠标点击漂移更多。
       const isTouchEvt = e.type && e.type.startsWith('touch');
       let isDoubleTap = false;
       if (isTouchEvt) {
@@ -38,7 +37,7 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
         const dy = cy - state.cloneLastTapY;
         if (dt < 500 && Math.hypot(dx, dy) < 40) {
           isDoubleTap = true;
-          state.cloneLastTapTime = 0; // consume the pair
+          state.cloneLastTapTime = 0; // 消费该双击对
         } else {
           state.cloneLastTapTime = now;
           state.cloneLastTapX = cx;
@@ -49,7 +48,7 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
         state.cloneSourceX = coords.x;
         state.cloneSourceY = coords.y;
         state.cloneSourceLayerId = (layer && layer.id) || state.activeLayerId;
-        state.cloneSourceSnapshot = null; // captured at first stroke
+        state.cloneSourceSnapshot = null; // 在第一次笔划时捕获
         showToast('Clone source set');
         return;
       }
@@ -61,9 +60,8 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
       }
       if (!layer || layer.locked) return;
       saveState('Clone stroke');
-      // Snapshot the source layer's pixels at stroke-start so the
-      // brush samples clean source pixels even after it has painted
-      // over them. Otherwise we'd cascade-clone the same ring.
+      // 在笔划开始时快照源图层的像素，这样画笔在已绘制过的
+      // 区域仍能采样到干净的源像素。否则会造成级联克隆同一区域。
       const srcLayer = state.layers.find(l => l.id === state.cloneSourceLayerId) || layer;
       const snap = document.createElement('canvas');
       snap.width = srcLayer.canvas.width;

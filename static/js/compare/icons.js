@@ -1,6 +1,6 @@
-// compare/icons.js — SVG icons, prompt templates, and constants
+// compare/icons.js — SVG 图标、提示模板和常量
 
-// ── SVG Icons ──
+// ── SVG 图标 ──
 
 export const EYE_OPEN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 export const EYE_CLOSED = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>';
@@ -14,31 +14,30 @@ export const ICON_DICE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="
 export const ICON_PLAY = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5,3 19,12 5,21"/></svg>';
 export const ICON_CODE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
 export const ICON_CLOSE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-// Parallel = lines side by side, Sequential = numbered list
+// 并行 = 并排线条，顺序 = 编号列表
 export const ICON_PARALLEL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
 export const ICON_SEQUENTIAL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>';
 export const SEND_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 
-// ── Animation ──
+// ── 动画 ──
 
 export const WAVE_FRAMES = ['▁▂▃', '▂▃▄', '▃▄▅', '▄▅▆', '▅▆▇', '▆▅▄', '▅▄▃', '▄▃▂'];
 
-// ── Storage keys & limits ──
+// ── 存储键和限制 ──
 
 export const VOTES_STORAGE_KEY = 'odysseus-compare-votes';
 export const VOTES_MAX = 200;
 export const POOL_STORAGE_KEY = 'odysseus-shuffle-pool-excluded';
 
-// ── Evaluation prompt templates ──
+// ── 评测提示模板 ──
 //
-// Five high-signal prompts per category — each picked to differentiate models
-// on a distinct capability. The Visual / SVG-render prompt in `chat` ends with
-// the subject as the last words, so swapping "a pelican riding a bicycle" for
-// anything else is a one-line edit.
+// 每个类别五个高信号提示词 — 每个都针对一项不同的能力来区分模型。
+// `chat` 中的 Visual / SVG 渲染提示以主题词结尾，因此将 "骑自行车的鹈鹕"
+// 替换为任何其他内容只需修改一行。
 
 export const EVAL_PROMPTS = {
   chat: [
-    // ── ★ Featured — prompts that have actually broken frontier models ──
+    // ── ★ 精选 — 真正难倒前沿模型的提示词 ──
     { sub: '★ Featured', label: 'Sum digits 2^100', answer: '115', prompt: 'Compute the sum of the decimal digits of 2^100. Do NOT use code execution — work it out by reasoning about the number. Show every step, then end with the final number on its own line.' },
     { sub: '★ Featured', label: 'Three jugs',       answer: '4 pours: 7→5, 5→3, 3→7, 5→3', prompt: 'You have three jugs of capacities 7, 5, and 3 liters. The 7-liter jug starts full; the others empty. Using only pouring (no markings), produce the shortest sequence of pours that leaves exactly 2 liters in the 3-liter jug. Output each step as `pour A → B` on its own line. Then state the total number of pours on a final line.' },
 

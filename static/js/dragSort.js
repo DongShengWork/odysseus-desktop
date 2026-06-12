@@ -1,7 +1,7 @@
 // static/js/dragSort.js
 
 /**
- * Vertical drag-and-drop sorting with magnetic snap behavior
+ * 垂直拖拽排序，带磁性吸附行为
  */
 
 import Storage from './storage.js';
@@ -9,7 +9,7 @@ import Storage from './storage.js';
 const instances = new Map();
 
 /**
- * Make a container's children sortable via vertical drag
+ * 通过垂直拖拽使容器的子元素可排序
  */
 export function enable(containerId, itemSelector, options = {}) {
   const container = document.getElementById(containerId);
@@ -18,10 +18,10 @@ export function enable(containerId, itemSelector, options = {}) {
     return;
   }
 
-  // Allow multiple instances per container via instanceKey
+  // 通过 instanceKey 允许每个容器有多个实例
   const key = options.instanceKey || containerId;
 
-  // Clean up previous instance
+  // 清理之前的实例
   if (instances.has(key)) {
     instances.get(key).cleanup();
     instances.delete(key);
@@ -55,7 +55,7 @@ export function enable(containerId, itemSelector, options = {}) {
     return ph;
   }
 
-  // --- Shared drag logic ---
+  // --- 共享拖拽逻辑 ---
 
   function startDrag(clientY, item) {
     const rect = item.getBoundingClientRect();
@@ -153,7 +153,7 @@ export function enable(containerId, itemSelector, options = {}) {
     }, 80);
   }
 
-  // --- Mouse events ---
+  // --- 鼠标事件 ---
 
   function onMouseDown(e) {
     if (e.button !== 0) return;
@@ -177,17 +177,17 @@ export function enable(containerId, itemSelector, options = {}) {
     endDrag();
   }
 
-  // --- Touch events (long-press to start) ---
+  // --- 触摸事件（长按开始拖拽） ---
 
   let _touchTimer = null;
   let _touchStartY = 0;
   let _touchItem = null;
 
   function onTouchStart(e) {
-    // Don't start on buttons/inputs.
+    // 不要在按钮/输入框上开始拖拽。
     if (e.target.closest('button, input, select, a')) return;
-    // Respect handleSelector on touch too — long-press anywhere was
-    // unintentionally letting users start a reorder from the whole row.
+    // 触摸时也遵循 handleSelector —— 之前长按任意位置会导致
+    // 用户无意中从整行开始重新排序。
     if (config.handleSelector && !e.target.closest(config.handleSelector)) return;
     const item = e.target.closest(itemSelector);
     if (!item || !container.contains(item)) return;
@@ -197,11 +197,11 @@ export function enable(containerId, itemSelector, options = {}) {
     const startY = e.touches[0].clientY;
     _touchStartY = startY;
 
-    // Long-press: 400ms hold to initiate drag
+    // 长按：按住 400ms 才开始拖拽
     _touchTimer = setTimeout(() => {
       _touchTimer = null;
       if (!_touchItem) return;
-      // Haptic feedback if available
+      // 如果可用则触发触觉反馈
       if (navigator.vibrate) navigator.vibrate(30);
       startDrag(startY, _touchItem);
       _touchItem.classList.add('touch-dragging');
@@ -209,7 +209,7 @@ export function enable(containerId, itemSelector, options = {}) {
   }
 
   function onTouchMove(e) {
-    // If long-press hasn't fired yet, cancel if finger moved too much
+    // 如果长按尚未触发，手指移动过远则取消
     if (_touchTimer) {
       const dy = Math.abs(e.touches[0].clientY - _touchStartY);
       if (dy > 10) {
@@ -220,7 +220,7 @@ export function enable(containerId, itemSelector, options = {}) {
       return;
     }
 
-    // If dragging, prevent scroll and move
+    // 如果正在拖拽，阻止滚动并移动元素
     if (draggedEl) {
       e.preventDefault();
       moveDrag(e.touches[0].clientY);

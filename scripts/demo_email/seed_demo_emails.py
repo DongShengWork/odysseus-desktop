@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Seed a throwaway, local-only mailbox with fake demo emails.
+"""向一个一次性、仅本地的邮箱填充虚假演示邮件。
 
-This populates the `demo@odysseus.local` Dovecot account (which has NO mbsync
-channel, so nothing here ever touches a real server) with a curated, obviously
-fake but realistic set of messages — varied senders, read/unread/flagged mix, a
-reply thread, an attachment, a newsletter, a calendar invite, an urgent one, and
-a spammy one — so the email assistant's summarize / reply / tag / spam / calendar
-features can be shown off without exposing any real mail.
+此脚本向 `demo@odysseus.local` Dovecot 账户（没有 mbsync
+通道，因此此处的任何内容绝不会触及真实服务器）填充一组精心策划、明显
+虚假但逼真的消息 — 多样的发件人、已读/未读/已标记混合、一个回复
+线程、一个附件、一份新闻通讯、一个日历邀请、一个紧急邮件，以及
+一个垃圾邮件 — 以便邮件助手的摘要 / 回复 / 标记 / 垃圾邮件 / 日历
+功能可以在不暴露任何真实邮件的情况下展示。
 
-Idempotent: `--reset` wipes every mailbox in the demo account first, so re-running
-gives a clean, identical inbox every time.
+幂等：`--reset` 首先清空演示账户中的所有邮箱，因此重新运行
+每次都能获得一个干净、完全相同的收件箱。
 
 Usage:
-    python seed_demo_emails.py            # append demo mail (creates folders)
-    python seed_demo_emails.py --reset    # wipe the demo account, then re-seed
-    python seed_demo_emails.py --reset --wipe-only   # just empty it
+    python seed_demo_emails.py            # 追加演示邮件（创建文件夹）
+    python seed_demo_emails.py --reset    # 清空演示账户，然后重新播种
+    python seed_demo_emails.py --reset --wipe-only   # 仅清空它
 
-Connection mirrors the app's local-Dovecot account (localhost:31143, STARTTLS).
-Override via env: DEMO_IMAP_HOST/PORT/USER/PASSWORD.
+连接镜像应用的本地 Dovecot 账户（localhost:31143, STARTTLS）。
+通过环境变量覆盖：DEMO_IMAP_HOST/PORT/USER/PASSWORD。
 """
 from __future__ import annotations
 
@@ -36,19 +36,19 @@ PORT = int(os.getenv("DEMO_IMAP_PORT", "31143"))
 USER = os.getenv("DEMO_IMAP_USER", "demo@odysseus.local")
 PASSWORD = os.getenv("DEMO_IMAP_PASSWORD", "demodemo")
 
-# Marker header on every message we create — lets a human (or a future cleanup)
-# tell demo mail apart at a glance.
+# 标记头 — 在我们创建的每条消息上添加，让人（或未来的清理操作）
+# 一眼就能区分出演示邮件。
 MARKER = ("X-Odysseus-Demo", "1")
 
-DEMO_OWNER_ADDR = USER  # the demo "you"
+DEMO_OWNER_ADDR = USER  # 演示中的 "你"
 
-# The "could've just been a search" email gets a FIXED Message-ID so we can
-# pre-seed a matching cached AI reply (keyed by Message-ID) in the app's email
-# cache DB — the read path attaches it as cached_ai_reply. This makes the
-# "my agent already looked it up and drafted the answer" beat reliable on stage.
+# "应该只是一个搜索" 的邮件使用固定的 Message-ID，这样我们可以
+# 在应用的邮件缓存数据库中预置匹配的缓存 AI 回复（按 Message-ID 键控）—
+# 读取路径将其作为 cached_ai_reply 附加。这使
+# "我的代理已为我查找并起草了答案" 的节拍在台上可靠展现。
 LOOKUP_MSGID = "<demo-lookup-deepseek@odysseus.local>"
-# The app's email cache lives at <repo>/data/scheduled_emails.db (email_summaries,
-# email_ai_replies, ... keyed by Message-ID).
+# 应用的邮件缓存位于 <repo>/data/scheduled_emails.db（email_summaries,
+# email_ai_replies, ... 按 Message-ID 键控）。
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CACHE_DB = _REPO_ROOT / "data" / "scheduled_emails.db"
 
@@ -62,7 +62,7 @@ def _connect() -> imaplib.IMAP4:
 
 
 def _tiny_pdf(title: str) -> bytes:
-    """A minimal but valid one-page PDF, so the attachment is real and openable."""
+    """一个最小但有效的单页 PDF，使附件真实且可打开。"""
     body = (
         f"BT /F1 18 Tf 72 700 Td ({title}) Tj ET\n"
         "BT /F1 12 Tf 72 670 Td (This is a fake demo invoice. Not a real charge.) Tj ET"
@@ -139,7 +139,7 @@ def build_dataset() -> list[dict]:
         msg, when = msg_when
         items.append({"mailbox": mailbox, "flags": flags, "msg": msg, "when": when})
 
-    # 1. Recruiter — unread. (Subject has an emoji to also show the mono-emoji render.)
+    # 1. 招聘邮件 — 未读。（主题包含 emoji 以展示等宽 emoji 渲染。）
     add("INBOX", "", _msg(
         frm="Brogan O'Hara <talent@northstar-labs.example>",
         subject="We want you on the Northstar AI team 🚀",
@@ -154,8 +154,8 @@ def build_dataset() -> list[dict]:
               "and the team is fully remote.</p><p>Cheers,<br>Brogan<br><i>Head of Talent, "
               "Northstar Labs</i></p>")))
 
-    # 1b. The "could've just been a search" email — unread, newest (top of inbox).
-    #     Fixed Message-ID so we can pre-seed the agent's researched reply.
+    # 1b. "应该只是一个搜索" 的邮件 — 未读，最新（收件箱顶部）。
+    #     固定 Message-ID 以便我们可以预置代理的研究回复。
     add("INBOX", "", _msg(
         frm="Greg <greg@odysseus-demo.example>",
         subject="quick q for the slide — DeepSeek-V3 param count?",
@@ -169,7 +169,7 @@ def build_dataset() -> list[dict]:
               "vs active?</b> need it for the comparison slide. could you look it up "
               "real quick? 🙏</p><p>ty!<br>Greg</p>")))
 
-    # 2. Newsletter — unread.
+    # 2. 新闻通讯 — 未读。
     add("INBOX", "", _msg(
         frm="Local Models Weekly <news@localmodels.example>",
         subject="This week in local AI: tiny models, big benchmarks",
@@ -180,7 +180,7 @@ def build_dataset() -> list[dict]:
               "• Cave of the week: someone ran 8x4090D in a closet\n\n"
               "Unsubscribe any time.")))
 
-    # 3. Reply thread — original is in Sent, the reply lands unread in INBOX.
+    # 3. 回复线程 — 原始邮件在 Sent 中，回复邮件以未读状态到达 INBOX。
     orig_id = make_msgid(domain="odysseus.local")
     add("Sent", "(\\Seen)", _msg(
         frm=f"You <{DEMO_OWNER_ADDR}>",
@@ -198,7 +198,7 @@ def build_dataset() -> list[dict]:
               "AI overlay + OBS + the game. Bring the capture card too.\n\n"
               "Thanks,\nAlex")))
 
-    # 4. Invoice with a real PDF attachment.
+    # 4. 带真实 PDF 附件的发票。
     add("INBOX", "(\\Seen)", _msg(
         frm="CloudCompute Billing <billing@cloudcompute.example>",
         subject="Your invoice #DFX-2042 is ready",
@@ -208,7 +208,7 @@ def build_dataset() -> list[dict]:
               "the 1st.\n\n— CloudCompute"),
         pdf=_tiny_pdf("Invoice #DFX-2042 - $42.00"), pdf_name="invoice_DFX-2042.pdf"))
 
-    # 5. Calendar invite (ICS attachment + explicit time in body).
+    # 5. 日历邀请（ICS 附件 + 正文中的明确时间）。
     nextmon = datetime.now(timezone.utc) + timedelta(days=(7 - datetime.now().weekday()) % 7 or 7)
     nextmon = nextmon.replace(hour=10, minute=0, second=0, microsecond=0)
     add("INBOX", "", _msg(
@@ -221,7 +221,7 @@ def build_dataset() -> list[dict]:
               "Agenda: stall-detector rollout, emoji icons, demo prep."),
         ics=_ics("Demo Team sync", nextmon, 30)))
 
-    # 6. Urgent — flagged + unread.
+    # 6. 紧急 — 已标记 + 未读。
     add("INBOX", "(\\Flagged)", _msg(
         frm="Ops Bot <ops@odysseus-demo.example>",
         subject="[URGENT] prod is on fire 🔥 — odysseus-ui 502s",
@@ -230,7 +230,7 @@ def build_dataset() -> list[dict]:
               "Error rate 38% over the last 5 min. Last deploy was 12 min ago.\n\n"
               "Need eyes ASAP. Reply here or join the incident call.")))
 
-    # 7. Spammy — obvious, for the spam verdict.
+    # 7. 垃圾邮件 — 明显，用于垃圾邮件判定。
     add("INBOX", "", _msg(
         frm="Prize Department <winner@totally-legit-prizes.example>",
         subject="CONGRATULATIONS!!! You have WON 1,000,000 GOLD COINS!!!",
@@ -240,7 +240,7 @@ def build_dataset() -> list[dict]:
               "a small processing fee of 50 coins.\n\nACT NOW — offer expires in 3 hours!!!\n\n"
               "Totally Legit Prizes Inc.")))
 
-    # 8. A normal, already-read personal one.
+    # 8. 一封普通的、已读的个人邮件。
     add("INBOX", "(\\Seen)", _msg(
         frm="Mom <mom@family.example>",
         subject="did you eat??",
@@ -252,8 +252,8 @@ def build_dataset() -> list[dict]:
 
 
 def _seed_cache() -> None:
-    """Pre-seed the app's email cache so the lookup email arrives with a summary
-    and an AI reply that has clearly 'done the search' (answer + source)."""
+    """预置应用的邮件缓存，使查找邮件附带摘要和
+    已明显"完成搜索"的 AI 回复（答案 + 来源）。"""
     if not CACHE_DB.parent.exists():
         print(f"  (skip cache seed: {CACHE_DB.parent} missing)")
         return
@@ -295,7 +295,7 @@ def _seed_cache() -> None:
 
 
 def _clear_cache() -> None:
-    """Remove the pre-seeded cache rows for the lookup email (best-effort)."""
+    """移除查找邮件的预置缓存行（尽力而为）。"""
     if not CACHE_DB.exists():
         return
     con = sqlite3.connect(str(CACHE_DB))
@@ -319,12 +319,12 @@ def _ensure_mailbox(conn: imaplib.IMAP4, name: str) -> None:
 
 
 def _wipe(conn: imaplib.IMAP4) -> int:
-    """Delete every message in every mailbox of this (throwaway) account.
+    """删除此（一次性）账户中每个邮箱的每封邮件。
 
-    Guard: the connection params are env-overridable, so refuse to run the
-    destructive expunge unless the target is unmistakably the local demo
-    account — otherwise a misconfigured DEMO_IMAP_USER/HOST could irreversibly
-    wipe a real mailbox. Override only with DEMO_ALLOW_WIPE=1 (you must mean it).
+    防护：连接参数可通过环境变量覆盖，因此除非目标明确无误地是
+    本地演示账户，否则拒绝运行破坏性的 expunge —
+    否则错误配置的 DEMO_IMAP_USER/HOST 可能不可逆地
+    清空真实邮箱。仅通过 DEMO_ALLOW_WIPE=1 覆盖（你必须是有意的）。
     """
     safe_target = USER.endswith("@odysseus.local") or HOST in ("localhost", "127.0.0.1", "::1")
     if not safe_target and os.getenv("DEMO_ALLOW_WIPE") != "1":
@@ -337,7 +337,7 @@ def _wipe(conn: imaplib.IMAP4) -> int:
     if typ == "OK":
         for raw in boxes:
             line = raw.decode(errors="replace")
-            # last token, possibly quoted, is the mailbox name
+            # 最后一个标记（可能被引号括起）是邮箱名称
             name = line.split(' "/" ')[-1].split(' "." ')[-1].strip().strip('"')
             names.append(name)
     for name in set(names) | {"INBOX"}:

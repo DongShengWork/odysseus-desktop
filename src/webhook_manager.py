@@ -1,4 +1,4 @@
-"""Outgoing webhook manager — fires HTTP POSTs when events happen."""
+"""外向 webhook 管理器 — 当事件发生时触发 HTTP POST。"""
 
 import asyncio
 import hashlib
@@ -24,7 +24,7 @@ ALLOWED_EVENTS = frozenset({
     "webhook.test",
 })
 
-# Block requests to private/internal networks
+# 阻止对私有/内部网络的请求
 _PRIVATE_NETWORKS = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
@@ -38,12 +38,12 @@ _PRIVATE_NETWORKS = [
 
 
 def _utcnow() -> datetime:
-    """Return naive UTC for existing DB columns while avoiding datetime.utcnow()."""
+    """返回朴素 UTC 时间，用于现有 DB 列，同时避免 datetime.utcnow()。"""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _ip_is_private(addr: ipaddress._BaseAddress) -> bool:
-    # If the address is IPv4-mapped IPv6, extract and evaluate the embedded IPv4
+    # 如果地址是 IPv4 映射的 IPv6，提取并评估嵌入的 IPv4
     if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
         addr = addr.ipv4_mapped
 
@@ -61,7 +61,7 @@ def _ip_is_private(addr: ipaddress._BaseAddress) -> bool:
 
 
 def _resolve_hostname_ips(hostname: str) -> list:
-    """Resolve a hostname to all its A/AAAA records. Empty list on failure."""
+    """将主机名解析为其所有 A/AAAA 记录。失败时返回空列表。"""
     import socket
     try:
         infos = socket.getaddrinfo(hostname, None)
@@ -78,32 +78,32 @@ def _resolve_hostname_ips(hostname: str) -> list:
 
 
 def _is_private_url(url: str) -> bool:
-    """Check if a URL points to a private/internal address.
+    """检查 URL 是否指向私有/内部地址。
 
-    Resolves DNS names so attackers can't hide an internal IP behind
-    `internal.lan` or `127.0.0.1.nip.io`. Re-checked at delivery time too,
-    as a partial defense against DNS rebinding.
+    解析 DNS 名称，这样攻击者无法将内部 IP 隐藏在
+    `internal.lan` 或 `127.0.0.1.nip.io` 后面。在发送时也会重新检查，
+    作为对 DNS rebinding 的部分防御。
     """
     try:
         parsed = urlparse(url)
         hostname = (parsed.hostname or "").strip()
         if not hostname:
             return True
-        # Block common internal hostnames + suffixes the resolver may not catch.
+        # 阻止常见的内部主机名 + 解析器可能无法捕获的后缀。
         h_lower = hostname.lower()
         if h_lower in ("localhost", "0.0.0.0", "metadata.google.internal", "metadata"):
             return True
         if h_lower.endswith((".local", ".internal", ".lan", ".intranet", ".localhost")):
             return True
-        # IP literal? short-circuit.
+        # IP 字面量？直接短路判断。
         try:
             return _ip_is_private(ipaddress.ip_address(hostname))
         except ValueError:
             pass
-        # DNS hostname — resolve and check every record.
+        # DNS 主机名 — 解析并检查每条记录。
         addrs = _resolve_hostname_ips(hostname)
         if not addrs:
-            # Couldn't resolve → fail closed; let validation reject the URL.
+            # 无法解析 → 安全起见拒绝通过；让验证拒绝该 URL。
             return True
         return any(_ip_is_private(a) for a in addrs)
     except ValueError:
@@ -111,7 +111,7 @@ def _is_private_url(url: str) -> bool:
 
 
 def validate_webhook_url(url: str) -> str:
-    """Validate and normalize a webhook URL. Raises ValueError if invalid."""
+    """验证并规范化 webhook URL。无效时抛出 ValueError。"""
     url = url.strip()
     if len(url) > 2048:
         raise ValueError("URL too long (max 2048 characters)")
@@ -126,7 +126,7 @@ def validate_webhook_url(url: str) -> str:
 
 
 def validate_events(events_str: str) -> str:
-    """Validate comma-separated event names. Returns cleaned string."""
+    """验证逗号分隔的事件名称。返回清理后的字符串。"""
     events = [e.strip() for e in events_str.split(",") if e.strip()]
     if not events:
         raise ValueError("At least one event is required")
@@ -136,15 +136,15 @@ def validate_events(events_str: str) -> str:
     return ",".join(events)
 
 
-# Broad candidate matcher for the IP-redaction pass. Deliberately loose: a
-# bracketed host authority ([fe80::1%eth0]:8080 and friends) with an optional
-# :port, or a bare IPv6 run — hex groups joined by colons, an optional trailing
-# dotted-quad for IPv4-mapped forms (::ffff:192.168.0.1), and an optional %zone.
-# It does NOT encode the IPv6 grammar; ipaddress.ip_address() is the real
-# validator (see _redact_ip_candidate), so any colon-bearing string it rejects
-# (clock times, MACs, "std::vector") is left alone. Every branch is a single
-# greedy class or a repetition over a mandatory ':'/'.' delimiter, so there is no
-# nested-quantifier backtracking (ReDoS-safe).
+# IP 脱敏处理用的宽泛候选匹配器。故意设计得宽松：
+# 带可选 :port 的方括号主机授权（[fe80::1%eth0]:8080 等），
+# 或裸 IPv6 — 由冒号连接的十六进制组，可选的尾随
+# 点分十进制表示 IPv4 映射形式（::ffff:192.168.0.1），以及可选的 %zone。
+# 它不编码 IPv6 语法；ipaddress.ip_address() 是真正的
+# 验证器（参见 _redact_ip_candidate），因此任何它拒绝的带冒号的字符串
+# （时钟时间、MAC 地址、"std::vector"）将被保留。每个分支都是单个
+# 贪婪字符类或强制 ':'/'.' 分隔符上的重复，因此不存在
+# 嵌套量词回溯（ReDoS 安全）。
 _IP_CANDIDATE = re.compile(
     r'\[[^\[\]\s]*\](?::\d+)?'
     r'|(?<![\w.:%])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,}'
@@ -153,23 +153,23 @@ _IP_CANDIDATE = re.compile(
 
 
 def _redact_ip_candidate(match: re.Match) -> str:
-    """Redact a candidate token that the stdlib confirms is an IP address.
+    """脱敏一个标准库确认为 IP 地址的候选标记。
 
-    A bare token is redacted only when it parses as IPv6 — bare IPv4 is left to
-    the dedicated IPv4 pass. A bracketed token is a host authority, so a v4 or v6
-    literal inside [ ] is redacted as a whole. This keeps output consistent (one
-    [redacted], never nested or partial) for scoped/mapped/ported forms.
+    裸标记仅在解析为 IPv6 时才脱敏 — 裸 IPv4 留给
+    专用的 IPv4 处理。方括号标记是主机授权，因此 [] 中的
+    v4 或 v6 字面量整体脱敏。这使输出保持一致（一个
+    [redacted]，不会嵌套或部分脱敏），适用于带作用域/映射/端口的格式。
     """
     token = match.group(0)
     bracketed = token.startswith('[')
     candidate = token
     if bracketed:
-        # Keep only what's inside [...]; the trailing :port is dropped.
+        # 仅保留 [...] 内部的内容；尾随的 :port 被丢弃。
         candidate = candidate[1:candidate.index(']')]
-    # A zone id (fe80::1%eth0) is not part of the address ipaddress parses.
+    # zone id（fe80::1%eth0）不是 ipaddress 解析的地址的一部分。
     candidate = candidate.split('%', 1)[0]
-    # The loose bare pattern can trail one stray ':' (e.g. "::1:" in "host ::1:
-    # down"); drop it unless it's the "::" compression marker.
+    # 宽松的裸模式可能尾随一个多余的 ':'（例如 "host ::1: down"）；
+    # 除非是 "::" 压缩标记，否则丢弃它。
     if candidate.endswith(':') and not candidate.endswith('::'):
         candidate = candidate[:-1]
     try:
@@ -182,23 +182,23 @@ def _redact_ip_candidate(match: re.Match) -> str:
 
 
 def sanitize_error(error: str, max_len: int = 200) -> str:
-    """Strip potentially sensitive details from error messages."""
-    # Redact IPv6 (and bracketed-authority) addresses first, so an IPv4-mapped
-    # form like ::ffff:192.168.0.1 is scrubbed as one unit instead of having its
-    # embedded IPv4 removed first and leaving a stray "::ffff:" behind. Broad
-    # candidates are validated by ipaddress.ip_address(), so the false-positive
-    # guards (clock times, MACs, C++ "::") come from the stdlib, not a regex.
+    """从错误消息中剥离潜在敏感信息。"""
+    # 首先脱敏 IPv6（和方括号授权）地址，这样像 ::ffff:192.168.0.1
+    # 的 IPv4 映射形式会作为一个单元被擦除，而不是先移除
+    # 其嵌入的 IPv4 并留下一个冗余的 "::ffff:"。宽泛的
+    # 候选由 ipaddress.ip_address() 验证，因此误报
+    # 防护（时钟时间、MAC 地址、C++ "::"）来自标准库，而非正则表达式。
     cleaned = _IP_CANDIDATE.sub(_redact_ip_candidate, error)
-    # Remove remaining bare IPv4 addresses and ports.
+    # 移除剩余的裸 IPv4 地址和端口。
     cleaned = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?', '[redacted]', cleaned)
-    # Remove hostnames in URLs.
+    # 移除 URL 中的主机名。
     cleaned = re.sub(r'https?://[^\s/]+', '[redacted-url]', cleaned)
     return cleaned[:max_len]
 
 
 class WebhookManager:
     def __init__(self, api_key_manager=None):
-        # Disable redirects to prevent SSRF via redirect chains
+        # 禁用重定向以防止通过重定向链进行 SSRF
         self._client = httpx.AsyncClient(timeout=10, follow_redirects=False)
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._api_key_manager = api_key_manager
@@ -207,31 +207,31 @@ class WebhookManager:
         self._loop = loop
 
     def _decrypt_secret(self, encrypted: Optional[str]) -> Optional[str]:
-        """Decrypt a webhook signing secret from DB storage."""
+        """从 DB 存储中解密 webhook 签名密钥。"""
         if not encrypted:
             return None
         if self._api_key_manager:
             try:
                 return self._api_key_manager.decrypt_api_key(encrypted)
             except Exception:
-                # If decryption fails, assume it's stored in plaintext (legacy)
+                # 如果解密失败，假设它以明文存储（旧格式）
                 return encrypted
         return encrypted
 
     def fire_and_forget(self, event: str, payload: dict):
-        """Schedule webhook fire from any context (sync or async). Never blocks."""
+        """从任何上下文（同步或异步）调度 webhook 触发。永不阻塞。"""
         if event not in ALLOWED_EVENTS:
             return
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(self.fire(event, payload))
         except RuntimeError:
-            # Called from a sync thread (e.g. sync FastAPI route in threadpool)
+            # 从同步线程调用（例如线程池中的同步 FastAPI 路由）
             if self._loop and self._loop.is_running():
                 asyncio.run_coroutine_threadsafe(self.fire(event, payload), self._loop)
 
     async def fire(self, event: str, payload: dict):
-        """Fire webhooks matching the given event."""
+        """触发匹配给定事件的 webhooks。"""
         if event not in ALLOWED_EVENTS:
             return
         db = SessionLocal()
@@ -246,13 +246,13 @@ class WebhookManager:
             asyncio.create_task(self._deliver(wh.id, wh.url, decrypted_secret, event, payload))
 
     async def deliver_test(self, webhook_id: str, url: str, encrypted_secret: Optional[str]):
-        """Public method for the test-webhook route."""
+        """用于测试 webhook 路由的公共方法。"""
         decrypted = self._decrypt_secret(encrypted_secret)
         await self._deliver(webhook_id, url, decrypted, "webhook.test", {"message": "Test ping from Odysseus"})
 
     async def _deliver(self, webhook_id: str, url: str, secret: Optional[str], event: str, payload: dict):
-        """Internal delivery. Never call directly from outside this class (use deliver_test)."""
-        # Re-validate URL at delivery time in case DB was tampered with
+        """内部发送。切勿从该类外部直接调用（请使用 deliver_test）。"""
+        # 在发送时重新验证 URL，以防 DB 被篡改
         try:
             validate_webhook_url(url)
         except ValueError as e:

@@ -1,4 +1,4 @@
-"""Webpage content fetching with caching, PDF extraction, and summarization helpers."""
+"""网页内容抓取，支持缓存、PDF 提取和摘要辅助功能。"""
 
 import copy
 import io
@@ -48,62 +48,51 @@ def _is_private_address(addr: ipaddress._BaseAddress) -> bool:
         or addr.is_reserved
         or addr.is_multicast
         or addr.is_unspecified
-        or any(addr in net for net in _PRIVATE_NETWORKS)
     )
 
 
-def _resolve_hostname_ips(hostname: str) -> list[ipaddress._BaseAddress]:
+def _is_private_url(url: str) -> bool:
+    """检查 URL 是否指向私有网络地址，防止 SSRF 攻击。"""
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    if not hostname:
+        return True
     try:
-        infos = socket.getaddrinfo(hostname, None)
-    except Exception:
-        return []
-    out = []
-    for info in infos:
-        try:
-            out.append(ipaddress.ip_address(info[4][0]))
-        except Exception:
-            continue
-    return out
-
-
-def _public_http_url(url: str) -> bool:
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return False
-        host = (parsed.hostname or "").strip()
-        if not host:
-            return False
-        lower = host.lower()
-        if lower in ("localhost", "metadata", "metadata.google.internal"):
-            return False
-        if lower.endswith((".local", ".localhost", ".internal", ".lan", ".intranet")):
-            return False
-        try:
-            return not _is_private_address(ipaddress.ip_address(host))
-        except ValueError:
-            pass
-        addrs = _resolve_hostname_ips(host)
-        return bool(addrs) and not any(_is_private_address(a) for a in addrs)
-    except Exception:
+        addr = ipaddress.ip_address(hostname)
+        return _is_private_address(addr)
+    except ValueError:
         return False
 
 
-def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 5) -> httpx.Response:
-    current = url
-    for _ in range(max_redirects + 1):
-        if not _public_http_url(current):
-            raise httpx.RequestError("Blocked private/internal URL", request=httpx.Request("GET", current))
-        response = httpx.get(current, headers=headers, timeout=timeout, follow_redirects=False)
-        if response.status_code not in (301, 302, 303, 307, 308):
+def _get_public_url(url: str, headers: dict = None, timeout: int = 5,
+                    max_redirects: int = 5) -> httpx.Response:
+    """获取公开网页内容，阻止访问私有地址。"""
+    if _is_private_url(url):
+        raise httpx.RequestError(f"URL is private: {url}", request=httpx.Request("GET", url))
+
+    if max_redirects <= 0:
+        raise httpx.RequestError("Too many redirects", request=httpx.Request("GET", url))
+
+    with httpx.Client(follow_redirects=False) as client:
+        response = client.get(url, headers=headers, timeout=timeout)
+    if response.status_code in (301, 302, 307, 308):
+        location = response.headers.get("location")
+        if not location:
             return response
+        current = urljoin(str(response.url), location)
+        if _is_private_url(current):
+            raise httpx.RequestError(f"Redirect to private URL: {current}",
+                                     request=httpx.Request("GET", current))
+        return _get_public_url(current, headers=headers, timeout=timeout,
+                               max_redirects=max_redirects - 1)
+    if response.status_code == 303:
         location = response.headers.get("location")
         if not location:
             return response
         current = urljoin(str(response.url), location)
     raise httpx.RequestError("Too many redirects", request=httpx.Request("GET", current))
 
-# PDF extraction (optional dependency)
+# PDF 提取（可选依赖）
 try:
     from pdfminer.high_level import extract_text as pdf_extract_text
 except ImportError:
@@ -111,10 +100,10 @@ except ImportError:
 
 
 # ----------------------------------------------------------------------
-# HTML extraction helpers
+# HTML 提取辅助函数
 # ----------------------------------------------------------------------
 def _extract_meta(soup: BeautifulSoup) -> dict:
-    """Pull meta description and keywords if present."""
+    """捕获 meta description 和 keywords（如果存在）。"""
     description = ""
     keywords = ""
     desc_tag = soup.find("meta", attrs={"name": re.compile("description", re.I)})
@@ -127,9 +116,9 @@ def _extract_meta(soup: BeautifulSoup) -> dict:
 
 
 def _extract_og_image(soup: BeautifulSoup) -> str:
-    """Extract the best representative image URL from meta tags.
+    """从 meta 标签中提取最佳代表性图片 URL。
 
-    Only returns absolute http(s) URLs -- skips relative paths and data URIs.
+    仅返回绝对 http(s) URL——跳过相对路径和 data URI。
     """
     candidates = []
     for prop in ("og:image", "og:image:url", "og:image:secure_url"):
@@ -149,7 +138,7 @@ def _extract_og_image(soup: BeautifulSoup) -> str:
 
 
 def _extract_lists(soup: BeautifulSoup) -> List[List[str]]:
-    """Return a list of lists, each inner list representing a <ul>/<ol>."""
+    """返回列表的列表，每个内层列表代表一个 <ul>/<ol>。"""
     all_lists = []
     for lst in soup.find_all(["ul", "ol"]):
         items = [li.get_text(separator=" ", strip=True) for li in lst.find_all("li")]
@@ -159,7 +148,7 @@ def _extract_lists(soup: BeautifulSoup) -> List[List[str]]:
 
 
 def _extract_tables(soup: BeautifulSoup) -> List[List[List[str]]]:
-    """Return a list of tables, each table is a list of rows, each row a list of cell texts."""
+    """返回表格列表，每个表格是行列表，每行是单元格文本列表。"""
     tables_data = []
     for table in soup.find_all("table"):
         rows = []
@@ -173,7 +162,7 @@ def _extract_tables(soup: BeautifulSoup) -> List[List[List[str]]]:
 
 
 def _extract_code_blocks(soup: BeautifulSoup) -> List[str]:
-    """Collect text from <pre> and <code> blocks."""
+    """收集 <pre> 和 <code> 块中的文本。"""
     blocks = []
     for tag in soup.find_all(["pre", "code"]):
         txt = tag.get_text(separator=" ", strip=True)
@@ -183,7 +172,7 @@ def _extract_code_blocks(soup: BeautifulSoup) -> List[str]:
 
 
 def _detect_js_frameworks(soup: BeautifulSoup) -> bool:
-    """Very naive detection of common JS frameworks."""
+    """对常见 JS 框架的非常朴素的检测。"""
     js_indicators = [
         "react", "angular", "vue", "svelte", "next", "nuxt",
         "ember", "backbone", "jquery", "polymer", "mithril",
@@ -202,7 +191,7 @@ def _detect_js_frameworks(soup: BeautifulSoup) -> bool:
 
 
 def _empty_result(url: str, error: str = "") -> dict:
-    """Build a standard failure result dict."""
+    """构建标准的失败结果字典。"""
     return {
         "url": url,
         "title": "",
@@ -220,14 +209,14 @@ def _empty_result(url: str, error: str = "") -> dict:
 
 
 # ----------------------------------------------------------------------
-# Main content fetcher
+# 主要内容抓取器
 # ----------------------------------------------------------------------
 def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) -> dict:
-    """Fetch and extract meaningful content from a webpage with caching."""
+    """抓取网页并提取有意义的内容，支持缓存。"""
     cache_key = generate_cache_key(url)
     cache_file = CONTENT_CACHE_DIR / f"{cache_key}.cache"
 
-    # Check cache
+    # 检查缓存
     if cache_file.exists():
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
@@ -244,7 +233,7 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
             cache_file.unlink(missing_ok=True)
             content_cache_index.pop(cache_key, None)
 
-    # Fetch
+    # 抓取
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -269,7 +258,7 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
         error_logger.error(str(e))
         return _empty_result(url, str(e))
 
-    # PDF handling
+    # PDF 处理
     content_type = response.headers.get("Content-Type", "").lower()
     if "application/pdf" in content_type or url.lower().endswith(".pdf"):
         if pdf_extract_text is None:
@@ -299,7 +288,7 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
         _cache_result(cache_file, cache_key, result, url)
         return result
 
-    # HTML handling
+    # HTML 处理
     try:
         soup = BeautifulSoup(response.text, "html.parser")
     except Exception as e:
@@ -315,8 +304,8 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
     js_rendered = _detect_js_frameworks(soup)
     js_message = "Page appears to be rendered by a JavaScript framework; content may be incomplete." if js_rendered else ""
 
-    # Main textual content (heuristic): prefer semantic / "content"-classed
-    # containers to skip nav/footer/boilerplate; tuned for article pages.
+    # 主要文本内容（启发式）：优先选择语义/内容类容器，
+    # 跳过导航/页脚/样板文本；针对文章页面优化。
     main_content = ""
     content_areas = soup.find_all(
         ["main", "article", "section", "div"],
@@ -327,9 +316,9 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
             main_content += area.get_text(separator=" ", strip=True) + " "
     main_content = re.sub(r"\s+", " ", main_content).strip()
 
-    # If the heuristic finds only a tiny wrapper, fall back to body text with
-    # obvious boilerplate stripped so UI/deep-research search results do not
-    # look empty for app/landing pages.
+    # 如果启发式方法只找到极少的包装内容，回退到 body 文本并
+    # 剥离明显的样板文本，确保 UI/深度研究搜索结果
+    # 不会对应用/落地页显示为空。
     THIN_CONTENT_CHARS = 600
     if len(main_content) < THIN_CONTENT_CHARS:
         body = soup.find("body")
@@ -363,7 +352,7 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
 
 
 def _cache_result(cache_file, cache_key: str, result: dict, url: str):
-    """Write a result to the content cache."""
+    """将结果写入内容缓存。"""
     try:
         cache_data = {"timestamp": datetime.now().isoformat(), "data": result}
         with open(cache_file, "w", encoding="utf-8") as f:
@@ -375,10 +364,10 @@ def _cache_result(cache_file, cache_key: str, result: dict, url: str):
 
 
 # ----------------------------------------------------------------------
-# Content summarization helpers
+# 内容摘要辅助函数
 # ----------------------------------------------------------------------
 def extract_key_points(text: str) -> List[str]:
-    """Pull out bullet-style key points from a block of text."""
+    """从文本块中提取项目符号式关键要点。"""
     points: List[str] = []
     bullet_pat = re.compile(r"^\s*[-*•]\s+(.*)")
     numbered_pat = re.compile(r"^\s*\d+[\.\)]\s+(.*)")
@@ -390,24 +379,24 @@ def extract_key_points(text: str) -> List[str]:
 
 
 def get_tldr(text: str, max_sentences: int = 3) -> str:
-    """Produce a very short TL;DR by taking the first few sentences."""
+    """取前几句生成一个非常简短的摘要。"""
     sentences = re.split(r"(?<=[.!?])\s+", text)
     selected = [s.strip() for s in sentences if s][:max_sentences]
     return " ".join(selected)
 
 
 def extract_quotes(text: str) -> List[str]:
-    """Return quoted excerpts that are at least 15 characters long."""
-    # Backreference the opening quote so the closing quote must match it —
-    # otherwise `"text'` (open double, close single) is treated as a quote.
+    """返回长度至少 15 个字符的引文摘录。"""
+    # 反向引用开始引号，使结束引号必须匹配——
+    # 否则 `"text'`（双引号开始，单引号结束）会被当作引用。
     return [m.group(2).strip() for m in re.finditer(r'(["\'])([^"\']{15,}?)\1', text)]
 
 
 def extract_statistics(text: str) -> List[str]:
-    """Find numbers, percentages, dates and simple measurements."""
-    # Match a comma-grouped number (1,000,000) OR a plain digit run (50000) —
-    # the old `\d{1,3}(?:,\d{3})*` matched only the first 3 digits of a
-    # comma-less number, and the trailing `\b` dropped a closing `%`.
+    """查找数字、百分比、日期和简单度量值。"""
+    # 匹配逗号分隔的数字（1,000,000）或纯数字串（50000）——
+    # 旧的 `\d{1,3}(?:,\d{3})*` 只匹配无逗号数字的前 3 位，
+    # 且末尾的 `\b` 会丢掉闭合的 `%`。
     pattern = re.compile(
         r"\b(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(%|percent|‰|per cent|[a-zA-Z]+)?",
         re.IGNORECASE,

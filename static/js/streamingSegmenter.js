@@ -1,53 +1,45 @@
 // streamingSegmenter.js
 //
-// Pure logic for incremental ("block-at-a-time") streaming markdown rendering.
+// 纯逻辑模块，用于增量（"逐块"）流式 markdown 渲染。
 //
-// While an assistant message streams in, re-rendering the whole accumulated
-// markdown on every token is wasteful (O(N^2)) and recreates DOM nodes, which
-// makes code-block hover buttons flicker. The fix is to FREEZE the leading part
-// of the message that can no longer change, and only re-render the growing tail.
+// 当助手消息流式传入时，每个 token 都重新渲染整个累积的 markdown 既浪费
+// （O(N^2)）又会重建 DOM 节点，导致代码块悬停按钮闪烁。解决方案是冻结
+// 消息中不会再改变的前导部分，仅重新渲染增长的尾部。
 //
-// This module answers the one hard question that makes freezing safe:
+// 本模块回答使冻结安全的一个核心问题：
 //
-//     Given the full markdown received so far, how many leading characters can
-//     be finalized without changing the rendered output?
+//     给定目前收到的完整 markdown，有多少个前导字符可以被最终化，
+//     而不会改变渲染输出？
 //
-// The contract callers rely on (`render` is the canonical markdown renderer):
+// 调用者依赖的契约（`render` 是规范的 markdown 渲染器）：
 //
 //     const n = splitFinalized(text, render);
 //     render(text.slice(0, n)) + render(text.slice(n))  ===  render(text)
 //
-// The module is intentionally DOM-free and renderer-agnostic so it can be unit
-// tested in isolation and reused for any markdown renderer with no long-range
-// cross-block dependencies (no reference-style links / footnotes).
+// 本模块刻意不含 DOM 操作且与渲染器无关，因此可以隔离进行单元测试，
+// 并复用于任何没有跨块长距离依赖（无引用式链接/脚注）的 markdown 渲染器。
 //
-// Known limitations (both bounded by the same mitigation):
-//   - cutIsRenderSafe proves only PRESENT-tense equivalence. If the renderer pairs
-//     an inline delimiter across a blank line (e.g. markdown.js will turn
-//     `*a\n\nb*` into emphasis spanning two paragraphs), a block frozen before the
-//     closing delimiter arrives can disagree with the final full render.
-//   - afterClosedFence boundaries are trusted without the equivalence check, so a
-//     fence the real renderer parses differently (e.g. a stray 4-backtick line) can
-//     be mis-detected as a close.
-//   Both only occur for input the renderer itself handles oddly, and both are
-//   transient: chat.js re-renders the finished message from source, so the settled
-//   output is always canonical.
+// 已知限制（两者均有相同的缓解措施）：
+//   - cutIsRenderSafe 仅证明当前时态的等价性。如果渲染器将内联分隔符跨空行配对
+//     （例如 markdown.js 会将 `*a\n\nb*` 转换为跨两个段落的强调），那么在对
+//     关闭分隔符到达之前冻结的块可能与最终的全量渲染不一致。
+//   - afterClosedFence 边界不经等价性检查就直接信任，因此真实渲染器以不同方式
+//     解析的围栏（例如奇怪的 4 反引号行）可能被错误检测为关闭。
+//   这两种情况仅在渲染器本身处理奇怪的输入时发生，且都是暂时的：
+//   chat.js 从源文本重新渲染已完成的消息，因此最终的稳定输出始终是规范的。
 
-// A fenced-code delimiter line: up to 3 leading spaces, then >=3 backticks or
-// tildes, then an optional info string.
+// 围栏代码分隔行：最多 3 个前导空格，然后是 >=3 个反引号或波浪号，
+// 后面可选跟信息字符串。
 const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
 /**
- * Scan `text` starting at `fromOffset` — which MUST be at top level (callers only
- * ever advance to a finalized boundary, never into a fence) — and collect the
- * candidate cut points.
+ * 从 `fromOffset`（必须在顶层 — 调用者只会前进到已冻结的边界，绝不会进入围栏）
+ * 扫描 `text`，收集候选切分点。
  *
  * @returns {{ boundaries: Array<{offset:number, afterClosedFence:boolean}>, inFence:boolean }}
- *   - A blank-line run at top level yields a boundary at the start of the next
- *     non-blank line (`afterClosedFence: false`).
- *   - A fence close yields a boundary just past the closing fence line
- *     (`afterClosedFence: true`) — such a cut is unconditionally safe, since
- *     nothing can ever merge into a completed code block.
+ *   - 顶层的空行序列在下一个非空行的起始位置产生边界 (`afterClosedFence: false`)。
+ *   - 围栏关闭在关闭围栏行之后产生边界 (`afterClosedFence: true`) —
+ *     这样的切分无条件安全，因为没有任何内容可以合并到已完成的代码块中。
  */
 function findBoundaries(text, fromOffset) {
   const boundaries = [];
@@ -71,7 +63,7 @@ function findBoundaries(text, fromOffset) {
       } else if (
         marker[0] === fenceMarker[0] &&
         marker.length >= fenceMarker.length &&
-        fence[2].trim() === '' // a closing fence carries no info string
+        fence[2].trim() === '' // 关闭围栏不能携带信息字符串
       ) {
         inFence = false;
         fenceMarker = '';
@@ -79,9 +71,8 @@ function findBoundaries(text, fromOffset) {
       }
       i = afterNl;
     } else if (!inFence && line.trim() === '') {
-      // Consume the entire run of blank lines; the boundary is the start of the
-      // next non-blank line so the finalized side owns the separator and the tail
-      // starts clean.
+      // 消费整个空行序列；边界在下一个非空行的起始位置，
+      // 这样冻结侧拥有分隔符，尾部从干净的行开始。
       let j = afterNl;
       while (j < n) {
         const nl2 = text.indexOf('\n', j);
@@ -104,30 +95,28 @@ function findBoundaries(text, fromOffset) {
 }
 
 /**
- * Does cutting between `before` and `after` leave the rendered output unchanged?
- * This is the self-verifying safety check: it directly compares rendering the two
- * sides separately against rendering them joined, so constructs that span the cut
- * (loose lists, setext headings, lazy blockquote continuations, tables) are caught
- * with no hand-coded grammar rules.
+ * 在 `before` 和 `after` 之间切分是否保持渲染输出不变？
+ * 这是自验证安全检查：直接比较分别渲染两侧与合并渲染的结果，因此跨越切分点的
+ * 结构（松散列表、setext 标题、懒惰块引用延续、表格）都会被捕获，无需手写的
+ * 语法规则。
  *
- * Renderer non-determinism (e.g. mermaid ids seeded with Date.now()) can only make
- * this return a false negative, never a false positive — so the bias is always
- * toward under-finalizing, which is the safe direction.
+ * 渲染器的不确定性（例如 mermaid id 使用 Date.now() 作为种子）只会导致返回
+ * 假阳性，绝不会出现假阴性 — 因此偏向于欠冻结，这是安全的方向。
  */
 function cutIsRenderSafe(before, after, render) {
   return render(before) + render(after) === render(before + after);
 }
 
 /**
- * Return how many leading characters of `text` can be safely finalized, scanning
- * forward from `committedLen` (the amount already finalized).
+ * 返回 `text` 中可安全冻结的前导字符数，从 `committedLen`（已被冻结的数量）
+ * 开始向前扫描。
  *
- * Guarantees `render(text.slice(0, n)) + render(text.slice(n)) === render(text)`,
- * and `committedLen <= n <= text.length`.
+ * 保证 `render(text.slice(0, n)) + render(text.slice(n)) === render(text)`，
+ * 且 `committedLen <= n <= text.length`。
  *
- * @param {string} text       Full markdown accumulated so far.
- * @param {(src:string)=>string} render  Canonical markdown renderer.
- * @param {number} [committedLen=0]  Characters already finalized (always a prior boundary).
+ * @param {string} text       目前为止累积的完整 markdown。
+ * @param {(src:string)=>string} render  规范的 markdown 渲染器。
+ * @param {number} [committedLen=0]  已冻结的字符数（始终是之前的边界值）。
  * @returns {number}
  */
 export function splitFinalized(text, render, committedLen = 0) {
@@ -140,12 +129,11 @@ export function splitFinalized(text, render, committedLen = 0) {
     const { offset, afterClosedFence } = boundaries[k];
 
     if (afterClosedFence) {
-      // A completed code block — always safe to freeze through here.
+      // 已完成的代码块 — 始终可以安全冻结到此位置。
       best = offset;
     } else {
-      // A prose/list/table boundary. We need a following block to compare
-      // against (the last block must stay live, it can still grow), and the cut
-      // must be render-equivalent locally.
+      // 普通文本/列表/表格边界。我们需要一个后续块来对比
+      // （最后一个块必须保持活动状态，因为它可能还会增长），并且切分必须局部渲染等价。
       const nextOffset = k + 1 < boundaries.length ? boundaries[k + 1].offset : text.length;
       const before = text.slice(segStart, offset);
       const after = text.slice(offset, nextOffset);
@@ -160,13 +148,11 @@ export function splitFinalized(text, render, committedLen = 0) {
 }
 
 /**
- * If `text` begins with a fenced-code opener whose fence never closes, describe it
- * so the renderer can stream the code in append-mode instead of re-rendering it.
- * Returns `{ lang, contentStart }` (contentStart = offset of the first code char),
- * or null when `text` does not start with a still-open fence.
+ * 如果 `text` 以一个从未关闭的围栏代码开启符开头，描述该围栏以便渲染器以追加模式
+ * 流式传输代码，而不是重新渲染。返回 `{ lang, contentStart }`（contentStart =
+ * 第一个代码字符的偏移），如果 `text` 不以仍未关闭的围栏开头则返回 null。
  *
- * The opener line must be complete (terminated by a newline) so the info string /
- * language is known before append-mode begins.
+ * 开启符行必须是完整的（以换行符结束），以便在追加模式开始前知道信息字符串/语言。
  */
 export function describeOpenFence(text) {
   const open = text.match(/^( {0,3})(`{3,}|~{3,})([^\n]*)\n/);
@@ -179,7 +165,7 @@ export function describeOpenFence(text) {
     const line = text.slice(i, nl === -1 ? text.length : nl);
     const close = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
     if (close && close[1][0] === marker[0] && close[1].length >= marker.length) {
-      return null; // the fence closes — let the normal finalize path handle it
+      return null; // 围栏关闭 — 让正常的冻结路径处理
     }
     if (nl === -1) break;
     i = nl + 1;

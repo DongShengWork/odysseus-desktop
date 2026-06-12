@@ -1,25 +1,23 @@
-"""CalDAV → local SQLite sync.
+"""CalDAV → 本地 SQLite 同步。
 
-The Settings UI lets users save CalDAV credentials, but the original
-sync path was removed when calendar storage was migrated to SQLite.
-This module re-wires that gap as a one-way pull (remote → local),
-called on calendar open and from a periodic scheduler loop.
+设置界面允许用户保存 CalDAV 凭据，但原始同步路径在日历存储
+迁移到 SQLite 时被移除。本模块将该缺口重新连接为单向拉取（远程 → 本地），
+在日历打开时和周期性调度器循环中调用。
 
-Design notes:
-- We use the `caldav` lib so PROPFIND discovery + REPORT XML work
-  across Radicale / Nextcloud / Apple / Fastmail without us
-  reinventing the protocol. It's pure Python.
-- The lib is synchronous; we run it in a threadpool via
-  `asyncio.to_thread` so the FastAPI event loop stays free.
-- Each remote calendar maps to one local `CalendarCal` row with
-  `source="caldav"` and `id` = a stable hash of the remote URL so
-  re-syncs idempotently target the same row.
-- Events upsert by VEVENT UID (kept as the local `uid`). Local
-  CalDAV-sourced events not seen in the latest pull are deleted so
-  remote deletions propagate.
-- Datetimes are converted to UTC and the row is flagged `is_utc=True`
-  so the serializer adds the Z suffix and the frontend renders in the
-  user's local TZ correctly.
+设计说明：
+- 我们使用 `caldav` 库，这样 PROPFIND 发现 + REPORT XML 可在
+  Radicale / Nextcloud / Apple / Fastmail 上工作，无需我们
+  重新实现协议。它是纯 Python。
+- 该库是同步的；我们通过 `asyncio.to_thread` 在线程池中运行它，
+  这样 FastAPI 事件循环保持空闲。
+- 每个远程日历映射到一个本地 `CalendarCal` 行，
+  `source="caldav"` 且 `id` = 远程 URL 的稳定哈希值，
+  使得重新同步可以幂等地定位到同一行。
+- 事件通过 VEVENT UID（保存为本地 `uid`）进行 upsert。本地
+  CalDAV 来源的事件在最新拉取中未出现时会被删除，以便
+  远程删除能够传播。
+- 日期时间转换为 UTC，行标记为 `is_utc=True`，
+  这样序列化器会添加 Z 后缀，前端以用户本地时区正确渲染。
 """
 
 import asyncio
@@ -103,7 +101,7 @@ def _validate_caldav_hostname(host: str) -> None:
 
 
 def validate_caldav_url(raw_url: str) -> str:
-    """Validate and normalize a user-provided CalDAV URL before server-side use."""
+    """在服务端使用前验证并规范化用户提供的 CalDAV URL。"""
     url = (raw_url if isinstance(raw_url, str) else "").strip()
     if not url:
         raise ValueError("CalDAV URL is required")

@@ -1,5 +1,5 @@
 /**
- * Tasks Module — scheduled recurring LLM prompts.
+ * 任务模块 — 定时循环执行 LLM 提示。
  */
 
 import uiModule from './ui.js';
@@ -8,19 +8,21 @@ import * as spinnerModule from './spinner.js';
 import { makeWindowDraggable } from './windowDrag.js';
 import { sortModelIds } from './modelSort.js';
 import { ordinalSuffix } from './util/ordinal.js';
+import { t } from './i18n.js';
 
 const API_BASE = window.location.origin;
 let _open = false;
-let _tasksCascadeNext = false;   // play the domino-in entrance on the next render
+let _tasksCascadeNext = false;   // 下次渲染时播放多米诺骨牌入场动画
 let _tasks = [];
-let _tasksFetched = false;   // first-fetch sentinel — `false` → show loading row instead of "No tasks yet"
+let _tasksFetched = false;   // 首次获取标记 — `false` → 显示加载行而非"暂无任务"
 let _escHandler = null;
-let _viewingRuns = null; // task id when viewing run history
+let _viewingRuns = null; // 查看运行历史时的任务 ID
 let _clockInterval = null;
 
-const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const _DAYS_OF_WEEK_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
+const DAYS_OF_WEEK = _DAYS_OF_WEEK_KEYS.map(k => t('calendar.' + k));
 
-// ---- API ----
+// ---- 接口层 ----
 
 async function _fetchTasks() {
   try {
@@ -115,9 +117,9 @@ async function _runNow(id, force = false) {
     method: 'POST', credentials: 'same-origin',
   });
   if (!res.ok) {
-    // Surface the backend's actual reason — 409 means "already running",
-    // 404 task missing, etc. Previously every error rendered as the same
-    // generic "Failed to trigger task", which hid the cause.
+    // 暴露后端实际原因 — 409 表示"已在运行"，
+    // 404 表示任务不存在等。之前每个错误都显示相同
+    // 的通用"触发任务失败"消息，掩盖了实际原因。
     let msg = `Failed to trigger task (${res.status})`;
     try {
       const data = await res.json();
@@ -218,7 +220,7 @@ async function _fetchEvents() {
   return _triggerEvents;
 }
 
-// ---- Helpers ----
+// ---- 辅助函数 ----
 
 function _scheduleLabel(task) {
   const tt = task.trigger_type || 'schedule';
@@ -288,8 +290,8 @@ function _relativeTime(iso) {
   return past ? `${days}d ago` : `in ${days}d`;
 }
 
-// Absolute local time — unique per second. Used in run history so clustered
-// runs don't all read as "just now".
+// 绝对本地时间 — 精确到秒。用于运行历史记录中避免
+// 密集运行都显示为"刚刚"。
 function _absoluteTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -312,31 +314,31 @@ function _statusDot(status) {
 }
 
 const _TASK_ICONS = {
-  // Chats
+  // 对话
   tidy_sessions:       '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
-  // Documents
+  // 文档
   tidy_documents:      '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
-  // Memory (brain)
+  // 记忆
   consolidate_memory:  '<path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/>',
-  // Research (magnifying glass)
+  // 研究
   tidy_research:       '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
-  // Calendar
+  // 日历
   tidy_calendar:       '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-  // Email
+  // 邮箱
   summarize_emails:    '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
   draft_email_replies: '<polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
   extract_email_events:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M7 14h5"/><path d="M7 18h8"/>',
   classify_events:    '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 15h.01M12 15h.01M16 15h.01"/>',
   learn_sender_signatures:'<path d="M20 6 9 17l-5-5"/><path d="M14 6h6v6"/>',
   check_email_urgency: '<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>',
-  // Skills
+  // 技能
   test_skills:         '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   audit_skills:        '<path d="M9 11l3 3L22 4"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v15H6.5A2.5 2.5 0 0 0 4 19.5z"/>',
-  // Assistant
+  // 助手
   daily_brief:         '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-  // Generic action fallback (gear)
+  // 通用 action 回退
   _action_default:     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
-  // LLM task fallback (chat bubble)
+  // LLM 任务回退
   _llm_default:        '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
 };
 
@@ -369,7 +371,7 @@ function _taskAiMark(task) {
   return '<svg class="task-ai-mark" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-label="Uses model" title="Uses model"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>';
 }
 
-// ---- Custom pickers ----
+// ---- 自定义选择器 ----
 
 function _buildTimePicker(containerId, hour, minute) {
   const wrap = document.getElementById(containerId);
@@ -423,7 +425,7 @@ function _buildDatePicker(containerId, initialDate) {
   const month = now.getMonth();
   const day = now.getDate();
 
-  // Year select
+  // 年份选择
   const yearSel = document.createElement('select');
   yearSel.className = 'task-form-input task-date-select';
   yearSel.id = containerId + '-year';
@@ -435,7 +437,7 @@ function _buildDatePicker(containerId, initialDate) {
     yearSel.appendChild(opt);
   }
 
-  // Month select
+  // 月份选择
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthSel = document.createElement('select');
   monthSel.className = 'task-form-input task-date-select';
@@ -448,7 +450,7 @@ function _buildDatePicker(containerId, initialDate) {
     monthSel.appendChild(opt);
   });
 
-  // Day select
+  // 日期选择
   const daySel = document.createElement('select');
   daySel.className = 'task-form-input task-date-select';
   daySel.id = containerId + '-day';
@@ -482,10 +484,10 @@ function _getDatePickerValue(containerId) {
   return new Date(y, m, d);
 }
 
-// ---- Render ----
+// ---- 渲染 ----
 
 const _CATEGORY_MAP = {
-  // action -> category
+  // action -> 分类
   tidy_sessions:        'Chats',
   tidy_documents:       'Documents',
   consolidate_memory:   'Memory',
@@ -506,10 +508,9 @@ const _CATEGORY_MAP = {
   run_local:            'System',
   cookbook_serve:       'Cookbook',
 };
-// Cookbook serves listed FIRST so a just-saved schedule shows at the
-// top instead of scrolling off the bottom of the list. The remaining
-// order is preserved for backwards-compatibility with users who've
-// learned where things are.
+// Cookbook 服务列在最前面，让刚保存的定时任务显示在
+// 顶部，而不会滚动到列表底部之外。其余顺序保持不变，以
+// 保持向后兼容，让用户已经习惯的位置不变。
 const _CATEGORY_ORDER = ['Cookbook', 'Other', 'Calendar', 'Email', 'Chats', 'Documents', 'Memory', 'Research', 'Skills', 'Assistant', 'System'];
 const _CATEGORY_ICONS = {
   Calendar:  '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
@@ -521,7 +522,7 @@ const _CATEGORY_ICONS = {
   Skills:    '<path d="M9 11l3 3L22 4"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v15H6.5A2.5 2.5 0 0 0 4 19.5z"/>',
   Assistant: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 18a5 5 0 0 1 10 0"/>',
   System:    '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
-  // Cookbook icon — matches the recipe-book glyph used on the sidebar.
+  // Cookbook 图标 — 与侧边栏使用的食谱图标匹配。
   Cookbook:  '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
   Other:     '<circle cx="12" cy="12" r="3"/>',
 };
@@ -530,14 +531,14 @@ function _categoryFor(task) {
   if (task.task_type === 'action' && task.action) {
     return _CATEGORY_MAP[task.action] || 'Other';
   }
-  // LLM tasks → Assistant if linked to a crew member, else Other
+  // LLM 任务 → 如果关联到成员则为助手，否则为其他
   if (task.task_type === 'llm' || !task.task_type) {
     return task.crew_member_id ? 'Assistant' : 'Other';
   }
   return 'Other';
 }
 
-// ---- Multi-select mode (mirrors the library's Select / bulk-bar) ----
+// ---- 多选模式（参照文档库的 Select / 批量操作栏）----
 function _taskEnterSelect() {
   _taskSelectMode = true; _taskSelected.clear();
   document.getElementById('tasks-bulk-bar')?.classList.remove('hidden');
@@ -563,7 +564,7 @@ function _taskToggleSelectAll() {
 }
 function _taskUpdateBulkCount() {
   const c = document.getElementById('tasks-selected-count');
-  if (c) c.textContent = `${_taskSelected.size} Selected`;
+  if (c) c.textContent = `${t('tasks.selected_n', { n: _taskSelected.size })}`;
   const del = document.getElementById('tasks-bulk-delete');
   if (del) del.disabled = _taskSelected.size === 0;
 }
@@ -571,19 +572,19 @@ async function _taskBulkDelete() {
   const ids = [..._taskSelected];
   if (!ids.length) return;
   const ok = uiModule?.styledConfirm
-    ? await uiModule.styledConfirm(`Delete ${ids.length} task${ids.length > 1 ? 's' : ''}? This cannot be undone.`, { confirmText: 'Delete', danger: true })
-    : confirm(`Delete ${ids.length} task(s)?`);
+    ? await uiModule.styledConfirm(t('tasks.delete_confirm', { n: ids.length }), { confirmText: t('common.delete'), danger: true })
+    : confirm(t('tasks.delete_confirm_short', { n: ids.length }));
   if (!ok) return;
   const results = await Promise.allSettled(ids.map(id => _deleteTask(id)));
   const deletedIds = ids.filter((_, i) => results[i].status === 'fulfilled');
   await _animateTaskRemoval(deletedIds);
-  if (uiModule) uiModule.showToast(`Deleted ${deletedIds.length} task${deletedIds.length > 1 ? 's' : ''}`);
+  if (uiModule) uiModule.showToast(t('tasks.deleted_n', { n: deletedIds.length }));
   await _fetchTasks();
-  _taskExitSelect();  // clears selection + re-renders the fresh list
+  _taskExitSelect();  // 清除选择并重新渲染最新列表
 }
 
-// Category filter chips (library-style tags) — solo-select: click one to
-// show only that category, click it again to clear. Hidden if ≤1 category.
+// 分类过滤标签（文档库风格的标签）— 单选：点击一个只显示
+// 该分类，再次点击取消。如果分类数 ≤1 则隐藏。
 function _renderTaskChips() {
   const bar = document.getElementById('tasks-filter-chips');
   if (!bar) return;
@@ -596,8 +597,8 @@ function _renderTaskChips() {
   if (_taskFilter && !counts[_taskFilter]) _taskFilter = null;
   bar.innerHTML = '';
   bar.style.display = cats.length > 1 ? 'flex' : 'none';
-  // Exact library style: .memory-cat-chip, an "all (N)" chip, then one per
-  // category with its count. Clicking "all" clears the filter.
+  // 精确的文档库风格：.memory-cat-chip，一个"全部 (N)"标签，
+  // 然后每个分类一个带计数的标签。点击"全部"清除过滤。
   const mkChip = (label, value, active) => {
     const b = document.createElement('button');
     b.className = 'memory-cat-chip' + (active ? ' active' : '');
@@ -625,16 +626,16 @@ function _renderList() {
   const list = document.getElementById('tasks-list');
   if (!list) return;
   list.innerHTML = '';
-  // Sync the count badges (tab + header).
+  // 同步计数徽章（标签页 + 标题栏）
   const _tabCount = document.getElementById('tasks-tab-count');
   if (_tabCount) _tabCount.textContent = _tasks.length;
   const _headCount = document.getElementById('tasks-head-count');
   if (_headCount) _headCount.textContent = _tasks.length ? `${_tasks.length} task${_tasks.length !== 1 ? 's' : ''}` : '';
 
   if (_tasks.length === 0) {
-    // Differentiate "still loading" from "really empty" so the first paint
-    // shows the app whirlpool (matching the document library) rather than a
-    // misleading "No tasks yet" message before the fetch completes.
+    // 区分"仍在加载"和"确实为空"，让首次渲染显示
+    // 应用加载动画（与文档库一致），而不是在请求完成前
+    // 显示误导性的"暂无任务"消息。
     if (!_tasksFetched) {
       list.appendChild(spinnerModule.createLoadingRow('Loading…'));
     } else {
@@ -645,8 +646,8 @@ function _renderList() {
 
   _renderTaskChips();
 
-  // Filter by the active category tag + search query, then flatten into one
-  // list (the tag chips replace the old per-category collapsible headers).
+  // 按活动分类标签 + 搜索关键词过滤，然后展平为一个
+  // 列表（标签标签替代了旧的按分类分组可折叠标题）。
   const q = _taskSearch.trim().toLowerCase();
   const visible = _tasks.filter(t => {
     if (_taskFilter && _categoryFor(t) !== _taskFilter) return false;
@@ -661,7 +662,7 @@ function _renderList() {
       if (sa !== sb) return sa - sb;
       return (a.name || '').localeCompare(b.name || '');
     }
-    // 'recent' (default): category order, then name.
+    // 'recent'（默认）：按分类顺序，然后按名称。
     const ia = _CATEGORY_ORDER.indexOf(_categoryFor(a)), ib = _CATEGORY_ORDER.indexOf(_categoryFor(b));
     if (ia !== ib) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     return (a.name || '').localeCompare(b.name || '');
@@ -676,8 +677,8 @@ function _renderList() {
     card.className = 'memory-item task-card' + (task.status === 'paused' ? ' task-paused' : '');
     card.dataset.id = task.id;
 
-    // Title row: icon + name (left); status pill + chevron/actions (right).
-    // The status pill replaces the old dot and doubles as pause/resume.
+    // 标题行：图标 + 名称（左）；状态标签 + 箭头/操作（右）。
+    // 状态标签替代旧的圆点，同时作为暂停/恢复按钮。
     const titleRow = document.createElement('div');
     titleRow.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;';
     const statusBadge = task.status === 'paused'
@@ -690,7 +691,7 @@ function _renderList() {
       : '';
     titleRow.innerHTML = `${_taskIcon(task)}<span class="memory-item-title">${_esc(task.name)}</span>${_taskAiMark(task)}${builtinBadge}<span style="flex:1;"></span>${statusBadge}`;
 
-    // ... menu button (hover to show)
+    // … 菜单按钮（悬停显示）
     const actionsWrap = document.createElement('div');
     actionsWrap.className = 'memory-item-actions';
     const menuBtn = document.createElement('button');
@@ -702,8 +703,8 @@ function _renderList() {
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const items = [];
-      // Run now stays in the kebab too (alongside the new Run button on the
-      // card) for users coming from muscle-memory / mobile long-press.
+      // Run now 也保留在菜单中（以及卡片上新的 Run 按钮），
+      // 方便肌肉记忆的用户 / 移动端长按。
       if (task.status !== 'completed') items.push({ label: 'Run now', icon: '<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>', action: () => _doRunNow(task.id) });
       items.push({ label: 'Edit', icon: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>', action: () => _showForm(task) });
       if (task.status === 'active') items.push({ label: 'Pause', icon: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>', action: () => _doPause(task.id) });
@@ -719,8 +720,8 @@ function _renderList() {
       _showTaskDropdown(menuBtn, items);
     });
     actionsWrap.appendChild(menuBtn);
-    // Run now — promoted out of the kebab onto the card itself for one-click
-    // manual triggering. Hidden for completed tasks (same gate as before).
+    // Run now — 从菜单提升到卡片上，一键手动触发。
+    // 已完成的任务隐藏（与之前相同的规则）。
     if (task.status !== 'completed') {
       const runBtn = document.createElement('button');
       runBtn.className = 'task-status-badge task-run-now-badge task-card-run-btn';
@@ -732,13 +733,13 @@ function _renderList() {
     }
     titleRow.appendChild(actionsWrap);
 
-    // Content area
+    // 内容区域
     const content = document.createElement('div');
     content.style.cssText = 'flex:1;min-width:0;position:relative;top:1px;';
 
     content.appendChild(titleRow);
 
-    // Slim meta line (always visible): schedule · next · run count.
+    // 精简元信息行（始终可见）：周期 · 下次运行 · 运行次数。
     const metaParts = [_scheduleLabel(task)];
     if (task.next_run && task.status === 'active') metaParts.push('Next: ' + _relativeTime(task.next_run));
     if (task.run_count > 0) metaParts.push(task.run_count + ' run' + (task.run_count !== 1 ? 's' : ''));
@@ -757,8 +758,8 @@ function _renderList() {
       });
     }
 
-    // Expandable detail (revealed on click) — like the library doc/chat cards:
-    // extra meta + last-run result + description.
+    // 可展开详情（点击显示）— 类似文档库的文档/对话卡片：
+    // 额外元信息 + 上次运行结果 + 描述。
     const detail = document.createElement('div');
     detail.style.cssText = 'display:none;margin-top:7px;padding:8px 0 2px;border-top:1px solid var(--border);';
     const extra = [];
@@ -798,7 +799,7 @@ function _renderList() {
     }
     content.appendChild(detail);
 
-    // Select-mode checkbox (mirrors the library's .memory-select-cb).
+    // 选择模式复选框（参照文档库的 .memory-select-cb）。
     if (_taskSelectMode) {
       if (_taskSelected.has(task.id)) card.classList.add('selected');
       const cb = document.createElement('input');
@@ -816,9 +817,9 @@ function _renderList() {
       titleRow.insertBefore(cb, titleRow.firstChild);
     }
 
-    // Title-row click: in select mode toggle the checkbox; otherwise expand.
+    // 标题行点击：选择模式下切换复选框；否则展开。
     titleRow.addEventListener('click', (e) => {
-      if (card._suppressNextClick) return;  // long-press just opened the menu
+      if (card._suppressNextClick) return;  // 长按刚打开了菜单
       if (e.target.closest('.memory-item-actions')) return;
       if (_taskSelectMode) {
         if (e.target.classList.contains('memory-select-cb')) return;
@@ -831,22 +832,21 @@ function _renderList() {
       card.classList.toggle('expanded', open);
     });
 
-    // Long-press (mobile) opens the ⋮ actions menu.
+    // 长按（移动端）打开 ⋮ 操作菜单。
     _attachTaskLongPress(card, menuBtn);
 
     card.appendChild(content);
     list.appendChild(card);
   }
-  // Domino-in cascade on the first render-with-cards after opening — same
-  // staggered entrance the gallery / document library uses. We consume the
-  // flag here OR in the early-return branches above so subsequent re-renders
-  // (search, filter, edit) don't replay it. Note: opening with 0 tasks AND
-  // hitting the early-return ALSO clears the flag, so creating a first task
-  // afterwards won't replay the cascade — keeps the entrance scoped to the
-  // very first render of the panel.
+  // 多米诺骨牌入场效果 — 打开后有卡片时的首次渲染，
+  // 使用与图库/文档库相同的交错入场动画。我们在此处或
+  // 上面的提前返回分支中消费标志，后续的重新渲染
+  // （搜索、过滤、编辑）不会重播。注意：以 0 个任务打开且
+  // 命中提前返回时也会清除标志，所以之后创建第一个任务
+  // 不会重播动画 — 保持入场动画仅限面板的首次渲染。
   if (_tasksCascadeNext && list.children.length) {
     list.classList.remove('tasks-just-opened');
-    void list.offsetWidth;  // force reflow so the class re-fires on re-add
+    void list.offsetWidth;  // 强制回流，使类名在重新添加时重新触发
     list.classList.add('tasks-just-opened');
     setTimeout(() => list.classList.remove('tasks-just-opened'), 900);
   }
@@ -867,8 +867,8 @@ function _esc(s) {
   return d.innerHTML;
 }
 
-// Long-press a task card (mobile) to open its ⋮ actions menu. Hold 500ms;
-// moving the finger >10px or releasing early cancels. Mirrors the library.
+// 长按任务卡片（移动端）打开其 ⋮ 操作菜单。按住 500ms；
+// 手指移动 >10px 或提前松开取消。与文档库保持一致。
 function _attachTaskLongPress(card, menuBtn) {
   let hold = null, start = null;
   const cancel = () => { if (hold) { clearTimeout(hold); hold = null; } start = null; };
@@ -891,7 +891,7 @@ function _attachTaskLongPress(card, menuBtn) {
 }
 
 function _showTaskDropdown(anchor, items) {
-  // Remove any existing dropdown
+  // 移除任何已存在的下拉菜单
   document.querySelectorAll('.task-dropdown').forEach(d => d.remove());
   const dd = document.createElement('div');
   dd.className = 'task-dropdown';
@@ -920,18 +920,18 @@ function _showTaskDropdown(anchor, items) {
   dd.style.left = left + 'px';
   const openedAt = performance.now();
   const close = (e) => {
-    // Ignore any clicks that occur within 250ms of the open (covers touch
-    // "ghost click" duplicates that were firing right after pointerup and
-    // removing the dropdown before the user could see it).
+    // 忽略打开后 250ms 内的任何点击（防止触摸事件的
+    // "幽灵点击"重复在 pointerup 后立即触发并
+    // 在用户看到前移除下拉菜单）。
     if (performance.now() - openedAt < 250) return;
     if (!dd.contains(e.target)) { dd.remove(); document.removeEventListener('click', close); }
   };
-  // requestAnimationFrame so the listener is registered AFTER the current
-  // pointer/click event cycle has finished bubbling.
+  // 使用 requestAnimationFrame 确保监听器在当前
+  // 指针/点击事件周期冒泡完成后再注册。
   requestAnimationFrame(() => document.addEventListener('click', close));
 }
 
-// ---- Presets ----
+// ---- 预设模板 ----
 
 const _TASK_PRESETS = [
   { label: 'Prompt on schedule',    desc: 'Run a prompt daily, weekly, etc.',             taskType: 'llm',      triggerType: 'schedule' },
@@ -943,14 +943,14 @@ const _TASK_PRESETS = [
   { label: 'Webhook triggered',     desc: 'Trigger via external HTTP call',               taskType: 'llm',      triggerType: 'webhook' },
 ];
 
-// Icon for each preset, keyed off task/trigger type (24x24 stroke SVG).
+// 每个预设的图标，按任务/触发类型区分（24x24 描边 SVG）。
 function _presetIcon(p) {
   const wrap = (inner) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4;flex-shrink:0;">${inner}</svg>`;
   if (p.taskType === 'research') return wrap('<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>');
-  if (p.taskType === 'action') return wrap('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10z"/>'); // sparkle
-  if (p.triggerType === 'webhook') return wrap('<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>'); // link
-  if (p.triggerType === 'event') return wrap('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'); // activity pulse
-  return wrap('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'); // clock (scheduled prompt)
+  if (p.taskType === 'action') return wrap('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10z"/>'); // 闪光
+  if (p.triggerType === 'webhook') return wrap('<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/>'); // 链接
+  if (p.triggerType === 'event') return wrap('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'); // 活动脉冲
+  return wrap('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'); // 时钟（定时任务）
 }
 
 function _showPresetPicker() {
@@ -962,13 +962,12 @@ function _showPresetPicker() {
   let html = '<div class="admin-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">';
   html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;"><h2 style="margin:0;padding:0;line-height:1;">Add Task</h2></div>';
   html += '<p class="memory-desc" style="position:relative;top:4px;">Describe a task for the AI to draft, or pick a type below to set one up manually.</p>';
-  // flex-wrap + min-width:0 on the input lets the row collapse cleanly
-  // on narrow modal widths instead of pushing the AI button past the
-  // right edge. margin-left:-4px nudges the compose row 4px into the
-  // description bar above so the input lines up with it visually.
+  // flex-wrap + min-width:0 让输入框在窄宽度弹窗下能正常收缩，
+  // 而不是将 AI 按钮推到右边缘之外。margin-left:-4px 将
+  // 输入行向左微调 4px，与上方的描述栏视觉对齐。
   html += '<div class="task-ai-compose" style="display:flex;gap:6px;margin:6px 0 10px -4px;flex-wrap:wrap;align-items:center;">'
-    + '<input type="text" id="task-ai-input" class="memory-search-input" style="flex:1 1 220px;min-width:0;" placeholder="Describe a task — e.g. &quot;every weekday 7am summarize my unread email&quot;" />'
-    + '<button class="memory-toolbar-btn active" id="task-ai-btn" title="Draft a task with AI" style="white-space:nowrap;height:28px;flex:0 0 auto;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>Draft with AI</button>'
+    + '<input type="text" id="task-ai-input" class="memory-search-input" style="flex:1 1 220px;min-width:0;" placeholder=t('tasks.ai_placeholder') />'
+    + '<button class="memory-toolbar-btn active" id="task-ai-btn" title=t('tasks.draft_with_ai_title') style="white-space:nowrap;height:28px;flex:0 0 auto;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>${t('tasks.draft_with_ai')}</button>'
     + '</div>';
   html += '<div class="memory-list" style="max-height:none;flex:1;gap:0px;margin-top:2px;padding-right:8px;">';
   _TASK_PRESETS.forEach((p, i) => {
@@ -991,7 +990,7 @@ function _showPresetPicker() {
   });
   document.getElementById('task-preset-cancel')?.addEventListener('click', () => _renderMainView());
 
-  // Describe a task in plain language → AI drafts the structured task + opens the form.
+  // 用自然语言描述任务 → AI 生成结构化任务并打开表单。
   const aiInput = document.getElementById('task-ai-input');
   const aiBtn = document.getElementById('task-ai-btn');
   if (aiBtn && aiInput) {
@@ -1000,7 +999,7 @@ function _showPresetPicker() {
   }
 }
 
-// ---- Form ----
+// ---- 表单 ----
 
 function _showForm(existing, initTaskType, initTriggerType) {
   const modal = document.getElementById('tasks-modal');
@@ -1019,7 +1018,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
       <p class="memory-desc">${existing?.id ? 'Update this task’s schedule, prompt, and output.' : 'Configure a prompt, research, or action to run automatically.'}</p>
     <div class="task-form" style="flex:1;overflow-y:auto;min-height:0;">
       <label class="task-form-label">Name</label>
-      <input type="text" id="task-form-name" class="task-form-input" value="${_esc(existing?.name || '')}" placeholder="${existing ? '' : 'Auto-generated if blank'}" />
+      <input type="text" id="task-form-name" class="task-form-input" value="${_esc(existing?.name || '')}" placeholder="${existing ? '' : t('tasks.auto_generated')}" />
 
       <label class="task-form-label">Type</label>
       <div class="task-form-toggle" id="task-form-type-toggle">
@@ -1068,7 +1067,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
     </div>
   `;
 
-  // --- Task type toggle ---
+  // --- 任务类型切换 ---
   let taskType = curTaskType;
   const typeToggle = document.getElementById('task-form-type-toggle');
   const typeOpts = document.getElementById('task-form-type-opts');
@@ -1099,7 +1098,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
         }
         extra.innerHTML = `
           <label class="task-form-label">Email triage rules</label>
-          <textarea id="task-form-urgent-email-prompt" class="task-form-input task-form-textarea" rows="4" placeholder="What should count as urgent? e.g. deadlines, blockers, people waiting outside."></textarea>
+          <textarea id="task-form-urgent-email-prompt" class="task-form-input task-form-textarea" rows="4" placeholder=t('tasks.urgent_placeholder')></textarea>
           <div class="memory-desc" style="font-size:11px;margin-top:4px;">Pause/resume and schedule are controlled by this task. It tags urgent, reply-soon, newsletter, marketing, and spam. Urgent/reply-soon emails use your reminder settings.</div>
         `;
         const settings = await _fetchUrgentEmailSettings();
@@ -1137,7 +1136,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
   });
   renderTypeOpts();
 
-  // --- Trigger type toggle ---
+  // --- 触发类型切换 ---
   let triggerType = curTriggerType;
   const triggerToggle = document.getElementById('task-form-trigger-toggle');
   const triggerOpts = document.getElementById('task-form-trigger-opts');
@@ -1161,7 +1160,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
         </div>
       `;
 
-      // Build time picker
+      // 构建时间选择器
       let initH = 9, initM = 0;
       if (existing && existing.scheduled_time) {
         const [uh, um] = existing.scheduled_time.split(':').map(Number);
@@ -1290,7 +1289,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
   });
   renderTriggerOpts();
 
-  // Populate output targets
+  // 填充输出目标列表
   _fetchOutputTargets().then(targets => {
     const outputSel = document.getElementById('task-form-output');
     if (!outputSel || targets.length <= 1) return;
@@ -1315,9 +1314,9 @@ function _showForm(existing, initTaskType, initTriggerType) {
     }
   });
 
-  // Populate model dropdown from /api/models. Value is "endpoint_url::model"
-  // so a single field encodes both the model name and which endpoint to call.
-  // Blank value (option 0) = inherit session default.
+  // 从 /api/models 填充模型下拉列表。值为 "endpoint_url::model"，
+  // 这样单个字段同时编码模型名称和要调用的接口。
+  // 空值（选项 0）= 继承会话默认值。
   fetch(`${API_BASE}/api/models`, { credentials: 'same-origin' })
     .then(r => r.json())
     .then(data => {
@@ -1341,19 +1340,19 @@ function _showForm(existing, initTaskType, initTriggerType) {
         }
         modelSel.appendChild(group);
       }
-      // Preserve a previously-set pairing even if /api/models doesn't list it
-      // anymore (e.g. endpoint disabled). Shows so the user knows it's set.
+      // 保留之前设置的配对，即使 /api/models 不再列出
+      //（例如接口已禁用）。仍然显示让用户知道已设置。
       if (curKey && modelSel.value !== curKey) {
         const opt = document.createElement('option');
         opt.value = curKey;
-        opt.textContent = `${existing.model} (unlisted endpoint)`;
+        opt.textContent = `${existing.model} ${t('tasks.unlisted_endpoint')}`;
         opt.selected = true;
         modelSel.appendChild(opt);
       }
     })
     .catch(() => {});
 
-  // Populate chain dropdown
+  // 填充链式任务下拉列表
   const chainSel = document.getElementById('task-form-chain');
   if (chainSel) {
     const otherTasks = _tasks.filter(t => !existing || t.id !== existing.id);
@@ -1366,19 +1365,19 @@ function _showForm(existing, initTaskType, initTriggerType) {
     }
   }
 
-  // Cancel — return to the Tasks tab (keeps the active-tab highlight in sync)
+  // 取消 — 返回任务标签页（保持活跃标签高亮同步）
   document.getElementById('task-form-cancel').addEventListener('click', () => {
     _switchTab('tasks');
   });
 
-  // Esc on the form goes back to the Add tab's preset picker (not the Tasks
-  // tab — Cancel handles that). Capture-phase + stopImmediatePropagation so
-  // app.js's generic modal-dismiss doesn't close the whole Tasks window first.
+  // 表单上的 Esc 回到新建标签的预设选择器（不是任务标签 —
+  // 取消按钮会处理）。使用捕获阶段 + stopImmediatePropagation，
+  // 防止 app.js 的通用弹窗关闭先关掉整个任务窗口。
   if (window._tasksFormEsc) document.removeEventListener('keydown', window._tasksFormEsc, true);
   window._tasksFormEsc = (e) => {
     if (e.key !== 'Escape') return;
     if (!document.getElementById('task-form-save')) {
-      // Form is no longer in the DOM — detach to stop leaking.
+      // 表单不再存在于 DOM 中——分离以停止泄露
       document.removeEventListener('keydown', window._tasksFormEsc, true);
       window._tasksFormEsc = null;
       return;
@@ -1394,7 +1393,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
   };
   document.addEventListener('keydown', window._tasksFormEsc, true);
 
-  // Save
+  // 保存
   document.getElementById('task-form-save').addEventListener('click', async () => {
     const nameEl = document.getElementById('task-form-name');
     const outputTarget = document.getElementById('task-form-output')?.value || 'session';
@@ -1406,8 +1405,8 @@ function _showForm(existing, initTaskType, initTriggerType) {
     };
     if (nameEl) payload.name = nameEl.value.trim() || undefined;
 
-    // Model / endpoint override. Blank = inherit session default. Otherwise
-    // value is `endpoint_url::model_id`.
+    // 模型/接口覆盖。空值 = 继承会话默认值。否则值格式为
+    // `endpoint_url::model_id`。
     const modelVal = document.getElementById('task-form-model')?.value || '';
     if (modelVal) {
       const idx = modelVal.indexOf('::');
@@ -1416,20 +1415,20 @@ function _showForm(existing, initTaskType, initTriggerType) {
         payload.model = modelVal.slice(idx + 2);
       }
     } else {
-      // Explicitly clear so a previously-pinned task can return to default.
+      // 显式清空，让之前固定模型的任务恢复默认值。
       payload.endpoint_url = '';
       payload.model = '';
     }
 
-    // Chain
+    // 链式任务
     const chainVal = document.getElementById('task-form-chain')?.value;
     payload.then_task_id = chainVal || '';
 
-    // Notifications toggle — defaults to true if absent.
+    // 通知开关 — 默认为 true。
     const notifEl = document.getElementById('task-form-notif');
     if (notifEl) payload.notifications_enabled = !!notifEl.checked;
 
-    // Task type specifics
+    // 任务类型特定字段
     if (taskType === 'llm' || taskType === 'research') {
       const prompt = document.getElementById('task-form-prompt')?.value?.trim();
       if (!prompt) {
@@ -1455,7 +1454,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
       }
     }
 
-    // Trigger specifics
+    // 触发器特定参数
     if (triggerType === 'schedule') {
       const schedSelect = document.getElementById('task-form-schedule');
       payload.schedule = schedSelect?.value || 'daily';
@@ -1491,11 +1490,11 @@ function _showForm(existing, initTaskType, initTriggerType) {
       payload.trigger_event = evSel.value;
       payload.trigger_count = parseInt(countInput?.value || '5', 10);
     }
-    // webhook: no extra fields needed, token is auto-generated server-side
+    // webhook：无需额外字段，token 由服务端自动生成
 
     try {
-      // Edit only when we have a real existing task (has an id). A draft
-      // object passed for AI pre-fill has no id → create via POST.
+      // 仅当有真实存在的任务（有 id）时才编辑。AI 预填充
+      // 传入的草稿无 id → 通过 POST 创建。
       if (existing && existing.id) {
         await _updateTask(existing.id, payload);
         if (uiModule) uiModule.showToast('Task updated');
@@ -1511,7 +1510,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
   });
 }
 
-// ---- Run History ----
+// ---- 运行历史 ----
 
 async function _showRunHistory(taskId, taskName) {
   _viewingRuns = taskId;
@@ -1556,7 +1555,7 @@ async function _showRunHistory(taskId, taskName) {
     _renderMainView();
   });
 
-  // Click to expand/collapse result
+  // 点击展开/折叠结果
   body.querySelectorAll('.task-run-item').forEach((item, i) => {
     const resultEl = item.querySelector('.task-run-result');
     const run = runs[i];
@@ -1570,7 +1569,7 @@ async function _showRunHistory(taskId, taskName) {
   });
 }
 
-// ---- Actions ----
+// ---- 操作 ----
 
 async function _doPause(id) {
   try {
@@ -1595,9 +1594,8 @@ async function _doRunNow(id, force = false) {
     await _runNow(id, force);
     if (uiModule) uiModule.showToast(force ? 'Task triggered in parallel' : 'Task triggered');
   } catch (e) {
-    // Mirror the polling notification surface so the user sees the same kind
-    // of feedback they get for finished/failed tasks — a real browser
-    // Notification when permission is granted, toast fallback otherwise.
+    // 镜像轮询通知界面，使用户看到与完成任务/失败任务
+    // 相同类型的反馈——权限授予时使用浏览器通知，否则回退到 toast
     const msg = e.message || 'Failed to trigger task';
     let fired = false;
     try {
@@ -1612,7 +1610,7 @@ async function _doRunNow(id, force = false) {
 
 async function _doDelete(id) {
   const ok = uiModule?.styledConfirm
-    ? await uiModule.styledConfirm('Delete this task and all its run history?', { confirmText: 'Delete', danger: true })
+    ? await uiModule.styledConfirm('Delete this task and all its run history?', { confirmText: t('common.delete'), danger: true })
     : confirm('Delete this task and all its run history?');
   if (!ok) return;
   try {
@@ -1658,7 +1656,7 @@ async function _doClearTaskCache(id, label = 'cache') {
 }
 
 async function _doToggleAll() {
-  // If any task is active → pause all. Else resume all paused tasks.
+  // 如果有任何活动任务 → 暂停全部。否则恢复所有已暂停任务
   const hasActive = _tasks.some(t => t.status === 'active');
   const targets = _tasks.filter(t => t.status === (hasActive ? 'active' : 'paused'));
   if (targets.length === 0) {
@@ -1687,7 +1685,7 @@ async function _doToggleAll() {
     }
   }
   if (uiModule) {
-    if (fails.length === 0) uiModule.showToast(`${verb}d all ${ok} task(s)`);
+    if (fails.length === 0) uiModule.showToast(t('tasks.verb_all', { verb: verb, ok: ok }));
     else uiModule.showError(`${verb}d ${ok}/${targets.length} — failed: ${fails.slice(0, 3).join(', ')}`);
   }
   await _fetchTasks();
@@ -1718,7 +1716,7 @@ function _syncPauseAllButton() {
   }
 }
 
-// ---- Tab routing ----
+// ---- 标签页路由 ----
 
 let _activeTab = 'tasks';
 
@@ -1736,7 +1734,7 @@ function _switchTab(tab) {
   else if (tab === 'new') _showPresetPicker();
 }
 
-// ---- Activity view (assistant session log) ----
+// ---- 活动视图（助手会话日志）----
 
 async function _renderActivityView() {
   const modal = document.getElementById('tasks-modal');
@@ -1750,7 +1748,7 @@ async function _renderActivityView() {
       </div>
       <p class="memory-desc">Recent task runs across all scheduled tasks.</p>
       <div style="display:flex;align-items:center;gap:6px;margin:6px 0 8px;">
-        <input type="text" id="tasks-activity-search" placeholder="Filter activity…" class="memory-search-input" style="flex:1;" />
+        <input type="text" id="tasks-activity-search" placeholder=t('tasks.filter_activity') class="memory-search-input" style="flex:1;" />
       </div>
       <div class="tasks-activity-filters" id="tasks-activity-chips" style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap;"></div>
       <div id="tasks-activity-list" class="memory-list" style="flex:1;overflow:auto;font-size:13px;"></div>
@@ -1759,11 +1757,11 @@ async function _renderActivityView() {
 
   document.getElementById('tasks-activity-refresh').addEventListener('click', _renderActivityView);
 
-  // Solo filter: clicking a chip shows ONLY that group (a category, or
-  // Errors). Clicking the active chip again clears the filter (show all).
-  // At most one chip is active at a time. _solo holds the active key, or null.
+  // 独占过滤器：点击芯片仅显示该分组（一个类别或
+  // 错误）。再次点击活动芯片清除过滤器（显示全部）。
+  // 一次最多一个芯片处于活动状态。_solo 保存活动键或 null
   let _afQuery = '';
-  let _solo = null;  // 'cat:<Category>' | 'status:error' | null
+  let _solo = null;  // 'cat:<分类>' | 'status:error' | null
 
   const _entryCat = (e) => _categoryLabel(e.taskName);
   const _entryStatus = (e) =>
@@ -1772,9 +1770,9 @@ async function _renderActivityView() {
   const _isNotification = (e) => e.output_target === 'notification';
 
   const _matchesSolo = (e) => {
-    // Notification rows are intentionally hidden from the default "All" view —
-    // they're surfaced via the dedicated "notifications" chip so the noisy
-    // alert stream doesn't drown the rest of the activity.
+    // 通知行有意从默认的"全部"视图中隐藏——
+    // 它们通过专用的"notifications"标签展示，这样嘈杂的
+    // 通知流不会淹没其余活动。
     if (!_solo) return !_isNotification(e);
     if (_solo === 'notifications') return _isNotification(e);
     if (_solo.startsWith('cat:')) return _entryCat(e) === _solo.slice(4);
@@ -1802,8 +1800,8 @@ async function _renderActivityView() {
   const _buildChips = () => {
     const chipBar = document.getElementById('tasks-activity-chips');
     if (!chipBar) return;
-    // Distinct categories present (excluding notifications — those have their
-    // own chip and are hidden from the default view).
+    // 存在的不同类别（排除通知——它们有自己
+    // 的芯片，并从默认视图中隐藏）。
     const cats = [];
     for (const e of _activityEntries) {
       if (_isNotification(e)) continue;
@@ -1811,16 +1809,16 @@ async function _renderActivityView() {
       if (!cats.includes(c)) cats.push(c);
     }
     const hasErrors = _activityEntries.some(e => !_isNotification(e) && _entryStatus(e) === 'error');
-    // Count notifications that would actually display under the chip — applies
-    // the active search query so the badge matches what you'd see, not a
-    // misleading total.
+    // 统计在芯片下实际显示的通知数——应用
+    // 当前搜索查询，使计数匹配用户实际看到的内容，而非
+    // 误导性的总数。
     const _q = _afQuery.trim().toLowerCase();
     const notifCount = _activityEntries.filter(e =>
       _isNotification(e) && (!_q || `${e.taskName} ${e.result}`.toLowerCase().includes(_q))
     ).length;
-    // Active chip is highlighted; when one is soloed the rest dim ('off').
-    // Library-style .memory-cat-chip, with an "all" chip; the active one
-    // highlights. Solo-select: clicking shows only that group.
+    // 活动芯片高亮；当某芯片独占时其余变暗
+    // 库风格的 .memory-cat-chip，带有"全部"芯片；活动芯片
+    // 高亮。独占选择：点击仅显示该分组。
     const cls = (active) => 'memory-cat-chip' + (active ? ' active' : '');
     let html = `<button class="${cls(!_solo)}" data-key="">all</button>`;
     html += cats.map(c =>
@@ -1836,7 +1834,7 @@ async function _renderActivityView() {
     chipBar.querySelectorAll('.memory-cat-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const key = chip.dataset.key;
-        _solo = key ? (_solo === key ? null : key) : null;  // "all" or re-click clears
+        _solo = key ? (_solo === key ? null : key) : null;  // "全部"或再次点击清除
         _buildChips();
         _applyFilter();
       });
@@ -1872,10 +1870,10 @@ async function _renderActivityView() {
         if (r.status === 'running') resultText = '_Running…_';
       }
       return {
-        // Surface the actual task_type ('llm' | 'research' | 'action') so the
-        // chat-worthy check in _renderActivityEntry can decide between "Open
-        // in chat" (llm/research) and "Copy log" (action). Was hardcoded
-        // 'task', which never matched and made Open-in-chat dead code.
+        // 暴露实际的 task_type（'llm' | 'research' | 'action'），使
+        // _renderActivityEntry 中的"是否值得聊天"检查能区分"在聊天中打开"
+        //（llm/research）和"复制日志"（action）。之前硬编码为
+        // 'task'，从未匹配，导致"在聊天中打开"成为死代码。
         kind: r.task_type || 'llm',
         taskName: r.task_name || (r.task_type === 'action' ? (r.action || 'Action') : 'Task'),
         taskId: r.task_id,
@@ -1942,7 +1940,7 @@ function _stackActivityEntries(entries) {
   return out;
 }
 
-// "5s" / "1m 23s" / "2h 14m" — same compact ladder the activity timestamps use.
+// "5s" / "1分23秒" / "2时14分" — 与活动时间戳相同的紧凑阶梯格式
 function _fmtElapsed(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   if (s < 60) return s + 's';
@@ -1952,17 +1950,16 @@ function _fmtElapsed(ms) {
   return h + 'h ' + (m % 60) + 'm';
 }
 
-// Single 1-second interval ticks all running rows' elapsed counters.
-// Started lazily when a running row appears, cleared when none remain.
+// 单一 1 秒间隔时钟驱动所有运行中行的已用时间计数器
+// 运行行出现时懒加载启动，没有剩余时清除
 let _activityTimerInterval = null;
 function _startActivityTimers(root) {
-  // Tick once immediately so the freshly-rendered row jumps to the right
-  // value before the interval fires.
+  // 立即走时使刚渲染的行在间隔触发前跳到正确值
   _tickActivityTimers(root || document);
   if (_activityTimerInterval) return;
   _activityTimerInterval = setInterval(() => {
     if (!_tickActivityTimers(document)) {
-      // No live rows anymore — stop the interval to avoid burning a tick.
+      // 不再有活跃行——停止间隔以节省时钟
       clearInterval(_activityTimerInterval);
       _activityTimerInterval = null;
     }
@@ -1979,29 +1976,27 @@ function _tickActivityTimers(root) {
   return true;
 }
 
-// Wire row interactions: expand toggle + "Open in chat".
+// 绑定行交互：展开切换 + "在聊天中打开"
 function _wireActivityRows(list) {
-  // Replace the [data-spin-here] placeholders in running/queued rows with the
-  // app's whirlpool spinner element (createElement, with a stop hook so the
-  // poll's next render clears them cleanly).
+  // 用应用的漩涡旋转器元素替换运行中/排队行的 [data-spin-here] 占位符
+  //（createElement，带有停止钩子，使下次轮询渲染时能干净清除）。
   list.querySelectorAll('[data-spin-here]').forEach(slot => {
     try {
       const wp = spinnerModule.createWhirlpool(12);
-      // Right-side placement (next to the "Running" label) — small left
-      // margin to separate from the text, no right margin so the spinner
-      // sits flush with the row's right edge.
+      // 右侧放置（紧挨"Running"标签）——左侧小
+      // 边距与文字分隔，无右边距使旋转器紧贴行的右边缘。
       wp.element.style.cssText = 'display:inline-flex;width:12px;height:12px;margin:0 0 0 6px;vertical-align:middle;';
       slot.replaceWith(wp.element);
     } catch (_) {
       slot.textContent = '…';
     }
   });
-  // Kick the live elapsed-timer interval (running rows only — queued has no
-  // counter). No-op when there's nothing to tick.
+  // 启动实时计时器间隔（仅运行中的行——排队行没有
+  // 计数器）。无内容需要计时时为空操作。
   _startActivityTimers(list);
   list.querySelectorAll('.task-log-row').forEach(row => {
-    // Click anywhere on the row to toggle expand.
-    // Buttons inside still get their own handlers via stopPropagation.
+    // 点击行上任意位置切换展开
+    // 内部按钮仍通过 stopPropagation 获得自己的处理器
     if (!row.classList.contains('is-skipped')) {
       row.addEventListener('click', () => row.classList.toggle('expanded'));
     }
@@ -2066,25 +2061,25 @@ function _wireActivityRows(list) {
   });
 }
 
-// Open a task run's result in a fresh chat session so it's comfortable
-// to read full-width and the user can ask follow-ups.
+// 在新聊天会话中打开任务运行结果，以便全宽舒适阅读
+// 且用户可以追问后续问题。
 async function _openResultInChat(entry) {
   try {
-    // Pick an endpoint/model. Prefer the model the task actually ran on
-    // (if it's currently reachable), else fall back to the first online
-    // endpoint. The user can switch models in the chat anyway.
+    // 选择端点/模型。优先选择任务实际运行所用的模型
+    //（如果当前可达），否则回退到第一个在线
+    // 端点。用户可以在聊天中随时切换模型。
     let url = '', model = '', epId = '';
     const items = (() => {
       try { return (window.modelsModule && window.modelsModule.getCachedItems) ? window.modelsModule.getCachedItems() : []; }
       catch { return []; }
     })();
     if (entry.model) {
-      // Find an online endpoint that serves the task's model.
+      // 查找服务于该任务模型的在线端点
       const match = items.find(it => !it.offline && (it.models || []).includes(entry.model));
       if (match) { url = match.url; model = entry.model; epId = match.endpoint_id || ''; }
       else if (entry.endpointUrl) {
-        // Endpoint known but not in the live list (e.g. cookbook model
-        // not currently served) — try it anyway with skip_validation.
+        // 端点已知但不在实时列表中（如 cookbook 模型
+        // 当前未提供服务）——仍尝试使用 skip_validation。
         url = entry.endpointUrl; model = entry.model;
       }
     }
@@ -2098,8 +2093,8 @@ async function _openResultInChat(entry) {
       } catch (_) {}
     }
     if (!url) {
-      // Skip embedding/tts/whisper/moderation/image models — they can't chat,
-      // and an endpoint may list one first (e.g. text-embedding-ada-002).
+      // 跳过 embedding/tts/whisper/moderation/image 模型——它们无法聊天，
+      // 且端点可能将其中一个列在前面（如 text-embedding-ada-002）。
       const _isChatModel = (m) => {
         const l = (m || '').toLowerCase();
         return !!l && !['text-embedding', 'embedding', 'tts-', 'whisper', 'text-moderation', 'moderation-', 'dall-e', 'rerank'].some(p => l.includes(p));
@@ -2120,12 +2115,12 @@ async function _openResultInChat(entry) {
     if (model) fd.append('model', model);
     if (epId) fd.append('endpoint_id', epId);
     const res = await fetch(`${API_BASE}/api/session`, { method: 'POST', credentials: 'same-origin', body: fd });
-    if (!res.ok) { uiModule.showToast(`Couldn't create chat (HTTP ${res.status})`); return; }
+    if (!res.ok) { uiModule.showToast(t('tasks.couldnt_create_chat', { status: res.status })); return; }
     const sess = await res.json();
     const sid = sess.id || sess.session_id;
     if (!sid) { uiModule.showToast('Chat created but no session id returned'); return; }
 
-    // Seed the conversation: a framing user line + the result as assistant.
+    // 种子对话：一个框架用户行 + 结果作为助手
     await fetch(`${API_BASE}/api/session/${sid}/inject_messages`, {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
@@ -2141,7 +2136,7 @@ async function _openResultInChat(entry) {
       if (window.sessionModule.selectSession) window.sessionModule.selectSession(sid);
     }
   } catch (e) {
-    uiModule.showToast(`Open in chat failed: ${e.message || e}`);
+    uiModule.showToast(t('tasks.open_chat_failed', { msg: e.message || e }));
   }
 }
 
@@ -2152,17 +2147,16 @@ function _classifyResult(text) {
   return 'info';
 }
 
-// Category → fixed hue. Anything that doesn't match a keyword gets a stable
-// hue derived from the task name's hash, so a recurring custom task keeps
-// the same color from one run to the next.
+// 类别 → 固定色相。不匹配关键字的内容根据任务名称哈希
+// 计算色相，使重复的自定义任务在多次运行间保持相同颜色。
 const _CATEGORY_HUES = [
-  { hue: 210, kw: /\b(email|inbox|mail|smtp|imap|reply|summary|spam|urgency)\b/i },     // blue   — email
-  { hue: 280, kw: /\b(research|web ?search|deep[-_ ]research|sources?|investigate)\b/i },// purple — research
-  { hue:  35, kw: /\b(cookbook|model[-_ ]?(serve|download)|hf|huggingface|vllm|llama|ollama)\b/i }, // amber — cookbook
-  { hue: 150, kw: /\b(calendar|event|meeting|appointment|schedule)\b/i },                // green  — calendar
-  { hue: 330, kw: /\b(reminder|note|notify|alert)\b/i },                                 // pink   — reminders
-  { hue:  10, kw: /\b(check[-_ ]?in|morning|evening|daily|standup)\b/i },                // red    — check-ins
-  { hue: 190, kw: /\b(memory|memories|remember|recall)\b/i },                            // teal   — memory
+  { hue: 210, kw: /\b(email|inbox|mail|smtp|imap|reply|summary|spam|urgency)\b/i },     // 蓝色   — 邮箱
+  { hue: 280, kw: /\b(research|web ?search|deep[-_ ]research|sources?|investigate)\b/i },// 紫色   — 研究
+  { hue:  35, kw: /\b(cookbook|model[-_ ]?(serve|download)|hf|huggingface|vllm|llama|ollama)\b/i }, // 琥珀色 — cookbook
+  { hue: 150, kw: /\b(calendar|event|meeting|appointment|schedule)\b/i },                // 绿色   — 日历
+  { hue: 330, kw: /\b(reminder|note|notify|alert)\b/i },                                 // 粉色   — 提醒
+  { hue:  10, kw: /\b(check[-_ ]?in|morning|evening|daily|standup)\b/i },                // 红色   — 签到
+  { hue: 190, kw: /\b(memory|memories|remember|recall)\b/i },                            // 青色   — 记忆
 ];
 
 function _hashHue(s) {
@@ -2172,7 +2166,7 @@ function _hashHue(s) {
 }
 
 function _categoryHue(taskName, kind) {
-  if (kind === 'you') return 220;          // user message — neutral blue-grey
+  if (kind === 'you') return 220;          // 用户消息 — 中性蓝灰
   const t = (taskName || '').toLowerCase();
   for (const c of _CATEGORY_HUES) {
     if (c.kw.test(t)) return c.hue;
@@ -2180,8 +2174,8 @@ function _categoryHue(taskName, kind) {
   return _hashHue(t || 'task');
 }
 
-// Coarse category label for the activity filter chips. Mirrors the
-// hue keyword groups so the chip color matches the row stripe.
+// 活动过滤器芯片的粗略类别标签。镜像
+// 色相关键字组，使芯片颜色匹配行的条纹。
 const _CATEGORY_LABELS = [
   { label: 'email',     kw: /\b(email|inbox|mail|smtp|imap|reply|spam|urgency)\b/i },
   { label: 'research',  kw: /\b(research|web ?search|deep[-_ ]research|sources?|investigate)\b/i },
@@ -2198,17 +2192,17 @@ function _categoryLabel(taskName) {
 }
 
 function _renderActivityEntry(entry) {
-  // Canonical index into _activityEntries (map() passes the FILTERED
-  // index, which would be wrong) — used by the Open-in-chat handler.
+  // 到 _activityEntries 的规范索引（map() 传递的是筛选后的
+  // 索引，那会是错的）——由"在聊天中打开"处理器使用。
   const entryIdx = Number.isInteger(entry.sourceIdx) ? entry.sourceIdx : _activityEntries.indexOf(entry);
   const repeatBadge = entry.repeatCount > 1
     ? `<span class="task-log-repeat" title="${entry.repeatCount} similar activity rows">+${entry.repeatCount - 1} repeats</span>`
     : '';
   const tsLabel = _relativeTime(entry.ts);
   const tsAbs = entry.ts ? new Date(entry.ts).toLocaleString() : '';
-  // Prefer the run's own status (queued / running / success / error / skipped)
-  // over heuristic text classification. Fall back to text-scan for older
-  // rows where entry.status is missing.
+  // 优先使用运行自身的状态（排队/运行中/成功/错误/已跳过）
+  // 而非启发式文本分类。对于缺少 entry.status 的旧行，
+  // 回退到文本扫描。
   let status;
   if (entry.status === 'queued' || entry.status === 'running' || entry.status === 'skipped' || entry.status === 'aborted') {
     status = entry.status;
@@ -2220,11 +2214,11 @@ function _renderActivityEntry(entry) {
     status = _classifyResult(entry.result);
   }
   const statusDot = `<span class="task-log-status task-log-status-${status}" title="${status}"></span>`;
-  // Render the result through markdown so code blocks, lists, links look right.
+  // 通过 markdown 渲染结果，使代码块、列表、链接显示正确
   let resultHtml;
   const _isRunning = entry.status === 'running' || entry.status === 'queued';
-  // Skipped (noop) rows: render as a slim, dimmed one-liner — no body, no
-  // actions, just `· name · skipped — reason · time`. CSS via .is-skipped.
+  // 跳过的（空操作）行：渲染为细窄的暗淡单行——无正文，无
+  // 操作按钮，仅 `· 名称 · 跳过 — 原因 · 时间`。CSS 通过 .is-skipped 控制。
   const _isSkipped = entry.status === 'skipped';
   if (_isRunning && !(entry.result || '').trim()) {
     resultHtml = '';
@@ -2235,20 +2229,20 @@ function _renderActivityEntry(entry) {
       resultHtml = `<pre style="white-space:pre-wrap;word-break:break-word;">${_escHtml(entry.result || '')}</pre>`;
     }
   }
-  // Bracketed prefixes like "[Default] No recent emails" — the fan-out across
-  // accounts joins per-account results. Style them as compact accent tags so
-  // the activity row reads as "<tag> message" instead of a wall of brackets.
-  // Skip <pre>/<code> blocks: bash output / tracebacks / numbered lists often
-  // contain "\n[N] ..." sequences that the prefix regex would otherwise mangle.
+  // 像 "[Default] No recent emails" 这样的方括号前缀——跨账号的展开
+  // 会合并每个账号的结果。将它们样式化为紧凑的强调标签，
+  // 使活动行显示为"<标签> 消息"而非大段方括号。
+  // 跳过 <pre>/<code> 块：bash 输出/追踪/编号列表经常
+  // 包含 "\n[N] ..." 序列，否则会被前缀正则乱码。
   {
     const tagRe = /(^|<p>|<br\s*\/?>|\n)\[([^\]\n<>]{1,40})\]\s*/g;
     const replaceTags = (s) => s.replace(tagRe, '$1<span class="task-log-account-tag">$2</span> ');
-    // Split on whole <pre>...</pre> blocks (greedy match per block); only
-    // transform the outside-of-pre segments. Then do the same for any stray
-    // inline <code>...</code> spans inside the surviving outside text.
+    // 在完整的 <pre>...</pre> 块上分割（每块贪婪匹配）；仅
+    // 仅转换 <pre> 块之外的部分。然后对在外层文本中剩下的
+    // 任何内联 <code>...</code> 跨度做同样处理。
     const parts = resultHtml.split(/(<pre[\s\S]*?<\/pre>)/i);
     resultHtml = parts.map((seg, i) => {
-      if (i % 2 === 1) return seg;  // odd indices = the <pre>…</pre> chunks, leave intact
+      if (i % 2 === 1) return seg;  // 奇数索引 = <pre>…</pre> 块，保持原样
       const codeParts = seg.split(/(<code[\s\S]*?<\/code>)/i);
       return codeParts.map((cs, j) => j % 2 === 1 ? cs : replaceTags(cs)).join('');
     }).join('');
@@ -2259,16 +2253,15 @@ function _renderActivityEntry(entry) {
     ? `<details class="task-log-prompt"><summary>Prompt</summary><pre>${_escHtml(entry.prompt)}</pre></details>`
     : '';
   const hue = _categoryHue(entry.taskName, entry.kind);
-  // CSS vars feed the colored title + accent stripe.
+  // CSS 变量提供彩色标题 + 强调条纹
   const styleVars = `--cat-hue:${hue};`;
   const _runningPlaceholder = /^(Starting…|Starting\.\.\.|_Running…_|_Running\.\.\._|_Queued\b)/i.test((entry.result || '').trim());
   const hasResult = !!(entry.result && entry.result.trim() && entry.status !== 'running' && entry.status !== 'queued');
   const hasRunningProgress = !!(entry.result && entry.result.trim() && !_runningPlaceholder && (entry.status === 'running' || entry.status === 'queued'));
-  // "Open in chat" only makes sense for runs whose result is a real assistant
-  // message (Prompt / Research tasks). Action/event runs are just log lines
-  // (e.g. "No recent emails", "Tidied N memories") — for those, replace the
-  // button with "Copy log" so you can grab the text without spawning a chat
-  // with nothing useful in it.
+  // "在聊天中打开"仅对结果是真实助手消息的运行有意义
+  //（Prompt/Research 任务）。Action/event 运行只是日志行
+  //（如"No recent emails"、"Tidied N memories"）——对此将其替换为
+  // "Copy log"，以便复制文本而无需打开无意义的聊天。
   const _isChatWorthy = entry.kind === 'llm' || entry.kind === 'research';
   let actionBtn = '';
   if (hasResult && _isChatWorthy) {
@@ -2301,14 +2294,14 @@ function _renderActivityEntry(entry) {
          Run again
        </button>`;
   }
-  // Running rows replace the relative-time on the right with "Running NN" + a
-  // live whirlpool spinner. Queued shows "Queued" the same way (no timer —
-  // hasn't actually started yet). The elapsed counter ticks every second via
-  // `_startActivityTimers` after the row is in the DOM.
+  // 运行中的行将右侧相对时间替换为"Running NN" +
+  // 实时漩涡旋转器。排队显示"Queued"同理（无计时器——
+  // 尚未真正开始）。行进入 DOM 后通过
+  // `_startActivityTimers` 每秒更新已用时间计数器。
   let rightHtml;
   if (_isRunning) {
     const isQueued = entry.status === 'queued';
-    // Initial elapsed for the first paint; the 1s interval below keeps it live.
+    // 首次渲染的初始已用时间；下方 1 秒间隔使其保持更新。
     const startMs = entry.ts ? new Date(entry.ts).getTime() : Date.now();
     const stale = !isQueued && (Date.now() - startMs) > 30 * 60 * 1000;
     const label = isQueued ? 'Queued' : stale ? 'Still running' : 'Running';
@@ -2320,9 +2313,9 @@ function _renderActivityEntry(entry) {
     rightHtml = `<span class="task-log-time" title="${_escHtml(tsAbs)}">${_escHtml(tsLabel)}</span>`;
   }
 
-  // Slim variant for skipped (noop) rows — single line, no body, no actions,
-  // dimmed. The reason (entry.result, e.g. "no pings due") sits inline so
-  // users can see *why* the row was skipped without expanding anything.
+  // 跳过的（空操作）行细长变体——单行，无正文，无操作，
+  // 变暗。原因（entry.result，如"no pings due"）内联显示，
+  // 用户无需展开即可看到该行*为何*被跳过。
   if (_isSkipped) {
     const reason = (entry.result || '').trim();
     return `
@@ -2364,9 +2357,9 @@ function _escHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// ---- Main view ----
+// ---- 主视图 ----
 
-// Tasks list view state — search query + active category tag + select mode.
+// 任务列表视图状态——搜索查询 + 活动类别标签 + 选择模式
 let _taskSearch = '';
 let _taskFilter = null;
 let _taskSort = 'recent';
@@ -2380,7 +2373,7 @@ async function _aiDraftTask(inputEl, btnEl) {
   btnEl.disabled = true;
   btnEl.classList.add('spinning');
   btnEl.textContent = '';
-  // Match the Tidy buttons' silent whirlpool spinner.
+  // 匹配整理按钮的静默漩涡旋转器
   const _sp = spinnerModule.create('', 'clean', 'whirlpool');
   const _spEl = _sp.createElement();
   _spEl.style.position = 'relative';
@@ -2399,14 +2392,14 @@ async function _aiDraftTask(inputEl, btnEl) {
       return;
     }
     const draft = data.draft;
-    // The form treats scheduled_time as UTC (it converts UTC→local for the
-    // picker). The AI returns LOCAL time, so convert local→UTC here for the
-    // round-trip to land on the intended local time.
+    // 表单将 scheduled_time 视为 UTC（它将 UTC→本地转换给
+    // 选择器）。AI 返回的是本地时间，所以在此将 local→UTC 转换，
+    // 使往返后落在预期的本地时间。
     if (draft.scheduled_time) {
       try { draft.scheduled_time = _localTimeToUtc(draft.scheduled_time); } catch (_) {}
     }
-    // Pass the draft as a synthetic "existing" (no id) → form pre-fills every
-    // field but still creates via POST on save.
+    // 将草稿作为合成的"现有"（无 id）传递→表单预填充所有
+    // 字段，但保存时仍通过 POST 创建。
     _showForm(draft, draft.task_type, draft.trigger_type || 'schedule');
   } catch (e) {
     if (uiModule) uiModule.showError('AI draft failed: ' + (e.message || e));
@@ -2440,7 +2433,7 @@ function _renderMainView() {
           </select>
           <button class="memory-toolbar-btn" id="tasks-select-btn" title="Select tasks" style="position:relative;top:-7px;">Select</button>
         </div>
-        <input type="text" id="tasks-search" placeholder="Search tasks…" class="memory-search-input" value="${_esc(_taskSearch)}" style="position:relative;top:-4px;" />
+        <input type="text" id="tasks-search" placeholder=t('tasks.search_tasks') class="memory-search-input" value="${_esc(_taskSearch)}" style="position:relative;top:-4px;" />
       </div>
       <div id="tasks-bulk-bar" class="memory-bulk-bar${_taskSelectMode ? '' : ' hidden'}" style="position:relative;top:-4px;">
         <label class="memory-bulk-check-all" style="position:relative;top:0px;"><input type="checkbox" id="tasks-select-all" /> All</label>
@@ -2471,8 +2464,8 @@ function _renderMainView() {
 
   _renderList();
   _syncPauseAllButton();
-  // Lazy-load action descriptions so the list can show them under each
-  // action task. Re-render once they arrive (no-op if already cached).
+  // 懒加载动作描述，使列表可在每个动作任务下显示它们。
+  // 到达后重新渲染（如果已缓存则为空操作）。
   if (!_builtinActions) {
     _fetchActions().then(() => {
       if (document.getElementById('tasks-list')) _renderList();
@@ -2480,11 +2473,11 @@ function _renderMainView() {
   }
 }
 
-// ---- Modal ----
+// ---- 弹窗 ----
 
 export function openTasks(focusId) {
   if (_open) {
-    // Already open — just focus the requested task.
+    // 已打开——仅聚焦所请求的任务
     if (focusId) _focusTask(focusId);
     return;
   }
@@ -2492,7 +2485,7 @@ export function openTasks(focusId) {
   _open = true;
   _tasksCascadeNext = true;
   _viewingRuns = null;
-  _outputTargets = null; // refresh available targets
+  _outputTargets = null; // 刷新可用目标
   _builtinActions = null;
   _triggerEvents = null;
 
@@ -2526,12 +2519,12 @@ export function openTasks(focusId) {
   `;
   document.body.appendChild(modal);
 
-  // Tab routing
+  // 标签路由
   modal.querySelectorAll('.tasks-tab').forEach(btn => {
     btn.addEventListener('click', () => _switchTab(btn.dataset.tab));
   });
 
-  // Live clock
+  // 实时时钟
   function _tickClock() {
     const el = document.getElementById('tasks-clock');
     if (!el) return;
@@ -2544,7 +2537,7 @@ export function openTasks(focusId) {
   _tickClock();
   _clockInterval = setInterval(_tickClock, 1000);
 
-  // Make draggable — shared helper handles drag + L/R dock + (none) fs.
+  // 设为可拖拽——共享辅助函数处理拖拽 + 左/右停靠 + 全屏
   {
     const content = modal.querySelector('.modal-content');
     const header = modal.querySelector('.modal-header');
@@ -2553,9 +2546,9 @@ export function openTasks(focusId) {
     }
   }
 
-  // Events
+  // 事件
   document.getElementById('tasks-close').addEventListener('click', closeTasks);
-  // "Pause all" + "Select" live in the main-view sub-header now (wired in _renderMainView).
+  // "Pause all" + "Select" 现在位于主视图子标题中（在 _renderMainView 中绑定）。
 
   modal.addEventListener('click', (e) => {
     if (uiModule.isTouchInsideModal()) return;
@@ -2569,9 +2562,9 @@ export function openTasks(focusId) {
         _renderMainView();
         return;
       }
-      // If we're on the "Add" tab inside the new-task form (preset already
-      // picked), step back to the preset picker instead of closing the modal.
-      // Detect by: Add tab active + the form's name input is mounted.
+      // 如果我们在新任务表单的"添加"标签页中（预设已
+      // 选定），回退到预设选择器而不是关闭弹窗。
+      // 检测方式：添加标签页处于活动状态 + 表单的名称输入框已挂载
       const _modal = document.getElementById('tasks-modal');
       const _addActive = _modal?.querySelector('.tasks-tab.active[data-tab="new"]');
       const _formMounted = _modal?.querySelector('#task-form-name');
@@ -2584,14 +2577,13 @@ export function openTasks(focusId) {
   };
   document.addEventListener('keydown', _escHandler);
 
-  // Paint the scaffolding immediately so the modal-enter animation reveals a
-  // populated shell (header/search/sort/empty list with a spinner row) instead
-  // of an empty modal-body that fills in after the fetch resolves — that delay
-  // was visible as a "flicker" right after opening.
+  // 立即绘制骨架，使模态入场动画展示已填充的外壳
+  //（标题/搜索/排序/带旋转器的空列表），而非空 modal-body
+  // 去等待 fetch 完成后填充——这一延迟在打开后表现为"闪烁"。
   _activeTab = 'tasks';
   _switchTab('tasks');
   _fetchTasks().then(() => {
-    // Re-render so the list swaps the Loading row for real cards.
+    // 重新渲染，使列表将加载行替换为真实卡片
     _renderList();
     _syncPauseAllButton();
     if (_pendingFocusTaskId) {
@@ -2604,13 +2596,13 @@ export function openTasks(focusId) {
 
 let _pendingFocusTaskId = null;
 
-// Scroll to + briefly highlight a task card by id. Used by the chat
-// anchor-link delegate ([Name](#task-<id>)).
+// 根据 id 滚动到任务卡片并短暂高亮。用于聊天
+// 锚点链接委托（[名称](#task-<id>)）。
 function _focusTask(taskId) {
   if (!taskId) return;
-  // Find the task card with this id and scroll-into-view + flash it. Backend
-  // task IDs are UUIDs so the unescaped selector is safe in practice; if that
-  // changes, swap to `[data-id="${CSS.escape(taskId)}"]`.
+  // 根据此 id 查找任务卡片，滚动到视图中并闪烁。后端
+  // 任务 ID 是 UUID，所以未转义的选择器在实践中安全；如果
+  // 改变，切换为 `[data-id="${CSS.escape(taskId)}"]`。
   setTimeout(() => {
     const card = document.querySelector(`.task-card[data-id="${taskId}"], [data-id="${taskId}"]`);
     if (!card) return;
@@ -2643,8 +2635,8 @@ export function closeTasks() {
     clearInterval(_clockInterval);
     _clockInterval = null;
   }
-  // Detach the form-Esc capture listener if it survived (e.g. user closed the
-  // modal from the X / outside-click while the form was open).
+  // 如果表单 Esc 捕获监听器仍存在（如用户通过 X/外部点击
+  // 在表单打开时关闭了弹窗），则分离之。
   if (window._tasksFormEsc) {
     document.removeEventListener('keydown', window._tasksFormEsc, true);
     window._tasksFormEsc = null;
@@ -2653,7 +2645,7 @@ export function closeTasks() {
 
 export function isTasksOpen() { return _open; }
 
-// ---- Task run notifications polling ----
+// ---- 任务运行通知轮询 ----
 
 let _notifInterval = null;
 
@@ -2665,9 +2657,9 @@ async function _pollTaskNotifications() {
     const notes = data.notifications || [];
     for (const n of notes) {
       const ok = n.status === 'success';
-      // Tasks with output_target='notification' carry the result text in `body`
-      // — show it as a real browser Notification (richer than a toast). Falls
-      // back to a toast when permission is denied or unavailable.
+      // output_target='notification' 的任务在 `body` 中携带结果文本
+      // ——将其显示为真实的浏览器通知（比 toast 更丰富）。当权限
+      // 被拒绝或不可用时回退到 toast。
       if (ok && n.body) {
         const title = n.task_name || 'Task';
         let fired = false;
@@ -2686,7 +2678,7 @@ async function _pollTaskNotifications() {
       else uiModule.showError(msg);
     }
   } catch (e) {
-    // Silently ignore — server may be unreachable
+    // 静默忽略——服务器可能不可达
   }
 }
 
@@ -2702,7 +2694,7 @@ function stopNotificationPolling() {
   }
 }
 
-// Start polling on module load
+// 模块加载时开始轮询
 startNotificationPolling();
 
 const tasksModule = { openTasks, closeTasks, isTasksOpen, startNotificationPolling, stopNotificationPolling };

@@ -1,5 +1,5 @@
 # routes/model_routes.py
-"""Routes for model and provider management."""
+"""模型和提供商管理路由。"""
 import os
 import re
 import uuid
@@ -50,7 +50,7 @@ _ENDPOINT_FALLBACK_FIELDS = {
 
 
 def _speech_settings_using_endpoint(settings: dict, ep_id: str) -> list:
-    """Return speech settings that reference a model endpoint."""
+    """返回引用模型端点的语音设置。"""
     endpoint_ref = f"endpoint:{ep_id}"
     return [
         label
@@ -60,7 +60,7 @@ def _speech_settings_using_endpoint(settings: dict, ep_id: str) -> list:
 
 
 def _clear_speech_settings_for_endpoint(settings: dict, ep_id: str) -> list:
-    """Reset speech settings that reference a model endpoint."""
+    """重置引用模型端点的语音设置。"""
     endpoint_ref = f"endpoint:{ep_id}"
     cleared = []
     for provider_key, model_key, default_model, label in _SPEECH_ENDPOINT_SETTINGS:
@@ -72,7 +72,7 @@ def _clear_speech_settings_for_endpoint(settings: dict, ep_id: str) -> list:
 
 
 def _endpoint_settings_using_endpoint(settings: dict, ep_id: str, *, include_speech: bool = False) -> list:
-    """Return labels for settings and fallback chains that reference an endpoint."""
+    """返回来引用端点的设置和回退链的标签。"""
     affected = []
     for ep_key, (_, label) in _ENDPOINT_SETTING_FIELDS.items():
         if (settings.get(ep_key) or "") == ep_id:
@@ -87,7 +87,7 @@ def _endpoint_settings_using_endpoint(settings: dict, ep_id: str, *, include_spe
 
 
 def _clear_endpoint_settings_for_endpoint(settings: dict, ep_id: str, *, include_speech: bool = False) -> list:
-    """Remove an endpoint from direct settings and model fallback chains."""
+    """从直接设置和模型回退链中移除端点。"""
     cleared = []
     for ep_key, (model_key, label) in _ENDPOINT_SETTING_FIELDS.items():
         if (settings.get(ep_key) or "") == ep_id:
@@ -111,7 +111,7 @@ def _clear_endpoint_settings_for_endpoint(settings: dict, ep_id: str, *, include
 
 
 def _clear_user_pref_endpoint_refs(all_prefs: dict, ep_id: str) -> int:
-    """Remove endpoint references from scoped or legacy-flat user preferences."""
+    """从作用域或 legacy 扁平的用户偏好中移除端点引用。"""
     if not isinstance(all_prefs, dict):
         return 0
     users = all_prefs.get("_users")
@@ -123,7 +123,7 @@ def _clear_user_pref_endpoint_refs(all_prefs: dict, ep_id: str) -> int:
     return cleared_users
 
 
-# Loopback hosts a user might type for a local model server (LM Studio,
+# 用户可能为本地模型服务器（LM Studio、Ollama 等）输入的环回地址主机
 # llama.cpp, vLLM, …). Inside Docker these point at the *container*, not the
 # host the server actually runs on.
 _ANY_BIND_HOSTS = {"0.0.0.0", "::"}
@@ -213,8 +213,8 @@ def _rewrite_loopback_for_docker(base_url: str, *, container_local: bool = False
 
 
 # ── Curated model lists per provider ──
-# For cloud providers that return 100+ models, only show these by default.
-# A model ID matches if it starts with or equals a curated entry.
+# 对于返回 100+ 模型的云服务提供商，默认只显示这些。
+# 模型 ID 如果以精选条目开头或等于精选条目则匹配。
 _PROVIDER_CURATED = {
     "openai": [
         "gpt-5.2", "gpt-5.2-pro", "gpt-5", "gpt-5-pro", "gpt-5-mini", "gpt-5-nano",
@@ -267,10 +267,10 @@ _PROVIDER_CURATED = {
     ],
 }
 
-# Map hostnames → curated-list keys for providers whose _detect_provider()
+# 将主机名映射到精选列表键，用于 _detect_provider() 返回通用键的提供商
 # returns a generic value (e.g. "openai") but deserve their own curated list.
 # "openrouter" is a sentinel meaning "no curation — show all models as curated".
-# Entries are matched by hostname equality or subdomain suffix (via _host_match),
+# 条目通过主机名相等或子域名后缀匹配（通过 _host_match），
 # so e.g. "deepseek.com" covers api.deepseek.com without matching the substring
 # inside an unrelated URL.
 _HOST_TO_CURATED = (
@@ -295,7 +295,7 @@ def _match_provider_curated(base_url: str, provider: str) -> str:
     then matches the base URL's hostname against known providers, and
     finally falls back to the raw provider string from _detect_provider().
     """
-    # Path-based overrides for hosts that serve multiple curated lists.
+    # 基于路径的覆盖，用于提供多个精选列表的主机。
     parsed = urlparse(base_url)
     if _host_match(base_url, "z.ai") and "/api/coding" in (parsed.path or ""):
         return "zai-coding"
@@ -328,7 +328,7 @@ def _curate_models(model_ids, provider):
             curated.append(mid)
         else:
             extra.append(mid)
-    # Sort curated models by their priority order in the curated list
+    # 按精选列表中的优先顺序对精选模型排序
     curated.sort(key=lambda mid: (_best_match_idx(mid), mid))
     return curated, extra
 
@@ -353,7 +353,7 @@ def _normalize_refresh_mode(value: Any, endpoint_kind: str = "auto") -> str:
         return mode
     if mode == "auto" and kind != "proxy":
         return "auto"
-    # Proxies default to manual cached-first behavior. Normal local/API
+    # 代理默认使用手动缓存优先行为。普通本地/API 端点按需获取。
     # endpoints keep automatic bounded refreshes.
     return "manual" if kind == "proxy" else "auto"
 
@@ -472,7 +472,7 @@ def _is_ollama_base(base_url: str) -> bool:
         return "ollama" in (base_url or "").lower()
 
 
-# Prefixes/substrings for models that are NOT chat-completions-capable
+# 不兼容 chat-completions 的模型的前缀/子字符串
 _NON_CHAT_PREFIXES = (
     "dall-e", "tts-", "whisper", "text-embedding", "embedding",
     "davinci", "babbage", "moderation", "omni-moderation",
@@ -572,7 +572,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Say OK"},
     ]
-    # Simple tool definition to test tool support
+    # 用于测试工具支持的简单工具定义
     _test_tools = [{"type": "function", "function": {"name": "test", "description": "Test tool", "parameters": {"type": "object", "properties": {}}}}] if with_tools else None
 
     if provider == "anthropic":
@@ -596,7 +596,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         from src.llm_core import _uses_max_completion_tokens, _restricts_temperature
         _max_key = "max_completion_tokens" if _uses_max_completion_tokens(model_id) else "max_tokens"
         payload = {"model": model_id, "messages": messages, _max_key: 5}
-        # Reasoning models (o1/o3/o4/gpt-5) reject an explicit temperature, so a
+        # 推理模型（o1/o3/o4/gpt-5）拒绝显式的 temperature，因此最大令牌探测失败
         # probe that hardcodes one falsely reports a working endpoint as failing.
         if not _restricts_temperature(model_id):
             payload["temperature"] = 0.0
@@ -610,7 +610,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         if r.is_success:
             return {"status": "ok", "latency_ms": latency}
         else:
-            # Extract error detail from response body
+            # 从响应体中提取错误详情
             error_msg = f"HTTP {r.status_code}"
             try:
                 body = r.json()
@@ -629,7 +629,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         return {"status": "fail", "error": str(e)[:80]}
 
 
-# Hostnames / IP prefixes that indicate a local endpoint
+# 表示本地端点的主机名 / IP 前缀
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 _PRIVATE_PREFIXES = ("10.", "172.16.", "172.17.", "172.18.", "172.19.",
                      "172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
@@ -688,7 +688,7 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
             return fetch_available_models(api_key, timeout=timeout)
         return []
     if provider == "anthropic":
-        # Try Anthropic's /v1/models endpoint first
+        # 首先尝试 Anthropic 的 /v1/models 端点
         url = _safe_build_models_url(base)
         headers = {"anthropic-version": "2023-06-01"}
         if api_key:
@@ -718,13 +718,13 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
         r = httpx.get(url, headers=headers, timeout=timeout, verify=llm_verify())
         r.raise_for_status()
         data = r.json()
-        # OpenAI format: {"data": [{"id": "model-name"}]}
+        # OpenAI 格式：{"data": [{"id": "model-name"}]}
         models = [m.get("id") for m in (data.get("data") or []) if m.get("id")]
-        # Ollama format: {"models": [{"name": "model-name"}]}
+        # Ollama 格式：{"models": [{"name": "model-name"}]}
         if not models:
             models = [m.get("name") or m.get("model") for m in (data.get("models") or []) if m.get("name") or m.get("model")]
         if models:
-            # Z.AI coding plan omits some working models from /models;
+            # Z.AI coding plan 的 /models 端点省略了一些可用的模型；
             # append curated-only entries for that endpoint only.
             if _host_match(base, "z.ai") and "/api/coding" in (urlparse(base).path or ""):
                 _ck = _match_provider_curated(base, None)
@@ -744,7 +744,7 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
             return []
         logger.warning(f"Failed to probe {url}: {e}")
 
-    # Older Ollama builds and some proxies expose native /api/tags even when
+    # 旧版 Ollama 构建和一些代理即使 /v1/models 不可用也暴露原生的 /api/tags
     # the OpenAI-compatible /v1/models path is unavailable.
     try:
         parsed = urlparse(base)
@@ -758,7 +758,7 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
                 return models
     except Exception as e:
         logger.debug(f"Ollama /api/tags probe failed for {base}: {e}")
-    # Fall back to curated list if the provider has a URL-based match (e.g. z.ai has no /models endpoint)
+    # 如果提供商有基于 URL 的匹配（如 z.ai 没有 /models 端点），回退到精选列表
     curated_key = _match_provider_curated(base, None)
     fallback = _PROVIDER_CURATED.get(curated_key) if curated_key else None
     if fallback:
@@ -773,7 +773,7 @@ def _ping_endpoint(base_url: str, api_key: str = None, timeout: float = 1.5) -> 
     base = resolve_url(_normalize_base(base_url))
     headers = _safe_build_headers(api_key, base)
 
-    # Ollama exposes /v1/models (OpenAI-compatible) AND native /api/version,
+    # Ollama 暴露 /v1/models（OpenAI 兼容）和原生 /api/version，
     # /api/tags. Probe native paths for Ollama-style endpoints, but avoid using
     # /models as a generic health check because large proxy catalogs can be slow.
     parsed_base = urlparse(base)
@@ -922,7 +922,7 @@ def _visible_models(cached_models, hidden_models, pinned_models=None):
     cloud deployment IDs the provider does not list in /v1/models). Returns an
     ordered, de-duplicated list of visible IDs.
     """
-    # Normalize each input so JSON strings, lists, comma/newline strings, and
+    # 规范化每个输入，使 JSON 字符串、列表、逗号/换行符字符串和空值都正常工作
     # malformed strings are all handled without raising.
     merged = _merge_model_ids(
         _normalize_model_ids(cached_models),
@@ -947,7 +947,7 @@ def setup_model_routes(model_discovery):
 
     # ---- Model list cache ----
     import time as _time
-    # Per-user cache: { owner_key: {"data": ..., "time": ...} }. owner_key is
+    # 每用户缓存：{ owner_key: {"data": ..., "time": ...} }。owner_key 是 "default" 或用户名。
     # the username (or "" for the unconfigured / single-user case). Without
     # this every user shared the same cached result and the picker showed
     # whichever admin's endpoint list happened to populate it first.
@@ -960,7 +960,7 @@ def setup_model_routes(model_discovery):
         flip)."""
         _models_cache.clear()
 
-    # Track model-list refreshes by URL+key. This prevents repeated picker/API
+    # 按 URL+key 跟踪模型列表刷新。这防止重复的 picker/API 调用锁定事件循环。
     # opens from starting duplicate /models probes, and gives slow/offline
     # providers a cooldown after failures.
     _refresh_state: Dict[str, Dict[str, Any]] = {}
@@ -1111,7 +1111,7 @@ def setup_model_routes(model_discovery):
         try:
             q = db.query(ModelEndpoint).filter(ModelEndpoint.is_enabled == True)
             if owner and not is_admin:
-                # Regular users see: their own endpoints + null-owner
+                # 普通用户看到：自己的端点 + null-owner（公共端点）
                 # (legacy / shared). Admins see everything.
                 q = owner_filter(q, ModelEndpoint, owner)
             endpoints = q.all()
@@ -1121,14 +1121,14 @@ def setup_model_routes(model_discovery):
         for ep in endpoints:
             base = _normalize_base(ep.base_url)
             provider = _safe_detect_provider(base)
-            # Merge cached + pinned models, then filter out hidden ones
+            # 合并缓存 + 固定的模型，然后过滤掉隐藏的
             ep_model_type = getattr(ep, "model_type", None) or "llm"
             model_ids = _visible_models(
                 _cached_model_ids(ep),
                 ep.hidden_models,
                 getattr(ep, "pinned_models", None),
             )
-            # Build correct URL based on provider
+            # 根据提供商构建正确的 URL
             chat_url = build_chat_url(base)
             kind = _effective_endpoint_kind(ep, base)
             category = _classify_endpoint(base, kind)
@@ -1136,7 +1136,7 @@ def setup_model_routes(model_discovery):
             if model_ids:
                 curated_key = _match_provider_curated(base, None)
                 curated, extra = _curate_models(model_ids, curated_key)
-                # Pinned models are admin-selected — they always belong in the
+                # 固定模型是管理员选择的 — 它们始终属于端点列表
                 # primary curated list, not buried in extras.
                 pinned = _normalize_model_ids(getattr(ep, "pinned_models", None))
                 for m in pinned:
@@ -1158,7 +1158,7 @@ def setup_model_routes(model_discovery):
                     "model_type": ep_model_type,
                 })
             else:
-                # Endpoint unreachable but still show it greyed out
+                # 端点不可达但仍以灰色显示
                 items.append({
                     "host": "custom",
                     "port": 0,
@@ -1181,14 +1181,14 @@ def setup_model_routes(model_discovery):
     def api_models(request: Request, refresh: bool = False):
         """Get available models — per-user (caller sees only their endpoints +
         legacy/shared null-owner rows). Cached per-user for 30s."""
-        # Require auth; "" is the unconfigured single-user mode, treated as
+        # 需要认证；"" 是未配置的单用户模式，视为公共访问
         # "see everything" by _fetch_models.
         try:
             from src.auth_helpers import get_current_user as _gcu
             owner = _gcu(request) or ""
         except Exception:
             owner = ""
-        # Reject anonymous in configured deployments — no leaking the model
+        # 在已配置的部署中拒绝匿名访问 — 不泄露模型列表
         # list to unauthenticated callers.
         try:
             auth_mgr = getattr(request.app.state, "auth_manager", None)

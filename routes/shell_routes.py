@@ -1,4 +1,4 @@
-"""Shell routes — user-facing command execution endpoint."""
+"""Shell 路由 — 面向用户的命令执行端点。"""
 
 import asyncio
 import json

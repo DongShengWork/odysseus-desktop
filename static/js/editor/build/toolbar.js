@@ -1,10 +1,9 @@
 /**
- * Build the editor's left-side tool palette.
+ * 构建编辑器左侧的工具面板。
  *
- * Pure DOM construction — no module state. The big tool-switch logic
- * (cursor swap, control-section toggle, transform entry, inpaint
- * mask plumbing, etc.) stays in the caller and arrives here as the
- * `onSelectTool` callback.
+ * 纯 DOM 构建——无模块状态。主要的工具切换逻辑
+ * （光标切换、控件区域切换、变换入口、修复蒙版管线等）
+ * 保留在调用方，并通过 `onSelectTool` 回调传入。
  *
  * @param {{
  *   currentTool: string,
@@ -46,22 +45,20 @@ export function buildToolbar({ currentTool, onSelectTool, onClearSelection }) {
     btn.className = 'ge-tool-btn' + (t.id === currentTool ? ' active' : '');
     btn.dataset.tool = t.id;
     btn.title = t.label + (t.key ? ` (${t.key})` : '');
-    // Heavy 4-point AI star marker for AI-backed tools — sits just to
-    // the left of the icon so the user can spot AI vs local tools at a
-    // glance now that the "AI Tools" separator is gone.
+    // 重型四角 AI 星标标记，用于 AI 支持的工具——位于图标左侧，
+    // 使用户能一眼区分 AI 工具和本地工具（"AI Tools" 分隔线已移除）。
     const aiStar = t.ai ? '<span class="ge-tool-ai" title="AI">✦</span>' : '';
     btn.classList.toggle('is-ai', !!t.ai);
-    // Selection-clear badge — rendered only for tools that can hold a
-    // selection (lasso, wand). Inpaint masks are first-class sub-layers
-    // now so they get their own delete-X in the layer panel.
+    // 清除选择徽章——仅对可持有选区的工具（套索、魔棒）渲染。
+    // 修复蒙版现为一级子图层，因此在图层面板中独立显示删除按钮。
     const clearBadge = (t.id === 'lasso' || t.id === 'wand')
       ? '<span class="ge-tool-clear" title="Clear selection" data-clear-tool="' + t.id + '">' +
           '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>' +
         '</span>'
       : '';
     btn.innerHTML = `${aiStar}<span class="ge-tool-icon"${t.small ? ' style="font-size:14px"' : ''}>${t.icon}</span><span class="ge-tool-label">${t.label}</span>${clearBadge}`;
-    // Clear-badge click stops propagation so the tool itself doesn't
-    // toggle; the actual clear is handled by the caller.
+    // 清除徽章的点击阻止冒泡，防止工具本身切换；
+    // 实际的清除操作由调用方处理。
     btn.querySelector('.ge-tool-clear')?.addEventListener('click', (ev) => {
       ev.stopPropagation();
       onClearSelection(ev.currentTarget.dataset.clearTool);

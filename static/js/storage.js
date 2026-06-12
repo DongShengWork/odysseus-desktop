@@ -1,7 +1,7 @@
 // static/js/storage.js
-// Centralized localStorage access with key constants and JSON parse safety
+// 集中式 localStorage 访问模块，含键常量定义与 JSON 安全解析
 
-// ── Key constants ──
+// ── 键常量 ──
 export const KEYS = {
   THEME: 'odysseus-theme',
   TOGGLES: 'odysseus-toggles',
@@ -27,8 +27,8 @@ export const KEYS = {
 };
 
 /**
- * Safely get and parse a JSON value from localStorage.
- * Returns fallback on any error.
+ * 安全地从 localStorage 读取并解析 JSON 值。
+ * 发生任何错误时返回降级值。
  */
 export function getJSON(key, fallback) {
   try {
@@ -36,24 +36,24 @@ export function getJSON(key, fallback) {
     if (raw === null) return fallback !== undefined ? fallback : null;
     return JSON.parse(raw);
   } catch (e) {
-    console.warn('[Storage] Failed to parse key "' + key + '":', e.message);
+    console.warn('[Storage] 解析键 "' + key + '" 失败：', e.message);
     return fallback !== undefined ? fallback : null;
   }
 }
 
 /**
- * Set a JSON-serialized value in localStorage.
+ * 将值以 JSON 序列化格式存入 localStorage。
  */
 export function setJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
-    console.warn('[Storage] Failed to set key "' + key + '":', e.message);
+    console.warn('[Storage] 设置键 "' + key + '" 失败：', e.message);
   }
 }
 
 /**
- * Get a raw string value from localStorage.
+ * 从 localStorage 获取原始字符串值。
  */
 export function get(key, fallback) {
   try {
@@ -65,28 +65,28 @@ export function get(key, fallback) {
 }
 
 /**
- * Set a raw string value in localStorage.
+ * 将原始字符串值存入 localStorage。
  */
 export function set(key, value) {
   try {
     localStorage.setItem(key, value);
   } catch (e) {
-    console.warn('[Storage] Failed to set key "' + key + '":', e.message);
+    console.warn('[Storage] 设置键 "' + key + '" 失败：', e.message);
   }
 }
 
 /**
- * Remove a key from localStorage.
+ * 从 localStorage 中删除指定键。
  */
 export function remove(key) {
   try {
     localStorage.removeItem(key);
   } catch (e) {
-    // Ignore removal errors
+    // 忽略删除错误
   }
 }
 
-// ── Toggle state helpers ──
+// ── 开关状态辅助函数 ──
 
 export function loadToggleState() {
   return getJSON(KEYS.TOGGLES, {});

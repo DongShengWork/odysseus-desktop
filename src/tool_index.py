@@ -1,9 +1,8 @@
 """
-RAG-based tool selection for agent mode.
+基于 RAG 的 tool 选择，用于 agent 模式。
 
-Instead of injecting all tool descriptions into the system prompt,
-embed them in a ChromaDB collection and retrieve only the top-K
-relevant ones per user message.
+将工具描述嵌入 ChromaDB 集合中，而非将所有工具描述注入系统提示词，
+仅检索每条用户消息最相关的 top-K 个。
 """
 
 import logging

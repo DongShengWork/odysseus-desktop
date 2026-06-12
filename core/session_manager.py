@@ -1,11 +1,11 @@
 # core/session_manager.py
 """
-Session management — all session business logic and DB operations.
+会话管理 — 所有会话业务逻辑和数据库操作。
 
-This is the single place that handles:
-- Loading/saving sessions to database
-- Adding messages to sessions
-- Session lifecycle (create, archive, delete)
+这是处理以下事项的唯一位置：
+- 加载/保存会话到数据库
+- 向会话添加消息
+- 会话生命周期（创建、归档、删除）
 """
 
 import json
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def _message_timestamp_iso(value: Optional[datetime]) -> Optional[str]:
-    """Return a stable ISO timestamp for chat message metadata."""
+    """返回用于聊天消息元数据的稳定 ISO 时间戳。"""
     if not value:
         return None
     if value.tzinfo is None:
@@ -30,8 +30,8 @@ def _message_timestamp_iso(value: Optional[datetime]) -> Optional[str]:
 
 
 def _parse_msg_content(raw):
-    """Parse message content from DB — deserialises JSON arrays back to lists
-    (multimodal content with image/audio attachments)."""
+    """从数据库解析消息内容 — 将 JSON 数组反序列化为列表
+    （包含图片/音频附件的多模态内容）。"""
     if isinstance(raw, list):
         return raw
     if isinstance(raw, str) and raw.startswith('[{') and '"type"' in raw:
@@ -46,9 +46,9 @@ def _parse_msg_content(raw):
 
 class SessionManager:
     """
-    Manages chat sessions with database persistence.
+    管理带有数据库持久化的聊天会话。
 
-    Usage:
+    用法：
         manager = SessionManager()
         session = manager.create_session(id, name, url, model)
         manager.add_message(session.id, ChatMessage("user", "hello"))
@@ -56,20 +56,18 @@ class SessionManager:
     """
 
     def __init__(self, sessions_file: str = None):
-        # sessions_file kept for backward compat, not used
+        # sessions_file 保留用于向后兼容，未使用
         self.sessions: Dict[str, Session] = {}
         self.load_sessions()
 
     # ------------------------------------------------------------------
-    # Loading
+    # 加载
     # ------------------------------------------------------------------
 
     def load_sessions(self):
-        """Load recent session METADATA from the database — messages are
-        hydrated on demand by `get_session`. Previously this walked every
-        message of every session into RAM at boot, which on a long-running
-        personal-server box could be tens of thousands of rows held forever
-        in `self.sessions`.
+        """从数据库加载近期的会话元数据 — 消息在 `get_session` 调用时
+        按需加载。之前的方式是在启动时将每个会话的所有消息都加载到 RAM 中，
+        在长期运行的个人服务器上，可能意味着数万行数据永远保留在 `self.sessions` 中。
         """
         db = SessionLocal()
         try:
@@ -98,8 +96,8 @@ class SessionManager:
             db.close()
 
     def _db_to_session_meta(self, db_session: DbSession) -> Optional[Session]:
-        """Build a Session with empty history. `get_session` will hydrate
-        messages from the DB on first read."""
+        """构建一个带有空历史记录的 Session。`get_session` 将在首次读取时
+        从数据库填充消息。"""
         headers = db_session.headers
         if isinstance(headers, str):
             try:
@@ -122,10 +120,10 @@ class SessionManager:
         return session
 
     def _db_to_session(self, db_session: DbSession, db) -> Optional[Session]:
-        """Convert a database session to a Session object."""
+        """将数据库会话转换为 Session 对象。"""
         history = []
 
-        # Try relationship first, then direct query
+        # 先尝试关系查询，再尝试直接查询
         if db_session.messages:
             for db_msg in db_session.messages:
                 meta = json.loads(db_msg.meta_data) if db_msg.meta_data else {}
@@ -156,7 +154,7 @@ class SessionManager:
         if not history:
             return None
 
-        # Parse headers
+        # 解析请求头
         headers = db_session.headers
         if isinstance(headers, str):
             try:
@@ -181,16 +179,16 @@ class SessionManager:
         return session
 
     # ------------------------------------------------------------------
-    # Message operations
+    # 消息操作
     # ------------------------------------------------------------------
 
     def add_message(self, session_id: str, message: ChatMessage):
         """
-        Add a message to a session and persist to database.
+        向会话添加一条消息并将其持久化到数据库。
 
         Args:
-            session_id: Session ID
-            message: ChatMessage to add
+            session_id: 会话 ID
+            message: 要添加的 ChatMessage
         """
         session = self.get_session(session_id)
         session.history.append(message)
@@ -199,14 +197,14 @@ class SessionManager:
         self._persist_message(session_id, message)
 
     def _persist_message(self, session_id: str, message: ChatMessage):
-        """Persist a single message to the database."""
+        """将单条消息持久化到数据库。"""
         db = SessionLocal()
         try:
             db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
             if db_session is None:
-                # A stream/tool callback can outlive a session delete. Do not
-                # create a chat_messages row with no parent session; also drop
-                # any stale cached session so later writes fail closed too.
+                # 流/工具回调可能在会话删除之后仍然存在。不要创建
+                # 没有父会话的 chat_messages 行；同时删除任何过期的
+                # 缓存会话，以便后续写入也能安全关闭。
                 self.sessions.pop(session_id, None)
                 logger.warning("Dropping message for deleted session %s", session_id)
                 return
@@ -216,9 +214,9 @@ class SessionManager:
             if message.metadata is None:
                 message.metadata = {}
             message.metadata.setdefault('timestamp', _message_timestamp_iso(msg_time))
-            # Multimodal content (image/audio attachments) is a list — serialize
-            # to JSON so the Text column can store it.  On reload, _db_to_session
-            # detects the JSON-array prefix and parses it back.
+            # 多模态内容（图片/音频附件）是一个列表——序列化为 JSON
+            # 以便 Text 列可以存储它。重新加载时，_db_to_session
+            # 检测到 JSON 数组前缀并解析回来。
             _content = message.content
             if isinstance(_content, list):
                 _content = json.dumps(_content)
@@ -235,14 +233,14 @@ class SessionManager:
             db_session.message_count = len(self.sessions.get(session_id, {}).history) if session_id in self.sessions else 0
             _now = datetime.now(timezone.utc)
             db_session.last_accessed = _now
-            # Clean "last conversation" timestamp — only bumped here on a
-            # real message persist, so it powers an accurate "Last active"
-            # sort that ignores renames / model swaps / mere opens.
+            # 清理"最后一次对话"时间戳——仅在实际消息持久化时更新，
+            # 以便为准确的"最后活跃"排序提供依据，
+            # 该排序忽略重命名/模型切换/仅打开操作。
             db_session.last_message_at = _now
 
             db.commit()
 
-            # Store DB ID on the in-memory message for edit/delete by ID
+            # 将数据库 ID 存储在内存消息中，以便按 ID 编辑/删除
             message.metadata['_db_id'] = msg_id
 
             logger.debug(f"Persisted message to session {session_id}")
@@ -254,7 +252,7 @@ class SessionManager:
             db.close()
 
     def truncate_messages(self, session_id: str, keep_count: int) -> bool:
-        """Truncate session history, keeping only the first `keep_count` messages."""
+        """截断会话历史记录，仅保留前 `keep_count` 条消息。"""
         session = self.get_session(session_id)
 
         if keep_count < 0:
@@ -273,15 +271,15 @@ class SessionManager:
 
             db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
             if db_session:
-                # keep_count can exceed the real message total (e.g. the AI tool
-                # defaults to keep_count=10 on a short session); message_count must
-                # track the rows that actually remain, not the requested cap.
+                # keep_count 可能超过实际消息总数（例如 AI 工具在短会话上
+                # 默认 keep_count=10）；message_count 必须跟踪实际保留的行数，
+                # 而不是请求的上限。
                 db_session.message_count = min(keep_count, len(db_messages))
                 db_session.updated_at = datetime.now(timezone.utc)
 
             db.commit()
 
-            # Update in-memory
+            # 更新内存中的数据
             session.history = session.history[:keep_count]
 
             logger.info(f"Truncated session {session_id} to {keep_count} messages")
@@ -295,7 +293,7 @@ class SessionManager:
             db.close()
 
     def replace_messages(self, session_id: str, messages: list) -> bool:
-        """Replace a session's persisted and in-memory history atomically."""
+        """原子地替换会话在数据库和内存中的历史记录。"""
         session = self.get_session(session_id)
         db = SessionLocal()
         try:
@@ -307,12 +305,11 @@ class SessionManager:
                     id=msg_id,
                     session_id=session_id,
                     role=message.role,
-                    # Multimodal content (image/audio attachments) is a list;
-                    # serialize to JSON so the Text column round-trips via
-                    # _parse_msg_content. Storing the raw list let SQLAlchemy
-                    # bind its single-quoted repr, which _parse_msg_content
-                    # cannot parse (it looks for double-quoted "type"), so the
-                    # attachment was destroyed on reload. Mirrors _persist_message.
+                    # 多模态内容（图片/音频附件）是一个列表；
+                    # 序列化为 JSON 以便 Text 列通过 _parse_msg_content 往返。
+                    # 存储原始列表会让 SQLAlchemy 绑定其单引号表示形式，
+                    # 而 _parse_msg_content 无法解析（它查找双引号的 "type"），
+                    # 因此附件在重新加载时被销毁。与 _persist_message 保持一致。
                     content=(json.dumps(message.content)
                              if isinstance(message.content, list)
                              else message.content),
@@ -344,34 +341,34 @@ class SessionManager:
             db.close()
 
     # ------------------------------------------------------------------
-    # Session CRUD
+    # 会话增删改查
     # ------------------------------------------------------------------
 
     def get_session(self, session_id: str) -> Session:
-        """Get a session by ID, loading from DB if needed.
+        """通过 ID 获取会话，按需从数据库加载。
 
-        Sessions seeded by `load_sessions` start with empty history. The
-        first read here hydrates them with the message rows.
+        由 `load_sessions` 初始加载的会话以空历史记录开始。
+        首次在此读取时，从消息行填充它们。
         """
         if session_id not in self.sessions:
             self._load_session_from_db(session_id)
         else:
             cached = self.sessions[session_id]
-            # Lazy hydrate: metadata-only entries get their messages on first read.
+            # 懒加载填充：仅有元数据的条目在首次读取时获取完整消息。
             if not cached.history and getattr(cached, "message_count", 0) > 0:
                 self._load_session_from_db(session_id)
 
-        # Keep model/endpoint metadata fresh. Endpoint deletion can clear the
-        # DB row while a session object is still cached in RAM.
+        # 保持模型/端点元数据是最新的。端点删除可能清除数据库行，
+        # 而会话对象仍缓存在 RAM 中。
         self.sync_session_metadata(session_id)
 
-        # Update last_accessed
+        # 更新最后访问时间
         self._touch_session(session_id)
 
         return self.sessions[session_id]
 
     def sync_session_metadata(self, session_id: str) -> bool:
-        """Refresh non-message session fields from the DB into the cached object."""
+        """从数据库刷新缓存的会话对象中非消息类的字段。"""
         session = self.sessions.get(session_id)
         if session is None:
             return False
@@ -403,7 +400,7 @@ class SessionManager:
             db.close()
 
     def _load_session_from_db(self, session_id: str):
-        """Hydrate a single session (with messages) from the database."""
+        """从数据库加载单个会话（包含消息）到内存中。"""
         db = SessionLocal()
         try:
             db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
@@ -414,8 +411,8 @@ class SessionManager:
             if session:
                 self.sessions[session_id] = session
             else:
-                # No messages — fall back to metadata-only entry so callers
-                # don't crash on KeyError for empty sessions.
+                # 没有消息——回退到仅有元数据的条目，以便调用者
+                # 在空会话上不会因 KeyError 崩溃。
                 meta = self._db_to_session_meta(db_session)
                 if meta is None:
                     raise KeyError(f"Session {session_id} could not be loaded")
@@ -430,7 +427,7 @@ class SessionManager:
             db.close()
 
     def _touch_session(self, session_id: str):
-        """Update last_accessed timestamp."""
+        """更新 last_accessed 时间戳。"""
         db = SessionLocal()
         try:
             db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
@@ -452,7 +449,7 @@ class SessionManager:
         rag: bool = False,
         owner: str = None
     ) -> Session:
-        """Create a new session and save to database."""
+        """创建新会话并保存到数据库。"""
         db = SessionLocal()
         try:
             db_session = DbSession(
@@ -490,31 +487,31 @@ class SessionManager:
             db.close()
 
     def delete_session(self, session_id: str) -> bool:
-        """Permanently delete a session and all its messages."""
+        """永久删除会话及其所有消息。"""
         db = SessionLocal()
         try:
-            # Detach documents so they survive as orphans in the library
+            # 分离文档，使其作为孤立项保留在文档库中
             db.query(DbDocument).filter(DbDocument.session_id == session_id).update(
                 {DbDocument.session_id: None}, synchronize_session=False
             )
 
-            # Delete messages
+            # 删除消息
             db.query(DbChatMessage).filter(DbChatMessage.session_id == session_id).delete()
 
-            # Delete session
+            # 删除会话
             db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
             if db_session:
                 db.delete(db_session)
 
-            # Drop the in-memory copy even when there is no DB row. A "ghost"
-            # session lives only here (never persisted, or its row was removed
-            # out-of-band); without this it can never be cleared and keeps
-            # 404ing on every operation (issue #1044).
+            # 即使没有数据库行，也删除内存中的副本。"幽灵"会话
+            # 只存在于这里（从未持久化，或其行被外部移除）；
+            # 如果不这样做，它永远无法被清除，并在每次操作时
+            # 持续返回 404（issue #1044）。
             removed_in_memory = self.sessions.pop(session_id, None) is not None
 
             if db_session or removed_in_memory:
-                # Commit the document-detach / message-delete above (a no-op when
-                # the ghost had no rows) together with the session delete.
+                # 将上面的文档分离/消息删除操作与会话删除一起提交
+                # （当幽灵会话没有行时，此操作为空操作）。
                 db.commit()
                 logger.info(f"Deleted session {session_id}")
                 return True
@@ -528,11 +525,11 @@ class SessionManager:
             db.close()
 
     # ------------------------------------------------------------------
-    # Session updates
+    # 会话更新
     # ------------------------------------------------------------------
 
     def update_session_name(self, session_id: str, name: str):
-        """Update session name."""
+        """更新会话名称。"""
         if session_id not in self.sessions:
             return
 
@@ -552,7 +549,7 @@ class SessionManager:
             db.close()
 
     def archive_session(self, session_id: str):
-        """Archive a session."""
+        """归档一个会话。"""
         if session_id not in self.sessions:
             return
 
@@ -572,7 +569,7 @@ class SessionManager:
             db.close()
 
     def mark_important(self, session_id: str, important: bool = True):
-        """Mark session as important."""
+        """将会话标记为重要。"""
         db = SessionLocal()
         try:
             db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
@@ -593,11 +590,11 @@ class SessionManager:
             db.close()
 
     # ------------------------------------------------------------------
-    # Queries
+    # 查询
     # ------------------------------------------------------------------
 
     def get_sessions_for_user(self, username: Optional[str] = None) -> Dict[str, Session]:
-        """Return sessions for a specific user (or all if username is None)."""
+        """返回特定用户的会话（如果 username 为 None，则返回所有）。"""
         if username is None:
             return self.sessions
         return {
@@ -606,14 +603,14 @@ class SessionManager:
         }
 
     def save_sessions(self):
-        """No-op for DB compatibility."""
+        """数据库兼容性的空操作。"""
 
     # ------------------------------------------------------------------
-    # Cleanup
+    # 清理
     # ------------------------------------------------------------------
 
     def cleanup_empty_sessions(self, auto_archive_days: int = 30) -> dict:
-        """Clean up empty and old sessions."""
+        """清理空会话和旧会话。"""
         db = SessionLocal()
         stats = {'deleted_empty': 0, 'archived_old': 0, 'total_checked': 0}
 
@@ -624,14 +621,14 @@ class SessionManager:
             for db_session in all_sessions:
                 stats['total_checked'] += 1
 
-                # Delete empty sessions
+                # 删除空会话
                 if db_session.message_count == 0:
                     if db_session.id in self.sessions:
                         del self.sessions[db_session.id]
                     db.delete(db_session)
                     stats['deleted_empty'] += 1
 
-                # Archive old sessions
+                # 归档旧会话
                 elif (not db_session.archived and
                       db_session.last_accessed and
                       db_session.last_accessed < cutoff_date and

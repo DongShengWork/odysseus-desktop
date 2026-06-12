@@ -1,11 +1,10 @@
 # src/research_handler.py
-"""Handler for research service integration with expandable UI support.
+"""研究服务集成处理器，支持可展开的 UI 界面。
 
-Uses the IterResearch-style DeepResearcher (LLM-in-the-loop) as the primary
-engine, falling back to the legacy ResearchOrchestrator or basic web search
-if needed.
+使用 IterResearch 风格的 DeepResearcher（LLM 参与环路）作为主要
+引擎，必要时回退到旧的 ResearchOrchestrator 或基础网页搜索。
 
-Includes a task registry so research survives page refreshes and can be cancelled.
+包含任务注册表，使研究在页面刷新后仍然存活并且可以被取消。
 """
 import asyncio
 import json

@@ -1,4 +1,4 @@
-"""Backup routes — export/import user data (memories, presets, settings, skills, preferences)."""
+"""备份路由 — 导出/导入用户数据（记忆、预设、设置、技能、偏好）。"""
 
 import json
 import logging
@@ -17,26 +17,26 @@ def setup_backup_routes(memory_manager, preset_manager, skills_manager) -> APIRo
 
     @router.get("/api/export")
     async def export_data(request: Request):
-        """Export all user data as a downloadable JSON file."""
+        """将所有用户数据导出为可下载的 JSON 文件。"""
         require_admin(request)
         user = get_current_user(request)
 
-        # Memories (filtered by owner when auth is enabled)
+        # 记忆（启用认证时按 owner 过滤）
         memories = memory_manager.load(owner=user)
 
-        # Presets (shared across users — export all)
+        # 预设（跨用户共享 — 导出全部）
         presets = preset_manager.get_all()
 
-        # Skills (filtered by owner when auth is enabled)
+        # 技能（启用认证时按 owner 过滤）
         skills = skills_manager.load(owner=user)
 
-        # Settings
+        # 设置
         settings = load_settings()
 
-        # Feature flags
+        # 功能标志
         features = load_features()
 
-        # User preferences
+        # 用户偏好设置
         from routes.prefs_routes import _load_for_user
         preferences = _load_for_user(user)
 
@@ -61,7 +61,7 @@ def setup_backup_routes(memory_manager, preset_manager, skills_manager) -> APIRo
 
     @router.post("/api/import")
     async def import_data(request: Request):
-        """Import user data from a previously exported JSON file. Merges with existing data."""
+        """从先前导出的 JSON 文件导入用户数据。与已有数据合并。"""
         require_admin(request)
         user = get_current_user(request)
         try:
@@ -77,10 +77,9 @@ def setup_backup_routes(memory_manager, preset_manager, skills_manager) -> APIRo
         # ── Memories ──
         if "memories" in body and isinstance(body["memories"], list):
             existing = memory_manager.load_all()
-            # Dedup against THIS user's own memories only. Using every tenant's
-            # rows (load_all) meant a memory whose text matched any other
-            # user's was silently skipped, so the importing user lost their own
-            # data. The full store is still saved back below.
+            # 仅对该用户自己的记忆去重。使用所有租户的行
+            # 意味着一个记忆的文本如果匹配了其他用户的记忆就会被静默跳过，
+            # 导致导入用户丢失自己的数据。完整存储仍然在下面保存。
             existing_texts = {e.get("text", "").strip().lower()
                               for e in existing if e.get("owner") == user}
             added = 0
@@ -88,8 +87,8 @@ def setup_backup_routes(memory_manager, preset_manager, skills_manager) -> APIRo
                 if not isinstance(mem, dict) or not mem.get("text"):
                     continue
                 if mem["text"].strip().lower() in existing_texts:
-                    continue  # skip duplicates
-                # Assign owner when auth is enabled
+                    continue  # 跳过重复项
+                # 启用认证时分配 owner
                 if user and not mem.get("owner"):
                     mem["owner"] = user
                 existing.append(mem)
@@ -128,10 +127,9 @@ def setup_backup_routes(memory_manager, preset_manager, skills_manager) -> APIRo
                 owner = skill.get("owner")
                 if user and not owner:
                     owner = user
-                # Skills live on disk as SKILL.md files; the old JSON-era
-                # skills_manager.save() no longer exists. Write each new skill
-                # via add_skill (source="user" skips auto-dedup — this is an
-                # explicit backup restore).
+                # 技能以 SKILL.md 文件形式存储在磁盘上；旧的 JSON 时代的
+                # skills_manager.save() 已不存在。通过 add_skill 写入每个新技能
+                # （source="user" 跳过自动去重 — 这是显式的备份恢复）。
                 result = skills_manager.add_skill(
                     title=title,
                     name=skill.get("name"),

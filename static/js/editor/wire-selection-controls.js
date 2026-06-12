@@ -1,25 +1,24 @@
 /**
- * Lasso + Magic Wand panel controls — sliders, mode toggles, and the
- * panel action buttons (Invert / Clear / Delete / Copy / To Mask /
- * Bg Remove). The actual selection algorithms live in their tool
- * modules (editor/tools/lasso.js, editor/tools/wand.js); this file
- * just wires the side-panel UI to them.
+ * 套索 + 魔棒面板控件 — 滑块、模式切换开关，以及面板操作按钮
+ * （反转 / 清除 / 删除 / 复制 / 转遮罩 / 背景移除）。实际的选区算法位于
+ * 各自的工具模块中（editor/tools/lasso.js、editor/tools/wand.js）；本文件
+ * 仅将侧边面板 UI 与它们进行接线。
  *
- *   Lasso section:
- *     #ge-lasso-feather       slider, updates label + preview, recomposites
- *     #ge-lasso-grow          slider, updates label + recomposites
+ *   套索部分：
+ *     #ge-lasso-feather       滑块，更新标签 + 预览，重新合成
+ *     #ge-lasso-grow          滑块，更新标签 + 重新合成
  *     #ge-lasso-invert        → invertSelection
  *     #ge-lasso-delete        → lassoDeleteSelection
  *     #ge-lasso-copy          → lassoCopyToLayer
  *     #ge-lasso-mask          → lassoToMask
  *
- *   Wand section:
- *     #ge-wand-feather        slider, updates label + recomposites
- *     #ge-wand-grow           slider, updates label + recomposites
- *     #ge-wand-tolerance      slider, updates future wand-click tolerance
- *     #ge-wand-live           opt-in rAF-coalesced live retune while dragging
- *     .ge-wand-mode-btn       segmented toggle (New / Add / Subtract)
- *     #ge-wand-vis            toggle the translucent red overlay
+ *   魔棒部分：
+ *     #ge-wand-feather        滑块，更新标签 + 重新合成
+ *     #ge-wand-grow           滑块，更新标签 + 重新合成
+ *     #ge-wand-tolerance      滑块，更新后续魔棒点击的容差
+ *     #ge-wand-live           可选启用，拖动时通过 rAF 合并进行实时重新调参
+ *     .ge-wand-mode-btn       分段切换按钮（新建 / 添加 / 减去）
+ *     #ge-wand-vis            切换半透明红色叠加层
  *     #ge-wand-clear / -invert / -delete / -copy / -mask / -rembg
  *
  * @param {{
@@ -52,7 +51,7 @@ export function wireSelectionControls({
   buildSelectionHintMask, applyImageTool,
   uiModule,
 }) {
-  // ── Lasso section ──
+  // ── 套索部分 ──
   const lassoFPrev = document.getElementById('ge-lasso-feather-preview');
   function syncLassoFeather(v) {
     if (!lassoFPrev) return;
@@ -83,7 +82,7 @@ export function wireSelectionControls({
   });
   document.getElementById('ge-lasso-invert')?.addEventListener('click', invertSelection);
 
-  // ── Wand section ──
+  // ── 魔棒部分 ──
   document.getElementById('ge-wand-feather')?.addEventListener('input', (e) => {
     const v = parseInt(e.target.value, 10) || 0;
     document.getElementById('ge-wand-feather-label').textContent = v + 'px';
@@ -96,9 +95,8 @@ export function wireSelectionControls({
     composite();
   });
 
-  // Tolerance slider fires `input` rapidly — coalesce to one wand run
-  // per frame with rAF. Label updates synchronously so the number
-  // tracks the cursor even when the flood-fill runs at ~60fps.
+  // 容差滑块 `input` 事件触发频繁 — 通过 rAF 合并为每次帧运行一次魔棒。
+  // 标签同步更新，所以数字能跟随光标变化，即使漫水填充 ~60fps 运行也不影响。
   let wandRetuneRaf = null;
   const retuneWand = () => {
     if (!state.wandLastSeed || !state.wandMask) return;
@@ -124,7 +122,7 @@ export function wireSelectionControls({
     if (state.wandLiveRetune) retuneWand();
   });
 
-  // Wand mode segmented toggle (New / Add / Subtract).
+  // 魔棒模式分段切换（新建 / 添加 / 减去）。
   document.querySelectorAll('.ge-wand-mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const mode = btn.dataset.wandMode;
@@ -136,7 +134,7 @@ export function wireSelectionControls({
     });
   });
 
-  // Toggle the translucent red overlay for the wand selection.
+  // 切换魔棒选区的半透明红色叠加层。
   document.getElementById('ge-wand-vis')?.addEventListener('click', () => {
     state.wandMaskVisible = !state.wandMaskVisible;
     const btn = document.getElementById('ge-wand-vis');
@@ -153,9 +151,9 @@ export function wireSelectionControls({
   document.getElementById('ge-wand-delete')?.addEventListener('click', wandDeleteSelection);
   document.getElementById('ge-wand-copy')?.addEventListener('click', wandCopyToNewLayer);
   document.getElementById('ge-wand-mask')?.addEventListener('click', wandToMask);
-  // Selection-constrained Bg Remove — reuses the same path the toolbar
-  // Bg Remove button does. buildSelectionHintMask picks the active
-  // wand/lasso selection, so this just kicks off the existing flow.
+  // 选区约束的背景移除 — 复用工具栏背景移除按钮的同一路径。
+  // buildSelectionHintMask 会选择当前激活的魔棒/套索选区，
+  // 所以这里只是触发已有的流程。
   document.getElementById('ge-wand-rembg')?.addEventListener('click', async () => {
     const btn = document.getElementById('ge-wand-rembg');
     const hint = buildSelectionHintMask();
@@ -164,7 +162,7 @@ export function wireSelectionControls({
     wandClear();
   });
 
-  // Live tolerance preview (just opacity-tracking like sharpen).
+  // 实时容差预览（类似锐化的不透明度跟踪）。
   const wandTolPrev = document.getElementById('ge-wand-tol-preview');
   if (wandTolPrev) wandTolPrev.style.opacity = (state.wandTolerance / 100).toFixed(2);
 }

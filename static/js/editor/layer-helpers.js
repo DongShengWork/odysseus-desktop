@@ -1,21 +1,19 @@
 /**
- * Pure helpers + constants for layers and adjustment sub-layers.
+ * 图层和调节子图层的纯辅助函数和常量。
  *
- * Everything in this module is stateless — feed in a layer object and
- * get back a value. The legacy gallery editor's module-level helpers
- * re-export from here so existing call sites keep working unchanged.
+ * 此模块中的所有内容都是无状态的 — 传入图层对象，返回值。
+ * 旧版画廊编辑器的模块级辅助函数从这里重新导出，现有调用点无需修改。
  */
 
-/** True if the layer has at least one FX/adjustment sub-layer. */
+/** 如果图层至少有一个 FX/调节子图层则返回 true。 */
 export function layerHasAdjustments(layer) {
   return !!(layer && layer.adjLayers && layer.adjLayers.length > 0);
 }
 
 
 /**
- * True if the layer carries a non-identity Levels OR Color-Balance
- * adjustment that needs the per-pixel pass (vs the cheap CSS-filter
- * path for plain B/C/H/S).
+ * 如果图层包含非恒等的色阶或色彩平衡调节，
+ * 需要逐像素处理（相对于纯 B/C/H/S 的低成本 CSS 滤镜路径），则返回 true。
  */
 export function layerNeedsPixelPass(layer) {
   if (!layer || !layer.adjustments) return false;
@@ -34,9 +32,8 @@ export function layerNeedsPixelPass(layer) {
 
 
 /**
- * Compact hash of a layer's Levels + Color-Balance values. Used to
- * key the per-pixel adjustment cache so we can skip recomputing when
- * nothing changed.
+ * 图层色阶 + 色彩平衡值的紧凑哈希。用于键控逐像素调节缓存，
+ * 以便在未发生变化时跳过重新计算。
  */
 export function adjustmentsKey(adj) {
   const l = adj.levels || {};
@@ -49,7 +46,7 @@ export function adjustmentsKey(adj) {
 }
 
 
-/** Identity params for each adjustment type. */
+/** 每种调节类型的恒等参数。 */
 export function defaultAdjParams(type) {
   switch (type) {
     case 'brightness-contrast': return { brightness: 1, contrast: 1 };
@@ -65,7 +62,7 @@ export function defaultAdjParams(type) {
 }
 
 
-/** Human-readable name for an adjustment type. */
+/** 调节类型的可读名称。 */
 export function adjLayerLabel(type) {
   return {
     'brightness-contrast': 'Brightness/Contrast',
@@ -77,9 +74,8 @@ export function adjLayerLabel(type) {
 
 
 /**
- * Per-type SVG icon strings. Used in popup title bars, the minimised
- * FX-dock chips, and the layer-panel sub-row name so the same glyph
- * shows up everywhere a given adjustment type appears.
+ * 每种类型的 SVG 图标字符串。用于弹出框标题栏、最小化的 FX 停靠芯片，
+ * 以及图层面板的子行名称，使相同图标在给定调节类型出现的任何地方都显示。
  */
 export const ADJ_ICONS = {
   'brightness-contrast': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"/></svg>',
@@ -89,11 +85,11 @@ export const ADJ_ICONS = {
 };
 
 
-/** SVG used in the topbar/history button glyphs. */
+/** 用于顶栏/历史记录按钮的 SVG。 */
 export const HISTORY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 16 14"/></svg>';
 
 
-/** Quick downsampled-alpha check: are there any opaque pixels on this canvas? */
+/** 快速降采样 alpha 检查：此画布上是否有不透明像素？ */
 export function isMaskCanvasEmpty(canvas) {
   if (!canvas) return true;
   try {
@@ -110,7 +106,7 @@ export function isMaskCanvasEmpty(canvas) {
 }
 
 
-/** Same as `isMaskCanvasEmpty` but accepts a layer wrapper. */
+/** 与 `isMaskCanvasEmpty` 相同，但接受图层包装器。 */
 export function isLayerEmpty(layer) {
   if (!layer || !layer.canvas) return true;
   return isMaskCanvasEmpty(layer.canvas);
@@ -118,8 +114,8 @@ export function isLayerEmpty(layer) {
 
 
 /**
- * Compact "now / 30s / 12m / 4h" relative-time string. Used in the
- * editor's history panel labels.
+ * 紧凑的"现在 / 30秒 / 12分钟 / 4小时"相对时间字符串。
+ * 用于编辑器历史面板的标签。
  */
 export function relTime(ts) {
   if (!ts) return '';

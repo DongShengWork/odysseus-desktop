@@ -1,4 +1,4 @@
-// compare/models.js — model classification, fetching, display names, persistence
+// compare/models.js — 模型分类、获取、显示名称和持久化
 import Storage from '../storage.js';
 import state from './state.js';
 import uiModule from '../ui.js';
@@ -6,7 +6,7 @@ import { sortModelObjects } from '../modelSort.js';
 
 var escapeHtml = uiModule.esc;
 
-// ── Model classification constants ──
+// ── 模型分类常量 ──
 const NON_CHAT_PREFIXES = ['tts-', 'whisper-', 'text-embedding-', 'text-moderation-', 'moderation-', 'embedding'];
 const NON_CHAT_SUFFIXES = ['deep-research', '-online'];
 const IMAGE_PREFIXES = ['dall-e-3', 'gpt-image', 'chatgpt-image'];
@@ -21,7 +21,7 @@ function classifyModel(id) {
   return 'chat';
 }
 
-/** Build display names for selected models, adding endpoint name when the same model appears from multiple providers. */
+/** 为选中的模型构建显示名称，当同一模型出现在多个提供商时添加端点名称。 */
 function _modelDisplayNames(models) {
   const nameCount = {};
   for (const m of models) {
@@ -35,7 +35,7 @@ function _modelDisplayNames(models) {
   });
 }
 
-/** Save selected models and synth models to localStorage, keyed by compare mode. */
+/** 将选中的模型和合成模型保存到 localStorage，按对比模式区分 key。 */
 function _persistSelections() {
   if (state._selectedModels.length > 0) {
     Storage.setJSON('odysseus-compare-selections-' + (state._compareMode || 'chat'), state._selectedModels);
@@ -45,10 +45,10 @@ function _persistSelections() {
   }
 }
 
-// ── Model fetching with cache ──
-const MODELS_CACHE_TTL = 30000; // 30 seconds
+// ── 带缓存的模型获取 ──
+const MODELS_CACHE_TTL = 30000; // 30 秒
 
-/** Fetch available models from API. */
+/** 从 API 获取可用模型。 */
 async function fetchModels() {
   const now = Date.now();
   if (state._fetchModelsCache && (now - state._fetchModelsCacheTime) < MODELS_CACHE_TTL) {
@@ -61,8 +61,8 @@ async function fetchModels() {
     data.items.forEach(item => {
       const displayNames = item.models_display || item.models || [];
       const extraDisplay = item.models_extra_display || item.models_extra || [];
-      // Curated list (item.models) takes priority; non-curated extras come
-      // after so newer/uncatalogued models (e.g. deepseek-v4-pro) still show.
+      // 精选列表（item.models）优先；非精选的额外模型排在后面，确保较新的
+      // /未收录模型（如 deepseek-v4-pro）仍然显示。
       (item.models || []).forEach((mid, i) => {
         models.push({
           id: mid,
@@ -90,7 +90,7 @@ async function fetchModels() {
   return state._fetchModelsCache;
 }
 
-// ── Shuffle pool persistence ──
+// ── 随机池持久化 ──
 const POOL_STORAGE_KEY = 'odysseus-shuffle-pool-excluded';
 
 function getExcludedModels() {

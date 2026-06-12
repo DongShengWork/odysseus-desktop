@@ -1,33 +1,32 @@
-// tourHints.js — secret continuation of /tour. The first time the user opens
-// a tool modal (after the welcome experience), surface a single "pro tip"
-// hint pointing out that modals can be snapped to the screen edge or
-// fullscreened by dragging the title bar. Shown once globally — once the
-// user has dismissed it (or it auto-hides), it never returns.
+// tourHints.js —— /tour 的秘密延续。用户首次打开
+// 工具模态框后（在欢迎体验之后），显示一个"专业提示"
+// 提示，指出模态框可以通过拖动标题栏吸附到屏幕边缘或
+// 全屏。全局仅显示一次 —— 一旦用户
+// 将其关闭（或自动隐藏），它永远不会再出现。
 
 const HINT_SEEN_KEY = 'odysseus-hint-drag-to-snap-seen';
 
-// Allow-list of modals where the snap/fullscreen hint makes sense.
-// These are the full-window "tool" modals where users commonly want to
-// reposition or fullscreen the pane (email, calendar, cookbook, gallery,
-// library, brain memories, tasks, theme, compare). Transient modals
-// like settings, prompts, rename dialogs, custom-preset picker, etc.
-// are excluded — opening those is task-focused and the snap tip would
-// be noise.
+// 吸附/全屏提示适用的模态框白名单。
+// 这些是用户通常想要重新定位或全屏的完整窗口"工具"模态框
+// （邮件、日历、Cookbook、Gallery、Library、Brain Memories、Tasks、
+// Theme、Compare）。临时模态框如 Settings、Prompts、重命名对话框、
+// 自定义预设选择器等被排除 —— 打开那些是任务聚焦的，吸附提示
+// 将是噪音。
 const SHOW_MODALS = new Set([
   'email-lib-modal',
   'calendar-modal',
-  'compare-modal',     // not currently a real id, defensive
+  'compare-modal',     // 当前不是真实 id，防御性的
   'cookbook-modal',
   'gallery-modal',
   'doclib-modal',
-  'library-modal',     // chat-history library (sessions.js)
-  'memory-modal',      // brain / memories
+  'library-modal',     // 聊天历史库（sessions.js）
+  'memory-modal',      // 大脑 / 记忆
   'tasks-modal',
   'theme-modal',
 ]);
 
-// Some modals have dynamic per-instance IDs (e.g. one window per opened
-// email). Match by prefix so any window from the same family qualifies.
+// 某些模态框具有动态的每个实例 ID（例如每封打开的邮件一个窗口）。
+// 按前缀匹配，使同一系列的任意窗口都符合条件。
 const SHOW_MODAL_PREFIXES = ['email-window-'];
 
 function _modalShouldShowHint(id) {
@@ -44,7 +43,7 @@ function _markSeen() { try { localStorage.setItem(HINT_SEEN_KEY, '1'); } catch {
 
 function _isVisible(el) {
   if (!el || el.classList.contains('hidden')) return false;
-  // Some modals set inline display:none rather than .hidden
+  // 某些模态框设置内联 display:none 而非 .hidden
   if (el.style.display === 'none') return false;
   const r = el.getBoundingClientRect();
   return r.width > 0 && r.height > 0;
@@ -54,14 +53,14 @@ function _onModalOpened(modal) {
   if (_shown || _hasSeen()) return;
   const id = modal.id;
   if (!_modalShouldShowHint(id)) return;
-  // Don't interrupt the welcome / tour itself
+  // 不要打断欢迎/导览本身
   if (document.body.classList.contains('tour-active')) return;
   if (document.getElementById('tour-tooltip')) return;
-  // Mobile: skip — snapping isn't a desktop-only feature there
+  // 移动端：跳过 —— 吸附功能不适用于移动端
   if (window.innerWidth <= 768) return;
 
   _shown = true;
-  // Give the modal a moment to settle (some open with their own animation).
+  // 给模态框一点时间稳定（有些打开时有自己的动画）。
   setTimeout(() => _show(modal), 380);
 }
 
@@ -75,25 +74,25 @@ function _show(modal) {
   pop.innerHTML = `
     <div class="tour-hint-visual" aria-hidden="true">
       <svg viewBox="0 0 100 60" width="160" height="96">
-        <!-- ambient frame -->
+        <!-- 环境框架 -->
         <rect x="0.5" y="0.5" width="99" height="59" rx="3" fill="none" stroke="currentColor" stroke-opacity="0.18" />
-        <!-- snap-zone preview (right half) -->
+        <!-- 吸附区域预览（右半部分） -->
         <rect class="th-zone" x="51" y="2" width="47" height="56" rx="2" fill="currentColor" opacity="0" />
-        <!-- the modal being dragged -->
+        <!-- 被拖动的模态框 -->
         <g class="th-modal-group">
           <rect x="22" y="20" width="34" height="22" rx="2.5" fill="var(--bg)" stroke="currentColor" stroke-width="1.2" />
           <rect x="22" y="20" width="34" height="5"  rx="2.5" fill="currentColor" opacity="0.35" />
         </g>
-        <!-- cursor -->
+        <!-- 光标 -->
         <path class="th-cursor" d="M0 0 L0 9 L2.5 7 L4.5 10 L6 9 L4 6 L7 6 Z" fill="currentColor" />
       </svg>
     </div>
-    <div class="tour-hint-text"><b>Pro tip:</b> drag any window's title bar to a screen edge to snap it. Drag to the top for fullscreen.</div>
+    <div class="tour-hint-text"><b>专业提示：</b> 将任意窗口的标题栏拖到屏幕边缘即可吸附。拖到顶部即可全屏。</div>
     <button class="tour-hint-dismiss" type="button">Got it</button>
   `;
   document.body.appendChild(pop);
 
-  // Prefer placing to the right of the modal; fall back to left, then below.
+  // 优先放置在模态框右侧；回退到左侧，然后是下方。
   pop.style.opacity = '0';
   requestAnimationFrame(() => {
     const pw = pop.offsetWidth || 260;
@@ -120,7 +119,7 @@ function _show(modal) {
     _markSeen();
   };
   pop.querySelector('.tour-hint-dismiss').addEventListener('click', dismiss);
-  // Auto-dismiss after 14s so it doesn't linger forever.
+  // 14 秒后自动关闭，不会永远停留。
   setTimeout(() => { if (pop.isConnected) dismiss(); }, 14000);
 }
 
@@ -163,8 +162,8 @@ function _watchModals() {
 export function init() {
   if (_initialized) return;
   _initialized = true;
-  if (_hasSeen()) return; // nothing to do
-  // Defer one tick so the rest of the app has a chance to mount its modals.
+  if (_hasSeen()) return; // 无需操作
+  // 延迟一个周期，让应用的其他部分有机会挂载其模态框。
   setTimeout(_watchModals, 50);
 }
 

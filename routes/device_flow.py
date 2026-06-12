@@ -1,4 +1,4 @@
-"""Shared OAuth/device-flow route scaffolding for provider setup."""
+"""供应商设置的共享 OAuth/设备流路由脚手架。"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from core.middleware import require_admin
 
 @dataclass(frozen=True)
 class DeviceFlowStart:
-    """Provider-specific start result consumed by the shared route wrapper."""
+    """共享路由包装器使用的供应商特定启动结果。"""
 
     pending: Mapping[str, Any]
     response: Mapping[str, Any]
@@ -26,7 +26,7 @@ class DeviceFlowStart:
 
 @dataclass(frozen=True)
 class DeviceFlowPoll:
-    """Normalized provider poll outcome."""
+    """标准化的供应商轮询结果。"""
 
     status: str
     endpoint: Optional[Mapping[str, Any]] = None

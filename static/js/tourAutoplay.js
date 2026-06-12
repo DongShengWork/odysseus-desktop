@@ -1,17 +1,17 @@
-// tourAutoplay.js — auto-fires the matching `/tour-<x>` slash command the
-// first time the user opens a tool modal. One-shot per modal: dismissed or
-// not, the marker is set so reopens never auto-trigger again.
+// tourAutoplay.js —— 在用户首次打开工具模态框时自动触发匹配的
+// `/tour-<x>` 斜杠命令。每个模态框仅触发一次：无论是否关闭，
+// 标记已设置，重新打开时不再自动触发。
 //
-// Pairs with the existing tourHints.js (which shows a single global "drag
-// title bar to snap" hint). Tours are richer per-feature walkthroughs.
+// 与现有的 tourHints.js 配对（后者显示一个全局的"拖动标题栏
+// 以吸附"提示）。导览是更丰富的逐功能引导。
 //
-// Mobile is excluded — tours position halos by rect math that doesn't fit
-// the bottom-sheet layout cleanly.
+// 移动端被排除 —— 导览通过矩形数学定位光晕，不适合
+// 底部面板布局。
 
 import { handleSlashCommand } from './slashCommands.js';
 
-// Modal id → slash command to fire (without the leading "/"). Add to this
-// map when a new feature picks up a `tour-*` command.
+// 模态框 id → 要触发的斜杠命令（不含前导 "/"）。当新功能
+// 添加 `tour-*` 命令时，向此映射追加。
 const TOUR_FOR_MODAL = {
   'doclib-modal':           'tour-library',
   'cookbook-modal':         'tour-cookbook',
@@ -25,9 +25,8 @@ const TOUR_FOR_MODAL = {
 const SEEN_KEY = (tour) => `odysseus-tour-autoplay-seen-${tour}`;
 
 let _initialized = false;
-// Suppress re-fire if a tour is already active or another modal opens while
-// we're mid-tour. The slash command itself adds `body.tour-active` for the
-// duration of its halos.
+// 如果导览已激活或另一个模态框在导览中打开，则禁止重新触发。
+// 斜杠命令本身在其光晕持续期间添加 `body.tour-active`。
 function _tourActive() {
   return document.body.classList.contains('tour-active');
 }
@@ -50,19 +49,18 @@ async function _maybeFire(modal) {
   let seen = false;
   try { seen = localStorage.getItem(SEEN_KEY(tour)) === '1'; } catch (_) {}
   if (seen) return;
-  // Mark immediately so a quick double-trigger (e.g. modal-class observer
-  // fires twice during animation) can't queue two tours.
+  // 立即标记，防止快速双重触发（例如模态框类观察器
+  // 在动画期间触发两次）排队两个导览。
   try { localStorage.setItem(SEEN_KEY(tour), '1'); } catch (_) {}
-  // Let the modal's own enter-animation settle before halos try to position
-  // off the title bar / first card / etc. ~400ms matches tourHints.
+  // 让模态框自身的入场动画稳定后再让光晕尝试定位
+  // 标题栏/第一张卡片/等。约 400ms 匹配 tourHints。
   setTimeout(() => {
     if (_tourActive()) return;
     try {
       handleSlashCommand('/' + tour);
     } catch (e) {
-      // If firing fails we don't unmark — re-attempting on every modal open
-      // would be more annoying than a missed tour. User can run `/tour-x`
-      // manually from the chat input.
+      // 如果触发失败，我们不取消标记 —— 每次模态框打开都重试
+      // 比错过一次导览更烦人。用户可以手动从聊天输入框运行 `/tour-x`。
       // eslint-disable-next-line no-console
       console.warn(`Tour autoplay failed for ${id}:`, e);
     }
@@ -83,7 +81,7 @@ function _watchModals() {
       if (wasHidden && _isVisible(el)) _maybeFire(el);
     }
   });
-  // Observe each known target if it exists at boot…
+  // 如果在启动时存在，观察每个已知目标…
   Object.keys(TOUR_FOR_MODAL).forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -94,8 +92,8 @@ function _watchModals() {
       });
     }
   });
-  // …and also for any matching modal added later (research overlay is
-  // appended on demand, for example).
+  // …也观察之后添加的任何匹配模态框（例如 research overlay 是
+  // 按需附加的）。
   const docObserver = new MutationObserver((muts) => {
     for (const m of muts) {
       m.addedNodes.forEach(node => {
@@ -117,9 +115,9 @@ function _watchModals() {
 export function init() {
   if (_initialized) return;
   _initialized = true;
-  // Disabled for v1 stability: opening ordinary app windows must never
-  // auto-spawn tour overlays or interfere with close/backdrop behavior.
-  // Manual slash tours still work through slashCommands.js.
+  // 为 v1 稳定性禁用：打开普通应用窗口绝不能
+  // 自动生成导览覆盖层或干扰关闭/背景行为。
+  // 手动斜杠导览仍通过 slashCommands.js 工作。
 }
 
 if (typeof window !== 'undefined') {

@@ -1,22 +1,22 @@
 # routes/copilot_routes.py
-"""GitHub Copilot device-flow login.
+"""GitHub Copilot 设备流登录。
 
-Drives the GitHub OAuth *device flow* and, on success, creates (or refreshes)
-an owner-scoped ``ModelEndpoint`` pointing at the Copilot API with the
-device-flow access token stored as its (encrypted) ``api_key``. After that the
-endpoint behaves like any other OpenAI-compatible provider — the Copilot-
-specific request headers are injected centrally by ``build_headers`` /
-``_provider_headers`` (see :mod:`src.copilot`).
+驱动 GitHub OAuth *设备流*，成功后创建（或刷新）
+一个按 owner 限定的 ``ModelEndpoint`` 指向 Copilot API，
+设备流访问令牌存储为其（加密的）``api_key``。之后该
+端点行为与其他 OpenAI 兼容供应商相同 — Copilot
+特定的请求头由 ``build_headers`` /
+``_provider_headers`` 集中注入（见 :mod:`src.copilot`）。
 
-Flow:
-  1. ``POST /api/copilot/device/start`` → returns a ``poll_id`` plus the
-     ``user_code`` + ``verification_uri`` to show the user. The secret
-     ``device_code`` is kept server-side, never sent to the browser.
-  2. The browser polls ``POST /api/copilot/device/poll`` with ``poll_id``.
-     While pending it returns ``{status: "pending"}``; once the user authorises
-     it provisions the endpoint and returns ``{status: "authorized", ...}``.
+流程：
+  1. ``POST /api/copilot/device/start`` → 返回 ``poll_id`` 以及
+     要展示给用户的 ``user_code`` + ``verification_uri``。密钥
+     ``device_code`` 保留在服务端，从不发给浏览器。
+  2. 浏览器用 ``poll_id`` 轮询 ``POST /api/copilot/device/poll``。
+     等待中返回 ``{status: "pending"}``；一旦用户授权
+     配置端点并返回 ``{status: "authorized", ...}``。
 
-All routes are admin-gated (endpoint/provider management is an admin action).
+所有路由都需要管理员权限（端点/提供商管理是管理员操作）。
 """
 
 import json
@@ -50,11 +50,11 @@ def _provision_endpoint(token: str, base: str, owner: Optional[str]) -> Dict:
         logger.warning(f"Copilot model fetch failed during provisioning: {e}")
         models = []
     model_ids = [m["id"] for m in models]
-    # Copilot picker models support OpenAI-style tool calling; mark the endpoint
-    # tool-capable so the agent loop sends native tool schemas.
-    # Tool-capable if any picker model advertises tool_calls. When the model
-    # fetch failed (empty list) default to True, since Copilot picker models
-    # support OpenAI-style tool calling.
+    # Copilot 选择器模型支持 OpenAI 风格的工具调用；将端点标记为
+    # 工具兼容，使 agent 循环发送原生工具 schema。
+    # 任一选择器模型声明 tool_calls 则工具兼容。当模型
+    # 获取失败（空列表）时默认为 True，因为 Copilot 选择器模型
+    # 支持 OpenAI 风格的工具调用。
     supports_tools = bool(not models or any(m.get("tool_calls") for m in models))
 
     db = SessionLocal()
@@ -90,7 +90,7 @@ def _provision_endpoint(token: str, base: str, owner: Optional[str]) -> Dict:
     finally:
         db.close()
 
-    # Best-effort: refresh the model cache so the new endpoint shows up.
+    # 尽力刷新模型缓存，使新端点显示出来。
     try:
         from routes.model_routes import _invalidate_models_cache
         _invalidate_models_cache()
@@ -116,9 +116,9 @@ def _start_device_flow(request: Request, form) -> DeviceFlowStart:
     if not device_code:
         raise HTTPException(502, "GitHub did not return a device code")
 
-    # verification_uri_complete embeds the user code, so the browser tab we
+    # verification_uri_complete 嵌入了用户码，因此打开的浏览器标签页
     # open lands the user straight on GitHub's "Authorize" screen with the
-    # code pre-filled — one click, no manual code entry.
+    # 代码已预填 — 一键完成，无需手动输入代码。
     return DeviceFlowStart(
         pending={
             "device_code": device_code,
@@ -159,7 +159,7 @@ def _poll_device_flow(_request: Request, pending: Dict) -> DeviceFlowPoll:
         return DeviceFlowPoll.slow_down(int(data.get("interval") or 0) or None)
     if err in ("expired_token", "access_denied"):
         return DeviceFlowPoll.failed(err)
-    # Unknown error — surface but keep the session for another try.
+    # 未知错误 — 显示出来但保留会话供再次尝试。
     return DeviceFlowPoll.pending(err or "unknown")
 
 

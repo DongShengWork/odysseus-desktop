@@ -1,13 +1,12 @@
 // ============================================
-// COOKBOOK DOWNLOAD SUB-MODULE
-// Download tab: SSE streaming, model download,
-// panel rendering, command building
+// COOKBOOK 下载子模块
+// 下载标签页：SSE 流式传输、模型下载、面板渲染、命令构建
 // ============================================
 
 import uiModule from './ui.js';
 import { _diagnose, _showDiagnosis, _clearDiagnosis } from './cookbook-diagnosis.js';
 
-// Shared state/functions injected by init()
+// 由 init() 注入的共享状态/函数
 let _envState;
 let _sshCmd;
 let _getPort;
@@ -29,10 +28,10 @@ let _renderRunningTab;
 let _loadTasks;
 let _saveTasks;
 
-// Storage keys
+// 存储键
 const SERVE_STATE_KEY = 'cookbook-serve-state';
 
-// ── Panel field helpers ──
+// ── 面板字段辅助函数 ──
 
 export function _setPanelField(panel, field, value) {
   const input = panel.querySelector(`[data-field="${field}"]`);
@@ -56,7 +55,7 @@ export function _setPanelCheckbox(panel, field, checked) {
   }
 }
 
-// ── Command builder: download ──
+// ── 命令构建：下载 ──
 
 function _firstGgufSource(model) {
   const sources = Array.isArray(model?.gguf_sources) ? model.gguf_sources : [];
@@ -117,8 +116,8 @@ export function _buildDownloadCmd(model, backend) {
       const repo = ggufSource?.repo || model.name;
       const includePattern = backend === 'llamacpp' ? _ggufIncludePattern(model, ggufSource) : null;
       const includeArg = includePattern ? `, allow_patterns=["${includePattern.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]` : '';
-      // Reflect the server's download target in the preview (matches the real
-      // download path built server-side). '' = default HF cache.
+      // 反映服务器下载目标在预览中的路径（匹配服务器端构建的实际下载路径）。
+      // '' = 默认 HF 缓存。
       const _dlDir = (_serverByVal?.(_envState.remoteServerKey || _envState.remoteHost || '') || {}).downloadDir || '';
       const _localDirArg = _dlDir ? `, local_dir=os.path.expanduser('${_dlDir.replace(/\/$/, '')}/${repo.split('/').pop()}')` : '';
       const _py = _isWindows() ? 'python' : 'python3';
@@ -186,7 +185,7 @@ except Exception as e:
   return full;
 }
 
-// ── Panel rendering helpers ──
+// ── 面板渲染辅助函数 ──
 
 function _getPanelFields(panel) {
   const vals = {};
@@ -211,7 +210,7 @@ function _syncEnvFromPanel(panel) {
 }
 
 export function _wirePanelEvents(panel, model, backend) {
-  // Populate env fields from _envState
+  // 从 _envState 填充环境字段
   const envFields = {
     env_type: _envState.env || 'none',
     env_path: _envState.envPath || '',
@@ -223,7 +222,7 @@ export function _wirePanelEvents(panel, model, backend) {
     if (el && val) el.value = val;
   }
 
-  // All inputs: update cmd preview + sync env state
+  // 所有输入框：更新命令预览 + 同步环境状态
   panel.querySelectorAll('.hwfit-f').forEach(input => {
     const evts = input.tagName === 'SELECT' ? ['change'] : ['input', 'change'];
     for (const evt of evts) {
@@ -238,7 +237,7 @@ export function _wirePanelEvents(panel, model, backend) {
     }
   });
 
-  // Download button
+  // 下载按钮
   const dlBtn = panel.querySelector('.hwfit-dl-btn');
   if (dlBtn) {
     dlBtn.addEventListener('click', () => {
@@ -246,7 +245,7 @@ export function _wirePanelEvents(panel, model, backend) {
     });
   }
 
-  // Stop button
+  // 停止按钮
   const stopBtn = panel.querySelector('.hwfit-stop-btn');
   if (stopBtn) {
     stopBtn.addEventListener('click', () => {
@@ -254,7 +253,7 @@ export function _wirePanelEvents(panel, model, backend) {
     });
   }
 
-  // Kill & close output button
+  // 关闭并关闭输出按钮
   const killBtn = panel.querySelector('.cookbook-output-kill');
   if (killBtn) {
     killBtn.addEventListener('click', () => {
@@ -277,7 +276,7 @@ export function _wirePanelEvents(panel, model, backend) {
     });
   }
 
-  // Copy button
+  // 复制按钮
   const copyBtn = panel.querySelector('.hwfit-copy-btn');
   if (copyBtn) {
     copyBtn.addEventListener('click', () => {
@@ -289,7 +288,7 @@ export function _wirePanelEvents(panel, model, backend) {
     });
   }
 
-  // Save button
+  // 保存按钮
   const saveBtn = panel.querySelector('.hwfit-save-btn');
   if (saveBtn) {
     saveBtn.addEventListener('click', () => {
@@ -304,7 +303,7 @@ export function _wirePanelEvents(panel, model, backend) {
     });
   }
 
-  // Output copy button
+  // 输出复制按钮
   const outputCopyBtn = panel.querySelector('.cookbook-output-copy');
   if (outputCopyBtn) {
     outputCopyBtn.addEventListener('click', (e) => {
@@ -341,7 +340,7 @@ function _updatePanelCmd(panel, model, backend) {
   pre.textContent = full;
 }
 
-// ── SSE streaming ──
+// ── SSE 流式传输 ──
 
 export async function _runPanelCmd(panel, cmd, opts = {}) {
   const outputWrap = panel.querySelector('.cookbook-output-wrap');
@@ -447,7 +446,7 @@ export async function _runPanelCmd(panel, cmd, opts = {}) {
   }
 }
 
-// ── Model download (dedicated endpoint, tmux-backed) ──
+// ── 模型下载（专用端点，基于 tmux）──
 
 export async function _runModelDownload(panel, model, backend, hostOverride) {
   const ggufSource = _ggufDownloadSource(model, backend);
@@ -462,20 +461,19 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
 
   _syncEnvFromPanel(panel);
 
-  // The host is whatever the caller resolved from the dropdown the user picked
-  // (passed explicitly as hostOverride). We do NOT trust _envState.remoteHost
-  // here: there can be more than one copy of the cookbook state in memory and
-  // they disagree on the active host. The servers LIST is consistent, so we look
-  // up the matching server to get its env / path / platform / port.
+  // 主机是从调用者通过下拉选择解析的（通过 hostOverride 显式传递）。
+  // 我们在这里不信任 _envState.remoteHost：可能有多个 cookbook 状态副本在内存中，
+  // 它们对活动主机的值不一致。服务器列表是一致的，因此我们通过查找匹配的服务器
+  // 来获取它的 env / path / platform / port。
   let host;
   if (hostOverride !== undefined) {
     host = hostOverride || '';
   } else {
-    // No explicit host passed: resolve from the visible server dropdown rather
-    // than _envState.remoteHost (unreliable — multiple state copies disagree).
+    // 没有显式传递主机：从可见的服务器下拉框解析，而非 _envState.remoteHost
+    //（不可靠 —— 多个状态副本不一致）。
     const ssEl = document.getElementById('hwfit-server-select') || document.getElementById('hwfit-dl-server');
-    // Dropdown values are profile keys now ('local' for local); stale host
-    // strings and numeric indices still resolve for backwards compatibility.
+    // 下拉框的值现在是 profile 键（'local' 表示本地）；过时的主机字符串和数字索引
+    // 仍为向后兼容而解析。
     const _ssv = ssEl ? ssEl.value : null;
     const _dsrv = (_ssv && _ssv !== 'local') ? (_serverByVal?.(_ssv) || _envState.servers[parseInt(_ssv)]) : null;
     if (_dsrv) {
@@ -494,15 +492,14 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
 
   const payload = { repo_id: repo, backend };
   if (include) payload.include = include;
-  // Large downloads are where hf_transfer most often dies near the end. Use the
-  // plain HuggingFace downloader up front for big model files; it is slower, but
-  // resumes cached partials more reliably.
+  // 大型下载是 hf_transfer 最常在接近完成时崩溃的地方。对大型模型文件使用
+  // 普通的 HuggingFace 下载器；速度较慢，但能更可靠地恢复已缓存的部分文件。
   if ((model.required_gb || 0) >= 10 || backend === 'llamacpp') payload.disable_hf_transfer = true;
   if (_envState.hfToken) payload.hf_token = _envState.hfToken;
   if (host) { payload.remote_host = host; const _sp = _getPort(host); if (_sp) payload.ssh_port = _sp; }
   if (platform) payload.platform = platform;
-  // If this server has a directory flagged as the download target, send it so
-  // the backend downloads into <dir>/<model> instead of the default HF cache.
+  // 如果此服务器有标记为下载目标的目录，发送它以便后端将模型下载到
+  // <dir>/<model> 而非默认的 HF 缓存。
   if (srv.downloadDir) payload.local_dir = srv.downloadDir;
   if (isWin) {
     if (env === 'venv' && envPath) {
@@ -534,11 +531,10 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
     uiModule.showToast(`${shortName} is already ${duplicate.status === 'queued' ? 'queued' : 'downloading'}`);
     return;
   }
-  // Also catch zombie "done" tasks — the cookbook may have lost track of a
-  // download (server restart, stale state) while its tmux session is still
-  // alive on the host. Probe it; if alive, flip back to running + treat as
-  // duplicate so we don't kick off a second concurrent download writing to
-  // the same target dir.
+  // 同时捕获僵尸 "完成" 任务 —— cookbook 可能已经丢失了对下载的跟踪（服务器重启、
+  // 过期状态），但它的 tmux 会话在主机上仍然活着。探测它；如果活着，则翻转回
+  // 运行状态，并作为重复处理，这样我们就不会启动第二个同时写入同一目标目录的下载。
+  //  [done, error, crashed, stopped] 状态中包含的状态值，并使用 !t.sessionId.startsWith
   const zombieCandidate = tasks.find(t => sameDownload(t)
     && ['done', 'error', 'crashed', 'stopped'].includes(t.status)
     && t.sessionId && !String(t.sessionId).startsWith('queue-'));
@@ -557,7 +553,7 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
       });
       const _d = await _r.json();
       if (_d.exit_code === 0) {
-        // tmux still alive → not actually done. Revive + tell the user.
+        // tmux 仍然存活 → 实际未完成。恢复任务并通知用户。
         const _fresh = _loadTasks();
         const _ft = _fresh.find(t => t.sessionId === zombieCandidate.sessionId);
         if (_ft) {
@@ -569,7 +565,7 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
         uiModule.showToast(`${shortName} is still downloading (was marked finished after a restart — revived)`);
         return;
       }
-    } catch { /* probe failed — fall through and let the user launch */ }
+    } catch { /* 探测失败 —— 继续执行，让用户手动启动 */ }
   }
   const activeOnHost = tasks.find(t => t.type === 'download' && (t.status === 'running' || t.status === 'queued') && (t.remoteHost || 'local') === targetHost);
 
@@ -591,8 +587,8 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      // Errors carry actionable text (e.g. "tmux is required …"); keep them up
-      // long enough to read, matching the serve path's duration (issue #1355).
+      // 错误携带可操作的文本（例如 "tmux is required …"）；保持足够长的时间以便读取，
+      // 与 serve 路径的持续时间匹配（issue #1355）。
       uiModule.showToast('Download failed: HTTP ' + res.status, 9000);
       return;
     }
@@ -608,7 +604,7 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
   }
 }
 
-// ── Init ──
+// ── 初始化 ──
 
 export function initDownload(shared) {
   _envState = shared._envState;

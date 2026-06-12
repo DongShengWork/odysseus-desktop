@@ -1,9 +1,9 @@
 """
 memory_vector.py
 
-ChromaDB-backed vector store for memory entries.
-Shares the EmbeddingClient with RAG to save memory.
-Stores pre-computed embeddings (ChromaDB does not manage embedding).
+基于 ChromaDB 的记忆条目向量存储。
+与 RAG 共享 EmbeddingClient 以节省内存。
+存储预计算的嵌入向量（ChromaDB 不管理嵌入）。
 """
 
 import logging
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryVectorStore:
-    """Vector index over memory entries for semantic retrieval."""
+    """基于向量的记忆条目索引，用于语义检索。"""
 
     COLLECTION_NAME = "odysseus_memories"
 
@@ -66,7 +66,7 @@ class MemoryVectorStore:
         return self._lanes[0].encode(texts)
 
     def count(self) -> int:
-        """Return the number of stored vectors."""
+        """返回已存储向量的数量。"""
         if not self._healthy:
             return 0
         return lane_count(self._lanes)
@@ -102,7 +102,7 @@ class MemoryVectorStore:
         return collections
 
     def add(self, memory_id: str, text: str):
-        """Add a single memory entry to the vector index."""
+        """向向量索引添加单个记忆条目。"""
         if not self._healthy:
             return
         for lane in self._lanes:
@@ -120,7 +120,7 @@ class MemoryVectorStore:
                 logger.warning("memory add failed in %s lane for %s: %s", lane.name, memory_id, e)
 
     def remove(self, memory_id: str):
-        """Remove a memory entry. O(1) — no rebuild needed."""
+        """移除一个记忆条目。O(1) — 无需重建。"""
         if not self._healthy:
             return
         for collection in self._collections_for_delete():
@@ -130,11 +130,11 @@ class MemoryVectorStore:
                 logger.warning(f"memory remove {memory_id}: {e}")
 
     def search(self, query: str, k: int = 8) -> List[Dict]:
-        """Search for the most relevant memory IDs by semantic similarity.
-        Returns list of {"memory_id": str, "score": float}.
+        """按语义相似度搜索最相关的记忆 ID。
+        返回 [{"memory_id": str, "score": float}] 列表。
 
-        ChromaDB cosine distance = 1 - cosine_similarity.
-        We convert back: similarity = 1.0 - distance.
+        ChromaDB 余弦距离 = 1 - 余弦相似度。
+        我们转换回来：相似度 = 1.0 - 距离。
         """
         if not self._healthy or self.count() == 0:
             return []
@@ -163,7 +163,7 @@ class MemoryVectorStore:
         return dedupe_results(out, id_key="memory_id", limit=k)
 
     def find_similar(self, text: str, threshold: float = 0.92) -> Optional[str]:
-        """Check if a near-duplicate exists. Returns memory_id if found, else None."""
+        """检查是否存在近似重复。找到返回 memory_id，否则返回 None。"""
         if not self._healthy or self.count() == 0:
             return None
 
@@ -186,8 +186,8 @@ class MemoryVectorStore:
         return None
 
     def rebuild(self, memories: List[Dict]):
-        """Rebuild the entire index from a list of memory entries.
-        Each entry must have 'id' and 'text' keys."""
+        """根据记忆条目列表重建整个索引。
+        每个条目必须包含 'id' 和 'text' 键。"""
         if not self._healthy:
             return
 
@@ -204,8 +204,8 @@ class MemoryVectorStore:
                 client.delete_collection(name)
             except Exception:
                 pass
-        # Explicit rebuilds must start from the supplied memory list, so clear
-        # legacy unsuffixed collections too.
+        # 显式重建必须从提供的记忆列表开始，因此也清除
+        # 旧版未加后缀的集合。
         self._lanes = build_embedding_lanes(self.COLLECTION_NAME)
         self._collection = next(
             (lane.collection for lane in self._lanes if lane.name == LANE_FASTEMBED),
@@ -222,7 +222,7 @@ class MemoryVectorStore:
                 ids.append(mid)
 
         if texts:
-            # Batch in chunks of 100 to avoid oversized requests
+            # 以 100 条为一批处理，避免请求过大
             failed_lanes = set()
             for i in range(0, len(texts), 100):
                 batch_texts = texts[i:i + 100]

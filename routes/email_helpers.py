@@ -1,15 +1,15 @@
 """
 email_helpers.py
 
-Lower-level helpers used by both `email_routes.py` (the FastAPI route file)
-and `email_pollers.py` (the background loops):
+`email_routes.py`（FastAPI 路由文件）和 `email_pollers.py`（后台循环）
+共同使用的低层级辅助函数：
 
-    - auth dependencies (require_owner / require_user / _assert_owns_account)
-    - account config + settings persistence (`_get_email_config`, `_list_email_accounts`)
-    - IMAP connection helpers (`_imap_connect`, `_imap`, folder detection)
-    - message parsing (`_decode_header`, `_extract_html/text`, attachment helpers)
-    - sender context retrieval for the AI-summary / AI-reply pipelines
-    - Pydantic models, shared constants, scheduled-DB bootstrap
+    - 认证依赖（require_owner / require_user / _assert_owns_account）
+    - 账户配置 + 设置持久化（`_get_email_config`、`_list_email_accounts`）
+    - IMAP 连接辅助（`_imap_connect`、`_imap`、文件夹检测）
+    - 邮件解析（`_decode_header`、`_extract_html/text`、附件辅助）
+    - AI 摘要 / AI 回复管道中的发件人上下文检索
+    - Pydantic 模型、共享常量、定时数据库初始化
 """
 
 import os

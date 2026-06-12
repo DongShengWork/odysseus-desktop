@@ -1,6 +1,6 @@
 """
-YouTube handling — transcript extraction, comment fetching (yt-dlp),
-and context formatting for LLM injection. Used by chat_handler.py.
+YouTube 处理 — 字幕提取、评论获取（yt-dlp），
+以及用于 LLM 注入的上下文格式化。由 chat_handler.py 使用。
 """
 
 import asyncio
@@ -15,7 +15,7 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Constants
+# 常量
 # ---------------------------------------------------------------------------
 
 YOUTUBE_INSTRUCTION_PROMPT = """When the user shares a YouTube video, respond with a structured breakdown:
@@ -28,16 +28,16 @@ YOUTUBE_INSTRUCTION_PROMPT = """When the user shares a YouTube video, respond wi
 Keep it conversational and concise. Do NOT web search for this video — use only the transcript and comments provided."""
 
 # ---------------------------------------------------------------------------
-# Init / helpers
+# 初始化 / 辅助函数
 # ---------------------------------------------------------------------------
 
-# Will be set at startup by init_youtube()
+# 将在启动时由 init_youtube() 设置
 YouTubeTranscriptApi = None
 YOUTUBE_AVAILABLE = False
 
 
 def _find_ytdlp() -> str:
-    """Find the yt-dlp binary: venv bin first, then system PATH."""
+    """查找 yt-dlp 二进制文件：先搜索 venv bin 目录，然后系统 PATH。"""
     venv_bin = Path(sys.executable).parent / "yt-dlp"
     if venv_bin.exists():
         return str(venv_bin)
@@ -46,7 +46,7 @@ def _find_ytdlp() -> str:
 
 
 def init_youtube():
-    """Import and cache the YouTube transcript API."""
+    """导入并缓存 YouTube 字幕 API。"""
     global YouTubeTranscriptApi, YOUTUBE_AVAILABLE
     try:
         from youtube_transcript_api import YouTubeTranscriptApi as _Api
@@ -65,7 +65,7 @@ def is_youtube_url(url: str) -> bool:
 
 
 def extract_youtube_id(url: str) -> Optional[str]:
-    """Extract YouTube video ID from various URL formats."""
+    """从各种 URL 格式中提取 YouTube 视频 ID。"""
     if not isinstance(url, str):
         return None
     parsed = urllib.parse.urlparse(url)
@@ -142,7 +142,7 @@ def format_transcript_for_context(
     transcript_data: Dict[str, Any], url: str,
     title: str = "", channel: str = ""
 ) -> str:
-    """Format transcript data for inclusion in LLM context."""
+    """为 LLM 上下文格式化字幕数据。"""
     if not transcript_data.get("success"):
         header = ""
         if title:
@@ -166,12 +166,12 @@ def format_transcript_for_context(
     ctx += f"Language: {language}\n"
     ctx += f"Source: {'Auto-generated' if is_generated else 'Manual'}\n"
     ctx += f"URL: {url}\n\n"
-    # Include timestamped segments for the LLM to reference
+    # 为 LLM 包含带时间戳的片段以便引用
     if segments:
         ctx += "Timestamped Transcript:\n"
         for seg in segments:
             ctx += f"[{seg['timestamp']}] {seg['text']}\n"
-        # Check length — fall back to plain text if too long
+        # 检查长度 — 太长则回退到纯文本
         if len(ctx) > 12000:
             ctx = ctx[:ctx.index("Timestamped Transcript:\n")]
             ctx += "Transcript:\n"
@@ -186,7 +186,7 @@ def format_transcript_for_context(
 async def fetch_youtube_comments(
     video_id: str, max_comments: int = 25, timeout: int = 30
 ) -> Dict[str, Any]:
-    """Fetch top comments for a YouTube video using yt-dlp.
+    """使用 yt-dlp 获取 YouTube 视频的热门评论。"""
 
     Returns dict with 'success', 'comments' list, 'error'.
     """
@@ -231,7 +231,7 @@ async def fetch_youtube_comments(
                 "likes": c.get("like_count", 0),
             })
 
-        # Sort by likes descending — most popular comments first
+        # 按点赞数降序排列 — 最热门的评论优先
         comments.sort(key=lambda x: x.get("likes", 0), reverse=True)
 
         return {"success": True, "comments": comments, "count": len(comments),
@@ -249,7 +249,7 @@ async def fetch_youtube_comments(
 
 
 def format_comments_for_context(comments_data: Dict[str, Any], url: str) -> str:
-    """Format YouTube comments for inclusion in LLM context."""
+    """为 LLM 上下文格式化 YouTube 评论。"""
     if not comments_data.get("success") or not comments_data.get("comments"):
         return ""
 

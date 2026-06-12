@@ -1,5 +1,5 @@
 # routes/note_routes.py
-"""Google Keep-style notes / checklists API."""
+"""Google Keep 风格笔记 / 清单 API。"""
 
 import json
 import uuid

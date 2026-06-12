@@ -1,6 +1,6 @@
 // ============================================
-// COOKBOOK MODULE (v2 — simplified)
-// What Fits? + Saved presets, inline action panels
+// 烹饪书模块 (v2 — 简化版)
+// 什么适合？ + 已保存预设, 内嵌操作面板
 // ============================================
 
 import uiModule from './ui.js';
@@ -10,7 +10,7 @@ import { makeWindowDraggable } from './windowDrag.js';
 import { _diagnose, _showDiagnosis, _clearDiagnosis, _runQuickCmd, ERROR_PATTERNS } from './cookbook-diagnosis.js';
 import { _hwfitCache, _hwfitDebounce, _hwfitFetch, _hwfitInit, _hwfitRenderList, _hwfitRenderHw, _renderGpuToggles, _expandModelRow, _fitColors, _hwfitColumns, _cachedModelIds, _gpuToggleTotal, _resetGpuToggleState } from './cookbook-hwfit.js';
 
-// Sub-modules
+// 子模块
 import {
   initRunning,
   _loadTasks, _saveTasks, _addTask, _removeTask,
@@ -31,16 +31,17 @@ import {
   initServe,
   _fetchCachedModels, _cachedAllModels, _filterCachedList, _rerenderCachedModels, _deleteCachedModel,
 } from './cookbookServe.js';
+import { t } from './i18n.js';
 
 const STORAGE_KEY = 'cookbook-presets';
 const LAST_STATE_KEY = 'cookbook-last-state';
 const SERVE_STATE_KEY = 'cookbook-serve-state';
 
-// Global, once: tag chip rows (.doclib-lang-chips) scroll horizontally on mobile.
-// Stop their touch events (capture phase, before any ancestor sees them) so a
-// sideways tag scroll never triggers a swipe-to-change-tab / swipe-dismiss
-// gesture in ANY modal (cookbook, document library, etc.). We don't preventDefault,
-// so the browser's native horizontal scroll of the chips still works.
+// 全局一次性设置：标签行 (.doclib-lang-chips) 在移动端水平滚动。
+// 在捕获阶段阻止其触摸事件（在任何祖先元素看到之前），这样
+// 横向标签滚动永远不会触发热键切换/滑动关闭
+// 手势（在任何模态框中：cookbook、文档库等）。我们不调用 preventDefault，
+// 这样浏览器原生的标签水平滚动仍然有效。
 if (typeof window !== 'undefined' && !window._tagScrollGuardWired) {
   window._tagScrollGuardWired = true;
   ['touchstart', 'touchmove'].forEach(evt => {
@@ -51,13 +52,13 @@ if (typeof window !== 'undefined' && !window._tagScrollGuardWired) {
   });
 }
 
-// Radio-style check marking which model directory is a server's download target.
-// OFF = hollow circle (pickable); ON = checked circle (accent-tinted via CSS).
+// 单选式勾选标记，标识哪个模型目录是服务器的下载目标。
+// OFF = 空心圆（可选）；ON = 勾选圆（通过 CSS 着色）。
 export const _MODELDIR_CHECK_OFF = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>';
 export const _MODELDIR_CHECK_ON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>';
 
-// Monochrome platform glyphs (currentColor) for a server's OS tag: a penguin for
-// Linux, the four-pane logo for Windows, an Android robot for Termux/Android.
+// 单色平台图标（currentColor）用于服务器 OS 标签：企鹅表示
+// Linux，四格 logo 表示 Windows，安卓机器人表示 Termux/Android。
 function _platformIcon(platform) {
   const k = (platform || '').toLowerCase();
   if (k === 'windows') {
@@ -79,11 +80,11 @@ export function _lastCacheHost() { return _lastCacheHostVal; }
 export function _setLastCacheHost(v) { _lastCacheHostVal = v; }
 
 function _setCookbookOpening(on) {
-  // Sidebar (tool-cookbook-btn) deliberately excluded — the inline
-  // whirlpool on the sidebar row read as "the click didn't register"
-  // rather than "loading", which made users (rightly) think clicks
-  // were being eaten. Keep only the icon-rail spinner since the
-  // rail is narrow enough that an obvious loading state still helps.
+  // 侧边栏按钮 (tool-cookbook-btn) 故意排除 — 侧边栏行上的
+  // 旋转加载器读起来像"点击未响应"
+  // 而不是"加载中"，这让用户（合理）地以为点击
+  // 被吞掉了。只保留图标栏的旋转器，因为
+  // 图标栏很窄，明显的加载状态仍然有帮助。
   const targets = [
     document.getElementById('rail-cookbook'),
   ].filter(Boolean);
@@ -110,13 +111,13 @@ function _setCookbookOpening(on) {
   });
 }
 
-/** Build server <option> HTML from _envState.servers. excludeLocal skips local-only entries. */
-// True for the local server entry (empty / "local" / "localhost" host).
+/** 从 _envState.servers 构建服务器 <option> HTML。excludeLocal 跳过本地条目。 */
+// 本地服务器条目为 true（空 / "local" / "localhost" 主机）。
 function _isLocalEntry(s) { return !s || !s.host || s.host === 'local' || s.host.toLowerCase() === 'localhost'; }
 
-// Resolve a dropdown option value to a server entry. New option values are
-// stable per-profile keys, so same-host SSH profiles stay distinguishable.
-// Host strings and numeric indices remain accepted for stale saved state.
+// 将下拉选项值解析为服务器条目。新的选项值是
+// 每个配置文件的稳定键，相同主机的 SSH 配置文件保持可区分。
+// 主机字符串和数字索引仍然接受用于旧保存状态。
 export function _serverKey(s) {
   if (_isLocalEntry(s)) return 'local';
   return 'srv:' + [
@@ -167,9 +168,9 @@ function _gemma4ThinkingChatTemplateArg(modelName) {
 }
 
 function _buildServerOpts(excludeLocal = false) {
-  // The local server is ALWAYS represented by the synthetic value="local" option
-  // (showing its custom name from the "server name" feature). We must therefore
-  // skip that same entry in the loop below — otherwise it appeared twice.
+  // 本地服务器始终由合成的 value="local" 选项表示
+  // （显示其来自"服务器名称"功能的自定义名称）。因此我们必须在
+  // 下面的循环中跳过该条目 — 否则会显示两次。
   const _localIdx = _envState.servers.findIndex(_isLocalEntry);
   const _localSrv = _localIdx >= 0 ? _envState.servers[_localIdx] : null;
   const _localLabel = (_localSrv && _localSrv.name) ? _localSrv.name : 'Local';
@@ -178,7 +179,7 @@ function _buildServerOpts(excludeLocal = false) {
   let legacyHostSelected = false;
   for (let i = 0; i < _envState.servers.length; i++) {
     const s = _envState.servers[i];
-    if (i === _localIdx) continue;                 // already the synthetic "local" option
+    if (i === _localIdx) continue;                 // 已经是合成的 "local" 选项
     if (excludeLocal && _isLocalEntry(s)) continue;
     const label = s.name || s.host || `Server ${i + 1}`;
     const value = _serverKey(s);
@@ -192,13 +193,13 @@ function _buildServerOpts(excludeLocal = false) {
   return html;
 }
 
-/** Wrap a command in SSH for a remote host, with proper single-quote escaping. */
+/** 为远程主机包装 SSH 命令，正确转义单引号。 */
 export function _sshCmd(host, cmd, port) {
   const portFlag = port && port !== '22' ? `-p ${port} ` : '';
   return `ssh ${portFlag}${host} '${cmd.replace(/'/g, "'\\''")}'`;
 }
 
-/** Get SSH port for a given host (or task object) */
+/** 获取给定主机（或任务对象）的 SSH 端口 */
 function _getPort(hostOrTask) {
   if (!hostOrTask) return '';
   if (typeof hostOrTask === 'object') return hostOrTask.sshPort || _getPort(hostOrTask.remoteServerKey || hostOrTask.remoteHost);
@@ -207,7 +208,7 @@ function _getPort(hostOrTask) {
   return srv?.port || '';
 }
 
-/** Get platform for a given host (or task object). Returns 'windows', 'termux', 'linux', or '' */
+/** 获取给定主机（或任务对象）的平台。返回 'windows'、'termux'、'linux' 或 '' */
 export function _getPlatform(hostOrTask) {
   if (!hostOrTask) return _envState.platform || '';
   if (typeof hostOrTask === 'object') return hostOrTask.platform || _getPlatform(hostOrTask.remoteServerKey || hostOrTask.remoteHost);
@@ -216,43 +217,43 @@ export function _getPlatform(hostOrTask) {
   return srv?.platform || '';
 }
 
-/** Check if the current active server is Windows */
+/** 检查当前活动服务器是否为 Windows */
 export function _isWindows(hostOrTask) {
   return _getPlatform(hostOrTask) === 'windows';
 }
 
-/** Check if the detected (local) hardware is Apple Silicon / Metal. Keys off the
- *  hardware probe's backend rather than a platform string, since a local Mac
- *  reports no platform but does report backend: "metal". */
+/** 检查检测到的（本地）硬件是否为 Apple Silicon / Metal。基于
+ *  硬件探测的后端而非平台字符串，因为本地 Mac
+ *  不报告平台但会报告 backend: "metal"。 */
 export function _isMetal() {
   return ['metal', 'mps', 'apple'].includes(String(_hwfitCache?.system?.backend || '').toLowerCase());
 }
 
-/** Detect model-specific vLLM optimizations */
+/** 检测模型特定的 vLLM 优化 */
 function _detectModelOptimizations(modelName) {
   const n = (modelName || '').toLowerCase();
   const opts = { envVars: [], flags: [], tips: [] };
 
-  // Qwen3.5 MoE models
+  // Qwen3.5 MoE 模型
   if (n.includes('qwen3.5') || n.includes('qwen3-') && (n.includes('a10b') || n.includes('a22b') || n.includes('a3b'))) {
     opts.envVars.push('VLLM_USE_DEEP_GEMM=0', 'VLLM_USE_FLASHINFER_MOE_FP16=1', 'VLLM_USE_FLASHINFER_SAMPLER=0', 'OMP_NUM_THREADS=4');
     opts.flags.push('--enable-expert-parallel', '--reasoning-parser qwen3');
     opts.tips.push('MoE optimizations: expert parallel + flashinfer MoE kernels');
   }
-  // Qwen3 MoE (non-3.5)
+  // Qwen3 MoE（非 3.5）
   else if (n.includes('qwen3') && (n.includes('a10b') || n.includes('a22b') || n.includes('a3b'))) {
     opts.envVars.push('VLLM_USE_DEEP_GEMM=0', 'VLLM_USE_FLASHINFER_MOE_FP16=1');
     opts.flags.push('--enable-expert-parallel', '--reasoning-parser qwen3');
     opts.tips.push('MoE optimizations: expert parallel');
   }
-  // DeepSeek MoE
+  // DeepSeek MoE 模型
   else if (n.includes('deepseek') && (n.includes('v3') || n.includes('r1'))) {
     opts.flags.push('--enable-expert-parallel');
     opts.tips.push('MoE expert parallel for DeepSeek');
   }
-  // Speculative decoding — pick the right MTP method per model family.
-  // opts.spec.{method,tokens} seed the UI dropdown/input; the actual flag is
-  // assembled by the command builder so the user can edit before launching.
+  // 推测解码 — 根据模型家族选择合适的 MTP 方法。
+  // opts.spec.{method,tokens} 填充 UI 下拉框/输入框；实际标志由
+  // 命令构建器组装，用户可在启动前编辑。
   let specDefault = null;
   if (n.includes('qwen3-next') || (n.includes('qwen3.5') && (n.includes('a10b') || n.includes('a22b')))) {
     specDefault = { method: 'qwen3_next_mtp', tokens: 2 };
@@ -273,20 +274,20 @@ function _detectModelOptimizations(modelName) {
   return opts;
 }
 
-/** Detect the right vLLM tool-call-parser based on model name.
- *  Qwen tool-call formats split by generation:
- *   - Qwen3-Coder           → qwen3_coder  (XML <tool_call> with named params)
- *   - Qwen3 (non-coder)     → qwen3_xml    (reasoning/instruct, XML wrapper)
- *   - Qwen2.5 / Qwen2 / 1.5 → hermes       (Qwen2.5 was trained on Hermes format)
- *  Catching "qwen" first and labelling everything qwen3_xml breaks tool
- *  calls on the Qwen2.5 line (the model emits hermes-style which the
- *  qwen3_xml parser doesn't recognise, so the call leaks through as text).
+/** 根据模型名称检测正确的 vLLM tool-call-parser。
+ *  Qwen tool-call 格式按代分割：
+ *   - Qwen3-Coder           → qwen3_coder（XML <tool_call> 带命名参数）
+ *   - Qwen3（非 coder）     → qwen3_xml（推理/指令，XML 包装）
+ *   - Qwen2.5 / Qwen2 / 1.5 → hermes（Qwen2.5 用 Hermes 格式训练）
+ *  先捕获"qwen"然后将所有内容标记为 qwen3_xml 会破坏
+ *  Qwen2.5 系列的工具调用（模型输出 hermes 风格，
+ *  qwen3_xml 解析器无法识别，调用会以文本形式泄露）。
  */
 export function _detectToolParser(modelName) {
   const n = (modelName || '').toLowerCase();
   if (n.includes('qwen3') && n.includes('coder')) return 'qwen3_coder';
   if (n.includes('qwen3')) return 'qwen3_xml';
-  if (n.includes('qwen')) return 'hermes';   // Qwen2.5 / Qwen2 / Qwen1.5
+  if (n.includes('qwen')) return 'hermes';   // Qwen2.5 / Qwen2 / Qwen1.5 系列
   if (n.includes('llama-4') || n.includes('llama4')) return 'llama4_json';
   if (n.includes('llama') || n.includes('nemotron')) return 'llama3_json';
   if (n.includes('mistral') || n.includes('mixtral')) return 'mistral';
@@ -298,10 +299,10 @@ export function _detectToolParser(modelName) {
   if (n.includes('glm-4')) return 'glm45';
   if (n.includes('internlm')) return 'internlm';
   if (n.includes('granite')) return 'granite';
-  return 'hermes'; // default fallback
+  return 'hermes'; // 默认回退
 }
 
-// ── Backend detection ──
+// ── 后端检测 ──
 
 export function _detectBackend(model) {
   const _ollamaName = String(model?.repo_id || model?.name || model?.id || '').trim();
@@ -321,47 +322,47 @@ export function _detectBackend(model) {
   const isAwqLike = /^AWQ|^GPTQ|^NVFP4/.test(q) || ['FP8', 'FP4', 'MXFP4', 'NF4', 'INT4', 'INT8', 'W4A16', 'W8A8', 'W8A16'].includes(q) || /\b(awq|gptq|fp8|fp4|nvfp4|mxfp4|nf4|int4|int8|w4a16|w8a8|w8a16)\b/i.test(_nm);
   const isGgufLike = model.is_gguf || /^Q[2-8]/.test(q) || /^IQ/.test(q) || q === 'GGUF' || _nm.includes('gguf');
 
-  // Image gen models → diffusers
+  // 图像生成模型 → diffusers
   if (model.is_image_gen || model.is_diffusion || model._tag === 'image') {
     return { backend: 'diffusers', label: 'Diffusers' };
   }
 
-  // AWQ / GPTQ / FP8 are safetensors GPU-serving formats. Never route them
-  // through llama.cpp/Ollama just because the host is Mac/Windows; those engines
-  // need GGUF. The UI will warn/block on Metal where vLLM/SGLang aren't viable.
+  // AWQ / GPTQ / FP8 是 safetensors GPU 推理格式。切勿将它们
+  // 仅因主机是 Mac/Windows 就路由到 llama.cpp/Ollama；这些引擎
+  // 需要 GGUF。UI 将在 vLLM/SGLang 不可行的 Metal 上警告/阻止。
   if (isAwqLike) {
     return { backend: 'vllm', label: 'vLLM' };
   }
 
-  // GGUF → llama.cpp/Ollama-compatible.
+  // GGUF → llama.cpp/Ollama 兼容。
   if (isGgufLike) {
     return { backend: 'llamacpp', label: 'llama.cpp' };
   }
 
-  // Windows → default to llama.cpp (no vLLM support on Windows)
+  // Windows → 默认 llama.cpp（Windows 不支持 vLLM）
   if (_isWindows()) {
     return { backend: 'llamacpp', label: 'llama.cpp' };
   }
 
-  // Apple Silicon (Metal) → llama.cpp (GGUF). vLLM/SGLang are CUDA/ROCm-only and
-  // don't run on macOS; vLLM-native quantized models are already filtered out
-  // of metal Cookbook results, so llama.cpp is always the right engine here.
+  // Apple Silicon (Metal) → llama.cpp (GGUF)。vLLM/SGLang 仅支持 CUDA/ROCm，
+  // 不能在 macOS 上运行；vLLM 原生量化模型已从 Metal Cookbook
+  // 结果中过滤掉，所以 llama.cpp 始终是这里正确的引擎。
   if (['metal', 'mps', 'apple'].includes(sysBackend)) {
     return { backend: 'llamacpp', label: 'llama.cpp' };
   }
 
-  // ROCm/AMD machines should not blindly default HF safetensors models to
-  // vLLM. SGLang is the safer OpenAI-compatible default for plain HF text
-  // repos there; llama.cpp still wins above whenever the model is GGUF.
+  // ROCm/AMD 机器不应盲目将 HF safetensors 模型默认设为
+  // vLLM。SGLang 对于纯 HF 文本仓库来说是更安全的
+  // OpenAI 兼容默认值；llama.cpp 在模型为 GGUF 时仍然优先。
   if (isRocm) {
     return { backend: 'sglang', label: 'SGLang' };
   }
 
-  // Unquantized / BF16 / F16 → vLLM
+  // 未量化 / BF16 / F16 → vLLM
   return { backend: 'vllm', label: 'vLLM' };
 }
 
-// ── Command builders ──
+// ── 命令构建器 ──
 
 export function _shellQuote(value) {
   return "'" + String(value ?? '').replace(/'/g, "'\\''") + "'";
@@ -405,11 +406,11 @@ function _buildEnvPrefixWindows() {
 }
 
 export function _buildServeCmd(f, modelName, backend) {
-  // When a venv is configured on the chosen server, use the venv's binaries
-  // by absolute path. Bare `vllm` / `python3` relies on PATH, and SSH non-
-  // interactive sessions often leave a user-site install (~/.local/bin/vllm)
-  // ahead of the venv's bin, so the WRONG vllm gets launched even with the
-  // venv activated. Absolute path sidesteps the whole PATH question.
+  // 当所选服务器配置了 venv 时，使用 venv 的二进制文件
+  // 的绝对路径。裸 `vllm` / `python3` 依赖 PATH，而 SSH 非
+  // 交互式会话经常将用户安装路径 (~/.local/bin/vllm)
+  // 放在 venv 的 bin 前面，所以即使 venv 已激活，
+  // 错误的 vllm 也会被启动。绝对路径绕过了整个 PATH 问题。
   const _isVenv = _envState.env === 'venv' && _envState.envPath;
   const _venvBin = _isVenv ? (_envState.envPath.replace(/\/+$/, '') + '/bin/') : '';
   const _vllmBin = _venvBin ? `${_venvBin}vllm` : 'vllm';
@@ -422,12 +423,12 @@ export function _buildServeCmd(f, modelName, backend) {
       const _opts = _detectModelOptimizations(modelName);
       if (_opts.envVars.length) cmd += _opts.envVars.join(' ') + ' ';
     }
-    // Pinned attention backend (Attention field). Empty = let vLLM pick.
+    // 固定的注意力后端（Attention 字段）。空 = 让 vLLM 选择。
     const _attn = (f.vllm_attn_backend ?? '').toString().trim();
     if (_attn) cmd += `VLLM_ATTENTION_BACKEND=${_attn} `;
-    // Free-text "Env" field — verbatim KEY=VAL pairs (space-separated).
-    // Collapse any pasted newlines/tabs so the backend allowlist (which
-    // rejects \n / \r) doesn't trip on a multi-line paste from a model card.
+    // 自由文本"Env"字段 — 逐字 KEY=VAL 对（空格分隔）。
+    // 折叠所有粘贴的换行/制表符，这样后端白名单（拒绝
+    // \n / \r）不会因从模型卡片粘贴的多行内容而报错。
     const _extraEnv = (f.extra_env ?? '').toString().replace(/\s+/g, ' ').trim();
     if (_extraEnv) cmd += _extraEnv + ' ';
     cmd += `${_vllmBin} serve ${modelName} --host 0.0.0.0 --port ${f.port || '8000'}`;
@@ -477,9 +478,9 @@ export function _buildServeCmd(f, modelName, backend) {
     const ggufPath = f._gguf_path || 'model.gguf';
     const gpuId = f.gpu_id?.trim() || '';
     const py = _isWindows() ? 'python' : 'python3';
-    // CPU-only serve (-ngl 0): drop the GPU-only flags, otherwise the command
-    // mixes "zero GPU layers" with CUDA unified-memory + flash-attn and fails to
-    // start (issue #1291). Only affects the ngl=0 path; GPU serving is unchanged.
+    // 纯 CPU 推理 (-ngl 0)：去掉仅 GPU 的标志，否则命令
+    // 会将"零 GPU 层"与 CUDA 统一内存 + flash-attn 混合导致启动失败
+    //（issue #1291）。仅影响 ngl=0 路径；GPU 推理不变。
     const _cpuOnly = String(f.ngl).trim() === '0';
     const lcPrefix = (() => {
       let p = '';
@@ -490,19 +491,19 @@ export function _buildServeCmd(f, modelName, backend) {
     if (f.unified_mem && !_cpuOnly && _isWindows()) cmd += `$env:GGML_CUDA_ENABLE_UNIFIED_MEMORY="1"; `;
     if (gpuId && _isWindows()) cmd += `$env:CUDA_VISIBLE_DEVICES="${gpuId}"; `;
     if (!_isWindows()) {
-      // Resolve GGUF path once, fail loudly if nothing matched (prevents
-      // `--model ""` which causes confusing downstream errors).
+      // 一次性解析 GGUF 路径，如果无匹配则大声报错（防止
+      // `--model ""` 导致下游混淆错误）。
       cmd += `MODEL_FILE=${ggufPath} && { [ -n "$MODEL_FILE" ] && [ -f "$MODEL_FILE" ]; } || { echo "ERROR: No GGUF found on this host. Either download the model here, or switch to the server where it's cached."; exit 1; } && `;
     }
     const modelArg = _isWindows() ? `"${ggufPath}"` : `"$MODEL_FILE"`;
-    // Prefer the native llama-server binary on Linux — its minja templating
-    // renders modern GGUF chat templates that the Python bindings' Jinja2
-    // rejects (do_tojson ensure_ascii). Fall back to llama_cpp.server.
-    // Don't suppress stderr — surface real errors (missing file, lib, OOM).
-    // Optional perf/fit flags from a hardware profile (see services/hwfit/
-    // profiles.py). n_cpu_moe offloads MoE expert layers to CPU when the model
-    // is bigger than VRAM; flash-attn + a quantized KV cache cut KV memory and
-    // speed things up. Only emitted when set, so manual/older flows are unchanged.
+    // 在 Linux 上优先使用原生 llama-server 二进制文件 — 其 minja 模板
+    // 引擎能渲染现代 GGUF 对话模板，而 Python 绑定的 Jinja2
+    // 则拒绝这些模板（do_tojson ensure_ascii）。回退到 llama_cpp.server。
+    // 不要抑制 stderr — 暴露真实错误（缺失文件、库、OOM）。
+    // 来自硬件配置文件的可选性能/适配标志（见 services/hwfit/
+    // profiles.py）。n_cpu_moe 在模型超出 VRAM 时将 MoE 专家层卸载到 CPU；
+    // flash-attn + 量化 KV 缓存减少 KV 内存并
+    // 加速推理。仅在设置时输出，手动/旧流程不变。
     const _ncm = (f.n_cpu_moe ?? '').toString().trim();
     const _kv = (f.cache_type ?? '').toString().trim();
     const _llamaNum = (v) => {
@@ -517,7 +518,7 @@ export function _buildServeCmd(f, modelName, backend) {
     let _lcpExtra = '';
     if (_ncm !== '' && Number(_ncm) > 0) {
       _lcExtra += ` --n-cpu-moe ${_ncm}`;
-      _lcpExtra += ` --n_cpu_moe ${_ncm}`;   // llama-cpp-python uses underscores
+      _lcpExtra += ` --n_cpu_moe ${_ncm}`;   // llama-cpp-python 使用下划线
     }
     if (f.flash_attn && !_cpuOnly) {
       _lcExtra += ' --flash-attn on';
@@ -525,7 +526,7 @@ export function _buildServeCmd(f, modelName, backend) {
     }
     if (_kv) {
       _lcExtra += ` --cache-type-k ${_kv} --cache-type-v ${_kv}`;
-      // llama-cpp-python exposes these as type_k/type_v; pass through best-effort.
+      // llama-cpp-python 将这些暴露为 type_k/type_v；尽最大努力传递。
       _lcpExtra += ` --type_k ${_kv} --type_v ${_kv}`;
     }
     const _llamaFit = String(f.llama_fit || '').trim();
@@ -549,12 +550,12 @@ export function _buildServeCmd(f, modelName, backend) {
       const specN = Number.isFinite(specTokens) && specTokens > 0 ? specTokens : 3;
       _lcExtra += ` --spec-type draft-mtp --spec-draft-n-max ${specN}`;
     }
-    // Vision: serve the multimodal projector so the model can read images. The
-    // mmproj path is resolved at runtime (find mmproj-*.gguf next to the model);
-    // only emitted when the Vision toggle is on AND a projector was found.
+    // 视觉：启动多模态投影仪使模型能读取图像。
+    // mmproj 路径在运行时解析（在模型旁边查找 mmproj-*.gguf）；
+    // 仅在 Vision 开关开启且找到投影仪时才输出。
     if (f.vision && f._mmproj_path) {
       _lcExtra += ` --mmproj "${f._mmproj_path}" --image-max-tokens 1024`;
-      // llama-cpp-python takes the projector via --clip_model_path.
+      // llama-cpp-python 通过 --clip_model_path 接收投影仪。
       _lcpExtra += ` --clip_model_path "${f._mmproj_path}"`;
     }
     const _lcpServer = `${lcPrefix}${py} -m llama_cpp.server --model ${modelArg} --host 0.0.0.0 --port ${f.port || '8080'} --n_gpu_layers ${f.ngl || '99'} --n_ctx ${f.ctx || '8192'}${_lcpExtra}`;
@@ -566,15 +567,15 @@ export function _buildServeCmd(f, modelName, backend) {
     }
   } else if (backend === 'ollama') {
     const ollamaPort = f.port || '11434';
-    // GGUF + Ollama: delegate to the iGPU-bound ollama-test container via
-    // its /usr/local/bin/ollama-import helper. Plain `ollama serve` errors
-    // 127 on hosts where ollama isn't on PATH (and even when it is, it
-    // doesn't import the GGUF — it just starts the daemon). Args are all
-    // literal so the cookbook validator (which bans &&/||/;/$() ) is
-    // happy: `docker exec ollama-test ollama-import <repo> <name> <ctx>
-    // <file>`. The helper handles the find/Modelfile/preload dance.
+    // GGUF + Ollama：通过 ollama-test 容器的
+    // /usr/local/bin/ollama-import 助手委托给 iGPU 绑定的 ollama-test 容器。
+    // 直接 `ollama serve` 在没有 ollama 的 PATH 上会报 127 错误
+    // （即使有，它也不导入 GGUF — 只是启动守护进程）。参数都是
+    // 字面量，cookbook 验证器（禁止 &&/||/;/$()）
+    // 满意：`docker exec ollama-test ollama-import <repo> <name> <ctx>
+    // <file>`。助手处理查找/Modelfile/预加载过程。
     if (modelName.includes('/') && (f.gguf_file || /-GGUF$/i.test(modelName))) {
-      // HF-GGUF repo → import + preload + tail
+      // HF-GGUF 仓库 → 导入 + 预加载 + tail
       const _name = (modelName.split('/').pop() || modelName)
         .replace(/-GGUF$/i, '')
         .toLowerCase()
@@ -582,12 +583,12 @@ export function _buildServeCmd(f, modelName, backend) {
         .replace(/^-+|-+$/g, '');
       const _ctx = f.ctx || '8192';
       const _file = (f.gguf_file || '').split('/').pop() || '';
-      // Trailing GGUF_FILE is optional; helper picks the first match if empty.
+      // 末尾 GGUF_FILE 可选；如果为空，助手选择第一个匹配文件。
       cmd = `docker exec ollama-test ollama-import ${modelName} ${_name} ${_ctx}${_file ? ' ' + _file : ''}`;
     } else if (!modelName.includes('/') && modelName) {
-      // Already-pulled Ollama tag (e.g. `qwen2.5:7b`). On kierkegaard the
-      // runtime is the ROCm Ollama sidecar; this quick command verifies the
-      // tag exists, then the backend auto-registers http://host.docker.internal:11434/v1.
+      // 已拉取的 Ollama 标签（如 `qwen2.5:7b`）。在 kierkegaard 上
+      // 运行时是 ROCm Ollama 边车；此快速命令验证
+      // 标签存在，然后后端自动注册 http://host.docker.internal:11434/v1。
       cmd = `docker exec ollama-rocm ollama show ${modelName}`;
     } else {
       const bindHost = _envState.remoteHost ? '0.0.0.0' : '127.0.0.1';
@@ -611,17 +612,17 @@ export function _buildServeCmd(f, modelName, backend) {
   return cmd;
 }
 
-/** Get inline logo HTML for a model name/repo_id */
+/** 获取模型名称/repo_id 的内联 logo HTML */
 export function modelLogo(name) {
   const logo = providerLogo(name);
   const svg = logo || '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"/></svg>';
   return `<span style="width:12px;height:12px;display:inline-flex;align-items:center;vertical-align:-2px;margin-right:3px;opacity:${logo ? '0.5' : '0.2'};">${svg}</span>`;
 }
 
-// Use shared esc() from ui module
+// 使用 ui 模块的共享 esc()
 export const esc = uiModule.esc;
 
-// ── Clipboard ──
+// ── 剪贴板 ──
 
 export function _copyText(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -641,9 +642,9 @@ function _fallbackCopy(text) {
   return Promise.resolve();
 }
 
-// ── Presets (server-synced; localStorage is offline cache) ──
-// Presets sync to/from cookbook_state.json via _syncToServer / _syncFromServer.
-// _loadPresets reads the cache (which gets refreshed at app boot and on modal open).
+// ── 预设（服务器同步；localStorage 是离线缓存） ──
+// 预设通过 _syncToServer / _syncFromServer 同步到/自 cookbook_state.json。
+// _loadPresets 读取缓存（应用启动和模态框打开时刷新）。
 
 export function _loadPresets() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
@@ -652,7 +653,7 @@ export function _loadPresets() {
 
 export function _savePresets(presets) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
-  // Trigger sync to server (via running module's _syncToServer debounce)
+  // 触发与服务器的同步（通过 running 模块的 _syncToServer 防抖）
   _saveTasks(_loadTasks());
 }
 
@@ -673,15 +674,15 @@ export function _persistEnvState() {
   _saveTasks(_loadTasks());
 }
 
-// ── Dependencies ──
+// ── 依赖项 ──
 
-// Category colors removed — using theme CSS classes instead
+// 类别颜色已移除 — 现在使用主题 CSS 类
 
 async function _fetchDependencies() {
   const list = document.getElementById('cookbook-deps-list');
   if (!list) return;
-  // Use the shared whirlpool spinner so the user sees the request is in
-  // flight (the package list takes a few seconds to enumerate on slow links).
+  // 使用共享漩涡加载器，让用户看到请求正在
+  // 进行中（在慢速连接上包列表需要几秒才能枚举完成）。
   list.innerHTML = '';
   let _spin = null;
   try {
@@ -691,15 +692,15 @@ async function _fetchDependencies() {
     list.appendChild(_spin.element);
     const label = document.createElement('div');
     label.className = 'hwfit-loading';
-    label.textContent = 'Loading packages…';
+    label.textContent = t('cookbook.loading_packages');
     label.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;margin-top:6px;';
     list.appendChild(label);
   } catch {
     list.innerHTML = '<div class="hwfit-loading">Loading packages...</div>';
   }
   try {
-    // Resolve the target server from the deps dropdown so remote-target
-    // packages are checked on THAT server's venv (not just the local host).
+    // 从依赖项下拉框解析目标服务器，这样远程目标
+    // 包会在该服务器的 venv 上检查（不仅仅是本地主机）。
     let _depHost = '', _depPort = '', _depVenv = '';
     const _dsel = document.getElementById('hwfit-deps-server');
     const _depSrv = _dsel && _dsel.value !== 'local' ? _serverByVal(_dsel.value) : null;
@@ -742,12 +743,12 @@ async function _fetchDependencies() {
       const winBlocked = !isLocal && _isWindows() && _winUnsupported.has(pkg.name);
       const note = pkg.status_note ? `<div class="memory-item-meta" style="font-size:10px;opacity:0.65;margin-top:3px;">${esc(pkg.status_note)}</div>` : '';
       const updateNote = pkg.installed && pkg.pip_update_available === false && pkg.update_note ? `<div class="memory-item-meta" style="font-size:10px;opacity:0.55;margin-top:3px;">${esc(pkg.update_note)}</div>` : '';
-      // Inline rebuild/reinstall tag. Styled as a .cookbook-dep-tag so it
-      // matches the LLM category tag's pill look, and lives to the LEFT of the
-      // category tag. llama_cpp uses the /api/cookbook/rebuild-engine flow
-      // (clear cached binary so next serve recompiles); vllm/sglang use the
-      // diagnosis-style `_launchServeTask` with `pip install --force-reinstall`
-      // so the user can watch the pip install in the Running tab.
+      // 内联重建/重装标签。样式为 .cookbook-dep-tag，
+      // 匹配 LLM 类别标签的药丸外观，位于
+      // 类别标签的左侧。llama_cpp 使用 /api/cookbook/rebuild-engine 流程
+      // （清除缓存二进制文件，下次启动时重新编译）；vllm/sglang 使用
+      // 诊断风格的 `_launchServeTask` 配合 `pip install --force-reinstall`
+      // 这样用户可以在"运行中"标签页看到 pip 安装过程。
       let _rebuildBtn = '';
       if (pkg.name === 'llama_cpp') {
         _rebuildBtn = `<button type="button" class="cookbook-dep-tag cookbook-dep-rebuild" id="cookbook-rebuild-engine" title="Clear the cached llama.cpp build so the next serve recompiles from source (use after installing a CUDA/ROCm toolkit to turn a CPU-only build into a GPU build).">Rebuild</button>`;
@@ -783,9 +784,9 @@ async function _fetchDependencies() {
       _section('Server', 'Run on the server chosen above (Local, or a remote box over SSH).', _serverDeps),
     ].join('');
 
-    // Shared install/update routine — used by the Install button and the
-    // "Update" item in an installed package's ⋮ menu. `upgrade` adds pip -U;
-    // `statusEl`, when given, shows "Installing…/Updating…" and is disabled.
+    // 共享安装/更新例程 — Install 按钮和
+    // 已安装包的三点菜单中的 "更新" 项都会用到。`upgrade` 添加 pip -U；
+    // `statusEl`（如果提供）显示"安装中…/更新中…"并变灰禁用。
     async function _installDep(pipName, pkgName, isLocalOnly, upgrade, statusEl) {
       if (isLocalOnly) {
         _envState.remoteHost = '';
@@ -796,17 +797,17 @@ async function _fetchDependencies() {
         if (depsServerSel) _applyServerSelection(depsServerSel.value);
       }
       const targetHost = isLocalOnly ? 'this server' : (_envState.remoteHost || 'local');
-      // Always go through `python -m pip` so the leading token is `python`
-      // — matches the /api/model/serve allow-list (bare `pip` is blocked).
-      // Inside a venv/conda env, `--user` is invalid (pip refuses), so we
-      // only add `--user --break-system-packages` when there's no env —
-      // for PEP-668-locked system pythons (Arch, newer Debian).
+      // 始终通过 `python -m pip` 运行，因为前导 token 是 `python`
+      // — 匹配 /api/model/serve 的允许列表（裸 `pip` 被阻止）。
+      // 在 venv/conda 环境中，`--user` 无效（pip 拒绝），所以
+      // 只在无环境时添加 `--user --break-system-packages` —
+      // 适用于 PEP-668 锁定的系统 Python（Arch、较新 Debian）。
       const _inEnv = _envState.env === 'venv' || _envState.env === 'conda';
       const _pipFlags = (!_isWindows() && !_inEnv) ? ' --user --break-system-packages' : '';
-      // Use the venv's python3 by absolute path when configured. Even with the
-      // env_prefix sourcing activate, SSH non-interactive sessions sometimes
-      // pick a `python3` ahead of the venv's bin on PATH, so the install
-      // silently lands in the wrong site-packages.
+      // 配置后使用 venv 的 python3 绝对路径。即使有
+      // env_prefix 源 activate，SSH 非交互式会话有时
+      // 会选取 PATH 中 venv bin 之前的 `python3`，因此安装
+      // 会静默落入错误的 site-packages。
       let _py;
       if (_isWindows()) {
         _py = 'python';
@@ -847,24 +848,24 @@ async function _fetchDependencies() {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
-          // FastAPI HTTPException returns {detail: …}; the route's own
-          // path returns {ok:false, error:…}. Surface whichever we get.
+          // FastAPI HTTPException 返回 {detail: …}；路由自身的
+          // 路径返回 {ok:false, error:…}。显示我们得到的任何内容。
           const reason = data.detail || data.error || `HTTP ${res.status}`;
-          uiModule.showToast('Install failed: ' + String(reason).slice(0, 200));
+          uiModule.showToast(t('cookbook.install_failed', { reason: String(reason).slice(0, 200) }));
           return;
         }
-        // _dep flags this as a pip dependency/driver install (not a servable
-        // model) so the running-task card doesn't offer a "Serve →" button.
+        // _dep 标记此为 pip 依赖/驱动安装（不是可服务的
+        // 模型），所以运行中任务卡片不会显示"启动 →"按钮。
         const payload = { repo_id: pipName, _cmd: cmd, remote_host: _envState.remoteHost || '', _dep: true, env_path: _envState.envPath || '' };
         _addTask(data.session_id, 'pip ' + pkgName, 'download', payload);
         if (statusEl) { statusEl.textContent = upgrade ? 'Updating...' : 'Installing...'; statusEl.disabled = true; }
-        uiModule.showToast(`${upgrade ? 'Updating' : 'Installing'} ${pkgName} on ${targetHost}...`);
+        uiModule.showToast(t('cookbook.install_status', { action: upgrade ? t('cookbook.updating') : t('cookbook.installing'), pkg: pkgName, host: targetHost }));
       } catch (err) {
-        uiModule.showToast('Install failed: ' + err.message);
+        uiModule.showToast(t('cookbook.install_error', { error: err.message }));
       }
     }
 
-    // Wire install buttons (not-installed packages)
+    // 连接安装按钮（未安装的包）
     list.querySelectorAll('.cookbook-dep-install').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -874,7 +875,7 @@ async function _fetchDependencies() {
       });
     });
 
-    // Wire the ⋮ menu on installed packages — currently just "Update".
+    // 连接已安装包的三点菜单 — 目前仅有"更新"。
     function _showDepMenu(anchor) {
       document.querySelectorAll('.cookbook-dep-menu').forEach(d => d.remove());
       const row = anchor.closest('.cookbook-dep-row');
@@ -924,7 +925,7 @@ async function _fetchDependencies() {
   }
 }
 
-// ── Tab wiring ──
+// ── 标签页连接 ──
 
 function _applyServerSelection(val) {
   if (val === 'local') {
@@ -943,20 +944,20 @@ function _applyServerSelection(val) {
       _envState.platform = s.platform || '';
     }
   }
-  // Persist + keep every server dropdown in sync, so the choice sticks across
-  // re-renders and the scan/download all target the SAME host (this was the
-  // bug: the Download/Cache/Deps dropdowns set the host but never saved it, so
-  // it silently reverted and downloads/scans hit the wrong server).
+  // 持久化 + 保持所有服务器下拉框同步，使选择在重新渲染和
+  // 扫描/下载之间保持一致，都指向同一主机（这曾是一个
+  // bug：Download/Cache/Deps 下拉框设置了主机但从未保存，所以
+  // 它静默还原，下载/扫描命中错误的服务器）。
   _persistEnvState();
   const _want = _currentServerValue();
   document.querySelectorAll('#hwfit-server-select, #hwfit-dl-server, #hwfit-cache-server, #hwfit-deps-server').forEach(sel => {
     if (!sel || sel.tagName !== 'SELECT') return;
-    // Option values are host strings now ('local' for the local box).
+    // 选项值现在是主机字符串（本地为 'local'）。
     sel.value = _want;
-    // If the host isn't among this select's current options (stale options after
-    // the server list changed), the browser leaves the box BLANK/grey even though
-    // the value is "set". Rebuild the options so the chosen host has an entry, then
-    // re-apply; fall back to 'local' only if it's genuinely gone.
+    // 如果主机不在当前 select 的选项列表中（服务器列表变更后选项
+    // 过时），浏览器会留空白/灰色框即使
+    // 值是"已设置"。重建选项以确保所选主机有条目，然后
+    // 重新应用；仅当确实不存在时才回退到 'local'。
     if (sel.selectedIndex < 0) {
       sel.innerHTML = _buildServerOpts(sel.id === 'hwfit-dl-server');
       sel.value = _want;
@@ -966,7 +967,7 @@ function _applyServerSelection(val) {
 }
 
 function _wireTabEvents(body) {
-  // Tab switching
+  // 标签页切换
   body.querySelectorAll('.cookbook-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       body.querySelectorAll('.cookbook-tab').forEach(t => t.classList.remove('active'));
@@ -988,14 +989,14 @@ function _wireTabEvents(body) {
     });
   });
 
-  // Mobile: swipe left/right anywhere in the body to move to the next/previous
-  // tab. Guarded so it ignores vertical scrolls, tiny moves, and form fields.
+  // 移动端：在 body 任意位置左右滑动以移到下一个/上一个
+  // 标签页。有保护使其忽略垂直滚动、微小移动和表单字段。
   if (!body._swipeWired) {
     body._swipeWired = true;
     let _sx = null, _sy = null;
     body.addEventListener('touchstart', (e) => {
-      // Ignore swipes that start in a horizontally-scrollable tag row — those
-      // should scroll the chips, not flip the tab.
+      // 忽略在可水平滚动的标签行中开始的滑动 — 这些
+      // 应该滚动标签而不是切换标签页。
       if (window.innerWidth > 768 || e.touches.length !== 1
           || e.target.closest('input, textarea, select, .doclib-lang-chips')) { _sx = null; return; }
       _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
@@ -1005,17 +1006,17 @@ function _wireTabEvents(body) {
       const dx = e.changedTouches[0].clientX - _sx;
       const dy = e.changedTouches[0].clientY - _sy;
       _sx = null;
-      // Require a clear horizontal swipe (>60px and mostly horizontal).
+      // 需要明显的水平滑动（>60px 且基本水平）。
       if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
       const tabs = [...body.querySelectorAll('.cookbook-tab')];
       const idx = tabs.findIndex(t => t.classList.contains('active'));
       if (idx < 0) return;
-      const next = dx < 0 ? idx + 1 : idx - 1;   // swipe left → next tab
+      const next = dx < 0 ? idx + 1 : idx - 1;   // 左滑 → 下一个标签页
       if (next >= 0 && next < tabs.length) tabs[next].click();
     }, { passive: true });
   }
 
-  // Sync server form DOM → _envState.servers
+  // 同步服务器表单 DOM → _envState.servers
   function _syncServers() {
     const entries = document.querySelectorAll('.cookbook-server-entry');
     const servers = [];
@@ -1028,21 +1029,21 @@ function _wireTabEvents(body) {
       const platform = entry.dataset.platform || '';
       const dirs = [];
       entry.querySelectorAll('.cookbook-modeldir-tag').forEach(tag => {
-        // Read from data attribute (authoritative) — never parse displayed text
+        // 从 data 属性读取（权威来源）— 从不解析显示文本
         const d = (tag.dataset.dir || '').replaceAll('✕', '').replaceAll('✖', '').trim();
         if (d) dirs.push(d);
       });
-      // Directory flagged as the download target ('' = default HF cache).
+      // 标记为下载目标的目录（'' = 默认 HF 缓存）。
       const dlEl = entry.querySelector('.cookbook-modeldir-dl.active');
       const downloadDir = dlEl ? (dlEl.dataset.dlDir || '') : '';
       servers.push({ name, host, port, env, envPath, modelDirs: dirs, downloadDir, platform });
     });
     _envState.servers = servers;
-    // Auto-default: when the user has configured EXACTLY ONE remote server
-    // and hasn't picked one yet, select it. Without this, the dropdown
-    // stays on "Local" so the eventual serve/scan/launch resolves to no
-    // remote host and the backend rejects the call with 403 (Forbidden),
-    // which read to the user as a permission bug.
+    // 自动默认：当用户配置了恰好一个远程服务器
+    // 且尚未选择时，选择它。否则下拉框
+    // 保持在"本地"，最终启动/扫描/运行解析为
+    // 无远程主机，后端返回 403 (Forbidden) 拒绝调用，
+    // 用户会认为是权限 bug。
     if (!_envState.remoteHost) {
       const remotes = servers.filter(s => !_isLocalEntry(s));
       if (remotes.length === 1) {
@@ -1055,9 +1056,9 @@ function _wireTabEvents(body) {
     _envState.platform = activeSrv?.platform || '';
     localStorage.setItem('cookbook-last-state', JSON.stringify(_envStateForStorage()));
     _saveTasks(_loadTasks());
-    // Reflect the auto-default selection into every server dropdown so the
-    // UI matches the resolved host. Done in a microtask so the dropdowns
-    // exist by the time we set their .value.
+    // 将自动默认选择反映到每个服务器下拉框，使
+    // UI 匹配解析后的主机。在微任务中完成，这样下拉框
+    // 在我们设置 .value 时已经存在。
     Promise.resolve().then(() => {
       const _want = _currentServerValue();
       document.querySelectorAll('#hwfit-server-select, #hwfit-dl-server, #hwfit-cache-server, #hwfit-deps-server').forEach(sel => {
@@ -1066,7 +1067,7 @@ function _wireTabEvents(body) {
     });
   }
 
-  // Wire server form inputs
+  // 连接服务器表单输入
   document.querySelectorAll('.cookbook-srv-name, .cookbook-srv-host, .cookbook-srv-port, .cookbook-srv-path').forEach(el => {
     el.addEventListener('change', _syncServers);
   });
@@ -1074,20 +1075,20 @@ function _wireTabEvents(body) {
     el.addEventListener('change', _syncServers);
   });
 
-  // Server selector — the server is global, so switching it here re-scans the
-  // main Scan/Download list (#hwfit-list) for the new server's hardware too.
-  // (The trending sublist reloads via its own handler in the HF-latest wiring.)
+  // 服务器选择器 — 服务器是全局的，切换它会重新扫描
+  // 主扫描/下载列表 (#hwfit-list) 以获取新服务器的硬件信息。
+  // （热门子列表通过其自己的处理器在 HF-latest 连接中重新加载。）
   const dlServer = document.getElementById('hwfit-dl-server');
   if (dlServer) {
     dlServer.addEventListener('change', () => {
       _applyServerSelection(dlServer.value);
-      // Reset toggle state (no flicker) so the new server's hardware re-renders.
+      // 重置切换状态（无闪烁）以便新服务器的硬件重新渲染。
       _resetGpuToggleState();
       _hwfitFetch();
     });
   }
 
-  // Add server link — switch to Settings tab
+  // 添加服务器链接 — 切换到设置标签页
   const addServerLink = document.querySelector('.cookbook-dl-add-server');
   if (addServerLink) {
     addServerLink.addEventListener('click', () => {
@@ -1096,7 +1097,7 @@ function _wireTabEvents(body) {
     });
   }
 
-  // Cache server selector
+  // 缓存服务器选择器
   const cacheServer = document.getElementById('hwfit-cache-server');
   const cacheDirEl = document.getElementById('hwfit-cache-dir');
   if (cacheServer) {
@@ -1141,23 +1142,23 @@ function _wireTabEvents(body) {
   if (depsServer) {
     depsServer.addEventListener('change', () => {
       _applyServerSelection(depsServer.value);
-      // Re-fetch the package list for the newly selected server — the installed
-      // status is per-server, so the list must refresh on a server switch.
+      // 为新选择的服务器重新获取包列表 — 安装
+      // 状态是每个服务器的，所以列表必须在切换服务器后刷新。
       _fetchDependencies();
     });
   }
 
-  // "Rebuild llama.cpp" clears the cached build so the next serve recompiles.
-  // The serve bootstrap only builds llama-server when it is missing from PATH,
-  // so a host that first built CPU-only (no nvcc at build time) keeps reusing
-  // that binary forever; this is the lever to force a fresh GPU build after a
-  // CUDA/ROCm toolkit is installed.
+  // "重建 llama.cpp" 清除缓存的构建，下次启动时重新编译。
+  // 启动引导仅在 PATH 中找不到 llama-server 时才构建，
+  // 所以首先构建了纯 CPU 版本（构建时没有 nvcc）的主机
+  // 会永久重用该二进制文件；这是在安装 CUDA/ROCm 工具包后
+  // 强制进行新鲜 GPU 构建的杠杆。
   const rebuildBtn = document.getElementById('cookbook-rebuild-engine');
   if (rebuildBtn && !rebuildBtn._wired) {
     rebuildBtn._wired = true;
     rebuildBtn.addEventListener('click', async () => {
-      // Match _installDep: honor the Dependencies server selector so the clear
-      // runs on the same host the build runs on.
+      // 匹配 _installDep：遵循依赖项服务器选择器，这样清除操作
+      // 会在构建运行所在的同一主机上运行。
       const sel = document.getElementById('hwfit-deps-server');
       if (sel) _applyServerSelection(sel.value);
       const host = _envState.remoteHost || '';
@@ -1165,7 +1166,7 @@ function _wireTabEvents(body) {
       if (!confirm(`Rebuild the llama.cpp engine on ${where}?\n\nThis clears the cached llama-server build so the next serve recompiles from source (with CUDA/HIP if a toolchain is present). It does not download or install anything.`)) return;
       const _label = rebuildBtn.textContent;
       rebuildBtn.disabled = true;
-      rebuildBtn.textContent = 'Clearing...';
+      rebuildBtn.textContent = t('cookbook.clearing');
       try {
         const res = await fetch('/api/cookbook/rebuild-engine', {
           method: 'POST', credentials: 'same-origin',
@@ -1179,12 +1180,12 @@ function _wireTabEvents(body) {
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
           const reason = data.detail || data.error || `HTTP ${res.status}`;
-          uiModule.showToast('Rebuild failed: ' + String(reason).slice(0, 200));
+          uiModule.showToast(t('cookbook.rebuild_failed', { reason: String(reason).slice(0, 200) }));
         } else {
-          uiModule.showToast(`Cleared llama.cpp build on ${where}. Re-launch the serve task to rebuild with GPU support.`);
+          uiModule.showToast(t('cookbook.rebuild_cleared', { where: where }));
         }
       } catch (err) {
-        uiModule.showToast('Rebuild failed: ' + err.message);
+        uiModule.showToast(t('cookbook.rebuild_error', { error: err.message }));
       } finally {
         rebuildBtn.disabled = false;
         rebuildBtn.textContent = _label;
@@ -1192,11 +1193,11 @@ function _wireTabEvents(body) {
     });
   }
 
-  // "Reinstall" buttons for pip-based serving stacks (vllm, sglang). The
-  // deps list renders ASYNCHRONOUSLY after _fetchDependencies resolves, so
-  // attaching listeners directly here would miss buttons that don't exist
-  // yet. Use document-level delegation instead — the click always finds the
-  // right .cookbook-dep-reinstall button no matter when it was painted.
+  // 基于 pip 的推理栈（vllm、sglang）的"重装"按钮。
+  // 依赖列表在 _fetchDependencies 完成后异步渲染，所以
+  // 直接在这里附加监听器会错过还不存在的按钮。
+  // 改用文档级委托 — 点击总能找到正确的
+  // .cookbook-dep-reinstall 按钮，无论它何时被渲染。
   if (!document._cookbookReinstallWired) {
     document._cookbookReinstallWired = true;
     document.addEventListener('click', async (ev) => {
@@ -1218,7 +1219,7 @@ function _wireTabEvents(body) {
     }, true);
   }
 
-  // Serve sort
+  // 推理排序
   const serveSort = document.getElementById('serve-sort');
   if (serveSort) {
     serveSort.addEventListener('change', () => {
@@ -1226,7 +1227,7 @@ function _wireTabEvents(body) {
     });
   }
 
-  // Serve search
+  // 推理搜索
   const serveSearch = document.getElementById('serve-search');
   if (serveSearch) {
     let _srvDebounce = null;
@@ -1236,7 +1237,7 @@ function _wireTabEvents(body) {
     });
   }
 
-  // Select mode — bulk actions
+  // 选择模式 — 批量操作
   const selectBtn = document.getElementById('hwfit-cache-select');
   const bulkBar = document.getElementById('serve-bulk-bar');
   if (selectBtn && bulkBar) {
@@ -1271,7 +1272,7 @@ function _wireTabEvents(body) {
 
     document.getElementById('serve-bulk-cancel')?.addEventListener('click', () => {
       selectBtn.classList.remove('active');
-      selectBtn.textContent = 'Select';  // reset label so the button doesn't stay reading "Cancel" after exit
+      selectBtn.textContent = t('cookbook.select');  // 重置标签，这样退出后按钮不会一直显示 "Cancel"
       bulkBar.classList.add('hidden');
       document.querySelectorAll('.serve-select-cb').forEach(dot => { dot.style.display = 'none'; dot.classList.remove('selected'); });
     });
@@ -1290,13 +1291,13 @@ function _wireTabEvents(body) {
         if (item) await _deleteCachedModel(repo, item, true);
       }
       selectBtn.classList.remove('active');
-      selectBtn.textContent = 'Select';  // same reset as bulk-cancel
+      selectBtn.textContent = t('cookbook.select');  // 与批量取消相同的重置
       bulkBar.classList.add('hidden');
       document.querySelectorAll('.serve-select-cb').forEach(dot => { dot.style.display = 'none'; dot.classList.remove('selected'); });
     });
   }
 
-  // Download input
+  // 下载输入
   const dlBtn = document.getElementById('cookbook-dl-btn');
   const dlInput = document.getElementById('cookbook-dl-repo');
   const dlCardToggle = document.getElementById('cookbook-download-card-toggle');
@@ -1312,23 +1313,23 @@ function _wireTabEvents(body) {
   if (dlBtn && dlInput) {
     function _stripHfUrl(input) {
       let repo = input.trim();
-      // Strip Ollama-style "hf.co/" prefix if present (e.g. hf.co/unsloth/...:tag)
+      // 如果存在，去除 Ollama 风格的 "hf.co/" 前缀（如 hf.co/unsloth/...:tag）
       repo = repo.replace(/^hf\.co\//, '');
       const hfMatch = repo.match(/^https?:\/\/huggingface\.co\/([^/]+\/[^/?#]+(?::[^/?#\s]+)?)/);
       if (hfMatch) repo = hfMatch[1];
       return repo;
     }
-    // Split `org/repo:tag` (Ollama/llama.cpp style) into repo + include-glob.
-    // The `:tag` picks a specific GGUF quantization file from the repo.
+    // 将 `org/repo:tag`（Ollama/llama.cpp 风格）分割为 repo + 包含通配符。
+    // `:tag` 从仓库中选择特定的 GGUF 量化文件。
     function _splitRepoTag(raw) {
       const m = raw.match(/^([^\s/:]+\/[^\s/:]+):([^\s/]+)$/);
       if (!m) return { repo: raw, include: null };
       return { repo: m[1], include: `*${m[2]}*` };
     }
-    // Ollama-library name. Matches `qwen2.5:14b`, `llama3:latest`, and the
-    // (rare) `library/<name>:<tag>` form which we normalize by stripping the
-    // namespace. The backend's _is_ollama_download check expects the same
-    // shape (no slash + has a colon).
+    // Ollama 库名称。匹配 `qwen2.5:14b`、`llama3:latest`，以及
+    //（罕见的）`library/<name>:<tag>` 形式，我们通过去除
+    // 命名空间来标准化。后端的 _is_ollama_download 检查期望相同的
+    // 形式（无斜杠 + 有冒号）。
     function _ollamaName(raw) {
       const stripped = raw.replace(/^library\//, '');
       if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,200}:[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/.test(stripped)) {
@@ -1341,20 +1342,20 @@ function _wireTabEvents(body) {
       if (!rawRepo) return;
       const ollamaName = _ollamaName(rawRepo);
       const { repo, include: autoInclude } = ollamaName ? { repo: ollamaName, include: null } : _splitRepoTag(rawRepo);
-      // HuggingFace repo IDs must be `org/model`. A bare model name would 404
-      // at snapshot_download time with a raw traceback, so reject it up front.
-      // Ollama names (single-segment with a tag) skip this check — they go
-      // through `ollama pull` server-side, not snapshot_download.
+      // HuggingFace 仓库 ID 必须是 `org/model`。纯模型名称会在
+      // snapshot_download 时返回 404 并抛出原始 traceback，所以提前拒绝。
+      // Ollama 名称（单段带标签）跳过此检查 — 它们
+      // 在服务端通过 `ollama pull` 运行，不是 snapshot_download。
       if (!ollamaName && !/^[^\s/]+\/[^\s/]+$/.test(repo)) {
-        uiModule.showToast('Enter a full HuggingFace repo ID like "org/model-name", or an Ollama name like "qwen2.5:14b".');
+        uiModule.showToast(t('cookbook.hf_repo_hint'));
         dlInput.focus();
         return;
       }
-      // Resolve the host straight from THIS window's server dropdown, by index
-      // into the (consistent) servers list. We deliberately don't use
-      // _envState.remoteHost — there can be multiple copies of the cookbook
-      // state in memory and they disagree on the active host, which is what sent
-      // downloads to the wrong server. The dropdown the user sees is the truth.
+      // 直接从此窗口的服务器下拉框按索引
+      // 解析主机（一致的服务器列表）。我们故意不使用
+      // _envState.remoteHost — 可能有多个 cookbook
+      // 状态副本在内存中且对活动主机意见不一致，这正是
+      // 下载发往错误服务器的原因。用户看到的下拉框就是真相。
       const dlSrv = document.getElementById('hwfit-dl-server');
       const srvVal = dlSrv ? dlSrv.value : 'local';
       let host = '';
@@ -1395,10 +1396,10 @@ function _wireTabEvents(body) {
     });
   }
 
-  // Latest HF models that fit — collapsible card list
-  // Foldable Download admin-card — h2 "Download" doubles as the chevron
-  // toggle; collapses the entire card body (description + input + HF list).
-  // State persisted to localStorage so the fold sticks across reloads.
+  // 适合的最新 HF 模型 — 可折叠卡片列表
+  // 可折叠下载 admin-card — h2 "下载" 兼作折叠箭头
+  // 开关；折叠整个卡片主体（描述 + 输入 + HF 列表）。
+  // 状态持久化到 localStorage，折叠状态在重新加载后保持。
   const dlFold = document.getElementById('cookbook-dl-tab-fold');
   const dlFoldBody = document.getElementById('cookbook-dl-tab-fold-body');
   const dlFoldChevron = document.getElementById('cookbook-dl-tab-chevron');
@@ -1407,9 +1408,9 @@ function _wireTabEvents(body) {
       const folded = dlFoldBody.style.display === 'none';
       dlFoldBody.style.display = folded ? '' : 'none';
       dlFoldChevron.textContent = folded ? '▾' : '▸';
-      // Toggle is-folded class on the h2 so the line under it only shows when
-      // the section is collapsed (the body's content normally provides
-      // separation; with no body visible, the line gives the h2 definition).
+      // 在 h2 上切换 is-folded 类，使线条只在部分折叠时显示
+      // （主体内容通常提供分隔；
+      // 无可见主体时，线条给 h2 定义感）。
       dlFold.classList.toggle('is-folded', !folded);
       try { localStorage.setItem('cookbook_dl_tab_folded_v1', folded ? '0' : '1'); } catch {}
     });
@@ -1420,15 +1421,15 @@ function _wireTabEvents(body) {
   const hfRefresh = document.getElementById('cookbook-hf-latest-refresh');
   if (hfToggle && hfList) {
     let _loaded = false;
-    // Per-server VRAM cache so we don't re-probe on every expand
+    // 每个服务器的 VRAM 缓存，避免每次展开时重新探测
     const _hwCache = {};
     function _hfModelLooksAwqLike(m) {
       const text = `${m?.repo_id || ''} ${(m?.tags || []).join(' ')}`.toLowerCase();
       return /\b(awq|gptq|fp8|4bit|int4)\b/.test(text);
     }
     async function _getSelectedServerHw() {
-      // Prefer the "What Fits" dropdown (the main control that shows hardware);
-      // fall back to the download dropdown. This is the server the list ranks for.
+      // 优先使用 "What Fits" 下拉框（显示硬件的主控件）；
+      // 回退到下载下拉框。这是列表排名的服务器。
       const dlSrv = document.getElementById('hwfit-server-select') || document.getElementById('hwfit-dl-server');
       const val = dlSrv?.value || 'local';
       let host = '';
@@ -1444,7 +1445,7 @@ function _wireTabEvents(body) {
       }
       const cacheKey = host || 'local';
       if (_hwCache[cacheKey]) return _hwCache[cacheKey];
-      // Fetch system info for this server from hwfit
+      // 从 hwfit 获取此服务器的系统信息
       try {
         const qp = new URLSearchParams();
         if (host) qp.set('host', host);
@@ -1462,8 +1463,8 @@ function _wireTabEvents(body) {
       return _hwCache[cacheKey];
     }
     async function _loadLatest() {
-      // Match the Dependencies loader: whirlpool spinner + text label so the
-      // user gets immediate feedback while the scan runs.
+      // 匹配依赖项加载器：漩涡旋转器 + 文本标签，
+      // 让用户在扫描运行时立即获得反馈。
       hfList.innerHTML = '';
       try {
         const sp = (await import('./spinner.js')).default;
@@ -1472,7 +1473,7 @@ function _wireTabEvents(body) {
         hfList.appendChild(_spin.element);
         const lbl = document.createElement('div');
         lbl.className = 'hwfit-loading';
-        lbl.textContent = 'Scanning models…';
+        lbl.textContent = t('cookbook.scanning_models');
         lbl.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;margin-top:6px;';
         hfList.appendChild(lbl);
       } catch {
@@ -1485,13 +1486,13 @@ function _wireTabEvents(body) {
         const _fetchLatest = async (v) => {
           const res = await fetch(`/api/cookbook/hf-latest?vram_gb=${v}&limit=10`);
           const data = await res.json();
-          if (data.error) lastErr = data.error;   // HF API timeout/rate-limit etc.
+          if (data.error) lastErr = data.error;   // HF API 超时/限流等
           return data.models || [];
         };
         let models = await _fetchLatest(vram);
-        // If the VRAM filter wiped everything out (often a flaky/zero hardware
-        // probe for a remote server — a huge-VRAM box should fit MORE, not
-        // fewer), fall back to the unfiltered trending list so something shows.
+        // 如果 VRAM 过滤清空了所有结果（通常是远程服务器的
+        // 硬件探测不稳定/归零 — 大 VRAM 机器应该显示更多，而不是
+        // 更少），回退到未过滤的热门列表以确保有内容显示。
         if (!models.length && vram > 0) {
           models = await _fetchLatest(0);
         }
@@ -1499,8 +1500,8 @@ function _wireTabEvents(body) {
           models = models.filter(m => !_hfModelLooksAwqLike(m));
         }
         if (!models.length) {
-          // Distinguish "the HF API failed" from "nothing matched" so an outage
-          // doesn't masquerade as no-fitting-models.
+          // 区分"HF API 失败"和"无匹配结果"，
+          // 避免故障伪装成无匹配模型。
           const msg = lastErr
             ? `Couldn't load trending models (${esc(lastErr)})`
             : 'No trending models found';
@@ -1525,7 +1526,7 @@ function _wireTabEvents(body) {
           html += `</div>`;
         }
         hfList.innerHTML = html;
-        // Wire card clicks → fill download input
+        // 连接卡片点击 → 填充下载输入
         hfList.querySelectorAll('.cookbook-hf-latest-card').forEach(card => {
           card.addEventListener('click', (e) => {
             if (e.target.closest('a')) return;
@@ -1552,16 +1553,16 @@ function _wireTabEvents(body) {
       e.stopPropagation();
       _loaded = true;
       _loadLatest();
-      // If list is hidden, open it
+      // 如果列表隐藏，则打开它
       if (hfList.style.display === 'none') {
         hfList.style.display = 'flex';
         if (hfArrow) hfArrow.style.transform = 'rotate(90deg)';
       }
     });
-    // Re-fetch when a server dropdown changes — different server = different
-    // hardware/VRAM. Mark the list stale so it reloads for the new server even
-    // if it's currently collapsed (otherwise reopening showed the old server's
-    // models); reload immediately when it's open.
+    // 服务器下拉框变更时重新获取 — 不同服务器 = 不同
+    // 硬件/VRAM。将列表标记为过期，即使当前
+    // 折叠也能在新服务器上重新加载（否则重新打开时会显示旧服务器的
+    // 模型）；打开时立即重新加载。
     const _onServerChange = () => {
       _loaded = false;
       if (hfList.style.display !== 'none') { _loaded = true; _loadLatest(); }
@@ -1570,9 +1571,9 @@ function _wireTabEvents(body) {
     document.getElementById('hwfit-server-select')?.addEventListener('change', _onServerChange);
   }
 
-  // Browse Ollama library — popular models from ollama.com via cached backend
-  // proxy. Click a row → fills the download input with `<name>:<size>` so the
-  // existing Download button kicks off `ollama pull`.
+  // 浏览 Ollama 库 — 通过缓存后端代理获取 ollama.com 的热门模型。
+  // 点击行 → 用 `<name>:<size>` 填充下载输入，
+  // 现有下载按钮触发 `ollama pull`。
   const olToggle = document.getElementById('cookbook-ollama-toggle');
   const olArrow = document.getElementById('cookbook-ollama-arrow');
   const olList = document.getElementById('cookbook-ollama-list');
@@ -1612,7 +1613,7 @@ function _wireTabEvents(body) {
             }
           });
         });
-        // Clicking the card body (not a size chip / link) → default to first size
+        // 点击卡片主体（非大小标签/链接）→ 默认使用第一个尺寸
         olList.querySelectorAll('.cookbook-ollama-card').forEach(card => {
           card.addEventListener('click', (e) => {
             if (e.target.closest('a') || e.target.closest('.cookbook-ol-size')) return;
@@ -1648,13 +1649,13 @@ function _wireTabEvents(body) {
     });
   }
 
-  // Server add button, row removal, model-dir add/remove, and per-row wiring
-  // are ALL owned by cookbook-hwfit.js's _hwfitInit / _wireServerEntry.
-  // A duplicate add handler used to live here and fired alongside the hwfit
-  // one, appending two rows per click — removed.
+  // 服务器添加按钮、行删除、模型目录添加/删除以及每行连接
+  // 全部由 cookbook-hwfit.js 的 _hwfitInit / _wireServerEntry 管理。
+  // 这里曾有一个重复的添加处理器，与 hwfit 同时触发，
+  // 每次点击添加两行 — 已移除。
 
 
-  // HF token — save on change
+  // HF token — 变更时保存
   const hfInput = document.getElementById('hwfit-hftoken');
   if (hfInput) {
     hfInput.addEventListener('change', async () => {
@@ -1671,13 +1672,13 @@ function _wireTabEvents(body) {
         if (!check) {
           check = document.createElement('span');
           check.className = 'hwfit-hf-check';
-          check.title = 'Token stored';
+          check.title = t('cookbook.token_stored');
           check.textContent = '✓';
           check.style.cssText = 'font-weight:800;color:var(--green,#50fa7b);font-size:15px;line-height:1;flex-shrink:0;position:relative;top:2px;';
           hfInput.parentNode.insertBefore(check, hfInput);
         }
         const flash = document.createElement('span');
-        flash.textContent = 'Saved';
+        flash.textContent = t('settings.saved');
         flash.style.cssText = 'margin-left:8px;font-size:11px;color:var(--green,#50fa7b);opacity:0;transition:opacity 0.18s;flex-shrink:0;position:relative;top:1px;';
         hfInput.parentNode.appendChild(flash);
         requestAnimationFrame(() => { flash.style.opacity = '1'; });
@@ -1687,13 +1688,13 @@ function _wireTabEvents(body) {
   }
 }
 
-// ── Main render ──
+// ── 主渲染 ──
 
-// Build one server entry's HTML — shared by the Settings render loop AND the
-// "+ Add server" handler, so a freshly-added server has the IDENTICAL layout
-// (Model Directory header, default-server checkmark, trash delete, platform icon).
-// forceRemote renders an editable remote entry even before a host is typed
-// (a new server's host is empty, which would otherwise read as "Local").
+// 构建一个服务器条目的 HTML — Settings 渲染循环和
+// "+ 添加服务器"处理器共享，这样新添加的服务器具有完全相同的布局
+// （模型目录标题、默认服务器勾选、删除垃圾桶、平台图标）。
+// forceRemote 在输入主机前渲染可编辑的远程条目
+// （新服务器的主机为空，否则会被读作"本地"）。
 export function _serverEntryHtml(s, i, defaultServer, forceRemote, isNew) {
   const isLocal = (forceRemote || isNew) ? false : (!s.host || s.host === 'local');
   const envOpts = ['none', 'venv'].map(e => `<option value="${e}"${s.env === e ? ' selected' : ''}>${e === 'none' ? 'None' : e}</option>`).join('');
@@ -1710,19 +1711,19 @@ export function _serverEntryHtml(s, i, defaultServer, forceRemote, isNew) {
   html += _pIco ? `<span class="cookbook-srv-platform" title="${esc(s.platform || '')}" style="display:inline-flex;align-items:center;opacity:0.55;">${_pIco}</span>` : '';
   html += `<span class="cookbook-srv-test-msg" style="font-size:10px;font-weight:400;opacity:0.55;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;top:1px;"></span>`;
   if (isNew) {
-    // New server: Cancel (discard) sits top-right; the default toggle only makes
-    // sense once the server is saved.
+    // 新服务器：取消（丢弃）位于右上角；默认开关仅在
+    // 服务器保存后才有意义。
     html += `<span style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;">${_checkBtn}${_keyBtn}<button class="cookbook-server-cancel-btn" title="Discard this new server" style="height:22px;box-sizing:border-box;display:inline-flex;align-items:center;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Cancel</button></span>`;
   } else {
     html += `<span style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;">${!isLocal ? _checkBtn + _keyBtn : ''}<span class="cookbook-srv-default${_isDefaultSrv ? ' active' : ''}" title="${_isDefaultSrv ? 'Default server — Cookbook opens here' : 'Make this the default server'}" data-srv-key="${esc(_srvKey)}">${_isDefaultSrv ? _MODELDIR_CHECK_ON : _MODELDIR_CHECK_OFF}<span class="cookbook-srv-default-label">default</span></span></span>`;
   }
   html += `</span>`;
   html += `<div class="cookbook-server-row">`;
-  html += `<input type="text" class="hwfit-sf cookbook-srv-name" value="${esc(s.name || (isLocal ? 'Local' : ''))}" placeholder="Name (optional)" style="width:92px;flex-shrink:0;" />`;
-  html += `<input type="text" class="hwfit-sf cookbook-srv-host" value="${isLocal ? '' : esc(s.host || '')}" placeholder="e.g. user@ip" style="width:214.5px;flex-shrink:0;box-sizing:border-box;" ${isLocal ? 'readonly' : ''} />`;
-  html += `<input type="text" class="hwfit-sf cookbook-srv-port" value="${esc(s.port || '')}" placeholder="Port" title="SSH port (default 22)" style="width:48px;flex-shrink:0;" ${isLocal ? 'readonly' : ''} />`;
+  html += `<input type="text" class="hwfit-sf cookbook-srv-name" value="${esc(s.name || (isLocal ? 'Local' : ''))}" placeholder="${t('cookbook.server_name_placeholder')}" style="width:92px;flex-shrink:0;" />`;
+  html += `<input type="text" class="hwfit-sf cookbook-srv-host" value="${isLocal ? '' : esc(s.host || '')}" placeholder="${t('cookbook.server_host_placeholder')}" style="width:214.5px;flex-shrink:0;box-sizing:border-box;" ${isLocal ? 'readonly' : ''} />`;
+  html += `<input type="text" class="hwfit-sf cookbook-srv-port" value="${esc(s.port || '')}" placeholder="${t('cookbook.server_port_placeholder')}" title="${t('cookbook.server_port_title')}" style="width:48px;flex-shrink:0;" ${isLocal ? 'readonly' : ''} />`;
   html += `<select class="hwfit-sf cookbook-srv-env">${envOpts}</select>`;
-  html += `<input type="text" class="hwfit-sf cookbook-srv-path" value="${esc(s.envPath || '')}" placeholder="${s.platform === 'windows' ? 'venv path' : '~/venv'}" />`;
+  html += `<input type="text" class="hwfit-sf cookbook-srv-path" value="${esc(s.envPath || '')}" placeholder="${s.platform === 'windows' ? t('cookbook.server_path_windows') : t('cookbook.server_path_default')}" />`;
   html += `<span class="cookbook-dep-tag cookbook-dep-target" style="font-size:8px;flex-shrink:0;min-width:46px;text-align:center;visibility:hidden;">placeholder</span>`;
   html += `<span class="cookbook-srv-actions" style="display:inline-flex;gap:4px;align-items:center;width:78px;flex-shrink:0;justify-content:flex-end;"></span>`;
   html += `</div>`;
@@ -1741,8 +1742,8 @@ export function _serverEntryHtml(s, i, defaultServer, forceRemote, isNew) {
   html += `<button class="cookbook-modeldir-add" title="Add model directory">+ Add</button>`;
   const _btnStyle = 'margin-left:auto;position:relative;top:-2px;height:22px;box-sizing:border-box;display:inline-flex;align-items:center;';
   if (isNew) {
-    // A brand-new server: Save (confirm) sits where Delete would be; Cancel is
-    // top-right in the title. Save confirms with a checkmark (auto-saves on edit too).
+    // 全新服务器：保存（确认）在删除按钮的位置；取消在
+    // 标题右上角。保存用勾号确认（编辑时也自动保存）。
     html += `<button class="cookbook-server-save-btn" title="Save this server" style="${_btnStyle}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save</button>`;
   } else if (!isLocal) {
     html += `<button class="cookbook-server-rm cookbook-server-rm-btn" title="Delete this server" style="${_btnStyle}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>Delete</button>`;
@@ -1771,7 +1772,7 @@ function _renderRecipes() {
 
   let html = '';
 
-  // Tabs
+  // 标签页
   html += '<div class="cookbook-tabs">';
   html += '<button class="cookbook-tab active" data-backend="Search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="7 14 12 19 17 14"/><line x1="12" y1="19" x2="12" y2="5"/><line x1="5" y1="21" x2="19" y2="21"/></svg>Download</button>';
   html += '<button class="cookbook-tab" data-backend="Serve"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px;"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>Serve</button>';
@@ -1779,12 +1780,12 @@ function _renderRecipes() {
   html += '<button class="cookbook-tab" data-backend="Settings"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:3px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>';
   html += '</div>';
 
-  // Search group
+  // 搜索组
   html += '<div class="cookbook-group" data-backend-group="Search" style="flex:0 0 auto;">';
   html += '<div class="admin-card" style="display:flex;flex-direction:column;overflow:hidden;">';
-  // Foldable Download admin-card: clicking the h2 header collapses the
-  // entire card body (description + download input + HF latest section).
-  // State persisted to localStorage so the fold survives reloads.
+  // 可折叠下载 admin-card：点击 h2 标题折叠
+  // 整个卡片主体（描述 + 下载输入 + HF 最新区域）。
+  // 状态持久化到 localStorage，折叠状态在重新加载后保持。
   const _dlTabFolded = (() => { try { return localStorage.getItem('cookbook_dl_tab_folded_v1') === '1'; } catch { return false; } })();
   html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">';
   html += `<h2 id="cookbook-dl-tab-fold" class="${_dlTabFolded ? 'is-folded' : ''}" style="margin:0;padding:0;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;flex:1;">Download<span id="cookbook-dl-tab-chevron" style="display:inline-block;transition:transform 0.15s;font-size:1.1em;margin-left:8px;opacity:0.85;">${_dlTabFolded ? '▸' : '▾'}</span></h2>`;
@@ -1793,7 +1794,7 @@ function _renderRecipes() {
   html += '<p class="memory-desc doclib-desc" style="margin-top:6px;">Download from <a href="https://huggingface.co/models" target="_blank" rel="noopener" style="color:var(--accent,var(--red));text-decoration:none;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:1px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>HuggingFace</a> by pasting model link, or download directly in the Scan section below.</p>';
   html += '<div class="hwfit-container" id="hwfit-container">';
 
-  // Section 1: Settings
+  // 区域 1：设置
   const _es = _envState;
   if (!_es.servers) _es.servers = [];
   let _localSeen = false;
@@ -1813,13 +1814,11 @@ function _renderRecipes() {
     _es.servers.push({ host: _es.remoteHost, env: _es.env || 'none', envPath: _es.envPath || '', modelDir: '~/.cache/huggingface/hub' });
     _persistEnvState();
   }
-  // NOTE: deliberately do NOT auto-pick the first remote server when no host is
-  // selected. That fallback turned any momentarily-empty remoteHost (a clobber,
-  // a render before the user's pick registered) into the first saved server,
-  // silently sending downloads to the wrong server. An empty selection means Local; the user
-  // chooses a remote server explicitly via the dropdown.
-
-  // Manual download input
+  // 注意：当未选择主机时，故意不自动选择第一个远程服务器。
+  // 该回退方案会将任何瞬时为空的 remoteHost（覆盖、
+  // 用户选择注册前渲染）变成第一个已保存的服务器，
+  // 静默将下载发送到错误的服务器。空选择表示本地；用户通过下拉框显式选择远程服务器。
+  // 手动下载输入
   html += `<div style="margin-top:7px;margin-bottom:2px;display:flex;gap:4px;align-items:center;">`;
   if (_es.servers.length > 1) {
     html += `<select class="cookbook-field-input hwfit-dl-server" id="hwfit-dl-server" style="height:28px;position:relative;top:0px;">`;
@@ -1831,12 +1830,12 @@ function _renderRecipes() {
   html += `<button class="memory-toolbar-btn cookbook-dl-add-server" title="Add server in Settings" style="height:28px;">add server</button>`;
   html += `</div>`;
   html += `<div class="cookbook-dl-input" style="margin-top:0;">`;
-  html += `<input type="text" class="cookbook-dl-repo" id="cookbook-dl-repo" placeholder="org/model-name, qwen2.5:14b, or HF URL" />`;
+  html += `<input type="text" class="cookbook-dl-repo" id="cookbook-dl-repo" placeholder="${t('cookbook.org_model_hint')}" />`;
   html += `<button class="cookbook-btn cookbook-dl-btn" id="cookbook-dl-btn">Download</button>`;
   html += `</div>`;
-  // Browse Ollama library — fetches popular models from ollama.com via the
-  // /api/cookbook/ollama/library cached proxy, click → fills the input with
-  // `<name>:<size>` so the existing Download button kicks off `ollama pull`.
+  // 浏览 Ollama 库 — 通过 /api/cookbook/ollama/library
+  // 缓存代理获取 ollama.com 的热门模型，点击 → 用
+  // `<name>:<size>` 填充输入，现有下载按钮触发 `ollama pull`。
   html += `<div style="margin-top:5px;position:relative;top:-3px;">`;
   html += `<div style="display:flex;gap:4px;align-items:center;">`;
   html += `<button type="button" class="memory-toolbar-btn" id="cookbook-ollama-toggle" style="flex:1;text-align:left;height:26px;display:flex;align-items:center;gap:6px;border-radius:4px;">`;
@@ -1847,7 +1846,7 @@ function _renderRecipes() {
   html += `</div>`;
   html += `<div id="cookbook-ollama-list" style="display:none;margin-top:4px;max-height:320px;overflow-y:auto;flex-direction:column;gap:4px;"></div>`;
   html += `</div>`;
-  // Latest HF models that fit — collapsible card list
+  // 适合的最新 HF 模型 — 可折叠卡片列表
   html += `<div style="margin-top:5px;position:relative;top:-3px;">`;
   html += `<div style="display:flex;gap:4px;align-items:center;">`;
   html += `<button type="button" class="memory-toolbar-btn" id="cookbook-hf-latest-toggle" style="flex:1;text-align:left;height:26px;display:flex;align-items:center;gap:6px;border-radius:4px;">`;
@@ -1858,9 +1857,9 @@ function _renderRecipes() {
   html += `</div>`;
   html += `<div id="cookbook-hf-latest-list" style="display:none;margin-top:4px;max-height:320px;overflow-y:auto;flex-direction:column;gap:4px;"></div>`;
   html += `</div>`;
-  html += `</div>`;  // /#cookbook-dl-tab-fold-body (whole Download card body)
+  html += `</div>`;  // /#cookbook-dl-tab-fold-body（整个下载卡片主体）
 
-  // Search section
+  // 搜索区域
   html += '</div></div></div></div>';
   html += '<div class="cookbook-group" data-backend-group="Search">';
   html += '<div class="admin-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">';
@@ -1872,12 +1871,12 @@ function _renderRecipes() {
   html += '<select class="cookbook-field-input hwfit-usecase" id="hwfit-usecase" style="height:28px;">';
   html += '<option value="general" selected>Standard</option><option value="coding">Coding</option>';
   html += '<option value="reasoning">Reasoning</option><option value="chat">Chat</option>';
-  // Image tab removed — text→image gen is gone from this build (only inpaint
-   // remains, which uses its own settings panel). Vision (multimodal) stays.
+  // 图像标签页已移除 — 此构建中不再有文本转图像生成（仅保留
+   // inpaint 功能，使用自己的设置面板）。多模态视觉保留。
   html += '<option value="multimodal">Vision</option></select>';
-  // Engine sits next to the type filter so the "what category / which serving
-  // path" filters live together; Quant + Context are storage-format and budget
-  // levers, grouped to the right.
+  // 引擎位于类型过滤器旁边，使"什么类别/哪个推理
+  // 路径"过滤器放在一起；量化和上下文是存储格式和预算
+  // 杠杆，分组在右侧。
   html += '<span class="hwfit-engine-wrap">';
   html += '<select class="cookbook-field-input hwfit-engine" id="hwfit-engine" style="height:28px;" title="Filter by serving engine">';
   html += '<option value="">Engine</option>';
@@ -1888,8 +1887,8 @@ function _renderRecipes() {
   html += '</select>';
   html += '<span class="hwfit-help-chip hwfit-help-chip-inline hwfit-engine-help" title="Rule of thumb: GGUF on single GPU / CPU+RAM → llama.cpp (or Ollama). Safetensors on multi-GPU NVIDIA → vLLM. SGLang is a vLLM-class alternative, sometimes faster on big-MoE / long-context.">?</span>';
   html += '</span>';
-  // Quant (Q4/Q8/…). Default is "All" so the list shows the best-scoring
-  // quant for every model instead of silently filtering to Q4.
+  // 量化（Q4/Q8/…）。默认为"全部"，列表为每个模型显示最佳评分
+  // 的量化版本，而不是静默过滤到 Q4。
   html += '<span class="hwfit-quant-wrap">';
   html += '<select class="cookbook-field-input hwfit-quant" id="hwfit-quant" style="height:28px;">';
   html += '<option value="" selected>Quant: All</option>';
@@ -1899,14 +1898,14 @@ function _renderRecipes() {
   html += '<option value="AWQ-4bit">AWQ</option><option value="FP8">FP8</option><option value="FP4">FP4</option><option value="NVFP4">NVFP4</option></select>';
   html += '<span class="hwfit-help-chip hwfit-help-chip-inline hwfit-quant-help" title="Lower quant tiers (Q2/Q3/Q4 / AWQ-4bit) are smaller, faster, and cheaper to run, at some quality loss. Higher tiers (Q8 / FP8 / FP16 / BF16) preserve more quality but need more VRAM. “All” shows the best-scoring quant per model — pick a specific one to filter.">?</span>';
   html += '</span>';
-  // Ctx slider — lets you target a context length for fit estimates; the
-  // hwfit ranking uses _ctxValue() to factor that into VRAM math, so
-  // dragging this re-sorts the list toward models that fit your chosen ctx.
+  // 上下文滑块 — 允许你设置目标上下文长度以进行适配估算；
+  // hwfit 排名使用 _ctxValue() 将其纳入 VRAM 计算，
+  // 拖动它会使列表重新排序，显示适合选定上下文的模型。
   html += '<label class="hwfit-ctx-control" title="Context length for fit estimates. Lower it to find more models that could fit your hardware.">';
   html += '<span>Context</span><span class="hwfit-help-chip hwfit-help-chip-inline" title="Context length. Lower it to find more models that could fit your hardware; raise it when you need longer chats or documents.">?</span><input type="range" id="hwfit-context" min="0" max="5" step="1" value="3" />';
   html += '<output id="hwfit-context-label">50k</output></label>';
-  // Search lives at the far right of the toolbar so the controls (Type/Quant/
-  // Engine/Context) read as a row of compact filters followed by free-text.
+  // 搜索框位于工具栏最右侧，使控件（类型/量化/
+  // 引擎/上下文）读作一排紧凑过滤器，后面跟着自由文本。
   html += '<input type="text" class="cookbook-field-input hwfit-search" id="hwfit-search" placeholder="Search models..." style="flex:1;" />';
   html += '</div>';
   html += '<div class="hwfit-toolbar" style="margin-top:7px;">';
@@ -1914,11 +1913,11 @@ function _renderRecipes() {
   html += _buildServerOpts(false);
   html += '</select>';
   html += '<div class="hwfit-gpu-toggles" id="hwfit-gpu-toggles"></div>';
-  // Scan/refresh button (icon-only) where the quant dropdown used to sit.
+  // 扫描/刷新按钮（仅图标）位于之前量化下拉框的位置。
   html += '<button type="button" class="hwfit-gpu-btn" id="hwfit-rescan" title="Re-scan hardware" style="flex-shrink:0;position:relative;top:-3px;left:-1px;">↻ RESCAN</button>';
   html += '<button type="button" class="hwfit-gpu-btn hwfit-hw-manual-btn" id="hwfit-hw-manual-btn" title="Set hardware manually" style="flex-shrink:0;position:relative;top:-3px;left:-1px;display:inline-flex;align-items:center;gap:3px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>EDIT</button>';
-  // Sort state — the clickable column headers read/write this (pewds' original
-  // sort paradigm). Newest is reachable by clicking the Model column header.
+  // 排序状态 — 可点击的列标题读写此状态（pewds 的原始
+  // 排序范式）。点击模型列标题可达到"最新"。
   html += '<select class="cookbook-field-input hwfit-sort" id="hwfit-sort" style="display:none">';
   html += '<option value="fit">Fit</option><option value="score">Score</option><option value="vram">VRAM</option>';
   html += '<option value="speed">Speed</option><option value="params">Params</option>';
@@ -1936,9 +1935,9 @@ function _renderRecipes() {
   html += '</div>';
   html += '<div id="hwfit-hw-row" style="display:none;align-items:center;gap:4px;margin-top:3px;padding-top:2px;"><span style="font-size:10px;padding:2px 8px;border-radius:10px;background:color-mix(in srgb, var(--fg) 8%, transparent);color:var(--fg);opacity:0.7;white-space:nowrap;flex-shrink:0;position:relative;top:-1px;">Detected hardware</span><div class="hwfit-hw" id="hwfit-hw" style="flex:1;"></div></div>';
   html += '<div class="hwfit-list" id="hwfit-list"></div>';
-  // Footer: link to the public discussion where users can request additions
-  // to the curated model list. Sits below the list so it reads as a callout
-  // after browsing, not a header.
+  // 页脚：链接到公开讨论，用户可在其中请求添加
+  // 到策划模型列表。位于列表下方，读取为浏览后的
+  // 提示，而非标题。
   html += '<div class="hwfit-list-footer" style="display:none;">'
        + 'Don\'t see a model? '
        + '<a href="https://github.com/pewdiepie-archdaemon/odysseus/discussions/1962" target="_blank" rel="noopener" style="color:var(--accent,var(--red));text-decoration:none;display:inline-flex;align-items:center;gap:4px;vertical-align:middle;position:relative;top:-1px;">'
@@ -1949,7 +1948,7 @@ function _renderRecipes() {
 
   html += '</div></div>';
 
-  // Serve group
+  // 推理组
   html += '<div class="cookbook-group hidden" data-backend-group="Serve">';
   html += '<div class="admin-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">';
   html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">';
@@ -1985,13 +1984,13 @@ function _renderRecipes() {
   html += '<div class="doclib-grid hwfit-cached-list" id="hwfit-cached-list"></div>';
   html += '</div></div>';
 
-  // Dependencies tab
+  // 依赖项标签页
   html += '<div class="cookbook-group hidden" data-backend-group="Dependencies">';
   html += '<div class="admin-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">';
   html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
   html += '<h2 style="margin:0;padding:0;line-height:1;">Dependencies</h2>';
-  // Rebuild llama.cpp button moved into the llama_cpp dep row (see _depRow);
-  // having it in the title polluted the section header.
+  // 重建 llama.cpp 按钮已移至 llama_cpp 依赖行（见 _depRow）；
+  // 之前放在标题中污染了区域头部。
   html += '<span style="font-size:10px;opacity:0.5;margin-left:auto;">Server</span>';
   html += '<select class="cookbook-field-input" id="hwfit-deps-server" style="height:28px;min-width:70px;">';
   html += _buildServerOpts(false);
@@ -2001,13 +2000,13 @@ function _renderRecipes() {
   html += '<div class="doclib-grid" id="cookbook-deps-list"></div>';
   html += '</div></div>';
 
-  // Settings tab
-  // Settings tab — split into two separate `.admin-card` blocks so the
-  // HF Token and Server config look like distinct panels (matches the
-  // Download tab's block-per-section layout).
+  // 设置标签页
+  // 设置标签页 — 分为两个独立的 `.admin-card` 块，
+  // 使 HF Token 和服务器配置看起来像不同的面板（匹配
+  // 下载标签页的逐块区域布局）。
   html += '<div class="cookbook-group hidden cookbook-settings-stack" data-backend-group="Settings">';
 
-  // ── HuggingFace Token block ─────────────────────────────────────────
+  // ── HuggingFace Token 区域 ─────────────────────────────────────────
   html += '<div class="admin-card" style="flex:0 0 auto;display:flex;flex-direction:column;">';
   html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">';
   html += '<h2 style="margin:0;padding:0;line-height:1;">HuggingFace Token</h2>';
@@ -2015,8 +2014,8 @@ function _renderRecipes() {
   html += '<p class="memory-desc doclib-desc">Personal access token for downloading gated and private models.</p>';
   html += '<div class="memory-toolbar">';
   html += `<div style="display:flex;gap:4px;align-items:center;">`;
-  // Bold green check shown when a token is stored (a placeholder can't style a
-  // single glyph, so it's its own element next to the input).
+  // 存储 token 时显示粗体绿色勾号（placeholder 无法对单个
+  // 字形设置样式，所以它是输入框旁边的独立元素）。
   if (_es.hfTokenConfigured) {
     html += `<span class="hwfit-hf-check" title="Token stored" style="font-weight:800;color:var(--green,#50fa7b);font-size:15px;line-height:1;flex-shrink:0;position:relative;top:2px;">✓</span>`;
   }
@@ -2028,12 +2027,12 @@ function _renderRecipes() {
   html += '</div>';
   html += '</div>';
 
-  // ── Servers block ───────────────────────────────────────────────────
+  // ── 服务器区域 ───────────────────────────────────────────────────
   html += '<div class="admin-card" style="flex:0 0 auto;display:flex;flex-direction:column;">';
   html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;margin-top:-4px;">';
   html += '<h2 style="margin:0;padding:0;line-height:1;">Servers</h2>';
-  // Reuse the calendar +New pill: spinning plus, label fades in idea uses
-   // the same `.cal-add-btn-text` rules, so styling stays consistent.
+  // 复用日历 +New 药丸样式：旋转加号，标签淡入
+   // 使用相同的 `.cal-add-btn-text` 规则，保持样式一致。
   html += '<button class="cal-add-btn cal-add-btn-text" id="cookbook-server-add" title="Add server" style="margin-left:auto;"><span class="cal-add-plus">+</span><span class="cal-add-label">Add</span></button>';
   html += '</div>';
   html += '<p class="memory-desc doclib-desc">Configure SSH servers, install Odysseus keys, choose model directories, and set the default server. Local is this machine.</p>';
@@ -2050,12 +2049,12 @@ function _renderRecipes() {
   body.innerHTML = html;
   _wireTabEvents(body);
 
-  // Auto-init What Fits
+  // 自动初始化 What Fits
   _hwfitInit();
   _hwfitFetch();
 }
 
-// ── Public API ──
+// ── 公共 API ──
 
 import * as Modals from './modalManager.js';
 
@@ -2063,17 +2062,17 @@ let _rendered = false;
 
 let _closeGen = 0;
 
-// ESC while a Serve card is expanded should collapse just that card, not
-// close the whole Cookbook modal. Capture-phase so we run before the
-// modal manager's global ESC-to-close handler and can stop it.
+// 推理卡片展开时按 ESC 应仅折叠该卡片，而不是
+// 关闭整个 Cookbook 模态框。捕获阶段，这样我们在
+// 模态框管理器的全局 ESC 关闭处理器之前运行并可阻止它。
 if (typeof window !== 'undefined' && !window._cookbookServeEscBound) {
   window._cookbookServeEscBound = true;
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const modal = document.getElementById('cookbook-modal');
     if (!modal || modal.classList.contains('hidden')) return;
-    // Layer 1: a model row in the scan/download list is highlighted —
-    // deselect it before doing anything else.
+    // 第一层：扫描/下载列表中突出显示的模型行 —
+    // 在执行其他操作前先取消选择。
     const activeRow = modal.querySelector('.hwfit-row-active');
     if (activeRow) {
       e.stopImmediatePropagation();
@@ -2082,24 +2081,24 @@ if (typeof window !== 'undefined' && !window._cookbookServeEscBound) {
       return;
     }
     const expanded = modal.querySelector('.memory-item.doclib-card-expanded');
-    if (!expanded) return;  // nothing expanded — let the modal close normally
+    if (!expanded) return;  // 没有展开的卡片 — 让模态框正常关闭
     e.stopImmediatePropagation();
     e.preventDefault();
-    // Collapse the card (mirror the toggle-close path in cookbookServe.js).
+    // 折叠卡片（镜像 cookbookServe.js 中的展开/关闭路径）。
     expanded.querySelector('.hwfit-serve-panel')?.remove();
     expanded.classList.remove('doclib-card-expanded');
     expanded.style.flexDirection = '';
     expanded.style.alignItems = '';
     const list = expanded.closest('.hwfit-cached-list') || document.getElementById('hwfit-cached-list');
     if (list) { list.style.minHeight = ''; list.style.maxHeight = ''; }
-  }, true);  // capture
+  }, true);  // 捕获阶段
 }
 
 export async function open(opts) {
   const modal = document.getElementById('cookbook-modal');
   if (!modal) return;
-  // Run any post-open intent (switch tab, prefill search, etc) after the
-  // current render pass so the target elements exist.
+  // 在当前渲染完成后运行任何打开后意图（切换标签页、预填搜索等），
+  // 确保目标元素存在。
   const _applyIntent = () => {
     if (!opts) return;
     if (opts.tab) {
@@ -2115,23 +2114,23 @@ export async function open(opts) {
       if (s) { s.value = opts.serveSearch; s.dispatchEvent(new Event('input', { bubbles: true })); }
     }
   };
-  // If minimized, restore in place — preserve all state
+  // 如果已最小化，原地还原 — 保留所有状态
   if (Modals.isMinimized('cookbook-modal')) {
     Modals.restore('cookbook-modal');
     _renderRunningTab();
     setTimeout(_applyIntent, 0);
     return;
   }
-  // If already visible, no-op (but still honour the intent)
+  // 如果已可见，无操作（但仍执行意图）
   if (!modal.classList.contains('hidden')) {
     setTimeout(_applyIntent, 0);
     return;
   }
   _setCookbookOpening(true);
   try {
-  // Invalidate any pending close() animation handlers so they won't re-hide us
+  // 使所有待处理的 close() 动画处理器失效，防止它们重新隐藏我们
   _closeGen++;
-  // Clear any leftover inline styles from a previous swipe-dismiss or close animation
+  // 清除之前滑动关闭或关闭动画残留的内联样式
   const _content = modal.querySelector('.modal-content');
   if (_content) {
     _content.classList.remove('modal-closing', 'sheet-ready', 'cookbook-modal-entering');
@@ -2149,15 +2148,15 @@ export async function open(opts) {
   });
   _wireCookbookDrag(modal);
   await _syncFromServer();
-  // `_syncFromServer` lives in cookbookRunning.js and populates *its* _envState
-  // (a different object reference than this module's), then mirrors the merged
-  // state to localStorage. So ALWAYS hydrate our _envState from that mirror —
-  // on a successful sync it holds the freshly-fetched servers; on failure it
-  // holds the last-known state. Gating this on `!synced` left the render's
-  // _envState empty whenever sync succeeded → "servers don't show".
+  // `_syncFromServer` 在 cookbookRunning.js 中，会填充其*自己的* _envState
+  //（与本模块不同的对象引用），然后将合并的
+  // 状态镜像到 localStorage。所以始终从该镜像中
+  // 水合我们的 _envState — 成功同步时它持有新获取的服务器；失败时
+  // 持有最后已知的状态。在此处用 `!synced` 限制了
+  // 渲染的 _envState 在每次同步成功时为空 →"服务器不显示"。
   try { Object.assign(_envState, _readStoredEnvState()); } catch {}
-  // Honour a user-set default server: always land on it when Cookbook opens, so
-  // every dropdown (scan/download/serve/cache/deps) starts on the same machine.
+  // 尊重用户设置的默认服务器：打开 Cookbook 时始终定位到它，
+  // 每个下拉框（扫描/下载/推理/缓存/依赖）都从同一台机器开始。
   if (_envState.defaultServer) {
     const _dk = _envState.defaultServer;
     if (_dk === 'local') {
@@ -2167,25 +2166,25 @@ export async function open(opts) {
       if (_ds) { _envState.remoteHost = _ds.host; _envState.env = _ds.env || 'none'; _envState.envPath = _ds.envPath || ''; _envState.platform = _ds.platform || ''; }
     }
   }
-  // Re-render on every open AFTER sync so the freshly-fetched state (servers,
-  // HF token, presets) is always reflected. Gating this to once-per-page used
-  // to freeze a stale/empty servers list whenever the first sync raced or
-  // returned before hydration — and since close/reopen doesn't reset the page,
-  // only a full reload recovered it. Re-rendering is cheap and the in-progress
-  // Running tab is rendered separately just below.
+  // 每次打开时同步后再重新渲染，这样新获取的状态（服务器、
+  // HF token、预设）总是被反映。将此限制为每页一次曾导致
+  // 当第一次同步竞争或在回填前返回时冻结过期/空的服务器列表
+  // — 而且关闭/重新打开不会重置页面，
+  // 只能完全重新加载恢复。重新渲染成本低，进行中的
+  // 运行标签页在下面单独渲染。
   _renderRecipes();
   _rendered = true;
   _clearCookbookNotif();
   _renderRunningTab();
-  // Self-heal: revive any download tasks whose tmux session is still alive
-  // but were persisted as done/error (covers the "restarted server while a
-  // big multi-shard download was in flight" case — the task survived in
-  // tmux, the cookbook just lost track of it).
+  // 自愈：恢复那些 tmux 会话仍存活但
+  // 持久化为 done/error 的下载任务（覆盖了"重启服务器时大量
+  // 多分片下载正在进行中"的情况 — 任务在 tmux 中存活，
+  // 只是 cookbook 失去了跟踪）。
   try { _selfHealStaleTasks({ oneShot: true }); } catch {}
   if (_content) {
-    // Put the panel in its entering state before it becomes visible. On
-    // mobile, showing first and adding the class a frame later can paint the
-    // sheet at its final position, which makes the slide-up look like a snap.
+    // 在面板可见之前将其置于进入状态。在
+    // 移动端，先显示再添加类可能会将工作表绘制在
+    // 最终位置，使得滑入看起来像瞬间出现。
     _content.classList.add('cookbook-modal-entering');
   }
   modal.classList.remove('hidden');
@@ -2201,10 +2200,10 @@ export async function open(opts) {
   }
 }
 
-// Make the Cookbook modal draggable (it had no drag wiring at all). We do
-// NOT supply a fsClass fullscreen here — that would cover the whole viewport
-// incl. the sidebar. Instead tileManager.js handles maximize/tiling (its
-// safe-rect sits the window NEXT TO the sidebar), same as tasks/gallery/etc.
+// 使 Cookbook 模态框可拖动（之前完全没有拖动连接）。我们不在此处
+// 提供 fsClass 全屏 — 那会覆盖整个视口
+// 包括侧边栏。tileManager.js 处理最大化/平铺（其
+// safe-rect 将窗口放在侧边栏旁），与 tasks/gallery 等一致。
 let _cookbookDragWired = false;
 function _wireCookbookDrag(modal) {
   if (_cookbookDragWired || !modal) return;
@@ -2215,9 +2214,9 @@ function _wireCookbookDrag(modal) {
   makeWindowDraggable(modal, {
     content, header,
     skipSelector: '.close-btn, .modal-close',
-    // Keep only the "close to the edge" dock gesture for Cookbook. The
-    // tileManager side snap is suppressed for this modal so there isn't a
-    // second, tighter edge state fighting the working one.
+    // 仅保留 Cookbook 的"靠边停靠"手势。
+    // 此模态框的 tileManager 侧对齐功能被抑制，不会有
+    // 第二个更紧凑的边缘状态干扰工作状态。
     enableDock: true,
   });
 }
@@ -2244,7 +2243,7 @@ function _doClose() {
 }
 
 export function close() {
-  // Full close — fires registered closeFn, removes badge, unregisters
+  // 完全关闭 — 触发已注册的 closeFn，移除徽章，注销
   if (Modals.isRegistered('cookbook-modal')) {
     Modals.close('cookbook-modal');
   } else {
@@ -2259,7 +2258,7 @@ export function isVisible() {
   return !modal.classList.contains('hidden');
 }
 
-// Close button
+// 关闭按钮
 document.addEventListener('DOMContentLoaded', () => {
   const closeBtn = document.getElementById('close-cookbook-modal');
   if (closeBtn) closeBtn.addEventListener('click', close);
@@ -2273,10 +2272,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// ── Initialize sub-modules ──
+// ── 初始化子模块 ──
 
-// Shared SSH-port resolver — sub-modules use this via the shared bundle
-// instead of redefining it. Kept here as the single source of truth.
+// 共享 SSH 端口解析器 — 子模块通过共享包使用此解析器
+// 而不是重新定义。作为唯一权威来源保留在此处。
 function _sshPrefix(port) {
   return port && port !== '22' ? `-p ${port} ` : '';
 }
@@ -2308,12 +2307,12 @@ const shared = {
   esc,
 };
 
-// Init running module (adds task management, auto-fix, launch, background monitor)
+// 初始化运行模块（添加任务管理、自动修复、启动、后台监视）
 initRunning({
   ...shared,
 });
 
-// Init download module (adds SSE, panel rendering, download commands)
+// 初始化下载模块（添加 SSE、面板渲染、下载命令）
 initDownload({
   ...shared,
   _addTask,
@@ -2322,7 +2321,7 @@ initDownload({
   _saveTasks,
 });
 
-// Init serve module (adds cached models, serve panels, launch)
+// 初始化推理模块（添加缓存模型、推理面板、启动）
 initServe({
   ...shared,
   _launchServeTask,
@@ -2330,8 +2329,8 @@ initServe({
   _nextAvailablePort,
 });
 
-// ── Re-exports for cookbook-diagnosis.js and cookbook-hwfit.js ──
-// These modules import from cookbook.js, so we re-export what they need
+// ── cookbook-diagnosis.js 和 cookbook-hwfit.js 的重新导出 ──
+// 这些模块从 cookbook.js 导入，我们重新导出它们所需的内容
 
 export {
   _loadTasks, _saveTasks, _addTask, _removeTask,
@@ -2346,3 +2345,4 @@ export {
 const cookbookModule = { open, close, isVisible, startBackgroundMonitor: _startBackgroundMonitor };
 
 export default cookbookModule;
+

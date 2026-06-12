@@ -1,8 +1,8 @@
 // static/js/censor.js
 /**
- * Sensitive Information Censor Module
- * Detects emails, passwords, API keys, tokens, etc. in chat responses
- * and blurs them. Click to reveal individual items.
+ * 敏感信息审查模块
+ * 检测聊天回复中的邮箱、密码、API 密钥、令牌等敏感信息
+ * 并将其模糊处理。点击可逐个显示。
  */
 
 let _enabled = true;
@@ -16,38 +16,38 @@ export const _prefEnabled = () => {
   }
 };
 
-// Patterns that indicate sensitive data
+// 可能表示敏感数据的正则模式
 const PATTERNS = [
-  // Emails
+  // 邮箱地址
   { re: /\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/g, label: 'email' },
-  // API key prefixes (common services)
+  // API 密钥前缀（常见服务）
   { re: /\b(sk-[a-zA-Z0-9]{20,}|pk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36,}|gho_[a-zA-Z0-9]{36,}|glpat-[a-zA-Z0-9\-_]{20,}|xox[bpras]-[a-zA-Z0-9\-]{10,}|npm_[a-zA-Z0-9]{36,}|AKIA[A-Z0-9]{12,})\b/g, label: 'api-key' },
-  // Bearer tokens
+  // Bearer 令牌
   { re: /Bearer\s+[A-Za-z0-9._\-]{20,}/g, label: 'token' },
-  // Generic tokens/secrets in key=value or key: value patterns
-  // Credentials with delimiters (key: value, key=value, key  value)
+  // 通用令牌/密钥，格式为 key=value 或 key: value
+  // 带分隔符的凭据（key: value, key=value, key  value）
   { re: /(?:password|passwd|secret|api[_\-]?key|access[_\-]?token|auth[_\-]?token|private[_\-]?key|client[_\-]?secret)[\s]*[:=]\s*["']?[^\s"'<]{4,}["']?/gi, label: 'credential' },
-  // Credentials in tabular/label-value format (Password    xyzABC123)
+  // 表格/标签-值格式中的凭据（Password    xyzABC123）
   { re: /(?:password|passwd|secret|api[_\-]?key|access[_\-]?token|auth[_\-]?token|private[_\-]?key|client[_\-]?secret)\s{2,}[^\s<]{4,}/gi, label: 'credential' },
-  // Value after a line starting with password-like label
+  // 以类似密码的标签开头的那一行的值
   { re: /(?:^|\n)\s*(?:password|passwd|secret|api[_\-]?key|token|private[_\-]?key)[\t ]*\n\s*([^\s<]{4,})/gim, label: 'credential' },
-  // SSH / PEM private keys (inline)
+  // SSH / PEM 私钥（内联格式）
   { re: /-----BEGIN\s[\w\s]*PRIVATE KEY-----[\s\S]*?-----END\s[\w\s]*PRIVATE KEY-----/g, label: 'private-key' },
-  // Long hex strings (32+ chars) that look like hashes/tokens
+  // 长十六进制字符串（32+ 字符），看起来像哈希/令牌
   { re: /\b[0-9a-f]{32,}\b/gi, label: 'hash' },
-  // JWT tokens (three dot-separated base64 segments)
+  // JWT 令牌（三段点号分隔的 base64 编码）
   { re: /\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b/g, label: 'jwt' },
-  // IP addresses with ports (internal networks)
+  // 带端口的 IP 地址（内网地址）
   { re: /\b(?:10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}(?::\d+)?\b/g, label: 'internal-ip' },
 ];
 
 export function init() {
-  // Load enabled state from feature flags
+  // 从功能标志加载启用状态
   _loadState();
   window.addEventListener('odysseus-sensitive-blur-change', (e) => {
     setEnabled(e.detail?.enabled !== false);
   });
-  // Set up click handler for reveals (delegated)
+  // 设置点击处理以显示内容（事件委托）
   document.addEventListener('click', (e) => {
     const el = e.target.closest('.censored-item');
     if (!el) return;
@@ -58,16 +58,16 @@ export function init() {
 }
 
 function _loadState() {
-  // Check admin feature flag
+  // 检查管理员功能标志
   fetch('/api/auth/features', { credentials: 'same-origin' })
     .then(r => r.json())
     .then(features => {
       _enabled = features.sensitive_filter !== false && _prefEnabled();
-      // Start observer after loading state
+      // 加载状态后启动观察器
       _startObserver();
     })
     .catch(() => {
-      // Default: enabled
+      // 默认：启用
       _enabled = _prefEnabled();
       _startObserver();
     });
@@ -75,13 +75,13 @@ function _loadState() {
 
 function _startObserver() {
   if (_observer) return;
-  // Observe chat-history, compare panes, and split panes for new messages
+  // 观察 chat-history、compare panes 和 split panes 以获取新消息
   _observer = new MutationObserver((mutations) => {
     if (!_enabled) return;
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node.nodeType !== 1) continue;
-        // Process any .body elements within newly added nodes
+        // 处理新添加节点中的 .body 元素
         if (node.classList && node.classList.contains('body')) {
           _scheduleProcess(node);
         } else if (node.querySelectorAll) {
@@ -91,7 +91,7 @@ function _startObserver() {
     }
   });
 
-  // Observe the entire main area for new messages
+  // 观察整个主区域以获取新消息
   const targets = [
     document.getElementById('chat-container'),
     document.getElementById('chat-history'),
@@ -102,13 +102,13 @@ function _startObserver() {
   });
 }
 
-// Debounce processing — content may still be streaming
+// 防抖处理 — 内容可能仍在流式传输中
 const _pending = new WeakSet();
 function _scheduleProcess(el) {
   if (_pending.has(el)) return;
   _pending.add(el);
-  // Wait for streaming to settle — process after a short delay
-  // Re-process periodically during streaming
+  // 等待流式传输稳定下来 — 短暂延迟后处理
+  // 流式传输期间定期重新处理
   let attempts = 0;
   const maxAttempts = 30;
   const interval = setInterval(() => {
@@ -116,9 +116,9 @@ function _scheduleProcess(el) {
     attempts++;
     if (attempts >= maxAttempts) clearInterval(interval);
   }, 2000);
-  // Also process once immediately (catches non-streaming content)
+  // 也立即处理一次（捕获非流式内容）
   setTimeout(() => _processElement(el), 100);
-  // Final pass after streaming likely done
+  // 流式传输可能结束后再做最后一轮处理
   setTimeout(() => {
     clearInterval(interval);
     _processElement(el);
@@ -126,14 +126,14 @@ function _scheduleProcess(el) {
   }, 60000);
 }
 
-// Labels that indicate the NEXT value should be censored
+// 表示下一个值应该被审查的标签
 const SENSITIVE_LABELS = /^(?:password|passwd|secret|api[_\-]?key|access[_\-]?token|auth[_\-]?token|private[_\-]?key|client[_\-]?secret|token|credentials?)$/i;
 
 function _processElement(el) {
   if (!_enabled || !el) return;
   if (el.closest && el.closest('.setup-guide-no-censor')) return;
 
-  // --- Pass 1: Pattern-based censoring on text nodes ---
+  // --- 第一轮：对文本节点进行基于模式的审查 ---
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
   const textNodes = [];
   let node;
@@ -177,7 +177,7 @@ function _processElement(el) {
       const span = document.createElement('span');
       span.className = 'censored-item';
       span.dataset.type = match.label;
-      span.title = 'Click to reveal ' + match.label;
+      span.title = '点击显示 ' + match.label;
       span.textContent = match.text;
       frag.appendChild(span);
       lastIdx = match.end;
@@ -188,14 +188,14 @@ function _processElement(el) {
     textNode.parentNode.replaceChild(frag, textNode);
   }
 
-  // --- Pass 2: Context-aware label/value censoring ---
-  // Finds elements where text matches a sensitive label, then censors
-  // the adjacent sibling or next text content as a value.
+  // --- 第二轮：基于上下文的标签/值审查 ---
+  // 查找文本匹配敏感标签的元素，然后审查
+  // 相邻兄弟元素或下一个文本内容作为值。
   _contextCensor(el);
 }
 
 function _contextCensor(el) {
-  // Strategy 1: Walk all elements looking for sensitive labels
+  // 策略 1：遍历所有元素查找敏感标签
   const allElements = el.querySelectorAll('td, th, dt, dd, span, strong, b, em, li, p, div');
   for (let i = 0; i < allElements.length; i++) {
     const elem = allElements[i];
@@ -204,25 +204,25 @@ function _contextCensor(el) {
     const txt = (elem.textContent || '').trim();
     if (!SENSITIVE_LABELS.test(txt)) continue;
 
-    // Found a label — censor value via multiple strategies
+    // 找到了标签 — 通过多种策略审查值
     let censored = false;
 
-    // A) Next text sibling node (e.g. <strong>Password</strong> value123)
+    // A) 下一个文本兄弟节点（例如 <strong>Password</strong> value123）
     let sibling = elem.nextSibling;
     while (sibling && !censored) {
-      if (sibling.nodeType === 3) { // text node
+      if (sibling.nodeType === 3) { // 文本节点
         const val = sibling.textContent.trim();
         if (val.length >= 4 && !SENSITIVE_LABELS.test(val)) {
           const span = document.createElement('span');
           span.className = 'censored-item';
           span.dataset.type = 'credential';
-          span.title = 'Click to reveal credential';
+          span.title = '点击显示凭据';
           span.textContent = sibling.textContent;
           sibling.parentNode.replaceChild(span, sibling);
           censored = true;
         }
       } else if (sibling.nodeType === 1 && !sibling.closest('.censored-item')) {
-        // Element sibling — censor its text
+        // 元素兄弟节点 — 审查其文本
         const val = sibling.textContent.trim();
         if (val.length >= 4 && !SENSITIVE_LABELS.test(val)) {
           _censorAllText(sibling);
@@ -232,7 +232,7 @@ function _contextCensor(el) {
       sibling = censored ? null : sibling.nextSibling;
     }
 
-    // B) Parent's next element sibling (for <td>/<dd> pairs)
+    // B) 父元素的下一个元素兄弟节点（用于 <td>/<dd> 对）
     if (!censored) {
       const parent = elem.parentElement;
       if (parent) {
@@ -247,7 +247,7 @@ function _contextCensor(el) {
       }
     }
 
-    // C) Same parent, next text node after this element
+    // C) 同一父元素下，此元素之后的文本节点
     if (!censored && elem.parentElement) {
       const parent = elem.parentElement;
       let found = false;
@@ -261,7 +261,7 @@ function _contextCensor(el) {
             const span = document.createElement('span');
             span.className = 'censored-item';
             span.dataset.type = 'credential';
-            span.title = 'Click to reveal credential';
+            span.title = '点击显示凭据';
             span.textContent = child.textContent;
             child.parentNode.replaceChild(span, child);
             break;
@@ -271,14 +271,14 @@ function _contextCensor(el) {
     }
   }
 
-  // Strategy 2: Full-text scan for label-value patterns across lines
-  // Get the full text, find patterns like "Password\n  value" or "Password: value"
+  // 策略 2：全文本扫描，查找跨行的标签-值模式
+  // 获取完整文本，查找如 "Password\n  value" 或 "Password: value" 的模式
   const fullText = el.textContent || '';
   const labelValueRe = /(?:password|passwd|secret|api[_\-]?key|access[_\-]?token|private[_\-]?key|client[_\-]?secret|token|auth[_\-]?token)\s*[:\s]\s*(\S{4,})/gi;
   let m;
   while ((m = labelValueRe.exec(fullText)) !== null) {
     const value = m[1];
-    // Find and censor this value string in text nodes
+    // 在文本节点中查找并审查此值字符串
     _censorValueInElement(el, value);
   }
 }
@@ -292,7 +292,7 @@ function _censorValueInElement(el, value) {
     if (node.parentElement.closest('pre:not(.censored-item), .censored-item')) continue;
     const idx = node.textContent.indexOf(value);
     if (idx < 0) continue;
-    // Split text node and wrap the value
+    // 分割文本节点并将值包裹起来
     const before = node.textContent.slice(0, idx);
     const after = node.textContent.slice(idx + value.length);
     const frag = document.createDocumentFragment();
@@ -300,17 +300,17 @@ function _censorValueInElement(el, value) {
     const span = document.createElement('span');
     span.className = 'censored-item';
     span.dataset.type = 'credential';
-    span.title = 'Click to reveal credential';
+    span.title = '点击显示凭据';
     span.textContent = value;
     frag.appendChild(span);
     if (after) frag.appendChild(document.createTextNode(after));
     node.parentNode.replaceChild(frag, node);
-    return; // One replacement per call to avoid walker issues
+    return; // 每次调用只做一次替换以避免遍历器问题
   }
 }
 
 function _censorAllText(el) {
-  // Wrap all text content in a censored span
+  // 将所有文本内容包裹在审查 span 中
   if (el.querySelector('.censored-item')) return;
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
   const nodes = [];
@@ -324,23 +324,23 @@ function _censorAllText(el) {
     const span = document.createElement('span');
     span.className = 'censored-item';
     span.dataset.type = 'credential';
-    span.title = 'Click to reveal credential';
+    span.title = '点击显示凭据';
     span.textContent = tn.textContent;
     tn.parentNode.replaceChild(span, tn);
   }
 }
 
-/** Manually censor a specific element (for dynamically loaded content) */
+/** 手动审查特定元素（用于动态加载的内容） */
 export function censorElement(el) {
   if (!_enabled) return;
   _processElement(el);
 }
 
-/** Toggle censoring on/off (client-side) */
+/** 切换审查开/关（客户端） */
 export function setEnabled(enabled) {
   _enabled = enabled;
   if (!enabled) {
-    // Reveal all currently censored items
+    // 显示所有当前被审查的项目
     document.querySelectorAll('.censored-item').forEach(el => el.classList.add('revealed'));
   } else {
     document.querySelectorAll('.censored-item').forEach(el => el.classList.remove('revealed'));

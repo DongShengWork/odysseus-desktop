@@ -1,7 +1,7 @@
-// static/js/search.js
+// static/js/search.js — 搜索设置管理
 
 /**
- * Search settings management — reads active provider from admin settings.
+ * 搜索设置管理 — 从管理员设置中读取当前搜索提供商。
  */
 
 let API_BASE = '';
@@ -10,7 +10,7 @@ let _loaded = false;
 
 export function init(apiBase) {
   API_BASE = apiBase;
-  // Fetch provider on init so it's ready when chat needs it
+  // 初始化时获取提供商，确保聊天需要时已准备就绪
   _fetchProvider();
 }
 
@@ -20,7 +20,7 @@ async function _fetchProvider() {
     const s = await res.json();
     _provider = s.search_provider || 'searxng';
     _loaded = true;
-  } catch (e) { /* keep default */ }
+  } catch (e) { /* 保持默认值 */ }
 }
 
 export function getCurrentProvider() {
@@ -37,7 +37,7 @@ export function getProviderLabel() {
   return _labels[_provider] || _provider;
 }
 
-/** Re-fetch after admin saves new settings */
+/** 管理员保存新设置后重新获取 */
 export function refresh() {
   _fetchProvider();
 }

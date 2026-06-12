@@ -1,14 +1,14 @@
 """
-agent_tools.py — Facade module.
+agent_tools.py — 外观模块。
 
-Re-exports tool parsing, schemas, execution, and implementations
-for backward compatibility. All importers continue to work unchanged.
+重新导出工具解析、schemas、执行和实现，
+以保持向后兼容。所有导入者继续无需修改即可工作。
 
-Sub-modules:
-  - tool_parsing.py: regex patterns, parse/strip functions
-  - tool_schemas.py: FUNCTION_TOOL_SCHEMAS, function_call_to_tool_block
-  - tool_execution.py: execute_tool_block, format_tool_result, MCP helpers
-  - tool_implementations.py: all do_* tool functions
+子模块：
+  - tool_parsing.py: 正则模式、解析/剥离函数
+  - tool_schemas.py: FUNCTION_TOOL_SCHEMAS、function_call_to_tool_block
+  - tool_execution.py: execute_tool_block、format_tool_result、MCP 辅助
+  - tool_implementations.py: 所有 do_* 工具函数
 """
 
 import logging
@@ -19,14 +19,14 @@ from src.tool_utils import _truncate, get_mcp_manager, set_mcp_manager
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Constants (re-exported for backward compatibility — single source of truth
-# is src.constants; always prefer importing from there for new code)
+# 常量（为向后兼容重新导出 — 单一事实来源
+# 是 src.constants；新代码始终优先从那里导入）
 # ---------------------------------------------------------------------------
 MAX_AGENT_ROUNDS = 50
 SHELL_TIMEOUT = 60
 PYTHON_TIMEOUT = 30
 
-# Tool types that trigger execution
+# 触发执行的工具类型
 TOOL_TAGS = {"bash", "python", "web_search", "web_fetch", "read_file", "write_file", "edit_file",
              "grep", "glob", "ls",
              "create_document", "update_document", "edit_document",
@@ -44,31 +44,30 @@ TOOL_TAGS = {"bash", "python", "web_search", "web_fetch", "read_file", "write_fi
              "resolve_contact", "manage_contact", "list_email_accounts", "send_email", "list_emails",
              "read_email", "reply_to_email", "bulk_email", "archive_email",
              "delete_email", "mark_email_read",
-             # Cookbook tools (LLM serving + downloads). Without these
-             # entries, native function calls to e.g. list_served_models
-             # are rejected as "Unknown function call" before reaching
-             # the dispatcher — silent failure for the whole cookbook
-             # surface.
+             # Cookbook 工具（LLM 服务 + 下载）。没有这些
+             # 条目，对 e.g. list_served_models 的原生函数调用
+             # 在到达调度器之前就会被当作 "Unknown function call" 拒绝
+             # — 导致整个 cookbook 操作面静默失败。
              "download_model", "serve_model",
              "list_served_models", "stop_served_model",
              "list_downloads", "cancel_download",
              "search_hf_models", "list_cached_models",
              "list_serve_presets", "serve_preset", "adopt_served_model",
              "list_cookbook_servers",
-             # Other tools the agent reaches for that were also missing.
+             # agent 还会用到但之前缺失的其他工具。
              "edit_image", "trigger_research", "manage_research",
-             # Generic loopback to any UI-button endpoint (cookbook,
-             # gallery, email folders, etc.) — agent uses this when
-             # there's no named tool wrapper for the action.
+             # 通用回环到任何 UI 按钮端点（cookbook、
+             # 图库、邮件文件夹等）— agent 在没有
+             # 对应命名工具包装器时使用此工具。
              "app_api"}
 
 ToolBlock = namedtuple("ToolBlock", ["tool_type", "content"])
 
 # ---------------------------------------------------------------------------
-# Re-exports from sub-modules
+# 从子模块重新导出
 # ---------------------------------------------------------------------------
 
-# Parsing
+# 解析
 from src.tool_parsing import (  # noqa: E402, F401
     parse_tool_blocks,
     strip_tool_blocks,
@@ -86,13 +85,13 @@ from src.tool_schemas import (  # noqa: E402, F401
     function_call_to_tool_block,
 )
 
-# Execution
+# 执行
 from src.tool_execution import (  # noqa: E402, F401
     execute_tool_block,
     format_tool_result,
 )
 
-# Implementations
+# 实现
 from src.tool_implementations import (  # noqa: E402, F401
     set_active_document,
     set_active_model,

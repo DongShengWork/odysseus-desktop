@@ -1,4 +1,4 @@
-"""Cookbook routes — model download, serve, cache scanning, and cookbook state sync."""
+"""Cookbook 路由 — 模型下载、服务、缓存扫描和 cookbook 状态同步。"""
 
 import asyncio
 import json
@@ -82,11 +82,11 @@ def setup_cookbook_routes() -> APIRouter:
         return state
 
     def _diagnose_serve_output(text: str) -> dict | None:
-        """Server-side mirror of the Cookbook UI's common serve diagnoses.
+        """服务端镜像 Cookbook UI 的常见服务诊断信息。
 
-        The browser uses cookbook-diagnosis.js for clickable fixes. This gives
-        the agent/tool path the same structured signal so it can retry with an
-        adjusted command instead of guessing from raw tmux output.
+        浏览器使用 cookbook-diagnosis.js 提供可点击的修复方案。这里给 agent/工具
+        路径提供相同的结构化信号，使其可以用调整后的命令重试，而不必从原始 tmux
+        输出中猜测。
         """
         if not text:
             return None
@@ -203,7 +203,7 @@ def setup_cookbook_routes() -> APIRouter:
         return None
 
     def _state_for_client(state):
-        """Return cookbook state without raw secrets for browser clients."""
+        """返回移除了原始密钥的 cookbook 状态，供浏览器客户端使用。"""
         _strip_task_secrets(state)
         env = state.get("env") if isinstance(state, dict) else None
         if isinstance(env, dict):
@@ -214,7 +214,7 @@ def setup_cookbook_routes() -> APIRouter:
         return state
 
     def _state_for_storage(state, on_disk=None):
-        """Encrypt cookbook secrets before writing state to disk."""
+        """写入磁盘前加密 cookbook 密钥。"""
         _strip_task_secrets(state)
         env = state.get("env") if isinstance(state, dict) else None
         disk_env = on_disk.get("env") if isinstance(on_disk, dict) and isinstance(on_disk.get("env"), dict) else {}
@@ -242,9 +242,9 @@ def setup_cookbook_routes() -> APIRouter:
             return ""
 
     def _cookbook_ssh_dir() -> Path:
-        # The Docker image keeps cookbook keys under /app/.ssh; that path only
-        # exists inside the container. On Windows (and any non-container host)
-        # fall back to the user profile's ~/.ssh, which OpenSSH on Win10+ uses.
+        # Docker 镜像将 cookbook 密钥保存在 /app/.ssh 下；该路径仅
+        # 存在于容器内部。在 Windows（及任何非容器主机）上
+        # 回退到用户配置文件的 ~/.ssh，这是 Win10+ 上 OpenSSH 使用的路径。
         if not IS_WINDOWS:
             app_ssh = Path("/app/.ssh")
             if Path("/app").exists():
@@ -336,23 +336,22 @@ def setup_cookbook_routes() -> APIRouter:
         return shutil.which(binary) is not None
 
     def _launch_local_detached(session_id: str, bash_lines: list[str]) -> dict:
-        """Windows-native stand-in for a LOCAL tmux session (tmux doesn't exist
-        on Windows). Mirrors shell_routes._generate_win_detached / bg_jobs.launch:
-        runs the wrapper detached so it survives a browser/SSE disconnect (the
-        whole point of the tmux feature for long downloads/serves), writing a
-        <session>.log the status poller tails and a <session>.pid for liveness.
+        """Windows 原生替代方案，用于本地 tmux 会话（tmux 在 Windows 上不存在）。
+        镜像 shell_routes._generate_win_detached / bg_jobs.launch：
+        以分离模式运行包装脚本，使其在浏览器/SSE 断开连接后仍能存活
+        （长下载/服务的 tmux 功能的全部意义），写入 <session>.log 供状态轮询器
+        读取，并写入 <session>.pid 用于存活检测。
 
-        `bash_lines` is the same bash wrapper used on POSIX. Prefers Git Bash
-        for full command-syntax parity; falls back to a cmd.exe wrapper that
-        runs the script through whatever bash is reachable, else best-effort
-        directly (simple commands only). Returns the launched job record."""
+        `bash_lines` 是与 POSIX 上使用的相同的 bash 包装脚本。优先使用 Git Bash
+        以获得完整的命令语法兼容性；回退到 cmd.exe 包装器，通过可访问的 bash
+        运行脚本，否则尽力而为直接运行（仅限简单命令）。返回启动的任务记录。"""
         log_path = TMUX_LOG_DIR / f"{session_id}.log"
         pid_path = TMUX_LOG_DIR / f"{session_id}.pid"
         bash = find_bash()
         if bash:
-            # Run the existing bash wrapper verbatim through Git Bash, redirecting
-            # all output to the log the poller reads. Paths handed to bash use
-            # POSIX form + shell-quoting so drive paths / spaces survive.
+            # 通过 Git Bash 逐字运行已有的 bash 包装器，将所有输出
+            # 重定向到轮询器读取的日志中。传递给 bash 的路径使用
+            # POSIX 形式 + shell-quoting 以确保驱动器路径/空格正常。
             inner = TMUX_LOG_DIR / f"{session_id}_run.sh"
             inner.write_text("\n".join(bash_lines) + "\n", encoding="utf-8")
             lp = shlex.quote(log_path.as_posix())
@@ -364,9 +363,9 @@ def setup_cookbook_routes() -> APIRouter:
             )
             argv = [bash, str(script_path)]
         else:
-            # No bash on this Windows host: the bash wrapper can't run. Fall back
-            # to a cmd.exe wrapper that just records a clear error to the log so
-            # the UI surfaces "install Git Bash" instead of silently hanging.
+            # 此 Windows 主机上没有 bash：bash 包装器无法运行。回退到
+            # cmd.exe 包装器，仅将清晰的错误记录到日志中，
+            # 这样 UI 会显示 "install Git Bash" 而不会静默挂起。
             script_path = TMUX_LOG_DIR / f"{session_id}.cmd"
             script_path.write_text(
                 "@echo off\r\n"
@@ -391,11 +390,11 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.post("/api/model/download")
     async def model_download(request: Request, req: ModelDownloadRequest):
-        """Download a HuggingFace model in a tmux session.
-        Uses `hf download` CLI directly — runs in tmux via `script -qc`
-        for real TTY progress, streams ANSI-stripped output via log file."""
+        """在 tmux 会话中下载 HuggingFace 模型。
+        直接使用 `hf download` CLI — 通过 `script -qc` 在 tmux 中运行以获取真实
+        TTY 进度，通过日志文件流式传输 ANSI 过滤后的输出。"""
         require_admin(request)
-        # Defence-in-depth: even though this endpoint is admin-gated, refuse
+        # 纵深防御：即使此端点受管理员限制，也拒绝包含 shell 元字符的值。
         # values that would land in shell contexts with metacharacters.
         backend = (req.backend or "").strip().lower()
         is_ollama_download = backend == "ollama" or ("/" not in req.repo_id and ":" in req.repo_id)
@@ -415,49 +414,47 @@ def setup_cookbook_routes() -> APIRouter:
         session_id = f"cookbook-{uuid.uuid4().hex[:8]}"
         wrapper_script = TMUX_LOG_DIR / f"{session_id}.sh"
 
-        # Custom download dir: point the HF cache at <dir>/hub via env vars
-        # (HF_HOME + HUGGINGFACE_HUB_CACHE) instead of --local-dir. local_dir
-        # produces a flat layout (<dir>/<name>/<file>) and the local-dir
-        # bookkeeping files (.cache/huggingface/.gitignore.lock), and it
-        # also breaks robust resume on flaky transfers — the blob-based hub
-        # cache survives SSL ReadError mid-stream by reusing <sha>.incomplete,
-        # local_dir does not. See issue #2722.
+        # 自定义下载目录：通过环境变量将 HF 缓存指向 <dir>/hub
+        # (HF_HOME + HUGGINGFACE_HUB_CACHE) 而非 --local-dir。local_dir
+        # 产生扁平布局 (<dir>/<name>/<file>) 和 local-dir 簿记文件
+        # (.cache/huggingface/.gitignore.lock)，而且在不稳定传输中无法稳健恢复 —
+        # 基于 blob 的 hub 缓存通过重用 <sha>.incomplete 文件在 SSL ReadError
+        # 中流式中断后存活，local_dir 则不行。见 issue #2722。
         _dl_hf_home_shell = _shell_path(req.local_dir.rstrip("/")) if req.local_dir else None
         _dl_pyarg = ""  # snapshot_download honors the env vars too — no kwarg needed
 
-        # Build the hf download command. Redirection to suppress the interactive
-        # "update available? [Y/n]" prompt is added per-platform further down
-        # (< /dev/null on bash, $null | on PowerShell).
+        # 构建 hf download 命令。重定向用于抑制交互式
+        # "update available? [Y/n]" 提示，在下面按平台分别添加
+        # (< /dev/null on bash, $null | on PowerShell)。
         hf_cmd = f"hf download {req.repo_id}"
         if req.include:
             hf_cmd += f" --include '{req.include}'"
         ollama_cmd = f"ollama pull {shlex.quote(req.repo_id)}"
 
-        # Build the shell wrapper — runs hf download directly in tmux (which is a TTY)
-        # No script/tee needed — we'll use tmux capture-pane to read output
+        # 构建 shell 包装器 — 直接在 tmux 中运行 hf download（tmux 是 TTY）
+        # 无需 script/tee — 我们将使用 tmux capture-pane 读取输出
         lines = ["#!/bin/bash"]
         lines.extend(_user_shell_path_bootstrap())
         if req.hf_token:
             lines.append(f"export HF_TOKEN='{_bash_squote(req.hf_token)}'")
         if _dl_hf_home_shell and not is_ollama_download:
-            # Make hf download / snapshot_download honor the chosen dir via the
-            # standard HF cache (gives us the models--org--name/blobs/... layout
-            # with resumable .incomplete blobs).
+            # 通过标准 HF 缓存让 hf download / snapshot_download 使用所选目录
+            # （提供 models--org--name/blobs/... 布局及可恢复的 .incomplete blobs）。
             lines.append(f"export HF_HOME={_dl_hf_home_shell}")
             lines.append(f"export HUGGINGFACE_HUB_CACHE={_dl_hf_home_shell}/hub")
             lines.append(f"export HF_HUB_CACHE={_dl_hf_home_shell}/hub")
-        # Ensure pip-user scripts (e.g. hf CLI installed via --user) are on PATH
+        # 确保 pip --user 脚本（如 --user 安装的 hf CLI）在 PATH 上
         lines.append('export PATH="$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"')
-        # When Odysseus runs from a venv (e.g. native macOS install), put its bin
-        # on PATH so the tmux shell finds the bundled `hf`/`python3` without an
-        # activated venv. Local bash runs only — meaningless over SSH.
+        # Odysseus 从 venv 运行时（如原生 macOS 安装），将其 bin 目录加入
+        # PATH 以便 tmux shell 无需激活 venv 就能找到绑定的 `hf`/`python3`。
+        # 仅限本地 bash 运行 — 在 SSH 上无意义。
         if not req.remote_host:
             lines.append(_local_tooling_path_export(sys.executable))
-        # Best-effort install hf CLI (always). hf_transfer (Rust parallel downloader)
-        # is fast but flaky on large files — it tends to crash near the end at high
-        # throughput. Retries set disable_hf_transfer to fall back to the plain,
-        # slower-but-reliable downloader (resumes cleanly from the .incomplete files).
-        # Use `python3 -m pip` not `pip` — macOS has no bare `pip` command.
+        # 尽力安装 hf CLI（始终执行）。hf_transfer（Rust 并行下载器）
+        # 速度快但大文件不稳定 — 在高吞吐量下容易在末尾崩溃。
+        # 重试时设置 disable_hf_transfer 回退到普通但可靠的下载器
+        # （从 .incomplete 文件干净地恢复）。使用 `python3 -m pip` 而非 `pip`
+        # — macOS 没有独立的 `pip` 命令。
         if is_ollama_download:
             lines.append('if command -v ollama >/dev/null 2>&1; then')
             lines.append(f'  ODYSSEUS_OLLAMA_PULL_CMD={shlex.quote(ollama_cmd)}')
@@ -478,10 +475,10 @@ def setup_cookbook_routes() -> APIRouter:
                 lines.append("python3 -c 'import hf_transfer' 2>/dev/null && export HF_HUB_ENABLE_HF_TRANSFER=1")
                 lines.append("export HF_HUB_DOWNLOAD_MAX_WORKERS=8")
 
-        remote = req.remote_host  # None for local
+        remote = req.remote_host  # None 表示本地
         is_windows = req.platform == "windows"
-        # LOCAL execution on a native-Windows host never uses tmux (it uses the
-        # detached-process path below), regardless of the UI-supplied platform.
+        # 原生 Windows 主机上的本地执行永不使用 tmux（它使用下面的
+        # 分离进程路径），无论 UI 提供的平台参数如何。
         local_windows = IS_WINDOWS and not remote
         logger.info(f"Download request: repo={req.repo_id}, remote={remote}, ssh_port={req.ssh_port}, platform={req.platform}")
 
@@ -493,7 +490,7 @@ def setup_cookbook_routes() -> APIRouter:
             }
 
         if remote and is_windows:
-            # ── Windows remote: generate .ps1 runner, use Start-Process for background ──
+            # ── Windows 远程：生成 .ps1 运行器，使用 Start-Process 后台运行 ──
             remote_runner = f".{session_id}_run.ps1"
             ps_lines = []
             ps_lines.append('$sessionDir = "$env:TEMP\\odysseus-sessions"')
@@ -501,9 +498,8 @@ def setup_cookbook_routes() -> APIRouter:
             if req.hf_token:
                 ps_lines.append(f"$env:HF_TOKEN = '{_ps_squote(req.hf_token)}'")
             if req.local_dir and not is_ollama_download:
-                # Mirror the bash branch — point the HF cache at the user's dir
-                # via env vars instead of --local-dir, so resume works on flaky
-                # transfers (issue #2722).
+                # 镜像 bash 分支 — 通过环境变量将 HF 缓存指向用户的目录
+                # 而非 --local-dir，以便在不稳定传输中恢复（issue #2722）。
                 _dl_ps = _ps_squote(req.local_dir.rstrip("/"))
                 ps_lines.append(f"$env:HF_HOME = '{_dl_ps}'")
                 ps_lines.append(f"$env:HUGGINGFACE_HUB_CACHE = '{_dl_ps}/hub'")
@@ -515,11 +511,11 @@ def setup_cookbook_routes() -> APIRouter:
                 ps_lines.append(f"$null | ollama pull '{_ps_squote(req.repo_id)}'")
                 ps_lines.append('if ($LASTEXITCODE -eq 0) { Write-Host ""; Write-Host "DOWNLOAD_OK" } else { Write-Host ""; Write-Host "DOWNLOAD_FAILED (exit $LASTEXITCODE)" }')
             else:
-                # Try hf CLI, fall back to Python huggingface_hub, then auto-install
+                # 尝试 hf CLI，回退到 Python huggingface_hub，再自动安装
                 ps_lines.append('try {{')
                 ps_lines.append('  $hfPath = Get-Command hf -ErrorAction SilentlyContinue')
                 ps_lines.append('  if ($hfPath) {{')
-                # Pipe $null to stdin to suppress interactive "update available? [Y/n]" prompt
+                # 将 $null 管道到 stdin 以抑制交互式 "update available? [Y/n]" 提示
                 ps_lines.append(f'    $null | {hf_cmd}')
                 ps_lines.append('  }} else {{')
                 ps_lines.append('    python -c "import huggingface_hub" 2>$null')
@@ -544,11 +540,11 @@ def setup_cookbook_routes() -> APIRouter:
             runner_path = TMUX_LOG_DIR / f"{session_id}_run.ps1"
             runner_path.write_text("\r\n".join(ps_lines) + "\r\n", encoding="utf-8")
 
-            # scp the .ps1 script, then launch it as a detached process with log + pid files
+            # scp 上传 .ps1 脚本，然后以分离进程启动，带日志和 pid 文件
             _port = req.ssh_port
             _Pf = f"-P {_port} " if _port and _port != "22" else ""
             _pf = f"-p {_port} " if _port and _port != "22" else ""
-            # Start-Process creates a fully detached process that survives SSH disconnect
+            # Start-Process 创建完全分离的进程，在 SSH 断开后仍然存活
             launch_ps = (
                 "$sd = \\\"$env:TEMP\\odysseus-sessions\\\"; "
                 f"Start-Process powershell -ArgumentList '-ExecutionPolicy','Bypass','-File','$HOME\\{remote_runner}' "
@@ -562,11 +558,11 @@ def setup_cookbook_routes() -> APIRouter:
             )
 
         elif remote:
-            # ── Linux/Termux remote: create tmux session ON the remote host ──
+            # ── Linux/Termux 远程：在远程主机上创建 tmux 会话 ──
             remote_runner = f".{session_id}_run.sh"
             runner_lines = ["#!/bin/bash"]
             runner_lines.extend(_user_shell_path_bootstrap())
-            runner_lines.append("# Auto-detect environment")
+            runner_lines.append("# 自动检测环境")
             runner_lines.append("deactivate 2>/dev/null; hash -r")
             if req.hf_token:
                 runner_lines.append(f"export HF_TOKEN='{_bash_squote(req.hf_token)}'")
@@ -577,18 +573,17 @@ def setup_cookbook_routes() -> APIRouter:
             if req.env_prefix:
                 runner_lines.append(_safe_env_prefix(req.env_prefix))
             else:
-                # Fallback: find a venv with hf CLI, or install huggingface-hub
+                # 回退：查找具有 hf CLI 的 venv，或安装 huggingface-hub
                 runner_lines.append(
                     'for p in ~/vllm-env ~/venv ~/.venv; do '
                     'if [ -f "$p/bin/activate" ]; then source "$p/bin/activate"; break; fi; '
                     'done'
                 )
-            # Ensure pip-user scripts (e.g. hf CLI installed via --user) are on PATH
+        # 确保 pip --user 脚本（如 --user 安装的 hf CLI）在 PATH 上
             runner_lines.append('export PATH="$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"')
-            # Install hf CLI + optional hf_transfer best-effort. Retries disable
-            # hf_transfer because the Rust parallel path is fast but has been
-            # flaky near the end of very large multi-file downloads.
-            # Use --break-system-packages on PEP-668 systems (Arch, newer Debian) so it doesn't bail.
+            # 安装 hf CLI + 可选的 hf_transfer（尽力而为）。重试时禁用 hf_transfer，
+            # 因为 Rust 并行路径速度快，但在超大文件的末尾容易不稳定。
+            # 在 PEP-668 系统（Arch、新版 Debian）上使用 --break-system-packages。
             if is_ollama_download:
                 runner_lines.append('if command -v ollama >/dev/null 2>&1; then')
                 runner_lines.append(f'  ODYSSEUS_OLLAMA_PULL_CMD={shlex.quote(ollama_cmd)}')
@@ -608,12 +603,11 @@ def setup_cookbook_routes() -> APIRouter:
                     runner_lines.append(f"python3 -c 'import hf_transfer' 2>/dev/null || {_pip_install_fallback_chain('hf_transfer', python_cmd='pip')}")
                     runner_lines.append("python3 -c 'import hf_transfer' 2>/dev/null && export HF_HUB_ENABLE_HF_TRANSFER=1")
                     runner_lines.append("export HF_HUB_DOWNLOAD_MAX_WORKERS=8")
-                # Surface whether the HF token actually reached THIS server, so a gated
-                # download's "not authorized" failure can be told apart from a missing
-                # token (the token is masked — we only print applied / not-set).
+                # 输出 HF token 是否实际上到达了此服务器，以便区分受控下载的
+                # "not authorized" 失败与 token 缺失（token 被掩码 — 只输出 applied / not-set）。
                 runner_lines.append(_HF_TOKEN_STATUS_SNIPPET)
-            # Wrap the download in a retry loop. Large HF/Ollama transfers can
-            # hit transient network failures; both backends resume cached partials.
+            # 将下载包裹在重试循环中。大型 HF/Ollama 传输可能遇到
+            # 瞬时网络故障；两种后端都从缓存的未完成部分恢复。
             mw = 4 if req.disable_hf_transfer else 8
             runner_lines.append('_max_retries=10; _attempt=0; _ec=0')
             runner_lines.append('while [ $_attempt -lt $_max_retries ]; do')
@@ -649,11 +643,10 @@ def setup_cookbook_routes() -> APIRouter:
             runner_lines.append('exec "${SHELL:-/bin/bash}"')
             runner_path = TMUX_LOG_DIR / f"{session_id}_run.sh"
             runner_path.write_text("\n".join(runner_lines) + "\n", encoding="utf-8")
-            # Local temp file is scp'd then chmod'd on the remote; the local bit
-            # is irrelevant (no-op on Windows).
+            # 本地临时文件被 scp 上传到远程后 chmod；本地 chmod 无关紧要（Windows 上无操作）。
             safe_chmod(runner_path, 0o755)
 
-            # scp the runner script, then create tmux session on the remote
+            # scp 上传运行脚本，然后在远程上创建 tmux 会话
             _port = req.ssh_port
             _pf = f"-P {_port} " if _port and _port != "22" else ""
             _spf = f"-p {_port} " if _port and _port != "22" else ""
@@ -662,17 +655,17 @@ def setup_cookbook_routes() -> APIRouter:
                 f"ssh {_spf}{remote} 'chmod +x {remote_runner} && tmux new-session -d -s {session_id} \"./{remote_runner}\"'"
             )
         else:
-            # Local: run hf download in the background (tmux on POSIX, a detached
-            # process + logfile on Windows where tmux doesn't exist).
+            # 本地：在后台运行 hf download（POSIX 上用 tmux，Windows 上用
+            # 分离进程 + 日志文件替代 tmux）。
             if req.env_prefix:
                 lines.append(_safe_env_prefix(req.env_prefix))
             else:
                 lines.append("deactivate 2>/dev/null; hash -r")
-            # Show whether the HF token reached this run (masked) — tells a gated
-            # "not authorized" failure apart from a missing token.
+            # 显示 HF token 是否到达了本次运行（已掩码）— 区分受控
+            # "not authorized" 失败与 token 缺失。
             if not is_ollama_download:
                 lines.append(_HF_TOKEN_STATUS_SNIPPET)
-            # Retry loop — same rationale as the remote-bash path. Issue #2722.
+            # 重试循环 — 与远程 bash 路径同理。Issue #2722。
             _hf_invoke = 'eval "$ODYSSEUS_OLLAMA_PULL_CMD" < /dev/null' if is_ollama_download else (hf_cmd if IS_WINDOWS else f"{hf_cmd} < /dev/null")
             lines.append('_max_retries=10; _attempt=0; _ec=0')
             lines.append('while [ $_attempt -lt $_max_retries ]; do')
@@ -697,7 +690,7 @@ def setup_cookbook_routes() -> APIRouter:
         logger.info(f"Download setup_cmd: {setup_cmd}")
 
         if setup_cmd is None:
-            # LOCAL Windows: launch the bash wrapper detached; no tmux setup_cmd.
+            # 本地 Windows：分离模式启动 bash 包装器；无 tmux setup_cmd。
             try:
                 _launch_local_detached(session_id, lines)
             except Exception as e:
@@ -716,7 +709,7 @@ def setup_cookbook_routes() -> APIRouter:
                 logger.error(f"Download failed (rc={proc.returncode}): {stderr}")
                 return {"ok": False, "error": stderr, "session_id": session_id}
 
-        # Log to assistant
+        # 记录到 assistant
         try:
             from src.assistant_log import log_to_assistant
             from src.auth_helpers import get_current_user
@@ -733,11 +726,11 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.get("/api/model/cached")
     async def model_cached(request: Request, host: str | None = None, model_dir: str | None = None, ssh_port: str | None = None, platform: str | None = None):
-        """List cached models. Scans HF cache + optional model directory."""
+        """列出缓存模型。扫描 HF 缓存 + 可选模型目录。"""
         require_admin(request)
-        # Validate shell-bound inputs, matching the sibling list_gpus endpoint —
-        # `host`/`ssh_port` are interpolated into an ssh command below, so an
-        # unvalidated value (e.g. "x'; rm -rf ~ #") would be command injection.
+        # 验证 shell-bound 输入，匹配相邻的 list_gpus 端点 —
+        # `host`/`ssh_port` 在下面的 ssh 命令中被插值，所以
+        # 未经验证的值（如 "x'; rm -rf ~ #"）将是命令注入。
         host = _validate_remote_host(host)
         if ssh_port is not None and ssh_port != "" and not _SSH_PORT_RE.fullmatch(ssh_port):
             raise HTTPException(400, "Invalid ssh_port")
@@ -757,7 +750,7 @@ def setup_cookbook_routes() -> APIRouter:
         if host:
             _pf = f"-p {ssh_port} " if ssh_port and ssh_port != "22" else ""
             if platform == "windows":
-                # Windows: use 'python' and pipe via stdin with double-quote wrapping
+                # Windows：使用 'python' 并通过双引号包裹由 stdin 管道传入
                 cmd = f'ssh {_pf}{host} "python -" < \'{scan_py}\''
             else:
                 cmd = f"ssh {_pf}{host} 'python3 -' < '{scan_py}'"
@@ -768,13 +761,12 @@ def setup_cookbook_routes() -> APIRouter:
                 cwd=str(Path.home()),
             )
         else:
-            # LOCAL scan: use sys.executable (the venv Python Odysseus is already
-            # running under) — it's guaranteed real Python on all platforms.
-            # Falling back to which_tool on Windows risks hitting the Microsoft
-            # Store stub alias for "python3"/"python", which prints
-            # "Python was not found; run without arguments to install from the
-            # Microsoft Store" and exits 9009, producing empty stdout and a
-            # JSON parse error. sys.executable bypasses PATH entirely.
+            # 本地扫描：使用 sys.executable（Odysseus 正在运行的 venv Python）
+            # — 它在所有平台上都是真正的 Python。在 Windows 上回退到 which_tool
+            # 有风险会命中 Microsoft Store 存根别名 "python3"/"python"，
+            # 它会输出 "Python was not found; run without arguments to
+            # install from the Microsoft Store" 并退出 9009，导致空 stdout
+            # 和 JSON 解析错误。sys.executable 完全绕过 PATH。
             local_py = sys.executable or (
                 which_tool("python3") or which_tool("python")
                 or which_tool("py") or "python"
@@ -827,26 +819,26 @@ def setup_cookbook_routes() -> APIRouter:
         import re
         from core.database import SessionLocal, ModelEndpoint
 
-        # Parse port from command (--port NNNN), default 8100 for diffusion_server
+        # 从命令中解析端口（--port NNNN），diffusion_server 默认 8100
         port_match = re.search(r'--port\s+(\d+)', req.cmd)
         port = int(port_match.group(1)) if port_match else 8100
 
-        # Determine host
+        # 确定主机
         if remote:
-            # SSH alias — use as hostname (Tailscale resolves it later)
+            # SSH 别名 — 用作主机名（Tailscale 稍后解析）
             host = remote.split("@")[-1] if "@" in remote else remote
         else:
             host = "localhost"
 
         base_url = f"http://{host}:{port}/v1"
 
-        # Friendly display name from repo_id
+        # 从 repo_id 生成友好的显示名称
         short_name = req.repo_id.split("/")[-1] if "/" in req.repo_id else req.repo_id
         display_name = f"{short_name} (image)"
 
         db = SessionLocal()
         try:
-            # Check for existing endpoint with same base_url — update it
+            # 检查是否存在相同 base_url 的端点 — 更新它
             existing = db.query(ModelEndpoint).filter(ModelEndpoint.base_url == base_url).first()
             if existing:
                 existing.is_enabled = True
@@ -885,8 +877,8 @@ def setup_cookbook_routes() -> APIRouter:
         Cookbook Stop button can't kill."""
         import socket
         if remote:
-            # Probe over SSH. Bash's /dev/tcp gives a portable "is anything
-            # listening" check without requiring ss/netstat/nmap.
+            # 通过 SSH 探测。Bash 的 /dev/tcp 提供便携的 "是否有监听" 
+            # 检查，无需 ss/netstat/nmap。
             ssh_base = ["ssh", "-o", "ConnectTimeout=4", "-o", "StrictHostKeyChecking=no"]
             if ssh_port and str(ssh_port) != "22":
                 if not _SSH_PORT_RE.match(str(ssh_port)):
@@ -914,7 +906,7 @@ def setup_cookbook_routes() -> APIRouter:
             except Exception:
                 return None
             return None
-        # Local: just try to connect.
+        # 本地：直接尝试连接。
         for off in range(max_offset + 1):
             p = start_port + off
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -949,13 +941,13 @@ def setup_cookbook_routes() -> APIRouter:
         wait. After the last check, the watchdog gives up — the picker's
         per-endpoint probe takes over from there.
         """
-        # Cumulative wait points: 25 s, 60 s, 2 min, 5 min.
+        # 累计等待点：25 秒、60 秒、2 分钟、5 分钟。
         _waits = [25, 35, 60, 180]
-        # Tmux capture-pane equivalent of the polling path used elsewhere in
-        # this file. Build it once and reuse on each tick. Skip the watchdog
-        # entirely on native-Windows local runs (no tmux). The Windows
-        # detached-process path writes its log to a known file and has its
-        # own lifecycle tracking; punting here keeps the code simple.
+        # 本文其他地方使用的轮询路径的 Tmux capture-pane 等价。
+        # 构建一次，在每个 tick 重用。在原生 Windows 本地运行上
+        # 完全跳过着门狗（无 tmux）。Windows 分离进程路径
+        # 将其日志写入已知文件，有自己的生命周期跟踪；
+        # 在此跳过保持代码简单。
         local_win = is_windows and not remote
         if local_win:
             return
@@ -981,9 +973,9 @@ def setup_cookbook_routes() -> APIRouter:
             except Exception as e:
                 logger.debug(f"crash-watchdog: capture-pane failed (will retry): {e!r}")
                 continue
-            # Last occurrence wins — a serve that exits/restarts under the
-            # runner's "exec bash -i" trail will emit multiple markers; the
-            # most-recent code is the one that matters.
+            # 最后一次出现为准 — 在运行器 "exec bash -i" 轨迹下
+            # 退出/重启的服务会发出多个标记；
+            # 最新的代码才是重要的。
             matches = list(_exit_re.finditer(output))
             if not matches:
                 continue
@@ -992,14 +984,14 @@ def setup_cookbook_routes() -> APIRouter:
             except (ValueError, IndexError):
                 continue
             if exit_code == 0:
-                # Exit 0 on a long-running serve is unusual (a normal "loaded
-                # then ready" path keeps the process alive) but it happens for
-                # commands like "ollama pull" the user might launch through
-                # the same form. Don't drop the endpoint on a clean exit;
-                # let the probe layer mark it offline if nothing's listening.
+                # 长时间运行的服务退出码 0 是不寻常的（正常的 "加载完成
+                # 然后就绪" 路径保持进程活跃），但用户可能通过
+                # 相同表单启动的 "ollama pull" 等命令会这样。
+                # 不在干净退出时删除端点；
+                # 如果没有人在监听，让 probe 层将其标记为离线。
                 logger.info(f"crash-watchdog: serve {session_id} exited cleanly (0); leaving endpoint {endpoint_id}")
                 return
-            # Non-zero exit — drop the endpoint.
+            # 非零退出 — 删除端点。
             try:
                 from core.database import SessionLocal as _SL, ModelEndpoint as _ME
                 db = _SL()
@@ -1037,16 +1029,14 @@ def setup_cookbook_routes() -> APIRouter:
         import re
         from core.database import SessionLocal, ModelEndpoint
 
-        # Port: ordered fallbacks so we match whatever the user actually
-        # asked for, not a hardcoded default:
-        #   1. explicit `--port N`  (vllm / sglang / llama-server)
-        #   2. `OLLAMA_HOST=host:port`  (the way Ollama specifies its bind)
-        #   3. fallback by backend (11434 ollama / 8080 llama.cpp)
-        # Previously the OLLAMA_HOST form was silently ignored and we
-        # registered every Ollama endpoint at 11434 — even if the user
-        # set OLLAMA_HOST=0.0.0.0:11435 to avoid colliding with an
-        # existing systemd Ollama, the registered endpoint pointed at
-        # the OLD port and showed as offline.
+        # 端口：有序回退以匹配用户实际请求的值，而非硬编码默认值：
+        #   1. 显式 `--port N`（vllm / sglang / llama-server）
+        #   2. `OLLAMA_HOST=host:port`（Ollama 指定其绑定的方式）
+        #   3. 按后端回退（11434 ollama / 8080 llama.cpp）
+        # 之前 OLLAMA_HOST 形式被静默忽略，我们将每个 Ollama 端点
+        # 注册到 11434 — 即使用户设置 OLLAMA_HOST=0.0.0.0:11435
+        # 以避免与现有 systemd Ollama 冲突，注册的端点仍指向
+        # 旧端口并显示为离线。
         port_match = re.search(r'--port\s+(\d+)', req.cmd)
         ollama_host_match = re.search(r'OLLAMA_HOST=[^\s]*?:(\d+)', req.cmd)
         if port_match:
@@ -1058,14 +1048,13 @@ def setup_cookbook_routes() -> APIRouter:
         else:
             port = 8080  # llama.cpp's llama-server default — the Apple Silicon path
 
-        # Determine host. The cookbook tmux for `local=true` serves runs INSIDE
-        # the odysseus container — so the right URL for the in-container
-        # backend to reach it is `localhost`, NOT `host.docker.internal`
-        # (the latter points at the docker HOST, which doesn't have a server
-        # on that port). The previous host.docker.internal fallback only made
-        # sense for /setup-added external services like systemd Ollama on the
-        # host — and those go through manual setup, not this auto-register
-        # code path. For remote serves we still use the SSH host alias.
+        # 确定主机。cookbook tmux 对于 `local=true` 的服务运行在
+        # odysseus 容器内部 — 所以容器内后端访问它的正确 URL 是
+        # `localhost`，而非 `host.docker.internal`
+        #（后者指向 docker 主机，该端口上没有服务器）。
+        # 之前的 host.docker.internal 回退仅对 /setup 添加的外部服务
+        #（如主机上的 systemd Ollama）有意义 — 那些走手动设置，不走此自动注册
+        # 代码路径。对于远程服务仍使用 SSH 主机别名。
         if remote:
             host = remote.split("@")[-1] if "@" in remote else remote
         elif re.search(r"\bdocker\s+exec\s+(?:ollama-rocm|ollama-test)\b", req.cmd or ""):
@@ -1078,15 +1067,15 @@ def setup_cookbook_routes() -> APIRouter:
         short_name = req.repo_id.split("/")[-1] if "/" in req.repo_id else req.repo_id
         display_name = short_name or "Local model"
 
-        # If the serve command opts models into OpenAI tool-calling, record it so
-        # agent_loop trusts emitted tool_calls instead of the name heuristic.
+        # 如果服务命令让模型使用 OpenAI tool-calling，记录下来，
+        # 以便 agent_loop 信任发出的 tool_calls 而非名称启发式。
         is_ollama_endpoint = "ollama" in (req.cmd or "").lower()
         supports_tools = True if "--enable-auto-tool-choice" in req.cmd else None
         pinned_models = [req.repo_id] if is_ollama_endpoint and req.repo_id else []
 
         db = SessionLocal()
         try:
-            # Reuse an endpoint already pointed at this URL instead of duplicating.
+            # 重用已指向此 URL 的端点，而非重复创建。
             existing = db.query(ModelEndpoint).filter(ModelEndpoint.base_url == base_url).first()
             if existing:
                 existing.is_enabled = True
@@ -1101,9 +1090,8 @@ def setup_cookbook_routes() -> APIRouter:
                     existing.supports_tools = supports_tools
                 db.commit()
                 logger.info(f"Updated existing local model endpoint: {base_url}")
-                # Re-probe so cached_models matches what the server actually
-                # serves right now (the URL may have stayed the same but the
-                # model behind it changed across launches).
+                # 重新探测以便 cached_models 匹配服务器当前实际提供的内容
+                #（URL 可能保持不变，但背后的模型在不同启动间变了）。
                 try:
                     from routes.model_routes import _probe_endpoint
                     import json as _json2
@@ -1113,12 +1101,11 @@ def setup_cookbook_routes() -> APIRouter:
                         db.commit()
                 except Exception as _pe:
                     logger.warning(f"Re-probe failed for {base_url}: {_pe!r}")
-                # Sweep stale dupes: other endpoints with the same display name
-                # at DIFFERENT URLs (likely failed earlier-attempt ports) get
-                # deleted so the picker doesn't show an offline ghost next to
-                # the working one. Only sweeps endpoints whose id starts with
-                # `local-` so we never touch a user's hand-added DeepSeek/OpenAI/
-                # etc. entry with a coincidentally matching name.
+                # 清理陈旧重复端点：其他具有相同显示名称但不同 URL
+                # 的端点（可能是之前尝试失败的端口）被删除，
+                # 以免选择器在正常工作的端点旁边显示离线幽灵。
+                # 仅清理 id 以 `local-` 开头的端点，绝不触碰用户手动添加的
+                # DeepSeek/OpenAI/等具有巧合匹配名称的条目。
                 stale = (db.query(ModelEndpoint)
                          .filter(ModelEndpoint.name == display_name)
                          .filter(ModelEndpoint.base_url != base_url)
@@ -1147,8 +1134,8 @@ def setup_cookbook_routes() -> APIRouter:
             db.add(ep)
             db.commit()
             logger.info(f"Auto-registered local model endpoint: {display_name} @ {base_url}")
-            # Same sweep on first-register path: drop any pre-existing local-*
-            # endpoints with this display name pointed elsewhere.
+            # 首次注册路径上的相同清理：删除任何具有此显示名称
+            # 但指向其他地方且已存在的 local-* 端点。
             stale = (db.query(ModelEndpoint)
                      .filter(ModelEndpoint.name == display_name)
                      .filter(ModelEndpoint.id != ep_id)
@@ -1159,12 +1146,11 @@ def setup_cookbook_routes() -> APIRouter:
                 db.delete(s)
             if stale:
                 db.commit()
-            # Probe /v1/models NOW and write cached_models so the chat
-            # picker actually shows the model on the next /api/models
-            # call. Without this immediate probe, the endpoint has empty
-            # cached_models until the next background refresh fires (up
-            # to a minute later) and the picker shows nothing — even
-            # though the endpoint is in the DB and the server is up.
+            # 立即探测 /v1/models 并写入 cached_models，以便聊天选择器
+            # 在下次 /api/models 调用时实际显示模型。
+            # 没有这个即时探测，端点在下一次后台刷新触发前（最多
+            # 一分钟）cached_models 为空，选择器不显示任何内容 —
+            # 即使端点已在数据库中且服务器已启动。
             try:
                 from routes.model_routes import _probe_endpoint
                 import json as _json2
@@ -1185,28 +1171,25 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.post("/api/model/serve")
     async def model_serve(request: Request, req: ServeRequest):
-        """Launch a model server in a tmux session (or PowerShell background process on Windows).
+        """在 tmux 会话（或 Windows 上的 PowerShell 后台进程）中启动模型服务器。
 
-        `repo_id` is dual-purpose: a HuggingFace repo (`<org>/<name>`) for
-        model-serve commands, a cached local-model id (the folder name reported
-        by `/api/model/cached`) for models scanned from a custom model dir, OR a
-        bare pip package name when the cmd is a `python -m pip install …`. We
-        keep strict validation, but serving local cached models must not require
-        a fake org/name wrapper.
+        `repo_id` 具有双重用途：HuggingFace 仓库（`<org>/<name>`）用于模型服务命令，
+        或在从自定义模型目录扫描模型时，用作 `/api/model/cached` 返回的缓存本地模型 ID
+        （文件夹名称），或者在 cmd 是 `python -m pip install …` 时用作裸 pip 包名。
+        我们保持严格验证，但服务本地缓存模型不应要求虚构的 org/name 包装。
         """
         require_admin(request)
-        # Defence-in-depth: reject values that could break out of shell contexts.
+        # 纵深防御：拒绝可能逃逸 shell 上下文的值。
         _validate_remote_host(req.remote_host)
         req.ssh_port = _validate_ssh_port(req.ssh_port)
         req.gpus = _validate_gpus(req.gpus)
         req.hf_token = req.hf_token or _load_stored_hf_token()
         _validate_token(req.hf_token)
-        # Normalize away backslash-newline continuations (multi-line pasted
-        # serve commands) so the cleaned single-line command is what gets
-        # written into the runner script and used for engine auto-detection.
-        # `_validate_serve_cmd` returns None for empty input; coerce to "" so the
-        # many downstream `"engine" in req.cmd` membership checks can't hit
-        # `TypeError: argument of type 'NoneType'` (a 500 instead of a clean 400).
+        # 规范化处理反斜杠换行符续行（多行粘贴的服务命令），
+        # 使清理后的单行命令被写入运行器脚本并用于引擎自动检测。
+        # `_validate_serve_cmd` 对空输入返回 None；强制转为 ""，
+        # 使下游众多的 `"engine" in req.cmd` 成员检查不会触发
+        # `TypeError: argument of type 'NoneType'`（不应是 500 而应是干净的 400）。
         req.cmd = _validate_serve_cmd(req.cmd) or ""
         req.cmd = _venv_safe_local_pip_install_cmd(
             req.cmd,
@@ -1215,22 +1198,22 @@ def setup_cookbook_routes() -> APIRouter:
         )
         is_pip_install = bool(req.cmd and "pip install" in req.cmd)
         if is_pip_install:
-            # Keep big dependency wheel builds (vLLM, …) off the home filesystem's
-            # pip cache so they don't fail mid-build with "No space left" (#1219)
-            # and leave the dep installed-but-unusable (#1459).
+            # 将大型依赖 wheel 构建（vLLM 等）移出 home 文件系统的
+            # pip 缓存，以免构建中途因 "No space left" 失败 (#1219)
+            # 并留下已安装但不可用的依赖 (#1459)。
             req.cmd = _pip_install_no_cache(req.cmd)
-            # Accept common aliases and enforce server extras for llama-cpp so
-            # `python -m llama_cpp.server` has all runtime dependencies.
+            # 接受常见别名并为 llama-cpp 强制 server extras，
+            # 使 `python -m llama_cpp.server` 拥有所有运行时依赖。
             req.cmd = re.sub(r"(?<![A-Za-z0-9_.-])llama_cpp(?![A-Za-z0-9_.-])", "llama-cpp-python[server]", req.cmd)
             req.cmd = re.sub(r"(?<![A-Za-z0-9_.-])llama-cpp-python(?!\[)", "llama-cpp-python[server]", req.cmd)
             if "llama-cpp-python" in req.cmd and "--extra-index-url" not in req.cmd:
                 req.cmd += " --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu"
-            # PEP-508-style package spec — letters, digits, `.-_` for the
-            # name; `[` `]` for extras; `<>=!~,` for version specifiers.
-            # v2 review HIGH-14: tightened from the previous regex which
-            # also allowed spaces and `+`, both of which can be abused to
-            # introduce extra shell tokens once interpolated into the
-            # serve command. We now use `re.fullmatch` and drop space/`+`.
+            # PEP-508 风格包规范 — 字母、数字、`.-_` 用于名称；
+            # `[` `]` 用于 extras；`<>=!~,` 用于版本说明符。
+            # v2 review HIGH-14：从上个正则收紧，上个正则
+            # 还允许空格和 `+`，两者都可能被滥用从而在插值到
+            # 服务命令时引入额外的 shell 令牌。我们现在使用
+            # `re.fullmatch` 并移除空格/`+`。
             if not req.repo_id or not re.fullmatch(
                 r"[A-Za-z0-9][A-Za-z0-9._\-\[\]<>=!,~]{0,200}", req.repo_id
             ):
@@ -1242,16 +1225,16 @@ def setup_cookbook_routes() -> APIRouter:
         remote = req.remote_host
         is_windows = req.platform == "windows"
 
-        # Ollama: if the user didn't pin a port, resolve the actual port we'll
-        # bind to here (before runner construction) by probing the target host.
-        # Otherwise the runner script picks one at runtime and `_auto_register`
-        # below still registers the stale 11434 default — which on a host with
-        # a systemd ollama lands on the wrong (unreachable-from-docker) service.
-        # Match "ollama serve" as a phrase (with optional flags after), not
-        # any substring containing "ollama" — otherwise commands like
-        # `docker exec ollama-test ollama-import …` get wrapped as if they
-        # were native `ollama serve`, prepending OLLAMA_HOST=… and then
-        # running the ollama-not-found preflight which exits 127.
+        # Ollama：如果用户没有固定端口，在此处（构建运行器之前）
+        # 通过探测目标主机解析实际将绑定的端口。
+        # 否则运行器脚本在运行时自行选择端口，而下面的 `_auto_register`
+        # 仍注册过时的 11434 默认值 — 这在具有 systemd ollama 的
+        # 主机上会落到错误的（不可从 docker 访问的）服务。
+        # 将 "ollama serve" 作为短语匹配（后面可以有可选标志），
+        # 而非任何包含 "ollama" 的子字符串 — 否则如
+        # `docker exec ollama-test ollama-import …` 的命令会被当作
+        # 原生 `ollama serve` 来包装，在前面加上 OLLAMA_HOST=… 然后
+        # 运行 ollama-not-found preflight 并以 127 退出。
         if re.search(r"\bollama\s+serve\b", req.cmd) and "OLLAMA_HOST=" not in req.cmd:
             _ollama_bind_host = "0.0.0.0" if remote else "127.0.0.1"
             _ollama_chosen_port = _pick_free_port_for_ollama(
@@ -1259,8 +1242,8 @@ def setup_cookbook_routes() -> APIRouter:
             )
             if _ollama_chosen_port:
                 req.cmd = f"OLLAMA_HOST={_ollama_bind_host}:{_ollama_chosen_port} {req.cmd}"
-        # LOCAL execution on a native-Windows host never uses tmux (detached
-        # process path below), regardless of the UI-supplied platform.
+        # 原生 Windows 主机上的本地执行永不使用 tmux（下面的
+        # 分离进程路径），无论 UI 提供的平台参数如何。
         local_windows = IS_WINDOWS and not remote
 
         if not is_windows and not local_windows and not await _binary_available("tmux", remote, req.ssh_port):
@@ -1288,15 +1271,15 @@ def setup_cookbook_routes() -> APIRouter:
                 ps_lines.append(f"$env:CUDA_VISIBLE_DEVICES = '{req.gpus}'")
             if req.env_prefix:
                 ps_lines.append(_safe_env_prefix(req.env_prefix))
-            # Auto-install ollama if the command uses it
+            # 如果命令使用 ollama，自动安装（已在上面翻译过，不变）
             if "ollama" in req.cmd:
-                ps_lines.append('# Check if ollama is available')
+                ps_lines.append('# 检查 ollama 是否可用')
                 ps_lines.append('if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {')
                 ps_lines.append('  Write-Host "Ollama not found. Please install from https://ollama.com/download/windows"')
                 ps_lines.append('  exit 1')
                 ps_lines.append('}')
             elif "llama_cpp" in req.cmd or "llama-server" in req.cmd:
-                ps_lines.append('# Auto-install llama-cpp-python if missing')
+                ps_lines.append('# 如果缺失，自动安装 llama-cpp-python')
                 ps_lines.append('try { python -c "import llama_cpp" 2>$null } catch {}')
                 ps_lines.append('if ($LASTEXITCODE -ne 0) {')
                 ps_lines.append('  Write-Host "Installing llama-cpp-python..."')
@@ -1330,16 +1313,14 @@ def setup_cookbook_routes() -> APIRouter:
         else:
             # ── Linux/Termux: bash + tmux (existing flow) ──
             runner_lines = ["#!/bin/bash"]
-            # Mirror every line of stdout+stderr into a persistent log file
-            # on the host running the serve. This is the file tail_serve_output
-            # reads when the tmux pane has been overwritten by the post-crash
-            # bash prompt — without it, the agent's diagnostic tool sees the
-            # neofetch banner instead of the actual Python traceback.
-            # We save the original fds to 3/4 so we can RESTORE them before
-            # `exec ${SHELL}` at the end of the script. Without that restore,
-            # the post-crash interactive shell's neofetch banner ALSO gets
-            # teed into the log file and `tail -N` returns ONLY the banner —
-            # the actual traceback ends up earlier than the tail window.
+            # 将 stdout+stderr 的每一行镜像到运行服务的主机上的持久日志文件中。
+            # 当 tmux 窗格在崩溃后被 bash 提示符覆盖时，
+            # tail_serve_output 读取此文件 — 没有它，agent 的诊断工具看到的是
+            # neofetch 横幅而不是实际的 Python traceback。
+            # 我们将原始文件描述符保存到 3/4，以便在脚本末尾的
+            # `exec ${SHELL}` 之前恢复它们。没有该恢复的话，
+            # 崩溃后交互式 shell 的 neofetch 横幅也会被 tee 到日志文件，
+            # `tail -N` 只返回横幅 — 实际的 traceback 在 tail 窗口之前。
             runner_lines.append("mkdir -p /tmp/odysseus-tmux 2>/dev/null || true")
             runner_lines.append("exec 3>&1 4>&2")
             runner_lines.append(
@@ -1347,8 +1328,8 @@ def setup_cookbook_routes() -> APIRouter:
             )
             runner_lines.extend(_user_shell_path_bootstrap())
             runner_lines.append('ODYSSEUS_PREFLIGHT_EXIT=""')
-            # Put Odysseus's own venv bin on PATH (local runs only) so the serve
-            # shell resolves the bundled python3/hf, mirroring the download flow.
+            # 将 Odysseus 自己的 venv bin 加入 PATH（仅限本地运行），
+            # 以便 serve shell 解析绑定的 python3/hf，镜像下载流程。
             if not remote:
                 runner_lines.append(_local_tooling_path_export(sys.executable))
             runner_lines.append("export FLASHINFER_DISABLE_VERSION_CHECK=1")
@@ -1360,23 +1341,23 @@ def setup_cookbook_routes() -> APIRouter:
                 runner_lines.append(_safe_env_prefix(req.env_prefix))
             else:
                 runner_lines.append("deactivate 2>/dev/null; hash -r")
-            # Show whether the HF token reached this server (masked) — a gated
-            # model vLLM has to download will be denied without it.
+            # 显示 HF token 是否到达了此服务器（已掩码）— 受控的
+            # vLLM 需要下载的模型，没有它会被拒绝。
             runner_lines.append(_HF_TOKEN_STATUS_SNIPPET)
             handled_ollama_serve = False
-            # Auto-install inference engine if missing
+            # 如果推理引擎缺失，自动安装
             if "llama_cpp" in req.cmd or "llama-server" in req.cmd:
-                # Prefer the NATIVE llama-server binary — its minja templating
-                # renders modern GGUF chat templates that the Python bindings'
-                # Jinja2 rejects (do_tojson ensure_ascii). Build it once from
-                # source if missing; keep llama-cpp-python only as a fallback.
-                runner_lines.append('# Ensure a llama.cpp server (prefer native llama-server)')
-                # Include the Homebrew bin dirs so a brew-installed llama-server /
-                # ollama is found (otherwise macOS falls back to a slow source build).
-                # /opt/homebrew = Apple Silicon, /usr/local = Intel; harmless on Linux.
+                # 优先使用 NATIVE llama-server 二进制文件 — 它的 minja 模板
+                # 渲染现代 GGUF 聊天模板，Python 绑定的 Jinja2 无法处理
+                #（do_tojson ensure_ascii）。如果缺失从源码构建一次；
+                # llama-cpp-python 仅作为后备。
+                runner_lines.append('# 确保 llama.cpp 服务器（优先原生 llama-server）')
+                # 包含 Homebrew bin 目录，以便找到通过 brew 安装的 llama-server /
+                # ollama（否则 macOS 回退到缓慢的源码构建）。
+                # /opt/homebrew = Apple Silicon, /usr/local = Intel；在 Linux 上无害。
                 runner_lines.append('export PATH="$HOME/.local/bin:$HOME/bin:$HOME/llama.cpp/build/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"')
                 runner_lines.append('if [ -d /data/data/com.termux ]; then')
-                runner_lines.append('  # Termux: no native build — use the Python bindings (CPU).')
+                runner_lines.append('  # Termux：无原生构建 — 使用 Python 绑定（CPU）。')
                 runner_lines.append('  if ! python3 -c "import llama_cpp" 2>/dev/null; then')
                 runner_lines.append('    pkg install -y cmake 2>/dev/null')
                 runner_lines.append('    pip install numpy diskcache jinja2 2>/dev/null')
@@ -1386,25 +1367,24 @@ def setup_cookbook_routes() -> APIRouter:
                 runner_lines.append('  echo "Native llama-server not found — building from source (one-time, may take a few minutes)..."')
                 runner_lines.append('  mkdir -p ~/bin')
                 runner_lines.append('  cd ~ && [ -d llama.cpp ] || git clone --depth 1 https://github.com/ggml-org/llama.cpp')
-                # Build with the right accelerator: Metal on macOS (llama.cpp
-                # enables it automatically, no flag), CUDA on Linux when present,
-                # else a plain CPU build. nproc is Linux-only — fall back to
-                # `sysctl hw.ncpu` on macOS. (Tip: `brew install llama.cpp` ships
-                # a prebuilt llama-server and skips this whole source build.)
+                # 使用正确的加速器构建：macOS 上 Metal（llama.cpp 自动启用，无需标志），
+                # Linux 上有 CUDA 时用它，否则纯 CPU 构建。
+                # nproc 仅 Linux 可用 — 在 macOS 上回退到 `sysctl hw.ncpu`。
+                #（提示：`brew install llama.cpp` 提供预构建的 llama-server 跳过整个源码构建。）
                 runner_lines.append('  NPROC="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"')
                 runner_lines.append('  if [ "$(uname -s)" = "Darwin" ]; then')
                 runner_lines.append('    command -v cmake >/dev/null 2>&1 || echo "WARNING: cmake not found — install it with: brew install cmake (or: brew install llama.cpp for a prebuilt llama-server)."')
-                # Start from a clean cache: a prior failed configure (e.g. a CUDA
-                # attempt) poisons build/CMakeCache.txt, so a plain `cmake -B build`
-                # would reuse the bad settings and fail again. CMAKE_BUILD_TYPE is
-                # explicit so the binary is optimized (Metal auto-enables on macOS).
+                # 从干净的缓存开始：之前失败的配置（如 CUDA 尝试）
+                # 会污染 build/CMakeCache.txt，所以普通的 `cmake -B build`
+                # 会重用错误设置并再次失败。显式设置 CMAKE_BUILD_TYPE
+                # 以确保二进制文件优化（macOS 上 Metal 自动启用）。
                 runner_lines.append('    cd ~/llama.cpp && rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release \\')
                 runner_lines.append('      && cmake --build build -j"$NPROC" --target llama-server \\')
                 runner_lines.append('      && ln -sf ~/llama.cpp/build/bin/llama-server ~/bin/llama-server')
                 runner_lines.append('  else')
                 _append_llama_cpp_linux_accel_build_lines(runner_lines)
                 runner_lines.append('  fi')
-                runner_lines.append('  # If the native build failed, fall back to the Python bindings.')
+                runner_lines.append('  # 如果原生构建失败，回退到 Python 绑定。')
                 runner_lines.append('  if ! command -v llama-server &>/dev/null && ! python3 -c "import llama_cpp" 2>/dev/null; then')
                 runner_lines.append('    echo "llama-server build failed — installing Python bindings as fallback..."')
                 runner_lines.append(f"    {_pip_install_fallback_chain('llama-cpp-python[server]', python_cmd='pip')} || true")
@@ -1421,11 +1401,10 @@ def setup_cookbook_routes() -> APIRouter:
                     req.cmd,
                     default_host=_ollama_default_host,
                 )
-                # Always launch a fresh ollama under tmux so Stop reliably
-                # kills it. If the requested port is busy (e.g. a systemd
-                # ollama on 11434), scan upward for a free one rather than
-                # silently reattaching to an external service that Stop
-                # can't reach.
+                # 始终在 tmux 下启动新的 ollama，以便 Stop 可靠地杀死它。
+                # 如果请求的端口被占用（如 systemd ollama 在 11434 上），
+                # 向上扫描寻找空闲端口，而非静默重连到一个 Stop 无法
+                # 触及的外部服务。
                 runner_lines.append(f'ODYSSEUS_OLLAMA_HOST={_bash_squote(_ollama_host)}')
                 runner_lines.append(f'ODYSSEUS_OLLAMA_PORT="{_ollama_port}"')
                 runner_lines.append('for _ody_off in 0 1 2 3 4 5 6 7 8 9; do')
@@ -1459,9 +1438,9 @@ def setup_cookbook_routes() -> APIRouter:
                 runner_lines.append('  echo "ERROR: vLLM does not run on macOS. Use Ollama or llama.cpp (Metal) instead."')
                 runner_lines.append('  ODYSSEUS_PREFLIGHT_EXIT=1')
                 runner_lines.append('fi')
-                # Put ~/.local/bin on PATH first — without a venv, vllm installs
-                # there via --user and the non-login serve shell otherwise can't
-                # find the `vllm` CLI ("command not found"). Mirrors llama.cpp above.
+                # 首先将 ~/.local/bin 加入 PATH — 没有 venv 时，vllm 通过 --user
+                # 安装到那里，非登录 serve shell 否则找不到 `vllm` CLI
+                #（"command not found"）。镜像上面的 llama.cpp。
                 runner_lines.append('export PATH="$HOME/.local/bin:$PATH"')
                 runner_lines.append('if ! command -v vllm &>/dev/null; then')
                 runner_lines.append('  echo "ERROR: vLLM is not installed."')
@@ -1510,15 +1489,15 @@ def setup_cookbook_routes() -> APIRouter:
                 )
                 runner_lines.append(req.cmd)
                 if local_windows:
-                    # Detached background process — no interactive shell to keep open.
-                    # Print the exit marker the status poller looks for, then stop.
+                    # 分离后台进程 — 无需保持交互式 shell 打开。
+                    # 打印状态轮询器查找的退出标记，然后停止。
                     _append_serve_exit_code_lines(
                         runner_lines,
                         keep_shell_open=False,
                         is_pip_install=is_pip_install,
                     )
                 else:
-                    # Keep shell open after exit so user can see errors
+                    # 退出后保持 shell 打开，以便用户可以看到错误
                     _append_serve_exit_code_lines(
                         runner_lines,
                         keep_shell_open=True,
@@ -1527,16 +1506,16 @@ def setup_cookbook_routes() -> APIRouter:
 
             runner_path = TMUX_LOG_DIR / f"{session_id}_run.sh"
             runner_path.write_text("\n".join(runner_lines) + "\n", encoding="utf-8")
-            # chmod is a no-op on Windows; bash on Windows runs the script
-            # regardless of the executable bit.
+            # chmod 在 Windows 上无操作；Windows 上的 bash 运行脚本
+            # 不受可执行位影响。
             safe_chmod(runner_path, 0o755)
 
             if local_windows:
-                # LOCAL Windows: launch the bash runner detached (tmux replacement).
+                # 本地 Windows：以分离模式启动 bash 运行器（tmux 替代方案）。
                 setup_cmd = None
             elif remote:
                 remote_runner = f".{session_id}_run.sh"
-                # If command references scripts/, scp those too
+                # 如果命令引用了 scripts/，也 scp 它们
                 scp_extras = ""
                 _port = req.ssh_port
                 _Pf = f"-P {_port} " if _port and _port != "22" else ""
@@ -1561,7 +1540,7 @@ def setup_cookbook_routes() -> APIRouter:
                 setup_cmd = f"tmux new-session -d -s {session_id} {shlex.quote(str(runner_path))}"
 
         if setup_cmd is None:
-            # LOCAL Windows: launch the bash runner detached; no tmux setup_cmd.
+            # 本地 Windows：以分离模式启动 bash 运行器；无 tmux setup_cmd。
             try:
                 _launch_local_detached(session_id, runner_lines)
             except Exception as e:
@@ -1579,10 +1558,10 @@ def setup_cookbook_routes() -> APIRouter:
                 stderr = (await proc.stderr.read()).decode(errors="replace")
                 return {"ok": False, "error": stderr, "session_id": session_id}
 
-        # Auto-register a model endpoint so the served model shows up in the model
-        # picker with no manual /setup step. Diffusion models get an image
-        # endpoint; any other real model serve (i.e. not a pip-install task) gets
-        # a local LLM endpoint pointed at its /v1.
+        # 自动注册模型端点，以便服务的模型无需手动 /setup 步骤
+        # 就能出现在模型选择器中。Diffusion 模型获得 image 端点；
+        # 任何其他真正的模型服务（即非 pip-install 任务）获得
+        # 指向其 /v1 的本地 LLM 端点。
         endpoint_id = None
         is_diffusion = "diffusion_server.py" in req.cmd
         if is_diffusion:
@@ -1590,17 +1569,16 @@ def setup_cookbook_routes() -> APIRouter:
         elif not is_pip_install:
             endpoint_id = _auto_register_llm_endpoint(req, remote)
 
-        # Crash watchdog: the auto-register above writes the endpoint row
-        # IMMEDIATELY (before the server has even bound its port) so the
-        # picker shows the model as it warms up. When the serve process
-        # crashes right at startup (missing module, bad cmd, port collision,
-        # ModuleNotFoundError on llama_cpp, etc.), the endpoint is left
-        # dangling — every subsequent chat returns 503 or an empty response.
-        # Schedule a background task to read the tmux output for the
-        # "=== Process exited with code N ===" marker the runner emits;
-        # if N != 0 within the watch window, delete the endpoint we just
-        # created. Skipped for diffusion (different image-endpoint cleanup
-        # path) and pip-install tasks (no endpoint to drop).
+        # 崩溃看门狗：上面的自动注册会立即写入端点行
+        #（甚至在服务器绑定端口之前），以便选择器在模型预热时显示它。
+        # 当服务进程在启动时立即崩溃（缺失模块、错误命令、端口冲突、
+        # ModuleNotFoundError on llama_cpp 等），端点会被遗留为
+        # dangling — 每次后续聊天返回 503 或空响应。
+        # 调度后台任务读取运行器发出的
+        # "=== Process exited with code N ===" 标记的 tmux 输出；
+        # 如果在观察窗口内 N != 0，删除我们刚创建的端点。
+        # 对 diffusion（不同的 image-endpoint 清理路径）和 pip-install
+        # 任务（没有端点需要删除）跳过。
         if endpoint_id and not is_diffusion and not is_pip_install:
             asyncio.create_task(_serve_crash_watchdog(
                 endpoint_id=endpoint_id,
@@ -1610,7 +1588,7 @@ def setup_cookbook_routes() -> APIRouter:
                 is_windows=is_windows,
             ))
 
-        # Log to assistant
+        # 记录到 assistant
         try:
             from src.assistant_log import log_to_assistant
             from src.auth_helpers import get_current_user
@@ -1635,7 +1613,7 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.post("/api/cookbook/setup")
     async def server_setup(request: Request, req: SetupRequest):
-        """Install required dependencies on a remote server via SSH."""
+        """通过 SSH 在远程服务器上安装所需依赖。"""
         require_admin(request)
         host = _validate_remote_host(req.host)
         if not host:
@@ -1645,7 +1623,7 @@ def setup_cookbook_routes() -> APIRouter:
             raise HTTPException(400, "Invalid ssh_port")
         pf = f"-p {port} " if port and port != "22" else ""
 
-        # Detect platform: Windows first (echo %OS% → Windows_NT), then Termux, then Linux
+        # 检测平台：先 Windows（echo %OS% → Windows_NT），再 Termux，最后 Linux
         detect_cmd = f'ssh {pf}{host} "echo %OS%"'
         platform = "linux"
         try:
@@ -1657,7 +1635,7 @@ def setup_cookbook_routes() -> APIRouter:
             if "Windows_NT" in out:
                 platform = "windows"
             else:
-                # Check for Termux
+                # 检查 Termux
                 detect_cmd2 = f"ssh {pf}{host} 'test -d /data/data/com.termux && echo termux || echo linux'"
                 proc2 = await asyncio.create_subprocess_shell(
                     detect_cmd2, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -1668,8 +1646,8 @@ def setup_cookbook_routes() -> APIRouter:
             platform = "linux"
 
         if platform == "windows":
-            # Windows setup: ensure Python + pip + huggingface-hub via PowerShell
-            # Also create the session directory for background tasks
+            # Windows 设置：通过 PowerShell 确保 Python + pip + huggingface-hub
+            # 同时为后台任务创建会话目录
             setup_script = (
                 'powershell -Command "'
                 "New-Item -ItemType Directory -Force -Path $env:TEMP\\odysseus-sessions | Out-Null; "
@@ -1688,11 +1666,11 @@ def setup_cookbook_routes() -> APIRouter:
             )
             cmd = f"ssh {pf}{host} '{setup_script}'"
         else:
-            # Linux: auto-install tmux (via whichever package manager is available)
-            # and huggingface_hub + hf_transfer (falling back to --user/--break-system-packages
-            # on PEP-668 locked distros like Arch / newer Debian).
+            # Linux：自动安装 tmux（通过可用的包管理器）
+            # 和 huggingface_hub + hf_transfer（在 PEP-668 锁定的发行版
+            # 如 Arch / 新版 Debian 上回退到 --user/--break-system-packages）。
             setup_script = (
-                # Install tmux if missing — try common package managers; skip if no sudo
+                # 如果缺失安装 tmux — 尝试常见包管理器；无 sudo 则跳过
                 "if ! command -v tmux >/dev/null 2>&1; then "
                 "  if command -v apt-get >/dev/null 2>&1; then sudo -n apt-get install -y tmux 2>/dev/null; "
                 "  elif command -v pacman >/dev/null 2>&1; then sudo -n pacman -S --noconfirm tmux 2>/dev/null; "
@@ -1702,7 +1680,7 @@ def setup_cookbook_routes() -> APIRouter:
                 "  fi; "
                 "fi; "
                 "command -v tmux >/dev/null 2>&1 || echo 'WARNING: tmux missing and auto-install failed (need passwordless sudo). Install manually.'; "
-                # Install Python bits. Try system install first; fall back to --user --break-system-packages on PEP 668 systems.
+                # 安装 Python 组件。先尝试系统安装；在 PEP 668 系统上回退到 --user --break-system-packages。
                 "pip install -q huggingface_hub hf_transfer 2>/dev/null || "
                 "pip install --user --break-system-packages -q huggingface_hub hf_transfer 2>/dev/null || "
                 "pip3 install --user --break-system-packages -q huggingface_hub hf_transfer 2>/dev/null; "
@@ -1726,7 +1704,7 @@ def setup_cookbook_routes() -> APIRouter:
     # ── GPU availability probe ──
 
     async def _run_nvidia_smi(query: str, host: str | None, ssh_port: str | None, timeout: int = 8):
-        """Run nvidia-smi locally or over SSH. Returns (stdout, error_or_None)."""
+        """在本地或通过 SSH 运行 nvidia-smi。返回 (stdout, error_or_None)。"""
         if host:
             pf = f"-p {ssh_port} " if ssh_port and ssh_port != "22" else ""
             cmd = f"ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no {pf}{host} '{query}'"
@@ -1749,7 +1727,7 @@ def setup_cookbook_routes() -> APIRouter:
         return stdout.decode("utf-8", errors="replace"), None
 
     async def _run_gpu_shell(cmd_text: str, host: str | None, ssh_port: str | None, timeout: int = 8):
-        """Run a small GPU probe shell command locally or over SSH."""
+        """在本地或通过 SSH 运行小型 GPU 探针 shell 命令。"""
         if host:
             pf = f"-p {ssh_port} " if ssh_port and ssh_port != "22" else ""
             quoted_cmd = shlex.quote(cmd_text)
@@ -1845,10 +1823,10 @@ def setup_cookbook_routes() -> APIRouter:
             total_mb = max(0, int(total_bytes / (1024 * 1024)))
             used_mb = max(0, min(total_mb, int(used_bytes / (1024 * 1024))))
             free_mb = max(0, total_mb - used_mb)
-            # GTT = the system-RAM pool the GPU pages into when VRAM is full.
-            # On a discrete card a large gtt_used means the model spilled past
-            # VRAM into RAM over PCIe — much slower. Surface it so the UI can
-            # warn "spilling to RAM" instead of the user wondering why it's slow.
+            # GTT = GPU 在 VRAM 满时将页面换入的系统 RAM 池。
+            # 在独立显卡上，大的 gtt_used 表示模型通过 PCIe
+            # 溢出 VRAM 到了 RAM — 速度极慢。将其暴露出来以便 UI 可以
+            # 警告"spilling to RAM"，而不是让用户疑惑为什么这么慢。
             gtt_used_raw = await _gpu_read_file(f"{base}/mem_info_gtt_used", host, ssh_port)
             gtt_used_mb = max(0, int(int(gtt_used_raw) / (1024 * 1024))) if (gtt_used_raw and gtt_used_raw.isdigit()) else 0
             gpus.append({
@@ -1928,7 +1906,7 @@ def setup_cookbook_routes() -> APIRouter:
                 "busy": busy, "processes": [],
             })
 
-        # Best-effort process listing — skip silently if it fails
+        # 尽力列进程 — 失败时静默跳过
         proc_query = "nvidia-smi --query-compute-apps=pid,gpu_uuid,process_name,used_memory --format=csv,noheader,nounits"
         try:
             proc_out, proc_err = await _run_nvidia_smi(proc_query, host, ssh_port, timeout=5)
@@ -1956,11 +1934,11 @@ def setup_cookbook_routes() -> APIRouter:
         if gpus:
             return {"ok": True, "gpus": gpus, "backend": "cuda", "source": "nvidia-smi"}
 
-        # Local Apple Silicon / Metal fallback. macOS has no nvidia-smi and no
-        # Linux /sys/class/drm tree, but services.hwfit.hardware already knows
-        # how to size the shared unified-memory GPU budget. Keep this route in
-        # sync so Cookbook's GPU picker doesn't show "nvidia-smi not found" on
-        # native Mac launches.
+        # 本地 Apple Silicon / Metal 回退。macOS 没有 nvidia-smi 也没有
+        # Linux /sys/class/drm 树，但 services.hwfit.hardware 已经知道
+        # 如何计算共享统一内存 GPU 预算。保持此路由同步，
+        # 以便 Cookbook 的 GPU 选择器在原生 Mac 启动时不显示
+        # "nvidia-smi not found"。
         if not host and sys.platform == "darwin":
             try:
                 from services.hwfit.hardware import detect_system
@@ -2029,15 +2007,14 @@ def setup_cookbook_routes() -> APIRouter:
         pid: int
         host: str | None = None
         ssh_port: str | None = None
-        signal: str = "TERM"  # TERM (graceful) or KILL (force)
+        signal: str = "TERM"  # TERM（优雅）或 KILL（强制）
 
     @router.post("/api/cookbook/kill-pid")
     async def kill_pid(request: Request, req: KillPidRequest):
-        """Kill a PID that's holding GPU memory.
+        """杀死正在占用 GPU 内存的 PID。
 
-        Admin-gated. Validates PID is positive int, signal is TERM/KILL, and
-        forbids low PIDs (<100) to avoid accidentally signalling init/system
-        daemons. Uses `kill -<sig> <pid>` locally or over SSH.
+        需要管理员权限。验证 PID 为正整数，信号为 TERM/KILL，并禁止低 PID（<100）
+        以避免意外信号 init/系统守护进程。使用 `kill -<sig> <pid>` 在本地或通过 SSH 执行。
         """
         require_admin(request)
         if req.pid < 100:
@@ -2057,11 +2034,11 @@ def setup_cookbook_routes() -> APIRouter:
                     cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
             elif IS_WINDOWS:
-                # No `kill` binary / POSIX signals on Windows. taskkill /F /T tears
-                # down the PID and its children. There's no graceful-vs-force
-                # distinction, so TERM/KILL/INT all map to the same forced kill.
-                # NB: never use os.kill(pid, 0) to probe here — on Windows that
-                # routes to TerminateProcess and would kill the process.
+                # Windows 上没有 `kill` 二进制文件 / POSIX 信号。taskkill /F /T 会终止
+                # PID 及其子进程。没有优雅-vs-强制的区分，
+                # 所以 TERM/KILL/INT 都映射到相同的强制杀死。
+                # 注意：永远不要在这里用 os.kill(pid, 0) 探针 — 在 Windows 上
+                # 这会路由到 TerminateProcess 并杀死进程。
                 if not pid_alive(req.pid):
                     return {"ok": False, "error": f"PID {req.pid} is not running"}
                 await asyncio.to_thread(kill_process_tree, req.pid)
@@ -2085,7 +2062,7 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.get("/api/cookbook/state")
     async def get_cookbook_state(request: Request):
-        """Load saved cookbook state (tasks, servers, presets, settings)."""
+        """加载已保存的 cookbook 状态（任务、服务器、预设、设置）。"""
         require_admin(request)
         if _cookbook_state_path.exists():
             try:
@@ -2096,18 +2073,16 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.post("/api/cookbook/state")
     async def save_cookbook_state(request: Request):
-        """Save cookbook state for cross-device sync.
+        """保存 cookbook 状态用于跨设备同步。
 
-        Admin-gated because cookbook state is read back into shell-quoting
-        contexts when polling tmux session status (see status handler).
+        需要管理员权限，因为 cookbook 状态在轮询 tmux 会话状态时会被读回
+        shell-quoting 上下文中（见 status handler）。
 
-        Merge guard: the UI debounces a `_syncToServer` POST every few
-        seconds with whatever localStorage has. The agent's tool layer
-        writes server-side tasks (e.g. `download_model` registering a
-        task). Without a merge, every UI sync wipes the agent's recent
-        additions. We preserve any on-disk task that the incoming body
-        omits but was added in the last RACE_WINDOW seconds — that's a
-        race, not an intentional delete.
+        合并保护：UI 每隔几秒用 localStorage 的内容防抖 POST 一次 `_syncToServer`。
+        agent 的工具层会写入服务端任务（如 `download_model` 注册任务）。
+        没有合并的话，每次 UI 同步都会清除 agent 最近添加的任务。
+        我们保留任何不在传入请求体中但最近 RACE_WINDOW 秒内添加的磁盘任务 —
+        那只是竞争条件，并非有意删除。
         """
         require_admin(request)
         RACE_WINDOW_MS = 60_000
@@ -2123,13 +2098,11 @@ def setup_cookbook_routes() -> APIRouter:
                     on_disk = {}
             except Exception:
                 on_disk = {}
-            # Anti-wipe guard for env servers. The UI debounces a
-            # sync of whatever is in memory; if it fires before the state has
-            # hydrated from GET /state (a load-time race) or during a render
-            # glitch, `env.servers` would be empty and silently overwrite the
-            # saved servers on disk. Never let an empty/absent incoming
-            # env.servers clobber a populated on-disk one — preserve the disk
-            # values while still accepting the rest of the incoming env.
+            # env servers 防擦除保护。UI 防抖同步内存中的任何内容；
+            # 如果在 GET /state 的水合完成之前触发（加载时竞争条件）
+            # 或在渲染故障期间，`env.servers` 将为空并静默覆盖
+            # 磁盘上保存的服务器。绝不让空的/缺失的传入 env.servers
+            # 覆盖磁盘上已填充的值 — 保留磁盘值同时接受传入 env 的其余部分。
             disk_env = on_disk.get("env") if isinstance(on_disk, dict) and isinstance(on_disk.get("env"), dict) else None
             if disk_env:
                 inc_env = data.get("env") if isinstance(data.get("env"), dict) else None
@@ -2142,12 +2115,11 @@ def setup_cookbook_routes() -> APIRouter:
 
             disk_tasks = on_disk.get("tasks") or [] if isinstance(on_disk, dict) else []
             incoming_tasks = data.get("tasks") if isinstance(data.get("tasks"), list) else []
-            # Anti-poisoning guard: a stale browser tab can keep POSTing a
-            # download task as status='done' from before the strict-finish
-            # fix landed, undoing any server-side correction. For each
-            # incoming "done" download, override to "running" if the last
-            # shard pattern says N<total AND no DOWNLOAD_OK/DOWNLOAD_FAILED/
-            # /snapshots/ sentinel is in the output.
+            # 防污染保护：陈旧的浏览器标签页可能持续 POST 下载任务
+            # 状态为 'done'（在严格完成修复落地之前），
+            # 撤销任何服务端修正。对每个传入的 "done" 下载，
+            # 如果最后一个分片模式显示 N<total 且输出中没有
+            # DOWNLOAD_OK/DOWNLOAD_FAILED//snapshots/ 标记，则覆盖为 "running"。
             import re as _re_dl
             for _it in incoming_tasks:
                 if (not isinstance(_it, dict)) or _it.get("type") != "download" or _it.get("status") != "done":
@@ -2194,16 +2166,16 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.get("/api/cookbook/hf-latest")
     async def hf_latest(vram_gb: float = 0, limit: int = 10, pipeline: str = "text-generation", owner: str = Depends(require_user)):
-        """Fetch latest HuggingFace models, filtered by what fits in available VRAM.
+        """获取最新的 HuggingFace 模型，按能装入可用 VRAM 的条件过滤。
 
-        vram_gb: total available VRAM in GB. 0 = no filter (return everything).
-        limit:   how many models to return (default 10).
-        pipeline: HF pipeline_tag filter (text-generation, text-to-image, etc.).
+        vram_gb: 可用总 VRAM（GB）。0 = 不过滤（返回全部）。
+        limit:   返回多少模型（默认 10）。
+        pipeline: HF pipeline_tag 过滤器（text-generation, text-to-image 等）。
         """
         import re
         import httpx
 
-        # Fetch a larger pool so we have enough to filter from (we drop ~80%)
+        # 获取更大的池以便有足够内容过滤（我们会丢弃约 80%）
         pool_size = max(limit * 15, 100)
         url = (
             "https://huggingface.co/api/models"
@@ -2218,8 +2190,8 @@ def setup_cookbook_routes() -> APIRouter:
         except Exception as e:
             return {"models": [], "error": str(e)}
 
-        # Estimate VRAM from the model id. Looks for patterns like "7B", "70B", "1.5B" etc.
-        # Returns approx VRAM in GB at fp16 (params*2). Caller adjusts for quant.
+        # 从模型 id 估算 VRAM。查找类似 "7B"、"70B"、"1.5B" 等的模式。
+        # 返回 fp16 下近似的 VRAM（GB）（参数数*2）。调用者根据量化调整。
         def _est_vram_fp16(repo_id: str) -> float | None:
             m = re.search(r'[-_/](\d+(?:\.\d+)?)\s*[Bb](?![a-zA-Z])', repo_id)
             if not m:
@@ -2227,7 +2199,7 @@ def setup_cookbook_routes() -> APIRouter:
             params_b = float(m.group(1))
             return params_b * 2.0  # fp16 baseline
 
-        # Detect quantization from repo_id / tags. Returns a multiplier on fp16 size.
+        # 从 repo_id / tags 检测量化。返回 fp16 大小的乘数。
         def _quant_factor(repo_id: str, tags: list) -> float:
             text = (repo_id + " " + " ".join(tags or [])).lower()
             if "fp4" in text or "nf4" in text or "int4" in text or "4bit" in text or "q4" in text or "awq" in text or "gptq" in text:
@@ -2238,7 +2210,7 @@ def setup_cookbook_routes() -> APIRouter:
                 return 1.0
             return 1.0  # default fp16
 
-        # Exclude adapters, LoRAs, datasets, GGUF-only repos, and other non-runnable artifacts
+        # 排除适配器、LoRAs、数据集、仅 GGUF 仓库和其他不可运行的构件
         EXCLUDE_TAG_SUBSTRINGS = (
             "lora", "adapter", "peft", "qlora",
             "dataset", "embeddings",
@@ -2272,29 +2244,28 @@ def setup_cookbook_routes() -> APIRouter:
             tags = entry.get("tags") or []
             pipeline_tag = entry.get("pipeline_tag") or ""
 
-            # Hard filter: only the requested pipeline (HF's filter param is loose)
+            # 硬过滤：仅请求的 pipeline（HF 的 filter 参数较宽松）
             if pipeline and pipeline_tag and pipeline_tag != pipeline:
                 continue
-            # Skip adapters, LoRAs, datasets, etc.
+            # 跳过适配器、LoRAs、数据集等。
             if _is_excluded(repo_id, tags):
                 continue
 
             est_fp16 = _est_vram_fp16(repo_id)
             quant_mult = _quant_factor(repo_id, tags)
             est_vram = (est_fp16 * quant_mult) if est_fp16 else None
-            # Add 30% headroom for KV cache, activations, etc.
+            # 为 KV 缓存、激活等增加 30% 余量。
             needed_vram = (est_vram * 1.3) if est_vram else None
 
             if vram_gb > 0 and needed_vram is not None and needed_vram > vram_gb:
                 continue
-            # Unknown-size models (e.g. MiniMax-M2.7, DeepSeek-V4-Flash) have no
-            # "NB" in the repo id, so the regex above can't extract their
-            # param count. Previously we dropped them entirely, which made
-            # brand-new flagship releases silently vanish from this list even
-            # on rigs with hundreds of GB of VRAM. Adapters/LoRAs are already
-            # filtered by _is_excluded(), so what falls through here is
-            # overwhelmingly full models — keep them, just without a size
-            # badge (the frontend handles needed_vram_gb=null gracefully).
+            # 未知大小模型（如 MiniMax-M2.7, DeepSeek-V4-Flash）的仓库 id 中
+            # 没有 "NB"，所以上面的正则无法提取其参数数量。
+            # 之前我们完全丢弃它们，导致全新的旗舰版即使在
+            # 数百 GB VRAM 的机器上也从列表中静默消失。
+            # 适配器/LoRAs 已被 _is_excluded() 过滤，
+            # 所以落到这里的基本上都是完整模型 — 保留它们，
+            # 只是不带大小标记（前端会优雅处理 needed_vram_gb=null）。
 
             out.append({
                 "repo_id": repo_id,
@@ -2311,22 +2282,19 @@ def setup_cookbook_routes() -> APIRouter:
 
         return {"models": out}
 
-    # Rate-limit for the orphan-tmux adoption sweep. 60s interval so SSH
-    # work is genuinely sparse even on an actively-polled cookbook page.
+    # 孤儿 tmux 采纳扫描的速率限制。60s 间隔使 SSH 工作
+    # 即使在活跃轮询的 cookbook 页面上也真正稀疏。
     _last_orphan_sweep_ts = [0.0]
     _ORPHAN_SWEEP_MIN_INTERVAL_S = 60.0
-    # Concurrency guard so two requests racing don't both spawn a sweep.
+    # 并发保护，防止两个竞态请求都触发扫描。
     _orphan_sweep_inflight = [False]
 
     def _maybe_sweep_orphans(tasks: list, state: dict) -> None:
-        """Scan each configured cookbook server for `serve-*` tmux sessions
-        the cookbook doesn't know about and adopt them into state.tasks.
-
-        Heavy SSH work runs in a background thread via asyncio.to_thread so
-        it never blocks the request that triggered it. Was previously
-        disabled because the sync implementation pegged uvicorn CPU during
-        active cookbook polling — re-enabled now with the work pushed off
-        the event loop and a slower (60s) cadence.
+        """扫描每个已配置的 cookbook 服务器上的 `serve-*` tmux 会话并
+        将它们采纳到 state.tasks 中。繁重的 SSH 工作在 asyncio.to_thread
+        的后台线程中运行，所以永不阻塞触发请求。之前因为同步实现在活跃
+        cookbook 轮询期间耗尽 uvicorn CPU 而被禁用 —
+        现在重新启用，将工作推离事件循环并使用较慢的（60s）节奏。
         """
         import time as _time
         now = _time.monotonic()
@@ -2336,15 +2304,15 @@ def setup_cookbook_routes() -> APIRouter:
             return
         _last_orphan_sweep_ts[0] = now
         _orphan_sweep_inflight[0] = True
-        # Snapshot inputs so the worker doesn't race with state mutations.
+        # 快照输入，使工作线程不与状态变更竞态。
         try:
             tasks_snap = list(tasks or [])
         except Exception:
             tasks_snap = []
         state_snap = state if isinstance(state, dict) else {}
 
-        # Caller is _cookbook_tasks_status_sync (sync context, no event
-        # loop). Use a plain background thread — no asyncio needed.
+        # 调用者是 _cookbook_tasks_status_sync（同步上下文，无事件循环）。
+        # 使用普通后台线程 — 不需要 asyncio。
         import threading
         def _run_sweep() -> None:
             try:
@@ -2361,7 +2329,7 @@ def setup_cookbook_routes() -> APIRouter:
         return
 
     def _sync_sweep_orphans(tasks: list, state: dict) -> None:
-        """The actual sync sweep — never call this on the event loop."""
+        """实际的同步扫描 — 绝不在事件循环中调用。"""
         import subprocess
         env = state.get("env") if isinstance(state, dict) else {}
         servers = env.get("servers") if isinstance(env, dict) else []
@@ -2403,18 +2371,16 @@ def setup_cookbook_routes() -> APIRouter:
                     continue
                 if sid in known_sids:
                     continue
-                # Adopt any session whose pane is currently running a
-                # known model-server process (checked below). The earlier
-                # prefix gate (serve-/cookbook-) dropped legitimate
-                # serves whenever tmux fell back to numeric IDs, leaving
-                # them invisible in the Cookbook UI — so the user could
-                # neither see nor stop them.
-                # Skip zombie / idle-shell sessions. A tmux session left
-                # over from a crashed vllm just shows a bash prompt —
-                # adopting it would pollute the UI with "running" tasks
-                # that aren't actually serving anything. pane_current_command
-                # is the foreground process in the pane right now; only
-                # real model serves leave a python/vllm/etc. process there.
+                # 采纳任何窗格当前正在运行已知模型服务进程的会话
+                #（下面检查）。之前的 prefix gate（serve-/cookbook-）
+                # 在 tmux 回退到数字 ID 时丢弃了合法的服务，
+                # 使其在 Cookbook UI 中不可见 — 所以用户
+                # 既看不到也无法停止它们。
+                # 跳过僵尸/空闲 shell 会话。崩溃的 vllm 留下的 tmux 会话
+                # 只显示 bash 提示符 — 采纳它会用 "running" 任务污染 UI，
+                # 而这些任务实际上并未提供任何服务。pane_current_command
+                # 是窗格中当前的前台进程；只有真正的模型服务会留下
+                # python/vllm/等进程。
                 try:
                     pc = subprocess.run(
                         ssh_base + [host, "tmux", "list-panes", "-t", sid,
@@ -2429,9 +2395,9 @@ def setup_cookbook_routes() -> APIRouter:
                               "ollama", "node", "uvicorn"}
                 if not any(c in LIVE_PROCS for c in cur):
                     continue
-                # Try to recover a plausible repo_id + port from the
-                # pane buffer. Cheap heuristic — if we can't, register
-                # with placeholder fields; the UI still shows it.
+                # 尝试从窗格缓冲区恢复合理的 repo_id + 端口。
+                # 廉价启发式 — 如果做不到，用占位字段注册；
+                # UI 仍会显示它。
                 try:
                     cap = subprocess.run(
                         ssh_base + [host, "tmux", "capture-pane", "-t", sid, "-p", "-S", "-300"],
@@ -2441,8 +2407,8 @@ def setup_cookbook_routes() -> APIRouter:
                 except Exception:
                     pane = ""
                 import re as _re_orphan
-                # vLLM banner: "model   /path/...". Falls back to the
-                # raw vllm-serve command if the banner already scrolled.
+                # vLLM 横幅："model   /path/..."。如果横幅已滚出
+                # 则回退到原始 vllm-serve 命令。
                 m_model = _re_orphan.search(r"model\s+(\S+)", pane)
                 model = m_model.group(1) if m_model else ""
                 if not model:
@@ -2486,10 +2452,10 @@ def setup_cookbook_routes() -> APIRouter:
             except Exception as e:
                 logger.warning(f"orphan sweep: state write failed: {e}")
 
-    # In-memory cache for the Ollama library scrape. ollama.com is a public
-    # site, but it doesn't expose a stable JSON listing — we fetch the HTML
-    # search page and regex out the model cards. Cached for 1 h so a busy
-    # cookbook view doesn't hammer the site on every render.
+    # Ollama 库抓取的内存缓存。ollama.com 是公开网站，
+    # 但不提供稳定的 JSON 列表 — 我们抓取 HTML 搜索页面并
+    # 用正则提取模型卡片。缓存 1 小时，使繁忙的 cookbook 视图
+    # 不会在每次渲染时冲击网站。
     _ollama_library_cache: dict = {"models": [], "fetched_at": 0.0, "error": None}
 
     _OLLAMA_FALLBACK_LIBRARY = [
@@ -2527,10 +2493,9 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.get("/api/cookbook/ollama/library")
     async def ollama_library(refresh: int = 0, request: Request = None, owner: str = Depends(require_user)):
-        """List popular Ollama library models for the Browse picker.
+        """列出 Browse 选择器中流行的 Ollama 库模型。
 
-        Tries a 1-hour-cached fetch of ollama.com/library, falls back to a
-        curated hard-coded list so the picker always renders something."""
+        尝试获取 ollama.com/library 的 1 小时缓存，回退到精心维护的硬编码列表以便选择器始终能显示内容。"""
         import time as _time
         import httpx as _httpx
         TTL = 3600.0
@@ -2546,17 +2511,17 @@ def setup_cookbook_routes() -> APIRouter:
                     )
                 if resp.status_code == 200:
                     html = resp.text
-                    # ollama.com renders each model card as a single anchor:
+                    # ollama.com 将每个模型卡片渲染为单个锚点：
                     #   <a href="/library/<name>" class="group w-full"> … </a>
-                    # The description + sizes live inside that anchor. Pull
-                    # the whole block then extract pieces individually.
+                    # 描述和大小都在该锚点内。提取整个块
+                    # 然后单独提取各部分。
                     block_re = re.compile(
                         r'<a[^>]*href="/library/([A-Za-z0-9._-]+)"[^>]*>(.*?)</a>',
                         re.DOTALL,
                     )
                     desc_re = re.compile(r'<p[^>]*>([^<]{4,400})</p>', re.DOTALL)
-                    # Size tags on ollama.com cards look like "0.5b", "14b",
-                    # "8x7b", "27b". Pulled from short <span>-wrapped chips.
+                    # ollama.com 卡片上的大小标签如 "0.5b"、"14b"、
+                    # "8x7b"、"27b"。从短 <span> 包裹的芯片中提取。
                     size_re = re.compile(r'>\s*(\d+(?:\.\d+)?(?:x\d+)?[bBmM])\s*<')
                     seen: set[str] = set()
                     for bm in block_re.finditer(html):
@@ -2568,7 +2533,7 @@ def setup_cookbook_routes() -> APIRouter:
                         dm = desc_re.search(body)
                         desc = (dm.group(1).strip() if dm else "").replace("\n", " ")
                         sizes_raw = size_re.findall(body)
-                        # Dedup sizes preserving order
+                        # 去重大小保持顺序
                         sizes: list[str] = []
                         for s in sizes_raw:
                             s_low = s.lower()
@@ -2581,9 +2546,9 @@ def setup_cookbook_routes() -> APIRouter:
                     err = f"HTTP {resp.status_code}"
             except Exception as e:
                 err = str(e)[:160]
-            # Merge curated fallback so classics (qwen2.5, llama3, deepseek-r1,
-            # …) stay reachable even when ollama.com's front page is dominated
-            # by brand-new releases the user might not be looking for.
+            # 合并精选回退，使经典模型（qwen2.5, llama3, deepseek-r1,
+            # …）即使在 ollama.com 首页被用户可能不想要的
+            # 全新版本占据时仍可访问。
             live_names = {m["name"] for m in models}
             for fb in _OLLAMA_FALLBACK_LIBRARY:
                 if fb["name"] not in live_names:
@@ -2603,12 +2568,11 @@ def setup_cookbook_routes() -> APIRouter:
 
     @router.get("/api/cookbook/tasks/status")
     async def cookbook_tasks_status(request: Request):
-        """Check status of all active cookbook tmux sessions.
+        """检查所有活跃 cookbook tmux 会话的状态。
 
-        Critical: every subprocess.run inside this handler is a sync blocking
-        call that — when this was a plain async def — froze the entire server
-        event loop. Now the whole body runs in a worker thread via
-        asyncio.to_thread so other requests stay responsive."""
+        关键：此处理器内的每个 subprocess.run 都是同步阻塞调用，
+        当它是纯 async def 时会冻结整个服务器事件循环。
+        现在整个主体在 asyncio.to_thread 中的工作线程内运行，以便其他请求保持响应。"""
         require_admin(request)
         return await asyncio.to_thread(_cookbook_tasks_status_sync)
 
@@ -2616,13 +2580,12 @@ def setup_cookbook_routes() -> APIRouter:
         import subprocess
 
         def _download_cache_complete(repo_id: str, remote_host: str = "", ssh_port: str = "") -> bool:
-            """Best-effort check for a completed HF cache entry.
+            """尽力检查已完成的 HF 缓存条目。
 
-            tmux output can stop at a stale progress line if the pane/session
-            disappears before Cookbook captures the final DOWNLOAD_OK marker.
-            In that case, trust the cache shape: a snapshot directory with files
-            and no *.incomplete blobs means HuggingFace finished materializing the
-            model.
+            tmux 输出可能在 Cookbook 捕获到最终 DOWNLOAD_OK 标记之前，
+            因 disappearing pane/session 而停留在过时的进度行。
+            这种情况下，信任缓存形态：存在快照目录且没有 *.incomplete
+            blobs 表示 HuggingFace 已完成模型物化。
             """
             if not repo_id or "/" not in repo_id:
                 return False
@@ -2653,11 +2616,11 @@ def setup_cookbook_routes() -> APIRouter:
                 return False
 
         def _download_cache_incomplete(repo_id: str, remote_host: str = "", ssh_port: str = "") -> bool:
-            """Best-effort check for resumable HF partial blobs.
+            """尽力检查可恢复的 HF 未完成 blob。
 
-            A lost SSH/tmux session can leave a real download still incomplete.
-            Treat any *.incomplete blob as stronger evidence than stale
-            "100%" lines in the captured pane output.
+            丢失的 SSH/tmux 会话可能导致真实下载仍处于未完成状态。
+            将任何 *.incomplete blob 视为比捕获的窗格输出中过时的
+            "100%" 行更有力的证据。
             """
             if not repo_id or "/" not in repo_id:
                 return False
@@ -2684,7 +2647,7 @@ def setup_cookbook_routes() -> APIRouter:
             except Exception:
                 return False
 
-        # Load saved tasks from cookbook state
+        # 从 cookbook 状态加载已保存的任务
         tasks = []
         state = {}
         if _cookbook_state_path.exists():
@@ -2698,16 +2661,16 @@ def setup_cookbook_routes() -> APIRouter:
             except Exception:
                 pass
 
-        # Orphan-tmux auto-adoption sweep. When the agent (or anyone)
-        # SSH-launches a `serve-*` tmux session — usually because
-        # serve_model rejected `source ... && vllm ...` or because of a
-        # manual relaunch via tmux send-keys — that session is invisible
-        # to the cookbook UI even though it's a live model server. The
-        # sweep finds those orphans on each configured remote host and
-        # writes them into state.tasks with _adoptedExternally=True, so
-        # they show up in the UI on the next poll without anyone having
-        # to remember to call adopt_served_model. Rate-limited via the
-        # module-level _last_orphan_sweep so we don't SSH every 3s.
+        # 孤儿 tmux 自动采纳扫描。当 agent（或任何人）通过 SSH
+        # 启动 `serve-*` tmux 会话时 — 通常是因为 serve_model
+        # 拒绝了 `source ... && vllm ...` 或因为通过 tmux send-keys
+        # 手动重新启动 — 该会话在 cookbook UI 中不可见，
+        # 即使它是正在运行的模型服务器。扫描在每个已配置的
+        # 远程主机上找到这些孤儿，并以 _adoptedExternally=True
+        # 写入 state.tasks，这样它们在下一次轮询时显示在 UI 中，
+        # 无需任何人记住调用 adopt_served_model。
+        # 通过模块级 _last_orphan_sweep 进行速率限制，
+        # 防止每 3 秒 SSH 一次。
         try:
             _maybe_sweep_orphans(tasks, state)
         except Exception as _sweep_e:
@@ -2720,9 +2683,9 @@ def setup_cookbook_routes() -> APIRouter:
                 continue
             remote = task.get("remoteHost", "")
             task_type = task.get("type", "download")  # "download" or "serve"
-            # Field name varies depending on whether the task was added
-            # via the download flow (`repoId`), the serve flow (`modelId`),
-            # or the UI-side serve preset (which uses `name` + `payload.repo_id`).
+            # 字段名根据任务是通过下载流程（`repoId`）、
+            # 服务流程（`modelId`）还是 UI 端服务预设
+            # （使用 `name` + `payload.repo_id`）添加的而有所不同。
             _payload = task.get("payload") or {}
             model = (
                 task.get("modelId")
@@ -2734,11 +2697,11 @@ def setup_cookbook_routes() -> APIRouter:
             )
             task_platform = task.get("platform", "")
 
-            # Check if session is alive + capture output
+            # 检查会话是否存活 + 捕获输出
             _tport = task.get("sshPort", "")
-            # Defense-in-depth: cookbook state is admin-writable but the values
-            # land in shell-interpolated commands below. Reject anything that
-            # isn't a benign session-id / hostname / port.
+            # 纵深防御：cookbook 状态是管理员可写的，但这些值会
+            # 落入下面的 shell 插值命令中。拒绝任何非良性的
+            # session-id / hostname / port 值。
             if not _SESSION_ID_RE.match(session_id):
                 logger.warning(f"Skipping task with unsafe session_id: {session_id!r}")
                 continue
@@ -2749,7 +2712,7 @@ def setup_cookbook_routes() -> APIRouter:
                 logger.warning(f"Skipping task with unsafe sshPort: {_tport!r}")
                 continue
             if task_platform == "windows" and remote:
-                # Windows: check PID file + Get-Process, read log tail
+                # Windows：检查 PID 文件 + Get-Process，读取日志尾部
                 sd = "$env:TEMP\\odysseus-sessions"
                 ssh_base = ["ssh"]
                 if _tport and _tport != "22":
@@ -2772,16 +2735,15 @@ def setup_cookbook_routes() -> APIRouter:
                 if _tport and _tport != "22":
                     ssh_base.extend(["-p", str(_tport)])
                 check_cmd = ssh_base + [remote, "tmux", "has-session", "-t", session_id]
-                # Capture 500 lines (was 50) so a Python traceback survives
-                # the post-crash neofetch banner + bash prompt that otherwise
-                # fills the visible tail. Without this, output_tail ends up
-                # as just "Locale: C / Ubuntu_Odysseus ❯" and the agent
-                # can't diagnose the actual error.
+                # 捕获 500 行（原来是 50），以便 Python traceback 在崩溃后的
+                # neofetch 横幅 + bash 提示符之前存活下来，否则这些会填满
+                # 可见尾部。没有这个，output_tail 最终只是
+                # "Locale: C / Ubuntu_Odysseus ❯"，agent 无法诊断实际错误。
                 capture_cmd = ssh_base + [remote, "tmux", "capture-pane", "-t", session_id, "-p", "-S", "-500"]
             elif IS_WINDOWS:
-                # LOCAL Windows task: launched as a detached process (no tmux).
-                # Liveness comes from the <session>.pid file, output from the
-                # <session>.log file the wrapper redirects into. No subprocess.
+                # 本地 Windows 任务：作为分离进程启动（无 tmux）。
+                # 存活状态来自 <session>.pid 文件，输出来自包装器
+                # 重定向到的 <session>.log 文件。无子进程。
                 check_cmd = None
                 capture_cmd = None
             else:
@@ -2794,7 +2756,7 @@ def setup_cookbook_routes() -> APIRouter:
             full_snapshot = ""
 
             if local_win_task:
-                # File-based liveness + output for the detached-process model.
+                # 分离进程模型的基于文件的存活状态 + 输出。
                 pid_path = TMUX_LOG_DIR / f"{session_id}.pid"
                 log_path = TMUX_LOG_DIR / f"{session_id}.log"
                 task_pid = None
@@ -2817,19 +2779,18 @@ def setup_cookbook_routes() -> APIRouter:
                 except Exception:
                     pass
             else:
-                # Skip the live SSH check entirely for tasks already in a
-                # terminal state — they won't change, and 10s timeouts
-                # stacked per task were the dominant cost of this whole
-                # status endpoint (3+ minute stalls with ~8 accumulated
-                # stopped tasks). The agent's `list_served_models` call
-                # was blocking the chat stream every time.
+                # 对于已处于终端状态的任务，完全跳过实时 SSH 检查 —
+                # 它们不会改变，而每个任务堆叠的 10s 超时
+                # 是整个状态端点的主要成本（约 8 个积累的停止
+                # 任务导致 3+ 分钟的停滞）。agent 的 `list_served_models`
+                # 调用每次都在阻塞聊天流。
                 _task_status = (task.get("status") or "").lower()
                 if _task_status in {"stopped", "done", "completed",
                                     "crashed", "error", "failed",
                                     "ended", "killed"}:
                     is_alive = False
-                    # Keep the persisted output_tail for the UI — it's
-                    # what the agent uses to diagnose past failures.
+                    # 保留持久化的 output_tail 给 UI — 这是 agent
+                    # 用来诊断过去失败的内容。
                     full_snapshot = (task.get("output") or "")[-12000:]
                 else:
                     try:
@@ -2838,9 +2799,9 @@ def setup_cookbook_routes() -> APIRouter:
                     except Exception:
                         is_alive = False
 
-                    # Capture last lines for progress. Prefer the "Downloading" line
-                    # (real aggregate bytes) over "Fetching N files" (whole-file count that
-                    # lags with hf_transfer). Falls back to the true last line otherwise.
+                    # 捕获最后几行获取进度。优先 "Downloading" 行
+                    # （真实聚合字节数）而非 "Fetching N files"（在 hf_transfer
+                    # 下滞后的整文件计数）。否则回退到真正的最后一行。
                     if is_alive:
                         try:
                             cap = subprocess.run(capture_cmd, timeout=4, capture_output=True, text=True)
@@ -2855,10 +2816,10 @@ def setup_cookbook_routes() -> APIRouter:
                         except Exception:
                             pass
 
-            # Determine status. For the local-Windows detached model the log file
-            # persists after the process exits, so a finished download still has a
-            # snapshot to classify (DOWNLOAD_OK / exit marker) — evaluate it even
-            # when the PID is gone instead of blindly reporting "stopped".
+            # 确定状态。对于本地 Windows 分离模型，进程退出后日志文件
+            # 仍然存在，所以已完成的下载仍有快照可供分类
+            # （DOWNLOAD_OK / 退出标记）— 即使 PID 不存在也要评估，
+            # 而不是盲目报告 "stopped"。
             download_zero_files = False
             status = "unknown"
             download_has_ok = task_type == "download" and "DOWNLOAD_OK" in full_snapshot
@@ -2878,11 +2839,11 @@ def setup_cookbook_routes() -> APIRouter:
                 exit_code = int(exit_match.group(1)) if exit_match else None
                 has_error = "error" in lower or "failed" in lower or "traceback" in lower
                 if has_exit and task_type == "serve":
-                    # Serve tasks that exit are always errors — they should run indefinitely
+                    # 退出的服务任务始终是错误 — 它们应该无限期运行
                     status = "error"
                 elif has_exit and task_type == "download":
-                    # Dependency installs are tracked as download tasks but only
-                    # emit the generic runner exit marker, not HF download markers.
+                    # 依赖安装被跟踪为下载任务，但只发出
+                    # 通用的运行器退出标记，不发出 HF 下载标记。
                     if download_has_incomplete_evidence and not download_has_ok:
                         status = "running" if is_alive else "stopped"
                     else:
@@ -2909,7 +2870,7 @@ def setup_cookbook_routes() -> APIRouter:
                 else:
                     status = "running"
             else:
-                # Session is dead — check if it completed or crashed
+                # 会话已死 — 检查它是完成还是崩溃了
                 if (
                     task_type == "download"
                     and not download_has_incomplete_evidence
@@ -2923,7 +2884,7 @@ def setup_cookbook_routes() -> APIRouter:
                 else:
                     status = "stopped"
 
-            # Parse structured phase info — single source of truth for the UI
+            # 解析结构化阶段信息 — UI 的单一事实来源
             phase_info = _parse_serve_phase(full_snapshot, task_type) if (task_type == "serve" and full_snapshot) else {}
             if phase_info.get("status") == "ready":
                 status = "ready"

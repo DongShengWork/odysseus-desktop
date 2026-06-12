@@ -1,8 +1,7 @@
-"""Compatibility re-export shim for the live ranking module.
+"""活动排名模块的兼容性重导出垫片。
 
-The real implementation lives in :mod:`services.search.ranking`, which is what
-the search runtime (services/search/core.py) imports. This module used to hold a
-parallel copy; it now re-exports so the two cannot drift out of sync again.
+真实实现位于 :mod:`services.search.ranking`，搜索运行时（services/search/core.py）直接导入该模块。
+此模块曾包含一份并行拷贝；现在已改为重导出，以防止两份实现再次出现不同步。
 """
 
 from services.search.ranking import (  # noqa: F401

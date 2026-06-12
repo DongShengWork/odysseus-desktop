@@ -1,5 +1,5 @@
 # src/middleware.py
-# Shared middleware, decorators, and request helpers
+# 共享中间件、装饰器和请求辅助函数
 
 import os
 import secrets
@@ -9,32 +9,31 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 
-# Per-process token that lets the in-app tool layer hit admin-gated
-# routes via HTTP loopback (the agent's tool calls don't carry the
-# admin user's session cookie). Set once at import; tools read the
-# same value from this module. Never persisted or exposed externally.
+# 进程内令牌，允许应用内工具层通过 HTTP 回环
+# 访问管理员门控路由（agent 的工具调用不携带
+# 管理员的会话 cookie）。在导入时设置一次；工具从此模块读取
+# 相同的值。绝不会被持久化或对外暴露。
 INTERNAL_TOOL_TOKEN = os.environ.get("ODYSSEUS_INTERNAL_TOKEN") or secrets.token_hex(32)
 INTERNAL_TOOL_HEADER = "X-Odysseus-Internal-Token"
 
 
 def is_cors_preflight(method: str, headers) -> bool:
-    """True for a genuine CORS preflight: an OPTIONS request carrying the
-    Access-Control-Request-Method header. Such requests are credential-less by
-    design and must reach CORSMiddleware to be answered -- gating them on auth
-    401s the preflight and breaks every cross-origin browser/WebView client.
-    Pure so it can be unit-tested without standing up the app."""
+    """判断是否为真正的 CORS 预检请求：携带 Access-Control-Request-Method
+    头的 OPTIONS 请求。此类请求在设计上不携带凭据，必须传递给
+    CORSMiddleware 进行处理——在认证层拦截会导致 401，从而破坏所有
+    跨域浏览器/WebView 客户端。纯函数，无需启动应用即可进行单元测试。"""
     return method == "OPTIONS" and "access-control-request-method" in headers
 
 
 def require_admin(request: Request):
-    """Raise 403 if the current user isn't an admin.
-    Allows access when auth is explicitly disabled, or when the request carries
-    the in-process internal-tool token used by loopback agent tools.
+    """如果当前用户不是管理员则抛出 403。
+    当认证被显式禁用，或请求携带回环 agent 工具使用的
+    进程内内部令牌时，允许访问。
     """
-    # In-process bypass for tool-layer loopback calls. Two paths:
-    # (a) header-direct (caller set X-Odysseus-Internal-Token), or
-    # (b) the auth middleware already validated the token and stamped
-    #     request.state.current_user = "internal-tool".
+    # 工具层回环调用的进程内绕过。两种路径：
+    # (a) header-direct（调用者设置了 X-Odysseus-Internal-Token），或
+    # (b) 认证中间件已验证令牌并将
+    #     request.state.current_user 标记为 "internal-tool"。
     try:
         hdr = request.headers.get(INTERNAL_TOOL_HEADER)
         if hdr and secrets.compare_digest(hdr, INTERNAL_TOOL_TOKEN):
@@ -55,22 +54,22 @@ def require_admin(request: Request):
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Add standard security headers to all responses."""
+    """为所有响应添加标准安全头。"""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # Generate a per-request nonce for inline scripts
+        # 为内联脚本生成每个请求的随机数
         nonce = secrets.token_hex(16)
         request.state.csp_nonce = nonce
 
         response = await call_next(request)
         path = request.url.path
 
-        # Tool render endpoints are served inside iframes — allow framing by self
+        # 工具渲染端点在 iframe 内提供 — 允许自身框架化
         is_tool_render = path.startswith("/api/tools/") and path.endswith("/render")
-        # PDF previews are embedded by the in-app document library. Keep the
-        # exception route-scoped so normal app pages remain unframeable.
+        # PDF 预览由应用内文档库嵌入。保持
+        # 此例外限定在路由范围内，以便普通应用页面保持不可框架化。
         is_document_pdf_preview = path.startswith("/api/document/") and path.endswith("/render-pdf")
-        # Visual report pages are self-contained HTML — need inline scripts + external images
+        # 可视化报告页面是自包含的 HTML — 需要内联脚本 + 外部图片
         is_report = path.startswith("/api/research/report/")
 
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -95,9 +94,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "frame-ancestors 'none'"
             )
         elif is_tool_render:
-            # Tool iframe content: skip all framing headers — the iframe's
-            # sandbox="allow-scripts" attribute provides isolation.
-            # Don't overwrite the route's own restrictive CSP either.
+            # 工具 iframe 内容：跳过所有框架化头 — iframe 的
+            # sandbox="allow-scripts" 属性提供了隔离。
+            # 也不要覆盖路由自身的限制性 CSP。
             pass
         elif is_document_pdf_preview:
             response.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -107,12 +106,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
         else:
             response.headers["X-Frame-Options"] = "DENY"
-            # NOTE: `style-src 'unsafe-inline'` is intentionally retained.
-            # `static/index.html` and `static/login.html` ship inline <style>
-            # blocks, and several JS modules build runtime `style=""` attrs.
-            # Migrating to nonce-only requires templating the HTML files +
-            # auditing every JS-set style attribute. Since inline styles
-            # don't execute script, the residual risk is visual-only.
+            # 注意：`style-src 'unsafe-inline'` 是故意保留的。
+            # `static/index.html` 和 `static/login.html` 包含内联 <style>
+            # 块，并且多个 JS 模块构建运行时 `style=""` 属性。
+            # 迁移到仅 nonce 需要模板化 HTML 文件 +
+            # 审计每个 JS 设置的 style 属性。由于内联样式
+            # 不执行脚本，残留风险仅限于视觉效果。
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
                 f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "

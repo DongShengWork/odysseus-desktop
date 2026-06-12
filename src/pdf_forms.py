@@ -1,20 +1,20 @@
-"""PDF AcroForm field detection and extraction.
+"""PDF AcroForm 字段检测和提取。
 
-Used to decide whether an uploaded PDF should be treated as a fillable form
-(routed to the pdf_form document type) versus a regular text PDF (routed
-through document_processor._process_pdf).
+用于判断上传的 PDF 是否应按可填充表单处理
+（路由到 pdf_form 文档类型）还是作为普通文本 PDF
+（路由通过 document_processor._process_pdf）。
 """
 
 import logging
 import re
 from typing import Any
 
-# PyMuPDF is an OPTIONAL dependency (AGPL-3.0), required ONLY for the PDF
-# form-filling feature implemented in this module. The MIT core imports fine
-# without it; calling these functions without PyMuPDF raises a clear error.
-# See requirements-optional.txt.
+# PyMuPDF 是一个可选依赖（AGPL-3.0），仅用于本模块实现的 PDF
+# 表单填充功能。MIT 核心在没有它的情况下可以正常导入；
+# 在没有 PyMuPDF 的情况下调用这些函数会引发明确的错误。
+# 参见 requirements-optional.txt。
 try:
-    import fitz  # PyMuPDF — optional, AGPL-3.0
+    import fitz  # PyMuPDF — 可选，AGPL-3.0
 except ImportError:  # pragma: no cover
     fitz = None
 
@@ -27,7 +27,7 @@ _PYMUPDF_MISSING = (
 
 
 def _require_fitz():
-    """Raise a clear error if the optional PyMuPDF dependency is absent."""
+    """如果缺少可选的 PyMuPDF 依赖，引发明确的错误。"""
     if fitz is None:
         raise RuntimeError(_PYMUPDF_MISSING)
     return fitz
@@ -45,29 +45,29 @@ def _widget_type_names() -> dict:
         fitz.PDF_WIDGET_TYPE_SIGNATURE: "signature",
     }
 
-# Text widgets that are really signature placeholders. Covers DocuSign-style
-# "_es_:signature" and the bare "signed N" / "Signature" patterns common in
-# UK conveyancing forms (TA6, TA10). Uses substring match deliberately —
-# false positives like "assigned" are rare in form-field names.
+# 实际是签名占位符的文本控件。涵盖 DocuSign 风格的
+# "_es_:signature" 以及英国产权转让表格（TA6、TA10）中常见的
+# 裸 "signed N" / "Signature" 模式。有意使用子串匹配 —
+# 像 "assigned" 这样的误报在表单字段名称中很少见。
 _SIGNATURE_NAME_RE = re.compile(r'sign(?:ed|ature)', re.IGNORECASE)
 
 
 def has_form_fields(path: str) -> bool:
-    """Return True if the PDF looks like a *fillable form* — not just a
-    content PDF that happens to carry a stray widget.
+    """如果 PDF 看起来像一个*可填充表单* — 而不仅仅是恰好
+    带有一两个孤立控件的纯内容 PDF，则返回 True。
 
-    Excel-exported PDFs (Japanese estimates, invoices, etc.) often ship with
-    one or two orphan AcroForm widgets (a signature stamp box, a leftover
-    text field from the source template) even when they're really
-    content-only documents. Treating those as forms routes them through the
-    form-fill chat prompt that ASKS the user which field to edit instead of
-    discussing the content — which is exactly the bug we're trying to avoid.
+    Excel 导出的 PDF（日本估价单、发票等）通常附带有
+    一两个孤立的 AcroForm 控件（签名印章框、源模板留下的
+    文本字段），即使它们实际上是纯内容文档。
+    将它们视为表单会将它们路由到表单填充聊天提示，
+    该提示询问用户要编辑哪个字段而不是讨论内容 —
+    这正是我们要避免的问题。
 
-    Heuristic: require at least 3 non-signature widgets. Signature-only
-    PDFs (e.g. a contract with one sign-here box) read as content, and tiny
-    stray-widget counts no longer hijack the chat. Genuine UK conveyancing
-    forms (TA6, TA10) and similar carry dozens of widgets and still trip
-    this threshold easily.
+    启发式规则：要求至少 3 个非签名控件。纯签名
+    PDF（例如带有一个签名字段的合同）当作内容读取，
+    而少量孤立控件不再劫持聊天。真正的英国产权转让
+    表格（TA6、TA10）及类似文件包含数十个控件，
+    仍能轻松触及此阈值。
     """
     _require_fitz()
     try:
@@ -89,12 +89,12 @@ def has_form_fields(path: str) -> bool:
 
 
 def _infer_label(page: "fitz.Page", rect: "fitz.Rect", page_words: list) -> str:
-    """Best-effort label inference from text near a widget.
+    """从控件附近的文本进行尽力标签推断。
 
-    Strategy: prefer text immediately to the left on the same line,
-    then text immediately above. Returns the closest non-empty match
-    or "" if nothing useful is found. AcroForm field_label is rarely
-    populated in real-world forms, so this fallback matters.
+    策略：优先选择同一行上左侧紧邻的文本，
+    然后选择紧靠上方的文本。返回最近的非空匹配
+    或在没有有用内容时返回 ""。AcroForm field_label 在
+    实际表单中很少被填充，因此此回退很重要。
     """
     candidates_left = []
     candidates_above = []
@@ -104,10 +104,10 @@ def _infer_label(page: "fitz.Page", rect: "fitz.Rect", page_words: list) -> str:
         wx0, wy0, wx1, wy1, text = w[0], w[1], w[2], w[3], w[4]
         if not text.strip():
             continue
-        # Same line, to the left
+        # 同一行，在左侧
         if abs((wy0 + wy1) / 2 - (rect.y0 + rect.y1) / 2) < line_tol and wx1 <= rect.x0 + 1:
             candidates_left.append((rect.x0 - wx1, wx0, text))
-        # Above, horizontally overlapping
+        # 在上方，水平重叠
         elif wy1 <= rect.y0 + 1 and not (wx1 < rect.x0 or wx0 > rect.x1):
             candidates_above.append((rect.y0 - wy1, wx0, text))
 
@@ -136,14 +136,14 @@ def _widget_on_state(w) -> str:
 
 
 def extract_fields(path: str) -> list[dict[str, Any]]:
-    """Enumerate form fields, one entry per unique field name.
+    """枚举表单字段，每个唯一字段名一个条目。
 
-    Multiple checkbox widgets sharing a field name are treated as a single
-    "choice" field whose options are each widget's on-state — that's the
-    PDF idiom for radio-style "Included / Excluded / None" rows.
+    共享字段名的多个复选框控件被视为单个
+    "choice" 字段，其选项是每个控件的 on-state — 这是
+    用于单选样式 "Included / Excluded / None" 行的 PDF 惯用做法。
 
-    Returns dicts with: name, type, label, value, options, page (1-indexed),
-    rect (x0,y0,x1,y1) for the first widget in the group, required.
+    返回字典，包含：name, type, label, value, options, page (1-indexed),
+    rect (x0,y0,x1,y1) 为组中第一个控件, required。
     """
     _require_fitz()
     names = _widget_type_names()
@@ -173,8 +173,8 @@ def extract_fields(path: str) -> list[dict[str, Any]]:
                 on_state = _widget_on_state(w) if wtype == "checkbox" else ""
 
                 if name not in grouped:
-                    # AdobeSign-style signature placeholders are stored as
-                    # plain text widgets but named with `_es_:signature`.
+                    # AdobeSign 风格的签名占位符被存储为
+                    # 纯文本控件，但命名为 `_es_:signature`。
                     if wtype == "text" and _SIGNATURE_NAME_RE.search(name):
                         wtype = "signature"
                     order.append(name)
@@ -201,8 +201,8 @@ def extract_fields(path: str) -> list[dict[str, Any]]:
                         g["_on_states"].append(on_state)
                         if on_state not in g["options"]:
                             g["options"].append(on_state)
-                    # If a checkbox name appears more than once with different on-states,
-                    # promote it to a choice field.
+                    # 如果复选框名称出现多次且有不同的 on-states，
+                    # 将其提升为 choice 字段。
                     if wtype == "checkbox" and len(g["_on_states"]) > 1:
                         g["type"] = "choice"
     finally:
@@ -221,15 +221,15 @@ def stamp_signatures(
     output_path: str,
     stamps: dict[str, bytes],
 ) -> int:
-    """Stamp PNG signature images into the PDF at each named field's rect.
+    """将 PNG 签名图像印章到每个命名字段 rect 处的 PDF 中。
 
-    `stamps` is {field_name: png_bytes}. Each named field is found in the
-    AcroForm; the image is drawn into the field's rectangle preserving aspect
-    ratio. The widget itself is left intact (still a form field) so it can be
-    re-edited later if needed; the stamp is rendered on top.
+    `stamps` 为 {field_name: png_bytes}。每个命名字段在
+    AcroForm 中找到；图像绘制到字段的矩形中，保持宽高比。
+    控件本身保持不变（仍为表单字段），以便以后需要时
+    重新编辑；印章渲染在顶部。
 
-    Returns the number of stamps written. Pass the source PDF (or an
-    already-filled output from fill_fields) and a fresh output_path.
+    返回写入的印章数量。传入源 PDF（或
+    fill_fields 的已填充输出）和新的 output_path。
     """
     if not stamps:
         return 0
@@ -262,11 +262,11 @@ def stamp_annotations(
     annotations: list[dict],
     signature_pngs: dict[str, bytes] | None = None,
 ) -> int:
-    """Burn freeform annotations (text, check, signature) onto a PDF.
+    """将自由形式标注（文本、勾选、签名）烧录到 PDF 上。
 
-    Each annotation has page-percentage coords (x, y, w, h: 0–100), a `kind`
-    in {text, check, signature}, a string value, and a line_height for text.
-    Returns the number of annotations stamped.
+    每个标注具有页面百分比坐标（x, y, w, h: 0–100），一个 `kind`
+    属于 {text, check, signature}，一个字符串 value，以及文本的 line_height。
+    返回印章的标注数量。
     """
     if not annotations:
         return 0
@@ -295,22 +295,20 @@ def stamp_annotations(
                         continue
                     line_height = float(ann.get("line_height") or 1.3)
                     lines = value.split("\n")
-                    # Fixed point size — keeps text consistent across boxes
-                    # regardless of how each was resized. Per HTML metrics the
-                    # baseline of a line box sits at fontsize × (lh + 0.6) / 2
-                    # from the line-box top (half the leading above the glyph,
-                    # half below, ascent ≈ 0.8 × fontsize).
+                    # 固定磅值 — 无论每个框如何调整大小，保持文本一致。
+                    # 根据 HTML 指标，行框的基线位于 fontsize × (lh + 0.6) / 2
+                    # 从行框顶部算起（leading 的一半在字形上方，
+                    # 一半在下方，ascent ≈ 0.8 × fontsize）。
                     fontsize = 11.0
-                    # Stride between lines is tuned to match what the editor
-                    # shows: the editor's textarea renders text larger than
-                    # 11pt (cqh-based ≈ 1.5% of page-image height ≈ 17pt for
-                    # Letter), so its rows are spaced wider than 11 × lh on
-                    # the page. Multiply the export stride to compensate.
+                    # 行间距已调整以匹配编辑器显示的：编辑器的 textarea
+                    # 呈现的文本比 11pt 更大（基于 cqh ≈ 页面图像高度的 1.5%
+                    # ≈ Letter 的 17pt），因此其行间距比页面上的 11 × lh 更宽。
+                    # 乘以导出步幅以补偿。
                     line_box = fontsize * line_height * 1.2
-                    # First baseline at one ascent below the box top — closest
-                    # match to where the editor's first line of text appears.
+                    # 首行基线位于框顶部下方一个 ascent 处 — 最接近
+                    # 编辑器第一行文本出现的位置。
                     yy = y + fontsize * 0.85
-                    # Match the textarea's 4px left padding (~3 PDF points).
+                    # 匹配 textarea 的 4px 左边距（~3 PDF 点）。
                     xx = x + 3.0
                     for line in lines:
                         try:
@@ -326,7 +324,7 @@ def stamp_annotations(
                     written += 1
 
                 elif kind == "check":
-                    # Draw a checkmark stroke that fills the box.
+                    # 绘制填充框的勾选标记笔画。
                     cx = x + w / 2.0
                     cy = y + h / 2.0
                     size = min(w, h) * 0.85
@@ -366,10 +364,10 @@ def stamp_annotations(
 
 
 def fill_fields(source_path: str, output_path: str, values: dict[str, Any]) -> int:
-    """Write values back into the AcroForm and save a new PDF.
+    """将值写回 AcroForm 并保存新的 PDF。
 
-    Returns the number of fields updated. Unknown field names are ignored.
-    Layout of the source PDF is preserved.
+    返回更新的字段数量。忽略未知的字段名称。
+    保留源 PDF 的布局。
     """
     _require_fitz()
     doc = fitz.open(source_path)
@@ -384,11 +382,11 @@ def fill_fields(source_path: str, output_path: str, values: dict[str, Any]) -> i
                 if w.field_type == fitz.PDF_WIDGET_TYPE_CHECKBOX:
                     on_state = _widget_on_state(w)
                     if isinstance(new_value, bool):
-                        # Single checkbox: bool semantics
+                        # 单个复选框：bool 语义
                         w.field_value = (on_state or "Yes") if new_value else "Off"
                     else:
-                        # Choice/radio group: only the widget whose on_state matches
-                        # gets that on_state; the rest go Off.
+                        # Choice/radio 组：只有 on_state 匹配的控件
+                        # 获得该 on_state；其余为 Off。
                         chosen = "" if new_value is None else str(new_value).strip()
                         w.field_value = on_state if on_state and on_state == chosen else "Off"
                 else:

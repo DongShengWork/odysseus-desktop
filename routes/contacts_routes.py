@@ -1,8 +1,8 @@
 """
 contacts_routes.py
 
-CardDAV contacts integration. Reads from local Radicale, supports
-search and adding new contacts.
+CardDAV 通讯录集成。读取本地 Radicale，支持
+搜索和添加新联系人。
 """
 
 import re
@@ -141,7 +141,7 @@ def _vunesc(value: str) -> str:
 
 
 def _parse_vcards(text: str) -> List[Dict]:
-    """Parse a stream of vCards into dicts with name, email, phone."""
+    """将 vCard 流解析为包含 name、email、phone 的字典。"""
     contacts = []
     for block in re.split(r"BEGIN:VCARD", text):
         if not block.strip():
@@ -149,17 +149,17 @@ def _parse_vcards(text: str) -> List[Dict]:
         contact = {"name": "", "emails": [], "phones": [], "uid": ""}
         for line in block.split("\n"):
             line = line.strip()
-            # Strip an optional RFC 6350 group prefix (e.g. "item1.EMAIL;...")
-            # that Apple Contacts / iCloud / many CardDAV servers emit by
-            # default — without this the property-name checks below miss those
-            # lines and silently drop the email / phone. The group token only
-            # precedes the property name, so it is safe to strip for matching
-            # and value extraction, and a no-op for non-grouped lines.
+            # 去除可选的 RFC 6350 组前缀（如 "item1.EMAIL;..."）
+            # Apple 通讯录 / iCloud / 许多 CardDAV 服务器默认发出此前缀 —
+            # 不处理此则下面的属性名检查会遗漏这些行
+            # 并静默丢弃邮件/电话。组标记仅出现在属性名之前，
+            # 所以在匹配和值提取时去除是安全的，
+            # 对非分组行是无操作。
             name_part = re.sub(r"^[A-Za-z0-9-]+\.", "", line, count=1)
             if name_part.startswith("FN:") or name_part.startswith("FN;"):
                 contact["name"] = _vunesc(name_part.split(":", 1)[1]) if ":" in name_part else ""
             elif name_part.startswith("EMAIL"):
-                # Handle EMAIL:foo@bar OR EMAIL;TYPE=...:foo@bar OR EMAIL;PREF=1:foo@bar
+                # 处理 EMAIL:foo@bar 或 EMAIL;TYPE=...:foo@bar 或 EMAIL;PREF=1:foo@bar
                 if ":" in name_part:
                     email_addr = _vunesc(name_part.split(":", 1)[1])
                     if email_addr and email_addr not in contact["emails"]:
@@ -194,16 +194,16 @@ def _vesc(value: str) -> str:
 def _build_vcard(name: str, email: str, uid: Optional[str] = None,
                  emails: Optional[List[str]] = None,
                  phones: Optional[List[str]] = None) -> str:
-    """Build a vCard. Accepts either a single `email` (legacy callers) or
-    full `emails`/`phones` lists (edit path). The first email is marked
-    PREF=1. All values are RFC-6350-escaped."""
+    """构建 vCard。接受单个 `email`（旧调用者）或完整的
+    `emails`/`phones` 列表（编辑路径）。第一个邮件标记为
+    PREF=1。所有值均按 RFC-6350 转义。"""
     if not uid:
         uid = str(uuid.uuid4())
-    # Normalize email lists — `email` arg is a convenience for single-email
-    # creation; `emails` (if given) is authoritative.
+    # 标准化邮件列表 — `email` 参数是单邮件创建的便捷参数；
+    # `emails`（如提供）为权威列表。
     email_list = [e.strip() for e in (emails if emails is not None else ([email] if email else [])) if e and e.strip()]
     phone_list = [p.strip() for p in (phones or []) if p and p.strip()]
-    # Try to split name into first/last
+    # 尝试将名称拆分为姓/名
     parts = name.strip().split()
     if len(parts) >= 2:
         first = parts[0]
@@ -222,7 +222,7 @@ def _build_vcard(name: str, email: str, uid: Optional[str] = None,
         f"N:{n_field}",
     ]
     for i, em in enumerate(email_list):
-        # First email is the preferred one.
+        # 第一个邮件为首选邮件。
         lines.append(f"EMAIL;PREF=1:{_vesc(em)}" if i == 0 else f"EMAIL:{_vesc(em)}")
     for ph in phone_list:
         lines.append(f"TEL:{_vesc(ph)}")

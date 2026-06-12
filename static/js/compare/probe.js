@@ -1,8 +1,9 @@
-// compare/probe.js — model probe/check system
+// compare/probe.js — 模型探测/检查系统
 import state from './state.js';
 import { WAVE_FRAMES } from './icons.js';
 import uiModule from '../ui.js';
 import spinnerModule from '../spinner.js';
+import { t } from '../i18n.js';
 
 function _clearProbeWaves() {
   const rows = document.querySelectorAll('.compare-probe-row');
@@ -12,11 +13,11 @@ function _clearProbeWaves() {
 async function _checkUnprobed() {
   const unprobed = state._selectedModels.filter(m => !state._probed.has(m.model));
   if (unprobed.length === 0) {
-    if (uiModule) uiModule.showToast('All models verified');
+    if (uiModule) uiModule.showToast(t('compare.all_verified'));
     return;
   }
 
-  // Whirlpool loader on the Probe button while the check runs.
+  // 在检查运行期间，探测按钮上显示旋转加载动画。
   const _btn = document.getElementById('compare-check-btn');
   let _btnHTML = null, _wp = null;
   if (_btn) {
@@ -27,10 +28,10 @@ async function _checkUnprobed() {
       _wp = spinnerModule.createWhirlpool(14);
       _btn.innerHTML = '';
       _btn.appendChild(_wp.element);
-    } catch (_) { /* spinner best-effort */ }
+    } catch (_) { /* spinner 尽力而为 */ }
   }
 
-  // Quick inline probe — show toast with results
+  // 快速内联探测 — 用 toast 显示结果
   const isBlind = state._blindMode;
   let ok = 0, fail = 0;
   try {
@@ -55,17 +56,17 @@ async function _checkUnprobed() {
       } else {
         fail++;
         const name = isBlind ? 'a model' : (m.name || m.model.split('/').pop());
-        if (uiModule) uiModule.showToast(`${name} failed: ${result?.error || 'unknown'}`, 5000);
+        if (uiModule) uiModule.showToast(t('compare.verify_failed', { name, error: result?.error || t('compare.unknown_error') }), 5000);
       }
     } catch (e) {
       fail++;
     }
   }
   if (fail === 0) {
-    if (uiModule) uiModule.showToast(`${ok} model${ok > 1 ? 's' : ''} verified`);
+    if (uiModule) uiModule.showToast(t('compare.models_verified', { count: ok }));
   }
   } finally {
-    // Restore the Probe button (its label/visibility is refreshed below).
+    // 恢复探测按钮（其标签/可见性将在下方刷新）。
     if (_btn) {
       _btn.disabled = false;
       _btn.style.opacity = '';

@@ -1,13 +1,13 @@
 /**
- * Paint a transparency-checkerboard pattern across the given canvas
- * context. The editor uses this beneath every layer pass so empty
- * (transparent) areas of the document are visible.
+ * 在给定画布上下文中绘制透明度棋盘格图案。
+ * 编辑器在每次图层绘制通道下方使用此图案，使得文档中
+ * 空白（透明）区域可见。
  *
- * Pure function — depends only on its arguments.
+ * 纯函数 — 仅依赖于其参数。
  *
  * @param {CanvasRenderingContext2D} ctx
- * @param {number} w  Width in canvas pixels.
- * @param {number} h  Height in canvas pixels.
+ * @param {number} w  宽度，单位为画布像素。
+ * @param {number} h  高度，单位为画布像素。
  */
 export function drawCheckerboard(ctx, w, h) {
   const size = 10;

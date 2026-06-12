@@ -1,6 +1,6 @@
 """
-Authentication module — multi-user password hashing, session tokens, config persistence.
-Config stored in data/auth.json. Uses bcrypt directly.
+认证模块 — 多用户密码哈希、会话令牌、配置持久化。
+配置存储在 data/auth.json 中。直接使用 bcrypt。
 """
 
 import json
@@ -31,39 +31,35 @@ DEFAULT_PRIVILEGES = {
     "max_messages_per_day": 0,
     "allowed_models": [],
     "allowed_models_restricted": False,
-    # Explicit "block every model" sentinel. An empty `allowed_models` list is
-    # ambiguous — it's also what gets sent when the admin clicks "[All]" — so
-    # we need a dedicated flag to express "this user may use no models at all"
-    # distinctly from "this user has no restriction".
+    # 显式的"阻止所有模型"标记。空 `allowed_models` 列表存在歧义——
+    # 当管理员点击"[All]"时也会发送空列表——因此需要一个专用标志
+    # 来表达"此用户不能使用任何模型"，与"此用户没有限制"区分开。
     "block_all_models": False,
 }
 
-# Admins get everything
+# 管理员拥有一切权限
 ADMIN_PRIVILEGES = {k: (True if isinstance(v, bool) else (0 if isinstance(v, int) else [])) for k, v in DEFAULT_PRIVILEGES.items()}
 ADMIN_PRIVILEGES["allowed_models_restricted"] = False
-# Admins must never be blocked from using models — the generic dict
-# comprehension above flips every boolean default to True, which would be
-# backwards for this sentinel.
+# 管理员绝不能被禁止使用模型——上面的泛型字典推导式会把
+# 每个布尔默认值翻转为 True，这对于这个哨兵值来说是反向的。
 ADMIN_PRIVILEGES["block_all_models"] = False
 
 from src.constants import AUTH_FILE
 DEFAULT_AUTH_PATH = AUTH_FILE
-TOKEN_TTL = 60 * 60 * 24 * 7  # 7 days
+TOKEN_TTL = 60 * 60 * 24 * 7  # 7 天
 
-# Usernames the auth + middleware layer reserve as internal "synthetic owner"
-# sentinels; they must never belong to a real account. The most dangerous is
-# "internal-tool": `core.middleware.require_admin` treats any request whose
-# `current_user == "internal-tool"` as the in-process tool loopback and grants
-# admin, and because the cookie auth path sets `current_user` to the raw
-# username, an account literally named "internal-tool" would be silently
-# treated as an admin by every `require_admin`-gated route. "api" collides with
-# the bearer-token owner-attribution sentinel. "demo"/"system" round out the
-# synthetic-owner set the rest of the codebase already special-cases (see
-# `_SYNTHETIC_OWNERS` in routes/assistant_routes.py and the matching guards in
-# src/task_scheduler.py / routes/research_routes.py) — a real account with one
-# of those names would be denied an assistant and inconsistently owner-scoped.
-# Refuse to create or rename into any of them so the sentinels can't be
-# impersonated. (Keep this in sync with that synthetic-owner set.)
+# 认证和中间件层保留为内部"合成所有者"哨兵的用户名；
+# 它们绝不能属于真实账户。最危险的是 "internal-tool"：
+# `core.middleware.require_admin` 会将任何 `current_user == "internal-tool"`
+# 的请求视为进程内工具回环并授予管理员权限，而由于 cookie 认证路径将
+# `current_user` 设置为原始用户名，一个字面名为 "internal-tool" 的账户会被
+# 每个受 `require_admin` 保护的路由静默视为管理员。"api" 与令牌持有者归属
+# 哨兵冲突。"demo"/"system" 补充了代码库其余部分已特殊处理的合成所有者集合
+# （参见 routes/assistant_routes.py 中的 `_SYNTHETIC_OWNERS` 以及
+# src/task_scheduler.py / routes/research_routes.py 中的匹配守卫）——
+# 使用这些名称的真实账户将被拒绝分配助手，且所有者范围不一致。
+# 拒绝创建或重命名为其中任何一个，以防止哨兵值被冒充。
+# （请与此合成所有者集合保持同步。）
 RESERVED_USERNAMES = frozenset({"internal-tool", "api", "demo", "system"})
 
 
@@ -76,22 +72,21 @@ def _verify_password(password: str, hashed: str) -> bool:
 
 
 class AuthManager:
-    """Manages multi-user password + session-token auth system."""
+    """管理多用户密码 + 会话令牌认证系统。"""
 
     def __init__(self, auth_path: str = DEFAULT_AUTH_PATH):
         self.auth_path = auth_path
         self._sessions_path = os.path.join(os.path.dirname(auth_path), "sessions.json")
         self._config: Dict[str, Any] = {}
-        self._sessions: Dict[str, Dict[str, Any]] = {}  # token -> {username, expiry}
-        # Guards mutations of self._sessions and the on-disk sessions.json.
-        # Validate/create/revoke run concurrently from the FastAPI threadpool.
+        self._sessions: Dict[str, Dict[str, Any]] = {}  # token -> {username, 过期时间}
+        # 保护 self._sessions 和磁盘上 sessions.json 的变更。
+        # validate/create/revoke 在 FastAPI 线程池中并发运行。
         self._sessions_lock = threading.RLock()
-        # Guards all mutations of self._config and the on-disk auth.json so
-        # concurrent create/delete/rename/privilege operations don't interleave
-        # and corrupt the user database.
+        # 保护 self._config 和磁盘上 auth.json 的所有变更，以防止
+        # 并发的 create/delete/rename/privilege 操作交错执行并损坏用户数据库。
         self._config_lock = threading.Lock()
-        # Guards the first-run setup check-and-write so concurrent requests
-        # cannot both observe is_configured==False and both create admin accounts.
+        # 保护首次运行设置检查并写入操作，以防止并发请求
+        # 同时观察到 is_configured==False 并都创建管理员账户。
         self._setup_lock = threading.Lock()
         self._load()
         self._load_sessions()
@@ -103,10 +98,9 @@ class AuthManager:
             if os.path.exists(self.auth_path):
                 with open(self.auth_path, "r", encoding="utf-8") as f:
                     self._config = json.load(f)
-                # Normalize all stored usernames to lowercase so they match
-                # the .strip().lower() applied at login/verify time. Fixes
-                # "Invalid credentials" when auth.json was written with
-                # mixed-case keys (e.g. via manual edit or a future migration).
+                # 将所有存储的用户名规范化为小写，以匹配登录/验证时
+                # 使用的 .strip().lower()。修复当 auth.json 用混合大小写键写入时
+                # （例如通过手动编辑或未来迁移）出现"凭据无效"的问题。
                 if "users" in self._config:
                     self._config["users"] = {
                         k.strip().lower(): v
@@ -121,7 +115,7 @@ class AuthManager:
             self._config = {}
 
     def _load_sessions(self):
-        """Load persisted session tokens from disk, pruning expired ones."""
+        """从磁盘加载持久化的会话令牌，并清理已过期的。"
         try:
             if os.path.exists(self._sessions_path):
                 with open(self._sessions_path, "r", encoding="utf-8") as f:
@@ -137,7 +131,7 @@ class AuthManager:
             self._sessions = {}
 
     def _save_sessions(self):
-        """Persist session tokens to disk (atomic, lock-guarded)."""
+        """将会话令牌持久化到磁盘（原子写入，锁保护）。"""
         try:
             with self._sessions_lock:
                 snapshot = dict(self._sessions)
@@ -146,7 +140,7 @@ class AuthManager:
             logger.error(f"Failed to save sessions: {e}")
 
     def _migrate_single_user(self):
-        """Migrate old single-user format to multi-user format."""
+        """将旧的单用户格式迁移为多用户格式。"""
         if "password_hash" in self._config and "users" not in self._config:
             old_user = self._config.get("username", "admin")
             old_hash = self._config["password_hash"]
@@ -163,7 +157,7 @@ class AuthManager:
             logger.info(f"Migrated single-user auth to multi-user (admin: {old_user})")
 
     def _migrate_legacy_admin_role(self):
-        """Normalize setup.py's old role='admin' marker to is_admin=True."""
+        """将 setup.py 旧的 role='admin' 标记规范化为 is_admin=True。"""
         changed = False
         for username, user in self.users.items():
             if user.get("role") == "admin" and "is_admin" not in user:
@@ -195,18 +189,18 @@ class AuthManager:
         return len(self.users) > 0
 
     # ------------------------------------------------------------------
-    # Account management
+    # 账户管理
     # ------------------------------------------------------------------
 
     def setup(self, username: str, password: str) -> bool:
-        """First-run admin setup. Only works if no users exist."""
+        """首次运行管理员设置。仅在没有用户存在时生效。"""
         with self._setup_lock:
             if self.is_configured:
                 return False
             return self.create_user(username, password, is_admin=True)
 
     def create_user(self, username: str, password: str, is_admin: bool = False) -> bool:
-        """Create a new user account."""
+        """创建一个新的用户账户。"""
         username = username.strip().lower()
         if not username:
             return False
@@ -229,12 +223,11 @@ class AuthManager:
         return True
 
     def delete_user(self, username: str, requesting_user: str) -> bool:
-        """Delete a user. Only admins can delete, and can't delete themselves.
+        """删除一个用户。只有管理员可以删除，且不能删除自己。
 
-        SECURITY: also revoke every active session token belonging to this
-        user so any open browser tab they have gets kicked back to /login
-        on the next request. Without this the user kept full access until
-        their cookie expired naturally (default ~30 days).
+        安全：同时撤销此用户的所有活跃会话令牌，以便其所有打开的浏览器标签页
+        在下一次请求时被踢回 /login。如果跳过此步骤，用户将保持完全访问权限，
+        直到其 cookie 自然过期（默认约 30 天）。
         """
         username = username.strip().lower()
         with self._config_lock:
@@ -246,9 +239,9 @@ class AuthManager:
                 return False
             del self._config["users"][username]
             self._save()
-        # Purge all sessions belonging to this user. validate_token doesn't
-        # cross-check `self.users`, so without this step a deleted user's
-        # cookie keeps authenticating.
+        # 清除该用户的所有会话。validate_token 不会交叉检查
+        # `self.users`，因此如果不执行此步骤，已删除用户的
+        # cookie 将继续保持认证状态。
         revoked = 0
         with self._sessions_lock:
             to_drop = [tok for tok, sess in self._sessions.items()
@@ -258,10 +251,9 @@ class AuthManager:
                 revoked += 1
         if revoked:
             self._save_sessions()
-        # Also revoke API bearer tokens owned by this user. The bearer auth
-        # path authenticates straight against ApiToken rows and never
-        # re-checks that the owner still exists, so leaving the rows behind
-        # would let a deleted user keep full API access indefinitely.
+        # 同时撤销此用户拥有的 API 令牌。令牌认证路径直接根据
+        # ApiToken 行进行认证，从不重新检查所有者是否仍然存在，
+        # 因此保留这些行会让已删除的用户无限期保持完整的 API 访问权限。
         try:
             from core.database import get_db_session, ApiToken
             with get_db_session() as db:
@@ -274,7 +266,7 @@ class AuthManager:
         return True
 
     def rename_user(self, old_username: str, new_username: str, requesting_user: str) -> bool:
-        """Rename a user in auth config and active sessions. Admin only."""
+        """重命名认证配置和活跃会话中的用户。仅管理员可用。"""
         old_username = old_username.strip().lower()
         new_username = new_username.strip().lower()
         requesting_user = (requesting_user or "").strip().lower()
@@ -318,23 +310,23 @@ class AuthManager:
         ]
 
     def get_privileges(self, username: str) -> Dict[str, Any]:
-        """Get privileges for a user. Admins get all privileges."""
+        """获取用户权限。管理员拥有所有权限。"""
         user = self.users.get(username, {})
         if user.get("is_admin"):
             return dict(ADMIN_PRIVILEGES)
-        # Merge stored privileges with defaults (in case new privileges were added)
+        # 将存储的权限与默认值合并（以防添加了新的权限项）
         stored = user.get("privileges", {})
         return {**DEFAULT_PRIVILEGES, **stored}
 
     def set_privileges(self, username: str, privileges: Dict[str, Any]) -> bool:
-        """Update privileges for a user. Can't modify admin privileges."""
+        """更新用户权限。无法修改管理员权限。"""
         username = username.strip().lower()
         with self._config_lock:
             if username not in self.users:
                 return False
             if self.users[username].get("is_admin"):
-                return False  # admins always have full access
-            # Only allow known privilege keys
+                return False  # 管理员始终拥有完全访问权限
+            # 仅允许已知的权限键
             current = self.get_privileges(username)
             for k, v in privileges.items():
                 if k in DEFAULT_PRIVILEGES:
@@ -356,16 +348,16 @@ class AuthManager:
         return True
 
     # ------------------------------------------------------------------
-    # TOTP two-factor authentication
+    # 双因素认证
     # ------------------------------------------------------------------
 
     def totp_enabled(self, username: str) -> bool:
-        """Check if 2FA is enabled for a user."""
+        """检查用户是否已启用双因素认证。"""
         user = self.users.get(username.strip().lower(), {})
         return bool(user.get("totp_enabled"))
 
     def totp_generate_secret(self, username: str) -> Optional[str]:
-        """Generate a new TOTP secret for a user. Returns the secret (not yet enabled)."""
+        """为用户生成一个新的 TOTP 密钥。返回密钥（尚未启用）。"""
         username = username.strip().lower()
         if username not in self.users:
             return None
@@ -376,12 +368,12 @@ class AuthManager:
         return secret
 
     def totp_get_provisioning_uri(self, username: str, secret: str) -> str:
-        """Get the otpauth:// URI for QR code generation."""
+        """获取用于生成二维码的 otpauth:// URI。"""
         totp = pyotp.TOTP(secret)
         return totp.provisioning_uri(name=username, issuer_name="Odysseus")
 
     def totp_confirm_enable(self, username: str, code: str) -> bool:
-        """Verify a TOTP code against the pending secret, then enable 2FA."""
+        """使用待确认密钥验证 TOTP 验证码，若通过则启用双因素认证。"""
         username = username.strip().lower()
         user = self.users.get(username, {})
         secret = user.get("totp_secret_pending")
@@ -390,12 +382,12 @@ class AuthManager:
         totp = pyotp.TOTP(secret)
         if not totp.verify(code, valid_window=1):
             return False
-        # Enable 2FA
+        # 启用双因素认证
         with self._config_lock:
             self._config["users"][username]["totp_secret"] = secret
             self._config["users"][username]["totp_enabled"] = True
             self._config["users"][username].pop("totp_secret_pending", None)
-            # Generate backup codes
+            # 生成备用验证码
             backup = [secrets.token_hex(4) for _ in range(8)]
             self._config["users"][username]["totp_backup_codes"] = backup
             self._save()
@@ -403,18 +395,17 @@ class AuthManager:
         return True
 
     def totp_verify(self, username: str, code: str) -> bool:
-        """Verify a TOTP code for login."""
+        """验证登录时的 TOTP 验证码。"""
         username = username.strip().lower()
         user = self.users.get(username, {})
         if not user.get("totp_enabled"):
-            return True  # 2FA not enabled, always pass
+            return True  # 未启用双因素认证，始终放行
         secret = user.get("totp_secret")
         if not secret:
-            # 2FA is enabled but no secret is stored (corrupt/partially-written
-            # auth.json). Fail closed — returning True here bypassed the second
-            # factor entirely.
+            # 双因素认证已启用但没有存储密钥（auth.json 损坏或部分写入）。
+            # 安全关闭——在此处返回 True 会完全绕过第二重认证因子。
             return False
-        # Check backup codes first
+        # 首先检查备用验证码
         backup = user.get("totp_backup_codes", [])
         if code in backup:
             with self._config_lock:
@@ -427,7 +418,7 @@ class AuthManager:
         return totp.verify(code, valid_window=1)
 
     def totp_disable(self, username: str, password: str) -> bool:
-        """Disable 2FA for a user. Requires password confirmation."""
+        """为用户禁用双因素认证。需要密码确认。"""
         username = username.strip().lower()
         if not self.verify_password(username, password):
             return False
@@ -441,7 +432,7 @@ class AuthManager:
         return True
 
     # ------------------------------------------------------------------
-    # Login / logout / session tokens
+    # 登录 / 登出 / 会话令牌
     # ------------------------------------------------------------------
 
     def verify_password(self, username: str, password: str) -> bool:
@@ -451,15 +442,15 @@ class AuthManager:
         return _verify_password(password, self.users[username]["password_hash"])
 
     def create_session(self, username: str, password: str) -> Optional[str]:
-        """Verify credentials and return a session token, or None."""
+        """验证凭据并返回会话令牌，失败则返回 None。"""
         username = username.strip().lower()
         if not self.verify_password(username, password):
             return None
         return self.create_session_trusted(username)
 
     def create_session_trusted(self, username: str) -> str:
-        """Issue a session token for an already-verified user.
-        Call only after verify_password (and TOTP if enabled) have passed."""
+        """为已验证的用户签发会话令牌。
+        仅在 verify_password（以及 TOTP，如果启用）通过后调用。"""
         username = username.strip().lower()
         token = secrets.token_hex(32)
         with self._sessions_lock:
@@ -483,10 +474,9 @@ class AuthManager:
                 self._sessions.pop(token, None)
                 expired = True
             else:
-                # SECURITY: if the user record has since been removed (admin
-                # deleted them while their cookie was still valid), drop the
-                # session so the next request kicks them out instead of
-                # silently authenticating against a non-existent account.
+                # 安全：如果用户记录已被移除（管理员在其 cookie 仍然有效时
+                # 删除了该用户），则丢弃此会话，以便下一个请求将其踢出，
+                # 而不是静默地对不存在的账户进行认证。
                 if session.get("username") not in self.users:
                     self._sessions.pop(token, None)
                     deleted_user = True
@@ -496,7 +486,7 @@ class AuthManager:
         return True
 
     def get_username_for_token(self, token: Optional[str]) -> Optional[str]:
-        """Return the username associated with a valid token."""
+        """返回与有效令牌关联的用户名。"""
         if not token:
             return None
         expired = False
@@ -510,7 +500,7 @@ class AuthManager:
                 expired = True
             else:
                 _u = session["username"]
-                # SECURITY: orphan check — same rationale as validate_token.
+                # 安全：孤立用户检查——与 validate_token 相同的逻辑。
                 if _u not in self.users:
                     self._sessions.pop(token, None)
                     deleted_user = True
@@ -526,7 +516,7 @@ class AuthManager:
         self._save_sessions()
 
     def revoke_user_sessions(self, username: str, except_token: Optional[str] = None) -> int:
-        """Revoke active browser sessions for a user, optionally preserving one."""
+        """撤销用户所有活跃的浏览器会话，可选择保留一个。"""
         username = username.strip().lower()
         revoked = 0
         with self._sessions_lock:

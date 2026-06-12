@@ -1,6 +1,6 @@
 // ============================================
-// COOKBOOK DIAGNOSIS SUB-MODULE
-// Error pattern matching and diagnosis UI
+// COOKBOOK 诊断子模块
+// 错误模式匹配和诊断 UI
 // ============================================
 
 import {
@@ -19,25 +19,23 @@ import {
   _serveAutoRetryReplace,
   _serveAutoRetryRemove,
   _serveAutoFix,
-  // Plain specifier (no ?v=) — must match every other cookbook.js importer so the
-  // browser loads it once. See cookbook-hwfit.js.
+  // 纯说明符（无 ?v=）—— 必须与所有其他 cookbook.js 导入者匹配，以便浏览器只加载一次。
+  // 参见 cookbook-hwfit.js。
 } from './cookbook.js';
 import uiModule from './ui.js';
 
-// Tiny HTML-escape — keeps the file standalone instead of leaning on a
-// shared helper that may not be exported from this module's import surface.
+// 小型 HTML 转义 —— 保持文件独立，而不是依赖可能无法从此模块导入面导出的共享辅助函数。
 function _diagEsc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-// Pick an icon for a diagnosis-action button based on the label. The icon
-// renders on the LEFT of the button text. Keeps the strokes consistent
-// across the set so they read as one family.
+// 根据标签为诊断操作按钮选择图标。图标渲染在按钮文字的左侧。
+// 保持整个集合的笔画一致，以便它们看起来像一个系列。
 function _diagFixIcon(label) {
   const l = String(label || '').toLowerCase();
   const _svg = (path) => `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="cookbook-diag-btn-ico" aria-hidden="true">${path}</svg>`;
   if (l.startsWith('retry') || l.includes('relaunch') || l.includes('restart')) {
-    // Circular-arrow refresh
+    // 循环箭头刷新图标
     return _svg('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>');
   }
   if (l.startsWith('copy')) {
@@ -58,12 +56,13 @@ function _diagFixIcon(label) {
   if (l.startsWith('switch') || l.includes('use ')) {
     return _svg('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>');
   }
-  // Default: lightbulb (generic "suggestion")
+  // 默认：灯泡图标（通用"建议"）
   return _svg('<path d="M9 21h6"/><path d="M12 17v4"/><path d="M12 3a6 6 0 0 0-4 10.5c1 1 1.5 2 1.5 3.5h5c0-1.5.5-2.5 1.5-3.5A6 6 0 0 0 12 3Z"/>');
 }
 import spinnerModule from './spinner.js';
+import { t } from './i18n.js';
 
-// ── Error diagnosis ──
+// ── 错误诊断 ──
 
 function _openCookbookDependencies(pkgName = '') {
   const cookbook = window.cookbookModule;
@@ -115,7 +114,7 @@ function _openCpuServeEdit(panel) {
   });
 }
 
-// Infer the gated base repo that single-file checkpoints need configs from
+// 推断单文件 checkpoint 需要配置的来源受限制基础仓库
 function _inferBaseRepo(text) {
   if (!text) return null;
   const t = text.toLowerCase();
@@ -168,8 +167,8 @@ export const ERROR_PATTERNS = [
   },
   {
     pattern: /There is no module or parameter named ['"]lm_head\.input_scale['"]|lm_head\.input_scale|weight_scale_2/i,
-    message: 'vLLM cannot load this ModelOpt LM-head quantized checkpoint with the current runtime.',
-    suggestion: 'Suggested action: upgrade vLLM through the environment that provides this CLI (package manager, venv, Docker image, or source checkout), or choose a compatible checkpoint.',
+    message: 'vLLM could not load this ModelOpt LM-head quantized checkpoint with the current runtime.',
+    suggestion: '建议操作：通过提供此 CLI 的环境升级 vLLM（包管理器、venv、Docker 镜像或源码检出），或选择兼容的 checkpoint。',
     fixes: [
       { label: 'Open Dependencies', action: () => _openCookbookDependencies('vllm') },
       {
@@ -220,7 +219,7 @@ export const ERROR_PATTERNS = [
   },
   {
     pattern: /No CUDA GPUs are available|no GPU.*found|CUDA_VISIBLE_DEVICES.*invalid/i,
-    message: 'No GPUs visible. Check your GPU selection or driver.',
+    message: 'No GPUs visible. 检查您的 GPU 选择或驱动程序。',
     fixes: [
       { label: 'Clear GPU selection (use all)', action: (panel) => {
         _setPanelField(panel, 'gpus', '');
@@ -232,7 +231,7 @@ export const ERROR_PATTERNS = [
   {
     pattern: /403 Forbidden|401 Unauthorized|Access to model.*is restricted|gated repo|not in the authorized list|awaiting a review/i,
     message: 'Gated model. Your HF token IS being sent — but its account must be granted access first: open the model page, accept the license, and wait for approval (Meta models can take a while).',
-    // Extract repo name from error text to build HF link
+    // 从错误文本中提取仓库名称以构建 HF 链接
     _repoPattern: /Access to model\s+(\S+)\s+is restricted|gated repo.*?huggingface\.co\/([^\s/]+\/[^\s/]+)/i,
     fixes: [
       { label: 'Request access on HF', action: (panel, _text) => {
@@ -252,7 +251,7 @@ export const ERROR_PATTERNS = [
     message: 'Single-file checkpoint needs a base model for missing components (text encoder, VAE). The base model may be gated — accept the license and set your HF token.',
     fixes: [
       { label: 'Request access to base model', action: (panel, _text) => {
-        // Extract gated repo from error, or infer from model name
+        // 从错误中提取受限制仓库，或者从模型名称推断
         const gated = _text && _text.match(/Access to model\s+(\S+)\s+is restricted/i);
         const base = _text && _text.match(/config=([^\s,)]+)/i);
         const model = _text && _text.match(/load model from\s+(\S+)/i);
@@ -391,8 +390,8 @@ export const ERROR_PATTERNS = [
     fixes: [
       { label: 'Try --trust-remote-code', action: (panel) => _serveAutoRetry(panel, '--trust-remote-code'), autofix: true },
       { label: 'Update vLLM on server', action: () => {
-        // Use the venv's python3 by absolute path when configured (SSH non-
-        // interactive sessions often pick user-site Python over the venv).
+        // 使用 venv 中 python3 的绝对路径（当通过 SSH 非交互式会话配置时，
+        // 裸 `python3` 可能会选择用户站点 Python 而非 venv 中的版本）。
         const _vp = (_envState.env === 'venv' && _envState.envPath)
           ? `${_envState.envPath.replace(/\/+$/, '')}/bin/python3` : 'python3';
         _launchServeTask('update-vllm', 'pip-update', `${_vp} -m pip install -U vllm transformers`);
@@ -489,21 +488,19 @@ export const ERROR_PATTERNS = [
     ],
   },
   {
-    // FlashInfer JIT-compiles attention kernels for the host GPU on first
-    // use. If the system /usr/bin/nvcc is older than CUDA 11.8 it can't
-    // target sm_89/sm_90 (Ada/Hopper), and the engine workers die before
-    // they can report a useful traceback. Two quick paths out: pick a
-    // non-flashinfer attention backend, or set CUDACXX to a newer nvcc
-    // (vLLM installs nvidia-cuda-nvcc into the venv — point at that).
+    // FlashInfer 在首次使用时为主机 GPU 进行 JIT 编译注意力内核。
+    // 如果系统 /usr/bin/nvcc 版本低于 CUDA 11.8，它无法针对 sm_89/sm_90
+    // (Ada/Hopper) 编译，引擎工作线程在能报告有用的回溯信息之前就会死亡。
+    // 两个快速解决方案：选择非 flashinfer 的注意力后端，或将 CUDACXX 设置为
+    // 较新的 nvcc（vLLM 将 nvidia-cuda-nvcc 安装到 venv 中——指定它即可）。
     pattern: /nvcc fatal\s+:\s+Unsupported gpu architecture 'compute_\d+'/i,
     message: 'FlashInfer is JIT-compiling sampling kernels with an nvcc too old for this GPU (no sm_89 / sm_90 support — pre-CUDA 11.8). Changing the attention backend does not help — flashinfer JITs the SAMPLER too. The clean fix is to set VLLM_USE_FLASHINFER_SAMPLER=0 so vLLM uses its native sampler instead.',
     suggestion: 'Suggested action: relaunch with VLLM_USE_FLASHINFER_SAMPLER=0 prepended. (Confirmed on the QuantTrio/Qwen3.5 model card as the canonical workaround.)',
     fixes: [
       { label: 'Retry with VLLM_USE_FLASHINFER_SAMPLER=0', action: (panel) => _serveAutoRetryReplace(panel, '', 'VLLM_USE_FLASHINFER_SAMPLER=0 ', { prepend: true }) },
       { label: 'Uninstall flashinfer-python', action: () => {
-        // Hard fallback: vLLM 0.22 reaches into flashinfer for sampling kernels
-        // even with VLLM_USE_FLASHINFER_SAMPLER=0 in some configs. Removing
-        // the package forces it onto the native sampler.
+        // 硬回退方案：在某些配置下，即使设置了 VLLM_USE_FLASHINFER_SAMPLER=0，
+        // vLLM 0.22 仍会使用 flashinfer 进行采样内核。移除该包强制其使用原生采样器。
         const _vp = (_envState.env === 'venv' && _envState.envPath)
           ? `${_envState.envPath.replace(/\/+$/, '')}/bin/python3` : 'python3';
         _launchServeTask('uninstall-flashinfer', 'pip-update', `${_vp} -m pip uninstall flashinfer-python -y`);
@@ -512,17 +509,16 @@ export const ERROR_PATTERNS = [
     ],
   },
   {
-    // vLLM <-> torch ABI mismatch: vLLM imports torch.library helpers
-    // (`infer_schema`, `register_fake`, etc.) that only exist on newer torch
-    // versions. When the installed torch is older, the import fails before
-    // any server code runs. Fix is to reinstall vllm (which pulls a matching
-    // torch) or upgrade torch directly.
+    // vLLM <-> torch ABI 不匹配：vLLM 导入的 torch.library 辅助函数
+    // (`infer_schema`、`register_fake` 等) 仅在较新的 torch 版本中存在。
+    // 当安装的 torch 版本较旧时，在任何服务器代码运行之前导入就会失败。
+    // 修复方法是重新安装 vllm（它会拉取匹配的 torch）或直接升级 torch。
     pattern: /ImportError: cannot import name '[^']+' from 'torch(\.\w+)+'/i,
     message: 'vLLM was built against a newer torch than what is installed. Reinstall vLLM so pip pulls a compatible torch (or upgrade torch directly).',
     fixes: [
       { label: 'Reinstall vLLM (pulls matching torch)', action: () => {
-        // Absolute path to the venv's python3 — bare `python3` lands in the
-        // wrong site-packages over SSH when ~/.local/bin precedes the venv.
+        // venv 中 python3 的绝对路径 —— 裸 `python3` 在 SSH 连接中会落入错误的
+        // site-packages（当 ~/.local/bin 优先于 venv 时）。
         const _vp = (_envState.env === 'venv' && _envState.envPath)
           ? `${_envState.envPath.replace(/\/+$/, '')}/bin/python3` : 'python3';
         _launchServeTask('reinstall-vllm', 'pip-reinstall', `${_vp} -m pip install --force-reinstall vllm`);
@@ -535,16 +531,14 @@ export const ERROR_PATTERNS = [
     ],
   },
   {
-    // Tail-only + healthy-server suppression. tmux capture-pane returns the
-    // entire scrollback every poll, so a one-shot startup traceback would
-    // otherwise stick on the panel forever even while the server happily
-    // serves /v1/models. Only fire if the traceback is in recent output AND
-    // the server isn't currently logging healthy traffic.
+    // 仅尾部 + 健康服务器抑制。tmux capture-pane 每次轮询返回整个滚动回溯，
+    // 所以一次性的启动回溯本应持续显示在面板上，即使服务器正在正常服务
+    // /v1/models。仅当回溯出现在最近的输出中并且服务器当前没有记录健康流量时才触发。
     match: (text) => {
       const TAIL = text.slice(-4096);
       if (!/Traceback \(most recent call last\)/i.test(TAIL)) return false;
-      // Healthy markers in the tail mean whatever blew up has been recovered
-      // from — the server is up and answering requests.
+      // 尾部中的健康标记表示之前爆炸的内容已从中恢复
+      // —— 服务器正在运行并响应请求。
       if (/Application startup complete|"GET \/v1\/[^"]+ HTTP\/[\d.]+" 2\d\d|Uvicorn running on/i.test(TAIL)) return false;
       return true;
     },
@@ -612,9 +606,8 @@ export function _showDiagnosis(panel, diagnosis, sourceText) {
 
   panel._diagCollapsed = false;
 
-  // Top-right toolbar: Copy bundle + × dismiss. Restored after user feedback
-  // — without them there's no way to quietly close a stale diagnosis or grab
-  // the full error+context for a forum/discord paste.
+  // 右上角工具栏：复制诊断信息 + × 关闭。在用户反馈后恢复 —— 没有这些按钮，
+  // 就无法安静地关闭过期的诊断或复制完整的错误+上下文用于论坛/Discord 粘贴。
   const toolbar = document.createElement('div');
   toolbar.className = 'cookbook-diag-toolbar';
   toolbar.style.cssText = 'display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-bottom:-2px;';
@@ -622,7 +615,7 @@ export function _showDiagnosis(panel, diagnosis, sourceText) {
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.className = 'cookbook-diag-copy';
-  copyBtn.title = 'Copy diagnosis details';
+  copyBtn.title = t('cookbook.copy_diagnosis_details');
   copyBtn.setAttribute('aria-label', 'Copy diagnosis');
   copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   copyBtn.addEventListener('click', async (e) => {
@@ -638,7 +631,7 @@ export function _showDiagnosis(panel, diagnosis, sourceText) {
   const dismissBtn = document.createElement('button');
   dismissBtn.type = 'button';
   dismissBtn.className = 'cookbook-diag-dismiss';
-  dismissBtn.title = 'Dismiss diagnosis';
+  dismissBtn.title = t('cookbook.dismiss_diagnosis');
   dismissBtn.setAttribute('aria-label', 'Dismiss');
   dismissBtn.textContent = '×';
   dismissBtn.addEventListener('click', (e) => {
@@ -691,11 +684,10 @@ export function _showDiagnosis(panel, diagnosis, sourceText) {
   };
 
   if (fixes.length) {
-    // Always render fixes as inline buttons. The old "Actions ▾" dropdown
-    // (for >3 fixes) was broken — the menu wouldn't open in some panels and
-    // hid useful actions behind a non-working affordance. Inline buttons wrap
-    // naturally in `.cookbook-diag-fixes` (flex-wrap) so a long list reflows
-    // onto multiple rows instead of getting collapsed.
+    // 始终以内联按钮方式渲染修复操作。旧的 "Actions ▾" 下拉菜单（用于 >3 个修复）
+    // 是坏掉的 —— 菜单在某些面板中无法打开，将有用的操作隐藏在无效的 UI 后面。
+    // 内联按钮在 `.cookbook-diag-fixes`（flex-wrap）中自然换行，因此长列表会
+    // 重新排列到多行，而不是被折叠。
     const row = document.createElement('div');
     row.className = 'cookbook-diag-fixes';
     for (const fix of fixes) {
@@ -719,7 +711,7 @@ export function _clearDiagnosis(panel) {
   if (diag) { diag.innerHTML = ''; diag.classList.add('hidden'); }
 }
 
-// ── Quick command ──
+// ── 快速命令 ──
 
 export async function _runQuickCmd(panel, cmd) {
   let fullCmd = cmd;
@@ -727,7 +719,7 @@ export async function _runQuickCmd(panel, cmd) {
     fullCmd = _sshCmd(_envState.remoteHost, cmd);
   }
   const diag = panel.querySelector('.cookbook-diagnosis');
-  if (diag) { diag.classList.remove('hidden'); diag.textContent = `Running: ${fullCmd}...`; }
+  if (diag) { diag.classList.remove('hidden'); diag.textContent = t('cookbook.diagnosis_running', { cmd: fullCmd }); }
 
   try {
     const res = await fetch('/api/shell/stream', {
@@ -738,6 +730,6 @@ export async function _runQuickCmd(panel, cmd) {
     });
     if (diag) diag.textContent = res.ok ? `Done: ${cmd}` : `Failed (HTTP ${res.status})`;
   } catch (e) {
-    if (diag) diag.textContent = `Error: ${e.message}`;
+    if (diag) diag.textContent = t('cookbook.diagnosis_error', { msg: e.message });
   }
 }

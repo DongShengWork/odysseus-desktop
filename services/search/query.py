@@ -1,4 +1,4 @@
-"""Query enhancement, entity extraction, and cache duration helpers."""
+"""查询增强、实体提取和缓存时长辅助函数。"""
 
 import re
 import logging
@@ -9,24 +9,24 @@ logger = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------------
-# Query processing helpers
+# 查询处理辅助函数
 # ----------------------------------------------------------------------
 def _detect_question_type(query: str) -> Optional[str]:
-    """Return the leading question word if present (who, what, when, where, why, how)."""
+    """如果存在引导疑问词则返回（who、what、when、where、why、how）。"""
     if not isinstance(query, str):
         return None
     q = query.strip().lower()
     for word in ("who", "what", "when", "where", "why", "how"):
-        # Require a whole-word match: a bare prefix mis-flags ordinary queries
-        # like "whatsapp pricing" (-> what) or "however ..." (-> how), which
-        # then get spurious boost terms OR-appended in enhance_query.
+        # 需要完整词匹配：裸前缀会错误标记普通查询，
+        # 如 "whatsapp pricing"（→ what）或 "however ..."（→ how），
+        # 这些会在 enhance_query 中被 OR 追加虚假的提升词。
         if q == word or q.startswith(word + " "):
             return word
     return None
 
 
 def _extract_entities(query: str) -> Dict[str, List[str]]:
-    """Lightweight entity extraction: capitalized words and date patterns."""
+    """轻量级实体提取：首字母大写的词和日期模式。"""
     if not isinstance(query, str):
         return {"names": [], "dates": []}
     entities: Dict[str, List[str]] = {"names": [], "dates": []}
@@ -48,7 +48,7 @@ def _extract_entities(query: str) -> Dict[str, List[str]]:
 
 
 def _split_multi_part(query: str) -> List[str]:
-    """Split a query into sub-queries on common conjunctions."""
+    """在常见连词处将查询拆分为子查询。"""
     if not isinstance(query, str):
         return []
     parts = re.split(r"\s+and\s+|\s+or\s+|;", query, flags=re.I)
@@ -56,7 +56,7 @@ def _split_multi_part(query: str) -> List[str]:
 
 
 def _extract_site_filter(query: str) -> Tuple[str, Optional[str]]:
-    """Detect a 'site:example.com' token. Returns (query_without_token, site_or_None)."""
+    """检测 'site:example.com' 标记。返回 (不带标记的查询, site 或 None)。"""
     if not isinstance(query, str):
         return "", None
     match = re.search(r"\bsite:([^\s]+)", query, flags=re.I)
@@ -68,7 +68,7 @@ def _extract_site_filter(query: str) -> Tuple[str, Optional[str]]:
 
 
 def _boost_entities_in_query(base_query: str, entities: Dict[str, List[str]]) -> str:
-    """Append extracted entities to the query using OR to increase relevance."""
+    """将提取的实体使用 OR 追加到查询中以提高相关性。"""
     parts = [base_query]
     if entities.get("names"):
         parts.append(" OR ".join(f'"{n}"' for n in entities["names"]))
@@ -78,7 +78,7 @@ def _boost_entities_in_query(base_query: str, entities: Dict[str, List[str]]) ->
 
 
 def enhance_query(original_query: str) -> Tuple[str, Optional[str]]:
-    """Process the original query: site filter, question type boosts, entity extraction."""
+    """处理原始查询：站点过滤、问题类型提升、实体提取。"""
     if not isinstance(original_query, str):
         original_query = ""
     query_without_site, site = _extract_site_filter(original_query)
@@ -111,7 +111,7 @@ def enhance_query(original_query: str) -> Tuple[str, Optional[str]]:
 
 
 def build_enhanced_query(query: str, time_filter: str = None) -> str:
-    """Build an enhanced search query with optional time filtering."""
+    """构建增强搜索查询，支持可选的时间过滤。"""
     enhanced_query, _ = enhance_query(query)
 
     if time_filter:
@@ -125,10 +125,10 @@ def build_enhanced_query(query: str, time_filter: str = None) -> str:
 
 
 # ----------------------------------------------------------------------
-# Cache duration helpers
+# 缓存时长辅助函数
 # ----------------------------------------------------------------------
 def _is_news_query(query: str) -> bool:
-    """Lightweight heuristic to decide if a query is news-oriented."""
+    """轻量级启发式判断查询是否面向新闻。"""
     news_terms = {"news", "latest", "breaking", "today", "today's", "current", "updates", "happening"}
     if not isinstance(query, str):
         return False
@@ -137,7 +137,7 @@ def _is_news_query(query: str) -> bool:
 
 
 def _cache_duration_for_query(query: str) -> timedelta:
-    """News queries -> 30 minutes, reference queries -> 24 hours."""
+    """新闻查询 → 30 分钟，参考查询 → 24 小时。"""
     if _is_news_query(query):
         return timedelta(minutes=30)
     return timedelta(hours=24)

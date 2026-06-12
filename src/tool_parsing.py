@@ -1,8 +1,8 @@
 """
 tool_parsing.py
 
-Regex-based parsing of tool invocations from LLM response text.
-Supports fenced code blocks, [TOOL_CALL] blocks, and XML-style <invoke> blocks.
+从 LLM 响应文本中进行基于正则的工具调用解析。
+支持围栏代码块、[TOOL_CALL] 块和 XML 风格 <invoke> 块。
 """
 
 import ast
@@ -16,25 +16,25 @@ from src.agent_tools import ToolBlock, TOOL_TAGS
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Regex patterns
+# 正则模式
 # ---------------------------------------------------------------------------
 
-# Pattern 1: ```bash ... ``` fenced code blocks
+# 模式 1：```bash ... ``` 围栏代码块
 _TOOL_BLOCK_RE = re.compile(
     r"```(" + "|".join(TOOL_TAGS) + r")\s*\n([\s\S]*?)```",
     re.IGNORECASE,
 )
 
-# Pattern 2: [TOOL_CALL] ... [/TOOL_CALL] blocks (some models use this format)
-# Matches: {tool => "shell", args => {--command "ls -la"}} etc.
+# 模式 2：[TOOL_CALL] ... [/TOOL_CALL] 块（一些模型使用此格式）
+# 匹配：{tool => "shell", args => {--command "ls -la"}} 等。
 _TOOL_CALL_RE = re.compile(
     r"\[TOOL_CALL\]\s*\{([\s\S]*?)\}\s*\[/TOOL_CALL\]",
     re.IGNORECASE,
 )
 
-# Pattern 3: XML-style tool calls (minimax, some other models)
+# 模式 3：XML 风格工具调用（Minimax 及一些其他模型）
 # <minimax:tool_call><invoke name="bash"><parameter name="command">...</parameter></invoke></minimax:tool_call>
-# Also handles: <tool_call><invoke ...>, <function_call><invoke ...>, plain <invoke ...>
+# 也处理：<tool_call><invoke ...>、<function_call><invoke ...>、纯 <invoke ...>
 _XML_TOOL_CALL_RE = re.compile(
     r"<(?:[\w]+:)?(?:tool_call|function_call)>\s*([\s\S]*?)</(?:[\w]+:)?(?:tool_call|function_call)>",
     re.IGNORECASE,
@@ -48,26 +48,20 @@ _XML_PARAM_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Pattern 4: <tool_code> blocks (MiniMax-M2.5 style)
+# 模式 4：<tool_code> 块（MiniMax-M2.5 风格）
 # {tool => 'tool_name', args => '<param>value</param>'}
 _TOOL_CODE_RE = re.compile(
     r"<tool_code>\s*\{([\s\S]*?)\}\s*</tool_code>",
     re.IGNORECASE,
 )
 
-# Pattern 5: DeepSeek DSML markup leaking into content. When deepseek
-# models can't emit structured tool_calls (e.g. we sent no tool schemas
-# that round, or the API didn't parse them), they fall back to raw
-# markup using fullwidth-pipe delimiters:
-#   <｜｜DSML｜｜tool_calls>
-#     <｜｜DSML｜｜invoke name="web_search">
-#       <｜｜DSML｜｜parameter name="query" string="true">QUERY</｜｜DSML｜｜parameter>
-#     </｜｜DSML｜｜invoke>
-#   </｜｜DSML｜｜tool_calls>
-# We normalize it into the standard <invoke>/<parameter> form so the
-# existing XML parser + stripper handle it (parse → execute; strip →
-# never show the garbage to the user). The pipe run is tolerant of
-# fullwidth (U+FF5C) and ascii '|' in any count.
+# 模式 5：DeepSeek DSML 标记泄露到内容中。当 deepseek
+# 模型无法发出结构化 tool_calls 时（例如该轮未发送工具 schema，
+# 或 API 未能解析），它们回退到使用
+# 全角竖线分隔符的原始标记。我们将它标准化为
+# 标准的 <invoke>/<parameter> 形式，以便现有的 XML 解析器
+# + 剥离器能够处理（解析 → 执行；剥离 → 永远不向用户显示垃圾内容）。
+# 竖线匹配容忍全角（U+FF5C）和 ascii '|' 的任意数量。
 _DSML_PIPES = r"[｜|]+"
 def _normalize_dsml(text: str) -> str:
     if not isinstance(text, str):
@@ -79,13 +73,13 @@ def _normalize_dsml(text: str) -> str:
     t = re.sub(rf"<\s*/\s*{_DSML_PIPES}\s*DSML\s*{_DSML_PIPES}\s*tool_calls\s*>", "</tool_call>", t, flags=re.IGNORECASE)
     t = re.sub(rf"<\s*{_DSML_PIPES}\s*DSML\s*{_DSML_PIPES}\s*invoke\s+name=", "<invoke name=", t, flags=re.IGNORECASE)
     t = re.sub(rf"<\s*/\s*{_DSML_PIPES}\s*DSML\s*{_DSML_PIPES}\s*invoke\s*>", "</invoke>", t, flags=re.IGNORECASE)
-    # parameter open tag — drop any extra attrs (e.g. string="true").
+    # parameter 打开标签——丢弃任何额外属性（例如 string="true"）。
     t = re.sub(rf'<\s*{_DSML_PIPES}\s*DSML\s*{_DSML_PIPES}\s*parameter\s+name=(["\'][^"\']+["\'])[^>]*>',
                r"<parameter name=\1>", t, flags=re.IGNORECASE)
     t = re.sub(rf"<\s*/\s*{_DSML_PIPES}\s*DSML\s*{_DSML_PIPES}\s*parameter\s*>", "</parameter>", t, flags=re.IGNORECASE)
     return t
 
-# Map model tool names to our tool types
+# 将模型工具名称映射到我们的工具类型
 _TOOL_NAME_MAP = {
     "shell": "bash",
     "bash": "bash",
@@ -190,11 +184,11 @@ _MISFENCED_WEB_TOOL_NAMES = {
 
 
 # ---------------------------------------------------------------------------
-# Parsing functions
+# 解析函数
 # ---------------------------------------------------------------------------
 
 def _literal_string(value) -> Optional[str]:
-    """Return a string from a small literal AST node, or None."""
+    """从小型字面量 AST 节点返回字符串，或返回 None。"""
     try:
         parsed = ast.literal_eval(value)
     except (ValueError, SyntaxError, TypeError):
@@ -209,16 +203,16 @@ def _literal_string(value) -> Optional[str]:
 
 
 def _parse_misfenced_web_lookup(content: str) -> Optional[ToolBlock]:
-    """Recover simple web_search/web_fetch calls wrapped in python/bash fences.
+    """恢复包裹在 python/bash 围栏中的简单 web_search/web_fetch 调用。
 
-    Some local fenced-tool models write:
+    一些本地围栏工具模型写出：
 
         ```python
         web_search("latest python release")
         ```
 
-    That is an intended tool call, not Python code. Keep this intentionally
-    narrow: only a single bare function call to a known web tool alias converts.
+    这是一个预期的工具调用，不是 Python 代码。有意保持
+    狭窄范围：只有对已知 web 工具别名的单个裸函数调用才会转换。
     """
     try:
         module = ast.parse(content.strip(), mode="exec")
@@ -280,50 +274,50 @@ def _parse_misfenced_web_lookup(content: str) -> Optional[ToolBlock]:
     return ToolBlock("web_fetch", url)
 
 def _parse_tool_call_block(raw: str) -> Optional[ToolBlock]:
-    """Parse a [TOOL_CALL] block into a ToolBlock.
+    """将 [TOOL_CALL] 块解析为 ToolBlock。
 
-    Handles formats like:
+    处理以下格式：
       {tool => "shell", args => {--command "ls -la"}}
       {tool: "shell", command: "ls -la"}
     """
-    # Try to extract tool name
+    # 尝试提取工具名称
     tool_match = re.search(r'tool\s*(?:=>|:|=)\s*["\']?(\w+)["\']?', raw, re.IGNORECASE)
     if not tool_match:
         return None
 
     tool_name = tool_match.group(1).lower()
-    # Fall back to the raw name when it's a real tool but not in the alias
-    # map, so known tools (e.g. manage_calendar) aren't silently dropped.
+    # 当它是真正的工具但不在别名映射中时，回退到原始名称，
+    # 这样已知工具（例如 manage_calendar）就不会被默默丢弃。
     mapped = _TOOL_NAME_MAP.get(tool_name) or (tool_name if tool_name in TOOL_TAGS else None)
     if not mapped:
         return None
 
-    # Extract the command/content — try several patterns
+    # 提取命令/内容——尝试多种模式
     content = None
 
-    # Pattern: --command "value" or --command 'value'
+    # 模式：--command "value" 或 --command 'value'
     cmd_match = re.search(r'--command\s+["\'](.+?)["\']', raw, re.DOTALL)
     if cmd_match:
         content = cmd_match.group(1)
 
-    # Pattern: command => "value" or command: "value"
+    # 模式：command => "value" 或 command: "value"
     if not content:
         cmd_match = re.search(r'command\s*(?:=>|:|=)\s*["\'](.+?)["\']', raw, re.DOTALL)
         if cmd_match:
             content = cmd_match.group(1)
 
-    # Pattern: args => {content} — extract everything inside the nested braces
+    # 模式：args => {content}——提取嵌套大括号内的所有内容
     if not content:
         args_match = re.search(r'args\s*(?:=>|:|=)\s*\{([\s\S]*)\}', raw, re.DOTALL)
         if args_match:
             inner = args_match.group(1).strip()
-            # Strip quotes and key prefixes
+            # 剥离引号和键前缀
             inner = re.sub(r'^--?\w+\s+', '', inner)
             inner = inner.strip('\'"')
             if inner:
                 content = inner
 
-    # Pattern: query/path/code => "value"
+    # 模式：query/path/code => "value"
     if not content:
         for key in ("query", "path", "code", "content", "text", "file"):
             m = re.search(rf'{key}\s*(?:=>|:|=)\s*["\'](.+?)["\']', raw, re.DOTALL)
@@ -331,7 +325,7 @@ def _parse_tool_call_block(raw: str) -> Optional[ToolBlock]:
                 content = m.group(1)
                 break
 
-    # Last resort: take everything after the tool declaration
+    # 最后手段：取工具声明之后的所有内容
     if not content:
         rest = raw[tool_match.end():].strip()
         rest = re.sub(r'^[,;]\s*', '', rest)
@@ -345,39 +339,39 @@ def _parse_tool_call_block(raw: str) -> Optional[ToolBlock]:
 
 
 def _parse_xml_invoke(inv_match) -> Optional[ToolBlock]:
-    """Parse an <invoke name="tool"><parameter ...>...</parameter></invoke> match.
+    """解析 <invoke name="tool"><parameter ...>...</parameter></invoke> 匹配。
 
-    Delegates content-shaping to function_call_to_tool_block — the SAME
-    converter used for native function calls — so the full tool set (every
-    name in TOOL_TAGS, plus email + MCP tools) and the correct per-tool
-    content format are handled in ONE place. The previous version duplicated
-    a partial, hand-maintained tool-name map plus a `key: value` serializer:
-    any tool missing from that map (e.g. `manage_calendar`) was silently
-    dropped, and JSON-arg tools got an unparseable `k: v` blob. Both bugs
-    made deepseek's DSML `create_event` calls vanish with no execution.
+    将内容塑造委托给 function_call_to_tool_block——与
+    原生函数调用使用的相同转换器——因此完整的工具集（TOOL_TAGS
+    中的每个名称，加上 email + MCP 工具）和正确的每工具
+    内容格式在一个地方处理。之前的版本重复了一个
+    部分的、手工维护的工具名称映射加上一个 `key: value` 序列化器：
+    任何在该映射中缺失的工具（例如 `manage_calendar`）都会被默默
+    丢弃，JSON 参数工具会得到不可解析的 `k: v` blob。这两个 bug
+    导致 deepseek 的 DSML `create_event` 调用消失且无执行。
     """
-    # Lowercase the tool name: models often emit capitalized invoke names
-    # (e.g. <invoke name="Bash">) and function_call_to_tool_block matches
-    # case-sensitively against the lowercase _TOOL_NAME_MAP / TOOL_TAGS, so a
-    # raw capitalized name would be silently dropped.
+    # 将工具名称转为小写：模型经常发出大写 invoke 名称
+    #（例如 <invoke name="Bash">），而 function_call_to_tool_block 对
+    # 小写的 _TOOL_NAME_MAP / TOOL_TAGS 进行大小写敏感的匹配，因此
+    # 原始大写名称会被默默丢弃。
     tool_name = inv_match.group(1).lower()
     body = inv_match.group(2)
     params = {}
     for pm in _XML_PARAM_RE.finditer(body):
         params[pm.group(1)] = pm.group(2).strip()
-    # Local import to avoid a circular import at module load.
+    # 模块加载时的本地导入以避免循环导入。
     from src.tool_schemas import function_call_to_tool_block
     return function_call_to_tool_block(tool_name, json.dumps(params))
 
 
 def _parse_tool_code_block(raw: str) -> Optional[ToolBlock]:
-    """Parse a <tool_code>{tool => 'name', args => '...'}</tool_code> block (MiniMax style)."""
-    # Extract tool name
+    """解析 <tool_code>{tool => 'name', args => '...'}</tool_code> 块（MiniMax 风格）。"""
+    # 提取工具名称
     tool_match = re.search(r"tool\s*=>\s*['\"](\S+?)['\"]", raw)
     if not tool_match:
         return None
     tool_name = tool_match.group(1).lower().replace('-', '_')
-    # Strip MCP prefixes like "mcp__server__" or "cli-mcp-server-"
+    # 剥离 "mcp__server__" 或 "cli-mcp-server-" 等 MCP 前缀
     for prefix in ("mcp__", "cli_mcp_server_", "desktop_commander_", "mcp_code_executor_"):
         if tool_name.startswith(prefix):
             tool_name = tool_name[len(prefix):]
@@ -385,26 +379,26 @@ def _parse_tool_code_block(raw: str) -> Optional[ToolBlock]:
 
     mapped = _TOOL_NAME_MAP.get(tool_name)
 
-    # Extract args content
+    # 提取 args 内容
     args_match = re.search(r"args\s*=>\s*['\"]?\s*([\s\S]*?)\s*['\"]?\s*$", raw, re.DOTALL)
     args_body = args_match.group(1).strip().strip("'\"") if args_match else ""
 
-    # Parse XML params inside args (e.g. <command>ls</command>)
+    # 解析 args 内的 XML 参数（例如 <command>ls</command>）
     xml_params = {}
     for pm in re.finditer(r"<(\w+)>([\s\S]*?)</\1>", args_body):
         xml_params[pm.group(1)] = pm.group(2).strip()
 
-    # When the model gave structured params, hand them to the canonical
-    # converter (same as native calls + <invoke>) so the full tool set and
-    # correct per-tool content format apply — not a partial map + k:v blob.
+    # 当模型给出了结构化参数时，将它们交给
+    # 标准转换器（与原生调用 + <invoke> 相同），以便完整的工具集和
+    # 正确的每工具内容格式适用——而不是部分映射 + k:v blob。
     if xml_params:
         from src.tool_schemas import function_call_to_tool_block
         block = function_call_to_tool_block(mapped or tool_name, json.dumps(xml_params))
         if block:
             return block
 
-    # No structured params: args_body is a raw single value (e.g. a bash
-    # command). Keep the freeform special-casing for the simple tools.
+    # 没有结构化参数：args_body 是原始单个值（例如 bash
+    # 命令）。保留简单工具的自由格式特殊处理。
     if mapped:
         if mapped == "bash":
             content = xml_params.get("command", args_body)
@@ -421,57 +415,57 @@ def _parse_tool_code_block(raw: str) -> Optional[ToolBlock]:
         if content:
             return ToolBlock(mapped, content.strip())
     elif tool_name and args_body:
-        # Unknown tool — try as MCP tool call
+        # 未知工具——作为 MCP 工具调用尝试
         content = "\n".join(f"{k}: {v}" for k, v in xml_params.items()) if xml_params else args_body
         return ToolBlock(tool_name, content.strip())
     return None
 
 
 def parse_tool_blocks(text: str, skip_fenced: bool = False) -> List[ToolBlock]:
-    """Extract executable tool blocks from LLM response text.
+    """从 LLM 响应文本中提取可执行的工具块。
 
-    Supports multiple formats:
-    1. ```bash ... ``` fenced code blocks (standard)
-    2. [TOOL_CALL] ... [/TOOL_CALL] blocks (some models)
-    3. XML-style <tool_call>/<invoke> blocks
-    4. <tool_code> blocks (MiniMax-M2.5 style)
-    5. DeepSeek DSML markup (normalized to <invoke> first)
+    支持多种格式：
+    1. ```bash ... ``` 围栏代码块（标准）
+    2. [TOOL_CALL] ... [/TOOL_CALL] 块（某些模型）
+    3. XML 风格 <tool_call>/<invoke> 块
+    4. <tool_code> 块（MiniMax-M2.5 风格）
+    5. DeepSeek DSML 标记（先标准化到 <invoke>）
 
-    `skip_fenced`: when True, Pattern 1 (fenced ```bash/```python/```json code
-    blocks) is not matched at all. Native function-calling models (GPT/Claude/
-    Grok/Qwen3/DeepSeek-V, etc.) commonly write illustrative fenced examples in
-    prose; for those models we trust the structured tool_calls channel for real
-    invocations and treat a bare fence as display text rather than an action
-    (issue #3222). Patterns 2-5 — explicit [TOOL_CALL]/<invoke>/<tool_code>/DSML
-    markup that leaked into content as text — stay fully active regardless,
-    since that markup is never an illustrative example and dropping it would
-    silently lose real calls (e.g. DeepSeek-V falling back to DSML when it
-    can't emit structured tool_calls).
+    `skip_fenced`：为 True 时，模式 1（围栏 ```bash/```python/```json 代码
+    块）完全不匹配。原生函数调用模型（GPT/Claude/
+    Grok/Qwen3/DeepSeek-V 等）经常在散文中写出说明性的围栏示例；
+    对于这些模型，我们信任结构化 tool_calls 通道来执行真正的
+    调用，并将裸围栏视为显示文本而非操作
+    （issue #3222）。模式 2-5——作为文本泄露到内容中的显式
+    [TOOL_CALL]/<invoke>/<tool_code>/DSML 标记——始终完全激活，
+    因为这些标记永远不会是说明性示例，丢弃它们将
+    默默丢失真正的调用（例如 DeepSeek-V 在无法发出
+    结构化 tool_calls 时回退到 DSML）。
     """
     blocks = []
 
-    # Normalize DeepSeek DSML markup into standard <invoke> form so the
-    # XML patterns below catch it.
+    # 将 DeepSeek DSML 标记标准化为标准的 <invoke> 形式，以便
+    # 下面的 XML 模式能捕获。
     text = _normalize_dsml(text)
 
-    # Pattern 1: fenced code blocks (skipped when `skip_fenced` — see docstring).
+    # 模式 1：围栏代码块（当 `skip_fenced` 时跳过——参见 docstring）。
     if not skip_fenced:
         for m in _TOOL_BLOCK_RE.finditer(text):
             tag = m.group(1).lower()
             content = m.group(2).strip()
             if not content:
                 continue
-            # If a code block's content is an <invoke> XML call (some models wrap
-            # tool calls in ```python or ```xml fences), parse the invoke instead.
+            # 如果代码块的内容是 <invoke> XML 调用（一些模型将
+            # 工具调用包裹在 ```python 或 ```xml 围栏中），改为解析 invoke。
             if '<invoke' in content:
                 for inv in _XML_INVOKE_RE.finditer(content):
                     block = _parse_xml_invoke(inv)
                     if block:
                         blocks.append(block)
-                # This fenced block is <invoke> markup, not literal code. Whether or
-                # not any call converted, never fall through to append the raw XML as
-                # a python/bash block — e.g. a hyphenated/namespaced tool name that
-                # _XML_INVOKE_RE's \w+ can't match would otherwise be executed as code.
+                # 这个围栏块是 <invoke> 标记，不是字面代码。无论
+                # 是否有调用成功转换，都绝不回退到将原始 XML 作为
+                # python/bash 块追加——例如，一个连字符/命名空间化的工具名称，
+                # _XML_INVOKE_RE 的 \w+ 无法匹配的，否则会被当作代码执行。
                 continue
             if tag in ("python", "bash"):
                 block = _parse_misfenced_web_lookup(content)
@@ -480,29 +474,29 @@ def parse_tool_blocks(text: str, skip_fenced: bool = False) -> List[ToolBlock]:
                     continue
             blocks.append(ToolBlock(tag, content))
 
-    # Pattern 2: [TOOL_CALL] blocks (only if no fenced blocks found)
+    # 模式 2：[TOOL_CALL] 块（仅在未找到围栏块时）
     if not blocks:
         for m in _TOOL_CALL_RE.finditer(text):
             block = _parse_tool_call_block(m.group(1))
             if block:
                 blocks.append(block)
 
-    # Pattern 3: XML-style <tool_call>/<invoke> blocks
+    # 模式 3：XML 风格 <tool_call>/<invoke> 块
     if not blocks:
-        # Try wrapped: <tool_call><invoke ...>...</invoke></tool_call>
+        # 尝试包装的：<tool_call><invoke ...>...</invoke></tool_call>
         for m in _XML_TOOL_CALL_RE.finditer(text):
             for inv in _XML_INVOKE_RE.finditer(m.group(1)):
                 block = _parse_xml_invoke(inv)
                 if block:
                     blocks.append(block)
-        # Try bare <invoke> without wrapper
+        # 尝试不带包装的裸 <invoke>
         if not blocks:
             for inv in _XML_INVOKE_RE.finditer(text):
                 block = _parse_xml_invoke(inv)
                 if block:
                     blocks.append(block)
 
-    # Pattern 4: <tool_code> blocks (MiniMax-M2.5 style)
+    # 模式 4：<tool_code> 块（MiniMax-M2.5 风格）
     if not blocks:
         for m in _TOOL_CODE_RE.finditer(text):
             block = _parse_tool_code_block(m.group(1))
@@ -513,26 +507,26 @@ def parse_tool_blocks(text: str, skip_fenced: bool = False) -> List[ToolBlock]:
 
 
 def strip_tool_blocks(text: str, skip_fenced: bool = False) -> str:
-    """Remove executable tool blocks from text for clean display.
+    """从文本中移除可执行工具块以供干净显示。
 
-    `skip_fenced`: when True, fenced ```bash/```python/```json code blocks
-    (Pattern 1) are left intact instead of being stripped. This must mirror
-    whatever `skip_fenced` value `parse_tool_blocks` was called with for the
-    same response: if a fence wasn't executed as a tool call (because it's an
-    illustrative example from a native function-calling model), it shouldn't
-    vanish from the persisted/displayed text either — otherwise the example
-    streams once and then disappears on reload (issue #3222 follow-up).
-    Patterns 2-5 + DSML markup are always stripped, since that markup should
-    never reach the user regardless of whether it converted to a tool call.
+    `skip_fenced`：为 True 时，围栏 ```bash/```python/```json 代码块
+    （模式 1）保持原样而非被剥离。这必须镜像
+    针对同一响应调用 `parse_tool_blocks` 时传递的 `skip_fenced` 值：
+    如果围栏未作为工具调用执行（因为它是一个
+    来自原生函数调用模型的说明性示例），它也不应该
+    从持久化/显示的文本中消失——否则示例
+    流式传输一次后，重新加载时就会消失（issue #3222 的后续）。
+    模式 2-5 + DSML 标记始终被剥离，因为无论是否转换为工具调用，
+    这些标记都不应该展示给用户。
     """
-    # Normalize DSML first so its markup gets stripped by the <invoke>
-    # / <tool_call> removers below instead of leaking to the user.
+    # 先标准化 DSML，以便其标记被下面的 <invoke>
+    # / <tool_call> 移除器剥离，而不是泄漏给用户。
     text = _normalize_dsml(text)
     cleaned = text if skip_fenced else _TOOL_BLOCK_RE.sub('', text)
     cleaned = _TOOL_CALL_RE.sub('', cleaned)
     cleaned = _XML_TOOL_CALL_RE.sub('', cleaned)
     cleaned = _TOOL_CODE_RE.sub('', cleaned)
-    # Strip bare <invoke> blocks not wrapped in <tool_call>
+    # 剥离未包裹在 <tool_call> 中的裸 <invoke> 块
     cleaned = re.sub(r'<invoke\s+name=["\'].*?</invoke>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
     return cleaned.strip()

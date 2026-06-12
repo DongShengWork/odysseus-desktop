@@ -1,13 +1,13 @@
 // static/js/voiceRecorder.js
 
 /**
- * Voice recording with optional Speech-to-Text transcription.
+ * 语音录制，支持可选的语音转文字（Speech-to-Text）转录。
  *
- * STT providers:
- *   "disabled"       — record audio as file attachment (original behavior)
- *   "browser"        — use Web Speech API for real-time transcription
- *   "local"          — send recording to server /api/stt/transcribe (Whisper)
- *   "endpoint:<id>"  — send recording to server /api/stt/transcribe (API)
+ * 语音转文字提供商：
+ *   "disabled"       — 将音频录制为文件附件（原始行为）
+ *   "browser"        — 使用 Web Speech API 进行实时转录
+ *   "local"          — 将录音发送到服务器 /api/stt/transcribe（Whisper）
+ *   "endpoint:<id>"  — 将录音发送到服务器 /api/stt/transcribe（API）
  */
 
 let mediaRecorder = null;
@@ -16,15 +16,15 @@ let isRecording = false;
 let recordingStartTime = null;
 let recordingInterval = null;
 
-// Browser STT state
+// 浏览器语音识别状态
 let _recognition = null;
 let _browserTranscript = '';
 
-// Cached STT provider — refreshed on settings change
+// 缓存的语音识别提供商 — 设置变更时刷新
 let _sttProvider = 'disabled';
 
 /**
- * Fetch current STT provider from server settings
+ * 从服务器设置中获取当前的语音识别提供商
  */
 async function refreshSttProvider() {
   try {
@@ -32,7 +32,7 @@ async function refreshSttProvider() {
     if (res.ok) {
       const stats = await res.json();
       _sttProvider = stats.provider || 'disabled';
-      // Notify the send button to update its icon
+      // 通知发送按钮更新图标
       if (window._updateSendBtnIcon) window._updateSendBtnIcon();
     }
   } catch (e) {
@@ -41,7 +41,7 @@ async function refreshSttProvider() {
 }
 
 /**
- * Format seconds as MM:SS
+ * 将秒数格式化为 MM:SS 格式
  */
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -50,7 +50,7 @@ function formatTime(seconds) {
 }
 
 /**
- * Reset UI state after recording ends
+ * 录音结束后重置 UI 状态
  */
 function _resetRecordingUI() {
   isRecording = false;
@@ -58,7 +58,7 @@ function _resetRecordingUI() {
     clearInterval(recordingInterval);
     recordingInterval = null;
   }
-  // Reset send button via global callback
+  // 通过全局回调重置发送按钮
   const sendBtn = document.querySelector('.send-btn');
   if (sendBtn) {
     sendBtn.classList.remove('recording');
@@ -70,7 +70,7 @@ function _resetRecordingUI() {
 }
 
 /**
- * Start browser speech recognition alongside recording
+ * 在录制的同时启动浏览器语音识别
  */
 function startBrowserSTT() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -99,14 +99,14 @@ function startBrowserSTT() {
 
 function stopBrowserSTT() {
   if (_recognition) {
-    try { _recognition.stop(); } catch (e) { /* ignore */ }
+    try { _recognition.stop(); } catch (e) { /* 忽略 */ }
     _recognition = null;
   }
   return _browserTranscript.trim();
 }
 
 /**
- * Send audio to server for transcription
+ * 将音频发送到服务器进行转录
  */
 async function transcribeOnServer(audioBlob) {
   const formData = new FormData();
@@ -128,7 +128,7 @@ async function transcribeOnServer(audioBlob) {
 }
 
 /**
- * Insert transcribed text into the chat input
+ * 将转录后的文本插入到聊天输入框中
  */
 function insertTranscription(text, showToast) {
   if (!text) return;
@@ -138,7 +138,7 @@ function insertTranscription(text, showToast) {
   const existing = input.value.trim();
   input.value = existing ? existing + ' ' + text : text;
 
-  // Trigger auto-resize and icon update
+  // 触发自动调整大小和图标更新
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.focus();
 
@@ -146,10 +146,10 @@ function insertTranscription(text, showToast) {
 }
 
 /**
- * Start voice recording
+ * 开始语音录制
  */
 export function startRecording(onFileCreated, showToast, showError) {
-  // Check for secure context (getUserMedia requires HTTPS or localhost)
+  // 检查安全上下文（getUserMedia 需要 HTTPS 或 localhost）
   if (!window.isSecureContext) {
     if (showError) showError('Microphone requires HTTPS. Use a reverse proxy with SSL or access via localhost.');
     _resetRecordingUI();
@@ -190,7 +190,7 @@ export function startRecording(onFileCreated, showToast, showError) {
             if (onFileCreated) onFileCreated(audioFile);
           }
         } else if (provider === 'local' || provider.startsWith('endpoint:')) {
-          // Show "Transcribing..." feedback
+          // 显示"正在转录..."反馈
           if (showToast) showToast('Transcribing...', 5000);
           try {
             const transcript = await transcribeOnServer(audioBlob);
@@ -202,12 +202,12 @@ export function startRecording(onFileCreated, showToast, showError) {
           } catch (e) {
             console.error('STT transcription error:', e);
             if (showError) showError('Transcription failed: ' + e.message);
-            // Fallback: attach as file
+            // 降级方案：作为文件附件
             const audioFile = new File([audioBlob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
             if (onFileCreated) onFileCreated(audioFile);
           }
         } else {
-          // STT disabled — attach audio file
+          // 语音识别已禁用 — 附加音频文件
           const audioFile = new File([audioBlob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
           if (onFileCreated) onFileCreated(audioFile);
         }
@@ -219,7 +219,7 @@ export function startRecording(onFileCreated, showToast, showError) {
       isRecording = true;
       recordingStartTime = new Date();
 
-      // Start browser STT if that's the provider
+      // 如果提供商是浏览器，则启动浏览器语音识别
       if (_sttProvider === 'browser') {
         startBrowserSTT();
       }
@@ -244,26 +244,26 @@ export function startRecording(onFileCreated, showToast, showError) {
 }
 
 /**
- * Stop voice recording
+ * 停止语音录制
  */
 export function stopRecording() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
-    // isRecording will be set to false in _resetRecordingUI called from onstop
+    // isRecording 将在 _resetRecordingUI 中设置为 false（由 onstop 调用）
   } else {
     _resetRecordingUI();
   }
 }
 
 /**
- * Check if currently recording
+ * 检查当前是否正在录制
  */
 export function getIsRecording() {
   return isRecording;
 }
 
 /**
- * Initialize recording state
+ * 初始化录音状态
  */
 export function init() {
   isRecording = false;
