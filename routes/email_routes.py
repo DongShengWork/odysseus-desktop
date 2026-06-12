@@ -3078,3 +3078,140 @@ def setup_email_routes():
 
     @router.post("/accounts/test")
     async def test_account_config(req: Request, owner: str = Depends(require_user)):
+        """测试实际的 IMAP（和可选的 SMTP）服务器连接。
+        server with the given credentials. Lets the user verify a config
+        BEFORE saving it. Returns per-protocol status so the UI can show
+        which half failed.
+
+        If `account_id` is provided (instead of inline credentials), load
+        the saved row's stored creds and test those — used by the
+        clickable test-dot in the integrations list, where the form has
+        no live values."""
+        try:
+            body = await req.json()
+        except Exception:
+            return {"ok": False, "imap": {"ok": False, "error": "invalid request body"}}
+
+        # Saved-account shortcut — hydrate missing credentials from the DB row,
+        # while keeping any edited form fields from the request. This lets the UI
+        # test unsaved host/port changes without forcing the user to retype the
+        # stored password.
+        # `imap_password` / `smtp_password` are Fernet-encrypted at rest
+        # (see _migrate_encrypt_email_passwords); decrypt before use so
+        # the test actually sends the real password to the server.
+        acc_id = body.get("account_id")
+        if acc_id:
+            _assert_owns_account(acc_id, owner)
+            from core.database import SessionLocal, EmailAccount
+            from src.secret_storage import decrypt as _decrypt
+            db = SessionLocal()
+            try:
+                row = db.get(EmailAccount, acc_id)
+                if not row:
+                    return {"ok": False, "imap": {"ok": False, "error": "Account not found"}}
+                saved_body = {
+                    "imap_host": row.imap_host or "",
+                    "imap_port": row.imap_port or 993,
+                    "imap_user": row.imap_user or "",
+                    "imap_password": _decrypt(row.imap_password or ""),
+                    "imap_starttls": bool(row.imap_starttls),
+                    "smtp_host": row.smtp_host or "",
+                    "smtp_port": row.smtp_port or 465,
+                    "smtp_security": _smtp_security_mode({"smtp_security": getattr(row, "smtp_security", ""), "smtp_port": row.smtp_port}),
+                    "smtp_user": row.smtp_user or "",
+                    "smtp_password": _decrypt(row.smtp_password or ""),
+                }
+                for key, value in body.items():
+                    if key == "account_id":
+                        continue
+                    if value not in (None, ""):
+                        saved_body[key] = value
+                body = saved_body
+            finally:
+                db.close()
+
+        imap_result = {"ok": False}
+        smtp_result = None
+
+        imap_host = (body.get("imap_host") or "").strip()
+        imap_port = int(body.get("imap_port") or 993)
+        imap_user = (body.get("imap_user") or "").strip()
+        imap_pass = body.get("imap_password") or ""
+        imap_starttls = bool(body.get("imap_starttls"))
+
+        if not (imap_host and imap_user and imap_pass):
+            imap_result = {"ok": False, "error": "Need IMAP host, username, and password"}
+        else:
+            # Connection mode resolution:
+            #   STARTTLS on  → plain IMAP4 + .starttls() (upgrade)
+            #   STARTTLS off + port 993 → IMAP4_SSL (implicit SSL, "IMAPS")
+            #   STARTTLS off + any other port → plain IMAP4 (no encryption)
+            # Without the last branch, local servers exposed on a non-993
+            # port (Dovecot on 31143, etc.) would always fail the SSL
+            # handshake because they're not actually wrapped in TLS.
+            try:
+                conn = _open_imap_connection(
+                    imap_host,
+                    imap_port,
+                    starttls=imap_starttls,
+                    timeout=_IMAP_TIMEOUT_SECONDS,
+                )
+                try:
+                    conn.login(imap_user, imap_pass)
+                    imap_result = {"ok": True}
+                finally:
+                    try: conn.logout()
+                    except Exception: pass
+            except Exception as e:
+                imap_result = {"ok": False, "error": _friendly_email_auth_error("IMAP", imap_host, e)}
+
+        smtp_host = (body.get("smtp_host") or "").strip()
+        if smtp_host:
+            smtp_port = int(body.get("smtp_port") or 465)
+            smtp_security = _smtp_security_mode({"smtp_security": body.get("smtp_security"), "smtp_port": smtp_port})
+            smtp_user = (body.get("smtp_user") or imap_user).strip()
+            smtp_pass = body.get("smtp_password") or imap_pass
+            try:
+                if smtp_security == "ssl":
+                    smtp = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10)
+                else:
+                    smtp = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+                    if smtp_security == "starttls":
+                        smtp.starttls()
+                try:
+                    smtp.login(smtp_user, smtp_pass)
+                    smtp_result = {"ok": True}
+                finally:
+                    try: smtp.quit()
+                    except Exception: pass
+            except Exception as e:
+                smtp_result = {"ok": False, "error": _friendly_email_auth_error("SMTP", smtp_host, e)}
+
+        return {
+            "ok": imap_result["ok"] and (smtp_result is None or smtp_result["ok"]),
+            "imap": imap_result,
+            "smtp": smtp_result,
+        }
+
+    @router.post("/accounts/{account_id}/set-default")
+    async def set_default_account(account_id: str, owner: str = Depends(require_user)):
+        _assert_owns_account(account_id, owner)
+        from core.database import SessionLocal, EmailAccount
+        db = SessionLocal()
+        try:
+            row = db.get(EmailAccount, account_id)
+            if not row:
+                return {"ok": False, "error": "Account not found"}
+            # SECURITY: scope the "clear other defaults" sweep to this user's
+            # accounts so we don't unset another user's default flag.
+            clear_q = db.query(EmailAccount)
+            if owner:
+                clear_q = clear_q.filter(EmailAccount.owner == owner)
+            clear_q.update({EmailAccount.is_default: False})
+            row.is_default = True
+            db.commit()
+            return {"ok": True}
+        finally:
+            db.close()
+
+    return router

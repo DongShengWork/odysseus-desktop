@@ -115,7 +115,7 @@ class AuthManager:
             self._config = {}
 
     def _load_sessions(self):
-        """从磁盘加载持久化的会话令牌，并清理已过期的。"
+        """从磁盘加载持久化的会话令牌，并清理已过期的。"""
         try:
             if os.path.exists(self._sessions_path):
                 with open(self._sessions_path, "r", encoding="utf-8") as f:

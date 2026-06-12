@@ -1233,8 +1233,8 @@ def setup_chat_routes(
                     _active_streams.pop(session, None)
 
         async def _safe_stream() -> AsyncGenerator[str, None]:
-        """包装器，确保即使 stream_with_save 在到达特定模式的
-        finally 块之前抛出异常，_active_streams 清理也会执行。"""
+            """包装器，确保即使 stream_with_save 在到达特定模式的
+            finally 块之前抛出异常，_active_streams 清理也会执行。"""
             try:
                 async for chunk in stream_with_save():
                     yield chunk
@@ -1352,5 +1352,109 @@ def setup_chat_routes(
     async def rewrite_message(request: Request) -> StreamingResponse:
         """使用指令重写最后一条 AI 消息（更短/更简单等）。
 
-        Unlike the full chat pipeline, this does NOT run the agent loop or tools.
-        It just asks the LLM to rewrite the given text.
+        与完整对话流程不同，这里不会运行 agent 循环或工具，仅让 LLM 重写给定文本。
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(400, "Invalid JSON")
+
+        session_id = body.get("session_id")
+        original_text = body.get("original_text", "")
+        instruction = body.get("instruction", "")
+
+        if not session_id or not original_text or not instruction:
+            raise HTTPException(400, "session_id, original_text, and instruction are required")
+
+        _verify_session_owner(request, session_id)
+
+        try:
+            sess = session_manager.get_session(session_id)
+        except (KeyError, SessionNotFoundError):
+            raise HTTPException(404, "Session not found")
+
+        messages = [
+            {"role": "system", "content": (
+                "You are rewriting a previous response. Follow the instruction exactly. "
+                "Output ONLY the rewritten text — no preamble, no explanation, no meta-commentary. "
+                "Preserve any formatting (markdown, code blocks, lists) from the original."
+            )},
+            {"role": "user", "content": (
+                f"Here is the original response:\n\n{original_text}\n\n"
+                f"Instruction: {instruction}"
+            )},
+        ]
+
+        async def stream_rewrite() -> AsyncGenerator[str, None]:
+            full_response = ""
+            try:
+                async for chunk in stream_llm(
+                    sess.endpoint_url,
+                    sess.model,
+                    messages,
+                    headers=sess.headers,
+                    temperature=0.7,
+                    # 0 = let the server decide (no cap). A hardcoded 4096 made
+                    # local reasoning models (Qwen3 / R1) burn the whole budget
+                    # inside <think> and emit no rewrite — the bubble just hung
+                    # on "Rewriting...". Same fix as the chat max_tokens cap.
+                    max_tokens=0,
+                    tools=None,
+                ):
+                    if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
+                        try:
+                            data = json.loads(chunk[6:])
+                            if "delta" in data:
+                                # Forward the chunk (so the client can show a
+                                # thinking indicator) but DON'T fold reasoning
+                                # tokens into the saved rewrite — only real
+                                # content. reasoning_content arrives flagged
+                                # with thinking:true.
+                                if not data.get("thinking"):
+                                    full_response += data["delta"]
+                                yield chunk
+                        except json.JSONDecodeError:
+                            yield chunk
+                    elif chunk.startswith("event: "):
+                        yield chunk
+                    elif chunk == "data: [DONE]\n\n":
+                        # Update the last assistant message in session history.
+                        # Strip reasoning-model <think> blocks so the persisted
+                        # rewrite is just the rewritten text, not its scratchpad.
+                        from src.research_utils import strip_thinking
+                        full_response = strip_thinking(full_response).strip() or full_response
+                        if full_response:
+                            for msg in reversed(sess.history):
+                                if (isinstance(msg, ChatMessage) and msg.role == 'assistant') or \
+                                   (isinstance(msg, dict) and msg.get('role') == 'assistant'):
+                                    if isinstance(msg, ChatMessage):
+                                        msg.content = full_response
+                                    else:
+                                        msg['content'] = full_response
+                                    break
+                            # Update in DB too
+                            db = SessionLocal()
+                            try:
+                                db_msg = (
+                                    db.query(DBChatMessage)
+                                    .filter(DBChatMessage.session_id == session_id, DBChatMessage.role == 'assistant')
+                                    .order_by(DBChatMessage.timestamp.desc())
+                                    .first()
+                                )
+                                if db_msg:
+                                    db_msg.content = full_response
+                                    db.commit()
+                            except Exception as e:
+                                logger.warning("Failed to update rewritten message in DB: %s", e)
+                                db.rollback()
+                            finally:
+                                db.close()
+                            session_manager.save_sessions()
+                        yield chunk
+            except Exception as e:
+                logger.error("Rewrite stream error: %s", e)
+                yield f'event: error\ndata: {json.dumps({"error": str(e), "status": 500})}\n\n'
+
+        return StreamingResponse(stream_rewrite(), media_type="text/event-stream")
+
+    return router

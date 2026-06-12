@@ -186,7 +186,7 @@ def format_transcript_for_context(
 async def fetch_youtube_comments(
     video_id: str, max_comments: int = 25, timeout: int = 30
 ) -> Dict[str, Any]:
-    """使用 yt-dlp 获取 YouTube 视频的热门评论。"""
+    """使用 yt-dlp 获取 YouTube 视频的热门评论。
 
     Returns dict with 'success', 'comments' list, 'error'.
     """
