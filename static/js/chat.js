@@ -3884,7 +3884,7 @@ import { t } from './i18n.js';
     // 常见情况是上传前竞争中的重新生成，气泡
     // 从未有过可抓取的 `[data-file-id]`。
     if (!text && !_ids.length) {
-      if (uiModule?.showError) uiModule.showError(t('chat.nothing_to_resend') — message has no text and no attachments yet (try again after the upload finishes).');
+      if (uiModule?.showError) uiModule.showError(t('chat.nothing_to_resend'));
       return;
     }
 

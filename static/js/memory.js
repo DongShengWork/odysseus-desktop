@@ -749,7 +749,7 @@ export function renderMemoryList() {
       // 选择 — 进入批量选择模式并预选此记忆。与邮件/文档/技能的"选择"项模式相同。
       const selectItem = document.createElement('div');
       selectItem.className = 'dropdown-item-compact';
-      selectItem.innerHTML = '<span class="dropdown-icon"><span style="font-size:16px;line-height:1;">●</span></span><span>${t('brain.select')}</span>';
+      selectItem.innerHTML = '<span class="dropdown-icon"><span style="font-size:16px;line-height:1;">●</span></span><span>' + t('brain.select') + '</span>';
       selectItem.addEventListener('click', (e) => {
         e.stopPropagation();
         if (dropdown.parentNode) dropdown.remove();

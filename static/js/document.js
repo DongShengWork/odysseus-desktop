@@ -6725,7 +6725,6 @@ import { t } from './i18n.js';
    *  普通浏览器选择但是持久化的）。代码文档获得基于行的
    *  高亮 — 在代码中工作时通常操作整行，
    *  字符基础的版本在等宽对齐下看起来抖动。 */
-*  等宽对齐。 */
   function _isCodeDoc() {
     const lang = (document.getElementById('doc-language-select')?.value || '').toLowerCase();
     if (!lang) return false;
