@@ -1,4 +1,4 @@
-"""Consolidated service health / degraded-state reporting.
+"""统一的服务健康/降级状态报告。
 
 ROADMAP: "Better degraded-state reporting for ChromaDB, SearXNG, email, ntfy,
 and provider probes." There was no single readout of which subsystems are
@@ -85,7 +85,7 @@ def _svc(name: str, status: str, detail: str, **meta: Any) -> Dict[str, Any]:
 
 
 def _safe_url(url: Optional[str]) -> str:
-    """Strip credentials (userinfo), query, and fragment from a URL.
+    """从 URL 中剥离凭据（userinfo）、查询和片段。
 
     Keeps scheme / host / port / path so the report is still useful, but never
     echoes `user:pass@`, `?api_key=…`, or `#…` back to the caller. Returns
@@ -108,7 +108,7 @@ def _safe_url(url: Optional[str]) -> str:
 
 
 def _classify_error(exc: BaseException) -> str:
-    """Map an exception to a controlled, secret-free category token.
+    """将异常映射到受控的、无密钥的类别标记。
 
     Never returns `str(exc)` — httpx/imaplib exception text can embed the target
     URL (which may carry credentials) or server-supplied detail.

@@ -1,5 +1,5 @@
 # src/document_processor.py
-"""Document processing: PDF/OCR extraction, text file handling, image VL analysis, user content building."""
+"""文档处理：PDF/OCR 提取、文本文件处理、图像 VL 分析、用户内容构建。"""
 
 import os
 import logging

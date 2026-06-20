@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
-    """Naive UTC for this module's DB-bound timestamps.
+    """此模块数据库绑定时间戳的简化 UTC。
 
     Mirrors the naive DateTime columns these values are compared against,
     without the deprecated stdlib UTC-now call (removed in Python 3.14).
@@ -16,7 +16,7 @@ def _utcnow() -> datetime:
 
 
 class CleanupConfig:
-    """Configuration constants for cleanup operations."""
+    """清理操作的配置常量。"""
     ARCHIVE_AFTER_DAYS = 7
     DELETE_AFTER_DAYS = 14
     MIN_MESSAGES_TO_KEEP = 20
@@ -26,7 +26,7 @@ class CleanupConfig:
 
 
 def _apply_owner_filter(query, DbSession, owner: Optional[str]):
-    """Apply owner filtering to a session query.
+    """对会话查询应用所有者过滤。
 
     SECURITY: strict — the previous OR predicate let one user's cleanup
     archive/delete every null-owner session, including ones that hadn't

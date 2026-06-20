@@ -1,4 +1,4 @@
-"""Compatibility helpers for optional third-party dependencies."""
+"""可选第三方依赖的兼容性辅助函数。"""
 
 from __future__ import annotations
 

@@ -1,25 +1,25 @@
 """
-email_thread_parser.py
+email_thread_parser.py — 邮件线程解析器
 
-Server-side port of the JS thread parser in static/js/emailLibrary.js.
-Walks an email body (HTML or plain text) and returns a tree of reply turns
-that the client can render directly without re-parsing.
+static/js/emailLibrary.js 中 JS 线程解析器的服务端移植。
+遍历邮件正文（HTML 或纯文本）并返回回复轮次的树形结构，
+客户端可直接渲染而无需重新解析。
 
-Mirrors the rules from talon (mailgun) and email-reply-parser:
-  - Multilingual "On <date>, <name> wrote:" attribution lines (20+ locales)
-  - Outlook-style "From: ... Sent: ... Subject:" header blocks
-  - "----- Original Message -----" delimiters
-  - <blockquote> nesting (HTML)
-  - "> " prefix nesting (plain text)
+镜像 talon (mailgun) 和 email-reply-parser 的规则：
+  - 多语言 "On <date>, <name> wrote:" 归属行（20+ 种语言）
+  - Outlook 风格 "From: ... Sent: ... Subject:" 头部块
+  - "----- Original Message -----" 分隔符
+  - <blockquote> 嵌套（HTML）
+  - "> " 前缀嵌套（纯文本）
 
-Returns a list of dicts:
+返回字典列表：
     [
       {"level": 0, "body_html": "...", "meta": null},
       {"level": 1, "body_html": "...", "meta": "Alice <a@x> · May 5"},
       {"level": 2, "body_html": "...", "meta": "Bob <b@y> · May 4"},
       ...
     ]
-where level 0 is the current reply, increasing levels = deeper in the chain.
+其中 level 0 是当前回复，递增的级别 = 链中更深的位置。
 """
 
 from __future__ import annotations

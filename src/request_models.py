@@ -53,7 +53,7 @@ class MemoryUpdateRequest(BaseModel):
 
 
 class PresetUpdateRequest(BaseModel):
-    """Request model for updating custom preset configuration."""
+    """更新自定义预设配置的请求模型。"""
     name: str = Field(
         "",
         max_length=50,
@@ -93,7 +93,7 @@ class PresetUpdateRequest(BaseModel):
 
 
 class DirectoryRequest(BaseModel):
-    """Request model for directory operations."""
+    """目录操作的请求模型。"""
     directory: str = Field(
         ...,
         min_length=1,
