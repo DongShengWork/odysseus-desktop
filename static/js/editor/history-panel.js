@@ -1,9 +1,10 @@
 /**
- * 历史记录面板子系统 — 浮动磨砂列表，显示带标签的撤销/重做条目，
- * 挂靠在顶栏 History 按钮上。
+ * History-panel subsystem — the floating frosted list of labeled
+ * undo/redo entries that hangs off the topbar History button.
  *
- * 与 FX 调节弹出窗口相同的停靠模式：拖拽标题重新定位，点击最小化按钮
- * 停靠到 modalManager 的芯片链中，点击芯片恢复。Esc 关闭。
+ * Same docking pattern as the FX adjustment popups: drag the head to
+ * reposition, click the minimise button to dock into the modalManager
+ * chip chain, click the chip to restore. Esc closes.
  *
  * @param {{
  *   undo: () => void,
@@ -87,7 +88,7 @@ export function createHistoryPanel({ undo, redo }) {
       panel.style.left = Math.max(8, r.left) + 'px';
     }
     panel.querySelector('.ge-adj-min').addEventListener('click', minimiseHistoryPanel);
-    // 点击面板之外的任意位置（或触发按钮）关闭面板。
+    // Click anywhere outside the panel (or trigger button) closes it.
     setTimeout(() => {
       const onAway = (ev) => {
         if (!state.historyPanelEl) return;
@@ -141,8 +142,8 @@ export function createHistoryPanel({ undo, redo }) {
     if (!state.historyPanelEl) return;
     const list = state.historyPanelEl.querySelector('#ge-history-list');
     if (!list) return;
-    // 时间顺序 — 最早的在上，最新的在下。撤销（过去）状态在前，
-    // 然后是当前状态，最后是重做（未来）状态。
+    // Chronological order — oldest at top, latest at bottom. Past
+    // (undo) states first, then Current, then future (redo) states.
     const rows = [];
     for (let i = 0; i < state.undoStack.length; i++) {
       const s = state.undoStack[i];
@@ -166,7 +167,7 @@ export function createHistoryPanel({ undo, redo }) {
         jumpToHistory(off);
       });
     });
-    // 将当前标记滚动到可视区域。
+    // Scroll the current marker into view.
     const cur = list.querySelector('.current');
     if (cur) cur.scrollIntoView({ block: 'center' });
   }

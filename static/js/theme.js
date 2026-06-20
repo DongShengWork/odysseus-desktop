@@ -1,5 +1,5 @@
-// 主题系统 — 预设主题 + 自定义颜色编辑，存储在 localStorage 中
-// ES6 模块
+// Theme system — preset themes + custom color editing, stored in localStorage
+// ES6 module
 
 import Storage from './storage.js';
 import uiModule from './ui.js';
@@ -7,14 +7,13 @@ import { initColorPickers, attachColorPicker } from './colorPicker.js';
 import { hexToRgb } from './color/hex.js';
 import { makeWindowDraggable } from './windowDrag.js';
 import { snapModalToZone } from './tileManager.js';
-import { t } from './i18n.js';
 
 export const THEMES = {
   dark:       { bg:'#282c34', fg:'#9cdef2', panel:'#111111', border:'#355a66', red:'#e06c75' },
   light:      { bg:'#f0ebe3', fg:'#5a5248', panel:'#faf6f0', border:'#d4cdc2', red:'#c47d5a' },
   midnight:   { bg:'#0d1117', fg:'#c9d1d9', panel:'#161b22', border:'#30363d', red:'#f85149' },
   paper:      { bg:'#faf8f5', fg:'#3b3836', panel:'#ffffff', border:'#d5d0c8', red:'#c5ac4a' },
-  // 趣味/花式主题
+  // Spicy / fun themes
   cyberpunk:  { bg:'#0a0a0f', fg:'#0ff0fc', panel:'#12101a', border:'#9b30ff', red:'#e040fb' },
   retrowave:  { bg:'#1a1a2e', fg:'#e94560', panel:'#16213e', border:'#533483', red:'#e94560' },
   forest:     { bg:'#1b2a1b', fg:'#a8d5a2', panel:'#142414', border:'#3d6b3d', red:'#7cb871' },
@@ -45,7 +44,7 @@ const DEFAULT_FONT = 'mono';
 const DEFAULT_DENSITY = 'comfortable';
 const MAX_CUSTOM_THEMES = 8;
 
-// 内置主题的默认背景图案
+// Default background patterns for built-in themes
 const THEME_DEFAULT_PATTERN = {
   dark:       'none',
   light:      'dots',
@@ -61,7 +60,7 @@ const THEME_DEFAULT_PATTERN = {
   cute:       'sparkles',
 };
 
-// 特定主题的默认效果颜色（覆盖 --fg）
+// Default effect colors for specific themes (overrides --fg)
 const THEME_DEFAULT_EFFECT_COLOR = {
   midnight:   '#ffffff',
   organs:     '#451616',
@@ -69,19 +68,19 @@ const THEME_DEFAULT_EFFECT_COLOR = {
   ume:        '#f5a0c0',
 };
 
-// 每个主题的默认效果强度（0..1）。未列出的主题默认为 1。
+// Default effect intensity (0..1) per theme. Any theme not listed defaults to 1.
 const THEME_DEFAULT_INTENSITY = {
   midnight:   0.5,
   terminal:   0.8,
   organs:     0.65,
 };
 
-// 每个主题的默认磨砂玻璃状态。未列出的主题默认为 false。
+// Default frosted-glass state per theme. Themes not listed default to false.
 const THEME_DEFAULT_FROSTED = {
   lavender:   true,
 };
 
-// ── 自定义主题持久化 ──
+// ── Custom theme persistence ──
 function _loadCustomThemes() {
   return Storage.getJSON(CUSTOM_THEMES_KEY, {});
 }
@@ -90,7 +89,7 @@ function _saveCustomThemes(obj) {
 }
 export function saveCustomTheme(name, colors, opts) {
   const ct = _loadCustomThemes();
-  // 强制限制 — 允许覆盖已有主题，禁止超过上限的新主题
+  // Enforce limit — allow overwriting existing, block new past max
   if (!ct[name] && Object.keys(ct).length >= MAX_CUSTOM_THEMES) {
     return 'limit';
   }
@@ -128,7 +127,7 @@ function _syncCustomThemesToServer(ct) {
   } catch (e) { console.warn('Theme sync (custom) error:', e); }
 }
 
-// --- 从主题基础颜色推导语法高亮颜色 ---
+// --- Syntax color derivation from theme base colors ---
 function hexToHSL(hex) {
   const rgb = hexToRgb(hex) || { r: 0, g: 0, b: 0 };
   const r = rgb.r / 255;
@@ -170,7 +169,7 @@ function deriveSyntaxColors(colors) {
     string: hslToHex(40, Math.min(fgS + 20, 70), isDark ? 72 : 42),
     comment: hslToHex(fgH, Math.max(fgS - 20, 5), isDark ? (fgL * 0.5 + bgL * 0.5) : (fgL * 0.5 + bgL * 0.5)),
     function: hslToHex(210, Math.min(fgS + 20, 75), isDark ? 70 : 45),
-    // 额外的 token 颜色，用于更丰富的高亮
+    // Extra token colors for richer highlighting
     number: hslToHex(20, Math.min(fgS + 15, 65), isDark ? 68 : 48),
     builtin: hslToHex(180, Math.min(fgS + 15, 60), isDark ? 65 : 40),
     variable: hslToHex((fgH + 30) % 360, Math.min(fgS + 5, 60), isDark ? fgL : fgL),
@@ -178,7 +177,7 @@ function deriveSyntaxColors(colors) {
   };
 }
 
-// 高级选择器 key → CSS 变量映射
+// Advanced picker key → CSS variable mapping
 const ADV_KEYS = [
   { key: 'userBubbleBg',       css: '--user-bubble-bg',    label: 'User Chat Bubble', group: 'Chat Bubbles' },
   { key: 'aiBubbleBg',         css: '--ai-bubble-bg',      label: 'AI Chat Bubble',   group: 'Chat Bubbles' },
@@ -236,7 +235,7 @@ function generateHarmonyColors(accentHex, harmonyType, mode) {
     bgL = isDark ? 13 : 96; fgL = isDark ? 86 : 14; fgS = Math.max(s * 0.18, 5);
     panelL = isDark ? 8 : 99;
     borderH = (h + 120) % 360; borderS = Math.max(s * 0.2, 8); borderL = isDark ? 28 : 74;
-  } else { // 单色
+  } else { // monochromatic
     bgH = h; bgS = Math.max(s * 0.08, 2);
     bgL = isDark ? 12 : 96; fgL = isDark ? 87 : 13; fgS = Math.max(s * 0.15, 5);
     panelL = isDark ? 7 : 99;
@@ -260,12 +259,12 @@ export function applyColors(colors) {
   s.setProperty('--border', colors.border);
   if (colors.red) s.setProperty('--red', colors.red);
 
-  // 保持移动浏览器工具栏/状态栏与主题背景匹配
-  // （与首次绘制时 head 中的脚本相同）。
+  // Keep the mobile browser toolbar / status bar matched to the theme bg
+  // (same as the early head-script does on first paint).
   const _mtc = document.querySelector('meta[name="theme-color"]');
   if (_mtc && colors.bg) _mtc.setAttribute('content', colors.bg);
 
-  // 推导并应用语法高亮颜色
+  // Derive and apply syntax highlighting colors
   const syn = deriveSyntaxColors(colors);
   s.setProperty('--hl-bg', syn.bg);
   s.setProperty('--hl-fg', syn.fg);
@@ -278,20 +277,20 @@ export function applyColors(colors) {
   s.setProperty('--hl-variable', syn.variable);
   s.setProperty('--hl-params', syn.params);
 
-  // 应用高级覆盖（或默认值）
+  // Apply advanced overrides (or defaults)
   const adv = colors.advanced || {};
   const defaults = computeAdvancedDefaults(colors);
   for (const { key, css } of ADV_KEYS) {
     s.setProperty(css, adv[key] || defaults[key]);
   }
 
-  // 更新 favicon 以匹配主题强调色
+  // Update favicon to match theme accent color
   _updateFavicon(colors.red || '#e06c75');
 }
 
-// 各路由的 SVG 形状注册表 — 与 index.html 中的内联 favicon 脚本保持同步，
-// 确保主题切换时保留路由图标而非默认小船。
-// 返回以 `fg` 着色的内部 SVG 标记。
+// Per-route SVG shape registry — kept in sync with the inline favicon
+// script in index.html so a theme change keeps the route icon, not the
+// default boat. Returns the inner SVG markup colored with `fg`.
 const _ROUTE_FAVICON_SHAPES = {
   '/calendar':
     "<rect x='4' y='6' width='24' height='22' rx='2' fill='none' stroke='__C__' stroke-width='2.5'/>" +
@@ -354,9 +353,9 @@ function _updateFavicon(fg) {
   apple.href = href;
 }
 
-// 已发现的自定义字体缓存：{ "字体族名称": [ {file, url, format} ] }
+// Cache of discovered custom fonts: { "Family Name": [ {file, url, format} ] }
 let _customFonts = {};
-// 跟踪哪些自定义字体族已注入 @font-face
+// Track which custom font families already have @font-face injected
 const _injectedFonts = new Set();
 
 function _injectFontFace(familyName, variants) {
@@ -376,7 +375,7 @@ export function applyFontDensity(font, density) {
   const d = density || DEFAULT_DENSITY;
   let family = FONT_MAP[f];
   if (!family && _customFonts[f]) {
-    // 这是来自本地文件夹的自定义字体
+    // It's a custom font from the local folder
     _injectFontFace(f, _customFonts[f]);
     family = "'" + f + "', sans-serif";
   }
@@ -399,41 +398,41 @@ export function applyBgEffectColor(color) {
 }
 
 export function applyBgEffectIntensity(v) {
-  // v 的范围是 0..1。缺失时默认为 1（全强度）。
+  // v is 0..1. Default 1 (full intensity) when missing.
   const n = (v === undefined || v === null || isNaN(v)) ? 1 : Math.max(0, Math.min(1, Number(v)));
   document.documentElement.style.setProperty('--bg-effect-intensity', String(n));
 }
 
 export function applyBgEffectSize(v) {
-  // v 是乘数 0.2..3.0。缺失时默认为 1。
+  // v is a multiplier 0.3..2.5. Default 1 when missing.
   const n = (v === undefined || v === null || isNaN(v)) ? 1 : Math.max(0.2, Math.min(3, Number(v)));
   document.documentElement.style.setProperty('--bg-effect-size', String(n));
 }
 
-/** 切换全局"磨砂玻璃"效果 — 通过对 `body.theme-frosted` 的 CSS 规则
- *  为每个面板、侧边栏、模态框、下拉菜单和弹出框应用半透明 + 模糊
- *  处理。 */
+/** Toggle the global "frosted glass" look — applies a translucent + blurred
+ *  treatment to every panel, sidebar, modal, dropdown, and popover via CSS
+ *  rules scoped to `body.theme-frosted`. */
 export function applyFrostedGlass(on) {
   document.body.classList.toggle('theme-frosted', !!on);
 }
 
-// 读取当前 JS 效果（基于 canvas）的大小乘数。
+// Read current size multiplier for JS effects (canvas-based).
 function _getEffectSize() {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bg-effect-size'));
   return isNaN(v) ? 1 : v;
 }
 
-// 强度/大小滑块对这些图案没有可见效果的图案集合。
+// Patterns where the intensity/size sliders have no visible effect.
 const _STATIC_PATTERNS = new Set(['none', 'dots']);
 
 export function applyBgPattern(pattern) {
   const p = pattern || 'none';
   document.body.classList.remove(..._BG_CLASSES);
-  // 清理任何 canvas 背景
+  // Clean up any canvas backgrounds
   document.querySelectorAll('#synapse-canvas, #rain-canvas, #constellations-canvas, #perlin-flow-canvas, #petals-canvas, #sparkles-canvas, #embers-canvas').forEach(c => c.remove());
   if (p !== 'none') document.body.classList.add('bg-pattern-' + p);
   if (_CANVAS_PATTERNS[p]) _CANVAS_PATTERNS[p]();
-  // 隐藏对静态图案无效果的滑块。
+  // Hide sliders that do nothing on static patterns.
   const hide = _STATIC_PATTERNS.has(p);
   const ig = document.getElementById('theme-bg-intensity-group');
   const sg = document.getElementById('theme-bg-size-group');
@@ -443,9 +442,9 @@ export function applyBgPattern(pattern) {
 
 export function getSaved() {
   const obj = Storage.getJSON(LS_KEY, null);
-  // 迁移：'chatgpt' 预设已重命名为 'gpt'
+  // Migration: 'chatgpt' preset was renamed to 'gpt'
   if (obj && obj.name === 'chatgpt') obj.name = 'gpt';
-  // 迁移：'sakura' 预设已重命名为 'ume'
+  // Migration: 'sakura' preset was renamed to 'ume'
   if (obj && obj.name === 'sakura') obj.name = 'ume';
   return obj;
 }
@@ -512,22 +511,22 @@ export function initThemeUI() {
     makeDraggable(themePopup, themeHeader);
   }
 
-  // 将内置颜色选择器附加到主题面板中的每个颜色输入。
-  // 可安全重复调用 — 选择器会标记已包装的输入。
+  // Attach the in-house color picker to every color input in the theme panel.
+  // Safe to call repeatedly — the picker marks inputs it's already wrapped.
   try { initColorPickers(document); } catch (e) { console.warn('Color picker init failed', e); }
 
-  // 立即用计算出的默认值填充高级颜色输入。
-  // BUG 修复：没有这一步，未触碰的输入会停留在浏览器默认值 '#000000'，
-  // 直到用户点击色板；此时任何高级输入的第一个编辑操作都会触发
-  // readAdvanced() 将其他每个 '#000000' 作为覆盖值存储 —
-  // 例如编辑聊天气泡边框会把侧边栏背景变成纯黑色。
+  // Populate the advanced color inputs with their computed defaults right now.
+  // BUG FIX: without this, untouched inputs sat at the browser-default `#000000`
+  // until the user clicked a swatch; the first edit of ANY advanced input then
+  // tripped readAdvanced() into storing every other `#000000` as an override —
+  // e.g. editing Chat Bubble Border turned Sidebar Bg pure black.
   try {
     const saved = getSaved();
     if (saved && saved.colors) {
       syncAdvancedPickers(saved.colors);
     }
   } catch (e) { console.warn('syncAdvancedPickers on init failed', e); }
-  // 关联主题标签页（主题 / 自定义）
+  // Wire up theme tabs (Themes / Customize)
   const themeTabs = document.getElementById('theme-tabs');
   if (themeTabs) {
     themeTabs.addEventListener('click', (e) => {
@@ -539,16 +538,17 @@ export function initThemeUI() {
       document.querySelectorAll('.theme-tab-panel').forEach(p => p.style.display = 'none');
       const panel = document.getElementById(targetId);
       if (panel) panel.style.display = '';
-      // 仅在自定义标签页中显示透明度滑块。
+      // Show the opacity slider only on the Customize tab.
       const opWrap = document.getElementById('theme-opacity-wrap');
       if (opWrap) opWrap.classList.toggle('hidden', targetId !== 'theme-tab-customize');
-      // 恢复完整透明度/模糊。滑块效果本来就只在自定义标签页中有效 —
-      // 在调整颜色时窥视页面 — 所以切换回主题（或计划任务）标签页时应该
-      // 看起来和应用的其他模态框完全一样。
+      // Restore full opacity / blur on every other tab. The slider's effect
+      // is meant to be Customize-only — peeking at the page while tweaking
+      // colors — so swapping back to Themes (or Schedule) should look
+      // exactly like the rest of the app's modals again.
       const popup = document.getElementById('theme-popup');
       if (popup) {
         if (targetId === 'theme-tab-customize') {
-          // 重新应用透视切换的当前状态。
+          // Reapply the Peek toggle's current state.
           if (opWrap && opWrap._apply) opWrap._apply();
         } else {
           popup.style.removeProperty('opacity');
@@ -566,21 +566,21 @@ export function initThemeUI() {
   }
 
 
-  // 关联"透视"透明度开关 — 淡化主题模态框，让用户在
-  // 自定义标签页中调整颜色时可以看见后面的页面。
-  // 仅开/关（无滑块）；初始关闭，位于标题栏中，
-  // 用户切换到主题/计划任务标签页时清除。
+  // Wire the "Peek" opacity toggle — fades the theme modal so the user can
+  // see the page behind it while tweaking colors on the Customize tab.
+  // On/off only (no slider); starts off, lives in the title bar, and is
+  // cleared when the user swaps to Themes / Schedule.
   (function _wireOpacityToggle() {
     const toggle = document.getElementById('theme-opacity-wrap');
     const popup = document.getElementById('theme-popup');
     if (!toggle || !popup || toggle.dataset.bound === '1') return;
     toggle.dataset.bound = '1';
-    const PEEK = 55; // 透视时的透明度百分比
+    const PEEK = 55; // % opacity when peeking
     const apply = (on) => {
       const cards = popup.querySelectorAll('.admin-card');
       if (on) {
-        // 通过 color-mix 淡化模态框 + 每个内部卡片 — 永远不用元素透明度，
-        // 这样文本、控件和色板保持清晰。
+        // Fade the modal + each inner card via color-mix — never element
+        // opacity, so text, controls and swatches stay sharp.
         const bgMix    = `color-mix(in srgb, var(--bg)    ${PEEK}%, transparent)`;
         const panelMix = `color-mix(in srgb, var(--panel) ${PEEK}%, transparent)`;
         popup.style.setProperty('background', bgMix, 'important');
@@ -604,7 +604,7 @@ export function initThemeUI() {
         });
       }
     };
-    // 暴露此方法以便切换标签页时回到自定义标签可以重新应用。
+    // Expose so the tab-switch handler can reapply when returning to Customize.
     toggle._apply = () => apply(toggle.classList.contains('active'));
     toggle.addEventListener('click', () => {
       const on = !toggle.classList.contains('active');
@@ -621,7 +621,7 @@ export function initThemeUI() {
   const activeName = saved ? saved.name : DEFAULT_THEME;
   const customThemes = _loadCustomThemes();
 
-  // 渲染预设色板
+  // Render preset swatches
   grid.innerHTML = Object.entries(THEMES).map(([name, c]) => `
     <div class="theme-swatch${name === activeName ? ' active' : ''}" data-theme="${name}">
       <div class="theme-swatch-colors">
@@ -634,7 +634,7 @@ export function initThemeUI() {
     </div>
   `).join('');
 
-  // 在单独的卡片中渲染自定义主题色板
+  // Render custom theme swatches into separate card
   const userGrid = document.getElementById('themeUserGrid');
   const userCard = document.getElementById('themeUserCard');
   const customEntries = Object.entries(customThemes);
@@ -649,14 +649,14 @@ export function initThemeUI() {
           <span style="background:${c.red}"></span>
         </div>
         <span class="theme-swatch-name">${name}</span>
-        <button type="button" class="theme-delete-btn" data-delete="${name}" title="${t('theme.delete_theme')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button type="button" class="theme-delete-btn" data-delete="${name}" title="Delete theme"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     `).join('');
   } else if (userCard) {
     userCard.style.display = 'none';
   }
 
-  // 辅助函数：使用 UI 下拉选择中当前的字体/密度/背景图案进行保存
+  // Helper: save with current font/density/bgPattern from UI selects
   function _getOpts() {
     const opts = {};
     const fs = document.getElementById('theme-font-select');
@@ -677,7 +677,7 @@ export function initThemeUI() {
   }
   function _saveFull(name, colors) { save(name, colors, _getOpts()); }
 
-  // 两个网格中所有色板（预设 + 自定义）的点击处理器
+  // Click handlers for all swatches (preset + custom) across both grids
   const allGrids = [grid, userGrid].filter(Boolean);
   function clearAllActive() { allGrids.forEach(g => g.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'))); }
   allGrids.forEach(g => {
@@ -736,17 +736,17 @@ export function initThemeUI() {
     });
   });
 
-  // 从当前主题初始化颜色选择器并应用语法颜色
+  // Init color pickers from current theme and apply syntax colors
   const currentColors = saved ? saved.colors : THEMES[DEFAULT_THEME];
   applyColors(currentColors);
   syncPickers(currentColors);
 
-  // 各选择器重置的参考颜色（你开始的基准主题）
+  // Reference colors for per-picker reset (the theme you started from)
   const refName = saved ? saved.name : DEFAULT_THEME;
   const refColors = THEMES[refName] || customThemes[refName] || currentColors;
   const refDefaults = computeAdvancedDefaults(refColors);
 
-  // 根据颜色是否与参考值不同来同步重置按钮的可见性
+  // Sync reset button visibility based on whether color differs from reference
   function syncResetButtons() {
     document.querySelectorAll('.color-reset-btn[data-reset]').forEach(btn => {
       const key = btn.dataset.reset;
@@ -765,27 +765,27 @@ export function initThemeUI() {
     });
   }
 
-  // 颜色选择器实时更新。
-  // 注意：不要克隆 input。attachColorPicker 已在这个确切的元素上安装了
-  // value-getter 覆盖 + mousedown 处理器；克隆会导致两者都失效。
-  // 改为使用一次性绑定标记。
+  // Color picker live updates.
+  // NOTE: do NOT clone the input. attachColorPicker installed a value-getter
+  // override + a mousedown handler on this exact element; cloning would orphan
+  // both. Use a one-time bind flag instead.
   const pickerIds = { bg: 'clr-bg', fg: 'clr-fg', panel: 'clr-panel', border: 'clr-border', red: 'clr-red' };
   Object.entries(pickerIds).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (!el || el.dataset.themeBound === '1') return;
     el.dataset.themeBound = '1';
     el.addEventListener('input', () => {
-      // 在读取新选择器值之前捕获旧的调色板。
-      // 下面用于判断哪些高级选择器有真实的用户自定义覆盖值
-      // （值与旧计算默认不同）与哪些是过时的默认值
-      // 应自动刷新。
+      // Capture the OLD basic palette before we read the new picker values.
+      // Used below to decide which advanced pickers carry a real user-set
+      // override (value differs from the OLD computed default) vs. ones
+      // that are just stale-default and should auto-refresh.
       const _oldColors = {};
       Object.entries(pickerIds).forEach(([k, pid]) => {
-        // 对用户触碰的那个选择器来说，值已经改变了（input 已触发）。
-        // 对该选择器，读取当前值就是新的颜色，这没问题
-        // — _oldDefaults 使用其余值。我们
-        // 用 computeAdvancedDefaults({...new}) 计算新的默认值
-        // 用 CSS 变量获取旧默认值。
+        // Picker value HAS already changed (input fired) for the one the
+        // user touched. For that one, reading the current value gives the
+        // NEW color, which is fine — _oldDefaults uses the rest. We use
+        // computeAdvancedDefaults({...new}) once for the new defaults, and
+        // the CSS variables for the OLD defaults.
       });
       const _rs = getComputedStyle(document.documentElement);
       _oldColors.bg     = (_rs.getPropertyValue('--bg')    || '').trim();
@@ -800,29 +800,29 @@ export function initThemeUI() {
         colors[k] = document.getElementById(pid).value;
       });
 
-      // 构建高级覆盖映射：只有值与旧默认值不同的选择器
-      // 才计为用户自定义。未触碰的选择器（仍匹配旧默认值）
-      // 会自动更新为新默认值，使其继续跟踪基础调色板
-      // （例如发送按钮跟随强调色）。
+      // Build the advanced override map: only pickers whose value differs
+      // from the OLD default count as user-set. Untouched pickers (still
+      // matching the old default) get auto-updated to the NEW default so
+      // they keep tracking the basic palette (e.g. Send Btn follows Accent).
       const _newDefaults = computeAdvancedDefaults(colors);
       const _adv = {};
       let _hasAdv = false;
-      // 将颜色字符串规范化为小写 6 位十六进制值，使 getComputedStyle
-      // 的值（保持设置时的值 — 可能是 #abc、#ABCDEF 或 rgb()）
-      // 能正确与颜色输入选择器（始终为小写 #rrggbb）比较。
-      // 没有这个规范化步骤，每个高级选择器都会被计为
-      // "用户自定义"，我们会回到 v161 的 bug。
+      // Normalize color strings to lowercase 6-char hex so getComputedStyle
+      // values (which keep whatever was set — could be #abc, #ABCDEF, or
+      // rgb()) compare correctly against color-input pickers (always
+      // #rrggbb lowercase). Without this, every advanced picker reads as
+      // "user-set" and we'd revert to the v161 bug.
       const _norm = (raw) => {
         let h = String(raw || '').trim().toLowerCase();
         if (!h) return '';
-        // rgb(r,g,b) 或 rgba(r,g,b,a)
+        // rgb(r,g,b) or rgba(r,g,b,a)
         const rgb = h.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
         if (rgb) {
           const hx = n => Math.max(0, Math.min(255, parseInt(n, 10))).toString(16).padStart(2, '0');
           return '#' + hx(rgb[1]) + hx(rgb[2]) + hx(rgb[3]);
         }
         if (h[0] !== '#') h = '#' + h;
-        // 展开 #rgb → #rrggbb
+        // Expand #rgb → #rrggbb
         if (/^#[0-9a-f]{3}$/.test(h)) {
           return '#' + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
         }
@@ -835,20 +835,20 @@ export function initThemeUI() {
           _adv[key] = pEl.value;
           _hasAdv = true;
         } else {
-          // 未触碰——滑动到新默认值以跟随新调色板
+          // Untouched — slide to the new default so it tracks the new palette.
           pEl.value = _newDefaults[key];
         }
       }
       if (_hasAdv) colors.advanced = _adv;
       applyColors(colors);
-      // 自动保存：如果活动主题是用户的自定义主题之一
-      // 则将更改写回该主题，这样重命名/重新加载能保留编辑内容。
-      // 否则回退到临时的'custom'槽（现有行为）
+      // Auto-save: if the active theme is one of the user's custom themes,
+      // route changes back into it so renaming/reloading keeps the edits.
+      // Otherwise fall back to the transient 'custom' slot (existing behavior).
       const _activeSaved = getSaved();
       const _activeName = _activeSaved && _activeSaved.name;
       const _customMap = _loadCustomThemes();
       if (_activeName && _customMap && _customMap[_activeName]) {
-        // 保留不属于基础颜色的 advanced/opts 键
+        // Preserve advanced/opts keys that aren't part of basic colors.
         saveCustomTheme(_activeName, colors, {
           font: _activeSaved.font, density: _activeSaved.density,
           bgPattern: _activeSaved.bgPattern, bgEffectColor: _activeSaved.bgEffectColor,
@@ -865,7 +865,7 @@ export function initThemeUI() {
     });
   });
 
-  // 保存自定义主题——内联输入
+  // Save custom theme — inline input
   const saveNameInputOld = document.getElementById('theme-save-name');
   const saveGoBtnOld = document.getElementById('theme-save-go');
   const saveError = document.getElementById('theme-save-error');
@@ -877,10 +877,10 @@ export function initThemeUI() {
     const doSave = () => {
       saveError.style.display = 'none';
       const name = newNameInput.value.trim();
-      if (!name) { saveError.textContent = t('theme.enter_name'); saveError.style.display = 'block'; return; }
+      if (!name) { saveError.textContent = 'Enter a name.'; saveError.style.display = 'block'; return; }
       const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      if (!slug) { saveError.textContent = t('theme.invalid_name'); saveError.style.display = 'block'; return; }
-      if (THEMES[slug]) { saveError.textContent = t('theme.cannot_overwrite_builtin'); saveError.style.display = 'block'; return; }
+      if (!slug) { saveError.textContent = 'Invalid name.'; saveError.style.display = 'block'; return; }
+      if (THEMES[slug]) { saveError.textContent = 'Cannot overwrite a built-in theme.'; saveError.style.display = 'block'; return; }
       const colors = {};
       const pickerIds2 = { bg: 'clr-bg', fg: 'clr-fg', panel: 'clr-panel', border: 'clr-border', red: 'clr-red' };
       Object.entries(pickerIds2).forEach(([k, pid]) => { colors[k] = document.getElementById(pid).value; });
@@ -894,14 +894,14 @@ export function initThemeUI() {
       if (hasAdv) colors.advanced = adv;
       const opts = _getOpts();
       const result = saveCustomTheme(slug, colors, opts);
-      if (result === 'limit') { saveError.textContent = t('theme.max_themes', { max: MAX_CUSTOM_THEMES }); saveError.style.display = 'block'; return; }
+      if (result === 'limit') { saveError.textContent = 'Max ' + MAX_CUSTOM_THEMES + ' custom themes. Delete one first.'; saveError.style.display = 'block'; return; }
       save(slug, colors, opts);
       newNameInput.value = '';
-      _flashAutosaved(t('theme.theme_saved'));
-      uiModule.showToast?.(t('theme.theme_saved'));
+      _flashAutosaved('Theme saved');
+      uiModule.showToast?.('Theme saved');
       const prevHtml = newGoBtn.innerHTML;
       newGoBtn.disabled = true;
-      newGoBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>' + t('settings.saved') + '</span>';
+      newGoBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Saved</span>';
       setTimeout(() => {
         newGoBtn.disabled = false;
         newGoBtn.innerHTML = prevHtml;
@@ -911,7 +911,7 @@ export function initThemeUI() {
     newNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSave(); });
   }
 
-  // 重置按钮
+  // Reset button
   const resetBtn = document.getElementById('theme-reset-btn');
   if (resetBtn) {
     const newReset = resetBtn.cloneNode(true);
@@ -935,7 +935,7 @@ export function initThemeUI() {
     });
   }
 
-  // 高级部分切换
+  // Advanced section toggle
   const advToggle = document.getElementById('theme-adv-toggle');
   const advSection = document.getElementById('themeAdvanced');
   if (advToggle && advSection) {
@@ -944,17 +944,17 @@ export function initThemeUI() {
     newToggle.addEventListener('click', () => {
       advSection.classList.toggle('hidden');
       newToggle.classList.toggle('open');
-      // 重新扫描行，使高级颜色输入也能获得悬停高亮
+      // Re-scan rows so advanced color inputs get the hover-highlight too.
       const root = document.getElementById('theme-tab-customize');
       if (root) root.dataset.zoneBound = '';
       initThemeZoneHighlight();
     });
   }
-  // 绑定颜色行的悬停高亮，让用户看到每个输入编辑的 UI 区域
-  // 编辑。
+  // Wire hover-highlights on color rows so the user sees which UI zone
+  // each input edits.
   initThemeZoneHighlight();
 
-  // 高级颜色选择器实时更新
+  // Advanced color picker live updates
   function readCurrentColors() {
     const pickerIds2 = { bg: 'clr-bg', fg: 'clr-fg', panel: 'clr-panel', border: 'clr-border', red: 'clr-red' };
     const c = {};
@@ -971,8 +971,8 @@ export function initThemeUI() {
       const el = document.getElementById('adv-' + key);
       if (!el) continue;
       const v = (el.value || '').toLowerCase();
-      // 跳过空的或从未填充的输入，避免意外存储
-      // （然后写入 '#000000' 到 CSS 变量）。
+      // Skip empty or never-populated inputs so we don't accidentally store
+      // them as overrides (and then write '#000000' to the CSS var).
       if (!v || !/^#[0-9a-f]{6}$/.test(v)) continue;
       if (v !== (defaults[key] || '').toLowerCase()) {
         adv[key] = el.value;
@@ -990,9 +990,9 @@ export function initThemeUI() {
       const base = readCurrentColors();
       base.advanced = readAdvanced();
       applyColors(base);
-      // 与上方基础颜色输入相同的自动保存路由——写入
-      // 自定义主题则写入该主题，否则回退到
-      // 临时的 'custom' 槽位。
+      // Same auto-save routing as the basic color inputs above — write
+      // to the active custom theme if there is one, else fall back to
+      // the transient 'custom' slot.
       const _activeSaved = getSaved();
       const _activeName = _activeSaved && _activeSaved.name;
       const _customMap = _loadCustomThemes();
@@ -1013,7 +1013,7 @@ export function initThemeUI() {
     });
   }
 
-  // 清除高级覆盖按钮
+  // Clear advanced overrides button
   const advClearBtn = document.getElementById('theme-adv-clear');
   if (advClearBtn) {
     const newClear = advClearBtn.cloneNode(true);
@@ -1028,7 +1028,7 @@ export function initThemeUI() {
     });
   }
 
-  // 各选择器的重置按钮（基础颜色）
+  // Per-picker reset buttons (base colors)
   document.querySelectorAll('.color-reset-btn[data-reset]').forEach(btn => {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
@@ -1042,7 +1042,7 @@ export function initThemeUI() {
     });
   });
 
-  // 效果颜色重置按钮
+  // Effect color reset button
   document.querySelectorAll('.color-reset-btn[data-reset-effect]').forEach(btn => {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
@@ -1057,7 +1057,7 @@ export function initThemeUI() {
     });
   });
 
-  // 各选择器的重置按钮（高级颜色）
+  // Per-picker reset buttons (advanced colors)
   document.querySelectorAll('.color-reset-btn[data-reset-adv]').forEach(btn => {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
@@ -1071,10 +1071,10 @@ export function initThemeUI() {
     });
   });
 
-  // 重置按钮可见性的初始同步
+  // Initial sync of reset button visibility
   syncResetButtons();
 
-  // 字体、密度、背景图案控件
+  // Font, density, background pattern controls
   const _initFont = (saved && saved.font) || DEFAULT_FONT;
   const _initDensity = (saved && saved.density) || DEFAULT_DENSITY;
   const _initPattern = (saved && saved.bgPattern) || (saved && THEME_DEFAULT_PATTERN[saved.name]) || 'none';
@@ -1104,7 +1104,7 @@ export function initThemeUI() {
       applyFontDensity(nf.value, document.getElementById('theme-density-select').value);
       const s = getSaved(); if (s) _saveFull(s.name, s.colors);
     });
-    // 从本地文件夹获取自定义字体并填充下拉菜单
+    // Fetch custom fonts from local folder and populate dropdown
     fetch('/api/fonts/custom', { credentials: 'same-origin' })
       .then(r => r.json())
       .then(data => {
@@ -1118,7 +1118,7 @@ export function initThemeUI() {
           opt.dataset.customFont = '1';
           nf.appendChild(opt);
         }
-        // 选项填充后恢复已保存的值
+        // Restore saved value after options are populated
         nf.value = _initFont;
       })
       .catch(e => console.warn('Custom fonts fetch failed:', e));
@@ -1176,18 +1176,18 @@ export function initThemeUI() {
     });
   }
 
-  // --- 颜色和谐生成器（在高级部分内） ---
+  // --- Color Harmony Generator (inside Advanced section) ---
   const harmonyGenBtnEl = document.getElementById('harmony-generate-btn');
   const harmonyAccentEl = document.getElementById('harmony-accent');
-  // 确保内部颜色选择器确实已附加到此元素。
-  // 全局 initColorPickers() 调用应该已经捕获了它，但在旧会话/部分加载中
-  // 有时没有被包装 —
-  // 幂等地调用 attachColorPicker，使弹出框、建议、最近使用
-  // 和十六进制同步全部匹配其他每个颜色行。
+  // Make sure the in-house color picker really attached to this one. The
+  // global initColorPickers() call earlier in initThemeUI should have grabbed
+  // it, but in older sessions / partial loads it sometimes wasn't wrapped —
+  // call attachColorPicker idempotently so the popover, suggestions, recents
+  // and hex syncing all match every other color row.
   if (harmonyAccentEl) {
     try { attachColorPicker(harmonyAccentEl); } catch (_) {}
   }
-  // 保持十六进制显示芯片与选择器报告的值同步
+  // Keep the hex display chip in sync with whatever the picker reports.
   const _harmonyHex = document.getElementById('harmony-accent-hex');
   if (harmonyAccentEl && _harmonyHex) {
     _harmonyHex.textContent = harmonyAccentEl.value || '#e06c75';
@@ -1214,11 +1214,11 @@ export function initThemeUI() {
   if (harmonyAccentEl) {
     const newAcc = harmonyAccentEl.cloneNode(true);
     harmonyAccentEl.parentNode.replaceChild(newAcc, harmonyAccentEl);
-    // 将内部颜色选择器重新附加到新的克隆。cloneNode
-    // 复制了 data-cp-attached="1" 标志但不会复制监听器，因此我们必须
-    // 先清除标志，否则 attachColorPicker 会作为空操作退出。
+    // Re-attach the in-house color picker to the fresh clone. cloneNode
+    // copies the data-cp-attached="1" flag but NOT the listeners, so we
+    // have to clear the flag first or attachColorPicker bails as a no-op.
     delete newAcc.dataset.cpAttached;
-    newAcc.type = 'color'; // 克隆元素可能是之前附加时的 type=text
+    newAcc.type = 'color'; // clone may have been type=text from prior attach
     try { attachColorPicker(newAcc); } catch (_) {}
     newAcc.addEventListener('input', () => {
       const type = document.getElementById('harmony-type').value;
@@ -1226,13 +1226,13 @@ export function initThemeUI() {
       const colors = generateHarmonyColors(newAcc.value, type, mode);
       const prev = document.getElementById('harmony-preview');
       if (prev) prev.innerHTML = [colors.bg, colors.panel, colors.fg, colors.border, colors.red].map(c => `<span style="background:${c}"></span>`).join('');
-      // 同步选择器旁的十六进制芯片
+      // Sync the hex chip beside the picker.
       const hex = document.getElementById('harmony-accent-hex');
       if (hex) hex.textContent = newAcc.value;
     });
   }
 
-  // --- 导入 / 导出 ---
+  // --- Import / Export ---
   const exportBtnEl = document.getElementById('theme-export-btn');
   const importBtnEl = document.getElementById('theme-import-btn');
   const importAreaEl = document.getElementById('theme-import-area');
@@ -1284,15 +1284,15 @@ export function initThemeUI() {
       saveError.style.display = 'none';
       let parsed;
       try { parsed = JSON.parse(importAreaEl.value.trim()); }
-      catch { saveError.textContent = t('theme.invalid_json'); saveError.style.display = 'block'; return; }
+      catch { saveError.textContent = 'Invalid JSON.'; saveError.style.display = 'block'; return; }
       let colors = parsed.colors || parsed;
       const name = parsed.name || 'imported';
       const required = ['bg', 'fg', 'panel', 'border', 'red'];
       const missing = required.filter(k => !colors[k]);
-      if (missing.length) { saveError.textContent = t('theme.missing_colors') + missing.join(', '); saveError.style.display = 'block'; return; }
+      if (missing.length) { saveError.textContent = 'Missing: ' + missing.join(', '); saveError.style.display = 'block'; return; }
       const hexRe = /^#[0-9a-fA-F]{6}$/;
       for (const k of required) {
-        if (!hexRe.test(colors[k])) { saveError.textContent = t('theme.bad_hex') + k; saveError.style.display = 'block'; return; }
+        if (!hexRe.test(colors[k])) { saveError.textContent = 'Bad hex for ' + k; saveError.style.display = 'block'; return; }
       }
       const colorData = { bg: colors.bg, fg: colors.fg, panel: colors.panel, border: colors.border, red: colors.red };
       if (colors.advanced && typeof colors.advanced === 'object') colorData.advanced = colors.advanced;
@@ -1303,7 +1303,7 @@ export function initThemeUI() {
       if (parsed.bgPattern) opts.bgPattern = parsed.bgPattern;
       if (parsed.bgEffectColor) opts.bgEffectColor = parsed.bgEffectColor;
       const result = saveCustomTheme(slug, colorData, opts);
-      if (result === 'limit') { saveError.textContent = t('theme.max_themes', { max: MAX_CUSTOM_THEMES }); saveError.style.display = 'block'; return; }
+      if (result === 'limit') { saveError.textContent = 'Max ' + MAX_CUSTOM_THEMES + ' custom themes. Delete one first.'; saveError.style.display = 'block'; return; }
       save(slug, colorData, opts);
       applyColors(colorData);
       applyFontDensity(opts.font || DEFAULT_FONT, opts.density || DEFAULT_DENSITY);
@@ -1325,13 +1325,13 @@ export function initThemeUI() {
     });
   }
 
-  // 主题弹出框现在使用标准模态框框架（不可拖动）
+  // Theme popup now uses standard modal frame (not draggable)
 }
 
-// ── 区域高亮器 ───────────────────────────────────────────────────
-// 将每个颜色输入 ID 映射到其影响的 UI 部分的选择器
-// 当用户悬停在颜色行上时，在匹配元素上叠加半透明框
-// 让用户清楚知道正在编辑什么。
+// ── Zone highlighter ───────────────────────────────────────────────────
+// Maps each color input id to a selector for the part of the UI it affects.
+// When the user hovers the color row, we overlay a translucent box on the
+// matching elements so it's obvious what's being edited.
 const _THEME_ZONE_MAP = {
   'clr-bg':            'body',
   'clr-fg':            '.msg .body, .chat-input-bar',
@@ -1364,7 +1364,7 @@ function _showThemeZoneHighlight(selector) {
   try { els = document.querySelectorAll(selector); }
   catch { return; }
   els.forEach(el => {
-    // 跳过主题模态框内的元素——高亮自身是干扰
+    // Skip elements inside the theme modal — highlighting itself is noise.
     if (el.closest && el.closest('#theme-modal')) return;
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
@@ -1390,7 +1390,7 @@ function _flashAutosaved(label = 'Auto-saved') {
     pill.id = 'theme-autosaved-pill';
     pill.className = 'theme-autosaved-pill';
     pill.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span></span>';
-    // 锚定在自定义标签页内，使其随表单浮动
+    // Anchor inside the customize tab so it floats with the form.
     const customizeTab = document.getElementById('theme-tab-customize');
     (customizeTab || document.body).appendChild(pill);
   }
@@ -1401,8 +1401,8 @@ function _flashAutosaved(label = 'Auto-saved') {
   _flashTimer = setTimeout(() => pill.classList.remove('visible'), 1100);
 }
 
-// 为主题模态框内每个颜色行绑定悬停高亮。调用
-// 进入 DOM 后调用一次。幂等操作。
+// Wire hover-to-highlight on every color row inside the theme modal. Call
+// once after the modal markup is in the DOM. Idempotent.
 export function initThemeZoneHighlight() {
   const root = document.getElementById('theme-tab-customize');
   if (!root || root.dataset.zoneBound === '1') return;
@@ -1414,11 +1414,11 @@ export function initThemeZoneHighlight() {
     if (!sel) return;
     row.addEventListener('mouseenter', () => _showThemeZoneHighlight(sel));
     row.addEventListener('mouseleave', _clearThemeZoneHighlight);
-    // 当选择器实际打开时也触发（输入框获焦）
+    // Also trigger when the picker actually opens (input focus)
     input.addEventListener('focus', () => _showThemeZoneHighlight(sel));
     input.addEventListener('blur', _clearThemeZoneHighlight);
   });
-  // 模态框关闭时清除高亮
+  // Clear highlight when the modal closes.
   const modal = document.getElementById('theme-modal');
   if (modal) {
     new MutationObserver(() => {
@@ -1427,19 +1427,19 @@ export function initThemeZoneHighlight() {
   }
 }
 
-// 固定定位元素的通用拖拽辅助函数
-// 对共享 makeWindowDraggable 辅助函数的薄包装。现有
-// (el, handle)——el 是需要移动的元素，handle 是拖拽手柄。
-// 不支持全屏（这些消费者都不需要）。
+// Generic draggable helper for fixed-position elements
+// Thin wrapper around the shared makeWindowDraggable helper. Existing
+// callers pass (el, handle) — `el` is what gets moved, `handle` is the
+// drag handle. No fullscreen support (none of these consumers wanted it).
 export function makeDraggable(el, handle) {
   if (!el || !handle) return;
   const dockTarget = (el.closest && el.closest('.modal')) || el;
   const dragOptions = {
     content: el,
     header: handle,
-    // 当用户抓取交互控件时不启动窗口拖拽
-    // 例如主题透明度滑块现在位于标题旁边，
-    // 拖拽其滑块应该移动滑块而非窗口。
+    // Don't start a window-drag when the user grabs an interactive control
+    // in the header — e.g. the theme opacity slider now lives next to the
+    // title, and dragging its thumb must move the slider, not the window.
     skipSelector: 'button, input, select, .theme-opacity-wrap',
   };
   if (dockTarget && dockTarget.id === 'theme-modal') {
@@ -1458,7 +1458,7 @@ export function makeDraggable(el, handle) {
   makeWindowDraggable(dockTarget, dragOptions);
 }
 
-// 切换弹出框
+// Toggle the popup
 export function togglePopup() {
   const modal = document.getElementById('theme-modal');
   if (!modal) return;
@@ -1486,27 +1486,27 @@ export function closePopup() {
   }
 }
 
-// 暴露给 app.js 接线 + AI ui_control
+// Expose for app.js wiring + AI ui_control
 export function getCustomThemes() { return _loadCustomThemes(); }
 
-// ── Synapse 背景效果 ──
-// 以 CSS 网格图案为基础，在网格线上叠加快速移动的小光脉冲
+// ── Synapse background effect ──
+// Uses the CSS grid pattern as base, overlays fast-moving small light pulses on grid lines
 function _initSynapse() {
   if (document.getElementById('synapse-canvas')) return;
   const canvas = document.createElement('canvas');
   canvas.id = 'synapse-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
-  // 装饰性背景效果 — 对辅助技术隐藏，这样屏幕阅读器
-  // 不会播报空白 canvas，axe 的 "region" 规则也不会标记它。
+  // Decorative background effect — hide from assistive tech so screen readers
+  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const GRID = 24; // 与 CSS 网格大小匹配
+  const GRID = 24; // matches CSS grid size
   const MAX_PULSES = 20;
   const SPEED_MIN = 2;
   const SPEED_MAX = 22;
-  const TRAIL_LEN = 12; // 拖尾光晕的像素长度
+  const TRAIL_LEN = 12; // pixels of trailing glow
 
   let W, H, cols, rows, pulses = [];
 
@@ -1528,11 +1528,11 @@ function _initSynapse() {
   function spawnPulse() {
     const speed = SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN);
     if (Math.random() > 0.5) {
-      // 水平——选择一个网格行
+      // Horizontal — pick a grid row
       const row = Math.floor(Math.random() * (rows + 1));
       pulses.push({ x: -TRAIL_LEN, y: row * GRID, dx: speed, dy: 0 });
     } else {
-      // 垂直——选择一个网格列
+      // Vertical — pick a grid column
       const col = Math.floor(Math.random() * (cols + 1));
       pulses.push({ x: col * GRID, y: -TRAIL_LEN, dx: 0, dy: speed });
     }
@@ -1548,18 +1548,18 @@ function _initSynapse() {
     ctx.clearRect(0, 0, W, H);
     const c = getColor();
 
-    // 生成
+    // Spawn
     if (pulses.length < MAX_PULSES && Math.random() < 0.12) spawnPulse();
 
-    // 将脉冲绘制为带有短拖尾的小亮点
+    // Draw pulses as small bright dots with a short trail
     for (let i = pulses.length - 1; i >= 0; i--) {
       const p = pulses[i];
       p.x += p.dx; p.y += p.dy;
 
-      // 离屏——移除
+      // Off screen — remove
       if (p.x > W + TRAIL_LEN || p.y > H + TRAIL_LEN) { pulses.splice(i, 1); continue; }
 
-      // 拖尾（在点后渐隐的线条渐变）
+      // Trail (line gradient fading behind the dot)
       const tx = p.x - (p.dx > 0 ? TRAIL_LEN : 0);
       const ty = p.y - (p.dy > 0 ? TRAIL_LEN : 0);
       const grad = ctx.createLinearGradient(tx, ty, p.x, p.y);
@@ -1573,7 +1573,7 @@ function _initSynapse() {
       ctx.lineTo(p.x, p.y);
       ctx.stroke();
 
-      // 头部亮点
+      // Bright dot at head
       ctx.globalAlpha = 0.55;
       ctx.fillStyle = c;
       ctx.beginPath();
@@ -1586,14 +1586,14 @@ function _initSynapse() {
   draw();
 }
 
-// ── 雨 — 下落细竖线 ──
+// ── Rain — thin vertical streaks falling ──
 function _initRain() {
   if (document.getElementById('rain-canvas')) return;
   const canvas = document.createElement('canvas');
   canvas.id = 'rain-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
-  // 装饰性背景效果 — 对辅助技术隐藏，这样屏幕阅读器
-  // 不会播报空白 canvas，axe 的 "region" 规则也不会标记它。
+  // Decorative background effect — hide from assistive tech so screen readers
+  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1631,7 +1631,7 @@ function _initRain() {
     requestAnimationFrame(draw);
     ctx.clearRect(0, 0, W, H);
     const c = getColor();
-    // 强度同时控制雨的速度 + 生成率（昏暗时感觉更慢/更轻）
+    // Intensity also controls rain speed + spawn rate (feels slower/lighter when dim)
     const intenCss = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bg-effect-intensity'));
     const inten = isNaN(intenCss) ? 1 : intenCss;
     const speedMult = 0.35 + inten * 0.65;
@@ -1661,14 +1661,14 @@ function _initRain() {
   draw();
 }
 
-// ── 星座 — 缓慢形成/消散连接线的静态点 ──
+// ── Constellations — static dots that slowly form/dissolve connecting lines ──
 function _initConstellations() {
   if (document.getElementById('constellations-canvas')) return;
   const canvas = document.createElement('canvas');
   canvas.id = 'constellations-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
-  // 装饰性背景效果 — 对辅助技术隐藏，这样屏幕阅读器
-  // 不会播报空白 canvas，axe 的 "region" 规则也不会标记它。
+  // Decorative background effect — hide from assistive tech so screen readers
+  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1719,14 +1719,14 @@ function _initConstellations() {
     ctx.clearRect(0, 0, W, H);
     const c = getColor();
 
-    // 轻柔地移动星星
+    // Move stars gently
     for (const s of stars) {
       s.x += s.vx; s.y += s.vy;
       if (s.x < 0) s.x = W; if (s.x > W) s.x = 0;
       if (s.y < 0) s.y = H; if (s.y > H) s.y = 0;
     }
 
-    // 绘制连接线
+    // Draw connections
     ctx.strokeStyle = c;
     ctx.lineWidth = 0.5;
     for (let i = 0; i < stars.length; i++) {
@@ -1744,7 +1744,7 @@ function _initConstellations() {
       }
     }
 
-    // 用微妙的闪烁绘制星星
+    // Draw stars with subtle twinkle
     ctx.fillStyle = c;
     for (const s of stars) {
       const twinkle = 0.5 + 0.5 * Math.sin(t * 2 + s.phase);
@@ -1758,7 +1758,7 @@ function _initConstellations() {
   draw();
 }
 
-// ── Perlin 效果噪声辅助函数 ──
+// ── Noise helper for Perlin effects ──
 function _bgNoise2d(x, y) { const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return n - Math.floor(n); }
 function _bgSmoothNoise(x, y) {
   const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
@@ -1767,14 +1767,14 @@ function _bgSmoothNoise(x, y) {
   return a + (b - a) * ux + (cc - a) * uy + (a - b - cc + d) * ux * uy;
 }
 
-// ── Perlin 流 — 彩色粒子流 ──
+// ── Perlin Flow — colored particle streams ──
 function _initPerlinFlow() {
   if (document.getElementById('perlin-flow-canvas')) return;
   const canvas = document.createElement('canvas');
   canvas.id = 'perlin-flow-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
-  // 装饰性背景效果 — 对辅助技术隐藏，这样屏幕阅读器
-  // 不会播报空白 canvas，axe 的 "region" 规则也不会标记它。
+  // Decorative background effect — hide from assistive tech so screen readers
+  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1797,7 +1797,7 @@ function _initPerlinFlow() {
     const bg = getBg();
     if (bg !== _cachedBg) {
       _cachedBg = bg;
-      // 解析十六进制为 RGB 以进行 RGBA 渐变
+      // Parse hex to rgb for rgba fade
       const { r, g, b } = hexToRgb(bg) || { r: 0, g: 0, b: 0 };
       _fadeStyle = `rgba(${r},${g},${b},0.02)`;
     }
@@ -1824,14 +1824,14 @@ function _initPerlinFlow() {
   draw();
 }
 
-// ── 花瓣 — 轻柔飘落的花瓣 ──
+// ── Petals — gentle falling flower petals ──
 function _initPetals() {
   if (document.getElementById('petals-canvas')) return;
   const canvas = document.createElement('canvas');
   canvas.id = 'petals-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
-  // 装饰性背景效果 — 对辅助技术隐藏，这样屏幕阅读器
-  // 不会播报空白 canvas，axe 的 "region" 规则也不会标记它。
+  // Decorative background effect — hide from assistive tech so screen readers
+  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1869,7 +1869,7 @@ function _initPetals() {
       if (p.y > H + 15) Object.assign(p, makePetal());
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.globalAlpha = 0.2;
-      // 花瓣形状 — 两个重叠的椭圆
+      // petal shape — two overlapping ellipses
       ctx.fillStyle = c;
       ctx.beginPath(); ctx.ellipse(-p.size * 0.2 * sz, 0, p.size * 0.6 * sz, p.size * 0.3 * sz, 0.3, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 0.15;
@@ -1881,14 +1881,14 @@ function _initPetals() {
   draw();
 }
 
-// ── 星光 — 闪烁的星形闪光 ──
+// ── Sparkles — twinkling star-shaped sparkles ──
 function _initSparkles() {
   if (document.getElementById('sparkles-canvas')) return;
   const canvas = document.createElement('canvas');
   canvas.id = 'sparkles-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
-  // 装饰性背景效果 — 对辅助技术隐藏，这样屏幕阅读器
-  // 不会播报空白 canvas，axe 的 "region" 规则也不会标记它。
+  // Decorative background effect — hide from assistive tech so screen readers
+  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1910,7 +1910,7 @@ function _initSparkles() {
   function getColor() { const s = getComputedStyle(document.documentElement); return s.getPropertyValue('--bg-effect-color').trim() || s.getPropertyValue('--fg').trim() || '#9cdef2'; }
   function drawStar(x, y, r, c, alpha) {
     ctx.save(); ctx.translate(x, y); ctx.fillStyle = c; ctx.globalAlpha = alpha;
-    // 四角星
+    // 4-point star
     ctx.beginPath();
     ctx.moveTo(0, -r); ctx.quadraticCurveTo(r * 0.15, -r * 0.15, r, 0);
     ctx.quadraticCurveTo(r * 0.15, r * 0.15, 0, r);
@@ -1931,7 +1931,7 @@ function _initSparkles() {
       const alpha = Math.max(0, twinkle) * 0.25 * s.life;
       const scale = 0.5 + Math.max(0, twinkle) * 0.5;
       if (alpha > 0.01) drawStar(s.x, s.y, s.size * scale * sizeMult, c, alpha);
-      // 当周期完成时重新生成
+      // respawn when cycle completes
       if (s.phase > Math.PI * 6) Object.assign(s, makeSpark());
     });
     ctx.globalAlpha = 1;
@@ -1939,14 +1939,14 @@ function _initSparkles() {
   draw();
 }
 
-// ── 余烬 — 温暖的粒子带着光晕上升，偶尔爆发火花 ──
+// ── Embers — warm particles rising with glow and occasional spark bursts ──
 function _initEmbers() {
   if (document.getElementById('embers-canvas')) return;
   const canvas = document.createElement('canvas');
   canvas.id = 'embers-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
-  // 装饰性背景效果 — 对辅助技术隐藏，这样屏幕阅读器
-  // 不会播报空白 canvas，axe 的 "region" 规则也不会标记它。
+  // Decorative background effect — hide from assistive tech so screen readers
+  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1992,7 +1992,7 @@ function _initEmbers() {
       return;
     }
     requestAnimationFrame(draw);
-    // 淡出上一帧（destination-out 保持无火星处的画布透明）
+    // Fade previous frame (destination-out keeps canvas transparent where no embers)
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fillRect(0, 0, W, H);
@@ -2051,9 +2051,9 @@ const themeModule = { initThemeUI, togglePopup, closePopup, makeDraggable,
 
 export default themeModule;
 
-// DOM 就绪时初始化，具备服务器端同步回退
+// Init on DOM ready, with server-side sync fallback
 async function _initWithSync() {
-  // 如果本地无主题，尝试从服务器加载（跨设备同步）
+  // If no local theme, try loading from server (cross-device sync)
   if (!getSaved()) {
     const serverTheme = await _loadFromServer();
     if (serverTheme && serverTheme.colors) {
@@ -2062,13 +2062,13 @@ async function _initWithSync() {
       applyColors(serverTheme.colors);
     }
   }
-  // 同时从服务器同步自定义主题
+  // Also sync custom themes from server
   try {
     const res = await fetch('/api/prefs/custom-themes', { credentials: 'same-origin' });
     const data = await res.json();
     if (data.value && typeof data.value === 'object') {
       const local = _loadCustomThemes();
-      // 合并：服务器主题填补缺失的本地主题
+      // Merge: server themes fill in missing local ones
       let changed = false;
       for (const [name, colors] of Object.entries(data.value)) {
         if (!local[name]) { local[name] = colors; changed = true; }

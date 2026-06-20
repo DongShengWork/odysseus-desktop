@@ -1,10 +1,11 @@
 """
 model_context.py
 
-从 OpenAI 兼容的 API 查询和缓存模型上下文窗口大小。
-为上下文使用跟踪提供 token 估算。
+Query and cache model context window sizes from OpenAI-compatible APIs.
+Provides token estimation for context usage tracking.
 """
 
+import ipaddress
 import logging
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -19,7 +20,20 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.interna
 _PRIVATE_PREFIXES = ("10.", "172.16.", "172.17.", "172.18.", "172.19.",
                      "172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
                      "172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
-                     "172.30.", "172.31.", "192.168.", "100.")
+                     "172.30.", "172.31.", "192.168.")
+
+# Tailscale uses the CGNAT range 100.64.0.0/10, NOT all of 100.0.0.0/8.
+# A bare "100." prefix would classify public addresses (e.g. AWS ranges
+# under 100.x outside the CGNAT block) as local; routes/model_routes.py
+# already narrows this the same way for endpoint classification.
+_TAILSCALE_CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
+
+def _in_tailscale_range(host: str) -> bool:
+    try:
+        return ipaddress.ip_address(host) in _TAILSCALE_CGNAT
+    except ValueError:
+        return False
 
 
 def _normalize_base_for_compare(url: str) -> str:
@@ -31,7 +45,7 @@ def _normalize_base_for_compare(url: str) -> str:
 
 
 def _configured_endpoint_kind(url: str) -> Optional[str]:
-    """返回可用时对话/base URL 的已配置端点类型。"""
+    """Return configured endpoint kind for a chat/base URL when available."""
     target = _normalize_base_for_compare(url)
     if not target:
         return None
@@ -64,8 +78,8 @@ def _configured_endpoint_kind(url: str) -> Optional[str]:
         return None
 
 
-def _is_local_endpoint(url: str) -> bool:
-    """检查 URL 是否指向本地/私有/tailscale 地址。"""
+def is_local_endpoint(url: str) -> bool:
+    """Check if URL points to a local/private/tailscale address."""
     kind = _configured_endpoint_kind(url)
     if kind in ("api", "proxy"):
         return False
@@ -73,19 +87,19 @@ def _is_local_endpoint(url: str) -> bool:
         return True
     try:
         host = urlparse(url).hostname or ""
-        return host in _LOCAL_HOSTS or host.startswith(_PRIVATE_PREFIXES)
+        return host in _LOCAL_HOSTS or host.startswith(_PRIVATE_PREFIXES) or _in_tailscale_range(host)
     except Exception:
         return False
 
 # ---------------------------------------------------------------------------
-# 常量
+# Constants
 # ---------------------------------------------------------------------------
 DEFAULT_CONTEXT = 128000
 REQUEST_TIMEOUT = 5
 
-# 主要 API 模型的已知上下文窗口（当 /models
-# 端点不报告 context_length 时用作回退）。
-# 子串匹配 — 使用最短的唯一前缀以捕获变体。
+# Known context windows for major API models (used as fallback when /models
+# endpoint doesn't report context_length).
+# Substring matching — use the shortest unique prefix so variants get caught.
 KNOWN_CONTEXT_WINDOWS = {
     # --- Anthropic ---
     'claude-sonnet-4-5': 200000,
@@ -206,48 +220,80 @@ KNOWN_CONTEXT_WINDOWS = {
 }
 
 # ---------------------------------------------------------------------------
-# 缓存
+# Cache
 # ---------------------------------------------------------------------------
-_context_cache: Dict[Tuple[str, str], int] = {}
+_context_cache: Dict[Tuple[str, str], Tuple[int, bool]] = {}
 
 
-def get_context_length(endpoint_url: str, model: str) -> int:
-    """获取模型的上下文窗口大小。
-
-    查询端点上的 /v1/models 并查找 context_length
-    或 context_window 字段。按 (endpoint, model) 缓存结果。
-    不可用时回退到 DEFAULT_CONTEXT。
-    """
+def _get_context_length_cached(endpoint_url: str, model: str) -> Tuple[int, bool]:
+    """Return (context_length, known). ``known`` is False only when the value is a
+    bare DEFAULT_CONTEXT fallback (no endpoint report and not in the known table)."""
     configured_kind = _configured_endpoint_kind(endpoint_url)
-    is_local = _is_local_endpoint(endpoint_url)
-    # 键为 (endpoint_url, model)：同一个 model ID 可能由两个
-    # 不同的远程端点提供服务，具有不同的实际上下文窗口（例如
-    # 被限制的代理 vs 完整的提供商），因此仅按 model ID 缓存
-    # 会导致一个端点的窗口值被用于另一个端点 (issue #2603)。
+    is_local = is_local_endpoint(endpoint_url)
+    # Key on (endpoint_url, model): the same model id can be served by two
+    # different remote endpoints with different real context windows (e.g. a
+    # capped proxy vs. the full provider), so caching by model id alone would
+    # serve one endpoint's window for the other (issue #2603).
     cache_key = (endpoint_url, model)
     if not is_local and cache_key in _context_cache:
         return _context_cache[cache_key]
 
-    ctx = _query_context_length(endpoint_url, model)
-    # 仅缓存非默认值以允许下次请求重试。
-    # 本地端点可以在保持相同 model ID 的情况下以不同的 --max-model-len 重启，
-    # 因此始终重新查询而非提供过时缓存。
+    ctx, known = _query_context_length(endpoint_url, model)
+    # Only cache non-default values to allow retry on next request.
+    # Local endpoints can restart with a different --max-model-len while keeping
+    # the same model id, so always re-query them instead of serving stale cache.
     if not is_local and (ctx != DEFAULT_CONTEXT or configured_kind in ("api", "proxy")):
-        _context_cache[cache_key] = ctx
+        _context_cache[cache_key] = (ctx, known)
     logger.info(f"Context length for {model}: {ctx}")
-    return ctx
+    return ctx, known
+
+
+def get_context_length(endpoint_url: str, model: str) -> int:
+    """Get the context window size for a model.
+
+    Queries /v1/models on the endpoint and looks for context_length
+    or context_window fields. Caches result per (endpoint, model).
+    Falls back to DEFAULT_CONTEXT if unavailable.
+    """
+    return _get_context_length_cached(endpoint_url, model)[0]
+
+
+def get_context_length_known(endpoint_url: str, model: str) -> Tuple[int, bool]:
+    """Like ``get_context_length`` but also returns whether the window was actually
+    discovered (endpoint-reported or in the known-models table) rather than the bare
+    DEFAULT_CONTEXT fallback. Callers that *scale* a budget off the window must not
+    trust an unknown value — a fallback 128K isn't proof the model holds 128K
+    (review on #4122)."""
+    return _get_context_length_cached(endpoint_url, model)
+
+
+def budget_context_for_model(endpoint_url: str, model: str, *, fallback: int = 0) -> int:
+    """Context window to scale the agent input budget against.
+
+    Returns the *freshly discovered* window when it was actually proven
+    (endpoint-reported / known table), else 0 so auto-scaling stays conservative.
+    Crucially this binds the ``known`` flag to the value it proves — callers must
+    not pair this flag with a context length from a *different* lookup (a stale
+    local re-query, or a caller that didn't pass one), which would budget off an
+    unproven number (review on #4122). On probe error, returns ``fallback`` (the
+    caller's best-known value) to preserve prior behaviour."""
+    try:
+        ctx, known = get_context_length_known(endpoint_url, model)
+        return ctx if known else 0
+    except Exception:
+        return fallback
 
 
 def _lookup_known(model: str) -> Optional[int]:
-    """通过子串匹配检查已知的上下文窗口。
+    """Check known context windows by substring match.
 
-    选择最长的匹配键，因此短键永远不会遮蔽更具体的键。
-    如果不这样做，'o1' (200k) 会排在 'o1-mini' (128k) 之前，
-    首次匹配返回会将 o1-mini 的窗口报告为 200k。
+    Picks the LONGEST matching key so a short key never shadows a more specific
+    one. Without this, 'o1' (200k) precedes 'o1-mini' (128k) in the table and a
+    first-match return would report o1-mini's window as 200k.
     """
     name = model.lower()
     basename = name.split("/")[-1] if "/" in name else name
-    basename = basename.split(":")[0]  # 去除 :free, :extended 等
+    basename = basename.split(":")[0]  # strip :free, :extended etc.
     best_key: Optional[str] = None
     best_ctx: Optional[int] = None
     for key, ctx in KNOWN_CONTEXT_WINDOWS.items():
@@ -257,23 +303,24 @@ def _lookup_known(model: str) -> Optional[int]:
     return best_ctx
 
 
-def _query_context_length(endpoint_url: str, model: str) -> int:
-    """查询模型 API 获取上下文长度。"""
+def _query_context_length(endpoint_url: str, model: str) -> Tuple[int, bool]:
+    """Query the model API for context length. Returns (context_length, known) where
+    ``known`` is False only for the bare DEFAULT_CONTEXT fallback."""
     known = _lookup_known(model)
     api_ctx = None
     configured_kind = _configured_endpoint_kind(endpoint_url)
 
-    # 大型 OpenAI 兼容代理可能使 /models 变得昂贵。如果
-    # 端点被明确配置为 API/proxy，优先使用已知上下文
-    # 元数据（或默认值）而非下载完整目录。
+    # Large OpenAI-compatible proxies can make /models expensive. If the
+    # endpoint is explicitly configured as API/proxy, prefer known context
+    # metadata (or the default) over downloading the full catalog.
     if configured_kind in ("api", "proxy"):
         if known:
             logger.info(f"Using known context window for {model}: {known}")
-            return known
-        return DEFAULT_CONTEXT
+            return known, True
+        return DEFAULT_CONTEXT, False
 
-    # 先尝试 llama.cpp /slots 端点 — 报告实际服务的上下文
-    if _is_local_endpoint(endpoint_url):
+    # Try llama.cpp /slots endpoint first — reports actual serving context
+    if is_local_endpoint(endpoint_url):
         try:
             base = endpoint_url.split("/v1")[0] if "/v1" in endpoint_url else endpoint_url.rsplit("/", 1)[0]
             r = httpx.get(f"{base}/slots", timeout=REQUEST_TIMEOUT)
@@ -283,19 +330,20 @@ def _query_context_length(endpoint_url: str, model: str) -> int:
                     n_ctx = slots[0].get("n_ctx")
                     if n_ctx and isinstance(n_ctx, int) and n_ctx > 0:
                         logger.info(f"llama.cpp /slots reports n_ctx={n_ctx} for {model}")
-                        return n_ctx
+                        return n_ctx, True
         except Exception:
             pass
 
-    # GitHub Copilot 的 /models 需要认证 + X-GitHub-Api-Version 头部，这些
-    # 在这里不可用；未认证的探测只会 400。所有 Copilot
-    # 选择器模型都是已知上下文表中涵盖的主流 API 模型，因此
-    # 依赖它而非进行一次注定失败的网络调用。
+    # GitHub Copilot's /models requires auth + X-GitHub-Api-Version headers that
+    # aren't available here; an unauthenticated probe just 400s. All Copilot
+    # picker models are major API models covered by the known-context table, so
+    # rely on that instead of a doomed network call.
     from src.copilot import is_copilot_base
     if is_copilot_base(endpoint_url):
         if known:
             logger.info(f"Using known context window for {model}: {known}")
-        return known or DEFAULT_CONTEXT
+            return known, True
+        return DEFAULT_CONTEXT, False
 
     from src.endpoint_resolver import build_models_url
 
@@ -324,7 +372,7 @@ def _query_context_length(endpoint_url: str, model: str) -> int:
                     if not api_ctx:
                         meta = m.get("meta") or m.get("model_extra") or {}
                         if isinstance(meta, dict):
-                            # n_ctx 是实际服务的上下文（通过 llama.cpp 的 -c 标志设置）
+                            # n_ctx is the actual serving context (set via -c flag in llama.cpp)
                             for field in ("n_ctx", "context_length", "context_window", "max_model_len"):
                                 val = meta.get(field)
                                 if val and isinstance(val, (int, float)) and val > 0:
@@ -334,38 +382,40 @@ def _query_context_length(endpoint_url: str, model: str) -> int:
     except Exception as e:
         logger.debug(f"Failed to query context length for {model}: {e}")
 
-    # 对于本地/自托管端点，信任 API 返回值（用户设置了 --max-model-len）
-    # 对于云 API，使用较大的值（API 可能报告较低的默认值）
+    # For local/self-hosted endpoints, trust the API value (user set --max-model-len)
+    # For cloud APIs, use the larger value (API can report low defaults)
     if api_ctx and known:
-        _is_local = _is_local_endpoint(endpoint_url)
+        _is_local = is_local_endpoint(endpoint_url)
         if _is_local and api_ctx < known:
             logger.info(f"Local endpoint reports {api_ctx} for {model} (known max: {known}) — using API value")
-            return api_ctx
+            return api_ctx, True
         result = max(api_ctx, known)
         if api_ctx < known:
             logger.info(f"API reported {api_ctx} for {model}, using known {known} instead")
-        return result
+        return result, True
     if api_ctx:
-        return api_ctx
+        return api_ctx, True
     if known:
         logger.info(f"Using known context window for {model}: {known}")
-        return known
+        return known, True
 
-    return DEFAULT_CONTEXT
+    return DEFAULT_CONTEXT, False
 
 
 def estimate_tokens(messages: List[Dict]) -> int:
-    """粗略估算消息列表的 token 数量。
+    """Rough token estimate for a list of messages.
 
-    使用 chars * 0.3，这比常用的 chars/4 更接近真实 BPE 分词器输出
-    （后者低估约 20-30%）。还为每条消息的角色/格式开销添加约 4 个 token，
-    并统计 assistant tool_calls（name + arguments）— 纯工具轮次存储时
-    content=None，实际负载在 tool_calls 中，因此忽略它们会导致
-    估算（以及依赖它的压缩/裁剪门控）视而不见大型工具调用参数。
+    Uses chars * 0.3 which is closer to real BPE tokenizer output
+    than the commonly-cited chars/4 (which underestimates by ~20-30%).
+    Also adds ~4 tokens per message for role/formatting overhead, and counts
+    assistant tool_calls (name + arguments) — a tool-only turn carries
+    content=None with the real payload in tool_calls, so ignoring them made the
+    estimate (and the compaction/trim gates that rely on it) blind to large
+    tool arguments.
     """
     total = 0
     for msg in messages:
-        total += 4  # 每条消息的开销（角色、分隔符）
+        total += 4  # per-message overhead (role, separators)
         content = msg.get("content", "")
         if isinstance(content, str):
             total += int(len(content) * 0.3)
@@ -373,10 +423,10 @@ def estimate_tokens(messages: List[Dict]) -> int:
             for item in content:
                 if isinstance(item, dict) and item.get("type") == "text":
                     total += int(len(item.get("text", "")) * 0.3)
-        # 工具调用也有实际负载：纯工具 assistant 轮次存储时
-        # content=None，实际参数（例如 create_document body）在
-        # tool_calls[].function.arguments 中。忽略它们会使大型工具参数
-        # 被读作约 0 token，导致压缩/裁剪门控漏掉真正的溢出。
+        # Tool calls carry real payload too: a tool-only assistant turn is stored
+        # with content=None and the actual args (e.g. a create_document body) in
+        # tool_calls[].function.arguments. Ignoring them made large tool arguments
+        # read as ~0 tokens, so the compaction/trim gates missed genuine overflow.
         tool_calls = msg.get("tool_calls")
         if isinstance(tool_calls, list):
             for tc in tool_calls:
@@ -386,7 +436,7 @@ def estimate_tokens(messages: List[Dict]) -> int:
                 name = fn.get("name", "") or ""
                 args = fn.get("arguments", "") or ""
                 if not isinstance(args, str):
-                    args = str(args)  # 有些形式将 arguments 存储为 dict
-                total += 4  # 每个工具调用的开销（id, type, wrapper）
+                    args = str(args)  # some shapes store arguments as a dict
+                total += 4  # per tool-call overhead (id, type, wrapper)
                 total += int((len(str(name)) + len(args)) * 0.3)
     return total

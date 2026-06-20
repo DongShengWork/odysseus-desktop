@@ -1,4 +1,4 @@
-"""日历路由 — 基于本地 SQLite 的日历 CRUD 操作。"""
+"""Calendar routes — local SQLite-backed calendar CRUD."""
 
 import logging
 import re
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_, and_
 from dateutil.rrule import rrulestr
 
-from core.database import SessionLocal, CalendarCal, CalendarEvent
+from core.database import SessionLocal, CalendarCal, CalendarDeletedEvent, CalendarEvent
 from src.auth_helpers import require_user
 from src.upload_limits import read_upload_limited, ICS_MAX_BYTES
 
@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 def _ics_naive_dtstart(dt):
-    """与 import_ics 存储 CalendarEvent.dtstart 的方式匹配的朴素值。
+    """Naive value matching how import_ics STORES CalendarEvent.dtstart.
 
-    带时区的定时事件存储为去除 tzinfo 的 UTC，全天
-    日期存储为午夜 datetime，朴素 datetime 保持不变。ICS 去重
-    必须计算相同的值，否则重新导入将无法匹配已存储的行。
+    Timed tz-aware events are stored as UTC with tzinfo stripped, all-day
+    dates as midnight datetimes, naive datetimes unchanged. The ICS dedup
+    must compute the same value or a re-import never matches the stored row.
     """
     if isinstance(dt, datetime):
         if dt.tzinfo is not None:
@@ -34,28 +34,28 @@ def _ics_naive_dtstart(dt):
         return datetime(dt.year, dt.month, dt.day)
     return dt
 
-# 单用户回退身份。仅当以下条件都成立时使用：
-#   1. 应用配置为单用户模式（无认证中间件），AND
-#   2. 请求未解析到已认证用户。
-# 部署时可通过 `ODYSSEUS_FALLBACK_OWNER` 环境变量覆盖。在真正的
-# 多用户安装中设置 `ODYSSEUS_SINGLE_USER=0` 以确保未认证请求
-# 被拒绝，而不是静默写入此地址。
+# Single-user fallback identity. Used only when:
+#   1. The app is configured for single-user (no auth middleware), AND
+#   2. The request didn't resolve to an authenticated user.
+# Override at deploy time via `ODYSSEUS_FALLBACK_OWNER` env var. In a real
+# multi-user install set `ODYSSEUS_SINGLE_USER=0` so unauthenticated requests
+# are rejected instead of silently writing to this address.
 import os as _os
 FALLBACK_OWNER = _os.environ.get("ODYSSEUS_FALLBACK_OWNER", "owner@localhost")
 _SINGLE_USER_MODE = _os.environ.get("ODYSSEUS_SINGLE_USER", "1") != "0"
 
 
 def _require_user(request: Request) -> str:
-    """返回已认证用户。使用 require_user 以便 AUTH_ENABLED=false
-    和单用户模式都能工作：当认证禁用或未配置时 require_user 返回 ""，
-    仅当认证已配置但调用者未认证时才抛出 401。
-    在单用户模式下回退到 FALLBACK_OWNER 以进行日历写入，
-    确保数据不会以空 owner 存储在数据库中。"""
+    """Return the authenticated user. Uses require_user so AUTH_ENABLED=false
+    and single-user mode both work: require_user returns "" when auth is
+    disabled or unconfigured, and only raises 401 when auth is configured but
+    the caller is unauthenticated. Falls back to FALLBACK_OWNER for calendar
+    writes so data isn't stored under an empty owner in single-user mode."""
     user = require_user(request)
     if user:
         return user
-    # require_user 返回了 "" — 认证关闭或未配置（单用户模式）。
-    # 使用 FALLBACK_OWNER 以确保日历行有稳定的 owner 用于过滤。
+    # require_user returned "" — auth is off or unconfigured (single-user).
+    # Use FALLBACK_OWNER so calendar rows have a stable owner for filtering.
     return FALLBACK_OWNER
 
 
@@ -63,11 +63,11 @@ def _get_or_404_calendar(db, cal_id: str, owner: str) -> CalendarCal:
     cal = db.query(CalendarCal).filter(CalendarCal.id == cal_id).first()
     if not cal:
         raise HTTPException(404, "Calendar not found")
-    # 收紧历史 null-owner 的门控（v2 审查 HIGH-12）：如果
-    # 调用者已认证 AND 日历的 owner 为 null 或
-    # 属于其他用户，视为未找到。之前的规则
-    # （`if cal.owner and cal.owner != owner`）静默允许任何
-    # 已认证用户读取/编辑 owner=None 的日历。
+    # Tighten the legacy null-owner gate (v2 review HIGH-12): if the
+    # caller is authenticated AND the calendar's owner is null OR
+    # belongs to a different user, treat it as not-found. The previous
+    # rule (`if cal.owner and cal.owner != owner`) silently allowed any
+    # authenticated user to read/edit any calendar with owner=None.
     if owner and (cal.owner is None or cal.owner != owner):
         raise HTTPException(404, "Calendar not found")
     return cal
@@ -84,11 +84,11 @@ def _get_or_404_event(db, uid: str, owner: str) -> CalendarEvent:
 
 
 def _ics_escape(text: str) -> str:
-    """转义 iCalendar TEXT 字段的值（RFC 5545 §3.3.11）。
+    """Escape a value for an iCalendar TEXT field (RFC 5545 §3.3.11).
 
-    反斜杠、分号和逗号在 TEXT 值中是结构化的，必须
-    转义，换行符转换为字面量 ``\\n``。反斜杠先进行转义，
-    以确保我们添加的转义不会被重新转义。
+    Backslash, semicolon and comma are structural in TEXT values and must be
+    escaped, and newlines become a literal ``\\n``. Backslash is escaped first
+    so the escapes we add aren't re-escaped.
     """
     return (
         (text or "")
@@ -102,7 +102,7 @@ def _ics_escape(text: str) -> str:
 
 
 def _safe_ics_filename(name: str) -> str:
-    """返回一个对 Content-Disposition 安全的保守 .ics 文件名。"""
+    """Return a conservative .ics filename safe for Content-Disposition."""
     stem = name if isinstance(name, str) else ""
     stem = re.sub(r"[^A-Za-z0-9._-]", "_", stem).strip("._-")
     if not stem:
@@ -111,10 +111,10 @@ def _safe_ics_filename(name: str) -> str:
 
 
 def _resolve_base_uid(uid: str) -> str:
-    """从复合 occurrence UID 中提取基本系列 UID。
+    """Extract the base series UID from a compound occurrence UID.
 
-    复合 UID 的格式为 ``{base_uid}::{date_suffix}``。
-    对于纯 UID（不含 ``::``），原样返回 UID。
+    Compound UIDs have the form ``{base_uid}::{date_suffix}``.
+    For plain UIDs (no ``::``), returns the UID unchanged.
     """
     if not uid:
         raise ValueError("empty uid")
@@ -125,6 +125,54 @@ def _resolve_base_uid(uid: str) -> str:
     if not base:
         raise ValueError("malformed compound UID: missing base before ::")
     return base
+
+
+async def _push_caldav_event_after_commit(owner: str, uid: str, action: str):
+    """Best-effort CalDAV write-through. Local writes stay authoritative if
+    the remote server is unreachable; pending flags let /sync retry later."""
+    try:
+        result = {"ok": True}
+        if action == "create":
+            from src.caldav_sync import push_event_create
+            result = await push_event_create(owner, uid)
+        elif action == "update":
+            from src.caldav_sync import push_event_update
+            result = await push_event_update(owner, uid)
+        elif action == "delete":
+            from src.caldav_sync import push_event_delete
+            result = await push_event_delete(owner, uid)
+        if result and not result.get("ok") and not result.get("skipped"):
+            raise RuntimeError(result.get("error") or result)
+    except Exception as e:
+        logger.warning("CalDAV %s push failed for uid=%s: %s", action, uid, e)
+        if action in {"create", "update"}:
+            db = SessionLocal()
+            try:
+                ev = _get_or_404_event(db, uid, owner)
+                ev.caldav_sync_pending = action
+                db.commit()
+            except Exception:
+                db.rollback()
+            finally:
+                db.close()
+
+
+def _record_caldav_delete_tombstone(db, ev: CalendarEvent, owner: str) -> None:
+    if not (ev.calendar and ev.calendar.source == "caldav"):
+        return
+    tombstone = db.query(CalendarDeletedEvent).filter(
+        CalendarDeletedEvent.uid == ev.uid,
+        CalendarDeletedEvent.owner == owner,
+    ).first()
+    if not tombstone:
+        tombstone = CalendarDeletedEvent(uid=ev.uid, owner=owner)
+        db.add(tombstone)
+    tombstone.calendar_id = ev.calendar_id
+    tombstone.remote_href = ev.remote_href
+    tombstone.remote_etag = ev.remote_etag
+    tombstone.caldav_base_url = getattr(ev.calendar, "caldav_base_url", None)
+    tombstone.summary = ev.summary or ""
+    tombstone.last_error = None
 
 # ── Pydantic models ──
 
@@ -151,7 +199,7 @@ class EventUpdate(BaseModel):
     color: Optional[str] = None
 
 
-# ── 辅助函数 ──
+# ── Helpers ──
 
 def _ensure_default_calendar(db, owner: str = None) -> CalendarCal:
     """Create default calendar if none exist for this owner."""
@@ -171,9 +219,10 @@ def _ensure_default_calendar(db, owner: str = None) -> CalendarCal:
     return cal
 
 
-# 每个请求的用户时间上下文。chat_routes 从浏览器时区头设置此项，
-# 以便 LLM 发出的自然语言时间（"today at 9pm"）在用户的时区中解析，
-# 而非服务器时钟。None = 未知，回退到历史服务器本地行为。
+# Per-request user time context. chat_routes sets this from browser timezone
+# headers so natural-language times the LLM emits ("today at 9pm") are parsed
+# in the user's timezone, not the server's clock. None = unknown, fall back to
+# legacy server-local behavior.
 from src.user_time import (
     get_user_tz_name,
     get_user_tz_offset,
@@ -227,9 +276,9 @@ def parse_due_for_user(s: str) -> str:
     # Natural language — evaluate against user's "now".
     server_now_utc = datetime.now(_tz.utc)
     user_now = now_user_local(server_now_utc)
-    # 利用用户的时钟来修补 _parse_dt 内部的 datetime.now()：
-    # 我们在此处以 user_now 为基准重新实现小型自然语言短语，
-    # 以便结果自然地在用户时区中。
+    # Patch datetime.now() inside _parse_dt by leveraging the user's clock:
+    # we re-implement the small natural-language phrases here against user_now
+    # so the result is naturally in the user's tz.
     import re as _re
     lower = s.lower().strip()
 
@@ -279,7 +328,7 @@ def parse_due_for_user(s: str) -> str:
     if t is not None:
         return today.replace(hour=t[0], minute=t[1]).isoformat()
 
-    # 最后手段：dateutil。信任它，但如果返回朴素时间则应用用户时区。
+    # Last resort: dateutil. Trust it but apply user tz if it returned naive.
     try:
         from dateutil import parser as _du
         parsed2 = _du.parse(s)
@@ -340,8 +389,8 @@ def _parse_dt(s: str) -> datetime:
             return datetime.fromisoformat(s)
         _s2 = s.replace("Z", "+00:00") if s.endswith("Z") else s
         parsed = datetime.fromisoformat(_s2)
-        # 为历史调用者去除时区 — 它们期望朴素时间。真正的时区
-        # 处理在 _parse_dt_pair 中。
+        # Strip tz for the legacy callers — they expect naive. Real tz
+        # handling lives in _parse_dt_pair.
         if parsed.tzinfo is not None:
             from datetime import timezone as _tz
             return parsed.astimezone(_tz.utc).replace(tzinfo=None)
@@ -411,21 +460,21 @@ def _parse_dt(s: str) -> datetime:
         if unit == "day":
             return now + timedelta(days=n)
 
-    # 裸时间 → 今天的该时间点
+    # Bare time → today at that time
     t = _parse_time(lower)
     if t is not None:
         return today.replace(hour=t[0], minute=t[1])
 
-    # 最后手段：dateutil 的模糊解析器
+    # Last resort: dateutil's fuzzy parser
     try:
         from dateutil import parser as _du
         parsed = _du.parse(s)
-        # 像上面所有其他返回路径一样去除时区 — 此函数的
-        # 约定是朴素 datetime（CalendarEvent.dtstart 是朴素的）。带有
-        # 偏移的非 ISO 输入（例如 RFC-2822 "Mon, 05 Jan 2026
-        # 14:00:00 +0900"）否则会将时区感知值泄漏到朴素列中，
-        # 导致 _expand_rrule 中的读回比较因"无法比较
-        # offset-naive 和 offset-aware datetimes"而崩溃。
+        # Strip tz like every other return path above — this function's
+        # contract is naive datetimes (CalendarEvent.dtstart is naive). An
+        # offset-bearing non-ISO input (e.g. RFC-2822 "Mon, 05 Jan 2026
+        # 14:00:00 +0900") otherwise leaked tz-aware into the naive column and
+        # crashed read-back comparisons in _expand_rrule with "can't compare
+        # offset-naive and offset-aware datetimes".
         if parsed.tzinfo is not None:
             from datetime import timezone as _tz
             return parsed.astimezone(_tz.utc).replace(tzinfo=None)
@@ -489,24 +538,25 @@ def _expand_rrule(
     duration = ev.dtend - ev.dtstart
 
     if not ev.rrule or not ev.rrule.strip():
-        # 为非重复事件返回基础事件原样。list_events
-        # 已经通过 SQL 中的重叠检查过滤了非重复行，
-        # 所以我们不在这里再次检查。
+        # Non-recurring — return the base event as-is. list_events
+        # already filters non-recurring rows with the overlap check
+        # in SQL, so we don't re-check here.
         d = _event_to_dict(ev)
         d["is_recurrence"] = False
         d["series_uid"] = ev.uid
         d["truncated"] = False
         return [d]
 
-    # 解析 rrule，将其应用于基准 dtstart。
+    # Parse the rrule, applying it to the base dtstart.
     rrule_str = ev.rrule
     if ev.dtstart is not None and getattr(ev.dtstart, "tzinfo", None) is None:
-        # 事件以朴素（UTC）dtstart 存储，但标准 .ics
-        # 导出器（Google/Apple/Outlook/Fastmail）将边界写为绝对 UTC 值，
-        # 例如 UNTIL=20240105T090000Z。dateutil 拒绝混合时区感知的 UNTIL 和朴素的 DTSTART
-        # （"RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware"），
-        # 因此下面的 except 分支会将整个系列静默折叠为单个事件。
-        # 移除尾部的 Z 使 UNTIL 匹配朴素 DTSTART。
+        # Events are stored with a naive (UTC) dtstart, but standard .ics
+        # exporters (Google/Apple/Outlook/Fastmail) write the bound as an
+        # absolute UTC value, e.g. UNTIL=20240105T090000Z. dateutil refuses to
+        # mix a tz-aware UNTIL with a naive DTSTART ("RRULE UNTIL values must be
+        # specified in UTC when DTSTART is timezone-aware"), so the except branch
+        # below would silently collapse the whole series to a single event.
+        # Drop the trailing Z so UNTIL matches the naive DTSTART.
         import re as _re
         rrule_str = _re.sub(
             r"(UNTIL=\d{8}(?:T\d{6})?)Z", r"\1", rrule_str, flags=_re.IGNORECASE
@@ -521,16 +571,17 @@ def _expand_rrule(
         d["is_recurrence"] = False
         d["series_uid"] = ev.uid
         d["truncated"] = False
-        # 格式错误的 RRULE 行由重复 SQL 分支获取，
-        # 仅凭 dtstart < end_dt — 基础事件可能实际上
-        # 不与窗口重叠。仅当确实重叠时才返回。
+        # Malformed RRULE rows are fetched by the recurring SQL branch
+        # with only dtstart < end_dt — the base event may not actually
+        # overlap the window. Only return if it does.
         if ev.dtstart < end and ev.dtend > start:
             return [d]
         return []
 
-    # 从 start - duration 展开，以捕捉在窗口之前开始
-    # 但在窗口内部结束的跨天/通宵事件
-    #（匹配非重复重叠语义：dtstart < end AND dtend > start）。
+    # Expand from start - duration so multi-day / overnight occurrences
+    # that start before the window but end inside it are captured
+    # (matching non-recurring overlap semantics: dtstart < end AND
+    # dtend > start).
     expand_start = start - duration
     results = []
     truncated = False
@@ -542,9 +593,9 @@ def _expand_rrule(
 
         occ_end = occ_start + duration
 
-        # 重叠过滤器：事件必须与 [start, end) 区间相交。
-        # 此做法强制执行 exclusive-end 语义（occ_start >= end 被
-        # 排除），同时包含跨天事件（occ_end > start）。
+        # Overlap filter: occurrence must intersect [start, end).
+        # This enforces exclusive-end semantics (occ_start >= end is
+        # excluded) and includes multi-day crossings (occ_end > start).
         if occ_end <= start:
             continue
 
@@ -552,7 +603,7 @@ def _expand_rrule(
             truncated = True
             break
 
-        # 构建复合 uid：{base_uid}::{date} 或 ::{datetime}
+        # Build the compound uid: {base_uid}::{date} or ::{datetime}
         if ev.all_day:
             occ_uid = f"{ev.uid}::{occ_start.strftime('%Y-%m-%d')}"
         else:
@@ -807,11 +858,11 @@ def setup_calendar_routes() -> APIRouter:
                     headers={"Depth": "0", "Content-Type": "application/xml"},
                     content=propfind_body,
                 )
-                # 如果服务器要求 Digest 认证（Baïkal 默认、基于 SabreDAV 的
-                # 服务器、带 htdigest 的 Radicale），上面的 Basic 尝试
-                # 会返回 401。用 httpx.DigestAuth 重试一次，以匹配
-                # src/caldav_sync.py 中 caldav.DAVClient 的真实同步行为
-                #（它会自动协商认证方案）。
+                # If the server demands Digest (Baïkal default, SabreDAV-based
+                # servers, Radicale with htdigest), the Basic attempt above
+                # 401s. Retry once with httpx.DigestAuth so this test matches
+                # what the real sync does via caldav.DAVClient in
+                # src/caldav_sync.py (which negotiates the scheme).
                 if r.status_code == 401 and "digest" in r.headers.get("www-authenticate", "").lower():
                     r = await cx.request(
                         "PROPFIND", url,
@@ -840,35 +891,34 @@ def setup_calendar_routes() -> APIRouter:
             return {"ok": False, "error": str(e)[:200]}
 
     @router.post("/sync")
-    async def sync_caldav_endpoint(request: Request):
-        """Pull events from the configured CalDAV server into local DB.
+    async def sync_caldav_endpoint(request: Request, direction: str = "pull"):
+        """Sync events with the configured CalDAV server.
         Returns counts + any per-calendar errors. Called by the frontend
         on calendar open and by the periodic scheduler loop."""
         owner = _require_user(request)
-        from src.caldav_sync import sync_caldav
-        return await sync_caldav(owner)
+        from src.caldav_sync import sync_caldav_direction
+        return await sync_caldav_direction(owner, direction)
+
 
     @router.delete("/calendars/{cal_id}")
-    async def delete_calendar(cal_id: str, request: Request):
+    async def delete_calendar(request: Request, cal_id: str):
         owner = _require_user(request)
         db = SessionLocal()
         try:
-            cal = db.query(CalendarCal).filter(
-                CalendarCal.id == cal_id,
-                CalendarCal.owner == owner,
-            ).first()
-            if not cal:
-                raise HTTPException(404, "Calendar not found")
+            cal = _get_or_404_calendar(db, cal_id, owner)
+            db.query(CalendarEvent).filter(CalendarEvent.calendar_id == cal_id).delete()
             db.delete(cal)
             db.commit()
             return {"ok": True}
         except HTTPException:
             raise
         except Exception as e:
+            db.rollback()
             logger.error("Failed to delete calendar %s: %s", cal_id, e)
             raise HTTPException(500, "Failed to delete calendar")
         finally:
             db.close()
+
 
     @router.get("/calendars")
     async def list_calendars(request: Request):
@@ -896,30 +946,31 @@ def setup_calendar_routes() -> APIRouter:
             start_dt = _parse_dt(start)
             end_dt = _parse_dt(end)
         except ValueError:
-            # 格式错误的时间范围（例如客户端传来的 "NaN-NaN-NaN"）
-            # 不应在每次轮询时向用户发送错误通知 —
-            # 只需记录日志并返回此窗口无事件。
+            # A malformed range (e.g. a stray "NaN-NaN-NaN" from the client)
+            # shouldn't spam the user with an error notification on every poll —
+            # just log it and return no events for this window.
             logger.warning("list_events: unparseable range start=%r end=%r", start, end)
             return {"events": []}
         db = SessionLocal()
         try:
-            # 将事件范围限定为调用者拥有的日历。
-            # 非重复事件必须与查询窗口重叠；重复事件
-            # （带 RRULE）的基础 dtstart 在窗口结束之前
-            # 会被取出，以便其实际 occurrences 可以在服务端展开，
-            # 并在每个重复的年份中显示，而不仅仅是 DTSTART 年份。
+            # Scope events to calendars owned by the caller.
+            # Non-recurring events must overlap the query window; recurring
+            # events (with RRULE) whose base dtstart is before the window end
+            # are fetched so their actual occurrences can be expanded
+            # server-side and appear in every year they repeat, not just the
+            # DTSTART year.
             q = db.query(CalendarEvent).join(CalendarCal).filter(
                 CalendarEvent.status != "cancelled",
                 CalendarCal.owner == owner,
                 or_(
-                    # 非重复事件：事件时间必须与查询窗口重叠
+                    # Non-recurring: event times must overlap the query window
                     and_(
                         or_(CalendarEvent.rrule == "", CalendarEvent.rrule.is_(None)),
                         CalendarEvent.dtstart < end_dt,
                         CalendarEvent.dtend > start_dt,
                     ),
-                    # 重复事件：dtstart 在窗口结束之前 — RRULE 展开
-                    # 会生成窗口内的实际 occurrences
+                    # Recurring: dtstart before window end — RRULE expansion
+                    # generates the actual occurrences within the window
                     and_(
                         CalendarEvent.rrule.isnot(None),
                         CalendarEvent.rrule != "",
@@ -962,25 +1013,25 @@ def setup_calendar_routes() -> APIRouter:
             cal = None
             if data.calendar_href:
                 cal = db.query(CalendarCal).filter(CalendarCal.id == data.calendar_href).first()
-                # 拒绝不属于调用者的日历。之前的
-                # `if cal and cal.owner and ...` 检查静默
-                # 放行了空 owner（历史遗留）行，允许任何已认证
-                # 用户向其中写入事件。与 `_get_or_404_calendar` 的
-                # 空 owner 门控相同。
+                # Reject calendars that aren't owned by the caller. The
+                # previous `if cal and cal.owner and ...` check silently
+                # passed null-owner (legacy) rows, letting any authenticated
+                # user write events into them. Same null-owner gate as
+                # `_get_or_404_calendar`.
                 if cal and (cal.owner is None or cal.owner != owner):
                     raise HTTPException(404, "Calendar not found")
             if not cal:
                 cal = _ensure_default_calendar(db, owner)
 
             uid = str(uuid.uuid4())
-            # 使用时区检测解析器，以便带偏移的事件
-            #（例如 "2026-05-13T10:00:00+09:00" 或 "...Z"）被存储为 UTC
-            # 并标记，以便读回时正确添加 Z 后缀。
+            # Use the tz-detecting parser so events posted with an offset
+            # (e.g. "2026-05-13T10:00:00+09:00" or "...Z") get stored as UTC
+            # and flagged for proper Z-suffix on read-back.
             dtstart, _is_utc = _parse_dt_pair(data.dtstart)
             if data.dtend:
                 dtend, _end_utc = _parse_dt_pair(data.dtend)
                 # If start was tz-aware but end was naive (or vice-versa),
-                # 信任为 True 的那个标志 — 它们应该一致。
+                # trust whichever flag is True — they should match.
                 _is_utc = _is_utc or _end_utc
             elif data.all_day:
                 dtend = dtstart + timedelta(days=1)
@@ -999,19 +1050,12 @@ def setup_calendar_routes() -> APIRouter:
                 is_utc=_is_utc and not data.all_day,
                 rrule=data.rrule or "",
                 color=data.color or None,
+                caldav_sync_pending="create" if cal.source == "caldav" else None,
             )
             db.add(ev)
             db.commit()
             if cal.source == "caldav":
-                # 将新事件推送到远程，以便显示在用户的其他
-                # 设备上 — 否则同步是仅拉取的 (#800)。
-                from src.caldav_writeback import writeback_event
-                await writeback_event(owner, cal.source, cal.id, {
-                    "uid": uid, "summary": data.summary, "description": data.description,
-                    "location": data.location, "dtstart": dtstart, "dtend": dtend,
-                    "all_day": data.all_day, "is_utc": _is_utc and not data.all_day,
-                    "rrule": data.rrule or "",
-                })
+                await _push_caldav_event_after_commit(owner, uid, "create")
             return {"ok": True, "uid": uid}
         except HTTPException:
             raise
@@ -1040,9 +1084,9 @@ def setup_calendar_routes() -> APIRouter:
                 ev.location = data.location
             if data.dtstart is not None:
                 ev.dtstart, _s_utc = _parse_dt_pair(data.dtstart)
-                # 当传入的 payload 携带时区信息时，将行标记为
-                # UTC 存储，以便序列化器添加 Z。如果 start 是朴素但 end 是 UTC，
-                # 不要翻转标志 — 只向上提升。
+                # When the incoming payload carries tz info, mark the row as
+                # UTC-stored so the serializer adds Z. Don't flip the flag
+                # off if start arrives naive but end was UTC — only escalate.
                 if _s_utc:
                     ev.is_utc = True
             if data.dtend is not None:
@@ -1057,15 +1101,12 @@ def setup_calendar_routes() -> APIRouter:
                 ev.rrule = data.rrule
             if data.color is not None:
                 ev.color = data.color if data.color else None
+            is_caldav = ev.calendar and ev.calendar.source == "caldav"
+            if is_caldav:
+                ev.caldav_sync_pending = "update"
             db.commit()
-            cal = db.query(CalendarCal).filter(CalendarCal.id == ev.calendar_id).first()
-            if cal and cal.source == "caldav":
-                from src.caldav_writeback import writeback_event
-                await writeback_event(owner, cal.source, cal.id, {
-                    "uid": ev.uid, "summary": ev.summary, "description": ev.description,
-                    "location": ev.location, "dtstart": ev.dtstart, "dtend": ev.dtend,
-                    "all_day": ev.all_day, "is_utc": ev.is_utc, "rrule": ev.rrule or "",
-                })
+            if is_caldav:
+                await _push_caldav_event_after_commit(owner, base_uid, "update")
             return {"ok": True}
         except HTTPException:
             raise
@@ -1086,15 +1127,13 @@ def setup_calendar_routes() -> APIRouter:
         db = SessionLocal()
         try:
             ev = _get_or_404_event(db, base_uid, owner)
-            # 在行被删除之前捕获远程推送所需的信息。
-            _cal = db.query(CalendarCal).filter(CalendarCal.id == ev.calendar_id).first()
-            _is_caldav = bool(_cal and _cal.source == "caldav")
-            _cal_id, _ev_uid = ev.calendar_id, ev.uid
+            is_caldav = ev.calendar and ev.calendar.source == "caldav"
+            if is_caldav:
+                _record_caldav_delete_tombstone(db, ev, owner)
             db.delete(ev)
             db.commit()
-            if _is_caldav:
-                from src.caldav_writeback import writeback_event
-                await writeback_event(owner, "caldav", _cal_id, {"uid": _ev_uid}, delete=True)
+            if is_caldav:
+                await _push_caldav_event_after_commit(owner, base_uid, "delete")
             return {"ok": True}
         except HTTPException:
             raise
@@ -1148,26 +1187,10 @@ def setup_calendar_routes() -> APIRouter:
         finally:
             db.close()
 
-    @router.delete("/calendars/{cal_id}")
-    async def delete_calendar(request: Request, cal_id: str):
-        owner = _require_user(request)
-        db = SessionLocal()
-        try:
-            cal = _get_or_404_calendar(db, cal_id, owner)
-            db.query(CalendarEvent).filter(CalendarEvent.calendar_id == cal_id).delete()
-            db.delete(cal)
-            db.commit()
-            return {"ok": True}
-        except HTTPException:
-            raise
-        except Exception as e:
-            db.rollback()
-            return {"error": str(e)}
-        finally:
-            db.close()
 
-    # ICS 上传的硬上限（ICS_MAX_BYTES，默认 10 MB）。使用 python-icalendar
-    # 时必须将整个文件加载到内存中，因此不受限制的上传会导致 OOM。
+    # Hard cap on ICS upload (ICS_MAX_BYTES, default 10 MB). Loading the whole
+    # file into memory is unavoidable with python-icalendar, so an unbounded
+    # upload would OOM.
 
     @router.post("/import")
     async def import_ics(request: Request, file: UploadFile = File(...), calendar_name: str = ""):
@@ -1183,7 +1206,7 @@ def setup_calendar_routes() -> APIRouter:
             except Exception as e:
                 raise HTTPException(400, f"Invalid ICS file: {e}")
 
-            # 清理显示名称 — 长度限制 + 去除控制字符
+            # Sanitize display name — length cap + strip control chars
             raw_name = calendar_name.strip() or (file.filename or "").replace(".ics", "").replace("_", " ").strip() or "Imported"
             cal_display = "".join(c for c in raw_name if c.isprintable())[:120] or "Imported"
 
@@ -1207,27 +1230,27 @@ def setup_calendar_routes() -> APIRouter:
             for comp in cal_data.walk():
                 if comp.name != "VEVENT":
                     continue
-                # 为每次导入生成新的 uid。旧代码重用了
-                # 文件中的 VEVENT uid，这会在用户之间泄漏：
-                # 任何用户日历上存在的 uid 会导致该用户的
-                # 行被静默跳过（并启用用户枚举）。
-                # 使用新的 uuid 将唯一性限定在每行范围内。
+                # Generate a fresh uid for each import. The old code reused
+                # the VEVENT uid from the file, which leaked across users:
+                # a uid present on ANY user's calendar caused this user's
+                # row to be silently skipped (and enabled enumeration).
+                # Using a fresh uuid scopes uniqueness per-row.
                 uid_val = str(uuid.uuid4())
                 dtstart = comp.get("dtstart")
                 if not dtstart:
                     skipped += 1
                     continue
 
-                # 仅在此用户的目标日历内部去重 — 相同的
-                # source-uid + 相同的 dtstart 在同一目标 = 重复。
+                # Dedup INSIDE this user's target calendar only — same
+                # source-uid + same dtstart in the same target = duplicate.
                 source_uid = str(comp.get("uid", "")) or None
                 if source_uid:
                     src_dtstart = dtstart.dt
-                    # 规范化到 import_ics 存储的相同朴素形式，以便
-                    # 重新导入带时区的事件能匹配已存在的行。
-                    # 旧代码在去除 tzinfo 时没有转换为 UTC
-                    #（使用墙钟时间），而存储首先转换为 UTC，因此
-                    # 每次重新导入 TZID 事件都会产生重复。
+                    # Normalize to the SAME naive form import_ics stores, so a
+                    # re-import of a tz-aware event matches the existing row.
+                    # The old code stripped tzinfo WITHOUT converting to UTC
+                    # (wall clock), while storage converts to UTC first, so
+                    # every re-import of a TZID event created a duplicate.
                     naive_src = _ics_naive_dtstart(src_dtstart)
                     existing = (
                         db.query(CalendarEvent)
@@ -1244,11 +1267,12 @@ def setup_calendar_routes() -> APIRouter:
 
                 dt_val = dtstart.dt
                 all_day = isinstance(dt_val, date) and not isinstance(dt_val, datetime)
-                # 对于定时事件，通过在去除 tzinfo 之前转换为 UTC
-                # 来保留源时区（DB 存储朴素值）。我们将行标记为
-                # is_utc=True，以便序列化器在输出时添加 Z
-                # 后缀 — 没有这个，前端会将朴素 ISO 解析为
-                # 用户的当前本地时间，这正是导入事件在错误时间触发提醒的 bug。
+                # For timed events, preserve the source timezone by converting
+                # to UTC before stripping tzinfo (DB stores naive). We mark
+                # the row with is_utc=True so the serializer adds the Z
+                # suffix on output — without this, the frontend would parse
+                # the naive ISO as the user's CURRENT local, which is exactly
+                # the bug where imported events fire reminders at wrong times.
                 from datetime import timezone as _tz
                 row_is_utc = False
                 if all_day:
@@ -1407,7 +1431,8 @@ def setup_calendar_routes() -> APIRouter:
 
         now = now_user_local()
         now_iso = now.strftime("%Y-%m-%dT%H:%M:%S")
-        # 模型只获取它需要填充的 schema；我们也会在客户端重新验证一切。
+        # The model gets only the schema it needs to fill out; we re-validate
+        # everything client-side too.
         system_prompt = (
             current_datetime_prompt()
             + "You are a calendar event parser. Read the user's one-line "
@@ -1455,12 +1480,13 @@ def setup_calendar_routes() -> APIRouter:
         except Exception as e:
             return {"ok": False, "error": f"Invalid JSON: {e}", "raw": cleaned[:400]}
 
-        # 轻量验证 / 默认值，以便前端可以信任数据格式。
+        # Light validation / defaults so the frontend can trust the shape.
         summary = (parsed.get("summary") or text)[:200]
-        # 去除 LLM（或用户的原始输入）有时会泄漏到摘要中的
-        # 陈旧相对/绝对时间标记 — 否则这些标记会在迟得多才触发的提醒通知中
-        # 逐字显示，此时 "in 29 min" 已不再准确。
-        # 实际时间信息存储在 dtstart/dtend 中。
+        # Strip stale relative/absolute time tokens that the LLM (or the
+        # user's raw input) sometimes leaks into the summary — these
+        # would otherwise be displayed verbatim in reminder notifications
+        # that fire much later, when "in 29 min" is no longer true. The
+        # actual timing lives in dtstart/dtend.
         summary = _re.sub(r'\bin\s+\d+\s*(min|minute|hour|hr|day)s?\b', '', summary, flags=_re.IGNORECASE)
         summary = _re.sub(r'\(\s*\d{1,2}:\d{2}\s*\)', '', summary)
         summary = _re.sub(r'\b\d{1,2}(:\d{2})?\s*(am|pm)\b', '', summary, flags=_re.IGNORECASE)
@@ -1469,20 +1495,22 @@ def setup_calendar_routes() -> APIRouter:
         all_day = bool(parsed.get("all_day"))
         dtstart = (parsed.get("dtstart") or "").strip()
         dtend   = (parsed.get("dtend") or "").strip()
-        # 对 LLM 输出强制使用朴素本地时间。模型通过 system prompt
-        # 锚定在用户的本地 "now" 上，因此它发出的 datetime
-        # 已经是用户的墙钟时间。一些模型仍然会追加 `Z` 或时区偏移，
-        # 这会使 `_parse_dt_pair` 将行标记为 UTC 并将
-        # 显示时间向前偏移用户的时区偏移量。去除任何
-        # 尾部的时区标记，以便时间完全按照 LLM 写入的值存储。
+        # Force naive-local on LLM output. The model is anchored on the
+        # user's local "now" via the system prompt, so its emitted
+        # datetime is already meant to be the user's wall-clock time.
+        # Some models append `Z` or a tz offset anyway, which would
+        # make `_parse_dt_pair` flag the row as UTC and shift the
+        # displayed time forward by the user's tz offset. Strip any
+        # trailing tz marker so the time is stored exactly as the LLM
+        # wrote it.
         def _strip_tz(s):
             if not s:
                 return s
             s = s.strip()
-            # 去除 "Z"
+            # Strip "Z"
             if s.endswith('Z') or s.endswith('z'):
                 s = s[:-1]
-            # 如果紧跟 T 时间后面，去除 "+HH:MM" / "-HH:MM"
+            # Strip "+HH:MM" / "-HH:MM" if it followed a T-time
             s = _re.sub(r'[+-]\d{2}:?\d{2}$', '', s)
             return s
         dtstart = _strip_tz(dtstart)

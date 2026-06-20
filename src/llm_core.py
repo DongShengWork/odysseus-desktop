@@ -7,6 +7,7 @@ import logging
 import hashlib
 import threading
 import re
+import os
 from fastapi import HTTPException
 from typing import Optional, Dict, List, Tuple
 from src.model_context import get_context_length, DEFAULT_CONTEXT
@@ -15,19 +16,37 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 class LLMConfig:
-    """LLM 操作的配置常量。"""
+    """Configuration constants for LLM operations."""
     DEFAULT_TIMEOUT = 30
     DEFAULT_TEMPERATURE = 1.0
     DEFAULT_MAX_TOKENS = 0
     MAX_RETRIES = 3
     RETRY_DELAY = 0.5
     STREAM_TIMEOUT = 300
+    # TCP+TLS connect budget for a SINGLE attempt. The old hard-coded 3.0s
+    # assumed LAN/Tailscale peers ('SYN in <100ms'); it is too tight for public
+    # cloud endpoints (offshore APIs take ~0.5-1.5s cold, with jitter), so a
+    # brief blip on the first connect of an idle chat surfaced as a 503 on the
+    # streaming path (which, unlike llm_call, does not retry the connect). A
+    # genuinely dead upstream stays bounded by the dead-host cooldown. Override
+    # with env LLM_CONNECT_TIMEOUT (seconds).
+    CONNECT_TIMEOUT = float(os.getenv('LLM_CONNECT_TIMEOUT', '10') or '10')
 
 
-# LLM 响应缓存
+def _call_timeout(read_timeout) -> httpx.Timeout:
+    """Per-request timeout for non-streaming LLM calls (connect from config)."""
+    return httpx.Timeout(connect=LLMConfig.CONNECT_TIMEOUT, read=float(read_timeout), write=10.0, pool=5.0)
+
+
+def _stream_timeout(read_timeout) -> httpx.Timeout:
+    """Per-request timeout for streaming LLM calls (connect from config)."""
+    return httpx.Timeout(connect=LLMConfig.CONNECT_TIMEOUT, read=float(read_timeout), write=30.0, pool=5.0)
+
+
+# Cache for LLM responses
 def _get_cache_key(url: str, model: str, messages: List[Dict], 
                    temperature: float, max_tokens: int) -> str:
-    """生成 LLM 请求的缓存键。"""
+    """Generate cache key for LLM requests."""
     hashable_messages = []
     for msg in messages:
         sorted_items = tuple(sorted(msg.items()))
@@ -44,26 +63,26 @@ def _get_cache_key(url: str, model: str, messages: List[Dict],
 
 _response_cache = {}
 
-# 死主机冷却：映射主机（scheme://host:port）→ 冷却过期的 Unix 时间戳。
-# 当连接到主机失败时，我们将其标记为死主机 DEAD_HOST_COOLDOWN 秒，使
-# 后续调用立即失败，而不是等待连接超时。防止
-# 一个不可达的上游阻塞整个应用其他部分的聊天。
+# Dead-host cooldown: maps host (scheme://host:port) -> unix ts when cooldown expires.
+# When a connect to a host fails, we mark it dead for DEAD_HOST_COOLDOWN seconds so
+# subsequent calls fail instantly instead of waiting on the connect timeout. Keeps
+# one unreachable upstream from jamming chat across the rest of the app.
 #
-# 但单个瞬时抖动（本地模型短暂繁忙，瞬间的
-# Tailscale 中断）曾触发长达 60 秒的锁死 — 用户在 503 后以为
-# 模型已死，而实际上它一秒后就恢复了。因此：
-#   - 在冷却之前要求 FAIL_THRESHOLD 次连续失败
-#   - 更短的冷却时间使恢复更快
-#   - 任何成功立即重置失败计数器
+# But a SINGLE transient blip (local model briefly busy, a momentary
+# Tailscale hiccup) used to trip a full 60s lockout — the user saw a
+# 503 and thought the model died when it was fine a second later. So:
+#   - require FAIL_THRESHOLD consecutive failures before cooling
+#   - shorter cooldown so recovery is quick
+#   - any success resets the failure counter immediately
 DEAD_HOST_COOLDOWN = 20.0
 _HOST_FAIL_THRESHOLD = 2
 _dead_hosts: Dict[str, float] = {}
 _host_fails: Dict[str, int] = {}
-# 保护上面的两个映射。同步的 llm_call() 在 FastAPI 的
-# 线程池中运行（同步路由如 /sessions/auto-sort），而 llm_call_async()
-# 在事件循环中运行，因此这些映射从多个 OS 线程中被修改。
-# 没有锁的情况下，_host_fails 的 get()+1+set 是一个读-修改-写操作，
-# 会在并发连接错误下丢失失败计数（issue #659）。
+# Guards the two maps above. The synchronous llm_call() runs inside FastAPI's
+# threadpool (sync routes such as /sessions/auto-sort) while llm_call_async()
+# runs on the event loop, so these maps are mutated from multiple OS threads.
+# Without the lock the get()+1+set on _host_fails is a read-modify-write that
+# loses failure counts under concurrent connect errors (issue #659).
 _host_health_lock = threading.Lock()
 _model_activity: Dict[str, float] = {}
 
@@ -92,7 +111,7 @@ _HARMONY_MAX_MARKER_LEN = max(len(marker) for marker in _HARMONY_MARKERS)
 
 
 def _harmony_suffix_hold_len(text: str) -> int:
-    """返回尾部有多少个字符可能是 harmony 标记的开头。"""
+    """Return how many trailing chars could be the start of a harmony marker."""
     limit = min(len(text), _HARMONY_MAX_MARKER_LEN - 1)
     for n in range(limit, 0, -1):
         suffix = text[-n:]
@@ -102,7 +121,7 @@ def _harmony_suffix_hold_len(text: str) -> int:
 
 
 class _HarmonyStreamRouter:
-    """路由 OpenAI harmony 分析/最终通道，不泄露标记。"""
+    """Route OpenAI harmony analysis/final channels without leaking markers."""
 
     def __init__(self) -> None:
         self._buf = ""
@@ -171,13 +190,13 @@ def _same_model_identity(left: str, right: str) -> bool:
     return (left or "").strip().lower() == (right or "").strip().lower()
 
 def note_model_activity(url: str, model: str):
-    """记录一次真实的上游请求使用了此端点/模型。"""
+    """Record that a real upstream request used this endpoint/model."""
     if not url or not model:
         return
     _model_activity[_model_activity_key(url, model)] = time.time()
 
 def seconds_since_model_activity(url: str, model: str) -> Optional[float]:
-    """自端点/模型上次在此进程中使用以来的秒数。"""
+    """Seconds since the endpoint/model was last used in this process."""
     ts = _model_activity.get(_model_activity_key(url, model))
     if not ts:
         return None
@@ -200,9 +219,10 @@ def _is_host_dead(url: str) -> bool:
         return True
 
 def _mark_host_dead(url: str) -> bool:
-    """记录连接失败。仅在 _HOST_FAIL_THRESHOLD 次连续失败后
-    实际冷却主机。返回 True 表示主机现已冷却（调用方可据此准确记录），
-    False 表示仍在允许的失败容忍期内。"""
+    """Record a connect failure. Only actually cools the host after
+    _HOST_FAIL_THRESHOLD consecutive failures. Returns True if the host
+    is now cooled (so callers can log accurately), False if it's still
+    within its allowed-failure grace."""
     key = _host_key(url)
     with _host_health_lock:
         n = _host_fails.get(key, 0) + 1
@@ -219,14 +239,14 @@ def _clear_host_dead(url: str) -> None:
         _host_fails.pop(key, None)
 
 
-# 共享的异步 HTTP 客户端。复用同一客户端保持连接预热：
-# 对 api.anthropic.com / api.openai.com / openrouter 的重复调用跳过
-# 100-500ms 的 TCP+TLS 握手。延迟初始化以便绑定到运行中的事件循环。
+# Shared async HTTP client. Reusing one client keeps connections warm:
+# repeat calls to api.anthropic.com / api.openai.com / openrouter skip the
+# 100-500ms TCP+TLS handshake. Lazy init so we bind to the running event loop.
 _http_client: Optional[httpx.AsyncClient] = None
 _http_limits = httpx.Limits(max_connections=100, max_keepalive_connections=30, keepalive_expiry=30.0)
 
 def _get_http_client() -> httpx.AsyncClient:
-    """返回进程全局的 AsyncClient。每次请求的超时在调用时传入。"""
+    """Return process-wide AsyncClient. Per-request timeout is passed at call time."""
     global _http_client
     if _http_client is None or _http_client.is_closed:
         from src.tls_overrides import llm_verify
@@ -236,11 +256,11 @@ def _get_http_client() -> httpx.AsyncClient:
     return _http_client
 
 def _get_cached_response(cache_key: str) -> Optional[str]:
-    """获取缓存响应（如果存在）。"""
+    """Get cached response if it exists."""
     return _response_cache.get(cache_key)
 
 def _set_cached_response(cache_key: str, response: str) -> None:
-    """将响应存入缓存。"""
+    """Store response in cache."""
     if len(_response_cache) > 128:
         keys_to_remove = list(_response_cache.keys())[:64]
         for key in keys_to_remove:
@@ -250,7 +270,7 @@ def _set_cached_response(cache_key: str, response: str) -> None:
             _response_cache.pop(key, None)
     _response_cache[cache_key] = response
 
-# ── Anthropic 原生 API 适配器 ──
+# ── Anthropic native API adapter ──
 
 ANTHROPIC_MODELS = [
     "claude-opus-4-20250514", "claude-opus-4",
@@ -260,7 +280,7 @@ ANTHROPIC_MODELS = [
 
 
 def _is_ollama_native_url(url: str) -> bool:
-    """对原生 Ollama API URL（包括 Ollama Cloud）返回 True。"""
+    """Return True for native Ollama API URLs, including Ollama Cloud."""
     try:
         parsed = urlparse(url or "")
     except Exception:
@@ -275,8 +295,26 @@ def _is_ollama_native_url(url: str) -> bool:
     return local_ollama_host and (path == "" or path == "/api" or path.startswith("/api/"))
 
 
+def _is_ollama_openai_compat_url(url: str) -> bool:
+    """Return True for local Ollama's OpenAI-compatible /v1 surface.
+
+    Mirrors the host detection used by ``_is_ollama_native_url`` so that the
+    two helpers stay in lockstep: a localhost Ollama on a non-default port
+    (custom ``OLLAMA_HOST``, reverse proxy, container port remap) is treated
+    the same way here as it is on the native ``/api`` path.
+    """
+    try:
+        parsed = urlparse(url or "")
+    except Exception:
+        return False
+    host = parsed.hostname or ""
+    path = (parsed.path or "").rstrip("/")
+    local_ollama_host = host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"} or parsed.port == 11434
+    return local_ollama_host and (path == "/v1" or path.startswith("/v1/"))
+
+
 def _ollama_api_root(url: str) -> str:
-    """返回原生 Ollama API 根路径，如 https://ollama.com/api。"""
+    """Return a native Ollama API root such as https://ollama.com/api."""
     url = (url or "").strip().rstrip("/")
     parsed = urlparse(url)
     path = (parsed.path or "").rstrip("/")
@@ -297,22 +335,22 @@ def _ollama_api_root(url: str) -> str:
 
 
 def _normalize_ollama_url(url: str) -> str:
-    """确保原生 Ollama URL 指向 /api/chat。"""
+    """Ensure a native Ollama URL points at /api/chat."""
     base = _ollama_api_root(url)
     return base.rstrip("/") + "/chat"
 
 
 def _ollama_normalize_tool_messages(messages: List[Dict]) -> List[Dict]:
-    """将 Odysseus 标准的 OpenAI 风格消息适配到原生 Ollama /api/chat。
+    """Adapt Odysseus' canonical OpenAI-style messages to native Ollama /api/chat.
 
-    Odysseus 以 OpenAI 形状携带 assistant 工具调用，其中
-    ``function.arguments`` 是一个 JSON *字符串*。原生 Ollama 期望它是一个
-    JSON *对象*；给定字符串会导致整个请求以 HTTP 400
-    "Value looks like object, but can't find closing '}' symbol" 失败，这会中断
-    每个后续（工具结果）轮次。在这里将 arguments 解析回对象，
-    在浅拷贝上进行，保持非工具消息不变。不透明的
-    Gemini ``extra_content``（thought_signature）被丢弃 — 它对
-    Ollama 无意义，仅在对话被重放到 Gemini 时相关。
+    Odysseus carries assistant tool calls in the OpenAI shape, where
+    `function.arguments` is a JSON *string*. Native Ollama expects it to be a
+    JSON *object*; given the string it fails the whole request with HTTP 400
+    "Value looks like object, but can't find closing '}' symbol", which aborts
+    every follow-up (tool-result) round. Parse the arguments back into an object
+    here, on a shallow copy, leaving non-tool messages untouched. The opaque
+    Gemini `extra_content` (thought_signature) is dropped — it is meaningless to
+    Ollama and only matters when the conversation is replayed to Gemini.
     """
     out: List[Dict] = []
     for m in messages or []:
@@ -348,14 +386,16 @@ def _build_ollama_payload(
     tools: Optional[List[Dict]] = None,
     num_ctx: Optional[int] = None,
 ) -> Dict:
-    """构建 Ollama /api/chat 端点的 JSON 负载。
+    """Build the JSON payload for Ollama's /api/chat endpoint.
 
-    ``num_ctx`` 设置输入上下文窗口。当选项被省略时 Ollama 默认为 2048，
-    因此广告窗口更大的模型会在此被静默截断，而窗口更小的模型
-    会得到一个超出其服务能力的超尺寸窗口。通过 ``num_ctx`` 传递发现的
-    上下文长度；此构建器仅在值可信时（非 ``DEFAULT_CONTEXT`` 回退）
-    发出它，因此我们不会为未知模型猜测，但在知道真实窗口时通知
-    Ollama — 即使它小于 2048。
+    ``num_ctx`` sets the input context window. Ollama defaults to 2048
+    when the option is omitted, so a model with a larger advertised
+    window is silently truncated there, and a model with a smaller one
+    gets an oversized window it can't service. Pass the discovered
+    context length through ``num_ctx``; this builder only emits it when
+    the value is trusted (not the ``DEFAULT_CONTEXT`` fallback), so we
+    don't guess for unknown models but do tell Ollama the real window
+    when we know it — even if it's smaller than 2048.
     """
     payload: Dict = {
         "model": model,
@@ -382,11 +422,12 @@ def _parse_ollama_response(data: dict) -> str:
 
 
 def _host_match(url: str, *domains: str) -> bool:
-    """如果 URL 的主机名等于任何 ``domains`` 或其子域名，返回 True。
+    """Return True if url's hostname equals any of `domains` or is a subdomain of one.
 
-    用于像 "is this Anthropic?" / "is this OpenRouter?" 这样的检查。
-    优先使用此方法而非 URL 子串匹配：子串形式对恰好
-    包含域文本的不相关路径或查询字符串给出错误答案。
+    Used by helpers that want "is this Anthropic?" / "is this OpenRouter?"
+    style checks. Prefer this over substring matching on the URL: the
+    substring form gives wrong answers for unrelated paths or query strings
+    that happen to contain the domain text.
     """
     if not url:
         return False
@@ -401,14 +442,154 @@ def _host_match(url: str, *domains: str) -> bool:
     return any(host == d or host.endswith("." + d) for d in domains)
 
 
-def _detect_provider(url: str) -> str:
-    """从配置的端点 URL 检测 API 提供商。
+# Kimi Code subscription keys (api.kimi.com/coding/v1) require a whitelisted
+# coding-agent User-Agent; otherwise the API returns 403 access_terminated_error.
+# Tried in order; first success is cached per base URL for later requests.
+KIMI_CODE_USER_AGENTS: tuple[str, ...] = (
+    "claude-code/0.1.0",
+    "claude-code/1.0.0",
+    "KimiCLI/1.0",
+    "Kilo-Code/1.0",
+    "Roo-Code/1.0",
+    "Cursor/1.0",
+)
+KIMI_CODE_USER_AGENT = KIMI_CODE_USER_AGENTS[0]
+_kimi_code_ua_cache: dict[str, str] = {}
 
-    基于主机名（精确或子域名）匹配而非子串，因此仅在其路径或
-    查询中包含提供商域名的 URL — 或像 ``anthropic.com.example`` 这样
-    外观相似的主机 — 不会被错误分类。
-    未知主机回退到 OpenAI 兼容默认值，这也是大多数
-    提供商所实现的。
+
+def _is_kimi_code_url(url: str) -> bool:
+    if not url or not _host_match(url, "kimi.com"):
+        return False
+    try:
+        return "/coding" in (urlparse(url).path or "")
+    except Exception:
+        return False
+
+
+def _kimi_code_base_key(url: str) -> str:
+    """Normalize a Kimi Code chat/models URL to its OpenAI base (.../coding/v1)."""
+    parsed = urlparse(url)
+    path = (parsed.path or "").rstrip("/")
+    for suffix in ("/chat/completions", "/models", "/completions"):
+        if path.endswith(suffix):
+            path = path[: -len(suffix)]
+    path = path.rstrip("/") or "/coding/v1"
+    return f"{parsed.scheme}://{parsed.netloc}{path}"
+
+
+def _is_kimi_code_access_denied(status: int, body: bytes | str) -> bool:
+    if status != 403:
+        return False
+    text = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else (body or "")
+    lower = text.lower()
+    return (
+        "access_terminated_error" in lower
+        or "coding agents" in lower
+        or "only available for coding" in lower
+    )
+
+
+def _kimi_code_ua_candidates(url: str) -> list[str]:
+    if not _is_kimi_code_url(url):
+        return []
+    base_key = _kimi_code_base_key(url)
+    cached = _kimi_code_ua_cache.get(base_key)
+    if cached:
+        return [cached] + [ua for ua in KIMI_CODE_USER_AGENTS if ua != cached]
+    return list(KIMI_CODE_USER_AGENTS)
+
+
+def _remember_kimi_code_user_agent(url: str, user_agent: str) -> None:
+    _kimi_code_ua_cache[_kimi_code_base_key(url)] = user_agent
+
+
+def apply_kimi_code_headers(headers: Optional[Dict], url: str) -> Dict[str, str]:
+    """Pick a Kimi Code User-Agent (cached probe when possible)."""
+    h = dict(headers or {})
+    if not _is_kimi_code_url(url):
+        return h
+    base_key = _kimi_code_base_key(url)
+    cached = _kimi_code_ua_cache.get(base_key)
+    if cached:
+        h["User-Agent"] = cached
+        return h
+    models_url = base_key.rstrip("/") + "/models"
+    from src.tls_overrides import llm_verify
+    for ua in KIMI_CODE_USER_AGENTS:
+        trial = dict(h)
+        trial["User-Agent"] = ua
+        try:
+            r = httpx.get(models_url, headers=trial, timeout=8, verify=llm_verify())
+        except Exception:
+            continue
+        if _is_kimi_code_access_denied(r.status_code, r.content):
+            logger.debug("Kimi Code rejected User-Agent %s (403), trying next", ua)
+            continue
+        if r.status_code < 400:
+            _remember_kimi_code_user_agent(url, ua)
+            h["User-Agent"] = ua
+            return h
+        break
+    h.setdefault("User-Agent", KIMI_CODE_USER_AGENT)
+    return h
+
+
+def httpx_get_kimi_aware(url: str, headers: Optional[Dict], **kwargs):
+    h = apply_kimi_code_headers(headers, url)
+    if not _is_kimi_code_url(url):
+        return httpx.get(url, headers=h, **kwargs)
+    last = None
+    for ua in _kimi_code_ua_candidates(url):
+        trial = dict(h)
+        trial["User-Agent"] = ua
+        last = httpx.get(url, headers=trial, **kwargs)
+        if not _is_kimi_code_access_denied(last.status_code, last.content):
+            if last.status_code < 400:
+                _remember_kimi_code_user_agent(url, ua)
+            return last
+    return last
+
+
+def httpx_post_kimi_aware(url: str, headers: Optional[Dict], **kwargs):
+    h = apply_kimi_code_headers(headers, url)
+    if not _is_kimi_code_url(url):
+        return httpx.post(url, headers=h, **kwargs)
+    last = None
+    for ua in _kimi_code_ua_candidates(url):
+        trial = dict(h)
+        trial["User-Agent"] = ua
+        last = httpx.post(url, headers=trial, **kwargs)
+        if not _is_kimi_code_access_denied(last.status_code, last.content):
+            if last.status_code < 400:
+                _remember_kimi_code_user_agent(url, ua)
+            return last
+    return last
+
+
+async def httpx_post_kimi_aware_async(client, url: str, headers: Optional[Dict], **kwargs):
+    h = apply_kimi_code_headers(headers, url)
+    if not _is_kimi_code_url(url):
+        return await client.post(url, headers=h, **kwargs)
+    last = None
+    for ua in _kimi_code_ua_candidates(url):
+        trial = dict(h)
+        trial["User-Agent"] = ua
+        last = await client.post(url, headers=trial, **kwargs)
+        if not _is_kimi_code_access_denied(last.status_code, last.content):
+            if last.status_code < 400:
+                _remember_kimi_code_user_agent(url, ua)
+            return last
+    return last
+
+
+def _detect_provider(url: str) -> str:
+    """Detect the API provider from a configured endpoint URL.
+
+    Matches on hostname (exact or subdomain) rather than substring, so a URL
+    that merely contains a provider's domain in its path or query — or a
+    look-alike host such as ``anthropic.com.example`` — is not misclassified.
+    Unknown hosts fall back to the OpenAI-compatible default, which the
+    majority of providers implement.
     """
     if _is_ollama_native_url(url):
         return "ollama"
@@ -422,6 +603,10 @@ def _detect_provider(url: str) -> str:
         return "openrouter"
     if _host_match(url, "groq.com"):
         return "groq"
+    if _host_match(url, "nvidia.com"):
+        return "nvidia"
+    if _host_match(url, "moonshot.ai") or _host_match(url, "moonshot.cn"):
+        return "moonshot"
     from src.chatgpt_subscription import is_chatgpt_subscription_base
     if is_chatgpt_subscription_base(url):
         return "chatgpt-subscription"
@@ -429,6 +614,53 @@ def _detect_provider(url: str) -> str:
     if is_copilot_base(url):
         return "copilot"
     return "openai"
+
+
+def _is_self_hosted_openai_compatible(url: str) -> bool:
+    """True for custom/local OpenAI-compatible servers (llama.cpp, LM Studio,
+    vLLM, text-generation-webui, etc.) as opposed to cloud APIs.
+
+    Used to gate llama.cpp-server-specific payload extras (``session_id``,
+    ``cache_prompt``) used for KV-cache slot affinity (issue #2927). Strict
+    cloud providers reject unrecognized top-level fields (api.openai.com
+    returns 400, Mistral returns 422 "extra_forbidden", issue #3793), and any
+    unknown OpenAI-compatible host used to be treated as self-hosted, so those
+    fields leaked to every strict provider added as a custom endpoint.
+
+    A server only counts as self-hosted when it also resolves as local:
+    loopback/private/tailscale host, or the endpoint explicitly configured
+    with kind "local". A self-hosted server exposed via a public hostname
+    loses the affinity hint unless its endpoint kind is set to "local" -
+    a lost perf hint, versus a hard 4xx on every request the other way.
+    """
+    if _detect_provider(url) != "openai" or _host_match(url, "openai.com"):
+        return False
+    from src.model_context import is_local_endpoint
+    return is_local_endpoint(url)
+
+
+def _apply_local_cache_affinity(payload: Dict, url: str, session_id: Optional[str]) -> None:
+    """Add llama.cpp-server slot-affinity hints to an outgoing payload, in place.
+
+    As diagnosed in issue #2927, llama.cpp assigns requests to processing
+    slots via LRU when no stable identifier is present ("session_id=<empty>
+    server-selected (LCP/LRU)"), which means consecutive turns of the same
+    chat can land on different slots and lose their cached prefix entirely.
+    Sending a stable ``session_id`` (derived from the Odysseus session) lets
+    the server keep routing the same conversation to the same slot, and
+    ``cache_prompt: true`` asks it to retain/reuse the prefix it already has.
+
+    Both fields are llama.cpp / LM Studio extensions to the OpenAI schema; we
+    only set them for self-hosted OpenAI-compatible endpoints (never
+    api.openai.com or other cloud providers, which reject unrecognized
+    top-level request fields).
+    """
+    if not session_id:
+        return
+    if not _is_self_hosted_openai_compatible(url):
+        return
+    payload.setdefault("session_id", str(session_id))
+    payload.setdefault("cache_prompt", True)
 
 
 def _provider_headers(provider: str, headers: Optional[Dict] = None) -> Dict[str, str]:
@@ -450,7 +682,7 @@ def _provider_headers(provider: str, headers: Optional[Dict] = None) -> Dict[str
 
 
 def _provider_label(url: str) -> str:
-    """对错误消息返回人性化的提供商名称。"""
+    """Human-friendly provider name for error messages."""
     if not url:
         return "provider"
     if _host_match(url, "anthropic.com"): return "Anthropic"
@@ -467,9 +699,16 @@ def _provider_label(url: str) -> str:
     if is_copilot_base(url): return "GitHub Copilot"
     if _host_match(url, "mistral.ai"): return "Mistral"
     if _host_match(url, "deepseek.com"): return "DeepSeek"
+    if _host_match(url, "nvidia.com"): return "NVIDIA"
     if _host_match(url, "googleapis.com"): return "Google"
     if _host_match(url, "together.xyz", "together.ai"): return "Together"
     if _host_match(url, "fireworks.ai"): return "Fireworks"
+    if _host_match(url, "kimi.com"):
+        try:
+            if "/coding" in (urlparse(url).path or ""):
+                return "Kimi Code"
+        except Exception:
+            pass
     if _is_ollama_native_url(url): return "Ollama"
     try:
         host = (urlparse(url).hostname or "").lower()
@@ -538,8 +777,9 @@ def _build_chatgpt_responses_payload(
     }
     if not _restricts_temperature(model):
         payload["temperature"] = temperature
-    if max_tokens and max_tokens > 0:
-        payload["max_output_tokens"] = max_tokens
+    # ChatGPT Subscription Codex API does not support max_output_tokens —
+    # passing it returns HTTP 400 "Unsupported parameter: max_output_tokens".
+    # Do not include it in the payload.
     return payload
 
 
@@ -552,10 +792,11 @@ def _format_chatgpt_subscription_error(status_code: int, text: str) -> str:
 
 
 def _format_upstream_error(status: int, body: bytes | str, url: str) -> str:
-    """将上游 HTTP 错误转换为用户可读的句子。
+    """Turn an upstream HTTP error into a user-readable sentence.
 
-    认证失败（401/403）变为 'xAI 拒绝了这个 API key' 等，因此 UI
-    不再显示原始 JSON 如 ``{"error":{"message":"User not found."}}``。"""
+    Auth failures (401/403) become 'xAI rejected the API key' etc., so the UI
+    stops showing raw JSON like '{"error":{"message":"User not found."}}'.
+    """
     if isinstance(body, bytes):
         try:
             body = body.decode("utf-8", errors="replace")
@@ -595,33 +836,76 @@ def _format_upstream_error(status: int, body: bytes | str, url: str) -> str:
 _MAX_COMPLETION_TOKENS_MODELS = {"o1", "o3", "o4", "gpt-4.5", "gpt-5"}
 
 def _uses_max_completion_tokens(model: str) -> bool:
-    """检查模型是否需要 max_completion_tokens 而非 max_tokens。"""
+    """Check if a model requires max_completion_tokens instead of max_tokens."""
     if not model:
         return False
     m = model.lower()
     return any(m.startswith(p) or f"/{p}" in m for p in _MAX_COMPLETION_TOKENS_MODELS)
 
-# OpenAI 推理模型（o1、o3、o4、gpt-5 系列）只接受默认的
-# temperature。发送任何显式值 — 即使是 0.0 — 都会返回 HTTP 400
-# （"Only the default (1) value is supported"）。否则会破坏聊天，当
-# 预设设置了非默认温度时，并使端点探测将
-# 完全正常的模型报告为失败。对于这些模型我们省略该字段，让
-# API 使用其必需的默认值。（gpt-4.5 被有意识地排除 — 它不是
-# 推理模型，正常接受 temperature。）
-_FIXED_TEMPERATURE_MODELS = ("o1", "o3", "o4", "gpt-5")
+# OpenAI reasoning models (o1, o3, o4, gpt-5 families) only accept the default
+# temperature. Sending any explicit value — even 0.0 — returns HTTP 400
+# ("Only the default (1) value is supported"). That otherwise breaks chat when a
+# preset sets a non-default temperature, and makes endpoint probing report a
+# perfectly good model as failing. For these models we omit the field and let
+# the API use its required default. (gpt-4.5 is intentionally excluded — it is
+# not a reasoning model and accepts temperature normally.)
+_FIXED_TEMPERATURE_MODELS = ("o1", "o3", "o4", "gpt-5", "kimi-for-coding")
 
 def _restricts_temperature(model: str) -> bool:
-    """检查模型是否拒绝任何非默认的 temperature。"""
+    """Check if a model rejects any non-default temperature."""
     if not model:
         return False
     m = model.lower()
     return any(m.startswith(p) or f"/{p}" in m for p in _FIXED_TEMPERATURE_MODELS)
 
-# 支持结构化思考的模型 — 可能输出 </think> 而没有开标签
+
+# The official Moonshot API fixes temperature at 1.0 in thinking mode and 0.6
+# when thinking is explicitly disabled for Kimi K2.5/K2.6. Any other explicit
+# value returns HTTP 400. Odysseus does not currently send the `thinking` mode
+# control, so omit temperature and let Moonshot use its default thinking mode.
+# Keep the gate provider-specific: self-hosted Kimi deployments may accept
+# custom sampling values, and older Moonshot models have different defaults.
+def _moonshot_rejects_custom_temperature(provider: str, model: str) -> bool:
+    """Check if the official Moonshot API fixes temperature for this model."""
+    if provider != "moonshot" or not isinstance(model, str):
+        return False
+    model_id = model.lower().rsplit("/", 1)[-1]
+    return bool(re.match(r"^kimi-k2\.(?:5|6)(?:$|[-_:])", model_id))
+
+
+def _omit_temperature(provider: str, model: str) -> bool:
+    """Check if a request should use the provider's default temperature."""
+    return _restricts_temperature(model) or _moonshot_rejects_custom_temperature(
+        provider, model
+    )
+
+
+# Anthropic removed the sampling parameters (temperature, top_p, top_k) starting
+# with Claude Opus 4.7. On Opus 4.7 and later, sending `temperature` at all —
+# even 0.0 — returns HTTP 400. Earlier Claude models (Opus 4.6 and below, every
+# Sonnet/Haiku) still accept temperature in [0.0, 1.0], so the omission must be
+# version-gated rather than applied to all `claude-*` models.
+def _anthropic_rejects_temperature(model: str) -> bool:
+    """Check if a native-Anthropic model rejects the temperature field (Opus 4.7+)."""
+    if not isinstance(model, str) or not model:
+        return False
+    # `(?<![a-z])` anchors "opus" to a word boundary so a substring match like
+    # `oct-opus`/`octopus-4-8` can't be read as Opus (it would otherwise strip
+    # temperature). Cap the minor at 1-2 digits and forbid a trailing digit so a
+    # dated id like `claude-opus-4-20250514` (Opus 4.0) parses as major-only (no
+    # minor match, kept) instead of reading the date `20250514` as a giant minor
+    # that would falsely test >= 4.7. Dated 4.7+ snapshots (`claude-opus-4-7-
+    # 20260201`) keep their explicit minor and are still matched.
+    match = re.search(r"(?<![a-z])opus[-_]?(\d+)[-_.](\d{1,2})(?!\d)", model.lower())
+    if not match:
+        return False
+    return (int(match.group(1)), int(match.group(2))) >= (4, 7)
+
+# Models that support structured thinking — may output </think> without opening tag
 _THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1", "deepseek-reasoner", "minimax", "m2-reap", "gemma")
 
 def _supports_thinking(model: str) -> bool:
-    """检查模型是否支持结构化思考输出。"""
+    """Check if model supports structured thinking output."""
     if not model:
         return False
     m = model.lower()
@@ -671,7 +955,7 @@ def _convert_openai_content_to_anthropic(content):
 
 
 def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=False, tools=None):
-    """将 OpenAI 风格的消息转换为 Anthropic 格式。"""
+    """Convert OpenAI-style messages to Anthropic format."""
     system_parts = []
     chat_messages = []
     for m in messages:
@@ -720,8 +1004,11 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
         "model": model,
         "messages": chat_messages,
         "max_tokens": max_tokens if max_tokens and max_tokens > 0 else 4096,
-        "temperature": temperature,
     }
+    # Opus 4.7+ removed the sampling parameters — sending `temperature` (even 0.0)
+    # returns HTTP 400. Omit it for those models; older Claude models still take it.
+    if not _anthropic_rejects_temperature(model):
+        payload["temperature"] = temperature
     if system_parts:
         system_text = "\n\n".join(system_parts)
         # Send `system` as a structured text block so we can attach a prompt-cache
@@ -755,7 +1042,7 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
     return payload
 
 def _build_anthropic_headers(headers):
-    """将 Bearer 认证转换为 Anthropic 的 x-api-key。"""
+    """Convert Bearer auth to x-api-key for Anthropic."""
     h = {"Content-Type": "application/json", "anthropic-version": "2023-06-01"}
     if headers:
         for k, v in headers.items():
@@ -805,7 +1092,7 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
     (content=None, since Gemini/Ollama reject tool_calls alongside ""). Dropping
     it leaves the tool result dangling and breaks the next round.
     """
-    allowed = {"role", "content", "name", "tool_call_id", "tool_calls", "function_call"}
+    allowed = {"role", "content", "name", "tool_call_id", "tool_calls", "function_call", "reasoning_content"}
     cleaned = []
     for msg in messages or []:
         if not isinstance(msg, dict):
@@ -828,13 +1115,13 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
         elif "content" in item:
             cleaned.append(item)
 
-    # 在发送给任何 OpenAI 兼容的提供商之前修复 tool-call 邻接关系。
-    # 裁剪/压缩/重试可能导致 ``role:"tool"`` 消息
-    # 没有紧邻其前的 assistant ``tool_calls`` 父消息，这会被
-    # DeepSeek 拒绝并报错：
+    # Repair tool-call adjacency before sending to any OpenAI-compatible
+    # provider. Trimming/compaction/retries can leave `role:"tool"` messages
+    # without their immediately-preceding assistant `tool_calls` parent, which
+    # DeepSeek rejects with:
     # "Messages with role 'tool' must be a response to a preceding message with
-    # 'tool_calls'"。同时去除未收到回答的 assistant tool_calls；一些提供商
-    # 将其拒绝为不完整的对话。
+    # 'tool_calls'". Also strip unanswered assistant tool_calls; some providers
+    # reject those as incomplete conversations.
     repaired: List[Dict] = []
     i = 0
     while i < len(cleaned):
@@ -842,8 +1129,8 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
         role = msg.get("role")
 
         if role == "tool":
-            # 孤立工具结果。紧邻此前没有有效的 assistant tool_calls 父消息，
-            # 因此不能发送。
+            # Orphan tool result. There is no valid assistant tool_calls parent
+            # immediately before this batch, so it cannot be sent.
             logger.debug("Dropping orphan tool message before provider request")
             i += 1
             continue
@@ -933,7 +1220,7 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
     return merged
 
 def _normalize_anthropic_url(url: str) -> str:
-    """确保 Anthropic URL 指向 /v1/messages。"""
+    """Ensure Anthropic URL points to /v1/messages."""
     url = url.rstrip("/")
     if url.endswith("/v1/messages"):
         return url
@@ -943,7 +1230,7 @@ def _normalize_anthropic_url(url: str) -> str:
 
 
 def _model_list_base(url: str) -> str:
-    """将模型/聊天 URL 规范化为已配置的端点 base。"""
+    """Normalize model/chat URLs to the configured endpoint base."""
     base = (url or "").strip().rstrip("/")
     for suffix in ("/models", "/chat/completions", "/completions", "/v1/messages", "/responses"):
         if base.endswith(suffix):
@@ -980,7 +1267,7 @@ def _configured_cached_model_ids(
     owner: Optional[str] = None,
     endpoint_id: Optional[str] = None,
 ) -> List[str]:
-    """返回匹配 endpoint_url 的已配置端点的缓存模型。"""
+    """Return cached models for a configured endpoint matching endpoint_url."""
     target = _model_list_base(endpoint_url)
     if not target:
         return []
@@ -1023,7 +1310,7 @@ def list_model_ids(
     owner: Optional[str] = None,
     endpoint_id: Optional[str] = None,
 ) -> List[str]:
-    """列出来自端点的可用模型 ID。"""
+    """List available model IDs from an endpoint."""
     cached = _configured_cached_model_ids(base_chat_url, owner=owner, endpoint_id=endpoint_id)
     if cached:
         return cached
@@ -1040,7 +1327,7 @@ def list_model_ids(
             from src.endpoint_resolver import build_models_url
 
             models_url = build_models_url(base_chat_url)
-        r = httpx.get(models_url, headers=h, timeout=timeout)
+        r = httpx_get_kimi_aware(models_url, h, timeout=timeout)
         r.raise_for_status()
         data = r.json()
         model_ids = [m.get("id") for m in (data.get("data") or []) if m.get("id")]
@@ -1070,7 +1357,7 @@ def normalize_model_id(
     owner: Optional[str] = None,
     endpoint_id: Optional[str] = None,
 ) -> Optional[str]:
-    """将模型 ID 规范化为与可用模型匹配。"""
+    """Normalize a model ID to match available models."""
     avail = list_model_ids(endpoint_url, timeout, owner=owner, endpoint_id=endpoint_id)
     if not avail:
         return None
@@ -1086,7 +1373,7 @@ def normalize_model_id(
 def llm_call(url: str, model: str, messages: List[Dict], temperature: float = LLMConfig.DEFAULT_TEMPERATURE,
              max_tokens: int = LLMConfig.DEFAULT_MAX_TOKENS, headers: Optional[Dict] = None, 
              timeout: int = LLMConfig.DEFAULT_TIMEOUT, prompt_type: Optional[str] = None) -> str:
-    """同步 LLM 调用，支持可选的提示类型增强。"""
+    """Synchronous LLM call with optional prompt type enhancement."""
     h = _provider_headers(_detect_provider(url))
     # Tolerate headers that arrive as a JSON string (some sessions stored them
     # double-encoded) — otherwise h.update() throws "dictionary update sequence
@@ -1141,14 +1428,14 @@ def llm_call(url: str, model: str, messages: List[Dict], temperature: float = LL
             "messages": messages_copy,
             "temperature": temperature,
         }
-        if _restricts_temperature(model):
+        if _omit_temperature(provider, model):
             payload.pop("temperature", None)
         if max_tokens and max_tokens > 0:
             tok_key = "max_completion_tokens" if _uses_max_completion_tokens(model) else "max_tokens"
             payload[tok_key] = max_tokens
     try:
         note_model_activity(target_url, model)
-        r = httpx.post(target_url, headers=h, json=payload, timeout=timeout)
+        r = httpx_post_kimi_aware(target_url, h, json=payload, timeout=timeout)
     except Exception as e:
         raise HTTPException(502, f"POST {target_url} failed: {e}")
     if not r.is_success:
@@ -1217,7 +1504,7 @@ def llm_call_with_fallback(candidates, messages, **kwargs) -> str:
 
 
 async def llm_call_async_with_fallback(candidates, messages, **kwargs) -> str:
-    """与 ``llm_call_with_fallback`` 的异步变体 — 相同语义。"""
+    """Async variant of `llm_call_with_fallback` — same semantics."""
     cands = _dedupe_candidates(candidates)
     if not cands:
         raise HTTPException(503, "No model endpoint configured")
@@ -1242,9 +1529,10 @@ async def llm_call_async(
     headers: Optional[Dict] = None,
     timeout: int = LLMConfig.STREAM_TIMEOUT,
     max_retries: int = LLMConfig.MAX_RETRIES,
-    prompt_type: Optional[str] = None
+    prompt_type: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> str:
-    """使用 httpx 的异步 LLM 调用，支持连接池、超时、重试逻辑和性能日志。"""
+    """Asynchronous LLM call using httpx with connection pooling, timeout, retry logic, and performance logging."""
     provider = _detect_provider(url)
     messages_copy = _sanitize_llm_messages(messages)
 
@@ -1334,16 +1622,20 @@ async def llm_call_async(
             "messages": messages_copy,
             "temperature": temperature,
         }
-        if _restricts_temperature(model):
+        if _omit_temperature(provider, model):
             payload.pop("temperature", None)
         if max_tokens and max_tokens > 0:
             tok_key = "max_completion_tokens" if _uses_max_completion_tokens(model) else "max_tokens"
             payload[tok_key] = max_tokens
+        # Suppress thinking for qwen3/gemma4 on Ollama /v1 — same as stream_llm.
+        if _is_ollama_openai_compat_url(url) and _supports_thinking(model):
+            payload["think"] = False
+        _apply_local_cache_affinity(payload, url, session_id)
 
     if _is_host_dead(target_url):
         raise HTTPException(503, f"Upstream {_host_key(target_url)} marked unreachable (cooldown active)")
 
-    call_timeout = httpx.Timeout(connect=3.0, read=float(timeout), write=10.0, pool=5.0)
+    call_timeout = _call_timeout(timeout)
     attempt = 0
     while attempt < max_retries:
         attempt += 1
@@ -1351,7 +1643,7 @@ async def llm_call_async(
         try:
             note_model_activity(target_url, model)
             client = _get_http_client()
-            r = await client.post(target_url, headers=h, json=payload, timeout=call_timeout)
+            r = await httpx_post_kimi_aware_async(client, target_url, h, json=payload, timeout=call_timeout)
             duration = time.time() - start
             if not r.is_success:
                 friendly = _format_upstream_error(r.status_code, r.text, target_url)
@@ -1396,7 +1688,7 @@ async def llm_call_async(
 async def stream_llm(url: str, model: str, messages: List[Dict], temperature: float = LLMConfig.DEFAULT_TEMPERATURE,
                      max_tokens: int = LLMConfig.DEFAULT_MAX_TOKENS, headers: Optional[Dict] = None,
                      timeout: int = LLMConfig.STREAM_TIMEOUT, prompt_type: Optional[str] = None,
-                     tools: Optional[List[Dict]] = None):
+                     tools: Optional[List[Dict]] = None, session_id: Optional[str] = None):
     """Stream LLM responses with improved error handling.
 
     Yields SSE chunks:
@@ -1447,7 +1739,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
             "temperature": temperature,
             "stream": True,
         }
-        if _restricts_temperature(model):
+        if _omit_temperature(provider, model):
             payload.pop("temperature", None)
         if provider not in {"openrouter", "groq"}:
             payload["stream_options"] = {"include_usage": True}
@@ -1456,14 +1748,23 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
             payload[tok_key] = max_tokens
         if tools:
             payload["tools"] = tools
+        # For Ollama's OpenAI-compat /v1 endpoint with thinking models (qwen3,
+        # gemma4, etc.), suppress thinking so tool calls aren't swallowed inside
+        # <think> blocks. Ollama /v1 accepts "think": false as a top-level param.
+        if _is_ollama_openai_compat_url(url) and _supports_thinking(model):
+            payload["think"] = False
+        _apply_local_cache_affinity(payload, url, session_id)
         h = _provider_headers(provider, headers)
         if provider == "copilot":
             from src.copilot import apply_request_headers
             apply_request_headers(h, messages_copy)
 
-    # Short connect timeout: a reachable peer answers SYN in <100ms even on
-    # Tailscale. 3s is plenty; 30s let one dead upstream wedge the UI.
-    stream_timeout = httpx.Timeout(connect=3.0, read=float(timeout), write=30.0, pool=5.0)
+    # Connect budget from LLMConfig.CONNECT_TIMEOUT (env LLM_CONNECT_TIMEOUT).
+    # The dead-host cooldown still bounds a genuinely unreachable upstream, so a
+    # wider connect budget only affects first contact and stops a brief cold
+    # connect blip (offshore/public endpoints) surfacing as a 503 on this stream
+    # path, which -- unlike llm_call -- does not retry the connect.
+    stream_timeout = _stream_timeout(timeout)
 
     if _is_host_dead(target_url):
         yield f'event: error\ndata: {json.dumps({"error": f"Upstream {_host_key(target_url)} unreachable (cooldown active)", "status": 503})}\n\n'
@@ -1739,6 +2040,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
             events.append(_stream_delta_event(part))
         return events
 
+    h = apply_kimi_code_headers(h, target_url)
     try:
         client = _get_http_client()
         async with client.stream('POST', target_url, json=payload, headers=h, timeout=stream_timeout) as r:

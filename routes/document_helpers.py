@@ -1,4 +1,6 @@
-"""document_helpers.py — 与 document_routes.py 共享的 Pydantic 模型、文档序列化器、owner 门控、文件定位辅助函数。"""
+"""document_helpers.py — Pydantic models, doc serializers, owner gating, file-locator helpers shared with document_routes.py."""
+
+"""Document routes — CRUD for living documents with version history."""
 
 import logging
 import os
@@ -47,8 +49,8 @@ def _doc_to_dict(doc: Document) -> Dict[str, Any]:
         "archived": bool(getattr(doc, "archived", False)),
         "created_at": (doc.created_at.isoformat() + "Z") if doc.created_at else None,
         "updated_at": (doc.updated_at.isoformat() + "Z") if doc.updated_at else None,
-        # 邮件来源信息（文档从邮件附件创建时设置）
-        # — 驱动"发送签名回复"菜单项。
+        # Source-email provenance (set when doc was created from an email
+        # attachment) — drives the "Send signed reply" menu item.
         "source_email_uid":        getattr(doc, "source_email_uid", None),
         "source_email_folder":     getattr(doc, "source_email_folder", None),
         "source_email_account_id": getattr(doc, "source_email_account_id", None),
@@ -81,7 +83,7 @@ def _verify_doc_owner(db, doc: Document, user: str):
         if doc.owner != user:
             raise HTTPException(404, "Document not found")
         return
-    # 旧版回退：从关联会话推导所有权。
+    # Legacy fallback: derive ownership from the linked session.
     if not doc.session_id:
         raise HTTPException(404, "Document not found")
     session = db.query(DbSession).filter(DbSession.id == doc.session_id).first()
@@ -108,14 +110,14 @@ def _owner_session_filter(q, user):
 
 
 def _slug(name: str) -> str:
-    """文档标题的文件系统友好版本。
+    """Filesystem-friendly version of a document title.
 
-    空格变为下划线；其他不安全标点被丢弃。
-    保留字母、数字、点、连字符、下划线。幂等。
+    Whitespace becomes underscores; other unsafe punctuation is dropped.
+    Preserves letters, digits, dot, hyphen, underscore. Idempotent.
     """
     import re as _re
     s = (name or "").strip()
-    # 如果标题恰好包含扩展名则去除末尾扩展名
+    # Drop the trailing extension if the title happens to include one
     s = _re.sub(r'\.pdf$', '', s, flags=_re.IGNORECASE)
     s = _re.sub(r'\s+', '_', s)
     s = _re.sub(r'[^A-Za-z0-9._-]', '', s)
@@ -123,7 +125,7 @@ def _slug(name: str) -> str:
     return s or "form"
 
 
-# 交互式 PDF 视图的 DPI 缩放。约 150 DPI（72 PDF 用户单位的 2 倍）。
+# DPI scale for the interactive PDF view. ~150 DPI (2x of 72 PDF user-units).
 _PDF_RENDER_SCALE = 2.0
 
 
@@ -142,7 +144,7 @@ def _resolve_user_upload_path(
     owner: Optional[str],
     auth_manager=None,
 ) -> Optional[str]:
-    """将上传 id 解析为调用者可读取的文件系统路径。"""
+    """Resolve an upload id to a filesystem path the caller may read."""
     if upload_handler is None:
         return None
     resolved = upload_handler.resolve_upload(
@@ -167,7 +169,7 @@ def _locate_upload(
     auth_manager=None,
     upload_handler: Any = None,
 ):
-    """通过 UploadHandler.resolve_upload 按文件名 ID 查找上传文件。"""
+    """Find an upload by its filename ID via UploadHandler.resolve_upload."""
     if upload_handler is None:
         from src.upload_handler import UploadHandler
 
@@ -199,7 +201,7 @@ def _assert_pdf_marker_upload_owned(
 
 
 def _derive_title(content: str) -> str:
-    """从文档内容推导标题。"""
+    """Derive a title from document content."""
     import re
     if not isinstance(content, str):
         return "Untitled"
@@ -207,7 +209,7 @@ def _derive_title(content: str) -> str:
     if not text:
         return "Untitled"
 
-    # Markdown 标题
+    # Markdown header
     md = re.match(r'^#{1,3}\s+(.+)', text, re.MULTILINE)
     if md:
         title = md.group(1).strip()
@@ -215,7 +217,7 @@ def _derive_title(content: str) -> str:
             title = title[:48] + "…"
         return title
 
-    # HTML 标题
+    # HTML heading
     html = re.search(r'<h[1-3][^>]*>([^<]+)</h[1-3]>', text, re.IGNORECASE)
     if html:
         title = html.group(1).strip()
@@ -223,7 +225,7 @@ def _derive_title(content: str) -> str:
             title = title[:48] + "…"
         return title
 
-    # 第一个非空行（如果够短）
+    # First non-empty line (if short enough)
     for line in text.split('\n'):
         line = line.strip()
         if line and 2 <= len(line) <= 60:

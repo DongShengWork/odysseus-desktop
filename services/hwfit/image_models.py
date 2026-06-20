@@ -1,10 +1,10 @@
-"""图像生成模型注册表和 Cookbook 的 VRAM 适配。"""
+"""Image generation model registry and VRAM fitting for Cookbook."""
 
-# 精心策划的图像生成模型注册表，支持 diffusers。
-# 仅包含经过验证的 HuggingFace 仓库 ID。
-# VRAM 估算针对推理（单张图像生成）。
+# Curated registry of image generation models supported by diffusers.
+# ONLY verified HuggingFace repo IDs.
+# VRAM estimates are for inference (single image generation).
 IMAGE_MODEL_REGISTRY = [
-    # ── Z-Image（阿里通义）──
+    # ── Z-Image (Alibaba Tongyi) ──
     {
         "id": "Tongyi-MAI/Z-Image-Turbo",
         "name": "Z-Image Turbo",
@@ -90,7 +90,7 @@ IMAGE_MODEL_REGISTRY = [
         "speed": 50,
         "released": "2025-11",
     },
-    # ── 稳定扩散（专用 impainting）──
+    # ── Stable Diffusion (dedicated inpainting) ──
     {
         "id": "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
         "name": "SDXL Inpainting",
@@ -271,14 +271,14 @@ IMAGE_MODEL_REGISTRY = [
 
 
 def get_image_models():
-    """返回图像模型注册表。"""
+    """Return the image model registry."""
     return IMAGE_MODEL_REGISTRY
 
 
 def rank_image_models(system, search=None, sort="fit"):
-    """对照检测到的硬件对图像模型评分和排序。
+    """Score and rank image models against detected hardware.
 
-    返回包含适配信息（所需 VRAM、是否适配、推荐量化）的模型列表。
+    Returns list of models with fit info (vram needed, fits, recommended quant).
     """
     if not isinstance(system, dict):
         system = {}
@@ -287,34 +287,34 @@ def rank_image_models(system, search=None, sort="fit"):
     results = []
 
     for model in IMAGE_MODEL_REGISTRY:
-        # 按搜索过滤
+        # Filter by search
         if isinstance(search, str) and search:
             s = search.lower()
             if s not in model["name"].lower() and s not in model["id"].lower() and s not in model.get("description", "").lower():
                 continue
 
-        # 确定能适配的最佳量化
+        # Determine best quant that fits
         quant = None
         vram_needed = None
         fits = False
         quant_repo = None
 
         if has_gpu and gpu_vram > 0:
-            # 先尝试 BF16，然后 FP8，然后 Q4
+            # Try BF16 first, then FP8, then Q4
             for q, vram_key in [("BF16", "vram_bf16"), ("FP8", "vram_fp8"), ("Q4", "vram_q4")]:
                 v = model.get(vram_key)
-                if v is not None and v <= gpu_vram * 0.90:  # 预留 10% 余量
+                if v is not None and v <= gpu_vram * 0.90:  # 10% headroom
                     quant = q
                     vram_needed = v
                     fits = True
                     quant_repo = model.get("quant_repos", {}).get(q)
                     break
-            # 如果都不适配，显示它需要的资源
+            # If nothing fits, show what it needs
             if not fits:
                 quant = model["default_quant"]
                 vram_needed = model.get("vram_bf16", 0)
 
-        # 适配标签
+        # Fit label
         if not has_gpu:
             fit = "no_gpu"
             fit_label = "No GPU"
@@ -333,7 +333,7 @@ def rank_image_models(system, search=None, sort="fit"):
             fit = "no_fit"
             fit_label = "Too large"
 
-        # 评分：质量 * 0.6 + 速度 * 0.2 + 适配加分
+        # Score: quality * speed * fit bonus
         score = model["quality"] * 0.6 + model["speed"] * 0.2
         if fit == "perfect":
             score += 20
@@ -363,14 +363,14 @@ def rank_image_models(system, search=None, sort="fit"):
             "released": model.get("released", ""),
         })
 
-    # 排序
+    # Sort
     if sort == "quality":
         results.sort(key=lambda x: (-x["quality"], -x["score"]))
     elif sort == "speed":
         results.sort(key=lambda x: (-x["speed"], -x["score"]))
     elif sort == "vram":
         results.sort(key=lambda x: (x["vram_needed"] or 999, -x["score"]))
-    else:  # fit（默认排序）
+    else:  # fit (default)
         results.sort(key=lambda x: (-x["score"],))
 
     return results

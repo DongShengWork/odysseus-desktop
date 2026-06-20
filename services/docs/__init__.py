@@ -1,7 +1,8 @@
 # services/docs/__init__.py
-"""文档服务 — 基于 ChromaDB 的个人文档 RAG。
+"""Docs service — personal document RAG with ChromaDB.
 
-精简外观层：DocsService 在此定义，RAGManager/VectorRAG 从 src/ 中的规范实现重新导出。
+Thin facade: DocsService lives here, RAGManager/VectorRAG are re-exported
+from the canonical implementations in src/.
 """
 
 from .service import DocsService, DocChunk, IndexResult

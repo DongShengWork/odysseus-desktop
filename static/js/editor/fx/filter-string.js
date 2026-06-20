@@ -1,12 +1,12 @@
 /**
- * 在编辑器的调整滑块界面和 CSS `filter` 字符串 /
- * 画布滤镜乘数之间进行转换的纯辅助函数。
+ * Pure helpers that translate between the editor's adjustment-slider
+ * UI and CSS `filter` strings / canvas-filter multipliers.
  */
 
 /**
- * 从图层的 `adjustments` 对象构建 CSS `filter` 字符串。
- * 当每个值都是标识值时返回 ''，使合成路径
- * 可以完全跳过滤镜。
+ * Build a CSS `filter` string from a layer's `adjustments` object.
+ * Returns '' when every value is at identity so the composite path
+ * can skip the filter entirely.
  *
  * @param {{
  *   brightness?: number, contrast?: number,
@@ -25,9 +25,9 @@ export function layerFilterString(adj) {
 
 
 /**
- * 将存储的滤镜乘数（亮度/对比度/饱和度
- * 范围是 0..2，1.0 = 标识值；色相为度数，-180..+180）
- * 转换为界面滑块的 -100..+100（或色相的 -180..+180）范围。
+ * Convert a stored filter multiplier (brightness/contrast/saturation
+ * are 0..2 with 1.0 = identity; hue is degrees, -180..+180) into the
+ * UI slider's -100..+100 (or -180..+180 for hue) range.
  */
 export function fxFilterToSlider(key, value) {
   if (key === 'brightness' || key === 'contrast' || key === 'saturation') {

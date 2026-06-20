@@ -1,4 +1,5 @@
-"""YouTube 服务 — 字幕提取。"""
+# services/youtube/__init__.py
+"""YouTube service — transcript extraction."""
 
 from .youtube_handler import (
     init_youtube,

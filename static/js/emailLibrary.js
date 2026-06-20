@@ -1,6 +1,6 @@
 /**
- * emailLibrary.js — 电子邮件库弹窗模态框。
- * 与 documentLibrary.js 模式相似。以对网格形式显示邮件，支持搜索/过滤。
+ * emailLibrary.js — Email library popup modal.
+ * Similar pattern to documentLibrary.js. Shows emails in a grid with search/filter.
  */
 
 import spinnerModule from './spinner.js';
@@ -22,7 +22,7 @@ import {
   _tryFoldHintSig, _foldSignature, _SIG_ICON, _QUOTE_ICON,
 } from './emailLibrary/signatureFold.js';
 import { state } from './emailLibrary/state.js';
-import { t } from './i18n.js';
+import { collapseSidebarToRail } from './modalSnap.js';
 
 const API_BASE = window.location.origin;
 let _emailUnreadChipClickWired = false;
@@ -30,6 +30,7 @@ let _libLoadSeq = 0;
 let _libFolderSeq = 0;
 let _libSearchSeq = 0;
 let _libSearchHadResults = false;
+let _libSearchInFlight = false;
 let _activeEmailReaderForSelectAll = null;
 
 function _isEmailTypingTarget(t) {
@@ -61,6 +62,52 @@ function _markEmailReaderActive(reader) {
   reader.addEventListener('pointerdown', () => { _activeEmailReaderForSelectAll = reader; }, true);
   reader.addEventListener('focusin', () => { _activeEmailReaderForSelectAll = reader; }, true);
 }
+
+// Stash the email identity (uid + folder + account) on the reader element
+// so chat submits and other code paths can ask "what email is the user
+// currently looking at?" without re-deriving from the DOM hierarchy.
+function _stampReaderContext(reader, em, folder, account) {
+  if (!reader || !em) return;
+  reader.dataset.emailUid = String(em.uid || '');
+  reader.dataset.emailFolder = String(folder || state._libFolder || 'INBOX');
+  reader.dataset.emailAccount = String(account || state._libAccountId || '');
+  if (em.subject) reader.dataset.emailSubject = String(em.subject);
+  if (em.from_address || em.from_name) {
+    reader.dataset.emailFrom = String(em.from_address || em.from_name);
+  }
+}
+
+// Returns { uid, folder, account, subject, from } for the email the user
+// is most likely referring to — the last reader they interacted with, then
+// any open reader-modal as a fallback. Returns null when no email reader
+// is open. Exported below for chat.js to read on submit.
+function _getActiveEmailContext() {
+  const candidates = [];
+  if (_activeEmailReaderForSelectAll && _activeEmailReaderForSelectAll.isConnected) {
+    candidates.push(_activeEmailReaderForSelectAll);
+  }
+  // Visible reader-tab modals (popped-out windows).
+  document.querySelectorAll('.modal[id^="email-reader-"]:not(.hidden):not(.modal-minimized) .email-card-reader').forEach(el => candidates.push(el));
+  // Expanded inline reader in the library list.
+  document.querySelectorAll('#email-lib-modal:not(.hidden) .doclib-card.email-card-expanded .email-card-reader').forEach(el => candidates.push(el));
+  for (const r of candidates) {
+    const uid = r?.dataset?.emailUid;
+    if (uid) {
+      return {
+        uid,
+        folder: r.dataset.emailFolder || 'INBOX',
+        account: r.dataset.emailAccount || '',
+        subject: r.dataset.emailSubject || '',
+        from: r.dataset.emailFrom || '',
+      };
+    }
+  }
+  return null;
+}
+
+// Frontend reads via the global so chat.js doesn't need a separate import
+// path (emailLibrary loads lazily in some entry points).
+try { window.__odysseusGetActiveEmailContext = _getActiveEmailContext; } catch (_) {}
 
 const _COPY_EMAIL_ICON = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 
@@ -129,6 +176,20 @@ async function _copyTextToClipboard(text) {
   }
 }
 
+function _wireMetaToggle(root) {
+  const toggle = root && root.querySelector('.email-reader-meta-toggle');
+  const details = root && root.querySelector('.email-reader-meta-details');
+  if (!toggle || !details) return;
+  toggle.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const open = details.hasAttribute('hidden');
+    if (open) details.removeAttribute('hidden');
+    else details.setAttribute('hidden', '');
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.classList.toggle('open', open);
+  });
+}
+
 function _recipientChipHtml(full, label, extraClass = '') {
   const fullText = String(full || '').trim();
   const addr = _emailAddressFromRecipientText(fullText);
@@ -152,11 +213,11 @@ function _wireRecipientChips(root) {
         const copied = await _copyTextToClipboard(email);
         if (!copied) throw new Error('copy failed');
         copyBtn.classList.add('copied');
-        copyBtn.title = t('email.copied');
+        copyBtn.title = 'Copied';
         showToast?.('Email copied');
         setTimeout(() => {
           copyBtn.classList.remove('copied');
-          copyBtn.title = t('email.copy_email');
+          copyBtn.title = 'Copy email';
         }, 900);
       } catch (_) {
         showToast?.('Copy failed');
@@ -235,17 +296,17 @@ function _syncEmailReadState(uid, isRead = true) {
     dot.className = 'email-card-unread-dot';
     dot.style.cssText = `width:6px;height:6px;border-radius:50%;background:${_senderColor(senderName)};flex-shrink:0;margin-left:2px;`;
     const done = titleRow.querySelector('.email-card-done');
-    const rightCluster = titleRow.querySelector('.email-card-header-menu')?.parentElement;
+    const navArrows = titleRow.querySelector('.email-card-nav-arrows');
     if (done) done.insertAdjacentElement('afterend', dot);
-    else if (rightCluster) titleRow.insertBefore(dot, rightCluster);
+    else if (navArrows) titleRow.insertBefore(dot, navArrows);
     else titleRow.appendChild(dot);
   });
 }
 
-  // 回复从文档编辑器发送时，源邮件在服务端标记为
-  // \Answered 并触发 `email-answered` 事件。实时反映该状态，
-  // 使邮件显示为已完成，无需等待手动刷新。
-  window.addEventListener('email-answered', (e) => {
+// When a reply is sent (from the doc editor), the source email is marked
+// \Answered server-side and an `email-answered` event fires. Reflect that live
+// so the email shows as done without waiting for a manual refresh.
+window.addEventListener('email-answered', (e) => {
   const uid = e.detail && e.detail.uid;
   if (uid == null) return;
   const em = (state._libEmails || []).find(x => String(x.uid) === String(uid));
@@ -280,7 +341,7 @@ function _syncUnreadTabBadge(count) {
       chip.title = `Open ${label}`;
     } else {
       delete chip.dataset.emailUnreadLabel;
-      chip.title = t('email.restore_email');
+      chip.title = 'Restore Email';
     }
   });
 }
@@ -301,14 +362,8 @@ function _renderAccountsLoading() {
   try {
     const wp = spinnerModule.createWhirlpool(14);
     wp.element.classList.add('email-accounts-loading-whirlpool');
-    const label = document.createElement('span');
-    label.className = 'email-accounts-loading-label';
-    label.textContent = t('email.accounts');
     strip.appendChild(wp.element);
-    strip.appendChild(label);
-  } catch (_) {
-    strip.textContent = t('email.accounts') + '...';
-  }
+  } catch (_) {}
 }
 
 function _syncEmailReminderBellVisibility(enabled) {
@@ -327,6 +382,12 @@ async function _loadEmailReminderBellVisibility() {
     _syncEmailReminderBellVisibility(false);
   }
 }
+// Live-update the bell when the reminder channel changes in Settings,
+// so the user doesn't have to reopen Email to see the change apply.
+window.addEventListener('odysseus-reminder-channel-changed', (e) => {
+  const ch = e?.detail?.channel;
+  _syncEmailReminderBellVisibility(ch === 'email');
+});
 
 function _readCssPx(name) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name);
@@ -340,10 +401,10 @@ function _emailSplitLeftEdge() {
 
 function _setEmailDocumentSplit(leftEdge, emailWidth) {
   if (window.innerWidth <= 768) return;
-  // 句点间隙为零，使文档窗格紧贴邮件右边缘。
-  // modalSnap.js 的左停靠路径以 0 间隙发布相同的变量 — 两个系统
-  // 在紧贴上达成一致，因此它们之间的切换不会导致文档
-  // "跳动"侧移。每侧 1px 的模态边框就是视觉接缝。
+  // Zero gap so the doc-pane sits flush against the email's right edge.
+  // modalSnap.js's left-dock path publishes the same vars with 0 gap — both
+  // systems agree on flush so handoffs between them don't cause the doc to
+  // "jump" sideways. The 1px modal border on each side is the visual seam.
   const splitGap = 0;
   const left = Math.max(0, Math.round(leftEdge || 0));
   const width = Math.max(320, Math.round(emailWidth || 420));
@@ -407,7 +468,14 @@ function _clearEmailDocumentSplit() {
   ].forEach(prop => docPane.style.removeProperty(prop));
 }
 
-function _hasDesktopRoomForEmailAndDocument(modal) {
+// Compute the left-edge x assuming the wide sidebar has collapsed to the
+// rail. Used by the "try collapsing the sidebar first" path so we can decide
+// whether collapsing recovers enough room before minimizing email.
+function _emailSplitLeftEdgeIfSidebarCollapsed() {
+  return _readCssPx('--icon-rail-w');
+}
+
+function _hasDesktopRoomForEmailAndDocument(modal, opts = {}) {
   if (window.innerWidth <= 768) return false;
   if (window.innerWidth >= 1100) return true;
   const content = modal?.querySelector?.('.modal-content');
@@ -417,18 +485,31 @@ function _hasDesktopRoomForEmailAndDocument(modal) {
   const emailWidth = isFullscreen
     ? Math.min(440, Math.max(360, Math.round(window.innerWidth * 0.30)))
     : Math.max(360, Math.round(rect?.width || 440));
-  const docMinWidth = 560;
-  const breathingRoom = 72;
-  const leftEdge = isFullscreen ? _emailSplitLeftEdge() : Math.max(0, Math.round(rect?.left || _emailSplitLeftEdge()));
+  // Relaxed thresholds — the old 560 + 72 forced an unnecessary tab-down
+  // on ~1200–1300px viewports where there was visually plenty of room.
+  const docMinWidth = 460;
+  const breathingRoom = 40;
+  const leftEdgeNow = isFullscreen ? _emailSplitLeftEdge() : Math.max(0, Math.round(rect?.left || _emailSplitLeftEdge()));
+  const leftEdge = opts.assumeSidebarCollapsed ? _emailSplitLeftEdgeIfSidebarCollapsed() : leftEdgeNow;
   return (window.innerWidth - leftEdge - emailWidth) >= (docMinWidth + breathingRoom);
 }
 
 function _prepareEmailWindowForDocument(modal) {
   if (window.innerWidth <= 768) return true;
   if (!modal) return false;
+  // Try to make breathing room by collapsing the wide sidebar to the rail
+  // when there isn't enough horizontal space for both panes. The
+  // route-collapse marker that collapseSidebarToRail() sets means the
+  // sidebar will auto-restore when the doc closes. Crucially, we no
+  // longer fall back to clearing the split when even that isn't enough —
+  // the user opted out of auto-tab-down, so we proceed with the dock
+  // even if it's cramped.
   if (!_hasDesktopRoomForEmailAndDocument(modal)) {
-    _clearEmailDocumentSplit();
-    return true;
+    const sidebar = document.getElementById('sidebar');
+    const sidebarWasOpen = sidebar && !sidebar.classList.contains('hidden');
+    if (sidebarWasOpen && _hasDesktopRoomForEmailAndDocument(modal, { assumeSidebarCollapsed: true })) {
+      try { collapseSidebarToRail(); } catch (_) {}
+    }
   }
   if (modal.classList.contains('modal-left-docked')) {
     const content = modal.querySelector('.modal-content');
@@ -466,8 +547,8 @@ function _prepareEmailWindowForDocument(modal) {
     _scheduleEmailDocumentSplitMeasure(modal);
     return false;
   }
-  // 如果 Email 是全屏且空间足够，将其停靠到左侧而不是最小化，
-  // 这样文档/撰写窗格可以在旁边打开。
+  // If Email is fullscreen and there is room, park it left instead of
+  // minimizing so the document/compose pane can open beside it.
   _snapEmailModalToLeftSidebar(modal);
   return false;
 }
@@ -486,7 +567,7 @@ async function _deleteEmailAndAdvance(em, card, opts = {}) {
   if (!em || em.uid == null) return;
   if (opts.confirm !== false) {
     const subject = em.subject || '(no subject)';
-    const ok = await styledConfirm(`${t('email.delete_confirm_prefix')}"${subject}"${t('email.delete_confirm_suffix')}`, { confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true });
+    const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
     if (!ok) return;
   }
   const wasExpanded = !!card?.classList?.contains('doclib-card-expanded');
@@ -498,7 +579,7 @@ async function _deleteEmailAndAdvance(em, card, opts = {}) {
     await fetch(`${API_BASE}/api/email/delete/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
   } catch (err) {
     console.error('Failed to delete email:', err);
-    showToast(t('email.delete_failed'));
+    showToast('Failed to delete email');
     return;
   }
   await _animateEmailCardRemoval([em.uid]);
@@ -544,11 +625,11 @@ function _animateEmailCardRemoval(uids, opts = {}) {
 }
 
 
-// 当账户被主动选中时，附加 &account_id=... 的 URL 后缀辅助函数。
-// 此文件中的每个邮件路由调用都经过这里，因此切换账户
-// 只是单个变量的翻转。
-// 打开设置模态框并激活特定标签页。用于电子邮件/日历等中的空状态
-// "设置于：设置 › X" 链接。
+// URL-suffix helper — appends &account_id=... when an account is actively selected.
+// Every email route call in this file goes through here so switching accounts
+// is a single-variable flip.
+// Open the Settings modal and activate a specific tab. Used by empty-state
+// "Set up at: Settings › X" links across email/calendar/etc.
 function _openSettingsTab(tab) {
   if (tab === 'integrations' && window.adminModule && typeof window.adminModule.open === 'function') {
     window.adminModule.open('integrations');
@@ -586,13 +667,14 @@ function _acct() {
   return state._libAccountId ? `&account_id=${encodeURIComponent(state._libAccountId)}` : '';
 }
 
-// 每个（账户、文件夹、过滤器、附件）第一页列表响应的缓存。
-// 允许关闭后重新打开时立即显示之前的列表，而网络刷新在后台运行 —
-// 以前模态框每次打开都会清空其 DOM 并从空状态显示旋转器，
-// 即使相同的视图仅一秒前还可见。
+// Per-(account, folder, filter, attachments) cache of the most recent
+// first-page list response. Lets reopen-after-close paint the previous
+// list instantly while the network refresh runs behind it — the modal
+// used to wipe its DOM and spinner-from-empty on every open, even when
+// the same view was just visible a second ago.
 //
-// 会话级别（存在于模块作用域中，硬刷新时清除）。
-// 搜索结果和 __scheduled__ 特意不缓存。
+// Session-only (lives in module scope, cleared on hard reload). Search
+// results and __scheduled__ are deliberately not cached.
 const _libListCache = new Map();
 const _LIB_CACHE_MAX = 24;
 let _libPrewarmTimer = null;
@@ -617,7 +699,7 @@ function _libCacheKey() {
 }
 function _libCacheGet(key) { return _libListCache.get(key) || null; }
 function _libCachePut(key, value) {
-  // 重新插入以提升 LRU 最近性。
+  // Re-insert to bump LRU recency.
   _libListCache.delete(key);
   _libListCache.set(key, value);
   if (_libListCache.size > _LIB_CACHE_MAX) {
@@ -634,7 +716,7 @@ function _resetEmailListForFreshLoad() {
   const grid = document.getElementById('email-lib-grid');
   if (grid) _renderEmailLoading(grid);
   const stats = document.getElementById('email-lib-stats');
-  if (stats) stats.textContent = t('email.loading');
+  if (stats) stats.textContent = 'Loading...';
 }
 
 function _loadEmailsFresh() {
@@ -663,9 +745,9 @@ async function _prewarmDefaultEmailView() {
   const ck = _libCacheKeyFor(accountId, folder, filter, false);
   if (_libCacheGet(ck)) return;
 
-  // 账户请求成本低，为首次打开预热账户条。
-  // 然后列表请求同时预热客户端缓存和后端 IMAP/读缓存。
-  // 故障保持静默：未配置邮件不应在应用启动时烦扰用户。
+  // The accounts request is cheap and warms the account strip for first open.
+  // Then the list request warms both the client cache and the backend IMAP/read
+  // cache. Failure stays silent: no configured mail should not nag on app boot.
   try {
     const accountsRes = await fetch(`${API_BASE}/api/email/accounts`, { credentials: 'same-origin' });
     if (accountsRes.ok) {
@@ -675,7 +757,7 @@ async function _prewarmDefaultEmailView() {
   } catch (_) {}
 
   const accountQS = accountId ? `&account_id=${encodeURIComponent(accountId)}` : '';
-  const res = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(folder)}${accountQS}&limit=100&offset=0&filter=${filter}`, {
+  const res = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(folder)}${accountQS}&limit=500&offset=0&filter=${filter}`, {
     credentials: 'same-origin',
   });
   if (!res.ok) return;
@@ -684,11 +766,11 @@ async function _prewarmDefaultEmailView() {
   _libCachePut(ck, { emails: data.emails || [], total: data.total || 0 });
 }
 function _libCacheWriteBack() {
-  // 在本地变更已更新 state._libEmails 后
-  //（删除/归档/批量操作），将更改同步到缓存中，以便
-  // 下次重新打开时在重新 fetch 成功前不会短暂显示变更前的状态。
-  // 在搜索期间跳过（结果不是真实列表），
-  // 以及计划的虚拟文件夹。
+  // After a local mutation that already updated state._libEmails
+  // (delete / archive / bulk), sync the change into the cache so the
+  // next reopen doesn't briefly show the pre-mutation state before the
+  // refetch wins. Skipped during search (results aren't the real list)
+  // and on the scheduled virtual folder.
   if (state._libSearch) return;
   if (state._libFolder === '__scheduled__') return;
   const ck = _libCacheKey();
@@ -697,21 +779,21 @@ function _libCacheWriteBack() {
   }
 }
 
-// 将活动账户 ID 暴露给其他模块（document.js 发送邮件时使用此值）。
-// 使用简单的全局变量而非跨模块导入，以保持耦合最小。
+// Expose the active account id to other modules (document.js uses this when sending).
+// Simple global rather than cross-module import to keep coupling minimal.
 function _publishActiveAccount() {
   try { window.__odysseusActiveEmailAccount = state._libAccountId || null; } catch (_) {}
-  // 发布活动账户的自身地址，以便回复全部可以将我们从
-  // 收件人列表中排除。此全局变量在 emailInbox.js 中被读取但从未被设置。
+  // Publish the active account's own address so reply-all can exclude us from
+  // the recipient list. This global was read in emailInbox.js but never set.
   try {
     const accts = state._libAccounts || [];
     const active = accts.find(a => a && a.id === state._libAccountId)
       || accts.find(a => a && a.is_default)
       || accts[0];
     window._myEmailAddress = (active && (active.from_address || active.imap_user)) || '';
-    // 同时发布所有已配置的地址，以便回复全部可以排除用户的
-    // 所有邮箱，而不仅仅是活动账户（多账户用户的其他地址
-    // 之前被添加到了抄送中）。
+    // Also publish every configured address so reply-all can exclude all of
+    // the user's own mailboxes, not just the active one (multi-account users
+    // were getting their other addresses added to Cc).
     const all = [];
     for (const a of accts) {
       if (a && a.from_address) all.push(a.from_address);
@@ -729,7 +811,7 @@ export function initEmailLibrary(config) {
 export function isOpen() { return state._libOpen; }
 
 export function openEmailLibrary(opts = {}) {
-  // 强行清理之前尝试的任何陈旧状态
+  // Force-clean any stale state from previous attempts
   const existing = document.getElementById('email-lib-modal');
   if (existing) existing.remove();
   if (state._libEscHandler) {
@@ -737,26 +819,33 @@ export function openEmailLibrary(opts = {}) {
     state._libEscHandler = null;
   }
   state._libOpen = true;
-  // 在移动端侧边栏覆盖内容 — 关闭它，以免邮件视图在后面打开
-  //（与会话切换/删除相同的模式）。
+  // On mobile the sidebar overlays content — close it so the email view isn't
+  // opened behind it (same pattern as session-switch/delete).
   if (window.innerWidth <= 768) {
     const _sb = document.getElementById('sidebar');
     if (_sb) _sb.classList.add('hidden');
     const _bd = document.getElementById('sidebar-backdrop');
     if (_bd) _bd.classList.remove('visible');
-    // 邮件最后打开 → 将邮件窗口置于任何打开文档之前
-    //（它们交替：最后打开的那个胜出）。文档在背后保持打开；
-    // 重新打开文档会将其翻回顶部。
+    // Email was opened last → bring the email windows IN FRONT of any open doc
+    // (they alternate: whichever was opened last wins). The doc stays open
+    // behind it; reopening the doc flips it back on top.
     document.body.classList.add('email-front');
   }
   state._libEmails = [];
   state._libOffset = 0;
   state._libSearch = '';
+  state._libSearchDraft = '';
+  // Reset select-mode on each open so the toolbar Select button
+  // never opens already-toggled-on after a previous session.
+  state._selectMode = false;
+  if (state._selectedUids) state._selectedUids.clear();
+  state._libSearchPills = [];
+  _libSuggestionCache = null;
   state._libFilter = 'all';
   state._libHasAttachments = false;
-  // 以多米诺级联动画渲染第一张卡片（与侧边栏 section-domino-in
-  // 关键帧相同）。在动画排队后由 _renderGrid 重置，以便后续的
-  // 过滤器/排序重新渲染是即时的。
+  // Animate the very first card render with a domino cascade (same as the
+  // sidebar section-domino-in keyframe). Reset by _renderGrid after the
+  // animation is queued so subsequent filter/sort re-renders are instant.
   state._libJustOpened = true;
   if (Object.prototype.hasOwnProperty.call(opts, 'account_id')) {
     state._libAccountId = opts.account_id || null;
@@ -786,7 +875,6 @@ export function openEmailLibrary(opts = {}) {
       </div>
       <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;overflow:hidden;">
         <div class="admin-card" style="flex:1;flex-direction:column;display:flex;overflow:hidden;">
-          <p class="memory-desc doclib-desc">All emails. Click to open as a document.</p>
           <div class="email-accounts-row">
             <div id="email-lib-accounts" style="display:flex;gap:4px;flex:1;min-width:0;"></div>
             <button class="memory-toolbar-btn email-compose-jiggle" id="email-lib-compose-btn">
@@ -799,7 +887,10 @@ export function openEmailLibrary(opts = {}) {
               <select class="memory-sort-select" id="email-lib-folder" style="flex:1;min-width:0;text-overflow:ellipsis;">
                 <option value="INBOX">Inbox</option>
               </select>
-              <select class="memory-sort-select" id="email-lib-filter" style="flex:1;min-width:0;">
+              <!-- Hidden native select kept as the source of truth — all
+                   existing change handlers still fire via the custom picker
+                   dispatching 'change' on it. -->
+              <select class="memory-sort-select" id="email-lib-filter" style="display:none;">
                 <option value="all">All</option>
                 <option value="unread">Unread</option>
                 <option value="favorites">Favorites</option>
@@ -816,7 +907,14 @@ export function openEmailLibrary(opts = {}) {
                   <option value="tag:marketing">Marketing</option>
                 </optgroup>
               </select>
-              <button class="memory-toolbar-btn email-filter-select-btn" id="email-lib-select-btn">Select</button>
+              <div class="email-filter-picker" id="email-filter-picker" style="flex:1;min-width:0;position:relative;">
+                <button type="button" class="email-filter-btn" id="email-filter-btn" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="email-filter-current"><span class="email-filter-icon"></span><span class="email-filter-label">All</span></span>
+                  <svg class="email-filter-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="email-filter-menu" id="email-filter-menu" role="listbox" hidden></div>
+              </div>
+              <button class="memory-toolbar-btn email-filter-select-btn" id="email-lib-select-btn"><svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>Select</button>
               <button class="memory-toolbar-btn email-filter-refresh-btn" id="email-lib-refresh-btn" title="Refresh">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
               </button>
@@ -827,7 +925,12 @@ export function openEmailLibrary(opts = {}) {
             </div>
             <div class="email-search-row" style="display:flex;gap:6px;align-items:flex-start;">
             <div class="email-search-wrap" style="position:relative;flex:1;min-width:140px;">
-              <input type="text" id="email-lib-search" placeholder="Search emails\u2026" class="memory-search-input" style="width:100%;padding-right:96px;" />
+              <div class="email-lib-chip-bar memory-search-input" id="email-lib-chip-bar" style="width:100%;padding-right:96px;padding-left:26px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;cursor:text;min-height:30px;position:relative;">
+                <svg class="email-lib-chip-bar-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--accent, var(--red));"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+                <span id="email-lib-pills" style="display:contents"></span>
+                <input type="text" id="email-lib-search" placeholder="Search by name or text" autocomplete="off" style="flex:1;min-width:80px;border:0;outline:none;background:transparent;color:inherit;font:inherit;padding:0;position:relative;top:-1px;" />
+              </div>
+              <div id="email-lib-suggest" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;z-index:60;background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,0.25);max-height:240px;overflow-y:auto;"></div>
               <button class="memory-toolbar-btn email-undone-toggle email-undone-toggle-inline" id="email-undone-btn" title="Show only emails not marked as done (undone)">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
@@ -841,7 +944,7 @@ export function openEmailLibrary(opts = {}) {
             </div>
           </div>
           <div id="email-lib-bulk" class="memory-bulk-bar hidden" style="margin-bottom:5px;">
-            <label class="memory-bulk-check-all" style="position:relative;top:2px;"><input type="checkbox" id="email-lib-select-all"> All</label>
+            <label class="memory-bulk-check-all" style="position:relative;top:0px;"><input type="checkbox" id="email-lib-select-all"> All</label>
             <span id="email-lib-selected-count" style="position:relative;top:1px;">0 Selected</span>
             <button class="memory-toolbar-btn" id="email-lib-bulk-actions" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Actions <span style="opacity:0.55;font-size:9px;">▼</span></button>
             <button class="memory-toolbar-btn" id="email-lib-bulk-delete" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>
@@ -859,12 +962,12 @@ export function openEmailLibrary(opts = {}) {
 
   document.body.appendChild(modal);
   modal.style.display = 'block';
-  // 使模态背景非阻塞，以便用户可以与应用的其余部分交互
+  // Make modal background non-blocking so user can interact with rest of the app
   modal.style.cssText += 'pointer-events:none;background:transparent;';
 
-  // 注册以便芯片带有正确的标签/图标。restoreFn 留空 —
-  // 只需取消最小化模态框就足够了；其中展开的任何邮件
-  // 保持展开状态。
+  // Register so the chip carries the right label/icon. restoreFn left
+  // empty — just unminimizing the modal is enough; whatever email was
+  // expanded inside stays expanded.
   try {
     Modals.register('email-lib-modal', {
       label: 'Email',
@@ -874,11 +977,12 @@ export function openEmailLibrary(opts = {}) {
         if (m) m.classList.add('hidden');
       },
       restoreFn: () => {
-        // 最后重新打开 → 将邮件窗口置于任何打开文档之前。
+        // Reopened last → bring the email windows in front of any open doc.
         document.body.classList.add('email-front');
-        // 移动端：点击库芯片会将任何打开的邮件阅读器芯片收起，
-        // 以便库是唯一可见的窗口。与每个阅读器的 restoreFn 配对，
-        // 当阅读器被调出时将库芯片收起。
+        // Mobile: tapping the library chip chips down any open email
+        // reader so the library is the only visible window. Pairs with
+        // the per-reader restoreFn that chips the library down when a
+        // reader is brought up.
         if (window.innerWidth <= 768) {
           document.querySelectorAll('.modal[id^="email-reader-"]').forEach(other => {
             try {
@@ -906,7 +1010,7 @@ export function openEmailLibrary(opts = {}) {
   if (content) {
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
-      // 移动端底部锚定面板
+      // Bottom-anchored sheet on mobile
       content.style.position = 'fixed';
       content.style.pointerEvents = 'auto';
       content.style.left = '0';
@@ -915,12 +1019,13 @@ export function openEmailLibrary(opts = {}) {
       content.style.top = 'auto';
       content.style.transform = 'none';
     } else {
-      // 使用固定定位 + 计算偏移量在屏幕上居中
+      // Center on screen using fixed positioning + computed offsets
       content.style.position = 'fixed';
       content.style.pointerEvents = 'auto';
-      // 等待一帧以便尺寸稳定，然后居中。根据模态框的 max-height (85vh)
-      // 居中 — 不是根据实时的 offsetHeight，后者在邮件列表仍在加载时
-      // 很小，会将窗口放在约 1/3 的位置（然后随着列表填充向下增长到超出底部）。
+      // Wait a frame for size to stabilize, then center. Center against the
+      // modal's max-height (85vh) — NOT the live offsetHeight, which is tiny
+      // while the email list is still loading and put the window ~1/3 down
+      // (then it grew off the bottom as the list filled in).
       requestAnimationFrame(() => {
         const w = content.offsetWidth;
         const refH = window.innerHeight * 0.85;
@@ -931,11 +1036,12 @@ export function openEmailLibrary(opts = {}) {
     }
   }
 
-  // 连线事件
+  // Wire events
   document.getElementById('email-lib-close').addEventListener('click', closeEmailLibrary);
 
-  // 点击模态框头部（按钮/输入框除外）会折叠当前展开的邮件卡片
-  // 并返回收件箱列表视图。作为"返回邮件菜单"的手势。
+  // Clicking the modal header (anywhere except buttons/inputs) collapses
+  // any currently-expanded email card and returns to the inbox list view.
+  // Acts as a "back to email menu" gesture.
   const libHeader = modal.querySelector('.modal-header');
   if (libHeader) {
     libHeader.style.cursor = 'pointer';
@@ -951,8 +1057,8 @@ export function openEmailLibrary(opts = {}) {
     });
   }
 
-  // 拖拽到顶部边缘 → 吸附到全屏（Aero Snap）。在全屏时拖离
-  // 顶部边缘则取消吸附回居中窗口。
+  // Drag-to-top edge → snap to fullscreen (Aero Snap). Dragging away from
+  // the top edge while fullscreen unsnaps back to a centered window.
   _makeDraggable(content, modal, 'email-lib-fullscreen');
 
   document.getElementById('email-lib-folder').addEventListener('change', (e) => {
@@ -964,10 +1070,13 @@ export function openEmailLibrary(opts = {}) {
     _syncUnreadWindowGlow();
     _syncReminderClearButton();
     _loadEmailsFresh();
-    // 同步快速切换的激活状态，使其与下拉菜单匹配。
+    // Sync quick-toggle active states so they mirror the dropdown.
     document.getElementById('email-undone-btn')?.classList.toggle('active', state._libFilter === 'undone');
     document.getElementById('email-reminder-btn')?.classList.toggle('active', state._libFilter === 'reminders');
+    // Mirror the picker label/icon.
+    _renderFilterPickerCurrent();
   });
+  _initFilterPicker();
   document.getElementById('email-attach-btn')?.addEventListener('click', () => {
     const btn = document.getElementById('email-attach-btn');
     state._libHasAttachments = !state._libHasAttachments;
@@ -976,9 +1085,9 @@ export function openEmailLibrary(opts = {}) {
     _loadEmailsFresh();
   });
   document.getElementById('email-reminders-clear-btn')?.addEventListener('click', async () => {
-    const ok = await styledConfirm(t('email.delete_reminders_confirm'), {
-      confirmText: t('common.delete'),
-      cancelText: t('common.cancel'),
+    const ok = await styledConfirm('Permanently delete all Odysseus reminder emails?', {
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
       danger: true,
     });
     if (!ok) return;
@@ -1003,7 +1112,7 @@ export function openEmailLibrary(opts = {}) {
       _loadEmailsFresh();
     } catch (err) {
       console.error(err);
-      showToast(t('email.clear_reminders_failed'));
+      showToast('Failed to clear reminder emails');
     }
   });
   document.getElementById('email-undone-btn')?.addEventListener('click', () => {
@@ -1040,29 +1149,30 @@ export function openEmailLibrary(opts = {}) {
     _syncReminderClearButton();
     _loadEmailsFresh();
   });
-  // 旧的"排序"下拉菜单（最新/未读优先/收藏优先）已合并到上面的过滤器
-  // 下拉菜单中 — "收藏夹"现在是一个过滤器（服务端 \Flagged 搜索）。
-  // _libSort 保持其 'recent' 默认值，以便网格保持 API 的最新优先顺序。
+  // The old "sort" dropdown (Latest / Unread first / Favorites first) was merged
+  // into the filter dropdown above — "Favorites" is now a filter (server-side
+  // \Flagged search). _libSort stays at its 'recent' default so the grid keeps
+  // the API's newest-first order.
 
-  let searchTimer = null;
-  document.getElementById('email-lib-search').addEventListener('input', (e) => {
-    state._libSearch = e.target.value;
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(_doSearch, 350);
-  });
+  // Chip-bar search: pills represent contact + free-text filters; the live
+  // input below drives the autocomplete dropdown. Old behavior — instant
+  // local filter on every keystroke + server-side IMAP search after 350ms
+  // — is replaced by deterministic local filtering against the snapshot.
+  _initEmailSearchChipBar();
 
   document.getElementById('email-lib-refresh-btn').addEventListener('click', async () => {
     const btn = document.getElementById('email-lib-refresh-btn');
     btn?.classList.add('email-lib-refreshing');
     state._libOffset = 0;
-    // 不要擦除 state._libEmails — _loadEmails 将在强制重新 fetch 时
-    // 绘制缓存列表，这样网格在刷新中不会变为空白。
-    // `force: true` 添加缓存破坏器，以绕过服务端的 8 秒列表缓存，获取实际新鲜结果。
+    // Don't wipe state._libEmails — _loadEmails will paint the cached
+    // list while the forced refetch runs, so the grid doesn't blank out
+    // mid-refresh. `force: true` adds the cache-buster so the server's
+    // 8s list cache is bypassed for an actually-fresh result.
     try {
       await _loadEmails({ force: true });
     } finally {
       btn?.classList.remove('email-lib-refreshing');
-      // 闪烁显示对勾约 900ms，以便用户获得清晰的"完成"提示。
+      // Flash a checkmark for ~900ms so the user gets a clear "done" cue.
       if (btn) {
         const orig = btn.innerHTML;
         btn.classList.add('email-lib-refresh-done');
@@ -1079,8 +1189,8 @@ export function openEmailLibrary(opts = {}) {
 
 
   const _composeNew = () => {
-    // 桌面端：当有足够空间容纳邮件和撰写/文档窗格时，保持 Email 打开。
-    // 移动端仍然收起标签页，以便文档拥有整个屏幕。
+    // Desktop: keep Email open when there is enough room for it plus the
+    // compose/document pane. Mobile still tabs down so the doc owns the screen.
     if (_prepareEmailWindowForDocument(document.getElementById('email-lib-modal'))) {
       if (!Modals.minimize('email-lib-modal')) closeEmailLibrary();
     }
@@ -1091,8 +1201,8 @@ export function openEmailLibrary(opts = {}) {
   };
   document.getElementById('email-lib-compose-btn').addEventListener('click', _composeNew);
 
-  // 移动端 FAB：与（桌面端）新建按钮相同的操作，另外在列表滚动时收缩为图标，
-  // 并在滚动停止时弹回扩展为 "New"。
+  // Mobile FAB: same action as the (desktop) New button, plus collapse-to-icon
+  // while the list scrolls and spring back out to "New" when scrolling stops.
   const _fab = document.getElementById('email-lib-fab');
   if (_fab) {
     _fab.addEventListener('click', _composeNew);
@@ -1103,16 +1213,16 @@ export function openEmailLibrary(opts = {}) {
         _fab.classList.add('collapsed');
         clearTimeout(_fabIdle);
         _fabIdle = setTimeout(() => _fab.classList.remove('collapsed'), 280);
-        _positionFab();   // Firefox 的工具栏在滚动时显示/隐藏
+        _positionFab();   // Firefox's toolbar shows/hides on scroll
       }, { passive: true });
     }
 
-    // 将 FAB 保持在浏览器底部工具栏之上。env(safe-area-inset)
-    // 不覆盖 Android 版 Firefox 的 URL 栏，且其 100dvh 处理不可靠，
-    // 因此测量面板延伸到 *可见*（visualViewport）区域之下的程度，
-    // 并将按钮上移相应的量。
+    // Keep the FAB above the browser's bottom toolbar. env(safe-area-inset)
+    // doesn't cover Firefox-for-Android's URL bar, and its 100dvh handling is
+    // unreliable, so measure how far the panel extends below the *visible*
+    // (visualViewport) area and lift the button by that much.
     function _positionFab() {
-      if (!_fab.isConnected) {       // 模态框被重建/关闭 — 停止监听
+      if (!_fab.isConnected) {       // modal was rebuilt/closed — stop listening
         window.visualViewport?.removeEventListener('resize', _positionFab);
         window.visualViewport?.removeEventListener('scroll', _positionFab);
         window.removeEventListener('resize', _positionFab);
@@ -1128,20 +1238,21 @@ export function openEmailLibrary(opts = {}) {
       window.visualViewport.addEventListener('scroll', _positionFab);
     }
     window.addEventListener('resize', _positionFab);
-    // 在布局稳定后运行（模态框打开带有动画）。
+    // Run after layout settles (modal opens with an animation).
     requestAnimationFrame(() => requestAnimationFrame(_positionFab));
     setTimeout(_positionFab, 300);
 
-    // 仅在邮件列表已渲染后（窗口"完全加载"），以从中心缩放弹出的
-    // 方式显示 FAB — 先在不可见时定位它，这样它不会在顶部闪烁然后滑下来。
+    // Reveal the FAB with a scale-from-center pop only AFTER the email list has
+    // rendered (the window is "fully loaded") — position it first while it's
+    // still invisible so it never flashes at the top and slides down.
     let _revealed = false;
     const _revealFab = () => {
       if (_revealed || !_fab.isConnected) return;
       _revealed = true;
       _positionFab();
-      // FAB 是 .modal-content 的绝对子元素，它在打开时向上滑入（sheet-enter）。
-      // 等待该入场动画完成后再弹出 FAB，否则它会随着滑动运动
-      //（"跟随窗口滑下"）。
+      // The FAB is an absolute child of .modal-content, which slides up on open
+      // (sheet-enter). Wait until that entrance finishes before popping the FAB
+      // in, otherwise it rides the slide ("swipes down with the window").
       const content = _fab.closest('.modal-content');
       const pop = () => { _positionFab(); requestAnimationFrame(() => _fab.classList.add('fab-revealed')); };
       if (!content || content.classList.contains('sheet-ready')) {
@@ -1154,7 +1265,7 @@ export function openEmailLibrary(opts = {}) {
           pop();
         };
         content.addEventListener('animationend', onEnd);
-        setTimeout(onEnd, 450);  // 如果 animationend 未触发则作为回退
+        setTimeout(onEnd, 450);  // fallback if animationend doesn't fire
       }
     };
     if (_grid) {
@@ -1165,7 +1276,7 @@ export function openEmailLibrary(opts = {}) {
           if (_grid.children.length) { _gobs.disconnect(); _revealFab(); }
         });
         _gobs.observe(_grid, { childList: true });
-        // 安全网 — 如果列表仍然为空，永远不要让 FAB 隐藏。
+        // Safety net — never leave the FAB hidden if the list stays empty.
         setTimeout(() => { _gobs.disconnect(); _revealFab(); }, 1600);
       }
     } else {
@@ -1173,10 +1284,20 @@ export function openEmailLibrary(opts = {}) {
     }
   }
 
-  // 选择模式切换
+  // Select mode toggle — icon + label swap matches the brain memories
+  // select button (dot+Select ↔ X+Cancel).
+  const _SELECT_BTN_DOT_SVG = '<svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>';
+  const _SELECT_BTN_X_SVG = '<svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:3px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  const _setSelectBtnState = (on) => {
+    const btn = document.getElementById('email-lib-select-btn');
+    if (!btn) return;
+    if (on) { btn.classList.add('active'); btn.innerHTML = _SELECT_BTN_X_SVG + 'Cancel'; }
+    else { btn.classList.remove('active'); btn.innerHTML = _SELECT_BTN_DOT_SVG + 'Select'; }
+  };
   document.getElementById('email-lib-select-btn').addEventListener('click', () => {
     state._selectMode = !state._selectMode;
     state._selectedUids.clear();
+    _setSelectBtnState(state._selectMode);
     _updateBulkBar();
     _renderGrid();
   });
@@ -1190,17 +1311,18 @@ export function openEmailLibrary(opts = {}) {
     _renderGrid();
   });
 
-  // 批量取消 — 以与通过切换的新取消相同的拆除方式接线。
-  // 让全局 Esc 处理程序（keyboard-shortcuts.js）通过点击可见的
-  // [id$="-bulk-cancel"] 按钮来关闭选择模式。
+  // Bulk cancel — wired with the same teardown a fresh Cancel-via-toggle does.
+  // Lets the global Esc handler (keyboard-shortcuts.js) close select mode by
+  // clicking the visible [id$="-bulk-cancel"] button.
   document.getElementById('email-lib-bulk-cancel')?.addEventListener('click', () => {
     state._selectMode = false;
     state._selectedUids.clear();
+    _setSelectBtnState(false);
     _updateBulkBar();
     _renderGrid();
   });
 
-  // 批量操作
+  // Bulk actions
   document.getElementById('email-lib-bulk-actions').addEventListener('click', (e) => {
     e.stopPropagation();
     if (state._selectedUids.size === 0) {
@@ -1224,7 +1346,7 @@ export function openEmailLibrary(opts = {}) {
     return _selectEmailReaderContents(reader);
   };
 
-  // ESC 关闭 + 箭头导航 + 删除所选/当前展开的邮件。
+  // ESC to close + Arrow nav + Delete on the selected / currently-expanded email.
   state._libEscHandler = (e) => {
     const modal = document.getElementById('email-lib-modal');
     if (!modal || modal.classList.contains('hidden')) return;
@@ -1252,7 +1374,7 @@ export function openEmailLibrary(opts = {}) {
       closeEmailLibrary();
       return;
     }
-    // 当用户正在某处输入时，不要劫持箭头/删除键。
+    // Don't hijack arrows / delete while the user is typing somewhere.
     const t = e.target;
     if (_isEmailTypingTarget(t)) return;
     const isDeleteKey = e.key === 'Delete' || e.key === 'Backspace';
@@ -1278,10 +1400,15 @@ export function openEmailLibrary(opts = {}) {
   document.addEventListener('keydown', state._libEscHandler, true);
 
   _renderAccountsLoading();
-  _loadAccounts();
-  _loadFolders();
-  _loadEmailReminderBellVisibility();
-  _loadEmails();
+  // Await accounts before loading emails so the list request carries the
+  // right account_id from the very first fetch (now that we auto-select
+  // an explicit account instead of relying on a 'Default' chip).
+  (async () => {
+    await _loadAccounts();
+    _loadFolders();
+    _loadEmailReminderBellVisibility();
+    _loadEmails();
+  })();
 }
 
 async function _loadAccounts() {
@@ -1291,6 +1418,15 @@ async function _loadAccounts() {
     const d = await r.json();
     state._libAccounts = d.accounts || [];
   } catch (_) { state._libAccounts = []; }
+  // The 'Default' chip is gone — pick an explicit account so the email
+  // list and any per-email actions (open in new tab, mark read, etc.)
+  // always carry an account_id and can't desync from the server's
+  // is_default state.
+  if (!state._libAccountId && state._libAccounts.length) {
+    const def = state._libAccounts.find(a => a.is_default) || state._libAccounts[0];
+    state._libAccountId = def.id;
+    _publishActiveAccount();
+  }
   _renderAccountsStrip();
 }
 
@@ -1299,12 +1435,23 @@ function _renderAccountsStrip() {
   if (!strip) return;
   strip.style.display = 'flex';
   const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-  const allActive = !state._libAccountId ? ' active' : '';
-  let html = `<button class="memory-toolbar-btn gallery-chip${allActive}" data-acc-id="">All (default)</button>`;
+  // The 'Default' chip caused desync bugs (changing the server-side
+  // default via the dot while still on the cached 'default' view would
+  // open the wrong account's emails). Each account renders as its own
+  // chip; the active one is selected explicitly via _loadAccounts.
+  let html = '';
+  // 6px dot — matches the sidebar notification-dot size.
+  const _dotFilled = '<svg width="6" height="6" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>';
+  const _dotHollow = '<svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9"/></svg>';
   for (const a of state._libAccounts) {
     const active = state._libAccountId === a.id ? ' active' : '';
     const label = a.name || a.from_address || a.imap_user || 'account';
-    html += `<button class="memory-toolbar-btn gallery-chip${active}" data-acc-id="${esc(a.id)}" title="${esc(a.from_address || a.imap_user || '')}${a.is_default ? ' (default)' : ''}">${esc(label)}</button>`;
+    const dot = a.is_default ? _dotFilled : _dotHollow;
+    const dotTitle = a.is_default ? 'Default account' : 'Set as default';
+    html += `<span class="gallery-chip-wrap" style="position:relative;display:inline-flex;align-items:center;">`
+         + `<button class="memory-toolbar-btn gallery-chip${active}" data-acc-id="${esc(a.id)}" title="${esc(a.from_address || a.imap_user || '')}${a.is_default ? ' (default)' : ''}" style="padding-right:24px;">${esc(label)}</button>`
+         + `<button class="email-lib-default-dot${a.is_default ? ' is-default' : ''}" data-set-default="${esc(a.id)}" title="${dotTitle}" aria-label="${dotTitle}" style="position:absolute;right:6px;top:calc(50% - 3px);transform:translateY(-50%);background:none;border:0;padding:0;width:18px;height:18px;cursor:pointer;color:${a.is_default ? 'var(--accent, var(--red))' : 'inherit'};opacity:${a.is_default ? '1' : '0.45'};display:inline-flex;align-items:center;justify-content:center;line-height:0;">${dot}</button>`
+         + `</span>`;
   }
   strip.innerHTML = html;
   strip.querySelectorAll('button[data-acc-id]').forEach(btn => {
@@ -1317,6 +1464,72 @@ function _renderAccountsStrip() {
       _loadEmails({ force: true, useCache: false });
     });
   });
+  // Star handler: POST set-default, then reload accounts + re-render so
+  // the chip stars reflect the new default.
+  strip.querySelectorAll('button[data-set-default]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const acctId = btn.dataset.setDefault;
+      if (!acctId) return;
+      try {
+        await fetch(`${API_BASE}/api/email/accounts/${encodeURIComponent(acctId)}/set-default`, {
+          method: 'POST', credentials: 'same-origin',
+        });
+        // Refresh the local accounts cache and re-render the strip.
+        for (const a of state._libAccounts) a.is_default = (a.id === acctId);
+        _renderAccountsStrip();
+      } catch (err) {
+        console.error('Set default account failed:', err);
+      }
+    });
+  });
+  // Idempotent — wire wheel + grab-drag scroll once per strip element.
+  if (!strip._scrollWired) {
+    strip._scrollWired = true;
+    // Vertical wheel → horizontal scroll. Only intercept when there's
+    // actually horizontal overflow to scroll through, otherwise let the
+    // page do its normal vertical scroll.
+    strip.addEventListener('wheel', (e) => {
+      if (strip.scrollWidth <= strip.clientWidth) return;
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      strip.scrollLeft += e.deltaY;
+    }, { passive: false });
+    // Click-and-drag scroll. Track mousedown, then mousemove deltas
+    // bump scrollLeft. Cancel a chip click if the user actually dragged
+    // more than a few pixels.
+    let dragging = false;
+    let startX = 0;
+    let startScroll = 0;
+    let moved = 0;
+    strip.style.cursor = 'grab';
+    strip.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      dragging = true;
+      moved = 0;
+      startX = e.pageX;
+      startScroll = strip.scrollLeft;
+      strip.style.cursor = 'grabbing';
+      strip.style.userSelect = 'none';
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const dx = e.pageX - startX;
+      moved = Math.max(moved, Math.abs(dx));
+      strip.scrollLeft = startScroll - dx;
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      strip.style.cursor = 'grab';
+      strip.style.userSelect = '';
+    });
+    // Swallow chip clicks fired after a real drag — the user meant to scroll,
+    // not select.
+    strip.addEventListener('click', (e) => {
+      if (moved > 5) { e.stopPropagation(); e.preventDefault(); moved = 0; }
+    }, true);
+  }
   _publishActiveAccount();
 }
 
@@ -1329,22 +1542,22 @@ export function closeEmailLibrary() {
     state._libEscHandler = null;
   }
   state._libOpen = false;
-  // 如果 /email 路由折叠了宽侧边栏以为全屏模态框腾出空间，
-  // 现在模态框消失后重新展开它。
+  // If the /email route collapsed the wide sidebar to make room for
+  // the fullscreen modal, re-expand it now that the modal is gone.
   try { window._restoreSidebarIfRouteCollapsed?.(); } catch (_) {}
 }
 
-// 通过其头部使模态框可拖拽。如果提供了 `modal` 和 `fsClass`，
-// 拖拽到视口顶部边缘会吸附到全屏（Aero Snap）。
-// 在全屏时从顶部拖离则取消吸附。
+// Make a modal draggable by its header. If `modal` and `fsClass` are
+// provided, dragging to the top edge of the viewport snaps to fullscreen
+// (Aero Snap). Dragging away from the top while fullscreen unsnaps.
 function _makeDraggable(content, modal, fsClass) {
   if (!content) return;
   const header = content.querySelector('.modal-header');
   if (!header) return;
-  // 每个模态框的全屏行为 — 调用方提供 fsClass，我们应用
-  // email-lib 和 email-window 都使用的相同内联样式全屏模式。
-  // exitFullscreen 恢复默认窗口大小 (min(720px, 92vw) × 85vh)
-  // 并围绕光标居中。
+  // Per-modal fullscreen behavior — caller supplies fsClass, we apply
+  // the same inline-style fullscreen pattern email-lib + email-window
+  // both use. exitFullscreen restores the default windowed size
+  // (min(720px, 92vw) × 85vh) and centers around the cursor.
   const enterFullscreen = () => {
     if (!fsClass || modal.classList.contains(fsClass)) return;
     modal.classList.add(fsClass);
@@ -1379,7 +1592,7 @@ function _makeDraggable(content, modal, fsClass) {
     header,
     fsClass,
     skipSelector: '.close-btn, .modal-close',
-    enableLeftDock: true,  // 在右侧回复时将邮件停靠在左侧
+    enableLeftDock: true,  // park the email on the left while replying on the right
     onDragStart: ({ rect }) => {
       if (!modal.classList.contains('email-snap-left')) return;
       modal.classList.remove('email-snap-left');
@@ -1402,16 +1615,24 @@ function _makeDraggable(content, modal, fsClass) {
   });
 }
 
-// 当用户在全屏邮件视图上点击 Reply 时，将邮件模态框停靠到左侧
-// 作为狭窄侧边栏，以便文档面板（在聊天区域右侧打开）可以并排可见。
-// 仅当视口足够宽以真正值得分屏时触发。返回 true 表示吸附已应用，false 表示未应用。
+// When the user clicks Reply on a fullscreened email view, dock the email
+// modal to the left as a narrow sidebar so the doc panel (which opens on
+// the right side of the chat area) is visible side-by-side. Only triggers
+// when the viewport is wide enough to make a true split worthwhile. Returns
+// true if the snap was applied, false otherwise.
 function _snapEmailModalToLeftSidebar(modal) {
   if (!modal) return false;
   if (window.innerWidth < 900) return false;
+  // "Open in new tab" reader modals (id="email-view-…") are explicitly
+  // floating windows the user already positioned. Replying from one
+  // shouldn't yank it to the left edge — leave it on top in its current
+  // spot. Reply still opens the compose document; the user can drag the
+  // reader away or close it themselves.
+  if ((modal.id || '').startsWith('email-view-')) return false;
   const content = modal.querySelector('.modal-content');
   if (!content) return false;
-  // 仅在全屏时才停靠 — 对于手动调整大小的窗口，
-  // 用户已经选择了其布局；不要通过吸附来意外改变它。
+  // Only dock if currently fullscreen — for a manually-sized window the
+  // user already chose its layout; don't surprise them by snapping it.
   const wasLibFs = modal.classList.contains('email-lib-fullscreen');
   const wasWinFs = modal.classList.contains('email-window-fullscreen');
   if (!wasLibFs && !wasWinFs) return false;
@@ -1484,14 +1705,14 @@ async function _loadFolders({ resetMissing = false } = {}) {
       if (f === state._libFolder) opt.selected = true;
       sel.appendChild(opt);
     }
-    // Scheduled（特殊虚拟文件夹）
+    // Scheduled (special virtual folder)
     const sep2 = document.createElement('option');
     sep2.disabled = true;
     sep2.textContent = '─────────';
     sel.appendChild(sep2);
     const schedOpt = document.createElement('option');
     schedOpt.value = '__scheduled__';
-    schedOpt.textContent = t('email.scheduled');
+    schedOpt.textContent = 'Scheduled';
     if (state._libFolder === '__scheduled__') schedOpt.selected = true;
     sel.appendChild(schedOpt);
     sel.value = state._libFolder;
@@ -1517,11 +1738,615 @@ function _crossFolderCandidates() {
   return Array.from(new Set(candidates.filter(Boolean)));
 }
 
+// Snapshot of state._libEmails taken right before search starts so we
+// can both filter locally and restore on clear without re-fetching.
+let _libPreSearchEmails = null;
+let _libPreSearchTotal = 0;
+
+// Cached contact suggestions for the chip-input autocomplete. Built on
+// first focus / first keystroke from contacts + currently-loaded senders.
+let _libSuggestionCache = null;
+let _libSuggestionFocusIdx = 0;
+
+async function _buildSuggestionSource() {
+  // Combine the contacts list with senders/recipients visible in the
+  // loaded email list. Dedup by lowercased email address; prefer
+  // contact-supplied display names where present.
+  const map = new Map();
+  const _add = (name, email) => {
+    const key = String(email || '').trim().toLowerCase();
+    if (!key) return;
+    const prev = map.get(key);
+    if (!prev || (name && !prev.name)) {
+      map.set(key, { name: (name || '').trim(), email: key });
+    }
+  };
+  // 1) Senders / recipients already in the loaded grid.
+  for (const em of (state._libEmails || [])) {
+    _add(em.from_name, em.from_address);
+    const _parse = (s) => String(s || '').split(',').forEach(seg => {
+      const m = seg.match(/^\s*"?([^"<]*)"?\s*<?([^>]+)>?\s*$/);
+      if (m) _add(m[1], m[2]);
+    });
+    _parse(em.to);
+    _parse(em.cc);
+  }
+  // 2) Address book — best-effort.
+  try {
+    const r = await fetch(`${API_BASE}/api/contacts/list`, { credentials: 'same-origin' });
+    if (r.ok) {
+      const d = await r.json();
+      for (const c of (d.contacts || [])) {
+        const email = c.email || (c.emails && c.emails[0]) || '';
+        _add(c.name || c.full_name, email);
+      }
+    }
+  } catch (_) {}
+  return Array.from(map.values()).filter(x => x.email);
+}
+
+function _scoreSuggestion(s, needle) {
+  // Crude relevance: startsWith on name or email wins big; substring is fine.
+  const n = (s.name || '').toLowerCase();
+  const e = (s.email || '').toLowerCase();
+  if (n.startsWith(needle) || e.startsWith(needle)) return 3;
+  if (n.includes(needle) || e.includes(needle)) return 2;
+  return 0;
+}
+
+// Filter / attachment suggestions surfaced inside the same chip-bar
+// dropdown. Typing 'attachment', 'unread', 'urgent' etc. surfaces the
+// corresponding filter row with its icon; picking it pins a filter
+// pill that drives state._libFilter or the has-attachments toggle.
+const _LIB_FILTER_OPTIONS = [
+  { value: 'filter:has-attachments', label: 'Has attachments', keywords: ['attachment', 'attachments', 'has attachment', 'attach'] },
+  { value: 'filter:unread',          label: 'Unread',          keywords: ['unread', 'new', 'unseen'] },
+  { value: 'filter:favorites',       label: 'Favorites',       keywords: ['favorite', 'favorites', 'starred', 'star', 'flagged'] },
+  { value: 'filter:undone',          label: 'Undone',          keywords: ['undone', 'pending', 'todo'] },
+  { value: 'filter:reminders',       label: 'Reminders',       keywords: ['reminder', 'reminders'] },
+  { value: 'filter:unanswered',      label: 'Unanswered',      keywords: ['unanswered', 'unreplied', 'no reply'] },
+  { value: 'filter:pending_30d',     label: 'Pending · 30d',   keywords: ['pending 30d', 'pending', 'recent pending'] },
+  { value: 'filter:stale_30d',       label: 'Stale · >30d',    keywords: ['stale', 'old', 'stale 30d'] },
+  { value: 'filter:tag:urgent',      label: 'Urgent',          keywords: ['urgent', 'critical'] },
+  { value: 'filter:tag:reply-soon',  label: 'Reply soon',      keywords: ['reply soon', 'reply', 'follow up'] },
+  { value: 'filter:tag:spam',        label: 'Spam',            keywords: ['spam', 'junk'] },
+  { value: 'filter:tag:newsletter',  label: 'Newsletter',      keywords: ['newsletter', 'newsletters', 'subscriptions'] },
+  { value: 'filter:tag:marketing',   label: 'Marketing',       keywords: ['marketing', 'promo', 'promotional'] },
+];
+
+function _libFilterIconFor(value) {
+  // value is 'filter:<X>' — strip prefix and reuse the existing icon map.
+  const v = String(value || '').replace(/^filter:/, '');
+  if (v === 'has-attachments') return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+  return _EMAIL_FILTER_ICONS[v] || _EMAIL_FILTER_ICONS['all'];
+}
+
+function _scoreFilterOption(opt, needle) {
+  for (const kw of opt.keywords) {
+    if (kw === needle) return 4;
+    if (kw.startsWith(needle)) return 3;
+    if (kw.includes(needle)) return 2;
+  }
+  if (opt.label.toLowerCase().includes(needle)) return 2;
+  return 0;
+}
+
+function _filterSuggestions(needle, limit = 10) {
+  const n = String(needle || '').trim().toLowerCase();
+  if (!n) return [];
+  // Filter / attachment matches first — typing 'unread' should surface
+  // the filter row before contact suggestions, since 'unread' isn't a
+  // person.
+  const filterMatches = _LIB_FILTER_OPTIONS
+    .map(opt => ({ s: { kind: 'filter', value: opt.value, label: opt.label, icon: _libFilterIconFor(opt.value) }, score: _scoreFilterOption(opt, n) }))
+    .filter(x => x.score > 0);
+  const src = _libSuggestionCache || [];
+  const contactMatches = src
+    .map(s => ({ s: { kind: 'contact', ...s }, score: _scoreSuggestion(s, n) }))
+    .filter(x => x.score > 0);
+  // Email subject / sender-name matches — use the snapshot (unfiltered
+  // list) when available so suggestions don't shrink as pills narrow the
+  // visible grid. Cap to 4 so contacts + filters stay visible.
+  const emails = _libPreSearchEmails || state._libEmails || [];
+  const emailMatches = [];
+  for (const em of emails) {
+    const subj = String(em.subject || '').toLowerCase();
+    const fromN = String(em.from_name || '').toLowerCase();
+    let score = 0;
+    if (subj.startsWith(n) || fromN.startsWith(n)) score = 3;
+    else if (subj.includes(n) || fromN.includes(n)) score = 1;
+    if (score > 0) emailMatches.push({ s: { kind: 'email', uid: em.uid, subject: em.subject || '(no subject)', from_name: em.from_name || em.from_address || '' }, score });
+    if (emailMatches.length >= 4) break;
+  }
+  return filterMatches.concat(contactMatches).concat(emailMatches)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(x => x.s);
+}
+
+function _emailMatchesPill(em, pill) {
+  if (!pill) return false;
+  if (pill.type === 'contact') {
+    const target = (pill.email || '').toLowerCase();
+    if (!target) return false;
+    if (String(em.from_address || '').toLowerCase() === target) return true;
+    if (String(em.to || '').toLowerCase().includes(target)) return true;
+    if (String(em.cc || '').toLowerCase().includes(target)) return true;
+    return false;
+  }
+  if (pill.type === 'filter') {
+    // Filter pills delegate to the server-side filter (state._libFilter)
+    // or the has-attachments toggle. The list is already pre-filtered by
+    // those when this runs, so the pill is effectively always-true here
+    // — it lives in the pill bar purely as a visible affordance.
+    return true;
+  }
+  // text pill — broad local-match
+  const q = (pill.text || '').toLowerCase();
+  if (!q) return true;
+  return _matchesQuery(em, q);
+}
+
+function _matchesQuery(em, q) {
+  const needle = q.toLowerCase();
+  return (
+    String(em.subject || '').toLowerCase().includes(needle) ||
+    String(em.from_name || '').toLowerCase().includes(needle) ||
+    String(em.from_address || '').toLowerCase().includes(needle) ||
+    String(em.snippet || em.preview || '').toLowerCase().includes(needle)
+  );
+}
+
+// Apply the active pill filter to the snapshot. Each pill is OR-ed; an
+// email shows up if ANY pill matches (a contact pill matches by from/to/cc
+// equality, a text pill matches by the broad _matchesQuery substring).
+function _applyPillFilter() {
+  const pills = state._libSearchPills || [];
+  const draft = (state._libSearchDraft || '').trim();
+  const noPills = pills.length === 0;
+  const noDraft = draft.length === 0;
+  // First time we apply with anything active: snapshot the loaded list.
+  if (!noPills || draft.length >= 1) {
+    if (!_libPreSearchEmails) {
+      _libPreSearchEmails = (state._libEmails || []).slice();
+      _libPreSearchTotal = state._libTotal;
+    }
+  }
+  if (noPills && noDraft) {
+    if (_libPreSearchEmails) {
+      state._libEmails = _libPreSearchEmails;
+      state._libTotal = _libPreSearchTotal;
+      _libPreSearchEmails = null;
+      _libPreSearchTotal = 0;
+    }
+    _renderGrid();
+    return;
+  }
+  const source = _libPreSearchEmails || state._libEmails || [];
+  // If the active server search covers a piece of text (either the live
+  // draft OR an Enter-committed text pill), skip the local re-filter for
+  // it — _emailMatchesPill only checks subject/from_name/from_address/
+  // snippet (no BODY), so it was dropping legitimate server hits where
+  // the match was in body text. Real pills (contact, filter chips) still
+  // apply, and other text pills with different strings still apply.
+  const libSearchLower = (_libSearchHadResults ? (state._libSearch || '').trim().toLowerCase() : '');
+  const serverHandledDraft = !!(libSearchLower && draft && libSearchLower === draft.toLowerCase());
+  const draftPill = (!serverHandledDraft && draft.length >= 1) ? { type: 'text', text: draft } : null;
+  // Filter out text pills whose text matches the active server search —
+  // those were the trigger for the IMAP query and don't need re-checking.
+  const effectiveBasePills = libSearchLower
+    ? pills.filter(p => !(p.type === 'text' && (p.text || '').toLowerCase() === libSearchLower))
+    : pills;
+  const effective = draftPill ? effectiveBasePills.concat([draftPill]) : effectiveBasePills;
+  // AND across pills — "alice + bob" should mean both alice AND bob are
+  // somewhere on the email (from/to/cc), not "from alice OR from bob".
+  const filtered = source.filter(em => effective.every(p => _emailMatchesPill(em, p)));
+  state._libEmails = filtered;
+  _renderGrid();
+}
+// Back-compat shim: older call sites still expect _localSearchFilter.
+function _localSearchFilter(query) {
+  state._libSearchDraft = String(query || '');
+  _applyPillFilter();
+}
+
+// Render the active pills inside the chip bar. Each pill carries a × to
+// remove individually. Backspace on empty input also pops the last one.
+function _renderSearchPills() {
+  const wrap = document.getElementById('email-lib-pills');
+  if (!wrap) return;
+  const pills = state._libSearchPills || [];
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  wrap.innerHTML = pills.map((p, i) => {
+    // Filter pills render as icon-only (the icon is the affordance);
+    // contact + text pills carry their label as text.
+    if (p.type === 'filter') {
+      const titleAttr = `${(p.label || p.value).replace(/"/g, '&quot;')}`;
+      return `<span class="email-lib-pill" data-pill-idx="${i}" title="${titleAttr}" style="display:inline-flex;align-items:center;gap:2px;padding:0 4px 0 6px;border-radius:999px;background:color-mix(in srgb, var(--accent, var(--red)) 14%, transparent);color:var(--accent, var(--red));line-height:18px;height:18px;flex-shrink:0;">
+        <span style="display:inline-flex;align-items:center;width:11px;height:11px;flex-shrink:0;">${_libFilterIconFor(p.value)}</span>
+        <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="Remove" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
+      </span>`;
+    }
+    const label = p.type === 'contact' ? (p.name || p.email || '?') : (p.text || '');
+    return `<span class="email-lib-pill" data-pill-idx="${i}" style="display:inline-flex;align-items:center;gap:3px;padding:0 4px 0 6px;border-radius:999px;background:color-mix(in srgb, var(--accent, var(--red)) 14%, transparent);color:var(--accent, var(--red));font-size:10px;line-height:18px;height:18px;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;">
+      <span style="overflow:hidden;text-overflow:ellipsis;">${esc(label)}</span>
+      <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="Remove" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
+    </span>`;
+  }).join('');
+  wrap.querySelectorAll('.email-lib-pill-x').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.pillIdx);
+      if (Number.isFinite(idx)) _removeSearchPillAt(idx);
+    });
+  });
+}
+
+function _applyFilterPillSideEffect(pill) {
+  // Filter pills drive the existing has-attachments toggle / filter
+  // dropdown so the server returns the right list. Only one filter
+  // pill is active at a time (see _addSearchPill).
+  const sel = document.getElementById('email-lib-filter');
+  const attachBtn = document.getElementById('email-attach-btn');
+  if (pill.value === 'filter:has-attachments') {
+    if (!state._libHasAttachments) {
+      state._libHasAttachments = true;
+      if (attachBtn) attachBtn.classList.add('active');
+    }
+    if (sel && sel.value !== 'all') { sel.value = 'all'; sel.dispatchEvent(new Event('change')); }
+    return;
+  }
+  // Any other filter pill — set the dropdown value, clear attachments
+  if (state._libHasAttachments) {
+    state._libHasAttachments = false;
+    if (attachBtn) attachBtn.classList.remove('active');
+  }
+  if (sel) {
+    const v = pill.value.replace(/^filter:/, '');
+    if (sel.value !== v) { sel.value = v; sel.dispatchEvent(new Event('change')); }
+  }
+}
+
+function _clearFilterPillSideEffect() {
+  const sel = document.getElementById('email-lib-filter');
+  const attachBtn = document.getElementById('email-attach-btn');
+  if (state._libHasAttachments) {
+    state._libHasAttachments = false;
+    if (attachBtn) attachBtn.classList.remove('active');
+  }
+  if (sel && sel.value !== 'all') {
+    sel.value = 'all'; sel.dispatchEvent(new Event('change'));
+  }
+}
+
+function _addSearchPill(pill) {
+  if (!pill) return;
+  if (!Array.isArray(state._libSearchPills)) state._libSearchPills = [];
+  // Dedup by email (contact), text (text pill), or filter value.
+  if (pill.type === 'contact') {
+    const key = (pill.email || '').toLowerCase();
+    if (!key) return;
+    if (state._libSearchPills.some(p => p.type === 'contact' && (p.email || '').toLowerCase() === key)) return;
+  } else if (pill.type === 'text') {
+    const t = (pill.text || '').toLowerCase();
+    if (!t) return;
+    if (state._libSearchPills.some(p => p.type === 'text' && (p.text || '').toLowerCase() === t)) return;
+  } else if (pill.type === 'filter') {
+    // Single-filter rule — drop any existing filter pill before adding.
+    state._libSearchPills = state._libSearchPills.filter(p => p.type !== 'filter');
+    state._libSearchPills.push(pill);
+    _applyFilterPillSideEffect(pill);
+    _renderSearchPills();
+    return;
+  }
+  state._libSearchPills.push(pill);
+  _renderSearchPills();
+  _applyPillFilter();
+}
+
+function _removeSearchPillAt(idx) {
+  if (!Array.isArray(state._libSearchPills)) return;
+  const removed = state._libSearchPills[idx];
+  state._libSearchPills.splice(idx, 1);
+  if (removed && removed.type === 'filter') _clearFilterPillSideEffect();
+  _renderSearchPills();
+  // Pill cleared all the way: if we got into search-result mode via the
+  // IMAP search, the pre-search snapshot is now those results too (set
+  // in _doSearch). Restoring from it would leave the user staring at
+  // the same results with the pill bar empty. Re-fetch the real inbox
+  // so removing the last pill genuinely "goes back".
+  const noPillsLeft = (state._libSearchPills || []).length === 0
+    && !(state._libSearchDraft || '').trim();
+  if (noPillsLeft && _libSearchHadResults) {
+    _libSearchHadResults = false;
+    _libPreSearchEmails = null;
+    _libPreSearchTotal = 0;
+    state._libSearch = '';
+    state._libOffset = 0;
+    const _searchInput = document.getElementById('email-lib-search');
+    if (_searchInput) _searchInput.value = '';
+    _loadEmails({ useCache: true });
+    return;
+  }
+  _applyPillFilter();
+}
+
+// Render the autocomplete dropdown below the input. focusIdx highlights
+// the active row; Tab autocompletes / Enter accepts that row.
+function _renderSearchSuggestions(items) {
+  const menu = document.getElementById('email-lib-suggest');
+  if (!menu) return;
+  if (!items.length) { menu.style.display = 'none'; menu.innerHTML = ''; return; }
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  menu.innerHTML = items.map((s, i) => {
+    const highlight = i === _libSuggestionFocusIdx ? 'background:color-mix(in srgb, var(--fg) 8%, transparent);' : '';
+    if (s.kind === 'filter') {
+      return `<div class="email-lib-suggest-item" data-idx="${i}" style="display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;${highlight}">
+        <span style="display:inline-flex;align-items:center;width:13px;height:13px;color:var(--accent, var(--red));flex-shrink:0;">${s.icon}</span>
+        <span style="font-weight:600;">${esc(s.label)}</span>
+      </div>`;
+    }
+    if (s.kind === 'email') {
+      return `<div class="email-lib-suggest-item" data-idx="${i}" style="display:flex;align-items:center;gap:6px;padding:6px 10px;cursor:pointer;font-size:12px;${highlight}">
+        <span style="display:inline-flex;align-items:center;width:13px;height:13px;color:var(--fg-muted, var(--fg));opacity:0.55;flex-shrink:0;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 6 12 13 22 6"/></svg></span>
+        <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.subject)}</span>
+        ${s.from_name ? `<span style="opacity:0.55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">— ${esc(s.from_name)}</span>` : ''}
+      </div>`;
+    }
+    return `<div class="email-lib-suggest-item" data-idx="${i}" style="display:flex;align-items:center;gap:6px;padding:6px 10px;cursor:pointer;font-size:12px;${highlight}">
+      <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name || s.email)}</span>
+      ${s.name ? `<span style="opacity:0.55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.email)}</span>` : ''}
+    </div>`;
+  }).join('');
+  menu.style.display = '';
+  menu.querySelectorAll('.email-lib-suggest-item').forEach(row => {
+    row.addEventListener('mousedown', (e) => {
+      // mousedown (not click) so we beat the input blur handler that hides the menu.
+      e.preventDefault();
+      const idx = Number(row.dataset.idx);
+      const item = items[idx];
+      if (item) _acceptSuggestion(item);
+    });
+  });
+}
+
+function _hideSearchSuggestions() {
+  const menu = document.getElementById('email-lib-suggest');
+  if (menu) { menu.style.display = 'none'; menu.innerHTML = ''; }
+  _libSuggestionFocusIdx = 0;
+}
+
+function _acceptSuggestion(s) {
+  const input = document.getElementById('email-lib-search');
+  if (s.kind === 'filter') {
+    _addSearchPill({ type: 'filter', value: s.value, label: s.label });
+  } else if (s.kind === 'email') {
+    // Clear the draft + dropdown and open the matching card directly.
+    if (input) input.value = '';
+    state._libSearchDraft = '';
+    _hideSearchSuggestions();
+    _applyPillFilter();
+    const grid = document.getElementById('email-lib-grid');
+    const card = grid?.querySelector(`.doclib-card[data-uid="${CSS.escape(String(s.uid))}"]`);
+    const em = (state._libEmails || []).find(x => String(x.uid) === String(s.uid))
+            || (_libPreSearchEmails || []).find(x => String(x.uid) === String(s.uid));
+    if (card && em) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      _toggleCardPreview(card, em);
+    }
+    return;
+  } else {
+    _addSearchPill({ type: 'contact', name: s.name, email: s.email });
+    // Same as the text-pill path in the Enter handler: trigger the IMAP
+    // search so unloaded emails (older than the current page) show up
+    // when picking a contact. The local pill filter then narrows the
+    // search results to that contact's address.
+    const _q = (s.email || s.name || '').trim();
+    if (_q && _q.length >= 2) {
+      state._libSearch = _q;
+      _doSearch();
+    }
+  }
+  if (input) input.value = '';
+  state._libSearchDraft = '';
+  _hideSearchSuggestions();
+  _applyPillFilter();
+  if (input) input.focus();
+}
+
+async function _initEmailSearchChipBar() {
+  const bar = document.getElementById('email-lib-chip-bar');
+  const input = document.getElementById('email-lib-search');
+  if (!bar || !input) return;
+  state._libSearchPills = state._libSearchPills || [];
+  state._libSearchDraft = '';
+  _renderSearchPills();
+
+  // Lazy-load suggestion source on first focus / keystroke.
+  const _ensureSuggestionCache = async () => {
+    if (_libSuggestionCache) return;
+    _libSuggestionCache = await _buildSuggestionSource();
+  };
+
+  // Click anywhere in the bar lands the cursor in the input field.
+  bar.addEventListener('click', (e) => {
+    if (e.target.closest('.email-lib-pill-x')) return;
+    input.focus();
+  });
+
+  let _itemsRef = [];
+  const _refreshSuggestions = async () => {
+    await _ensureSuggestionCache();
+    _itemsRef = _filterSuggestions(input.value);
+    // Default to no focused suggestion — text typing should feel like
+    // regular search; the user has to ArrowDown / Tab explicitly to
+    // pick a contact. Enter without a focused row commits as text.
+    _libSuggestionFocusIdx = -1;
+    _renderSearchSuggestions(_itemsRef);
+  };
+
+  input.addEventListener('focus', _refreshSuggestions);
+  // Debounced IMAP search — fires ~500ms after the user stops typing so
+  // searches for names/text not in the current inbox page actually surface
+  // hits, instead of just locally filtering the visible window.
+  //
+  // Live local filtering on EVERY keystroke was clobbering server hits:
+  // _emailMatchesPill / _matchesQuery check subject/from_name/from_address/
+  // snippet but never body, so intermediate text like "sam" reduced the
+  // 61 server results to whatever matched just those four fields (often
+  // 0). User saw "no emails" while typing. So local filter is gone from
+  // the typing path — debounced server search drives the grid. Pill
+  // add/remove still re-runs the local filter through _applyPillFilter
+  // directly.
+  let _libSearchTypingTimer = null;
+  input.addEventListener('input', async () => {
+    state._libSearchDraft = input.value;
+    try { console.log('[email-search] input event, value=', JSON.stringify(input.value)); } catch {}
+    await _refreshSuggestions();
+    if (_libSearchTypingTimer) clearTimeout(_libSearchTypingTimer);
+    const v = input.value.trim();
+    if (v.length >= 2) {
+      _libSearchTypingTimer = setTimeout(() => {
+        const cur = (input.value || '').trim();
+        if (cur === v && cur.length >= 2) {
+          state._libSearch = cur;
+          try { console.log('[email-search] firing _doSearch for', cur); } catch {}
+          _doSearch();
+        } else {
+          try { console.log('[email-search] debounce expired but input changed (was', v, 'now', cur, ')'); } catch {}
+        }
+      }, 500);
+    } else if (!v && _libSearchHadResults) {
+      // Cleared the input → restore the inbox the same way the pill-clear
+      // path does. Otherwise the stale search results stayed up after the
+      // user backspaced everything out.
+      _libSearchHadResults = false;
+      _libPreSearchEmails = null;
+      _libPreSearchTotal = 0;
+      state._libSearch = '';
+      state._libOffset = 0;
+      _loadEmails({ useCache: true });
+    }
+  });
+  input.addEventListener('blur', () => {
+    // Delay so click/mousedown on a suggestion fires first.
+    setTimeout(_hideSearchSuggestions, 120);
+  });
+  input.addEventListener('keydown', (e) => {
+    const menu = document.getElementById('email-lib-suggest');
+    const menuOpen = menu && menu.style.display !== 'none';
+    if (e.key === 'Backspace' && !input.value && (state._libSearchPills || []).length) {
+      e.preventDefault();
+      _removeSearchPillAt(state._libSearchPills.length - 1);
+      return;
+    }
+    if (e.key === 'ArrowDown' && menuOpen) {
+      e.preventDefault();
+      // -1 → 0 → 1 → … → length-1, then wraps back to -1 (no selection)
+      const next = _libSuggestionFocusIdx + 1;
+      _libSuggestionFocusIdx = next >= _itemsRef.length ? -1 : next;
+      _renderSearchSuggestions(_itemsRef);
+      return;
+    }
+    if (e.key === 'ArrowUp' && menuOpen) {
+      e.preventDefault();
+      // -1 → length-1 → length-2 → … → 0 → -1
+      const next = _libSuggestionFocusIdx - 1;
+      _libSuggestionFocusIdx = next < -1 ? _itemsRef.length - 1 : next;
+      _renderSearchSuggestions(_itemsRef);
+      return;
+    }
+    if (e.key === 'Tab' && menuOpen) {
+      // Tab autocompletes the FIRST suggestion (most-relevant), regardless
+      // of whether the user arrowed down yet — matches the user's mental
+      // model of "type a name and tab to pick".
+      const pick = _libSuggestionFocusIdx >= 0 ? _itemsRef[_libSuggestionFocusIdx] : _itemsRef[0];
+      if (pick) { e.preventDefault(); _acceptSuggestion(pick); return; }
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Only commit a contact if the user explicitly focused one. Plain
+      // Enter should default to a text pill so regular text search works
+      // without forcing a contact pick.
+      if (menuOpen && _libSuggestionFocusIdx >= 0 && _itemsRef[_libSuggestionFocusIdx]) {
+        _acceptSuggestion(_itemsRef[_libSuggestionFocusIdx]);
+        return;
+      }
+      const v = input.value.trim();
+      if (v) {
+        _addSearchPill({ type: 'text', text: v });
+        input.value = '';
+        state._libSearchDraft = '';
+        _hideSearchSuggestions();
+        // Pill-only filtering used to only check emails already loaded into
+        // state._libEmails (the visible page of the inbox). Searches for
+        // names/text that aren't in the current page returned "no emails"
+        // even when matches existed on the server. Trigger the IMAP
+        // search so state._libEmails is replaced with the actual hits,
+        // then the pill filter narrows to matches.
+        state._libSearch = v;
+        _doSearch();
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (menuOpen) {
+        // Just close the dropdown — let the modal Esc handler run on the
+        // next Esc to actually dismiss the library.
+        e.preventDefault();
+        e.stopPropagation();
+        _hideSearchSuggestions();
+      } else {
+        // Blur first so the modal Esc handler doesn't get suppressed by
+        // any IME / typing-target check, and let the event propagate.
+        try { input.blur(); } catch (_) {}
+      }
+    }
+  });
+}
+
+// Click-to-add: clicking a recipient-chip in the email reader OR a
+// .email-meta-sender in the library list drops the person into the
+// library search as a contact pill so the user can pivot to "everything
+// from / to this person" in one tap.
+window.addEventListener('click', (e) => {
+  const lib = document.getElementById('email-lib-modal');
+  // 1) Recipient chips inside the email reader area
+  const chip = e.target.closest && e.target.closest('.recipient-chip');
+  if (chip && chip.closest('.email-reader-header, .email-card-reader, .email-reader-tab-modal')) {
+    // Don't pivot to library search for chips in the From / To / Cc
+    // meta — clicking those should just toggle the expanded address
+    // view via the per-reader handler.
+    if (chip.closest('.email-reader-meta')) return;
+    const email = (chip.dataset && chip.dataset.email) || '';
+    const name = (chip.dataset && chip.dataset.name) || (chip.textContent || '').trim();
+    if (!email) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { window.openEmailLibrary && window.openEmailLibrary(); } catch (_) {}
+    _addSearchPill({ type: 'contact', name, email });
+    return;
+  }
+  // 2) Sender name in a library list card row (only when the library is open)
+  if (lib && !lib.classList.contains('hidden')) {
+    const senderEl = e.target.closest && e.target.closest('.email-meta-sender');
+    if (senderEl && senderEl.closest('#email-lib-grid')) {
+      const email = (senderEl.dataset && senderEl.dataset.email) || '';
+      const name = (senderEl.dataset && senderEl.dataset.name) || (senderEl.textContent || '').trim();
+      if (!email) return;
+      e.preventDefault();
+      e.stopPropagation();
+      _addSearchPill({ type: 'contact', name, email });
+    }
+  }
+}, true);
+
 async function _doSearch() {
   const seq = ++_libSearchSeq;
   const q = state._libSearch.trim();
   if (q.length < 2) {
-    // 空或太短 — 如果之前的搜索替换了网格内容，则恢复普通文件夹。
+    // Empty or too short — restore the normal folder if a previous search
+    // had replaced the grid contents.
     if (_libSearchHadResults) {
       _libSearchHadResults = false;
       state._libOffset = 0;
@@ -1531,17 +2356,26 @@ async function _doSearch() {
     _renderGrid();
     return;
   }
-  const grid = document.getElementById('email-lib-grid');
-  if (!grid) return;
-  const sp = _renderEmailLoading(grid);
   const accountAtStart = state._libAccountId || '';
   const folderAtStart = state._libFolder || 'INBOX';
+  // No grid-blanking spinner — the local filter already painted something
+  // useful. Surface progress in the stats badge instead so the user knows
+  // the server search is still grinding.
+  const stats = document.getElementById('email-lib-stats');
+  const originalStatsText = stats?.textContent || '';
+  if (stats) stats.textContent = 'Searching…';
+  _libSearchInFlight = true;
+  // Force a re-render so the "Searching…" empty-state shows (and any
+  // existing "No emails" gets replaced) while the fetch is in flight.
+  _renderGrid();
 
+  const accountQS = accountAtStart ? `&account_id=${encodeURIComponent(accountAtStart)}` : '';
   try {
-    const accountQS = accountAtStart ? `&account_id=${encodeURIComponent(accountAtStart)}` : '';
+    // Single fast fetch — limit=100 so the IMAP fetch loop doesn't spend
+    // 60 s pulling 500 headers serially. We can wire "Load more" later
+    // off `state._libTotal` if needed.
     const res = await fetch(`${API_BASE}/api/email/search?folder=${encodeURIComponent(folderAtStart)}${accountQS}&q=${encodeURIComponent(q)}&limit=100`);
     const data = await res.json();
-    sp.destroy();
     if (
       seq !== _libSearchSeq ||
       q !== state._libSearch.trim() ||
@@ -1554,15 +2388,139 @@ async function _doSearch() {
 
     const results = data.emails || [];
     _libSearchHadResults = true;
-    state._libEmails = results;  // 临时替换为搜索结果
+    state._libEmails = results;  // temporarily replace with search results
+    state._libTotal = data.total || results.length;
+    // Refresh the pre-search snapshot so any subsequent _applyPillFilter
+    // call (focus / pill edit / etc.) sources from the actual search
+    // results, not the stale inbox page that was loaded before the
+    // search ran. Without this, active pills (a contact pill from the
+    // suggestion the user just clicked) would filter the inbox snapshot
+    // → near-always empty → user sees "no emails" even though the
+    // server search succeeded.
+    _libPreSearchEmails = results.slice();
+    _libPreSearchTotal = state._libTotal;
+    // If pills are active (and they usually are after a contact-pill or
+    // text-pill add), re-run the pill filter so the visible grid is the
+    // pill-narrowed intersection of the new search results. Otherwise
+    // _renderGrid below would render the raw server response, which
+    // might not match the active pills the user just added.
+    if ((state._libSearchPills || []).length) {
+      _applyPillFilter();
+      // Fall back to rendering the raw results if the pill intersection
+      // hid everything but the user just confirmed they want this query.
+      if (!(state._libEmails || []).length) state._libEmails = results;
+    }
     _renderGrid();
 
-    const stats = document.getElementById('email-lib-stats');
-    if (stats) stats.textContent = `${data.total || results.length} match${(data.total || results.length) === 1 ? '' : 'es'}`;
+    const count = data.total || results.length;
+    if (stats) stats.textContent = `${count} match${count === 1 ? '' : 'es'} on server`;
+    try { console.log('[email-search]', JSON.stringify({ q, folder: folderAtStart, count, returned: results.length })); } catch {}
   } catch (e) {
-    sp.destroy();
-    grid.innerHTML = '<div class="email-loading">Search failed</div>';
+    if (stats) stats.textContent = originalStatsText || 'Search failed';
+    try { console.error('[email-search] fetch failed:', e); } catch {}
+  } finally {
+    _libSearchInFlight = false;
   }
+}
+
+// Custom dropdown for the email filter (All/Unread/Favorites/...). Replaces
+// the native <select> so each row can carry an SVG icon. The hidden
+// <select id="email-lib-filter"> stays as the value source — clicking a
+// menu item updates its value and dispatches 'change', so every existing
+// listener keeps working.
+const _EMAIL_FILTER_ICONS = {
+  'all':           '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+  'unread':        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>',
+  'favorites':     '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+  'undone':        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>',
+  'reminders':     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>',
+  'unanswered':    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>',
+  'pending_30d':   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  'stale_30d':     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="10" y1="14" x2="14" y2="18"/><line x1="14" y1="14" x2="10" y2="18"/></svg>',
+  'tag:urgent':    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  'tag:reply-soon':'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/><circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/></svg>',
+  'tag:spam':      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
+  'tag:newsletter':'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6z"/></svg>',
+  'tag:marketing': '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+};
+
+function _filterIcon(value) {
+  return _EMAIL_FILTER_ICONS[value] || _EMAIL_FILTER_ICONS['all'];
+}
+
+function _renderFilterPickerCurrent() {
+  const sel = document.getElementById('email-lib-filter');
+  const btn = document.getElementById('email-filter-btn');
+  if (!sel || !btn) return;
+  const value = sel.value || 'all';
+  const opt = sel.querySelector(`option[value="${CSS.escape(value)}"]`);
+  const label = opt ? opt.textContent : value;
+  const iconWrap = btn.querySelector('.email-filter-icon');
+  const labelEl = btn.querySelector('.email-filter-label');
+  if (iconWrap) iconWrap.innerHTML = _filterIcon(value);
+  if (labelEl) labelEl.textContent = label;
+}
+
+function _initFilterPicker() {
+  const sel = document.getElementById('email-lib-filter');
+  const picker = document.getElementById('email-filter-picker');
+  const btn = document.getElementById('email-filter-btn');
+  const menu = document.getElementById('email-filter-menu');
+  if (!sel || !picker || !btn || !menu || picker._wired) return;
+  picker._wired = true;
+
+  // Build menu from the hidden <select> contents (preserves optgroup labels).
+  const items = [];
+  for (const child of sel.children) {
+    if (child.tagName === 'OPTGROUP') {
+      items.push({ group: child.label });
+      for (const o of child.children) {
+        items.push({ value: o.value, label: o.textContent, group: child.label });
+      }
+    } else if (child.tagName === 'OPTION') {
+      items.push({ value: child.value, label: child.textContent });
+    }
+  }
+  menu.innerHTML = items.map(it => {
+    if (!it.value) {
+      return `<div class="email-filter-group">${it.group}</div>`;
+    }
+    return `<button type="button" role="option" class="email-filter-item" data-value="${it.value}">
+      <span class="email-filter-item-icon">${_filterIcon(it.value)}</span>
+      <span class="email-filter-item-label">${it.label}</span>
+    </button>`;
+  }).join('');
+
+  const close = () => {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  const open = () => {
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  };
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (menu.hidden) open(); else close();
+  });
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('.email-filter-item');
+    if (!item) return;
+    sel.value = item.dataset.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    close();
+  });
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !picker.contains(e.target)) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.hidden) {
+      e.stopPropagation();
+      close();
+    }
+  }, { capture: true });
+
+  _renderFilterPickerCurrent();
 }
 
 function _renderEmailLoading(grid) {
@@ -1577,17 +2535,18 @@ function _renderEmailLoading(grid) {
   } catch (_) {}
   const label = document.createElement('div');
   label.className = 'email-loading-label';
-  label.textContent = t('email.loading_emails');
+  label.textContent = 'Loading emails';
   wrap.appendChild(label);
   grid.appendChild(wrap);
   return sp;
 }
 
-// 使用当前文件夹的未读计数刷新模态框标题中的小强调药丸。
-// 当收件箱当前过滤到未读时，药丸翻转为显示总邮件数 + "all" 标签，
-// 因为点击它会关闭过滤器 — 因此标签需要展示将要执行的操作，
-// 而非当前视图。两个小侧载 fetch（limit=1，仅总数）；失败时静默 —
-// 如果请求出错，徽章仅保持隐藏。
+// Refreshes the small accent-pill in the modal title with the unread count
+// for the current folder. When the inbox is currently filtered to unread, the
+// pill flips to show the total-emails count + "all" label, because clicking
+// it would toggle the filter off — so the label needs to advertise the
+// action, not the now-current view. Two tiny side-fetches (limit=1, total
+// only); silent on failure — the badge just stays hidden if the request errors.
 async function _refreshUnreadBadge() {
   const badge = document.getElementById('email-lib-unread-badge');
   if (!badge) return;
@@ -1599,22 +2558,22 @@ async function _refreshUnreadBadge() {
     const n = data.total || 0;
     _syncUnreadTabBadge(n);
     if (state._libFilter === 'unread') {
-      // 当前正在查看未读邮件 — 显示点击后将带来的视图。
+      // Currently viewing unread — show what the click will take you to.
       try {
         const allRes = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(folder)}${_acct()}&limit=1&filter=all`);
         const allData = await allRes.json();
         const t = allData.total || 0;
         badge.textContent = `${t} all`;
-        badge.title = t('email.show_all_emails');
+        badge.title = 'Show all emails';
         badge.style.display = '';
       } catch (_) {
-        badge.textContent = t('email.show_all');
-        badge.title = t('email.show_all_emails');
+        badge.textContent = 'Show all';
+        badge.title = 'Show all emails';
         badge.style.display = '';
       }
     } else if (n > 0) {
       badge.textContent = n > 999 ? '999+ unread' : `${n} unread`;
-      badge.title = t('email.show_unread');
+      badge.title = 'Show unread emails';
       badge.style.display = '';
     } else {
       badge.style.display = 'none';
@@ -1635,13 +2594,14 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
   const grid = document.getElementById('email-lib-grid');
   if (!grid) { if (seq === _libLoadSeq) state._libLoading = false; return; }
 
-  // SWR：当加载真实文件夹的第一页且无搜索时，立即绘制缓存列表
-  //（无旋转器，无空白网格），然后在背后悄悄重新 fetch。
-  // 分页、搜索和计划虚拟文件夹跳过缓存并使用旧的旋转器路径。
-  // `force`（刷新按钮）仍可查询缓存以保持感知连续性，但添加
-  // 缓存破坏器以同时绕过服务端的 8 秒列表缓存。
-  // 账户/文件夹/过滤器更改传递 `useCache: false`，
-  // 以便前一视图的陈旧行永远不会闪现。
+  // SWR: when loading the first page of a real folder with no search,
+  // paint the cached list immediately (no spinner, no blank grid) and
+  // then quietly refetch behind it. Pagination, search, and the
+  // scheduled virtual folder skip the cache and use the old spinner
+  // path. `force` (Refresh button) can still consult the cache for
+  // perceptual continuity, but adds a cache-buster so the server's 8s
+  // list cache is bypassed too. Account/folder/filter changes pass
+  // `useCache: false` so stale rows from the previous view never flash.
   const cacheable =
     offsetAtStart === 0 &&
     !searchAtStart &&
@@ -1653,10 +2613,11 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
   if (cached) {
     state._libEmails = cached.emails || [];
     state._libTotal = cached.total || 0;
-    // 从缓存绘制时抑制打开级联动画 — 数据刚刚还在屏幕上，
-    // 因此每张卡片重新滑入感觉卡顿。同时防止级联动画在后台
-    // refetch 在 900ms 清理窗口内到达并将新卡片节点追加到仍带有类名的
-    // 网格中时重新触发。
+    // Suppress the open-cascade animation when we're painting from
+    // cache — the data was already on screen a moment ago, so sliding
+    // each card in fresh feels janky. Also prevents the cascade from
+    // re-firing when the bg refetch lands within the 900ms cleanup
+    // window and appends new card nodes into the still-classed grid.
     state._libJustOpened = false;
     const grid2 = document.getElementById('email-lib-grid');
     if (grid2) grid2.classList.remove('email-lib-just-opened');
@@ -1674,9 +2635,9 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
     } else {
       const accountQS = accountAtStart ? `&account_id=${encodeURIComponent(accountAtStart)}` : '';
       const attQS = hasAttachmentsAtStart ? '&has_attachments=1' : '';
-      // `&_=Date.now()` 绕过服务端的 8 秒列表缓存。默认打开
-      // 省略它以允许快速关闭/重新打开立即返回；刷新按钮传递
-      // `force: true` 来添加它。
+      // `&_=Date.now()` bypasses the server's 8s list cache. Default
+      // opens omit it so rapid close/reopen returns instantly; the
+      // Refresh button passes `force: true` to add it back.
       const buster = force ? `&_=${Date.now()}` : '';
       const res = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(folderAtStart)}${accountQS}&limit=100&offset=${offsetAtStart}&filter=${filterAtStart}${attQS}${buster}`);
       const data = await res.json();
@@ -1685,7 +2646,18 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
       state._libEmails = data.emails || [];
       state._libTotal = data.total || 0;
       if (sp) sp.destroy();
-      _renderGrid();
+      // If chip-bar pills are active, swap the snapshot to the freshly
+      // loaded list and re-apply the filter so pills persist across
+      // refreshes / folder switches instead of getting wiped.
+      const _activePills = (state._libSearchPills || []).length > 0
+                       || (state._libSearchDraft || '').length > 0;
+      if (_activePills) {
+        _libPreSearchEmails = state._libEmails.slice();
+        _libPreSearchTotal = state._libTotal;
+        _applyPillFilter();
+      } else {
+        _renderGrid();
+      }
       const stats = document.getElementById('email-lib-stats');
       if (stats) stats.textContent = `${state._libTotal} emails`;
       _refreshUnreadBadge();
@@ -1694,10 +2666,10 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
   } catch (e) {
     if (seq !== _libLoadSeq || accountAtStart !== (state._libAccountId || '')) return;
     if (sp) sp.destroy();
-    // 如果我们已绘制了缓存列表，保留在屏幕上 — 比擦除它显示
-    // "加载失败"更好，因为仍有可读内容。
+    // If we already painted the cached list, leave it on screen — beats
+    // wiping it for "Failed to load" when there's still readable content.
     if (!cached) {
-      const msg = e && e.message ? `${t('settings.failed_to_load')}: ${e.message}` : t('settings.failed_to_load');
+      const msg = e && e.message ? `Failed to load: ${e.message}` : 'Failed to load';
       grid.innerHTML = `<div class="email-loading">${_esc(msg)}${_emailSetupHintHtml()}</div>`;
       _wireEmailSetupHint(grid);
     }
@@ -1746,15 +2718,15 @@ async function _loadScheduled(grid, sp) {
     `;
     card.appendChild(content);
 
-    // 取消按钮
+    // Cancel button
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'memory-item-btn';
-    cancelBtn.title = t('email.cancel_scheduled');
+    cancelBtn.title = 'Cancel scheduled send';
     cancelBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
     cancelBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const { styledConfirm } = await import('./ui.js');
-      const ok = await styledConfirm(`${t('email.cancel_scheduled_confirm')}"${subject}"?`, { confirmText: t('email.cancel_send'), cancelText: t('email.keep'), danger: true });
+      const ok = await styledConfirm(`Cancel scheduled email "${subject}"?`, { confirmText: 'Cancel Send', cancelText: 'Keep', danger: true });
       if (!ok) return;
       try {
         await fetch(`${API_BASE}/api/email/scheduled/${it.id}`, { method: 'DELETE' });
@@ -1776,22 +2748,55 @@ function _renderGrid() {
   grid.innerHTML = '';
 
   let filtered = state._libEmails;
+  try { console.log('[email-search] _renderGrid: state._libEmails.length=', (state._libEmails || []).length, 'pills=', (state._libSearchPills || []).length, 'draft=', JSON.stringify(state._libSearchDraft || ''), 'libSearch=', JSON.stringify(state._libSearch || '')); } catch {}
 
-  // 应用排序
+  // Apply sort
   if (state._libSort === 'unread') {
     filtered = [...filtered].sort((a, b) => Number(a.is_read) - Number(b.is_read));
   } else if (state._libSort === 'favorites') {
     filtered = [...filtered].sort((a, b) => Number(b.is_flagged) - Number(a.is_flagged));
   }
   // 'recent' is the default order from the API
+  // Stable secondary sort: favorited (is_flagged) emails ALWAYS bubble to
+  // the top of whatever order the sort above produced. This pins the
+  // user's flagged items so they're the first thing in the inbox no
+  // matter which sort mode is active.
+  filtered = [...filtered].sort((a, b) => Number(!!b.is_flagged) - Number(!!a.is_flagged));
 
   if (filtered.length === 0) {
-    // 收件箱清零是一种成功 — 将消息与笑脸配对，
-    // 使空状态读作"全部处理完毕"，而不是"某些东西坏了"。
+    // Active search — don't flash "No emails": the IMAP fetch is still
+    // running. Show a "Searching…" placeholder until _doSearch resolves
+    // and renders again. Without this the user saw an empty state
+    // smiley for ~500ms between the optimistic pill-filter clear and
+    // the server response landing.
+    if (_libSearchInFlight) {
+      grid.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.className = 'email-loading';
+      wrap.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:24px;opacity:0.75;';
+      grid.appendChild(wrap);
+      // Whirlpool spinner for parity with the rest of the cookbook /
+      // doclib loaders. Falls back to plain text if the import fails.
+      import('./spinner.js').then(sp => {
+        if (!wrap.isConnected) return;
+        const w = sp.default.createWhirlpool(20);
+        w.element.style.cssText = 'margin:0;display:block;';
+        wrap.appendChild(w.element);
+        const lbl = document.createElement('span');
+        lbl.textContent = 'Searching…';
+        wrap.appendChild(lbl);
+      }).catch(() => {
+        wrap.textContent = 'Searching…';
+      });
+      return;
+    }
+    // Inbox-zero is a win — pair the message with a small smiley so the
+    // empty state reads as "all caught up", not "something's broken".
     const _smileyIco = '<span style="vertical-align:-3px;margin-left:6px;">' + emptyStateIcon('smiley') + '</span>';
-    // 仅当收件箱真正为空时才显示"在设置 › 集成中配置"提示 —
-    // 没有过滤器、没有搜索、没有源邮件。恰好为空的子过滤器
-    //（提醒、未读等）不是配置问题；那里的链接读起来毫无意义。
+    // Only show the "Set up at Settings › Integrations" hint when the inbox
+    // is TRULY empty — no filter, no search, no source emails. A sub-filter
+    // (reminders, unread, etc.) that happens to be empty isn't a setup
+    // problem; the link there reads as nonsense.
     const _isTrulyEmpty = (
       state._libEmails.length === 0
       && (!state._libFilter || state._libFilter === 'all')
@@ -1819,22 +2824,23 @@ function _renderGrid() {
     return;
   }
 
-  // 打开时级联：触发侧边栏章节使用的相同 domino-in 动画。
-  // 仅在库打开后的第一次网格渲染时触发 — 后续的重新渲染
-  //（过滤器/排序/搜索）需要即时完成。
+  // Cascade-on-open: fire the same domino-in animation the sidebar
+   // section uses. Only on the FIRST grid render after the library is
+   // opened — subsequent re-renders (filter/sort/search) need to be
+   // instant.
   if (state._libJustOpened) {
     grid.classList.add('email-lib-just-opened');
     state._libJustOpened = false;
-    // 级联后剥离类名，以免限制后续动画
-    //（如归档时的 FLIP 重排）。最坏情况持续时间与下面关键帧
-    // 集合中最长延迟匹配。
+    // Strip the class after the cascade so it doesn't restrict later
+    // animations (e.g. the FLIP reflow when archiving). Worst-case
+    // duration matches the longest delay in the keyframe set below.
     setTimeout(() => grid.classList.remove('email-lib-just-opened'), 900);
   }
   for (const em of filtered) {
     grid.appendChild(_createCard(em));
   }
 
-  // 如果深度链接要求展开特定邮件，现在执行并清除。
+  // If a deep-link asked us to expand a specific email, do it now and clear.
   if (state._libPendingExpandUid) {
     const target = filtered.find(e => String(e.uid) === String(state._libPendingExpandUid));
     const wantUid = state._libPendingExpandUid;
@@ -1858,7 +2864,7 @@ function _createCard(em) {
   card.dataset.uid = String(em.uid);
   if (state._selectMode && state._selectedUids.has(em.uid)) card.classList.add('selected');
 
-  // 选择模式下的复选框
+  // Checkbox in select mode
   if (state._selectMode) {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
@@ -1874,14 +2880,20 @@ function _createCard(em) {
     card.appendChild(cb);
   }
 
-  // 在"已发送"文件夹中，显示收件人 — 发件人始终是你，
-  // 这会隐藏实际有用的信息。在"已发送"之外，像以前一样显示发件人。
+  // In Sent folder, show the recipient(s) — the sender is always you and
+  // hides the actually useful info. Outside Sent, show the sender as before.
   const isSentFolderEarly = /sent/i.test(state._libFolder);
   let senderName;
+  let senderAddress;
   if (isSentFolderEarly) {
     senderName = _formatRecipients(em.to) || em.to || '(no recipient)';
+    // First address out of em.to for click-to-pill targeting.
+    const _firstTo = String(em.to || '').split(',')[0] || '';
+    const _m = _firstTo.match(/<([^>]+)>/);
+    senderAddress = (_m ? _m[1] : _firstTo).trim();
   } else {
     senderName = em.from_name || em.from_address;
+    senderAddress = em.from_address || '';
   }
   const color = _senderColor(senderName);
 
@@ -1908,8 +2920,8 @@ function _createCard(em) {
   const titleEl = document.createElement('span');
   titleEl.className = 'memory-item-title';
   titleEl.textContent = em.subject || '(no subject)';
-  // 悬停预览：通过原生浏览器工具提示直接在标题上显示缓存的 AI 摘要 —
-  // 无需打开邮件即可浏览。
+  // Hover preview: surface the cached AI summary directly on the title via
+  // a native browser tooltip — no need to open the email to skim it.
   if (em.cached_summary) {
     titleEl.title = em.cached_summary;
     titleEl.classList.add('email-card-has-summary');
@@ -1918,13 +2930,13 @@ function _createCard(em) {
 
   if (em.has_attachments) {
     const att = document.createElement('span');
-    att.title = t('email.has_attachments');
+    att.title = 'Has attachments';
     att.style.cssText = 'opacity:0.6;flex-shrink:0;display:inline-flex;';
     att.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
     titleRow.appendChild(att);
   }
 
-  // 完成对勾 + 未读圆点保持在左侧的主题旁。
+  // Done check + unread dot stay next to the subject on the left.
   const isSentFolder = /sent/i.test(state._libFolder);
   if (!isSentFolder) {
     const doneCheck = document.createElement('span');
@@ -1933,17 +2945,19 @@ function _createCard(em) {
     doneCheck.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     const _toggleDone = async (e) => {
       if (e) e.stopPropagation();
-        // 使用可见类作为真实来源 — em.is_answered 可能由于后台同步而过期，
-        // 这会导致用户点击却看不到 UI 变化。
+      // Use the visible class as source of truth — em.is_answered could
+      // be stale from a background sync, which would leave the user
+      // clicking and seeing no UI change.
       const wasActive = doneCheck.classList.contains('active');
       const newState = !wasActive;
       em.is_answered = newState;
       doneCheck.classList.toggle('active', newState);
       doneCheck.title = newState ? 'Mark not done' : 'Mark done';
-      // 在两个方向都进行动画，以便用户在取消对勾时也能获得明确反馈 —
-      // 否则悬停状态和激活状态看起来相同，点击感觉像是无效操作。
+      // Animate in both directions so the user gets explicit feedback when
+      // un-checking too — without this the hover state and the active state
+      // look identical, so the click felt like a no-op.
       doneCheck.classList.remove('just-checked', 'just-unchecked');
-      void doneCheck.offsetWidth; // 重新启动动画
+      void doneCheck.offsetWidth; // restart animation
       doneCheck.classList.add(newState ? 'just-checked' : 'just-unchecked');
       setTimeout(() => doneCheck.classList.remove('just-checked', 'just-unchecked'), 500);
       if (newState) {
@@ -1970,15 +2984,15 @@ function _createCard(em) {
 
   if (em.is_flagged) {
     const star = document.createElement('span');
-    star.title = t('email.favorited_email');
+    star.title = 'Favorited';
     star.style.cssText = 'color:var(--accent, var(--red));opacity:0.85;flex-shrink:0;display:inline-flex;';
-    star.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+    star.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     titleRow.appendChild(star);
   }
 
-  // 上一页/下一页箭头 — 仅在此卡片为展开状态时可见
-  //（通过 CSS 控制，折叠的卡片保持干净）。点击通过折叠
-  // 当前卡片并展开相邻卡片来导航。
+  // Prev/next arrows — visible only when this card is the expanded one
+  // (CSS-gated so collapsed cards stay clean). Click navigates by collapsing
+  // this card and expanding the neighbour.
   const navArrows = document.createElement('span');
   navArrows.className = 'email-card-nav-arrows';
   navArrows.innerHTML = `
@@ -2000,27 +3014,10 @@ function _createCard(em) {
     await _toggleCardPreview(sibling, nextEm);
     sibling.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
-  // 右侧群组：展开状态下的操作菜单 + 导航箭头。普通的
-  // `.memory-item-actions` 菜单在展开时隐藏，因此这将在
-  // 上一页/下一页控件旁边保持相同的邮件操作可用。
-  const rightCluster = document.createElement('span');
-  rightCluster.style.cssText = 'margin-left:auto;display:inline-flex;align-items:center;gap:6px;';
-  const headerMenuBtn = document.createElement('button');
-  headerMenuBtn.type = 'button';
-  headerMenuBtn.className = 'email-card-header-menu';
-  headerMenuBtn.title = t('email.actions');
-  headerMenuBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
-  headerMenuBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    _showCardMenu(em, headerMenuBtn);
-  });
-  // .email-card-nav-arrows 上的 CSS 规则仍然设置 margin-left:auto
-  //（当箭头单独在标题行中时需要）。在此包装器内部，
-  // 需要群组的 gap 来应用，因此取消该 auto。
-  navArrows.style.marginLeft = '0';
-  rightCluster.appendChild(headerMenuBtn);
-  rightCluster.appendChild(navArrows);
-  titleRow.appendChild(rightCluster);
+  // Just the nav arrows here — the per-card `.memory-item-actions` menu
+  // at the bottom of the card stays visible while expanded (see the CSS
+  // override below), so duplicating it in the header was redundant.
+  titleRow.appendChild(navArrows);
 
   content.appendChild(titleRow);
 
@@ -2028,18 +3025,18 @@ function _createCard(em) {
   meta.className = 'memory-item-meta';
   meta.style.cssText = 'font-size:10px;opacity:0.7;margin-top:2px;';
   const senderPrefix = isSentFolderEarly ? 'to ' : '';
-  meta.innerHTML = `<span class="email-meta-sender"><span style="opacity:0.55">${senderPrefix}</span><span style="color:${color};font-weight:600">${_esc(senderName)}</span></span><span class="email-meta-sep"> · </span><span class="email-meta-date">${_esc(dateStr)}</span>`;
+  meta.innerHTML = `<span class="email-meta-sender" data-email="${_esc(senderAddress || '')}" data-name="${_esc(senderName || '')}"><span style="opacity:0.55">${senderPrefix}</span><span style="color:${color};font-weight:600">${_esc(senderName)}</span></span><span class="email-meta-sep"> · </span><span class="email-meta-date">${_esc(dateStr)}</span>`;
   content.appendChild(meta);
 
   card.appendChild(content);
 
-  // 每张卡片菜单按钮（...菜单）
+  // Per-card menu button (... menu)
   if (!state._selectMode) {
     const actionsWrap = document.createElement('div');
     actionsWrap.className = 'memory-item-actions';
     const menuBtn = document.createElement('button');
     menuBtn.className = 'memory-item-btn';
-    menuBtn.title = t('email.actions');
+    menuBtn.title = 'Actions';
     menuBtn.style.position = 'relative';
     menuBtn.style.top = '-1px';
     menuBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
@@ -2050,8 +3047,8 @@ function _createCard(em) {
     actionsWrap.appendChild(menuBtn);
     card.appendChild(actionsWrap);
 
-    // 长按行任意位置打开相同的操作菜单 — 与
-    // 聊天 / 归档 / 研究 / 文档标签页的长按 UX 匹配。
+    // Long-press anywhere on the row opens the same actions menu — matches
+    // the chats / archive / research / documents tabs' long-press UX.
     let _hold = null, _holdStart = null;
     const _cancelHold = () => { if (_hold) { clearTimeout(_hold); _hold = null; } _holdStart = null; };
     card.addEventListener('pointerdown', (e) => {
@@ -2075,7 +3072,7 @@ function _createCard(em) {
     card.addEventListener('pointercancel', _cancelHold);
   }
 
-  // 点击处理器 — 切换预览展开
+  // Click handler — toggle preview expansion
   card.addEventListener('click', async (e) => {
     if (card._suppressNextClick) { card._suppressNextClick = false; return; }
     if (state._selectMode) {
@@ -2129,13 +3126,19 @@ function _prefetchAdjacentEmails(card, count = 1) {
   const target = targets.find(t => t?.dataset?.uid);
   const uid = target?.dataset?.uid;
   if (!uid) return;
-  const key = `${state._libAccountId || ''}|${state._libFolder}|${uid}`;
+  // Use the email's actual folder when it was stamped by the search
+  // endpoint; otherwise default to the currently-selected folder.
+  const _emFold = (() => {
+    const emObj = (state._libEmails || []).find(e => String(e.uid) === String(uid));
+    return (emObj && emObj.folder) || state._libFolder || 'INBOX';
+  })();
+  const key = `${state._libAccountId || ''}|${_emFold}|${uid}`;
   if (_emailReadPrefetching.has(key) || _emailReadPrefetching.size > 0) return;
   if (_emailReadPrefetchTimer) clearTimeout(_emailReadPrefetchTimer);
   _emailReadPrefetchTimer = setTimeout(() => {
     _emailReadPrefetchTimer = null;
     _emailReadPrefetching.add(key);
-    fetch(`${API_BASE}/api/email/read/${encodeURIComponent(uid)}?folder=${encodeURIComponent(state._libFolder)}${_acct()}&mark_seen=false`)
+    fetch(`${API_BASE}/api/email/read/${encodeURIComponent(uid)}?folder=${encodeURIComponent(_emFold)}${_acct()}&mark_seen=false`)
       .catch(() => {})
       .finally(() => _emailReadPrefetching.delete(key));
   }, 900);
@@ -2143,7 +3146,10 @@ function _prefetchAdjacentEmails(card, count = 1) {
 
 async function _toggleCardPreview(card, em) {
   const accountAtStart = state._libAccountId || '';
-  const folderAtStart = state._libFolder || 'INBOX';
+  // Prefer the per-email folder stamped by the search endpoint (results
+  // from "All Mail" carry folder="[Gmail]/All Mail"). Falls back to the
+  // currently-selected folder for normal inbox cards.
+  const folderAtStart = (em && em.folder) || state._libFolder || 'INBOX';
   const uidAtStart = String(em?.uid || card?.dataset?.uid || '');
   const grid = card.closest('.doclib-grid');
   const gridRect = grid?.getBoundingClientRect?.();
@@ -2157,7 +3163,7 @@ async function _toggleCardPreview(card, em) {
     Math.min(Math.max(260, window.innerHeight * 0.56), gridRect?.height || window.innerHeight)
   );
 
-  // 已展开 — 折叠
+  // Already expanded — collapse
   if (card.classList.contains('email-card-expanded')) {
     card.classList.remove('email-card-expanded');
     card.classList.remove('doclib-card-expanded');
@@ -2169,7 +3175,7 @@ async function _toggleCardPreview(card, em) {
     return;
   }
 
-  // 折叠其他已展开的卡片
+  // Collapse any other expanded card
   if (grid) {
     grid.querySelectorAll('.email-card-expanded').forEach(c => {
       c.classList.remove('email-card-expanded');
@@ -2183,20 +3189,27 @@ async function _toggleCardPreview(card, em) {
   card.classList.add('email-card-expanded');
   card.classList.add('doclib-card-expanded');
   card.style.minHeight = `${Math.round(stableOpenHeight)}px`;
+  // Pull the card into view in case the user clicked an email further up
+  // the list whose top is partially scrolled off the viewport. Wait for
+  // the layout to settle (minHeight just changed) before scrolling so
+  // the browser scrolls toward the post-expansion position.
+  requestAnimationFrame(() => {
+    try { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+  });
   if (!em.is_read) {
     _syncEmailReadState(em.uid, true);
     fetch(`${API_BASE}/api/email/mark-read/${em.uid}?folder=${encodeURIComponent(folderAtStart)}${_acct()}`, { method: 'POST' })
       .catch(err => console.error('Failed to mark email read:', err));
   }
-  // 模态框上的类钩子，使头部隐藏/填充规则在不支持 :has()
-  // 的浏览器（Firefox 移动版）上也能工作 — 下面的 :has() 版本
-  // 保留为桌面路径。
+  // Class hook on the modal so the header-hide / padding rules work on
+  // browsers without :has() support (Firefox mobile) — the :has() versions
+  // below stay as the desktop path.
   if (modal && modalRect?.height) {
     modal.style.setProperty('--email-reading-modal-min-h', `${Math.round(modalRect.height)}px`);
   }
   modal?.classList.add('email-reading');
 
-  // 使用旋转器显示加载阅读器
+  // Show loading reader with whirlpool spinner
   const reader = document.createElement('div');
   reader.className = 'email-card-reader email-card-reader-loading';
   reader.style.minHeight = `${Math.max(180, Math.round(stableOpenHeight - 70))}px`;
@@ -2225,16 +3238,18 @@ async function _toggleCardPreview(card, em) {
       return;
     }
 
-    // 本地标记为已读
+    // Mark as read locally
     _syncEmailReadState(em.uid, true);
     _prefetchAdjacentEmails(card);
+    _stampReaderContext(reader, { ...em, ...data }, state._libFolder, state._libAccountId);
 
-    // 使用共享辅助函数构建附件包裹，以便签名图像过滤器
-    //（小内联 PNG/JPG、Outlook image001 占位符、logo/banner 文件）
-    // 在此处也适用。当所有附件都被过滤掉时回退到 ''。
+    // Build the attachments wrap using the shared helper so the signature-
+    // image filter (small inline PNGs/JPGs, Outlook image001 placeholders,
+    // logo/banner files) is applied here too. Falls back to '' when every
+    // attachment is filtered out.
     const attsHtml = _buildAttsHtmlFor(em.uid, data);
 
-    // 格式化日期为简洁形式："Mar 21, 2026 14:32"
+    // Format date nicely (compact): "Mar 21, 2026 14:32"
     let dateDisplay = data.date || '';
     try {
       if (data.date) {
@@ -2248,7 +3263,7 @@ async function _toggleCardPreview(card, em) {
       }
     } catch (_) {}
 
-    // 从逗号分隔的地址列表构建收件人芯片组
+    // Build recipient chip group from a comma-separated address list
     const buildRecipients = (str) => {
       if (!str) return '';
       const addrs = _splitRecipientList(str);
@@ -2259,26 +3274,26 @@ async function _toggleCardPreview(card, em) {
       }).join('');
     };
 
-    // 构建 From 芯片 — 单个芯片带有姓名，点击显示地址
+    // Build the From chip too — single chip with name, click reveals address
     const fromChip = _recipientChipHtml(`${data.from_name || ''} <${data.from_address || ''}>`, data.from_name || data.from_address, 'from-chip');
 
     reader.innerHTML = `
       <div class="email-reader-header">
         <div class="email-reader-meta">
-          <div class="email-reader-meta-row"><strong>From:</strong><span class="recipient-chips">${fromChip}</span></div>
-          ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${buildRecipients(data.to)}</span></div>` : ''}
-          ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${buildRecipients(data.cc)}</span></div>` : ''}
-        </div>
-        <div class="email-reader-actions">
-          <div class="email-reader-actions-row email-reader-actions-row-primary">
+          <div class="email-reader-meta-row email-reader-meta-from">
+            <strong>From:</strong>
+            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="Show recipients"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
+          </div>
+          ${(data.to || data.cc) ? `<div class="email-reader-meta-details" hidden>
+            ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${buildRecipients(data.to)}</span></div>` : ''}
+            ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${buildRecipients(data.cc)}</span></div>` : ''}
+          </div>` : ''}
+          <div class="email-reader-actions-inline">
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply (suggest a draft)'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
             <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="Reply"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">Reply</span></button>
             ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="Reply All"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">Reply all</span></button>` : ''}
             <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="Forward"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">Forward</span></button>
-          </div>
-          <div class="email-reader-actions-row email-reader-actions-row-secondary">
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply (suggest a draft)'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
             <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="Summarize">${_summaryIcon(data)}<span class="reader-btn-label">Summary</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="from-sender" title="Search text in this thread"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="reader-btn-label">Search</span></button>
             <div class="email-reader-more-wrap" style="position:relative">
               <button class="memory-toolbar-btn reader-icon-btn" data-act="more" title="More actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><span class="reader-btn-label">More</span></button>
             </div>
@@ -2292,7 +3307,7 @@ async function _toggleCardPreview(card, em) {
     reader.classList.remove('email-card-reader-loading');
     reader.style.minHeight = '';
 
-    // 附件头部点击切换折叠/展开（与摘要相同的 UX）。
+    // Attachment header click toggles fold/unfold (same UX as the summary).
     const attsWrap = reader.querySelector('.email-reader-atts-wrap');
     if (attsWrap) {
       const attsToggle = attsWrap.querySelector('.email-reader-atts-header');
@@ -2310,10 +3325,11 @@ async function _toggleCardPreview(card, em) {
       }
     }
 
-    // 附件芯片点击：在移动端和桌面端都可用。iOS Safari 忽略
-    // 实际 DOM 中 <a> 之外的编程 <a download>。在移动端打开新标签页中的 URL，
-    // 以便操作系统选择操作；在桌面端 fetch + blob 下载以保留文件名且不触发
-    // 弹出窗口拦截器。
+    // Attachment chip clicks: works on both mobile (iOS Safari ignores
+    // programmatic <a download> outside an actual <a> in the DOM) and desktop.
+    // On mobile we open the URL in a new tab so the OS picks the action; on
+    // desktop we fetch + blob-download so the filename is preserved and no
+    // popup-blocker fires.
     const _isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     _wireAttachmentHandlers(reader, state._libFolder);
@@ -2345,22 +3361,25 @@ async function _toggleCardPreview(card, em) {
       ev.stopPropagation();
       await _summarizeEmail(reader, data, ev.currentTarget);
     });
-    // from-sender / thread-search 搜索按钮暂时禁用 —
-    // 搜索 + 线程侧边栏 UX 太不稳定无法发布。从每个阅读器渲染路径中
-    // 物理移除此按钮。通过删除这些 .remove() 行 + CSS 规则可重新启用。
+    _wireMetaToggle(reader);
+    // from-sender / thread-search Search button is DISABLED for now —
+    // the search + threaded sidebar UX is too buggy to ship. Physically
+    // remove it from every reader render path. Re-enable by deleting
+    // these .remove() lines + the CSS rule.
     reader.querySelector('[data-act="from-sender"]')?.remove();
     reader.querySelector('[data-act="from-sender"]')?.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       await _toggleFromSenderPanel(reader, data, ev.currentTarget);
     });
 
-    // 刷新此新展开卡片的标题行上一页/下一页箭头。
+    // Refresh the title-row prev/next arrows for this newly-expanded card.
     _syncCardNavArrows(card);
 
-    // 在阅读器上水平滑动切换到上一封/下一封邮件 — 但
-    // 仅当底层内容无法在滑动方向上进一步滚动时才切换。
-    // 如果邮件正文比视口宽（带表格的 HTML 邮件、嵌入图片），
-    // 正常水平滚动优先；导航仅在用户到达边缘后才会触发。
+    // Horizontal swipe on the reader switches to prev/next email — but
+    // only when the underlying content can't scroll further in the swipe
+    // direction. If the email body is wider than the viewport (HTML emails
+    // with tables, embedded images), normal horizontal scroll wins; nav
+    // only fires once the user has reached an edge.
     {
       let _sx = 0, _sy = 0, _swiping = false, _intent = null;
       let _scrollEl = null;
@@ -2405,20 +3424,21 @@ async function _toggleCardPreview(card, em) {
         const dx = t.clientX - _sx;
         const dy = t.clientY - _sy;
         if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dy) > Math.abs(dx)) return;
-        // 如果可水平滚动元素捕获了滑动，让它滚动而非切换邮件 —
-        // 除非用户已经处于边缘（scrollLeft 无法在该方向进一步移动）。
+        // If a horizontally-scrollable element captured the swipe, let it
+        // scroll instead of changing email — UNLESS the user was already
+        // at the edge (scrollLeft can't move further in that direction).
         if (_scrollEl) {
           const max = _scrollEl.scrollWidth - _scrollEl.clientWidth;
           const atLeftEdge = _scrollEl.scrollLeft <= 2;
           const atRightEdge = _scrollEl.scrollLeft >= max - 2;
-          // 向左滑动(dx<0)显示右侧内容 → 如果不在右边缘，
-          // 这是滚动而非导航。
+          // Swiping LEFT (dx<0) reveals content to the right → if not at
+          // right edge, that's a scroll, not a nav.
           if (dx < 0 && !atRightEdge) return;
-          // 向右滑动(dx>0)显示左侧内容 → 如果不在左边缘，
-          // 这是滚动而非导航。
+          // Swiping RIGHT (dx>0) reveals content to the left → if not at
+          // left edge, that's a scroll, not a nav.
           if (dx > 0 && !atLeftEdge) return;
-          // 如果浏览器在此手势期间已经滚动，无条件视为滚动
-          //（用户显然想要平移）。
+          // If the browser already scrolled during this gesture, treat as
+          // scroll regardless (the user clearly wanted to pan).
           if (_scrollEl.scrollLeft !== _startScrollLeft) return;
         }
         const dir = dx < 0 ? 1 : -1;
@@ -2427,15 +3447,15 @@ async function _toggleCardPreview(card, em) {
       }, { passive: true });
     }
 
-    // 如果邮件有预缓存的摘要，立即显示。折叠状态通过渲染器中的
-    // _summaryCollapsedPref 持久化。
+    // If the email has a pre-cached summary, show it immediately. Fold
+    // state is persisted via _summaryCollapsedPref inside the renderer.
     if (data.cached_summary) {
       const sumBtn = reader.querySelector('[data-act="summarize"]');
       _showCachedSummary(reader, data.cached_summary, sumBtn);
     }
 
     _wireRecipientChips(reader);
-    // 始终停止冒泡，以便在读邮件时卡的点击不会触发。
+    // Always stop bubbling so the card's click doesn't fire while reading.
     reader.addEventListener('click', (ev) => { ev.stopPropagation(); });
   } catch (e) {
     reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">Failed to load email</div>`;
@@ -2443,31 +3463,33 @@ async function _toggleCardPreview(card, em) {
 }
 
 /**
- * 将可能的签名块包裹在折叠的 <details> 中，以防止其占据整个阅读器。
- * 我们按优先级顺序尝试：
- *   1. 邮件客户端签名包裹器 — Gmail 的 `gmail_signature` div 是显式的，
- *      无需猜测。Apple Mail 的 data-smartmail 同理。
- *   2. 标准的 "-- " RFC 3676 签名分隔符。
- *   3. 常见的落款短语（"Best regards"、"Cheers" 等）在自己的行上 —
- *      较模糊，但能捕获没有破折号标记的签名。
- *   4. "Sent from my iPhone/Android" / "Get Outlook for ..." 移动客户端
- *      样板文本。
- * 任何匹配的内容从标记处到正文末尾都被包裹起来。
+ * Wrap a probable signature block in a collapsed <details> so it stops
+ * eating the whole reader. We try, in priority order:
+ *   1. Mail-client signature wrappers — Gmail's `gmail_signature` div is
+ *      explicit, no guessing required. Same for Apple Mail's data-smartmail.
+ *   2. The standard "-- " RFC 3676 sig delimiter.
+ *   3. A common closing phrase ("Best regards", "Cheers", etc.) on its own
+ *      line — fuzzier, but catches sigs without the dash marker.
+ *   4. "Sent from my iPhone/Android" / "Get Outlook for ..." mobile-client
+ *      boilerplate.
+ * Anything matched gets wrapped from the marker through end-of-body.
  */
 /**
- * 渲染带签名/引用折叠的邮件正文。如果后端缓存了 LLM 检测到的
- * 边界偏移量（data.boundaries），使用它们进行基于纯文本位置的精确折叠。
- * 否则回退到正则检测器。当边界存在时纯文本分支始终优先，
- * 因为偏移量是基于纯文本计算的。
+ * Render the email body with sig/quote folds. If the backend has cached
+ * LLM-detected boundary offsets (data.boundaries), use those for an exact
+ * fold based on plain-text positions. Otherwise fall back to the regex
+ * detectors. The plain-body branch is always preferred when boundaries
+ * exist because the offsets are computed against plain text.
  */
-// 全局逃生舱口 — 当服务端的线程解析器出错时（偶尔会将单个回复
-// 拆分成两个虚假的"轮次"，将签名/免责声明当作独立消息处理），
-// 用户可以关闭此选项以回退到普通渲染。重启后仍然保留。
+// Global escape hatch — when the server's thread parser misfires (it
+// occasionally splits a single reply into two bogus "turns" by treating a
+// signature/disclaimer as its own message), the user can flip this off to
+// fall back to plain rendering. Survives reloads.
 const _BUBBLES_DISABLED_KEY = 'odysseus.email.bubblesDisabled';
-// 线程化聊天气泡邮件视图目前已禁用 — 太不稳定无法发布。
-// 通过始终返回 true 来强制使用纯文本渲染。
-// 重新启用需恢复 localStorage 支持的主体 + 阅读器
-// 更多菜单中的切换菜单项。
+// Threaded chat-bubble email view is DISABLED for now — too buggy to
+// ship. Force plain-text rendering everywhere by always returning true.
+// Re-enable by restoring the localStorage-backed body + the toggle
+// menu item in the reader's More menu.
 function _bubblesDisabled() {
   return true;
 }
@@ -2482,9 +3504,9 @@ function _renderEmailBody(data) {
   const fromAddr = String(data?.from_address || '').toLowerCase().trim();
   const isMine = !!fromAddr && _meEmailAddrs().has(fromAddr);
 
-  // 用户撰写的消息（已发送文件夹或收件箱中的自己发送副本）
-  // 是当前撰写的文本。不要让缓存的边界或 HTML 引用解析
-  // 将整个内容隐藏在"较早回复"后面。
+  // Messages authored by the user (Sent folder or self-sent copies in INBOX)
+  // are current authored text. Do not let cached boundaries or HTML
+  // blockquote parsing hide the whole thing behind "Earlier reply".
   if ((isSentFolder || isMine) && plain) {
     const plainTurns = _renderPlaintextThread(plain);
     if (plainTurns && !/^\s*<details\b/i.test(plainTurns.trim())) {
@@ -2493,9 +3515,9 @@ function _renderEmailBody(data) {
     return _foldSignature(_escLinkify(plain).replace(/\n/g, '<br>'), null);
   }
 
-  // 优先使用服务端缓存的线程解析 — 这是最丰富的结构，
-  // 也是聊天气泡布局的基础。当用户手动禁用
-  // 气泡渲染时跳过。
+  // Prefer the server-cached thread parse — that's the richest structure
+  // and the one the chat-bubble layout is built around. Skip when the user
+  // has manually disabled bubble rendering.
   if (!_bubblesDisabled() && Array.isArray(data && data.thread_turns) && data.thread_turns.length) {
     return _foldSignature(
       _renderTurnsAsBubbles(data.thread_turns, data),
@@ -2503,10 +3525,10 @@ function _renderEmailBody(data) {
     );
   }
   const b = data && data.boundaries;
-  // 当存在缓存边界且有纯文本来切分时使用缓存边界
+  // Use cached boundaries when present AND we have plain-text body to slice
   if (b && plain && (b.sig_start >= 0 || b.quote_start >= 0)) {
-    // 选择两者中较早的作为"此点以下的所有内容都是可折叠的"的切分点，
-    // 但分别用各自的标签渲染签名和引用。
+    // Pick the EARLIER of the two as the cut for "everything below this is
+    // foldable", but render sig and quote with their own labels.
     let sig = (typeof b.sig_start === 'number' && b.sig_start >= 0) ? b.sig_start : -1;
     let quote = (typeof b.quote_start === 'number' && b.quote_start >= 0) ? b.quote_start : -1;
     // Clamp
@@ -2545,13 +3567,13 @@ function _renderEmailBody(data) {
         out += '<details class="email-sig-fold">' + _foldSummary('Signature', _SIG_ICON)
              + sigHtml + '</details>';
       } else {
-        // 短落款 — 保持内联；折叠只会增加样板。
+        // Short closing — leave inline; folding would just add chrome.
         out += sigHtml;
       }
     }
     return out;
   }
-  // 回退：客户端解析（HTML 或纯文本）。
+  // Fallback: client-side parse (HTML or plaintext).
   const hintSig = (data && data.sender_signature) || null;
   const isHtml = !!data.body_html;
   let rendered;
@@ -2579,12 +3601,12 @@ function _safeRenderEmailBody(data) {
   }
 }
 
-// ── 邮件线程的聊天气泡渲染 ──
-// 每个解析的轮次渲染为一个聊天气泡。活动账户的
-// 发出的回复气泡右对齐；其他人的气泡左对齐。
-// 顺序颠倒，使最旧的消息位于对话顶部，
-// 最新的（当前正在阅读的消息）位于底部 —
-// 符合人们对聊天的心理模型。
+// ── Chat-bubble rendering for email threads ──
+// Each parsed turn renders as a chat bubble. Bubbles for the active
+// account's outgoing replies align right; everyone else aligns left.
+// Order is reversed so the oldest message sits at the top of the
+// conversation and the newest (the message currently being read) sits
+// at the bottom — matches the mental model people have from chat.
 
 function _meEmailAddrs() {
   const set = new Set();
@@ -2596,7 +3618,7 @@ function _meEmailAddrs() {
 }
 
 // _parseTurnMeta / _formatBubbleDate / _formatRecipients / _senderColor /
-// _initials 位于 ./emailLibrary/utils.js
+// _initials live in ./emailLibrary/utils.js
 
 function _renderTurnsAsBubbles(turns, data) {
   if (!Array.isArray(turns) || !turns.length) return '';
@@ -2606,12 +3628,12 @@ function _renderTurnsAsBubbles(turns, data) {
   const lvl0Author = (data && (data.from_name || data.from_address)) || '';
   const lvl0Date = _formatBubbleDate(data && data.date);
 
-  // 最新回复在顶部，较旧的历史记录在下方。轮次按浅→深排列
-  //（级别 0 = 当前回复，更深级别 = 较早的引用材料），因此我们
-  // 按源顺序渲染而不反转。
+  // Newest reply on top, older history below. Turns come ordered shallow→deep
+  // (level 0 = current reply, deeper levels = older quoted material) so we
+  // render in source order without reversing.
   const ordered = turns.slice();
 
-  // 收集每个轮次的发件人身份 + 频率，用于下面的无自我情况。
+  // Gather per-turn sender identity + frequency for the no-self case below.
   const turnIdentity = ordered.map((t) => {
     if (t.level === 0) {
       return { email: lvl0Email, author: lvl0Author };
@@ -2620,9 +3642,10 @@ function _renderTurnsAsBubbles(turns, data) {
     return { email: p.email, author: p.author };
   });
   const anyMine = turnIdentity.some(x => x.email && mineSet.has(x.email));
-  // 当用户不是此线程的参与者时（转发链、历史档案等），
-  // 将两个最频繁的发件人分配到相反的两侧，以便对话仍能左右阅读。
-  // 第三及更多参与方退回到哈希取模 2。
+  // When the user isn't a participant in this thread (forwarded chains,
+  // historical archives, etc.), assign the two most frequent senders to
+  // opposite sides so the conversation still reads side-to-side. Third+
+  // parties fall back to hash mod 2.
   const sideForKey = (() => {
     if (anyMine) return null;
     const freq = new Map();
@@ -2641,7 +3664,7 @@ function _renderTurnsAsBubbles(turns, data) {
       if (!key) return 'theirs';
       if (key === leftKey)  return 'theirs';
       if (key === rightKey) return 'mine';
-      // 为第三及以上参与方使用稳定哈希。
+      // Stable hash for 3rd+ parties.
       let h = 0;
       for (let i = 0; i < key.length; i++) h = ((h << 5) - h + key.charCodeAt(i)) | 0;
       return (h & 1) ? 'mine' : 'theirs';
@@ -2660,7 +3683,7 @@ function _renderTurnsAsBubbles(turns, data) {
       author = p.author || (t.meta || 'Earlier reply');
       date = p.date;
     }
-    // 无自我回退：按每个发件人侧边映射路由。
+    // No-self fallback: route by per-sender side mapping.
     if (sideForKey) {
       const id = turnIdentity[i];
       const key = (id.email || id.author || '').toLowerCase();
@@ -2690,8 +3713,8 @@ function _renderTurnsAsBubbles(turns, data) {
 }
 
 /**
- * 将服务端缓存的线程轮次（{level, body_html, meta} 列表）
- * 渲染为客户端解析器产生的相同嵌套卡片结构。
+ * Render server-cached thread turns (list of {level, body_html, meta})
+ * into the same nested-card structure the client-side parser produces.
  */
 function _renderTurnsFromServer(turns) {
   if (!Array.isArray(turns) || !turns.length) return '';
@@ -2732,7 +3755,7 @@ function _renderTurnsFromServer(turns) {
     const w = wrap(top);
     if (stack.length) stack[stack.length - 1].html += w; else out += w;
   }
-  // 为底部折叠标记圆角。
+  // Mark the bottom-most fold for rounded corners.
   const lastIdx = out.lastIndexOf('<details class="email-thread-turn email-quote-fold"');
   if (lastIdx >= 0) {
     out = out.slice(0, lastIdx)
@@ -2745,19 +3768,19 @@ function _renderTurnsFromServer(turns) {
 }
 
 /**
- * 将邮件正文的回复链解析为轮次卡片堆栈。
- * 每个轮次 = { author, date, bodyHtml, nested[] }，其中 body 是
- * 在下一个引用边界之前的全部内容，`nested` 是内部的子线程
- *（递归解析）。如果邮件没有引用线程可解析（单条消息，无需折叠），
- * 返回 null。
+ * Parse an email body's reply chain into a stack of turn-cards.
+ * Each turn = { author, date, bodyHtml, nested[] } where the body is
+ * everything UP TO the next quote boundary, and `nested` is the sub-thread
+ * inside (recursively parsed). Returns null if the email has no quoted
+ * thread to parse (single message, no folds needed).
  */
-// ── 受 Talon 启发的多语言引用检测模式 ──
-// 来源：
-//   github.com/mailgun/talon（HTML/文本引用检测）
-//   github.com/crisp-oss/email-reply-parser（语言环境列表）
+// ── Talon-inspired multilingual quote-detection patterns ──
+// Sources:
+//   github.com/mailgun/talon (HTML/text quote detection)
+//   github.com/crisp-oss/email-reply-parser (locale list)
 //
-// _TALON_* / _SIG_BLOAT_MIN_CHARS 位于 ./emailLibrary/utils.js
-// _SIG_ICON / _QUOTE_ICON 位于 ./emailLibrary/signatureFold.js
+// _TALON_* / _SIG_BLOAT_MIN_CHARS live in ./emailLibrary/utils.js
+// _SIG_ICON / _QUOTE_ICON live in ./emailLibrary/signatureFold.js
 
 function _renderThreadStructure(html) {
   if (!html || typeof html !== 'string' || html.length > 200000) return null;
@@ -2767,14 +3790,15 @@ function _renderThreadStructure(html) {
   const root = doc.getElementById('__t');
   if (!root) return null;
 
-  // 找到顶级 blockquote（不在另一个 blockquote 内部嵌套的）。
+  // Find top-level blockquotes (not nested inside another blockquote).
   const tops = Array.from(root.querySelectorAll('blockquote')).filter(b =>
     !b.parentElement.closest('blockquote')
   );
   if (!tops.length) return null;
 
-  // 构建当前消息正文：根目录中在第一个顶级 blockquote
-  // 之前的所有内容，减去引入它的 "On <date>, <author> wrote:" 归属行。
+  // Build the current-message body: everything in root up to the first
+  // top-level blockquote, minus the "On <date>, <author> wrote:" attribution
+  // line that introduces it.
   const head = doc.createElement('div');
   let cursor = root.firstChild;
   while (cursor && cursor !== tops[0]) {
@@ -2782,24 +3806,25 @@ function _renderThreadStructure(html) {
     head.appendChild(cursor);
     cursor = next;
   }
-  // 从 `head` 中剥离尾部的 "On <date>, <name> wrote:" / Outlook 风格归属，
-  // 因为相同的信息会出现在轮次头部中。
+  // Strip trailing "On <date>, <name> wrote:" / Outlook-style attribution
+  // from `head` since the same info will appear in the turn header.
   let attribution = _harvestAttribution(head);
 
-  // 递归解析每个顶级 blockquote 为一个轮次（及其嵌套链）。
+  // Recursively parse each top-level blockquote into a turn (and its nested chain).
   const turnsHtml = [];
   for (let i = 0; i < tops.length; i++) {
     const bq = tops[i];
-    // blockquote 可能在内部第一个文本中包含 Outlook 风格的
-    // "From: / Sent: / Subject:" 头部。将其提取为轮次元数据。
+    // The blockquote may have an Outlook-style "From: / Sent: / Subject:"
+    // header inside as the first text. Extract that as the turn meta.
     const meta = _extractTurnMetaFromBlockquote(bq) || attribution || _extractQuoteMeta(bq.innerHTML);
     const innerHtml = bq.innerHTML;
 
-    // 启发式：如果一个 blockquote 没有可检测的归属（无 "From:"，
-    // 无 "On <date>... wrote:"）且其内容匹配签名风格模式
-    //（公司免责声明、"registered in"、法律声明、仅姓名 + 职位），
-    // 将其视为签名折叠而非较早回复。这阻止了将签名包裹在
-    // <blockquote> 中的邮件客户端使签名显示为幻影先前邮件。
+    // Heuristic: if a blockquote has no detectable attribution (no "From:",
+    // no "On <date>... wrote:") AND its content matches signature-style
+    // patterns (corporate disclaimer, "registered in", legal notices, just
+    // a name + title), treat it as a Signature fold instead of an Earlier
+    // Reply. This stops mail clients that wrap signatures in <blockquote>
+    // from making the signature appear as a phantom prior email.
     if (!meta && _looksLikeSignature(innerHtml)) {
       turnsHtml.push(
         '<details class="email-sig-fold">'
@@ -2811,8 +3836,8 @@ function _renderThreadStructure(html) {
       continue;
     }
 
-    // 递归渲染此 blockquote 内部（可能包含其自己的
-    // 嵌套 blockquote，表示更早的回复）。
+    // Recursively render the inside of this blockquote (which may contain
+    // its own nested blockquotes representing earlier replies).
     const nested = _renderThreadStructure(innerHtml);
     const bodyHtml = nested || innerHtml;
     const isLast = i === tops.length - 1;
@@ -2822,40 +3847,41 @@ function _renderThreadStructure(html) {
         + `<div class="email-thread-turn-body">${bodyHtml}</div>`
       + '</details>'
     );
-    // 只有第一个轮次使用提取的归属；更深层次的轮次
-    // 从 blockquote 内部获取自己的归属。
+    // Only the first turn uses the harvested attribution; deeper turns
+    // get their own from inside the blockquote.
     attribution = null;
   }
 
   return head.innerHTML + turnsHtml.join('');
 }
 
-// 看起来像签名/公司免责声明而非引用邮件。
-// 用于将一些发件人包裹其签名+免责声明的无归属 blockquote
-//（Outlook、EY、大公司）从"较早回复"降级为适当的签名折叠。
-// 保守 — 仅当没有引用回复标记且匹配强烈的公司噪音短语时才触发。
+// Looks like a signature / corporate disclaimer rather than a quoted email.
+// Used to demote attribution-less blockquotes that some senders wrap their
+// sig+disclaimer in (Outlook, EY, big firms) from "Earlier reply" to a
+// proper Signature fold. Conservative — only fires when there's no quoted
+// reply markers AND it matches strong corporate-noise phrases.
 // _looksLikeSignature / _harvestAttribution / _extractTurnMetaFromBlockquote
-// 位于 ./emailLibrary/signatureFold.js
+// live in ./emailLibrary/signatureFold.js
 
 /**
- * 将任何引用的回复链包裹在折叠的 <details> 中，以免深度邮件线程
- * 主导阅读器。检测：
- *   - <blockquote> 标签（Gmail / 本地引用回复）
- *   - Outlook 风格 "From: ... Sent: ... To: ... Subject: ..." 头部
- * 每个都获得自己的"较早线程"切换。
+ * Wrap any quoted reply chain in a collapsed <details> so deep email threads
+ * don't dominate the reader. Detects:
+ *   - <blockquote> tags (Gmail / native quoted replies)
+ *   - Outlook-style "From: ... Sent: ... To: ... Subject: ..." headers
+ * Each gets its own "Earlier thread" toggle.
  */
 /**
- * 将纯文本邮件正文解析为堆叠的轮次卡片，通过遍历
- * `> ` 引用前缀级别和 Outlook 风格 "On X wrote:" / Original-Message
- * 边界。返回渲染后的 HTML，或在没有引用内容时返回 null
- *（调用方回退到扁平渲染）。
+ * Parse a plaintext email body into stacked turn-cards by walking
+ * `> ` quote-prefix levels and Outlook-style "On X wrote:" / Original-Message
+ * boundaries. Returns rendered HTML, or null when there's no quoted content
+ * (caller falls back to flat rendering).
  *
- * 镜像 talon 的 `extract_from_plain` 和 email-reply-parser 片段：
- *   1. 以一个或多个 `>` 字符开头的行是引用的（级别 = > 的数量）。
- *   2. 增加级别打开更深层次的轮次（嵌套回复）。
- *   3. `-----Original Message-----` 和 `On <date>, <name> wrote:` 即使
- *      没有 `>` 也启动新轮次。
- *   4. 前导的非引用段是当前消息。
+ * Mirrors talon's `extract_from_plain` and email-reply-parser fragments:
+ *   1. Lines starting with one or more `>` chars are quoted (level = count of >).
+ *   2. Increasing the level opens a deeper turn (nested reply).
+ *   3. `-----Original Message-----` and `On <date>, <name> wrote:` start a
+ *      new turn even without `>`.
+ *   4. The leading non-quoted segment is the current message.
  */
 function _renderPlaintextThread(text) {
   if (!text || typeof text !== 'string' || text.length > 200000) return null;
@@ -2952,19 +3978,23 @@ function _renderPlaintextThread(text) {
 }
 
 // _foldSummary / _extractQuoteMeta / _SIG_ICON / _QUOTE_ICON
-// 位于 ./emailLibrary/signatureFold.js
+// live in ./emailLibrary/signatureFold.js
 
 function _foldQuotedReplies(html) {
   if (!html || typeof html !== 'string') return html;
   if (html.length > 200000) return html;
   const before = html;
-  // 使用 DOMParser 进行正确的嵌套 blockquote 处理。针对 HTML 的正则
-  // 错误处理嵌套并留下孤立的闭合标签，浏览器重新平衡这些标签，
-  // 产生两种视觉上不一致的折叠样式。
+  // Use DOMParser for proper nested-blockquote handling. Regex against HTML
+  // mishandles nesting and leaves orphan close tags that the browser
+  // re-balances, producing two visually inconsistent fold styles.
   try {
     const doc = new DOMParser().parseFromString(`<div id="__r">${html}</div>`, 'text/html');
     const root = doc.getElementById('__r');
     if (root) {
+      // Only fold TOP-LEVEL blockquotes (children of the root that are not
+      // already inside another blockquote). The inner blockquote chain stays
+      // intact inside the fold and renders with the existing
+      // .email-quote-fold blockquote styles, so everything matches.
       const tops = Array.from(root.querySelectorAll('blockquote')).filter(b =>
         !b.parentElement.closest('blockquote')
       );
@@ -2972,27 +4002,27 @@ function _foldQuotedReplies(html) {
         for (const bq of tops) {
           const det = doc.createElement('details');
           det.className = 'email-quote-fold';
-          // 将摘要构建为原始 HTML — 比手动构建 DOM 更容易。
+          // Build the summary as raw HTML — easier than building DOM by hand.
           const summary = _foldSummary('Earlier thread', _QUOTE_ICON, _extractQuoteMeta(bq.innerHTML));
           det.innerHTML = summary;
           bq.parentNode.insertBefore(det, bq);
-          det.appendChild(bq); // 将原始 blockquote（及任何嵌套的）移入 details
+          det.appendChild(bq); // move the original blockquote (and any nested ones) into the details
         }
-        // 仅标记最后一个折叠，以便 CSS 可以为其添加圆角底边。
+        // Tag only the last fold so CSS can give it rounded bottom corners.
         const allFolds = root.querySelectorAll('.email-quote-fold');
         if (allFolds.length) allFolds[allFolds.length - 1].classList.add('last-fold');
         return root.innerHTML;
       }
     }
   } catch (e) {
-    // 如果 DOMParser 失败，回退到下面的旧正则路径
+    // Fall through to the legacy regex path below if DOMParser fails
   }
-  // 如果 DOM 路径已经包裹了某些内容，我们上面已返回。否则
-  // 未找到 blockquote — 尝试 Outlook 头部启发式。
+  // If DOM-pass already wrapped something, we returned above. Otherwise no
+  // blockquotes were found — try the Outlook-header heuristic.
   if (html !== before) return html;
-  // Outlook 风格引用回复头部 — 多语言。从第一个
-  // "From: ... Sent: ... Subject: ..." 块折叠到正文末尾，
-  // 所有先前的线程级别一起折叠。
+  // Outlook-style quoted-reply header — multilingual. Fold from the first
+  // "From: ... Sent: ... Subject: ..." block through end-of-body so all
+  // prior thread levels collapse together.
   const FROM = '(?:From|Från|Von|De|De\\s|Da|От|Od|Van)';
   const SENT = '(?:Sent|Skickat|Gesendet|Envoyé|Inviato|Enviado|Verzonden|Отправлено|Wysłane)';
   const SUBJ = '(?:Subject|Ämne|Betreff|Objet|Oggetto|Asunto|Onderwerp|Тема|Temat)';
@@ -3003,7 +4033,7 @@ function _foldQuotedReplies(html) {
   const m = html.match(outlookRe);
   if (m) {
     const idx = html.lastIndexOf(m[0]);
-    // Outlook 回退最终只产生一个折叠，因此将其标记为最后一个。
+    // Outlook fallback only ever produces ONE fold, so tag it as last.
     html = html.slice(0, idx) + m[1]
       + '<details class="email-quote-fold last-fold">'
       + _foldSummary('Earlier thread', _QUOTE_ICON, _extractQuoteMeta(m[2]))
@@ -3013,9 +4043,9 @@ function _foldQuotedReplies(html) {
 }
 
 
-// 全局偏好：一旦用户折叠某个 AI 摘要面板，所有邮件都保持折叠状态；
-// 一旦展开，保持展开状态。存储在 localStorage 中，
-// 以便选择在重新加载后仍然保留。
+// Global preference: AI summary panels stay collapsed across every email
+// once the user folds one, and stay expanded once they unfold. Stored in
+// localStorage so the choice survives reloads.
 const _SUMMARY_COLLAPSED_KEY = 'odysseus.email.summaryCollapsed';
 function _summaryCollapsedPref() {
   try { return localStorage.getItem(_SUMMARY_COLLAPSED_KEY) === '1'; } catch { return false; }
@@ -3041,7 +4071,8 @@ function _showCachedSummary(reader, summary, btn) {
   panel.querySelector('.email-summary-content').textContent = summary;
   body.insertBefore(panel, body.firstChild);
   const toggle = panel.querySelector('.email-summary-toggle');
-  // 头部点击折叠/展开。持久化以便下一封邮件以相同状态打开。
+  // Header click folds/unfolds. Persists so the next email opens in the
+  // same state.
   const _flip = () => {
     panel.classList.toggle('collapsed');
     _setSummaryCollapsedPref(panel.classList.contains('collapsed'));
@@ -3055,18 +4086,20 @@ function _showCachedSummary(reader, summary, btn) {
   if (btn) {
     btn.classList.add('active');
     const label = btn.querySelector('.btn-label');
-    if (label) label.textContent = t('email.summary');
+    if (label) label.textContent = 'Summary';
   }
 }
 
-// "此发件人的其他邮件" — 阅读器内的滑出面板，列出同一地址的最近邮件。
-// 点击项目可原地加载。
+// "Other from this sender" — slide-out panel inside the reader listing
+// recent emails from the same address. Click an item to load it in place.
 async function _toggleFromSenderPanel(reader, data, btn) {
   const body = reader.querySelector('.email-reader-body');
   if (!body) return;
 
-  // 在模态框大小改变后重新居中（CSS 在 from-sender 面板挂载/卸载时放宽 + 增高
-  // modal-content）。否则模态框只向右/下增长，在窄/短窗口上会溢出视口。
+  // Recenter the modal after its size changes (CSS widens + heightens the
+  // modal-content when the from-sender panel is mounted/unmounted). Without
+  // this the modal grows only to the right/down and can overflow the
+  // viewport on narrow / short windows.
   const _recenterModal = () => {
     const modal = document.getElementById('email-lib-modal');
     const content = modal?.querySelector('.modal-content');
@@ -3081,7 +4114,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     });
   };
 
-  // 已打开？关闭它。
+  // Already open? Close it.
   const existing = reader.querySelector('.from-sender-panel');
   if (existing) {
     existing.remove();
@@ -3123,8 +4156,8 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   if (btn) btn.classList.add('active');
   _recenterModal();
 
-  // 头部关闭 — 与工具栏漏斗按钮相同，因此关闭路径保持单一来源
-  //（面板移除 + 激活类删除）。
+  // Header close — same as the toolbar funnel button so the close path
+  // stays single-sourced (panel removal + active class drop).
   const headerClose = panel.querySelector('.from-sender-close');
   if (headerClose) {
     headerClose.addEventListener('click', (ev) => {
@@ -3136,12 +4169,12 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   }
 
   const listEl = panel.querySelector('.from-sender-list');
-  // 提升以便 panel._originalEmails（稍后赋值，在 try 外部）可以看到它。
+  // Hoisted so panel._originalEmails (assigned later, outside the try) can see it.
   let emails = [];
 
-  // 多标签模型 — 头部现在是 {name, address} 芯片列表。
-  // 过滤逻辑：当每个标签的地址都出现在 from/to/cc 中（在连接的头部字符串上
-  // 进行不区分大小写的子串匹配）时，邮件匹配。
+  // Multi-tag model — the header is now a list of {name, address} chips.
+  // Filter logic: an email matches when EVERY tag's address appears in
+  // from/to/cc (case-insensitive substring on the joined header strings).
   panel._tags = [{ name: displayName, address: fromAddr }];
   panel._attachmentsOnly = false;
   const searchEl = panel.querySelector('.from-sender-search');
@@ -3169,7 +4202,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
       });
     });
   };
-  // 按每个活动标签过滤已加载的邮件（或最近邮件）。
+  // Filter loaded emails (or recents) by every active tag.
   const _matchesTags = (em) => {
     if (!panel._tags.length) return true;
     const haystack = [
@@ -3197,8 +4230,8 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     panel._lastShowFolder = !!opts.showFolder;
     _applyToggles();
   };
-  // 重新运行当前标签集/查询的相应获取路径。
-  // 提前声明以便上面的芯片移除处理程序可以调用它。
+  // Re-runs the appropriate fetch path for the current tag set / query.
+  // Declared early so chip-removal handlers above can call it.
   let _refreshList = () => {};
   if (attToggle) {
     attToggle.addEventListener('click', (ev) => {
@@ -3231,7 +4264,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     emails = raw;
 
     if (!emails.length) {
-      listEl.innerHTML = `<div class="from-sender-empty">${t('email.no_other_emails', { folder: _esc(state._libFolder || 'INBOX') })}</div>`;
+      listEl.innerHTML = `<div class="from-sender-empty">No other emails from this sender in ${_esc(state._libFolder || 'INBOX')}.</div>`;
     } else {
       panel._setResults(emails, { showFolder: false });
     }
@@ -3247,9 +4280,9 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   updatePlaceholder();
   _renderChips();
 
-  // 当芯片变化以及用户清除查询时都使用。
-  // 拉取跨常见文件夹的最新邮件，以便用户着陆到有用的内容，
-  // 然后 _applyToggles 按标签缩小范围。
+  // Used both when chips change AND when the user clears their query.
+  // Pulls the most-recent emails across the common folders so the user
+  // lands on something useful, then _applyToggles narrows by tags.
   let _recentToken = 0;
   const _loadRecentAcross = async () => {
     const myToken = ++_recentToken;
@@ -3273,7 +4306,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
         const db = b.date ? Date.parse(b.date) : 0;
         return db - da;
       });
-      // 预先取更宽的切片；标签/附件过滤器会进一步修剪。
+      // Take a wider slice up front; tag/attachment filters trim it.
       merged = merged.slice(0, 80);
       panel._setResults(merged, { showFolder: true });
       updatePlaceholder();
@@ -3283,7 +4316,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     }
   };
 
-  // 添加联系人作为标签，清除输入，刷新列表。
+  // Adds a contact as a tag, clears input, refreshes the list.
   const _addTag = (contact) => {
     if (!contact || !contact.address) return;
     const addr = String(contact.address).toLowerCase();
@@ -3296,17 +4329,17 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     _refreshList();
   };
 
-  // 跨文件夹搜索 — 当用户输入时，如果发件人芯片仍然活跃，也尊重它。
-  // 芯片活跃时的空输入恢复原始的"此发件人邮件"视图；
-  // 芯片被移除时的空输入显示提示。
+  // Cross-folder search — when the user types, also honor the sender chip if
+  // it's still active. Empty input with chip active restores the original
+  // "from this sender" view; empty input with chip removed shows the prompt.
   if (searchEl) {
     let searchToken = 0;
     let debounceTimer = null;
     let suggestToken = 0;
     let highlightedIdx = -1;
 
-    // 跨文件夹的自由文本邮件搜索。标签过滤通过
-    // panel._setResults 中的 _applyToggles 应用。
+    // Free-text email search across folders. Tag filter is applied via
+    // _applyToggles inside panel._setResults.
     const runSearch = async (q) => {
       const myToken = ++searchToken;
       const folders = _crossFolderCandidates();
@@ -3337,17 +4370,17 @@ async function _toggleFromSenderPanel(reader, data, btn) {
       }
     };
 
-    // 连接 _refreshList 以便芯片移除/标签添加可以重新运行匹配
-    // 当前输入状态的路径。
+    // Hook up _refreshList so chip removal / tag add can rerun whichever
+    // path matches the current input state.
     _refreshList = () => {
       const q = (searchEl.value || '').trim();
       if (q.length >= 2) runSearch(q);
       else _loadRecentAcross();
     };
 
-    // 联系人建议 — 从 /api/email/contacts 获取。在输入框下方渲染
-    // 一个小的绝对定位下拉菜单。上/下/回车/ESC 键在下面的
-    // keydown 监听器中处理。
+    // Contact suggestions — fetched from /api/email/contacts. Renders a
+    // small absolutely-positioned dropdown under the input. Up/Down/Enter/
+    // Esc handled in the keydown listener below.
     const _renderSuggestions = (items) => {
       if (!suggestEl) return;
       if (!items || !items.length) {
@@ -3371,7 +4404,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
           highlightedIdx = Number(item.dataset.idx);
         });
         item.addEventListener('mousedown', (ev) => {
-          // mousedown 以便我们在 blur 夺走焦点之前添加芯片
+          // mousedown so we add the chip BEFORE blur takes the focus away
           ev.preventDefault();
           _addTag({ name: item.dataset.name, address: item.dataset.addr });
         });
@@ -3380,9 +4413,9 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     const _fetchSuggestions = async (q) => {
       const myToken = ++suggestToken;
       try {
-        // 使用与电子邮件撰写器 To/Cc 字段相同的联系人源
-        // (/api/contacts/search → {results: [{name, emails:[...]}]})。
-        // 展平为 {name, address} 对并删除任何已标记的地址。
+        // Use the same contact source as the email composer's To/Cc fields
+        // (/api/contacts/search → {results: [{name, emails:[...]}]}). Flatten
+        // to {name, address} pairs and drop any already-tagged address.
         const res = await fetch(`${API_BASE}/api/contacts/search?q=${encodeURIComponent(q)}`);
         const j = await res.json();
         if (myToken !== suggestToken) return;
@@ -3410,7 +4443,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
         _loadRecentAcross();
         return;
       }
-      // 立即触发建议（廉价的 SQL）并延迟邮件搜索。
+      // Fire suggestions immediately (cheap SQL) and defer the email search.
       _fetchSuggestions(q);
       debounceTimer = setTimeout(() => runSearch(q), 220);
     });
@@ -3439,7 +4472,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
           suggestEl.hidden = true;
         }
       } else if (ev.key === 'Backspace' && searchEl.value === '' && panel._tags.length) {
-        // 空输入 + 退格键弹出最右边的芯片 — 常见的芯片输入习惯。
+        // Empty input + Backspace pops the rightmost chip — common chip-input idiom.
         ev.preventDefault();
         panel._tags.pop();
         _renderChips();
@@ -3448,12 +4481,12 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     });
 
     searchEl.addEventListener('blur', () => {
-      // 在 blur 时隐藏建议，带有微小延迟以便点击建议有机会触发
-      //（mousedown-add 在大多数情况下已涵盖）。
+      // Hide suggestions on blur, with a tiny delay so click-on-suggestion
+      // gets a chance to fire (mousedown-add covers most cases anyway).
       setTimeout(() => { if (suggestEl) suggestEl.hidden = true; }, 120);
     });
   }
-  // 存储发件人的邮件，以便在搜索被清除后恢复。
+  // Stash the sender's emails for restoring after a search is cleared.
   panel._originalEmails = (typeof emails !== 'undefined') ? emails : [];
 }
 
@@ -3498,8 +4531,8 @@ function _renderFromSenderRows(emails, listEl, reader, opts = {}) {
       const uid = row.dataset.uid;
       const folder = row.dataset.folder || state._libFolder;
       if (!uid) return;
-      // 在我们知道的任何缓存中查找行的邮件；菜单仅需要
-      // uid + subject + folder 来进行操作。
+      // Look up the row's email in any cache we know about; the menu just
+      // needs uid + subject + folder for its actions.
       const em = (typeof emails !== 'undefined' ? emails : []).find(e => String(e.uid) === String(uid))
         || state._libEmails.find(e => String(e.uid) === String(uid))
         || { uid, subject: row.querySelector('.from-sender-subj')?.textContent || '' };
@@ -3509,13 +4542,14 @@ function _renderFromSenderRows(emails, listEl, reader, opts = {}) {
   });
 }
 
-// 为阅读器内的附件芯片 + "在编辑器中打开"子按钮连接点击处理程序。
-// 可以安全地多次调用 — 使用 dataset.wired 标志跳过已有监听器的节点。
+// Wire click handlers for attachment chips + "open in editor" sub-buttons
+// inside a reader. Safe to call multiple times — uses dataset.wired flag to
+// skip nodes that already have listeners.
 function _wireAttachmentHandlers(reader, folder) {
   const useFolder = folder || state._libFolder;
-  // 在此处检测移动端，以便当从没有 _isMobileUA 作用域的上下文
-  //（如 _openEmailAsTab、_openEmailWindow）调用此函数时，
-  // 附件芯片处理程序不会因 ReferenceError 而崩溃。
+  // Detect mobile here so the attachment-chip handler doesn't blow up with
+  // a ReferenceError when this fn is called from contexts that don't have
+  // _isMobileUA in scope (e.g. _openEmailAsTab, _openEmailWindow).
   const _isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   reader.querySelectorAll('.email-attachment-open').forEach(openBtn => {
     if (openBtn.dataset.wired === '1') return;
@@ -3542,8 +4576,9 @@ function _wireAttachmentHandlers(reader, folder) {
           return;
         }
         try {
-          // 仅在视口无法同时容纳邮件和文档窗格时收起邮件模态框。
-          // 桌面端有空间时保持并排布局；移动端仍将屏幕交给文档。
+          // Tab the email modal down only when the viewport cannot fit both
+          // Email and the document pane. Desktop keeps a side-by-side layout
+          // when there is room; mobile still gives the document the screen.
           const ownerModal = openBtn.closest('.modal');
           if (ownerModal && ownerModal.id && _prepareEmailWindowForDocument(ownerModal)) {
             try {
@@ -3589,8 +4624,24 @@ function _wireAttachmentHandlers(reader, folder) {
         window.open(url, '_blank');
         return;
       }
-      const orig = chip.style.opacity;
-      chip.style.opacity = '0.6';
+      // Swap the paperclip icon for a whirlpool spinner while the
+      // download is in flight, so large attachments give a clear cue
+      // they're loading. Restore on completion.
+      const iconSvg = chip.querySelector(':scope > svg');
+      const origIconHtml = iconSvg ? iconSvg.outerHTML : '';
+      let _wp = null;
+      let _spinnerHost = null;
+      try {
+        const sp = window.spinnerModule || (await import('./spinner.js')).default;
+        _wp = sp.createWhirlpool(12);
+        _spinnerHost = document.createElement('span');
+        _spinnerHost.className = 'email-attachment-spinner';
+        _spinnerHost.style.cssText = 'display:inline-flex;width:12px;height:12px;align-items:center;justify-content:center;flex-shrink:0;position:relative;top:-2px;';
+        _spinnerHost.appendChild(_wp.element);
+        if (iconSvg) iconSvg.replaceWith(_spinnerHost);
+      } catch (_) {}
+      const origOpacity = chip.style.opacity;
+      chip.style.opacity = '0.85';
       try {
         const res = await fetch(url, { credentials: 'same-origin' });
         if (!res.ok) {
@@ -3611,33 +4662,41 @@ function _wireAttachmentHandlers(reader, folder) {
         console.error('attachment download error', e);
         location.href = url;
       } finally {
-        chip.style.opacity = orig;
+        chip.style.opacity = origOpacity;
+        if (_spinnerHost && _spinnerHost.parentNode && origIconHtml) {
+          const tmp = document.createElement('div');
+          tmp.innerHTML = origIconHtml;
+          const restored = tmp.firstChild;
+          if (restored) _spinnerHost.replaceWith(restored);
+        }
+        if (_wp) { try { _wp.destroy(); } catch (_) {} }
       }
     });
   });
 }
 
-// 启发式：跳过明显是签名/引用回复头部使用的内联图片的"附件"
-//（小图片文件、Outlook 风格的 image001.png 占位符、logo*.png 等）。
-// 它们不是真正的用户共享附件，将它们添加到芯片中会让每封邮件
-// 看起来像有需要用户处理的内容。
+// Heuristic: skip "attachments" that are clearly inline images used by
+// signatures / quoted-reply headers (small image files, Outlook-style
+// image001.png placeholders, logo*.png, etc.). They aren't real user-
+// shared attachments and adding them to the chips makes every email look
+// like it has content the user needs to act on.
 function _isLikelySignatureImage(a) {
   if (!a || !a.filename) return false;
   const name = String(a.filename).toLowerCase();
   const isImage = /\.(png|jpe?g|gif|bmp|svg|webp)$/i.test(name);
   if (!isImage) return false;
   const size = Number(a.size) || 0;
-  // Outlook / Gmail 内联图片占位符总是看起来像这样。
+  // Outlook / Gmail inline image placeholders always look like this.
   if (/^image\d{3,}\.(png|jpe?g|gif)$/i.test(name)) return true;
   if (/^(signature|logo|sig|footer|banner)[-_\d]*\.(png|jpe?g|gif|svg)$/i.test(name)) return true;
-  // 大多数签名 logo / 内联缩略图 < 30 KB。真正的用户共享图片
-  //（截图、照片）通常是 50 KB+。
+  // Most signature logos / inline thumbnails are < 30 KB. Real user-
+  // shared images (screenshots, photos) are typically 50 KB+.
   if (size > 0 && size < 30 * 1024) return true;
   return false;
 }
 
-// 为邮件读取响应构建附件头部+芯片 HTML。提取出来以便初始打开
-// 和交换阅读器路径都可以渲染它。
+// Build the attachments header+chips HTML for an email read response. Pulled
+// out so both the initial-open and the swap-reader paths can render it.
 function _buildAttsHtmlFor(uid, data) {
   if (!data || !data.attachments || !data.attachments.length) return '';
   const _OPENABLE_RE = /\.(pdf|docx|txt|md|markdown)$/i;
@@ -3662,16 +4721,18 @@ function _buildAttsHtmlFor(uid, data) {
   );
 }
 
-// "在新标签页中打开" — 邮件在库中打开（内联展开）
-// 并创建一个单独的浮动"邮件查看器"覆盖模态框。覆盖层以
-// 停靠栏中最小化芯片的形式启动；点击芯片将查看器调出到库之上。
-// 多个标签页 = 多个覆盖模态框 + 芯片，每个独立。
+// "Open in new tab" — the email opens in the library (expanded inline)
+// AND a separate floating "email viewer" overlay modal is created. The
+// overlay starts minimized as a chip in the dock; tapping the chip
+// brings the viewer up over the library. Multiple tabs = multiple
+// overlay modals + chips, each independent.
 const _EMAIL_ICON_PATH = 'M2 4h20v16H2zM22 7l-9.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7';
 let _emailTabSeq = 0;
-// 每个阅读器 modalId 的持久槽位号。一旦阅读器是"标签页 2"，
-// 它将保持"标签页 2"直到关闭 — 即使标签页 1 先关闭，剩余的
-// 阅读器也不会重新编号为 1。新标签页占用最小的未使用槽位。
-const _emailReaderSlots = new Map(); // modalId -> 槽位 (1, 2, 3, ...)
+// Persistent slot numbers per reader modalId. Once a reader is "tab 2"
+// it stays "tab 2" until it's closed — even if tab 1 closes first, the
+// remaining reader doesn't renumber down to 1. New tabs claim the
+// lowest unused slot.
+const _emailReaderSlots = new Map(); // modalId -> slot (1, 2, 3, ...)
 function _allocReaderSlot(modalId) {
   if (_emailReaderSlots.has(modalId)) return _emailReaderSlots.get(modalId);
   const used = new Set(_emailReaderSlots.values());
@@ -3684,23 +4745,24 @@ function _freeReaderSlot(modalId) {
   _emailReaderSlots.delete(modalId);
 }
 
-// JS 驱动的门：在 <body> 上设置 [data-email-tabs="N"]，以便 CSS 可以
-// 仅在 2+ 标签页存在时显示每个芯片的数字徽章。
+// JS-driven gate: sets [data-email-tabs="N"] on <body> so CSS can show
+// the per-chip number badge only when 2+ tabs exist.
 function _syncEmailTabsCount() {
   const tabs = document.querySelectorAll('.minimized-dock-chip[data-modal-id^="email-view-"]');
   document.body.dataset.emailTabs = String(tabs.length);
 }
 
-// 每当停靠栏内容变化时重新计算邮件菜单芯片的标签页计数。
-// 统计 #minimized-dock 内部和 body 级别（移动端自由定位芯片）的
-// "email-view-*" 芯片。结果写入 email-lib-modal 芯片的
-// data-tab-count 属性；CSS 通过 attr() 读取以渲染徽章。
+// Recompute the email menu chip's tab-count whenever the dock contents
+// change. Counts "email-view-*" chips both inside #minimized-dock and
+// at body level (free-positioned chips on mobile). Result is written to
+// the email-lib-modal chip's data-tab-count attribute; CSS reads it via
+// attr() to render the badge.
 function _syncEmailTabBadge() {
   const readers = document.querySelectorAll('.minimized-dock-chip[data-modal-id^="email-reader-"]');
   document.body.dataset.emailReaders = String(readers.length);
-  // 为每个芯片标记其持久槽位号。CSS 通过 attr() 读取
-  // data-tab-num 而不是使用计数器，这样当其他标签页关闭时
-  // 数字保持稳定。
+  // Stamp each chip with its persistent slot number. CSS reads
+  // data-tab-num via attr() instead of using a counter so the number
+  // stays stable when other tabs close.
   readers.forEach(chip => {
     const slot = _emailReaderSlots.get(chip.dataset.modalId);
     if (slot) chip.dataset.tabNum = String(slot);
@@ -3711,9 +4773,10 @@ let _badgeSyncScheduled = false;
 function _ensureEmailTabObserver() {
   if (_emailTabObserverWired) return;
   _emailTabObserverWired = true;
-  // 防抖，使一次突变爆发（如 _renderDock 在一次遍历中重建整个停靠栏）
-  // 合并为每个动画帧的单个同步。否则芯片徽章可能会在停靠栏重渲染期间
-  // 观察者重复触发时闪烁。
+  // Debounce so a burst of mutations (e.g. _renderDock rebuilding the
+  // whole dock in one pass) collapses to a single sync per animation
+  // frame. Without this the chip badge could flicker as the observer
+  // fires repeatedly during dock rerenders.
   const handler = () => {
     if (_badgeSyncScheduled) return;
     _badgeSyncScheduled = true;
@@ -3725,11 +4788,11 @@ function _ensureEmailTabObserver() {
   const tryWire = () => {
     const dock = document.getElementById('minimized-dock');
     if (!dock) { setTimeout(tryWire, 200); return; }
-    // 只关注我们关心的：停靠栏中的芯片添加/移除。
+    // Only watch what we care about: chip add/remove in the dock.
     const obs = new MutationObserver(handler);
     obs.observe(dock, { childList: true });
-    // 监听库网格，以便卡片展开/折叠的切换实时更新库芯片的
-    // "has-expanded" 徽章。
+    // Watch the library grid so toggling a card expanded/collapsed
+    // updates the lib chip's "has-expanded" badge in real time.
     const wireGridObs = () => {
       const grid = document.getElementById('email-lib-grid');
       if (!grid) { setTimeout(wireGridObs, 500); return; }
@@ -3741,21 +4804,23 @@ function _ensureEmailTabObserver() {
   };
   tryWire();
 }
-// 混合模型：
-//   - email-lib-modal（收件箱库）是唯一的。其芯片仅恢复它。
-//   - 每个"在新标签页中打开"创建一个单独的每邮件阅读器模态框
-//     （id "email-reader-{uid}-{seq}"），具有与库内联阅读器相同的
-//     结构和类，因此它们看起来相同。每个阅读器注册自己的停靠栏芯片
-//     并带有数字徽章。
+// Hybrid model:
+//   - email-lib-modal (the inbox library) is unique. Its chip just
+//     restores it.
+//   - Each "Open in new tab" creates a separate per-email reader modal
+//     (id "email-reader-{uid}-{seq}") with the SAME structure & classes
+//     as the library's inline reader, so they look identical. Each
+//     reader registers its own dock chip with a number badge.
 async function _openEmailAsTab(em, folder) {
   const useFolder = folder || state._libFolder || 'INBOX';
   _emailTabSeq += 1;
   const modalId = `email-reader-${em.uid}-${_emailTabSeq}`;
   _allocReaderSlot(modalId);
 
-  // 构建模态框外壳。使用与邮件库相同的 doclib-modal-content 尺寸，
-  // 使其感觉像是兄弟窗口。内部的阅读器主体使用内联阅读器完全相同的
-  // email-card-reader / email-reader-* 类 → 样式相同。
+  // Build the modal shell. Uses the same doclib-modal-content sizing
+  // as the email library so it feels like a sibling window. The reader
+  // body inside uses the exact same email-card-reader / email-reader-*
+  // classes the inline reader uses → identical styling.
   const modal = document.createElement('div');
   modal.className = 'modal email-reader-tab-modal';
   modal.id = modalId;
@@ -3776,10 +4841,10 @@ async function _openEmailAsTab(em, folder) {
     </div>
   `;
   document.body.appendChild(modal);
-  // 继承 .modal 的显示（flex-center）。z-index 高于库
-  //（库使用默认 .modal z-index 250），以便新标签页位于顶部。
+  // Inherit display from .modal (flex-center). z-index above the library
+  // (which uses default .modal z-index 250) so the new tab sits on top.
   modal.style.zIndex = '270';
-  // 最后打开 → 邮件窗口在已打开文档之前（交替标志）。
+  // Opened last → email windows in front of any open doc (alternation flag).
   document.body.classList.add('email-front');
 
   Modals.register(modalId, {
@@ -3791,11 +4856,11 @@ async function _openEmailAsTab(em, folder) {
       Promise.resolve().then(_syncEmailTabBadge);
     },
     restoreFn: () => {
-      // 最后重新打开 → 将邮件窗口置于任何已打开文档之前。
+      // Reopened last → bring the email windows in front of any open doc.
       document.body.classList.add('email-front');
-      // 移动端：一次只有一个邮件窗口可见。点击此芯片
-      // 收起库 + 任何其他阅读器，这样用户通过停靠栏在它们之间切换
-      // 而不是堆叠。
+      // Mobile: only one email window visible at a time. Tapping this
+      // chip chips down the library + any other reader, so the user
+      // toggles between them via the dock instead of stacking.
       if (window.innerWidth <= 768) {
         try {
           if (Modals.isRegistered('email-lib-modal') && !Modals.isMinimized('email-lib-modal')) {
@@ -3813,18 +4878,18 @@ async function _openEmailAsTab(em, folder) {
       }
     },
   });
-  // 通过 modalManager 连接 `_` 最小化按钮（它看到我们的 .minimize-btn
-  // 已经存在，只需绑定点击处理程序）。
+  // Wire the `_` minimize button via modalManager (it sees our .minimize-btn
+  // already exists and just binds the click handler).
   try { Modals.injectMinimizeButton(modal, modalId); } catch {}
-  // X 按钮完全关闭标签页（拆卸并取消注册）。
+  // X button fully closes the tab (tears down and unregisters).
   modal.querySelector('.close-btn')?.addEventListener('click', (ev) => {
     ev.stopPropagation();
     Modals.close(modalId);
   });
 
-  // 在 header 上接线拖拽（仅桌面端）。匹配 app.js initUIVisibility 中的
-  // 全局模式，但那只在启动时运行一次，看不到动态创建的模态框 —
-  // 因此我们在此复制它。
+  // Wire dragging on the header (desktop only). Matches the global pattern
+  // in app.js initUIVisibility, but that runs once at boot and doesn't see
+  // dynamically-created modals — so we replicate it here.
   const content = modal.querySelector('.modal-content');
   const mh = modal.querySelector('.modal-header');
   if (mh && content) {
@@ -3858,13 +4923,14 @@ async function _openEmailAsTab(em, folder) {
     });
   }
 
-  // 在前面打开新标签页，位于邮件库之上。用户可以点击 `_`
-  // 将其收起为芯片，阅读完成后使用。
+  // Open the new tab in front, on top of the email library. The user
+  // can tap `_` to tab it down to a chip when they're done reading.
   //
-  // 移动端：底部面板窗口填满视口，因此堆叠多个阅读器
-  // 会令人困惑 — 一次只有一个窗口可以有意义地可见。因此当新标签页
-  // 打开时，收起库和任何其他当前打开的 email-reader-* 标签页。
-  // 用户获得一组迷你芯片来在它们之间切换。
+  // Mobile: bottom-sheet windows fill the viewport, so stacking multiple
+  // readers on top of each other is confusing — only one window can be
+  // meaningfully visible at a time. So when the new tab opens, chip down
+  // the library AND any other email-reader-* tab that's currently up.
+  // The user gets a stack of mini chips to toggle between them.
   if (window.innerWidth <= 768) {
     try {
       if (Modals.isRegistered('email-lib-modal') && !Modals.isMinimized('email-lib-modal')) {
@@ -3883,8 +4949,8 @@ async function _openEmailAsTab(em, folder) {
   _ensureEmailTabObserver();
   _syncEmailTabBadge();
 
-  // 使用与 _toggleCardPreview 完全相同的模板获取 + 渲染邮件正文，
-  // 使视觉效果完全匹配。
+  // Fetch + render the email body using the exact same template as
+  // _toggleCardPreview so the visuals match perfectly.
   const reader = modal.querySelector('.email-card-reader');
   _markEmailReaderActive(reader);
   const sp = spinnerModule.createWhirlpool(28);
@@ -3898,6 +4964,7 @@ async function _openEmailAsTab(em, folder) {
       return;
     }
     _syncEmailReadState(em.uid, true);
+    _stampReaderContext(reader, { ...em, ...data }, useFolder, state._libAccountId);
     const buildChips = (str) => {
       if (!str) return '';
       return _splitRecipientList(str).map(a => {
@@ -3911,18 +4978,19 @@ async function _openEmailAsTab(em, folder) {
     reader.innerHTML = `
       <div class="email-reader-header">
         <div class="email-reader-meta">
-          <div class="email-reader-meta-row"><strong>From:</strong><span class="recipient-chips">${fromChip}</span></div>
-          ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${buildChips(data.to)}</span></div>` : ''}
-          ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${buildChips(data.cc)}</span></div>` : ''}
-        </div>
-        <div class="email-reader-actions">
-          <div class="email-reader-actions-row email-reader-actions-row-primary">
+          <div class="email-reader-meta-row email-reader-meta-from">
+            <strong>From:</strong>
+            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="Show recipients"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
+          </div>
+          ${(data.to || data.cc) ? `<div class="email-reader-meta-details" hidden>
+            ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${buildChips(data.to)}</span></div>` : ''}
+            ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${buildChips(data.cc)}</span></div>` : ''}
+          </div>` : ''}
+          <div class="email-reader-actions-inline">
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
             <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="Reply"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">Reply</span></button>
             ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="Reply All"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">Reply all</span></button>` : ''}
             <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="Forward"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">Forward</span></button>
-          </div>
-          <div class="email-reader-actions-row email-reader-actions-row-secondary">
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
             <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="Summarize">${_summaryIcon(data)}<span class="reader-btn-label">Summary</span></button>
             <button class="memory-toolbar-btn reader-icon-btn" data-act="from-sender" title="Search text in this thread"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="reader-btn-label">Search</span></button>
             <div class="email-reader-more-wrap" style="position:relative">
@@ -3961,6 +5029,7 @@ async function _openEmailAsTab(em, folder) {
       ev.stopPropagation();
       try { await _summarizeEmail(reader, data, ev.currentTarget); } catch {}
     });
+    _wireMetaToggle(reader);
     reader.querySelector('[data-act="from-sender"]')?.remove();
     reader.querySelector('[data-act="from-sender"]')?.addEventListener('click', async (ev) => {
       ev.stopPropagation();
@@ -3976,10 +5045,11 @@ async function _openEmailAsTab(em, folder) {
 }
 
 
-// "在新窗口中打开" — 生成一个仅显示邮件内容的浮动可拖拽模态框。
-// 多个窗口可以堆叠；每个有自己的 DOM id 和关闭按钮。
-// 使用 `_makeDraggable`，因此拖拽头部可在周围平移窗口。
-// 通过 _renderEmailBody 渲染正文，与展开的阅读器保持一致。
+// "Open in new window" — spawns a floating draggable modal that shows just
+// the email content. Multiple windows can stack; each has its own DOM id
+// and close button. Uses `_makeDraggable` so dragging the header pans the
+// window around. Renders the body via _renderEmailBody for parity with the
+// expanded reader.
 let _emailWindowSeq = 0;
 async function _openEmailWindow(em, folder) {
   const useFolder = folder || state._libFolder || 'INBOX';
@@ -4006,7 +5076,7 @@ async function _openEmailWindow(em, folder) {
   document.body.appendChild(modal);
   modal.style.display = 'block';
   const content = modal.querySelector('.modal-content');
-  // 位置从屏幕中心偏移，以便连续窗口形成级联。
+  // Position offset from screen center so successive windows cascade.
   const isMobile = window.innerWidth <= 768;
   if (isMobile) {
     content.style.position = 'fixed';
@@ -4028,7 +5098,7 @@ async function _openEmailWindow(em, folder) {
   modal.querySelector('.close-btn')?.addEventListener('click', () => modal.remove());
   try { _makeDraggable(content, modal, 'email-window-fullscreen'); } catch {}
 
-  // 加载 + 渲染
+  // Load + render
   const bodyEl = modal.querySelector('.email-window-body');
   const loading = modal.querySelector('.email-window-loading');
   try {
@@ -4043,8 +5113,8 @@ async function _openEmailWindow(em, folder) {
     _syncEmailReadState(em.uid, true);
     const subjEl = modal.querySelector('.email-window-subject');
     if (subjEl && data.subject) subjEl.textContent = data.subject;
-    // 以与内联阅读器相同的方式构建收件人芯片，
-    // 使独立查看器看起来/感觉起来与真实邮件视图完全相同。
+    // Build recipient chips the same way the inline reader does so the
+    // standalone viewer looks/feels exactly like a real email view.
     const _chipsFor = (addrs) => {
       if (!addrs) return '';
       const list = _splitRecipientList(addrs);
@@ -4056,28 +5126,28 @@ async function _openEmailWindow(em, folder) {
     const fromChip = _recipientChipHtml(`${data.from_name || ''} <${data.from_address || ''}>`, data.from_name || data.from_address, 'from-chip');
     let attsHtml = '';
     try { attsHtml = _buildAttsHtmlFor(em.uid, data); } catch {}
-    // 重新将 bodyEl 用作完整的 email-card-reader，以便内联阅读器的
-    // CSS 适用（有尺寸的头部、两行操作按钮等）。
+    // Repurpose bodyEl as a full email-card-reader so the inline reader's
+    // CSS applies (sized header, action buttons in two rows, etc.).
     bodyEl.classList.add('email-card-reader');
     _markEmailReaderActive(bodyEl);
     bodyEl.style.padding = '0';
     bodyEl.innerHTML = `
       <div class="email-reader-header">
         <div class="email-reader-meta">
-          <div class="email-reader-meta-row"><strong>From:</strong><span class="recipient-chips">${fromChip}</span></div>
-          ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${_chipsFor(data.to)}</span></div>` : ''}
-          ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${_chipsFor(data.cc)}</span></div>` : ''}
-        </div>
-        <div class="email-reader-actions">
-          <div class="email-reader-actions-row email-reader-actions-row-primary">
+          <div class="email-reader-meta-row email-reader-meta-from">
+            <strong>From:</strong>
+            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="Show recipients"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
+          </div>
+          ${(data.to || data.cc) ? `<div class="email-reader-meta-details" hidden>
+            ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${_chipsFor(data.to)}</span></div>` : ''}
+            ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${_chipsFor(data.cc)}</span></div>` : ''}
+          </div>` : ''}
+          <div class="email-reader-actions-inline">
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply (suggest a draft)'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
             <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="Reply"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">Reply</span></button>
             ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="Reply All"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">Reply all</span></button>` : ''}
             <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="Forward"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">Forward</span></button>
-          </div>
-          <div class="email-reader-actions-row email-reader-actions-row-secondary">
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply (suggest a draft)'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
             <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="Summarize">${_summaryIcon(data)}<span class="reader-btn-label">Summary</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="from-sender" title="Search text in this thread"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="reader-btn-label">Search</span></button>
             <div class="email-reader-more-wrap" style="position:relative">
               <button class="memory-toolbar-btn reader-icon-btn" data-act="more" title="More actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><span class="reader-btn-label">More</span></button>
             </div>
@@ -4089,7 +5159,7 @@ async function _openEmailWindow(em, folder) {
     `;
     _markEmailReaderActive(bodyEl);
     _wireRecipientChips(bodyEl);
-    // 连接内联阅读器拥有的所有相同操作处理程序。
+    // Wire all the same action handlers the inline reader has.
     try { _wireAttachmentHandlers(bodyEl, useFolder); } catch {}
     const attsWrap = bodyEl.querySelector('.email-reader-atts-wrap');
     if (attsWrap) {
@@ -4115,6 +5185,7 @@ async function _openEmailWindow(em, folder) {
       ev.stopPropagation();
       try { await _summarizeEmail(bodyEl, data, ev.currentTarget); } catch {}
     });
+    _wireMetaToggle(bodyEl);
     bodyEl.querySelector('[data-act="from-sender"]')?.remove();
     bodyEl.querySelector('[data-act="from-sender"]')?.addEventListener('click', async (ev) => {
       ev.stopPropagation();
@@ -4122,9 +5193,10 @@ async function _openEmailWindow(em, folder) {
     });
     bodyEl.querySelector('[data-act="more"]')?.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      // 使用合成的"卡片" — more 菜单只需要锚点元素和邮件数据。
-      // card 参数主要用于查找下一个兄弟；独立窗口没有，所以我们只需
-      // 传递 bodyEl 作为替代。
+      // Use a synthetic "card" — the more-menu only needs the anchor
+      // element and the email data. The card param is mostly used to find
+      // the next sibling; the standalone window has none so we just pass
+      // bodyEl as a stand-in.
       try { _showReaderMoreMenu(em, modal, bodyEl, ev.currentTarget); } catch {}
     });
   } catch (err) {
@@ -4132,10 +5204,11 @@ async function _openEmailWindow(em, folder) {
   }
 }
 
-// 获取新邮件的内容并用其替换当前阅读器正文
-//（保留 from-sender 面板）。用于在同一发件人的邮件之间进行原地导航 —
-// `folder` 默认为库的当前文件夹，但可以覆盖，
-// 以便跨文件夹搜索结果可以打开正确的文件夹。
+// Fetch a new email's content and replace the current reader body with it
+// (preserving the from-sender panel). Used for in-place navigation between
+// emails of the same sender — `folder` defaults to the library's current
+// folder but is overridable so cross-folder search results can open the
+// correct one.
 async function _swapReaderToUid(reader, uid, folder) {
   const body = reader.querySelector('.email-reader-body');
   if (!body) return;
@@ -4154,7 +5227,7 @@ async function _swapReaderToUid(reader, uid, folder) {
       return;
     }
     _syncEmailReadState(uid, true);
-    // 更新头部元数据（From/To/Subject）以匹配新邮件。
+    // Update the header meta (From/To/Subject) so it matches the new email.
     const headerMeta = reader.querySelector('.email-reader-meta');
     if (headerMeta) {
       const subj = data.subject || '(no subject)';
@@ -4176,9 +5249,10 @@ async function _swapReaderToUid(reader, uid, folder) {
       `;
       _wireRecipientChips(reader);
     }
-    // 刷新附件块以匹配新邮件。构建新的 HTML，
-    // 并替换现有块、移除它（如果新邮件没有附件），
-    // 或在正文前插入一个（如果之前的邮件没有附件但新邮件有）。
+    // Refresh the attachments block to match the new email. Build fresh HTML
+    // and either replace the existing block, remove it (if the new email has
+    // none), or insert one before the body (if the previous email had none
+    // but the new one does).
     const newAttsHtml = _buildAttsHtmlFor(uid, data);
     const oldAtts = reader.querySelector('.email-reader-atts-wrap');
     if (newAttsHtml) {
@@ -4210,8 +5284,9 @@ async function _swapReaderToUid(reader, uid, folder) {
     }
     body.innerHTML = _safeRenderEmailBody(data);
     body.classList.toggle('html-body', !!data.body_html);
-    // 为新渲染的附件芯片连接点击处理程序。否则在
-    // 通过侧边栏切换到不同邮件后，点击附件芯片不会产生任何效果。
+    // Wire click handlers for the newly-rendered attachment chips. Without
+    // this, after swapping to a different email via the sidebar, clicking
+    // an attachment chip would do nothing.
     _wireAttachmentHandlers(reader, useFolder);
   } catch (err) {
     body.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">${_esc(String(err))}</div>`;
@@ -4222,28 +5297,28 @@ async function _summarizeEmail(reader, data, btn) {
   const body = reader.querySelector('.email-reader-body');
   if (!body) return;
 
-  // 如果摘要面板已存在，切换：隐藏/显示
+  // If a summary panel already exists, toggle: hide/show
   const existing = body.querySelector('.email-summary-panel');
   if (existing) {
     if (existing.style.display === 'none') {
       existing.style.display = '';
       if (btn) {
         btn.classList.add('active');
-        btn.querySelector('.btn-label').textContent = t('email.summary');
+        btn.querySelector('.btn-label').textContent = 'Summary';
       }
     } else {
       existing.style.display = 'none';
       if (btn) {
         btn.classList.remove('active');
-        btn.querySelector('.btn-label').textContent = t('email.summary');
+        btn.querySelector('.btn-label').textContent = 'Summary';
       }
     }
     return;
   }
 
-  // 还没有面板。如果邮件没有缓存的 AI 摘要，显示占位符
-  // "未生成 — 立即创建？"提示，而不是立即触发 LLM。
-  // 这避免了意外的 LLM 花费，并使状态对用户明确。
+  // No panel yet. If the email has no cached AI summary, show a placeholder
+  // "not generated — create now?" prompt instead of firing the LLM immediately.
+  // This avoids accidental LLM spend and makes the state explicit to the user.
   if (!data.cached_summary) {
     const prompt = document.createElement('div');
     prompt.className = 'email-summary-panel';
@@ -4257,10 +5332,10 @@ async function _summarizeEmail(reader, data, btn) {
     if (btn) {
       btn.classList.add('active');
       const label = btn.querySelector('.btn-label');
-      if (label) label.textContent = t('email.summary');
+      if (label) label.textContent = 'Summary';
     }
-    // 没有取消按钮 — 再次切换摘要按钮会隐藏此面板
-    //（由上面的现有面板分支处理），所以它是多余的。
+    // No Cancel button — toggling the Summary button again hides this panel
+    // (handled by the existing-panel branch above), so it'd be redundant.
     prompt.querySelector('[data-act="summary-generate"]').addEventListener('click', async (ev) => {
       ev.stopPropagation();
       prompt.remove();
@@ -4269,7 +5344,7 @@ async function _summarizeEmail(reader, data, btn) {
     return;
   }
 
-  // 缓存的摘要存在 — 立即显示它。
+  // Cached summary exists — show it immediately.
   await _generateSummary(reader, data, btn);
 }
 
@@ -4313,8 +5388,8 @@ async function _generateSummary(reader, data, btn) {
         body: data.body,
         subject: data.subject,
         from: `${data.from_name} <${data.from_address}>`,
-        // 发送标识符以便后端可以获取原始消息并
-        // 提取附件文本用于摘要（PDF、发票等）。
+        // Send identifiers so the backend can fetch the raw message and
+        // pull attachment text for the summary (PDFs, invoices, etc.).
         uid: data.uid || '',
         folder: state._libFolder || 'INBOX',
         message_id: data.message_id || '',
@@ -4329,30 +5404,31 @@ async function _generateSummary(reader, data, btn) {
       if (btn) {
         btn.classList.add('active');
         const label = btn.querySelector('.btn-label');
-        if (label) label.textContent = t('email.summary');
+        if (label) label.textContent = 'Summary';
       }
     } else {
-      content.innerHTML = `<span style="color:var(--red)">${_esc(result.error || t('email.failed_to_summarize'))}</span>`;
+      content.innerHTML = `<span style="color:var(--red)">${_esc(result.error || 'Failed to summarize')}</span>`;
       panel.remove();
     }
   } catch (e) {
     sp.destroy();
     panel.remove();
-    if (uiModule) uiModule.showError?.(t('email.failed_to_summarize'));
+    if (uiModule) uiModule.showError?.('Failed to summarize');
   } finally {
     if (btn) btn.disabled = false;
   }
 }
 
-// 将邮件 ⋮ 下拉菜单保持在视口内：当它会超出底部时
-//（例如手机屏幕上位置较低的邮件），如果上方有更多空间就翻转到锚点之上，
-// 如果仍然溢出则限制高度并滚动。
+// Keep an email ⋮ dropdown inside the viewport: when it would spill past the
+// bottom (e.g. an email low on a phone screen), flip it above the anchor if
+// there's more room up there, and cap height + scroll if it still overflows.
 function _fitEmailDropdown(dropdown, rect) {
   requestAnimationFrame(() => {
     const margin = 8;
-    // 水平约束 — 无论通过左还是右锚定，都将下拉菜单保持在视口内。
-    // 因为现在一些触发器（例如右对齐的批量"操作"按钮）靠近
-    // 右边缘，左锚定的菜单会溢出屏幕。
+    // Horizontal clamp — keep the dropdown inside the viewport regardless of
+    // whether it was anchored via left or right. Needed now that some
+    // triggers (e.g. the right-aligned bulk "Actions" button) sit close to
+    // the right edge, where a left-anchored menu would spill off-screen.
     const dw = dropdown.offsetWidth;
     const curLeft = dropdown.getBoundingClientRect().left;
     if (curLeft + dw > window.innerWidth - margin) {
@@ -4362,16 +5438,16 @@ function _fitEmailDropdown(dropdown, rect) {
       dropdown.style.left = margin + 'px';
       dropdown.style.right = 'auto';
     }
-    // 垂直适应 — 如果下方空间不足，则向上翻转或限制高度+滚动。
+    // Vertical fit — flip up or cap+scroll if it doesn't fit below.
     const dh = dropdown.offsetHeight;
     const below = window.innerHeight - rect.bottom - margin;
     const above = rect.top - margin;
-    if (dh <= below) return;                 // 在下方合适
-    if (above > below) {                     // 向上翻转
+    if (dh <= below) return;                 // fits below as-is
+    if (above > below) {                     // flip upward
       dropdown.style.top = 'auto';
       dropdown.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
       if (dh > above) { dropdown.style.maxHeight = above + 'px'; dropdown.style.overflowY = 'auto'; }
-    } else {                                 // 保持在下方，限制高度+滚动
+    } else {                                 // keep below, cap + scroll
       dropdown.style.maxHeight = below + 'px';
       dropdown.style.overflowY = 'auto';
     }
@@ -4379,15 +5455,15 @@ function _fitEmailDropdown(dropdown, rect) {
 }
 
 function _showReaderMoreMenu(em, card, reader, anchor) {
-  // 切换：如果此锚点对应的下拉菜单已打开，关闭它。
+  // Toggle: if a dropdown for THIS anchor is already open, close it.
   const existing = document.querySelector('.email-card-dropdown');
   if (existing && existing._anchor === anchor) {
     existing.remove();
     anchor.classList.remove('reader-more-active');
     return;
   }
-  // 否则在打开新下拉菜单之前关闭任何其他打开的下拉菜单
-  //（并清除其锚点的激活状态）。
+  // Otherwise close any other open dropdown (and clear its anchor's active
+  // state) before opening a fresh one.
   document.querySelectorAll('.email-card-dropdown').forEach(d => {
     if (d._anchor) d._anchor.classList.remove('reader-more-active');
     d.remove();
@@ -4411,8 +5487,9 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
   const _checkIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
   const closeAndRemove = async () => {
-    // 在重新渲染之前选择下一个邻居，以便知道要跳转到哪个邮件。
-    // 优先选择下一张卡片；如果这是最后一张则回退到上一张。
+    // Pick the next neighbour BEFORE we re-render so we know which email to
+    // jump to. Prefer the next card; fall back to the previous one if this
+    // was the last card.
     const sibling = _findSiblingEmailCard(card, +1) || _findSiblingEmailCard(card, -1);
     const nextUid = sibling ? sibling.dataset.uid : null;
     await _animateEmailCardRemoval([em.uid]);
@@ -4420,7 +5497,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
     _renderGrid();
     _libCacheWriteBack();
     if (!nextUid) return;
-    // _renderGrid 之后，卡片节点是新鲜的 — 重新解析并展开。
+    // After _renderGrid, the card nodes are fresh — re-resolve and expand.
     const grid = document.getElementById('email-lib-grid');
     const nextCard = grid?.querySelector(`.doclib-card[data-uid="${CSS.escape(String(nextUid))}"]`);
     const nextEm = state._libEmails.find(e => String(e.uid) === String(nextUid));
@@ -4432,6 +5509,10 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
 
   const _bubblesIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   const _contactIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>';
+  // Three groups separated by dividers:
+  //   1. Open / Mark Unread / Remind — the per-email view actions
+  //   2. Save sender / Not Done / Archive — non-destructive state changes
+  //   3. Move to Spam / Move to Trash / Delete — destructive
   const actions = [
     {
       label: 'Open in new tab',
@@ -4442,40 +5523,13 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      // 将发件人保存到 CardDAV 联系人。从列表项 (em) 中提取姓名 + 地址；
-      // 回退到拆分本地部分作为姓名。
-      label: t('email.save_to_contacts'),
-      icon: _contactIcon,
-      action: async () => {
-        const email = (em.from_address || em.from || '').trim();
-        if (!email) {
-          import('./ui.js').then(m => m.showError && m.showError('No sender address')).catch(() => {});
-          return;
-        }
-        const name = (em.from_name || '').trim() || email.split('@')[0];
-        try {
-          const r = await fetch(`${API_BASE}/api/contacts/add`, {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email }),
-          });
-          const d = await r.json();
-          import('./ui.js').then(m => {
-            if (!m.showToast) return;
-            if (d.success && d.message === 'Already exists') m.showToast(t('email.already_in_contacts'));
-            else if (d.success) m.showToast(t('email.saved_to_contacts'));
-            else m.showError && m.showError(t('email.save_contact_failed'));
-          }).catch(() => {});
-        } catch (_) {
-          import('./ui.js').then(m => m.showError && m.showError(t('email.save_contact_failed'))).catch(() => {});
-        }
-      },
+      label: 'Remind to reply',
+      icon: _bellIcon,
+      submenu: 'remind',
     },
-    // 线程化 ⇄ 纯文本视图切换已移除 — 线程化视图目前禁用
-    //（太不稳定）。邮件始终以纯文本渲染。恢复此项及
-    // _bubblesDisabled() localStorage 逻辑可重新启用。
+    { separator: true },
     {
-      label: em.is_read ? 'Mark Unread' : 'Mark Read',
+      label: em.is_read ? 'Mark as Unread' : 'Mark as Read',
       icon: _unreadIcon,
       action: async () => {
         const newRead = !em.is_read;
@@ -4491,7 +5545,28 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: em.is_answered ? 'Not Done' : 'Done',
+      // Favorite (pin to top). Same bookmark glyph we use for the
+      // sidebar-pin / favorites filter so the visual language stays
+      // consistent. Toggling updates em.is_flagged and re-sorts via
+      // _renderGrid (favorited rows are always pinned at the top).
+      label: em.is_flagged ? 'Unfavorite' : 'Favorite (pin to top)',
+      icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (em.is_flagged ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+      action: async () => {
+        const next = !em.is_flagged;
+        em.is_flagged = next;
+        _renderGrid();
+        try {
+          await fetch(`${API_BASE}/api/email/flag/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}&on=${next ? 'true' : 'false'}`, { method: 'POST' });
+        } catch (e) {
+          // Roll back the optimistic flip if the server didn't take it.
+          em.is_flagged = !next;
+          _renderGrid();
+          console.error('Failed to toggle favorite:', e);
+        }
+      },
+    },
+    {
+      label: em.is_answered ? 'Mark as Not Done' : 'Mark as Done',
       icon: _checkIcon,
       action: async () => {
         const newState = !em.is_answered;
@@ -4509,7 +5584,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: 'Archive',
+      label: 'Move to Archive',
       icon: _archIcon,
       action: async () => {
         try {
@@ -4519,10 +5594,36 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: 'Remind to reply',
-      icon: _bellIcon,
-      submenu: 'remind',
+      // Save the sender to CardDAV contacts. Pulls name + address off the
+      // list-item (em); falls back to splitting the local-part for a name.
+      label: 'Save sender to contacts',
+      icon: _contactIcon,
+      action: async () => {
+        const email = (em.from_address || em.from || '').trim();
+        if (!email) {
+          import('./ui.js').then(m => m.showError && m.showError('No sender address')).catch(() => {});
+          return;
+        }
+        const name = (em.from_name || '').trim() || email.split('@')[0];
+        try {
+          const r = await fetch(`${API_BASE}/api/contacts/add`, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email }),
+          });
+          const d = await r.json();
+          import('./ui.js').then(m => {
+            if (!m.showToast) return;
+            if (d.success && d.message === 'Already exists') m.showToast('Already in contacts');
+            else if (d.success) m.showToast('Saved to contacts');
+            else m.showError && m.showError('Failed to save contact');
+          }).catch(() => {});
+        } catch (_) {
+          import('./ui.js').then(m => m.showError && m.showError('Failed to save contact')).catch(() => {});
+        }
+      },
     },
+    { separator: true },
     {
       label: 'Move to Spam',
       icon: _spamIcon,
@@ -4544,14 +5645,14 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: t('email.delete_permanently'),
+      label: 'Delete Permanently',
       icon: _deleteForeverIcon,
       danger: true,
       action: async () => {
         const subject = em.subject || '(no subject)';
         const ok = await styledConfirm(
-          `${t('email.delete_permanently_confirm')}"${subject}"? ${t('email.cannot_be_undone')}`,
-          { confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true }
+          `Permanently delete "${subject}"? This cannot be undone.`,
+          { confirmText: 'Delete', cancelText: 'Cancel', danger: true }
         );
         if (!ok) return;
         try {
@@ -4563,6 +5664,12 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
   ];
 
   for (const a of actions) {
+    if (a.separator) {
+      const sep = document.createElement('div');
+      sep.className = 'dropdown-divider';
+      dropdown.appendChild(sep);
+      continue;
+    }
     const item = document.createElement('div');
     item.className = 'dropdown-item-compact' + (a.danger ? ' dropdown-item-danger' : '');
     const arrow = a.submenu ? '<span style="margin-left:auto;opacity:0.5;">›</span>' : '';
@@ -4579,12 +5686,12 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
     });
     dropdown.appendChild(item);
   }
-  // 仅移动端的取消项 — 触摸用户的显式关闭。CSS 在桌面端隐藏它，
-  // 因为桌面端外部点击已经能干净地关闭。
+  // Mobile-only Cancel item — explicit close for touch users. CSS hides it
+  // on desktop where outside-click already dismisses cleanly.
   const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelItem.innerHTML = _icon(_cancelIco) + `<span>${t('common.cancel')}</span>`;
+  cancelItem.innerHTML = _icon(_cancelIco) + '<span>Cancel</span>';
   cancelItem.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.remove();
@@ -4625,15 +5732,16 @@ function _showCardMenu(em, anchor) {
   const _newTabIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
   const actions = [
     { label: 'Open', icon: _replyIcon, action: async () => {
-      // 仅内联展开（与点击行相同）。
+      // Just expand inline (same as tapping the row).
       const card = anchor.closest('.doclib-card');
       if (card && !card.classList.contains('doclib-card-expanded')) {
         await _toggleCardPreview(card, em);
       }
     }},
     { label: 'Open in new tab', icon: _newTabIcon, action: async () => {
-      // 将邮件作为自己的应用内模态框打开，注册停靠栏芯片 —
-      // 可以同时打开多封邮件，每个在最小化停靠栏中有自己的芯片。
+      // Open this email as its own in-app modal that registers a dock
+      // chip — multiple emails can be opened simultaneously, each gets
+      // its own chip in the minimized dock.
       const folder = state._libFolder || 'INBOX';
       await _openEmailAsTab(em, folder);
     }},
@@ -4641,8 +5749,9 @@ function _showCardMenu(em, anchor) {
   ];
 
   if (!isSentFolder) {
-    // 真实来源 = 卡片完成对勾上的可见 "active" 类，
-    // 以确保菜单标签和实际切换行为不会与用户所见不符。
+    // Source of truth = the visible "active" class on the card's done
+    // check, so the menu label and the actual toggle behaviour can't
+    // disagree with what the user sees.
     const _cardForLabel = anchor.closest('.doclib-card');
     const _checkForLabel = _cardForLabel ? _cardForLabel.querySelector('.email-card-done') : null;
     const _currentlyDone = _checkForLabel ? _checkForLabel.classList.contains('active') : !!em.is_answered;
@@ -4655,7 +5764,7 @@ function _showCardMenu(em, anchor) {
         const wasActive = check ? check.classList.contains('active') : !!em.is_answered;
         const newState = !wasActive;
         em.is_answered = newState;
-        if (newState) _syncEmailReadState(em.uid, true); // 标记完成意味着标记已读
+        if (newState) _syncEmailReadState(em.uid, true); // mark-done implies mark-read
         try {
           if (newState) {
             await fetch(`${API_BASE}/api/email/mark-answered/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
@@ -4667,6 +5776,22 @@ function _showCardMenu(em, anchor) {
         if (card) {
           if (check) check.classList.toggle('active', newState);
           if (newState) _syncEmailReadState(em.uid, true);
+        }
+      },
+    });
+    actions.push({
+      label: em.is_flagged ? 'Unfavorite' : 'Favorite (pin to top)',
+      icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (em.is_flagged ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+      action: async () => {
+        const next = !em.is_flagged;
+        em.is_flagged = next;
+        _renderGrid();
+        try {
+          await fetch(`${API_BASE}/api/email/flag/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}&on=${next ? 'true' : 'false'}`, { method: 'POST' });
+        } catch (e) {
+          em.is_flagged = !next;
+          _renderGrid();
+          console.error('Failed to toggle favorite:', e);
         }
       },
     });
@@ -4683,6 +5808,22 @@ function _showCardMenu(em, anchor) {
     });
   } else {
     actions.push({
+      label: em.is_flagged ? 'Unfavorite' : 'Favorite (pin to top)',
+      icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (em.is_flagged ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+      action: async () => {
+        const next = !em.is_flagged;
+        em.is_flagged = next;
+        _renderGrid();
+        try {
+          await fetch(`${API_BASE}/api/email/flag/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}&on=${next ? 'true' : 'false'}`, { method: 'POST' });
+        } catch (e) {
+          em.is_flagged = !next;
+          _renderGrid();
+          console.error('Failed to toggle favorite:', e);
+        }
+      },
+    });
+    actions.push({
       label: 'Archive',
       icon: _archIcon,
       action: async () => {
@@ -4695,10 +5836,11 @@ function _showCardMenu(em, anchor) {
     });
   }
 
-  // "选择" — 切换为多选模式，并将此邮件预选中，
-  // 以便用户可以快速通过批量栏扩展到相邻邮件。
-  // 匹配聊天侧边栏的选择图标 — 粗点字符视觉上比小的 SVG 圆更厚重。
-  // 上移 2px 以确保其视觉中心与上方的 SVG 图标对齐（它们稍高一些）。
+  // "Select" — switch to multi-select mode with THIS email pre-selected so
+  // the user can quickly fan-out to neighbours with the bulk bar.
+  // Match the chat-sidebar Select icon — a thick bullet character reads
+  // much heavier than a small SVG circle. Nudged up 2px so its visual
+  // center lines up with the SVG icons above (which sit a bit higher).
   const _selectIcon = '<span style="font-size:16px;line-height:1;position:relative;top:-2px;">●</span>';
   actions.push({
     label: 'Select',
@@ -4712,9 +5854,9 @@ function _showCardMenu(em, anchor) {
   });
 
   actions.push(
-    { label: t('common.delete'), icon: _delIcon, danger: true, action: async () => {
+    { label: 'Delete', icon: _delIcon, danger: true, action: async () => {
       const subject = em.subject || '(no subject)';
-      const ok = await styledConfirm(`${t('email.delete_confirm_prefix')}"${subject}"${t('email.delete_confirm_suffix')}`, { confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true });
+      const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
       if (!ok) return;
       await fetch(`${API_BASE}/api/email/delete/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
       await _animateEmailCardRemoval([em.uid]);
@@ -4741,12 +5883,12 @@ function _showCardMenu(em, anchor) {
     });
     dropdown.appendChild(item);
   }
-  // 仅移动端的取消项 — 触摸用户的显式关闭。CSS 在桌面端隐藏它，
-  // 因为桌面端外部点击已经能干净地关闭。 (卡片菜单)
+  // Mobile-only Cancel item — explicit close for touch users. CSS hides it
+  // on desktop where outside-click already dismisses cleanly.
   const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelItem.innerHTML = _icon(_cancelIco) + `<span>${t('common.cancel')}</span>`;
+  cancelItem.innerHTML = _icon(_cancelIco) + '<span>Cancel</span>';
   cancelItem.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.remove();
@@ -4766,7 +5908,7 @@ function _showCardMenu(em, anchor) {
   setTimeout(() => document.addEventListener('click', close, true), 10);
 }
 
-// 选择模式的批量"操作"下拉菜单 — 删除按钮是单独的可见按钮。
+// Bulk "Actions" dropdown for select mode — Delete is a separate visible button.
 function _showBulkActionsMenu(anchor) {
   document.querySelectorAll('.email-card-dropdown').forEach(d => d.remove());
   const dropdown = document.createElement('div');
@@ -4788,7 +5930,7 @@ function _showBulkActionsMenu(anchor) {
     it.addEventListener('click', (e) => { e.stopPropagation(); dropdown.remove(); a.action(); });
     dropdown.appendChild(it);
   }
-  // 仅移动端取消 — 与每张卡片和侧边栏下拉菜单匹配。
+  // Mobile-only Cancel — matches the per-card and sidebar dropdowns.
   const _cancelIco2 = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelIt = document.createElement('div');
   cancelIt.className = 'dropdown-item-compact dropdown-cancel-mobile';
@@ -4796,7 +5938,8 @@ function _showBulkActionsMenu(anchor) {
   cancelIt.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.remove();
-    // 批量操作菜单中的取消也退出选择模式 — 与文档批量下拉菜单匹配。
+    // Cancel inside the bulk-Actions menu also exits select mode — matches the
+    // documents bulk dropdown.
     state._selectMode = false;
     state._selectedUids.clear();
     _updateBulkBar();
@@ -4819,15 +5962,15 @@ function _updateBulkBar() {
   const selectBtn = document.getElementById('email-lib-select-btn');
   if (bar) bar.classList.toggle('hidden', !state._selectMode);
   if (selectBtn) {
-    selectBtn.textContent = state._selectMode ? t('common.cancel') : t('email.select');
+    selectBtn.textContent = state._selectMode ? 'Cancel' : 'Select';
     selectBtn.classList.toggle('active', state._selectMode);
   }
   const count = document.getElementById('email-lib-selected-count');
   if (count) count.textContent = `${state._selectedUids.size} Selected`;
   const all = document.getElementById('email-lib-select-all');
   if (all) all.checked = state._libEmails.length > 0 && state._libEmails.every(e => state._selectedUids.has(e.uid));
-  // 当有选中项时，将操作按钮亮化为与"N 项已选"计数相同的完整 --fg 颜色
-  //（按钮默认为暗淡的 60% --fg）。
+  // When something's selected, brighten Actions to the same full --fg color as
+  // the "N Selected" count (the button is a dimmer 60% --fg by default).
   const actions = document.getElementById('email-lib-bulk-actions');
   if (actions) actions.style.color = state._selectedUids.size > 0 ? 'var(--fg)' : '';
   const deleteBtn = document.getElementById('email-lib-bulk-delete');
@@ -4854,67 +5997,123 @@ async function _bulkAction(action) {
   const originalDeleteHtml = deleteBtn?.innerHTML || '';
   const originalCountText = countEl?.textContent || '';
   let busySpinner = null;
-  if (action === 'delete') {
-    if (deleteBtn) {
-      deleteBtn.disabled = true;
-      deleteBtn.classList.add('email-bulk-loading');
-      deleteBtn.innerHTML = '<span class="email-bulk-loading-label">Deleting</span>';
-      busySpinner = spinnerModule.create('', 'clean', 'whirlpool');
-      const spEl = busySpinner.createElement();
-      spEl.classList.add('email-bulk-whirlpool');
-      deleteBtn.appendChild(spEl);
-      busySpinner.start();
-    }
-    if (actionsBtn) actionsBtn.disabled = true;
-    if (cancelBtn) cancelBtn.disabled = true;
-    if (selectAll) selectAll.disabled = true;
-    if (countEl) countEl.textContent = t('email.deleting', { n: uids.length });
+  // Loading state for every bulk action, not just delete — large
+  // selections (e.g. 90+ Dones) used to silently hammer the server
+  // with sequential requests and the user got zero feedback. Now the
+  // Actions button (or Delete button) shows a whirlpool + verb-ing
+  // label, and the count surfaces progress.
+  const verbing = {
+    delete: 'Deleting',
+    archive: 'Archiving',
+    done: 'Marking done',
+    read: 'Marking read',
+    unread: 'Marking unread',
+  }[action] || 'Updating';
+  const targetBtn = action === 'delete' ? deleteBtn : actionsBtn;
+  let originalTargetHtml = '';
+  if (targetBtn) {
+    originalTargetHtml = targetBtn.innerHTML;
+    targetBtn.disabled = true;
+    targetBtn.classList.add('email-bulk-loading');
+    targetBtn.innerHTML = `<span class="email-bulk-loading-label">${verbing}</span>`;
+    busySpinner = spinnerModule.create('', 'clean', 'whirlpool');
+    const spEl = busySpinner.createElement();
+    spEl.classList.add('email-bulk-whirlpool');
+    targetBtn.appendChild(spEl);
+    busySpinner.start();
   }
+  if (action !== 'delete' && deleteBtn) deleteBtn.disabled = true;
+  if (action === 'delete' && actionsBtn) actionsBtn.disabled = true;
+  if (cancelBtn) cancelBtn.disabled = true;
+  if (selectAll) selectAll.disabled = true;
+  if (countEl) countEl.textContent = `${verbing} ${uids.length}…`;
+
+  // Single-uid worker.
+  const handleOne = async (uid) => {
+    try {
+      if (action === 'archive') {
+        await fetch(`${API_BASE}/api/email/archive/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
+      } else if (action === 'delete') {
+        await fetch(`${API_BASE}/api/email/delete/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
+      } else if (action === 'done') {
+        // uid may come back from the Set as a string while em.uid is
+        // numeric (or vice versa) — coerce both sides so the in-memory
+        // state actually flips and the post-loop re-render shows the
+        // done checkmark.
+        const em = state._libEmails.find(e => String(e.uid) === String(uid));
+        if (em) { em.is_answered = true; em.is_read = true; }
+        const ansRes = await fetch(`${API_BASE}/api/email/mark-answered/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
+        const readRes = await fetch(`${API_BASE}/api/email/mark-read/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
+        if (!ansRes.ok || !readRes.ok) throw new Error(`mark-done HTTP ${ansRes.status}/${readRes.status}`);
+      } else if (action === 'read' || action === 'unread') {
+        const endpoint = action === 'read' ? 'mark-read' : 'mark-unread';
+        const res = await fetch(`${API_BASE}/api/email/${endpoint}/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
+        let data = null;
+        try { data = await res.json(); } catch (_) {}
+        if (!res.ok || data?.success === false) {
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+        _syncEmailReadState(uid, action === 'read');
+      }
+    } catch (e) {
+      if (action === 'read' || action === 'unread') failedReadSync += 1;
+      console.error(`Failed to ${action} ${uid}:`, e);
+    }
+  };
 
   try {
-    for (const uid of uids) {
-      try {
-        if (action === 'archive') {
-          await fetch(`${API_BASE}/api/email/archive/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
-        } else if (action === 'delete') {
-          await fetch(`${API_BASE}/api/email/delete/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
-        } else if (action === 'done') {
-          const em = state._libEmails.find(e => e.uid === uid);
-          if (em) {
-            em.is_answered = true;
-            em.is_read = true;
-          }
-          await fetch(`${API_BASE}/api/email/mark-answered/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
-          await fetch(`${API_BASE}/api/email/mark-read/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
-        } else if (action === 'read' || action === 'unread') {
-          const endpoint = action === 'read' ? 'mark-read' : 'mark-unread';
-          const res = await fetch(`${API_BASE}/api/email/${endpoint}/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
-          let data = null;
-          try { data = await res.json(); } catch (_) {}
-          if (!res.ok || data?.success === false) {
-            throw new Error(data?.error || `HTTP ${res.status}`);
-          }
-          _syncEmailReadState(uid, action === 'read');
+    // Run in parallel with a concurrency cap so 92 emails don't take
+    // 30 seconds sequentially but we also don't open 92 simultaneous
+    // connections.
+    const CONCURRENCY = 6;
+    const queue = uids.slice();
+    let inFlight = 0;
+    let nextSlot = 0;
+    let finishedCount = 0;
+    await new Promise((resolve) => {
+      const launch = () => {
+        while (inFlight < CONCURRENCY && nextSlot < queue.length) {
+          const uid = queue[nextSlot++];
+          inFlight++;
+          handleOne(uid).finally(() => {
+            inFlight--;
+            finishedCount++;
+            if (countEl) countEl.textContent = `${verbing} ${finishedCount}/${queue.length}…`;
+            if (nextSlot >= queue.length && inFlight === 0) resolve();
+            else launch();
+          });
         }
-      } catch (e) {
-        if (action === 'read' || action === 'unread') failedReadSync += 1;
-        console.error(`Failed to ${action} ${uid}:`, e);
-      }
-    }
+        if (queue.length === 0) resolve();
+      };
+      launch();
+    });
 
     if (action === 'archive' || action === 'delete') {
+      await _animateEmailCardRemoval(uids);
+      const removed = new Set(uids.map(uid => String(uid)));
+      state._libEmails = state._libEmails.filter(e => !removed.has(String(e.uid)));
+    } else if (action === 'done' && state._libFilter === 'undone') {
+      // The undone filter is a "show only not-done" view — after marking
+      // selected emails done, they no longer match. Animate them out and
+      // drop them from the local list so the view reflects the filter
+      // instead of leaving freshly-done cards sitting there.
       await _animateEmailCardRemoval(uids);
       const removed = new Set(uids.map(uid => String(uid)));
       state._libEmails = state._libEmails.filter(e => !removed.has(String(e.uid)));
     }
   } finally {
     if (busySpinner) busySpinner.destroy();
-    if (deleteBtn) {
-      deleteBtn.disabled = false;
-      deleteBtn.classList.remove('email-bulk-loading');
-      deleteBtn.innerHTML = originalDeleteHtml;
+    // Restore whichever button we hijacked (delete vs actions).
+    if (targetBtn) {
+      targetBtn.disabled = false;
+      targetBtn.classList.remove('email-bulk-loading');
+      targetBtn.innerHTML = originalTargetHtml || targetBtn.innerHTML;
     }
-    if (actionsBtn) actionsBtn.disabled = false;
+    if (deleteBtn && deleteBtn !== targetBtn) {
+      deleteBtn.disabled = false;
+      deleteBtn.innerHTML = originalDeleteHtml || deleteBtn.innerHTML;
+    }
+    if (actionsBtn && actionsBtn !== targetBtn) actionsBtn.disabled = false;
     if (cancelBtn) cancelBtn.disabled = false;
     if (selectAll) selectAll.disabled = false;
     if (countEl) countEl.textContent = originalCountText;
@@ -4926,7 +6125,8 @@ async function _bulkAction(action) {
   if (failedReadSync > 0) {
     showToast(`Failed to update ${failedReadSync} email${failedReadSync === 1 ? '' : 's'}`);
   }
-  // 将成功的本地变更同步到 SWR 缓存中，以便重新打开时不会简短显示批量操作前的状态。
+  // Sync successful local mutations into the SWR cache so reopen doesn't
+  // briefly show the pre-bulk state.
   _libCacheWriteBack();
 }
 
@@ -4944,7 +6144,7 @@ function _summaryIcon(data) {
   return `<svg width="14" height="14" viewBox="0 0 24 24" fill="${fill}"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>`;
 }
 
-async function _runAiReplyFromButton(btn, em, data, mode) {
+async function _runAiReplyFromButton(btn, em, data, mode, noteHint = '') {
   _snapEmailModalToLeftSidebar(btn.closest('.modal'));
   btn.disabled = true;
   const orig = btn.innerHTML;
@@ -4956,7 +6156,7 @@ async function _runAiReplyFromButton(btn, em, data, mode) {
     btn.appendChild(wp.element);
   } catch (_) {}
   try {
-    if (state._onEmailClick) await state._onEmailClick({ email: em, emailData: data, mode });
+    if (state._onEmailClick) await state._onEmailClick({ email: em, emailData: data, mode, noteHint });
   } finally {
     try { wp && wp.stop(); } catch (_) {}
     btn.disabled = false;
@@ -4974,10 +6174,31 @@ function _showAiReplyChoice(btn, em, data) {
   const rect = btn.getBoundingClientRect();
   const menu = document.createElement('div');
   menu.className = 'email-ai-reply-choice';
+  /* Clamp width to viewport minus 16px margin so the menu (textarea
+     + Fast/Full buttons) never spills off the right edge on narrow
+     mobile screens. */
+  const menuMaxW = Math.min(220, window.innerWidth - 16);
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuMaxW - 8));
+  /* Vertical placement: prefer below the button, but flip above if
+     there's not enough room (e.g. button near bottom of viewport).
+     Estimated menu height is ~150px (textarea + buttons + padding). */
+  const estHeight = 150;
+  const spaceBelow = window.innerHeight - rect.bottom - 8;
+  const spaceAbove = rect.top - 8;
+  let top;
+  if (spaceBelow >= estHeight || spaceBelow >= spaceAbove) {
+    top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - estHeight - 8));
+  } else {
+    top = Math.max(8, rect.top - estHeight - 6);
+  }
   menu.style.cssText = [
     'position:fixed',
-    `left:${Math.max(8, Math.min(rect.left, window.innerWidth - 190))}px`,
-    `top:${Math.min(window.innerHeight - 96, rect.bottom + 6)}px`,
+    `left:${left}px`,
+    `top:${top}px`,
+    `max-width:${menuMaxW}px`,
+    `max-height:${window.innerHeight - 16}px`,
+    'overflow:auto',
+    'box-sizing:border-box',
     'z-index:10060',
     'display:flex',
     'gap:6px',
@@ -4987,36 +6208,72 @@ function _showAiReplyChoice(btn, em, data) {
     'border-radius:7px',
     'box-shadow:0 8px 24px rgba(0,0,0,.28)',
   ].join(';');
+  // Fast = lightning bolt (already used as a 'fast' glyph elsewhere in the app).
+  // Full = layered concentric circles to suggest "more, deeper" — not a fully
+  // filled circle so it reads as a complement to the lightning, not as a "stop".
   menu.innerHTML = `
-    <button class="memory-toolbar-btn" data-mode="ai-reply-fast" title="Shorter, faster draft">Fast</button>
-    <button class="memory-toolbar-btn" data-mode="ai-reply-full" title="Uses the fuller reply context">Full</button>
+    <div class="email-ai-reply-row" style="display:flex;flex-direction:column;gap:6px;min-width:180px;">
+      <textarea data-note-input rows="2" placeholder="Add context (optional)" style="width:100%;box-sizing:border-box;resize:vertical;min-height:42px;font-family:inherit;font-size:11px;padding:5px 6px;border-radius:5px;border:1px solid var(--border,#333);background:var(--bg-elev,#1a1a1a);color:var(--fg);"></textarea>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button class="memory-toolbar-btn" data-mode="ai-reply-fast" title="Shorter, faster draft" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--accent, var(--red))" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Fast
+        </button>
+        <button class="memory-toolbar-btn" data-mode="ai-reply-full" title="Uses the fuller reply context" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="color:var(--accent, var(--red));"><circle cx="12" cy="12" r="6"/></svg>
+          Full
+        </button>
+      </div>
+    </div>
   `;
+  const noteInput = menu.querySelector('[data-note-input]');
+  setTimeout(() => noteInput.focus(), 0);
   menu.addEventListener('click', async (ev) => {
     const choice = ev.target.closest('[data-mode]');
     if (!choice) return;
     ev.preventDefault();
     ev.stopPropagation();
     const mode = choice.getAttribute('data-mode') || 'ai-reply';
+    const noteHint = (noteInput.value || '').trim();
     _closeAiReplyChoice();
-    await _runAiReplyFromButton(btn, em, data, mode);
+    await _runAiReplyFromButton(btn, em, data, mode, noteHint);
   });
+  // Esc closes the popover; ignore plain clicks inside the menu so the
+  // textarea stays focused.
+  menu.addEventListener('mousedown', (ev) => ev.stopPropagation());
   document.body.appendChild(menu);
-  setTimeout(() => document.addEventListener('click', _closeAiReplyChoice, true), 0);
+  // Outside-click closer: only fires when the click target is OUTSIDE
+  // the menu. The original handler closed on any click which made
+  // focusing the textarea immediately dismiss the popover.
+  const outsideClose = (ev) => {
+    if (menu.contains(ev.target)) return;
+    document.removeEventListener('click', outsideClose, true);
+    _closeAiReplyChoice();
+  };
+  setTimeout(() => document.addEventListener('click', outsideClose, true), 0);
 }
 
 function _handleAiReplyButton(ev, em, data) {
   ev.stopPropagation();
   const btn = ev.currentTarget;
-  if (data?.cached_ai_reply) {
+  // First click on a cached email surfaces the cached draft. Second
+  // click clears the cache and opens the Fast/Full + context menu so
+  // the user can ask for a fresh draft (with new steering).
+  if (data?.cached_ai_reply && !btn.dataset.shownOnce) {
+    btn.dataset.shownOnce = '1';
     _runAiReplyFromButton(btn, em, data, 'ai-reply');
     return;
+  }
+  if (data?.cached_ai_reply) {
+    data.cached_ai_reply = null;
+    btn.dataset.shownOnce = '';
   }
   _showAiReplyChoice(btn, em, data);
 }
 
 function _hasMultipleRecipients(data) {
-  // 统计 To + Cc 中的不同地址（减去当前用户）。当用户地址尚未知时，
-  // 空回退 — 不排除任何人。
+  // Count distinct addresses in To + Cc (minus the current user). Empty
+  // fallback when the user's address isn't yet known — no exclusion.
   const myAddress = (window._myEmailAddress || '').toLowerCase();
   const extractEmails = (str) => {
     if (!str) return [];
@@ -5031,7 +6288,7 @@ function _hasMultipleRecipients(data) {
     ...extractEmails(data.to),
     ...extractEmails(data.cc),
   ]);
-  // 发件人也算作另一个其他人
+  // Sender counts as one other person too
   if (data.from_address && data.from_address.toLowerCase() !== myAddress) {
     recipients.add(data.from_address.toLowerCase());
   }
@@ -5096,18 +6353,64 @@ function _showLibRemindSubmenu(em, parentDropdown) {
     tmp.addEventListener('blur', () => setTimeout(() => tmp.remove(), 200));
   });
   parentDropdown.appendChild(customItem);
+  // "Note" — prompts for free-text and saves it as a note without a
+  // due_date, so no timer/reminder fires.
+  const noteItem = document.createElement('div');
+  noteItem.className = 'dropdown-item-compact';
+  noteItem.innerHTML = '<span>Note</span>';
+  noteItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    parentDropdown.remove();
+    _promptEmailNote(em);
+  });
+  parentDropdown.appendChild(noteItem);
 }
 
-async function _createEmailReplyReminder(em, dueDate) {
+function _promptEmailNote(em) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:16px;';
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;min-width:280px;max-width:min(420px, 92vw);display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 32px rgba(0,0,0,0.4);';
+  const subject = em.subject || '(no subject)';
+  card.innerHTML = `
+    <div style="font-size:11px;opacity:0.6;">Note about ${_esc(subject)}</div>
+    <textarea data-note placeholder="Write your note…" rows="4" style="resize:vertical;min-height:80px;font-family:inherit;font-size:12px;padding:7px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-elev,#1a1a1a);color:var(--fg);box-sizing:border-box;width:100%;"></textarea>
+    <div style="display:flex;gap:6px;justify-content:flex-end;">
+      <button class="memory-toolbar-btn" data-act="cancel">Cancel</button>
+      <button class="memory-toolbar-btn active" data-act="save">Save</button>
+    </div>
+  `;
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  const ta = card.querySelector('[data-note]');
+  setTimeout(() => ta.focus(), 0);
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) close(); });
+  card.querySelector('[data-act="cancel"]').addEventListener('click', close);
+  card.querySelector('[data-act="save"]').addEventListener('click', async () => {
+    const text = (ta.value || '').trim();
+    if (!text) { ta.focus(); return; }
+    close();
+    await _createEmailReplyReminder(em, null, text);
+  });
+  ta.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') close();
+    else if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') card.querySelector('[data-act="save"]').click();
+  });
+}
+
+async function _createEmailReplyReminder(em, dueDate, customText = '') {
   const pad = n => String(n).padStart(2,'0');
-  const iso = `${dueDate.getFullYear()}-${pad(dueDate.getMonth()+1)}-${pad(dueDate.getDate())}T${pad(dueDate.getHours())}:${pad(dueDate.getMinutes())}`;
+  const iso = dueDate
+    ? `${dueDate.getFullYear()}-${pad(dueDate.getMonth()+1)}-${pad(dueDate.getDate())}T${pad(dueDate.getHours())}:${pad(dueDate.getMinutes())}`
+    : null;
   const fullFrom = em.from || em.sender || '';
-  // 仅从 "First Last <email@x>" 中提取名字，或回退到电子邮件本地部分
+  // Extract just the first name from "First Last <email@x>" or fall back to email local part
   let from = 'someone';
   if (fullFrom) {
     const fullName = _extractName(fullFrom);
     if (fullName) {
-      // 剥离引号，取第一个空格分隔的词，首字母大写
+      // Strip quotes, take the first whitespace-separated word, capitalize
       const first = fullName.replace(/^["']|["']$/g, '').trim().split(/[\s,]+/)[0] || '';
       if (first) from = first.charAt(0).toUpperCase() + first.slice(1);
     }
@@ -5115,17 +6418,18 @@ async function _createEmailReplyReminder(em, dueDate) {
   const subject = em.subject || '(no subject)';
   const folder = state._libFolder || 'INBOX';
   const deepLink = `${window.location.origin}/#email=${encodeURIComponent(folder)}:${em.uid}`;
+  const itemText = customText || `Reply to ${from}: ${subject}`;
   const payload = {
     title: `Reply: ${subject}`,
     note_type: 'todo',
     items: [
-      { text: `Reply to ${from}: ${subject}`, checked: false },
+      { text: itemText, checked: false },
     ],
     content: `Open email: ${deepLink}`,
     label: 'email reminder',
-    due_date: iso,
     source: 'email',
   };
+  if (iso) payload.due_date = iso;
   try {
     const res = await fetch(`${API_BASE}/api/notes`, {
       method: 'POST', credentials: 'same-origin',
@@ -5134,28 +6438,32 @@ async function _createEmailReplyReminder(em, dueDate) {
     });
     if (!res.ok) throw new Error('Failed');
     const { showToast } = await import('./ui.js');
-    const fmt = dueDate.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-    showToast(`Todo reminder set for ${fmt}`);
+    if (dueDate) {
+      const fmt = dueDate.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      showToast(`Todo reminder set for ${fmt}`);
+    } else {
+      showToast('Reply note saved');
+    }
     if ('Notification' in window && Notification.permission === 'default') {
       try { Notification.requestPermission(); } catch {}
     }
   } catch (e) {
     const { showError } = await import('./ui.js');
-    showError(t('email.create_reminder_failed'));
+    showError('Failed to create reminder');
   }
 }
 
-// 在通过 innerHTML 注入之前消毒不受信任的 HTML 邮件正文。
+// Sanitize untrusted HTML email bodies before injecting via innerHTML.
 //
-// 拒绝列表消毒器 — 必须阻止所有已知的 XSS 攻击入口：
+// Denylist sanitizer — has to block every well-known XSS sink:
 //   - <script>, <iframe>, <object>, <embed>, <form>, <style>, <link>
-//   - 完全移除 SVG（事件处理器、<use href="javascript:">、<foreignObject>、
-//     <animate>、<set> 等）。邮件客户端不需要 SVG。
-//   - <math>（MathML 可以携带处理器）。
+//   - SVG entirely (event handlers, <use href="javascript:">, <foreignObject>,
+//     <animate>, <set>, etc.). Email clients don't need SVG.
+//   - <math> (MathML can carry handlers).
 //   - <base href="...">, <meta http-equiv="refresh">, <noscript>, <frame>,
-//     <frameset>, <applet>, <portal>。
-//   - on* 属性；href/src/srcset/formaction/action/background/poster/data
-//     属性中的 javascript:/vbscript:/data: URL。
-//   - srcdoc（防御性 — iframe 已被移除）。
-//   - 包含 javascript: 或 expression() 的内联 `style` 声明。
+//     <frameset>, <applet>, <portal>.
+//   - on* attributes; javascript:/vbscript:/data: URLs in href/src/srcset/
+//     formaction/action/background/poster/data attributes.
+//   - srcdoc (defensive — iframe is already nuked).
+//   - inline `style` declarations containing javascript: or expression().
 // _sanitizeHtml / _escLinkify live in ./emailLibrary/utils.js

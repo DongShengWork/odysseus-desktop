@@ -69,7 +69,7 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
         self.presets = self.load()
     
     def load(self) -> Dict[str, Any]:
-        """从文件加载预设，如果需要则创建默认值。"""
+        """Load presets from file, creating defaults if needed"""
         if not os.path.exists(self.presets_file):
             self.save(self.DEFAULT_PRESETS)
             return self.DEFAULT_PRESETS.copy()
@@ -95,12 +95,13 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
                     custom.setdefault("inject_prefix", "")
                     custom.setdefault("inject_suffix", "")
                     self.save(presets)
-            # 以与上面旧版 `custom` 迁移相同的方式修复向前不兼容的文件：
-            # 填充任何旧版或不完整的 presets.json 中缺失的内置预设，
-            # 以便它们到达现有安装（缺失的内置预设会在
-            # GET /api/presets 提供的选择器中静默缺失）。
-            # 内置键没有删除路径，因此这不会覆盖有意的移除。
-            # 默认值优先，已加载的值胜出 — 用户的编辑被保留。
+            # Heal a forward-incompatible file the same way the legacy `custom`
+            # migration above does: fill in any built-in presets an older or
+            # partial presets.json is missing, so they reach existing installs
+            # (a missing built-in is otherwise silently absent from the picker
+            # served by GET /api/presets). There is no delete path for the
+            # built-in keys, so this never clobbers an intentional removal.
+            # Defaults first, loaded values win — user edits are preserved.
             if isinstance(presets, dict) and any(
                 k not in presets for k in self.DEFAULT_PRESETS
             ):
@@ -112,12 +113,12 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
             return self.DEFAULT_PRESETS.copy()
     
     def save(self, presets: Dict[str, Any]) -> bool:
-        """将预设保存到文件。"""
+        """Save presets to file"""
         try:
-            # 原子写入（临时文件 + os.replace），因此写入过程中的崩溃或序列化
-            # 错误不会截断 presets.json 并丢失所有已保存的
-            # 预设。延迟导入使此模块在加载时免于重型核心
-            # 包导入图。
+            # Atomic write (tmp file + os.replace) so a crash or serialization
+            # error mid-write can't truncate presets.json and lose every saved
+            # preset. Lazy import keeps this module free of the heavy core
+            # package import graph at load time.
             from core.atomic_io import atomic_write_json
             atomic_write_json(self.presets_file, presets, indent=2)
             self.presets = presets
@@ -127,7 +128,7 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
             return False
     
     def get(self, preset_id: str) -> Dict[str, Any]:
-        """获取特定预设。"""
+        """Get a specific preset"""
         return self.presets.get(preset_id)
     
     def update_custom(
@@ -140,7 +141,7 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
         inject_prefix: str = "",
         inject_suffix: str = "",
     ) -> bool:
-        """更新自定义预设。"""
+        """Update the custom preset"""
         self.presets["custom"] = {
             "name": name or "Custom",
             "character_name": name,
@@ -154,17 +155,17 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
         return self.save(self.presets)
     
     def get_all(self) -> Dict[str, Any]:
-        """获取所有预设。"""
+        """Get all presets"""
         return self.presets.copy()
 
     def get_user_templates(self) -> list:
-        """获取用户保存的角色模板。"""
+        """Get user-saved character templates."""
         return self.presets.get("user_templates", [])
 
     def save_user_template(self, template: dict) -> bool:
-        """保存新的用户模板或按 ID 更新现有模板。"""
+        """Save a new user template or update existing by id."""
         templates = self.presets.get("user_templates", [])
-        # 如果 ID 相同则更新现有
+        # Update existing if same id
         existing = next((i for i, t in enumerate(templates) if t.get("id") == template.get("id")), None)
         if existing is not None:
             templates[existing] = template
@@ -174,16 +175,16 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
         return self.save(self.presets)
 
     def delete_user_template(self, template_id: str) -> bool:
-        """按 ID 删除用户模板。"""
+        """Delete a user template by id."""
         templates = self.presets.get("user_templates", [])
         self.presets["user_templates"] = [t for t in templates if t.get("id") != template_id]
         return self.save(self.presets)
 
     def get_group_presets(self) -> list:
-        """获取已保存的群聊预设。"""
+        """Get saved group chat presets."""
         return self.presets.get("group_presets", [])
 
     def save_group_presets(self, groups: list) -> bool:
-        """保存群聊预设。"""
+        """Save group chat presets."""
         self.presets["group_presets"] = groups
         return self.save(self.presets)

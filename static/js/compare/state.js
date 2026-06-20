@@ -1,41 +1,41 @@
-// compare/state.js — compare 模块的共享可变状态
+// compare/state.js — shared mutable state for compare modules
 const state = {
   API_BASE: '',
   isActive: false,
-  _openingSelector: false,        // 防止快速重复点击导致重复对比弹窗
+  _openingSelector: false,        // prevents duplicate compare modals on rapid re-clicks
   _streaming: false,
   _blindMode: true,
   _saveOnClose: false,
   _continueChat: false,
-  _timeout: 300,                   // 秒
+  _timeout: 300,                   // seconds
   _finishOrder: 0,
-  _paneElapsed: [],                // 每个窗格的总毫秒数；完成时填充，
-                                   // 以便按实际时间授予 Fastest 徽章
-                                   // （顺序模式否则总是选窗格 1）
+  _paneElapsed: [],                // per-pane total ms; populated on finish so the
+                                   // Fastest badge can be awarded by actual time
+                                   // (sequential mode otherwise always picks pane 1)
   _selectedModels: [],             // [{model, endpoint, endpointId, name}, ...]
-  _paneSessionIds: [],             // 每个窗格的会话 ID
-  _paneMetrics: [],                // 上一轮每个窗格的指标
-  _abortControllers: [],           // 每个窗格的中止控制器
+  _paneSessionIds: [],             // session IDs for each pane
+  _paneMetrics: [],                // metrics per pane from last round
+  _abortControllers: [],           // per-pane abort controllers
   _sidebarWasHidden: false,
-  _compareElements: [],            // 添加到容器中的元素（用于清理）
-  _savedToggles: null,             // 对比前保存的工具开关状态
-  _savedIndicatorDisplay: {},      // 对比前工具栏指示器的显示状态
-  _savedMode: 'chat',              // 对比前保存的 agent/chat 模式
-  _hasVisibleResults: false,       // 关闭后对比结果是否仍在屏幕上
-  _compareMode: 'chat',            // 'chat'、'agent'、'search' 或 'research'
-  _lastPrompt: '',                 // 最后发送的提示（用于重新匹配）
-  _cachedModels: [],               // 缓存的模型列表，用于窗格下拉菜单
-  _probed: new Set(),              // 已成功探测的模型 ID
-  _cachedProviders: null,          // 缓存的搜索提供商，用于搜索模式
-  _searchSynthModels: null,        // 搜索模式中每个窗格的合成模型
-  _parallel: true,                 // true = 一次运行所有窗格，false = 一次一个
+  _compareElements: [],            // elements we added to container (for cleanup)
+  _savedToggles: null,             // tool toggle states saved before compare
+  _savedIndicatorDisplay: {},      // display state of toolbar indicators before compare
+  _savedMode: 'chat',              // agent/chat mode saved before compare
+  _hasVisibleResults: false,       // compare results still on screen after close
+  _compareMode: 'chat',            // 'chat', 'agent', 'search', or 'research'
+  _lastPrompt: '',                 // last prompt sent (for rematch)
+  _cachedModels: [],               // cached model list for pane dropdowns
+  _probed: new Set(),              // model IDs that have been successfully probed
+  _cachedProviders: null,          // cached search providers for search mode
+  _searchSynthModels: null,        // per-pane synthesis models for search mode
+  _parallel: true,                 // true = run all panes at once, false = one at a time
   _fetchModelsCache: null,
   _fetchModelsCacheTime: 0,
-  _expectedAnswer: '',             // 当选择带有 `answer` 的评测提示时，
-                                   // stream.js 读取此项并为每个窗格标记 ✓/✗
+  _expectedAnswer: '',             // when an eval prompt with `answer` is picked,
+                                   // stream.js reads this and stamps ✓/✗ per pane
 };
 
-/** 将临时状态重置为默认值 — 适用于干净的重新启动。 */
+/** Reset transient state to defaults — useful for clean restarts. */
 export function reset() {
   state._openingSelector = false;
   state._streaming = false;

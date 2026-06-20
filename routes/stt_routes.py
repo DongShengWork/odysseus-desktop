@@ -1,5 +1,5 @@
 # routes/stt_routes.py
-"""STT API 路由 — 多提供商（本地 Whisper、API 端点、浏览器）。"""
+"""STT API routes — multi-provider (local Whisper, API endpoint, browser)."""
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 import logging

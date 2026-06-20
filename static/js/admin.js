@@ -1,24 +1,24 @@
-// static/js/admin.js — 管理面板模块 (ES6)
-// 管理员专属：用户、端点、MCP、RAG、嵌入、令牌、Webhooks、功能
+// static/js/admin.js — Admin panel module (ES6)
+// Admin-only: users, endpoints, MCP, RAG, embeddings, tokens, webhooks, features
 
 import uiModule from './ui.js';
 import settingsModule from './settings.js';
-import { providerLogo } from './providers.js';
+import { providerLogo, providerLogoFromUrl } from './providers.js';
 import { sortModelObjects } from './modelSort.js';
 import { PROVIDER_DEVICE_FLOWS, formatDeviceFlowError, runProviderDeviceFlow } from './providerDeviceFlow.js';
-import { t } from './i18n.js';
 
 let initialized = false;
 let modalEl = null;
-// 当用户添加端点时，存储其 id，以便下次渲染端点列表时
-// 该行可以闪烁高亮。动画触发后清除。
+// When the user adds an endpoint, store its id so the next render of
+// the endpoints list can flash a glow on that row. Cleared once the
+// animation fires.
 let _recentlyAddedEpId = null;
 
 function el(id) { return document.getElementById(id); }
 function esc(s) { return uiModule.esc(s); }
 
 /* ═══════════════════════════════════════════
-   用户标签
+   USERS TAB
    ═══════════════════════════════════════════ */
 const PRIV_LABELS = {
   can_use_agent: 'Agent mode',
@@ -42,7 +42,7 @@ async function loadUsers() {
       const row = document.createElement('div');
       row.className = 'admin-user-row';
 
-      // 头部：名称 + 徽章 + 删除
+      // Header: name + badges + delete
       const header = document.createElement('div');
       header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0;';
       const initial = u.username.charAt(0).toUpperCase();
@@ -55,6 +55,7 @@ async function loadUsers() {
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
+          <button class="admin-btn-sm" data-adm-toggle-admin="${esc(u.username)}" data-make-admin="${u.is_admin ? '0' : '1'}" style="font-size:11px;">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
           <button class="admin-btn-sm" data-adm-rename-user="${esc(u.username)}" style="font-size:11px;">Rename</button>
           ${u.is_admin ? '' : `<button class="admin-btn-delete" data-adm-del-user="${esc(u.username)}" style="font-size:11px;">Remove</button>`}
           ${u.is_admin ? '' : '<svg class="admin-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>'}
@@ -62,13 +63,13 @@ async function loadUsers() {
       `;
       row.appendChild(header);
 
-      // 权限面板（默认隐藏，管理员不显示）
+      // Privileges panel (hidden by default, not for admins)
       if (!u.is_admin) {
         const privPanel = document.createElement('div');
         privPanel.className = 'admin-priv-panel hidden';
         privPanel.style.cssText = 'padding:8px 0 4px;border-top:1px solid var(--border);margin-top:8px;';
 
-        // 布尔开关
+        // Boolean toggles
         let html = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.35;font-weight:600;margin-bottom:4px;">Features</div>';
         for (const [key, label] of Object.entries(PRIV_LABELS)) {
           const checked = u.privileges && u.privileges[key] ? 'checked' : '';
@@ -77,7 +78,7 @@ async function loadUsers() {
             <label class="admin-switch" style="transform:scale(0.85);"><input type="checkbox" data-priv="${key}" data-user="${esc(u.username)}" ${checked}><span class="admin-slider"></span></label>
           </div>`;
         }
-        // 速率限制
+        // Rate limit
         html += '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.35;font-weight:600;margin:10px 0 4px;">Limits</div>';
         const maxMsg = (u.privileges && u.privileges.max_messages_per_day) || 0;
         html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
@@ -87,7 +88,7 @@ async function loadUsers() {
           </div>
           <input type="number" min="0" value="${maxMsg}" data-priv="max_messages_per_day" data-user="${esc(u.username)}" style="width:70px;padding:4px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-size:12px;text-align:center;">
         </div>`;
-        // 允许的模型 — 复选框列表
+        // Allowed models — checkbox list
         const allowedModels = Array.isArray(u.privileges && u.privileges.allowed_models)
           ? u.privileges.allowed_models
           : [];
@@ -110,10 +111,10 @@ async function loadUsers() {
         privPanel.innerHTML = html;
         row.appendChild(privPanel);
 
-        // 切换面板可见性 + 旋转箭头 + 加载模型
+        // Toggle panel visibility + rotate chevron + load models
         let _modelsLoaded = false;
         header.addEventListener('click', (e) => {
-          if (e.target.closest('.admin-btn-delete, [data-adm-rename-user]')) return;
+          if (e.target.closest('.admin-btn-delete, [data-adm-rename-user], [data-adm-toggle-admin]')) return;
           privPanel.classList.toggle('hidden');
           const chevron = header.querySelector('.admin-user-chevron');
           if (chevron) {
@@ -121,14 +122,14 @@ async function loadUsers() {
             chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
             chevron.style.opacity = isOpen ? '0.7' : '0.3';
           }
-          // 首次展开时加载模型列表
+          // Load models list on first expand
           if (!_modelsLoaded && !privPanel.classList.contains('hidden')) {
             _modelsLoaded = true;
             _loadModelsForUser(u.username, allowedSet, modelsRestricted, blockAllModels, privPanel);
           }
         });
 
-        // 绑定权限变更事件（布尔 + 数字输入，不包括模型复选框）
+        // Wire privilege changes (boolean + number inputs, not model checkboxes)
         privPanel.querySelectorAll('[data-priv]').forEach(input => {
           const handler = async () => {
             const username = input.dataset.user;
@@ -143,23 +144,23 @@ async function loadUsers() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ [key]: value }),
               });
-            } catch (e) { uiModule.showError(t('admin.failed_to_update_privilege')); }
+            } catch (e) { uiModule.showError('Failed to update privilege'); }
           };
           if (input.type === 'checkbox') input.addEventListener('change', handler);
           else input.addEventListener('change', handler);
         });
       }
 
-      // 重命名按钮
+      // Rename button
       const renameBtn = row.querySelector('[data-adm-rename-user]');
       if (renameBtn) {
         renameBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const oldUsername = renameBtn.dataset.admRenameUser;
-          const next = await uiModule.styledPrompt(t('admin.rename_user_confirm', { oldUsername: oldUsername }), {
+          const next = await uiModule.styledPrompt(`Rename "${oldUsername}"`, {
             defaultValue: oldUsername,
             placeholder: 'New username',
-            confirmText: t('admin.rename'),
+            confirmText: 'Rename',
           });
           const username = (next || '').trim();
           if (!username || username === oldUsername) return;
@@ -172,7 +173,7 @@ async function loadUsers() {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-              uiModule.showError(data.detail || t('admin.failed_to_rename_user'));
+              uiModule.showError(data.detail || 'Failed to rename user');
               return;
             }
             if (data.renamed_self) {
@@ -181,21 +182,57 @@ async function loadUsers() {
             }
             loadUsers();
           } catch (err) {
-            uiModule.showError(t('admin.failed_to_rename_user'));
+            uiModule.showError('Failed to rename user');
           }
         });
       }
 
-      // 删除按钮
+      // Delete button
       const delBtn = row.querySelector('[data-adm-del-user]');
       if (delBtn) {
         delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const username = delBtn.dataset.admDelUser;
-          if (!await uiModule.styledConfirm(t('admin.remove_user_confirm', { username: username }), { confirmText: t('admin.remove'), danger: true })) return;
+          if (!await uiModule.styledConfirm(`Remove user "${username}"?`, { confirmText: 'Remove', danger: true })) return;
           const res = await fetch('/api/auth/users', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
           if (res.ok) loadUsers();
-          else uiModule.showError(t('admin.failed_to_delete_user'));
+          else uiModule.showError('Failed to delete user');
+        });
+      }
+
+      // Promote / demote (admin toggle) — present on every row
+      const adminToggleBtn = row.querySelector('[data-adm-toggle-admin]');
+      if (adminToggleBtn) {
+        adminToggleBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const username = adminToggleBtn.dataset.admToggleAdmin;
+          const makeAdmin = adminToggleBtn.dataset.makeAdmin === '1';
+          const confirmMsg = makeAdmin
+            ? `Grant admin rights to "${username}"? They'll get full access to all settings and users — including the power to demote or remove other admins (you included).`
+            : `Revoke admin rights from "${username}"? They'll lose access to the admin panel.`;
+          if (!await uiModule.styledConfirm(confirmMsg, { confirmText: makeAdmin ? 'Make admin' : 'Revoke admin', danger: !makeAdmin })) return;
+          adminToggleBtn.disabled = true;
+          try {
+            const res = await fetch(`/api/auth/users/${encodeURIComponent(username)}/admin`, {
+              method: 'PUT',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ is_admin: makeAdmin }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              uiModule.showError(data.detail || 'Failed to change admin status');
+              adminToggleBtn.disabled = false;
+              return;
+            }
+            // Demoting yourself drops your own admin access — reload into the
+            // normal-user view (mirrors the rename-self reload above).
+            if (data.self) { window.location.reload(); return; }
+            loadUsers();
+          } catch (err) {
+            uiModule.showError('Failed to change admin status');
+            adminToggleBtn.disabled = false;
+          }
         });
       }
 
@@ -208,10 +245,11 @@ async function _loadModelsForUser(username, allowedSet, modelsRestricted, blockA
   const listEl = privPanel.querySelector(`.priv-models-list[data-user="${username}"]`);
   if (!listEl) return;
   try {
-    // 使用 /api/model-endpoints 而不是 /api/models — 后者由
-    // `cached_models` 支撑，因此尚未探测的端点（例如新添加的
-    // 云 API 如 DeepSeek）在其他端点触发缓存刷新之前完全不会
-    // 显示。端点列表始终反映所有已配置的端点。
+    // Use /api/model-endpoints rather than /api/models — the latter is
+    // backed by `cached_models`, so endpoints that haven't been probed yet
+    // (e.g. a freshly-added cloud API like DeepSeek) simply don't show up
+    // until some other endpoint happens to trigger a cache refresh. The
+    // endpoints listing always reflects every configured endpoint.
     const res = await fetch('/api/model-endpoints', { credentials: 'same-origin' });
     const data = await res.json();
     const allModels = [];
@@ -236,16 +274,16 @@ async function _loadModelsForUser(username, allowedSet, modelsRestricted, blockA
       </label>`;
     }).join('');
 
-    // 变更时保存
+    // Save on change
     function _saveModels() {
       const checked = [];
       listEl.querySelectorAll('.priv-model-cb').forEach(cb => {
         if (cb.checked) checked.push(cb.dataset.mid);
       });
-      // 后端需要区分三种不同状态：
-      //  - 全部选中   -> 无限制 (allowed_models: [], block_all_models: false)
-      //  - 无选中     -> 全部阻止 (allowed_models: [], block_all_models: true)
-      //  - 部分选中   -> 白名单 (allowed_models: checked, block_all_models: false)
+      // Three distinct states the backend must be able to tell apart:
+      //  - all checked   -> no restriction (allowed_models: [], block_all_models: false)
+      //  - none checked  -> block everything (allowed_models: [], block_all_models: true)
+      //  - some checked  -> allowlist (allowed_models: checked, block_all_models: false)
       let value, hintText;
       if (checked.length === allModels.length) {
         restricted = false;
@@ -273,7 +311,7 @@ async function _loadModelsForUser(username, allowedSet, modelsRestricted, blockA
     }
     listEl.querySelectorAll('.priv-model-cb').forEach(cb => cb.addEventListener('change', _saveModels));
 
-    // 全选 / 清空按钮
+    // All / None buttons
     privPanel.querySelector(`.priv-models-all[data-user="${username}"]`)?.addEventListener('click', (e) => {
       e.preventDefault();
       listEl.querySelectorAll('.priv-model-cb').forEach(cb => cb.checked = true);
@@ -311,21 +349,21 @@ function initAddUser() {
     const username = el('adm-newUsername').value.trim();
     const password = el('adm-newPassword').value;
     const is_admin = el('adm-newIsAdmin').checked;
-    if (!username) { msg.textContent = t('admin.username_required'); msg.className = 'admin-error'; return; }
-    if (password.length < 8) { msg.textContent = t('admin.password_min_length'); msg.className = 'admin-error'; return; }
+    if (!username) { msg.textContent = 'Username required'; msg.className = 'admin-error'; return; }
+    if (password.length < 8) { msg.textContent = 'Password must be at least 8 characters'; msg.className = 'admin-error'; return; }
     el('adm-addBtn').disabled = true;
     try {
       const res = await fetch('/api/auth/users', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password, is_admin }) });
       const data = await res.json();
-      if (res.ok) { msg.textContent = t('admin.user_created'); msg.className = 'admin-success'; el('adm-newUsername').value = ''; el('adm-newPassword').value = ''; el('adm-newIsAdmin').checked = false; loadUsers(); }
-      else { msg.textContent = data.detail || t('admin.failed'); msg.className = 'admin-error'; }
-    } catch (e) { msg.textContent = t('admin.request_failed'); msg.className = 'admin-error'; }
+      if (res.ok) { msg.textContent = 'User created'; msg.className = 'admin-success'; el('adm-newUsername').value = ''; el('adm-newPassword').value = ''; el('adm-newIsAdmin').checked = false; loadUsers(); }
+      else { msg.textContent = data.detail || 'Failed'; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = 'Request failed'; msg.className = 'admin-error'; }
     el('adm-addBtn').disabled = false;
   });
 }
 
 /* ═══════════════════════════════════════════
-   服务标签 — 端点
+   SERVICES TAB — Endpoints
    ═══════════════════════════════════════════ */
 function _isLocalEndpoint(url) {
   if (!url) return false;
@@ -337,11 +375,11 @@ function _isLocalEndpoint(url) {
     if (/^10\./.test(h)) return true;
     if (/^192\.168\./.test(h)) return true;
     if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(h)) return true;
-    // Tailscale CGNAT 范围 (100.64.0.0/10 → 100.64.x–100.127.x)。通过
-    // "扫描服务器"发现的服务器返回的是 tailnet IP，这些仍然是
-    // 你自己的机器，因此归类为本地而非 API。
+    // Tailscale CGNAT range (100.64.0.0/10 → 100.64.x–100.127.x). Servers
+    // found via "Scan for Servers" come back as tailnet IPs, which are still
+    // your own machines, so group them under Local rather than API.
     if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)) return true;
-    // 单标签主机名按惯例视为局域网。
+    // Single-label hostnames are LAN by convention.
     if (!h.includes('.')) return true;
     return false;
   } catch { return false; }
@@ -395,10 +433,10 @@ async function _selectAddedModelInChat(endpoint) {
 async function loadEndpoints() {
   const listLocal = el('adm-epList-local');
   const listApi = el('adm-epList-api');
-  // 如果分栏容器不存在，回退到旧的单一列表
-  // （旧版 HTML 或第三方嵌入）。
+  // Fallback to the legacy single list if the split containers don't exist
+  // (older HTML or third-party embedding).
   const listLegacy = el('adm-epList');
-  // 刷新模型选择器以便新端点出现在聊天中
+  // Refresh model picker so new endpoints show up in chat
   if (window.modelsModule && window.modelsModule.refreshModels) {
     window.modelsModule.refreshModels();
     setTimeout(() => {
@@ -412,10 +450,10 @@ async function loadEndpoints() {
   }
   try {
     const res = await fetch('/api/model-endpoints', { credentials: 'same-origin' });
-    // 将非 OK 响应（例如非管理员的 401/403，或后端返回的错误
-    // 信封）视为"暂无端点"：显示空状态，而不是"加载失败"。
-    // 用户刚安装应用 — 确实没有东西可加载，显示错误会让
-    // 界面看起来像是坏了。
+    // Treat a non-OK response (e.g. 401/403 for non-admins, or backend
+    // returning an error envelope) the same as "no endpoints yet": show the
+    // empty state, not "Failed to load". The user just installed the app —
+    // there's literally nothing to load, so the error read as broken UI.
     let data = [];
     if (res.ok) {
       try { data = await res.json(); } catch { data = []; }
@@ -430,9 +468,9 @@ async function loadEndpoints() {
     const rowHtml = data.map(ep => {
       const visibleCount = ep.models.length;
       const totalCount = visibleCount + (ep.hidden_count || 0);
-      // `ep.models` 是*可见*集合 — 当所有模型都隐藏时它为空，
-      // 但我们仍需渲染展开面板以便用户可以取消隐藏。
-      // 因此改用总数来判断。
+      // `ep.models` is the *visible* set — when every model is hidden it's
+      // empty, but we still need to render the expand panel so the user can
+      // un-hide them. Gate on the total instead.
       const hasModels = ep.online && totalCount > 0;
       const statusBadge = ep.status === 'empty'
         ? '<span class="admin-badge">no models</span>'
@@ -448,13 +486,14 @@ async function loadEndpoints() {
       return `
         <div class="admin-user-row${ep.is_enabled ? '' : ' admin-ep-disabled'}${justAddedClass}" data-adm-ep-id="${ep.id}">
           <div style="display:flex;align-items:center;justify-content:space-between;${hasModels ? 'cursor:pointer;' : ''}padding:4px 0;" data-adm-ep-header="${ep.id}">
-            <div class="admin-user-info" style="flex:1;flex-wrap:wrap;gap:0.3rem;">
+            <div class="admin-user-info" style="flex:1;flex-wrap:wrap;gap:0.3rem;align-items:center;">
+              <span class="adm-ep-row-logo" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex-shrink:0;opacity:0.9;">${providerLogoFromUrl(ep.base_url) || ''}</span>
               <span class="admin-user-name">${esc(ep.name)}</span>
               ${ep.model_type === 'image' ? '<span class="admin-badge" style="background:color-mix(in srgb, var(--accent) 20%, transparent);color:var(--accent);">Image</span>' : ''}
               ${kindLabel ? `<span class="admin-badge">${esc(kindLabel)}</span>` : ''}
               ${statusBadge}
               ${ep.is_enabled ? '' : '<span class="admin-badge admin-badge-off">disabled</span>'}
-              ${hasModels ? '<span style="font-size:10px;opacity:0.4;">Click to manage models</span>' : ''}
+              ${hasModels ? `<span style="font-size:10px;opacity:0.4;${category === 'api' ? 'flex-basis:100%;' : ''}">Click to manage models</span>` : ''}
             </div>
             <div style="display:flex;gap:4px;align-items:center;">
               <button class="admin-btn-sm" data-adm-toggle-ep="${ep.id}">${ep.is_enabled ? 'Disable' : 'Enable'}</button>
@@ -466,9 +505,9 @@ async function loadEndpoints() {
           ${hasModels ? `<div class="mcp-tools-panel hidden" data-adm-ep-models-panel="${ep.id}"></div>` : ''}
         </div>`;
     });
-    // 将行分为本地和 API 以填充分栏区域。
-    // 没有任何行的子区域完全隐藏（标题 + 所有内容），
-    // 这样空组不会占用垂直空间。
+    // Partition rows into Local vs API for the split sections.
+    // Subsections without any rows are hidden entirely (heading + all)
+    // so empty groups don't take up vertical real estate.
     const _renderInto = (container, indices) => {
       if (!container) return;
       const section = container.closest('.adm-ep-section');
@@ -482,15 +521,15 @@ async function loadEndpoints() {
     };
     const localIdx = [], apiIdx = [];
     data.forEach((ep, i) => ((ep.category || (_isLocalEndpoint(ep.base_url) ? 'local' : 'api')) === 'local' ? localIdx : apiIdx).push(i));
-    // 每个区域排序：启用的端点在前，禁用的在底部。
-    // 通过稳定排序保持每个组内的原始顺序。
+    // Sort each section: enabled endpoints first, disabled at the bottom.
+    // Preserve original order within each group via stable sort.
     const _sortByEnabled = (a, b) => Number(!!data[b].is_enabled) - Number(!!data[a].is_enabled);
     localIdx.sort(_sortByEnabled);
     apiIdx.sort(_sortByEnabled);
     _renderInto(listLocal, localIdx);
     _renderInto(listApi, apiIdx);
     if (listLegacy) listLegacy.innerHTML = rowHtml.join('');
-    // 跨两个容器遍历匹配节点。
+    // Iterate matching nodes across both containers.
     const queryAll = (sel) => {
       const out = [];
       [listLocal, listApi, listLegacy].forEach(c => {
@@ -507,8 +546,8 @@ async function loadEndpoints() {
         const url = btn.dataset.admCopyUrl || '';
         if (!url) return;
         uiModule.copyToClipboard(url).then(() => {
-          // 短暂图标切换为勾号，让用户得到复制成功的反馈。
-          // ~1.4 秒后恢复。
+          // Brief icon swap to a checkmark so the user gets feedback that
+          // the copy actually happened. Reverts after ~1.4s.
           const prev = btn.innerHTML;
           btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
           btn.style.opacity = '1';
@@ -521,22 +560,23 @@ async function loadEndpoints() {
         e.stopPropagation();
         var epId = btn.dataset.admDelEp;
         var isOffline = btn.dataset.admEpOnline === '0';
-        // 离线端点已经失效 — 完全跳过确认对话框，
-        // 立即删除。乐观 UI 移除让操作感觉即时。
+        // Offline endpoints are already broken — skip the confirm dialog
+        // entirely and delete immediately. The optimistic UI removal makes
+        // the action feel instant.
         if (!isOffline) {
           var deps = [];
           try {
             var depRes = await fetch('/api/model-endpoints/' + epId + '/dependents', { credentials: 'same-origin' });
             var depData = await depRes.json();
             deps = depData.dependents || [];
-          } catch (e) { /* 继续而不显示警告 */ }
+          } catch (e) { /* proceed without warning */ }
           var msg = 'Delete this endpoint?';
           if (deps.length) {
             msg += '\n\nThe following settings use this endpoint and will be reset:\n— ' + deps.join('\n— ');
           }
-          if (!await uiModule.styledConfirm(msg, { confirmText: t('admin.delete'), danger: true })) return;
+          if (!await uiModule.styledConfirm(msg, { confirmText: 'Delete', danger: true })) return;
         }
-        // 乐观更新：立即从 UI 中移除
+        // Optimistic: remove from UI immediately
         const row = btn.closest('[data-adm-ep-id]');
         if (row) row.remove();
         fetch('/api/model-endpoints/' + epId, { method: 'DELETE' })
@@ -545,19 +585,20 @@ async function loadEndpoints() {
           .catch(() => loadEndpoints());
       });
     });
-    // 清除刚添加标记，因为该行已带动画类渲染 —
-    // 防止后续每次 loadEndpoints() 调用时（例如切换模型时）
-    // 高亮效果重复触发。
+    // Clear the just-added marker now that the row has been rendered
+    // with the animation class — keeps the glow from re-firing on every
+    // subsequent loadEndpoints() call (e.g. when toggling a model).
     if (_recentlyAddedEpId) _recentlyAddedEpId = null;
-    // 模型展开/折叠（点击卡片任意位置）
+    // Models expand/collapse (click anywhere on card)
     queryAll('[data-adm-ep-id]').forEach(row => {
       const header = row.querySelector('[data-adm-ep-header]');
       if (!header) return;
       let _modelsLoaded = false;
       row.style.cursor = 'pointer';
       row.addEventListener('click', async (e) => {
-        // 不让展开面板内的交互重新触发展开/折叠处理 —
-        // 搜索框因为点击事件冒泡到这里而被关闭。
+        // Don't let interactions inside the expanded panel re-fire the
+        // expand/collapse handler — the search box was getting closed
+        // because clicking it bubbled up to here.
         if (e.target.closest('.admin-btn-sm, .admin-btn-delete, .mcp-tools-list, .mcp-tools-header, .mcp-tools-search, input, label')) return;
         const epId = header.dataset.admEpHeader;
         const panel = row.querySelector(`[data-adm-ep-models-panel="${epId}"]`);
@@ -571,7 +612,7 @@ async function loadEndpoints() {
         }
         if (!_modelsLoaded && isOpen) {
           _modelsLoaded = true;
-          // 共享的漩涡式加载动画（与应用其他部分保持一致）。
+          // Our shared whirlpool spinner (consistent with the rest of the app).
           panel.innerHTML = '';
           let _modelsSpin = null;
           const _ld = document.createElement('span');
@@ -596,7 +637,7 @@ async function loadEndpoints() {
                 try {
                   const res = await fetch(`/api/model-endpoints/${epId}/models?refresh=true&refresh_timeout=60`, { credentials: 'same-origin' });
                   const refreshWarning = res.headers.get('X-Model-Refresh-Warning') || '';
-                  if (!res.ok) throw new Error(t('admin.http_status', { status: res.status }));
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
                   const refreshedModels = await res.json();
                   renderModels(refreshedModels, refreshWarning);
                   if (refreshWarning && uiModule?.showToast) uiModule.showToast(refreshWarning, 6000);
@@ -626,7 +667,7 @@ async function loadEndpoints() {
                 <a href="#" data-ep-select-all="${epId}">All</a>
                 <a href="#" data-ep-select-none="${epId}">None</a>
               </span>
-            </div>${warningHtml}${showSearch ? `<input type="search" class="mcp-tools-search" placeholder="${t('admin.search_models', { n: sortedModels.length })}" data-ep-search="${epId}">` : ''}<div class="mcp-tools-list">` + sortedModels.map(m =>
+            </div>${warningHtml}${showSearch ? `<input type="search" class="mcp-tools-search" placeholder="Search ${sortedModels.length} models..." data-ep-search="${epId}">` : ''}<div class="mcp-tools-list">` + sortedModels.map(m =>
               `<label title="${esc(m.id)}" data-ep-model-row data-search="${esc((m.display + ' ' + m.id).toLowerCase())}" class="adm-model-row">
                 <input type="checkbox" class="adm-cb-hidden" data-ep-model-id="${esc(m.id)}" ${!m.is_hidden ? 'checked' : ''}>
                 <span class="adm-check-dot" aria-hidden="true"></span>
@@ -661,7 +702,7 @@ async function loadEndpoints() {
           };
           try {
             const res = await fetch(`/api/model-endpoints/${epId}/models`, { credentials: 'same-origin' });
-            if (!res.ok) throw new Error(t('admin.http_status', { status: res.status }));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const models = await res.json();
             _stopSpin();
             renderModels(models);
@@ -689,16 +730,16 @@ async function _saveEpModelState(epId, panel) {
       body: JSON.stringify({ hidden }),
     });
     const countLabel = panel.querySelector('.mcp-tools-count');
-    if (countLabel) countLabel.textContent = `${t('admin.enabled_count', { n: total - hidden.length, m: total })}`;
+    if (countLabel) countLabel.textContent = `${total - hidden.length}/${total} enabled`;
     const row = panel.closest('[data-adm-ep-id]');
     if (row) {
       const badge = row.querySelector('.admin-badge');
-      if (badge && !badge.classList.contains('admin-badge-off')) badge.textContent = `${t('admin.models_enabled', { n: total - hidden.length, m: total })}`;
+      if (badge && !badge.classList.contains('admin-badge-off')) badge.textContent = `${total - hidden.length}/${total} models enabled`;
     }
     if (settingsModule && typeof settingsModule.refreshAiModelEndpoints === 'function') {
       settingsModule.refreshAiModelEndpoints();
     }
-  } catch (e) { /* 静默忽略 */ }
+  } catch (e) { /* silent */ }
 }
 
 function initEndpointForm() {
@@ -706,9 +747,9 @@ function initEndpointForm() {
   const urlInput = el('adm-epUrl');
   const kindSel = el('adm-epKind');
 
-  // 自定义提供商选择器 — 镜像（现已隐藏的）<select id="adm-epProvider">，
-  // 让函数其余部分（读取 provider.value 并派发变更事件）
-  // 保持正常工作不变。
+  // Custom provider picker — mirrors the (now hidden) <select id="adm-epProvider">
+  // so the rest of this function (which reads provider.value and dispatches
+  // change events) keeps working unchanged.
   const picker = el('adm-provider-picker');
   const pickerBtn = el('adm-provider-btn');
   const pickerMenu = el('adm-provider-menu');
@@ -825,6 +866,14 @@ function initEndpointForm() {
     document.addEventListener('click', (e) => {
       if (!picker.contains(e.target)) pickerMenu.classList.add('hidden');
     });
+    // Capture-phase Esc: dismiss the picker menu without bubbling to the
+    // settings-modal handler that would otherwise close the whole modal.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (pickerMenu.classList.contains('hidden')) return;
+      e.stopPropagation();
+      pickerMenu.classList.add('hidden');
+    }, { capture: true });
   }
 
   provider.addEventListener('change', () => {
@@ -853,22 +902,22 @@ function initEndpointForm() {
   }
   function _normalizeBaseUrl(raw) {
     let u = raw.trim();
-    // 修复常见协议拼写错误
+    // Fix common protocol typos
     u = u.replace(/^https?:\/(?!\/)/, m => m + '/');  // https:/ → https://
     u = u.replace(/^htp:/, 'http:').replace(/^htps:/, 'https:');
     u = u.replace(/^http:\/\/\//, 'http://');  // http:/// → http://
     u = u.replace(/^https:\/\/\//, 'https://');
-    // 若无协议则添加 http://
+    // Add http:// if no protocol
     if (!/^https?:\/\//.test(u)) u = 'http://' + u;
-    // 移除尾部斜杠
+    // Strip trailing slashes
     u = u.replace(/\/+$/, '');
-    // 移除不应出现在 base URL 中的尾部路径
+    // Strip trailing paths that shouldn't be in a base URL
     u = u.replace(/\/v1\/(models|chat\/completions|completions|messages)\/?$/i, '/v1');
     u = u.replace(/\/(models|chat\/completions|completions|v1\/messages)\/?$/i, '');
     u = u.replace(/\/api\/(chat|tags|generate)\/?$/i, '/api');
-    // 修复重复的 /v1/v1
+    // Fix double /v1/v1
     u = u.replace(/\/v1\/v1$/, '/v1');
-    // 移除查询参数和片段
+    // Strip query params and fragments
     u = u.split('?')[0].split('#')[0];
     try {
       const parsed = new URL(u);
@@ -876,7 +925,7 @@ function initEndpointForm() {
         u = 'https://ollama.com/api';
       }
     } catch(e) {}
-    // 确保裸 host:port URL 带有 /v1 后缀（非云提供商）
+    // Ensure /v1 suffix for bare host:port URLs (not cloud providers)
     if (!u.includes('api.') && !u.includes('openrouter') && !u.includes('opencode.ai') && !u.includes('ollama.com') && !u.endsWith('/v1')) {
       try {
         const parsed = new URL(u);
@@ -901,18 +950,18 @@ function initEndpointForm() {
 
   function _renderEndpointTestResult(msg, res, d) {
     if (res.ok && d.status === 'empty') {
-      msg.textContent = t('admin.online_no_models');
+      msg.textContent = 'Online — no models found';
       msg.className = 'admin-success';
       return;
     }
     if (res.ok && d.online) {
       const models = d.models || [];
       const preview = models.slice(0, 3).map(m => esc(String(m).split('/').pop())).join(', ');
-      msg.innerHTML = t('admin.online_found', { n: models.length }) + ': ' + preview + (models.length > 3 ? ', …' : '');
+      msg.innerHTML = `Online — found ${models.length} model${models.length !== 1 ? 's' : ''}${preview ? `: ${preview}${models.length > 3 ? ', …' : ''}` : ''}`;
       msg.className = 'admin-success';
       return;
     }
-    msg.textContent = (d && d.detail) || (d && d.ping_error ? t('admin.offline_error', { error: d.ping_error }) : 'Offline');
+    msg.textContent = (d && d.detail) || (d && d.ping_error ? `Offline — ${d.ping_error}` : 'Offline');
     msg.className = 'admin-error';
   }
 
@@ -935,12 +984,12 @@ function initEndpointForm() {
       msg.textContent = ''; msg.className = '';
       const rawUrl = (urlInput.value || provider.value).trim();
       const apiKey = el('adm-epApiKey').value.trim();
-      if (!rawUrl) { msg.textContent = t('admin.select_provider_or_url'); msg.className = 'admin-error'; return; }
-      if (provider.value && !apiKey) { msg.textContent = t('admin.api_key_required_cloud'); msg.className = 'admin-error'; return; }
+      if (!rawUrl) { msg.textContent = 'Select a provider or enter a base URL'; msg.className = 'admin-error'; return; }
+      if (provider.value && !apiKey) { msg.textContent = 'API key is required for cloud providers'; msg.className = 'admin-error'; return; }
       const url = provider.value && rawUrl === provider.value ? rawUrl : _normalizeBaseUrl(rawUrl);
       apiTestController = new AbortController();
       apiTestBtn.disabled = true;
-      apiTestBtn.textContent = t('admin.testing');
+      apiTestBtn.textContent = 'Testing...';
       if (apiCancelTestBtn) apiCancelTestBtn.classList.remove('hidden');
       try {
         const fd = new FormData();
@@ -958,16 +1007,16 @@ function initEndpointForm() {
         _renderEndpointTestResult(msg, res, d);
       } catch (e) {
         if (e && e.name === 'AbortError') {
-          msg.textContent = t('admin.test_canceled');
+          msg.textContent = 'Test canceled';
           msg.className = '';
         } else {
-          msg.textContent = t('admin.test_failed') + (e && e.message ? e.message : 'request failed');
+          msg.textContent = 'Test failed: ' + (e && e.message ? e.message : 'request failed');
           msg.className = 'admin-error';
         }
       }
       apiTestController = null;
       apiTestBtn.disabled = false;
-      apiTestBtn.textContent = t('admin.test');
+      apiTestBtn.textContent = 'Test';
       if (apiCancelTestBtn) apiCancelTestBtn.classList.add('hidden');
     });
   }
@@ -987,12 +1036,12 @@ function initEndpointForm() {
     msg.textContent = ''; msg.className = '';
     const rawUrl = (urlInput.value || provider.value).trim();
     const apiKey = el('adm-epApiKey').value.trim();
-    if (!rawUrl) { msg.textContent = t('admin.select_provider_or_url'); msg.className = 'admin-error'; return; }
-    if (provider.value && !apiKey) { msg.textContent = t('admin.api_key_required_cloud'); msg.className = 'admin-error'; return; }
-    // 规范化 URL（修复拼写错误，添加 /v1，移除错误路径）
+    if (!rawUrl) { msg.textContent = 'Select a provider or enter a base URL'; msg.className = 'admin-error'; return; }
+    if (provider.value && !apiKey) { msg.textContent = 'API key is required for cloud providers'; msg.className = 'admin-error'; return; }
+    // Normalize URL (fix typos, add /v1, strip wrong paths)
     const url = provider.value && rawUrl === provider.value ? rawUrl : _normalizeBaseUrl(rawUrl);
     const btn = el('adm-epAddBtn');
-    btn.disabled = true; btn.textContent = t('admin.adding');
+    btn.disabled = true; btn.textContent = 'Adding...';
     try {
       const fd = new FormData();
       fd.append('base_url', url);
@@ -1019,14 +1068,15 @@ function initEndpointForm() {
         if (d.id) _recentlyAddedEpId = String(d.id);
         await loadEndpoints();
         await _selectAddedModelInChat(d);
+        const goLink = ' <a href="#" data-go-added-models style="margin-left:6px;text-decoration:underline;color:inherit;font-weight:600;">Added Models →</a>';
         if (!d.online) {
-          msg.textContent = 'Added (endpoint offline — will retry on next load)';
+          msg.innerHTML = 'Added (endpoint offline — will retry on next load)' + goLink;
           msg.className = 'admin-error';
         } else if (d.status === 'empty') {
-          msg.textContent = 'Added — endpoint reachable, no models found';
+          msg.innerHTML = 'Added — endpoint reachable, no models found' + goLink;
           msg.className = 'admin-success';
         } else {
-          msg.textContent = t('admin.added_found', { n: count });
+          msg.innerHTML = `Added — found ${count} model${count !== 1 ? 's' : ''}` + goLink;
           msg.className = 'admin-success';
         }
       } else { msg.textContent = d.detail || 'Failed'; msg.className = 'admin-error'; }
@@ -1041,9 +1091,9 @@ function initEndpointForm() {
     const status = el('adm-deviceAuthStatus') || _endpointMsg('api');
     if (!status) return;
     const triggerText = triggerEl ? triggerEl.textContent : '';
-    // 以内联"重试"按钮渲染错误（设备认证提供商的顶部按钮已隐藏，
-    // 因此重试放在此处）。使用 DOM 方法构建，不用 innerHTML。
-    // 先调用 reset() 清除 deviceAuthPolling 防护。
+    // Render an error with an inline "Try again" (the top button is hidden for
+    // device-auth providers, so retry lives here). Built with DOM methods, not
+    // innerHTML. Call reset() first so the deviceAuthPolling guard is cleared.
     const showAuthError = (text) => {
       status.className = 'admin-error';
       status.textContent = text + ' ';
@@ -1070,7 +1120,7 @@ function initEndpointForm() {
     }
     deviceAuthPolling = true;
     _setApiFormForProvider();
-    status.textContent = t('admin.starting_signin', { label: config.label });
+    status.textContent = `Starting ${config.label} sign-in...`;
 
     try {
       const result = await runProviderDeviceFlow(providerKey, {
@@ -1102,8 +1152,8 @@ function initEndpointForm() {
               }
             } catch (e) {}
             if (!ok) {
-              // navigator.clipboard 在非安全上下文中不可用（通过局域网 IP
-              // 的 HTTP 自托管），回退到 execCommand('copy')。
+              // navigator.clipboard is unavailable in non-secure contexts (HTTP
+              // self-host over a LAN IP), so fall back to execCommand('copy').
               const ta = document.createElement('textarea');
               ta.value = code;
               ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;font-size:16px;';
@@ -1146,9 +1196,9 @@ function initEndpointForm() {
     }
   }
 
-  // API 密钥显示切换。密钥输入框默认隐藏，所以添加表单
-  // 显示为单行操作；密钥按钮切换输入行的可见性，
-  // 并为屏幕阅读器 / CSS 伪类切换 aria-expanded。
+  // API Key reveal toggle. The key inputs are hidden by default so the Add
+  // form reads as a single action row; the Key button toggles the input row
+  // and flips aria-expanded for screen readers / CSS pseudo-classes.
   const _wireKeyToggle = (btnId, rowId) => {
     const btn = el(btnId);
     const row = el(rowId);
@@ -1166,23 +1216,142 @@ function initEndpointForm() {
   };
   _wireKeyToggle('adm-epLocalKeyBtn', 'adm-epLocalApiKey-row');
 
-  // ── 已添加模型工具栏：探测 + 清除离线 ────────────────────
-  // 两个按钮作用于当前渲染的端点列表。
-  // loadEndpoints() 在线/离线标记已标记在每个行的
-  // [data-adm-ep-online] 属性上，因此两个按钮只需遍历 DOM，
-  // 无需重新获取已有的数据。
+  // Delegated link handler for jumping between settings tabs.
+  //   [data-go-added-models]              → quick shortcut for the Added Models tab
+  //   [data-go-settings-tab="X"]          → any tab whose nav button has data-settings-tab="X"
+  //   [data-go-scroll-to="#elementId"]    → after switching, scroll the element into view
+  document.addEventListener('click', (e) => {
+    const explicit = e.target.closest('[data-go-settings-tab]');
+    if (explicit) {
+      e.preventDefault();
+      const tab = explicit.getAttribute('data-go-settings-tab');
+      const scrollTo = explicit.getAttribute('data-go-scroll-to');
+      const btn = document.querySelector(`[data-settings-tab="${tab}"]`);
+      if (btn) btn.click();
+      if (scrollTo) {
+        // Defer to the next frame so the panel has actually become visible
+        // before we try to scroll into it.
+        requestAnimationFrame(() => {
+          const target = document.querySelector(scrollTo);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+      return;
+    }
+    const link = e.target.closest('[data-go-added-models]');
+    if (!link) return;
+    e.preventDefault();
+    const btn = document.querySelector('[data-settings-tab="added-models"]');
+    if (btn) btn.click();
+  });
+
+  // Generic open/close helper for the kebab dropdowns in this card.
+  // Both the Local and API cards use the same shape: an h2-anchored button
+  // with id "<prefix>MoreBtn" toggles a sibling menu with id "<prefix>MoreMenu".
+  // Global Esc handler: close any currently-open kebab menu in the admin
+  // panel regardless of which _wireKebab instance owns it. Belt-and-braces
+  // backup for the per-instance handler below — registered once.
+  if (!document._admKebabEscWired) {
+    document._admKebabEscWired = true;
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      // Any visible kebab dropdown in the admin panel — match by id pattern
+      // so adding a new kebab elsewhere automatically benefits.
+      const menus = document.querySelectorAll(
+        '#adm-epLocalMoreMenu, #adm-epApiMoreMenu'
+      );
+      let closed = false;
+      menus.forEach((m) => {
+        if (m && m.style.display !== 'none') {
+          m.style.display = 'none';
+          // Sync the associated button's aria-expanded when we can find it.
+          const btn = document.getElementById(m.id.replace('Menu', 'Btn'));
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+          closed = true;
+        }
+      });
+      if (closed) e.stopPropagation();
+    }, { capture: true });
+  }
+
+  const _wireKebab = (btnId, menuId, onItem) => {
+    const btn = el(btnId);
+    const menu = el(menuId);
+    if (!btn || !menu) return;
+    const isOpen = () => menu.style.display !== 'none';
+    const close = () => { menu.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); };
+    const open = () => { menu.style.display = 'flex'; btn.setAttribute('aria-expanded', 'true'); };
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (isOpen()) close(); else open();
+    });
+    menu.addEventListener('click', (e) => {
+      const item = e.target.closest('.adm-more-item');
+      if (!item) return;
+      if (onItem) onItem(item, e);
+      close();
+    });
+    document.addEventListener('click', (e) => {
+      if (!isOpen()) return;
+      if (e.target.closest('#' + menuId + ', #' + btnId)) return;
+      close();
+    });
+    // Use capture phase so this fires before the settings-modal Esc handler
+    // (which is in bubble phase). stopPropagation prevents the modal from
+    // closing when the user only meant to dismiss this menu.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isOpen()) {
+        e.stopPropagation();
+        close();
+      }
+    }, { capture: true });
+  };
+
+  // API card "..." menu: contains the Proxy/API connection-mode toggle.
+  // Sync the visible checkmarks with the hidden #adm-epKind select so
+  // downstream code (which reads kindSel.value) keeps working.
+  (function wireApiKindMenu() {
+    const kind = el('adm-epKind');
+    if (!kind) return;
+    const opts = document.querySelectorAll('#adm-epApiMoreMenu .adm-kind-opt');
+    const sync = () => {
+      opts.forEach((o) => {
+        const check = o.querySelector('.adm-kind-check');
+        if (check) check.style.visibility = (o.dataset.kind === kind.value) ? 'visible' : 'hidden';
+      });
+    };
+    sync();
+    kind.addEventListener('change', sync);
+    _wireKebab('adm-epApiMoreBtn', 'adm-epApiMoreMenu', (item) => {
+      const k = item.dataset.kind;
+      if (!k) return;
+      kind.value = k;
+      kind.dispatchEvent(new Event('change'));
+    });
+  })();
+
+  // Local card "..." kebab: holds Scan network / Ollama / API key reveal.
+  // Item buttons keep their own click handlers; the helper just handles
+  // open/close + outside-click + Esc.
+  _wireKebab('adm-epLocalMoreBtn', 'adm-epLocalMoreMenu');
+
+  // ── Added Models toolbar: Probe + Clear offline ────────────────────
+  // Both buttons act over the currently-rendered endpoint list. The
+  // online/offline marker is stamped on each row's [data-adm-ep-online]
+  // attribute by loadEndpoints(), so both buttons just iterate the DOM
+  // without re-fetching anything they don't already have.
   const _refreshOfflineCount = () => {
     const lbl = el('adm-epOfflineCount');
     if (!lbl) return;
     const n = document.querySelectorAll('[data-adm-ep-id] [data-adm-ep-online="0"]').length;
     lbl.textContent = n > 0 ? `(${n})` : '';
-    // 即使没有离线行也保持按钮可用 —
-    // 点击空情况会弹出提示而不是让按钮感觉失效。
+    // Hide the button entirely when there's nothing offline — no point
+    // showing an action that has nothing to act on.
     const btn = el('adm-epClearOfflineBtn');
-    if (btn) btn.style.opacity = n === 0 ? '0.55' : '0.85';
+    if (btn) btn.style.display = n === 0 ? 'none' : '';
   };
-  // 每次 loadEndpoints() 运行后通过挂钩渲染来绑定 —
-  // 最简单的方式：对两个列表容器使用 MutationObserver。
+  // Wire after every loadEndpoints() run by patching the render hook —
+  // simplest path: MutationObserver on the two list containers.
   const _obsRoots = ['adm-epList-local', 'adm-epList-api']
     .map(id => el(id)).filter(Boolean);
   if (_obsRoots.length) {
@@ -1196,13 +1365,23 @@ function initEndpointForm() {
     probeAllBtn.addEventListener('click', async () => {
       probeAllBtn.disabled = true;
       const origHTML = probeAllBtn.innerHTML;
-      probeAllBtn.innerHTML = '<span style="opacity:0.7;">Probing…</span>';
+      let _wp = null;
       try {
-        // 执行批量本地探测（模型选择器使用的同一个）。
+        const sp = window.spinnerModule || (await import('./spinner.js')).default;
+        _wp = sp.createWhirlpool(11);
+        _wp.element.style.cssText = 'display:inline-flex;width:11px;height:11px;margin:0 4px 0 0;';
+        probeAllBtn.innerHTML = '';
+        probeAllBtn.appendChild(_wp.element);
+        probeAllBtn.appendChild(document.createTextNode('Probing'));
+      } catch (_) {
+        probeAllBtn.innerHTML = '<span style="opacity:0.7;">Probing…</span>';
+      }
+      try {
+        // Hit the bulk local probe (same one the model picker uses).
         await fetch('/api/model-endpoints/probe-local', { credentials: 'same-origin' }).catch(() => {});
-        // 然后逐个端点 /probe 探测其余部分，使 API/云端点
-        // 也得到刷新。并行执行 — 每次最多 6 个，避免
-        // 列表很大时压垮后端。
+        // Then per-endpoint /probe for the rest so API/cloud endpoints
+        // refresh too. Parallel — capped to 6 at a time so we don't
+        // hammer the backend on a big list.
         const ids = Array.from(document.querySelectorAll('[data-adm-ep-id]')).map(r => r.getAttribute('data-adm-ep-id')).filter(Boolean);
         const lane = async (id) => {
           try { await fetch(`/api/model-endpoints/${id}/probe`, { credentials: 'same-origin' }); } catch (_) {}
@@ -1218,6 +1397,7 @@ function initEndpointForm() {
         await loadEndpoints();
         if (uiModule && uiModule.showToast) uiModule.showToast('Endpoint status refreshed', 1800);
       } finally {
+        if (_wp) { try { _wp.destroy(); } catch (_) {} }
         probeAllBtn.innerHTML = origHTML;
         probeAllBtn.disabled = false;
       }
@@ -1237,15 +1417,15 @@ function initEndpointForm() {
       }
       const confirmMsg = ids.length === 1
         ? 'Remove 1 offline endpoint?'
-        : t('admin.remove_offline_endpoints', { n: ids.length });
+        : `Remove ${ids.length} offline endpoints?`;
       if (uiModule && uiModule.styledConfirm) {
-        const ok = await uiModule.styledConfirm(confirmMsg, { confirmText: t('admin.remove'), danger: true });
+        const ok = await uiModule.styledConfirm(confirmMsg, { confirmText: 'Remove', danger: true });
         if (!ok) return;
       } else if (!confirm(confirmMsg)) {
         return;
       }
       clearOfflineBtn.disabled = true;
-      // 乐观 UI：立即移除行，然后发送 DELETE 请求。
+      // Optimistic UI: pull rows immediately, then fire the DELETEs.
       offlineBtns.forEach(b => {
         const row = b.closest('[data-adm-ep-id]');
         if (row) row.remove();
@@ -1255,14 +1435,14 @@ function initEndpointForm() {
       ));
       try { await loadEndpoints(); } catch (_) {}
       _refreshOfflineCount();
-      if (uiModule && uiModule.showToast) uiModule.showToast(t('admin.removed_offline_endpoints', { n: ids.length }), 1800);
+      if (uiModule && uiModule.showToast) uiModule.showToast(`Removed ${ids.length} offline endpoint${ids.length === 1 ? '' : 's'}`, 1800);
     });
   }
 
-  // API 密钥输入框获焦点时清空。字段类型为 password 所以
-  // 值被掩盖；用户看不到内容无法就地编辑，因此预期
-  // 操作是"点击进入，输入新密钥"。获焦点时清空省去了
-  // 全选再删除的步骤。
+  // Clear-on-focus for the API key inputs. The fields are type=password so the
+  // value is masked; users can't see what's there to edit it in place, so the
+  // expected gesture is "click in, type new key". Wiping on focus removes the
+  // select-all-and-delete dance.
   const _wireClearOnFocus = (id) => {
     const inp = el(id);
     if (!inp) return;
@@ -1273,8 +1453,8 @@ function initEndpointForm() {
   _wireClearOnFocus('adm-epLocalApiKey');
   _wireClearOnFocus('adm-epApiKey');
 
-  // 将 Ollama 提供商 logo 放置到 Ollama 快速启动按钮中。
-  // 重用提供商选择器使用的同一个 SVG，品牌一致性免费获得。
+  // Drop the Ollama provider logo into the Ollama Quickstart button. Reuses
+  // the same SVG the provider picker uses, so brand parity stays free.
   try {
     const _ollamaLogoSlot = document.querySelector('#adm-epOllamaBtn .adm-ollama-logo');
     if (_ollamaLogoSlot) {
@@ -1283,20 +1463,21 @@ function initEndpointForm() {
     }
   } catch (_) {}
 
-  // 本地"添加"按钮 — 自托管 base URL 的并行表单。
+  // Local "Add" button — sibling form for self-hosted base URLs.
   const localAddBtn = el('adm-epLocalAddBtn');
   const localTestBtn = el('adm-epLocalTestBtn');
   if (localTestBtn) {
     localTestBtn.addEventListener('click', async () => {
+      const testOriginalHtml = localTestBtn.innerHTML || '>Test';
       const msg = _endpointMsg('local');
-      msg.textContent = ''; msg.className = '';
+      msg.textContent = ''; msg.className = 'adm-ep-inline-msg';
       const raw = (el('adm-epLocalUrl').value || '').trim();
       if (!raw) { msg.textContent = 'Enter a base URL to test'; msg.className = 'admin-error'; return; }
       const url = _normalizeBaseUrl(raw);
       const keyEl = el('adm-epLocalApiKey');
       const apiKey = keyEl ? keyEl.value.trim() : '';
       localTestBtn.disabled = true;
-      localTestBtn.textContent = 'Testing...';
+      localTestBtn.innerHTML = testOriginalHtml.replace(/>Test\s*$/, '>Testing...');
       try {
         const fd = new FormData();
         fd.append('base_url', url);
@@ -1309,19 +1490,21 @@ function initEndpointForm() {
         msg.className = 'admin-error';
       }
       localTestBtn.disabled = false;
-      localTestBtn.textContent = 'Test';
+      localTestBtn.innerHTML = testOriginalHtml;
     });
   }
   if (localAddBtn) {
     localAddBtn.addEventListener('click', async () => {
+      const addOriginalHtml = localAddBtn.innerHTML || '>Add';
       const msg = _endpointMsg('local');
-      msg.textContent = ''; msg.className = '';
+      msg.textContent = ''; msg.className = 'adm-ep-inline-msg';
       const raw = (el('adm-epLocalUrl').value || '').trim();
       if (!raw) { msg.textContent = 'Enter a base URL (e.g. http://localhost:8002/v1)'; msg.className = 'admin-error'; return; }
       const url = _normalizeBaseUrl(raw);
       const keyEl = el('adm-epLocalApiKey');
       const apiKey = keyEl ? keyEl.value.trim() : '';
-      localAddBtn.disabled = true; localAddBtn.textContent = 'Adding...';
+      localAddBtn.disabled = true;
+      localAddBtn.innerHTML = addOriginalHtml.replace(/>Add\s*$/, '>Adding...');
       try {
         const fd = new FormData();
         fd.append('base_url', url);
@@ -1341,15 +1524,17 @@ function initEndpointForm() {
           await loadEndpoints();
           await _selectAddedModelInChat(d);
           const count = (d.models || []).length;
-          msg.textContent = d.status === 'empty'
+          const baseText = d.status === 'empty'
             ? 'Added — Ollama is running, no models pulled yet'
             : d.online
-            ? t('admin.added_found', { n: count })
+            ? `Added — found ${count} model${count !== 1 ? 's' : ''}`
             : 'Added (offline — will retry on next load)';
+          msg.innerHTML = `${baseText} <a href="#" data-go-added-models style="margin-left:6px;text-decoration:underline;color:inherit;font-weight:600;">Added Models →</a>`;
           msg.className = d.online ? 'admin-success' : 'admin-error';
         } else { msg.textContent = d.detail || 'Failed'; msg.className = 'admin-error'; }
       } catch (e) { msg.textContent = 'Request failed'; msg.className = 'admin-error'; }
-      localAddBtn.disabled = false; localAddBtn.textContent = 'Add';
+      localAddBtn.disabled = false;
+      localAddBtn.innerHTML = addOriginalHtml;
     });
   }
 
@@ -1369,16 +1554,13 @@ function initEndpointForm() {
     });
   }
 
-  // 发现本地模型按钮
+  // Discover local models button
   const discoverBtn = el('adm-epDiscoverBtn');
   if (discoverBtn) {
     discoverBtn.addEventListener('click', async () => {
       const msg = _endpointMsg('local');
       discoverBtn.disabled = true;
-      // 扫描时保持按钮图标不变；下方的漩涡动画 +
-      // 状态文本已经足够反馈。（两个旋转指示器
-      // 同时出现太喧哗。）
-      msg.className = '';
+      msg.className = 'adm-ep-inline-msg';
       msg.innerHTML = '';
       try {
         const sp = window.spinnerModule || (await import('./spinner.js')).default;
@@ -1389,7 +1571,7 @@ function initEndpointForm() {
         wrap.appendChild(wp.element);
         const txt = document.createElement('span');
         txt.textContent = 'Scanning ports 8000-8020 and 11434 for model servers...';
-        txt.style.cssText = 'font-size:12px;opacity:0.7;';
+        txt.style.cssText = 'opacity:0.7;';
         wrap.appendChild(txt);
         msg.appendChild(wrap);
         discoverBtn._wp = wp;
@@ -1402,8 +1584,8 @@ function initEndpointForm() {
           msg.textContent = 'No model servers found. Make sure vLLM, llama.cpp, SGLang, or Ollama is running. Docker users may need Ollama bound to a trusted reachable interface.';
           msg.className = 'admin-error';
         } else {
-          // 自动添加每个发现的端点。服务端基于 base_url 去重，
-          // 对已注册的返回 `existing: true`。
+          // Auto-add each discovered endpoint. Server dedupes on base_url
+          // and returns `existing: true` for already-registered ones.
           let added = 0;
           let skipped = 0;
           for (const item of items) {
@@ -1423,9 +1605,9 @@ function initEndpointForm() {
             }
           }
           const totalModels = items.reduce((n, i) => n + (i.models ? i.models.length : 0), 0);
-          const parts = [t('admin.found_servers', { n: items.length, m: totalModels })];
-          if (added) parts.push(t('admin.added_new', { n: added }));
-          if (skipped) parts.push(t('admin.already_added', { n: skipped }));
+          const parts = [`Found ${items.length} server${items.length !== 1 ? 's' : ''} with ${totalModels} model${totalModels !== 1 ? 's' : ''}`];
+          if (added) parts.push(`added ${added} new`);
+          if (skipped) parts.push(`${skipped} already added`);
           msg.innerHTML = parts.join(' — ');
           msg.className = 'admin-success';
           loadEndpoints();
@@ -1464,7 +1646,7 @@ function initEndpointForm() {
 }
 
 /* ═══════════════════════════════════════════
-   工具标签 — MCP
+   TOOLS TAB — MCP
    ═══════════════════════════════════════════ */
 
 const _GOOGLE_OAUTH_HELP = `To get Google OAuth credentials:
@@ -1545,7 +1727,7 @@ const MCP_PRESETS = [
   { name: "Todoist",         command: "npx", args: ["-y", "todoist-mcp-server"],                         env: { TODOIST_API_TOKEN: "" },
     help: "1. Go to todoist.com > Settings > Integrations > Developer\n2. Copy your API token" },
 ];
-// ── 内置工具管理 ──
+// ── Built-in tools management ──
 const TOOL_META = {
   bash:              { name: 'Shell',            desc: 'Execute bash commands',           cat: 'Code',       ctx: '~200' },
   python:            { name: 'Python',           desc: 'Run Python scripts',              cat: 'Code',       ctx: '~200' },
@@ -1590,7 +1772,7 @@ async function loadBuiltinTools() {
     const tools = data.tools || [];
     if (!tools.length) { list.innerHTML = '<div class="admin-empty">No tools found</div>'; return; }
 
-    // 按类别分组
+    // Group by category
     const groups = {};
     for (const t of tools) {
       const meta = TOOL_META[t.id] || { name: t.id, desc: '', cat: 'Other', ctx: '?' };
@@ -1599,7 +1781,7 @@ async function loadBuiltinTools() {
       groups[cat].push({ ...t, ...meta });
     }
 
-    // 类别顺序
+    // Category order
     const catOrder = ['Code', 'Search', 'Documents', 'Media', 'Knowledge', 'Multi-Agent', 'Sessions', 'System', 'Other'];
     let html = '';
     for (const cat of catOrder) {
@@ -1640,12 +1822,12 @@ async function loadBuiltinTools() {
     }
     list.innerHTML = html;
 
-    // 阻止开关点击触发展开/折叠
+    // Prevent toggle clicks from expanding/collapsing
     list.querySelectorAll('.admin-tool-cat-right').forEach(span => {
       span.addEventListener('click', e => e.stopPropagation());
     });
 
-    // 绑定类别展开/折叠
+    // Wire category expand/collapse
     list.querySelectorAll('[data-tool-cat]').forEach(header => {
       header.addEventListener('click', () => {
         const body = el(header.dataset.toolCat);
@@ -1660,7 +1842,7 @@ async function loadBuiltinTools() {
       });
     });
 
-    // 辅助函数：保存禁用工具 + 更新计数器
+    // Helper: save disabled tools + update counters
     async function _saveToolState() {
       const allChecks = list.querySelectorAll('input[data-tool-id]');
       const disabled = [];
@@ -1682,7 +1864,7 @@ async function loadBuiltinTools() {
       if (catToggle) catToggle.checked = (catEnabled === catChecks.length);
     }
 
-    // 绑定单个工具开关
+    // Wire individual tool toggles
     list.querySelectorAll('input[data-tool-id]').forEach(chk => {
       chk.addEventListener('change', async () => {
         await _saveToolState();
@@ -1690,7 +1872,7 @@ async function loadBuiltinTools() {
       });
     });
 
-    // 绑定类别级别开关（启用/禁用类别内全部工具）
+    // Wire category-level toggle (enable/disable all in category)
     list.querySelectorAll('input[data-tool-cat-toggle]').forEach(chk => {
       chk.addEventListener('change', async () => {
         const catEl = chk.closest('.admin-tool-category');
@@ -1709,15 +1891,15 @@ async function loadBuiltinTools() {
 
 async function loadMcpServers() {
   const list = el('adm-mcpList');
-  if (!list) return;  // MCP 区域不可见 / 尚未渲染
+  if (!list) return;  // MCP section not visible / not yet rendered
   try {
     const res = await fetch('/api/mcp/servers', { credentials: 'same-origin' });
     const servers = await res.json();
     if (!servers.length) { list.innerHTML = '<div class="admin-empty">No MCP servers configured</div>'; return; }
     list.innerHTML = servers.map(s => {
       const statusColor = s.needs_oauth ? '#e5a33a' : s.status === 'connected' ? 'var(--fg)' : s.status === 'error' ? 'var(--red)' : 'color-mix(in srgb, var(--fg) 50%, transparent)';
-      const toolInfo = s.status === 'connected' ? `${t('admin.tools_enabled_count', { enabled: s.enabled_tool_count, total: s.tool_count })}` : '';
-      const statusText = s.needs_oauth ? 'Needs authorization' : s.status === 'connected' ? t('admin.mcp_connected', { info: toolInfo }) : s.status === 'error' ? t('admin.mcp_error', { msg: s.error || 'unknown' }) : 'Disconnected';
+      const toolInfo = s.status === 'connected' ? `${s.enabled_tool_count}/${s.tool_count} tools enabled` : '';
+      const statusText = s.needs_oauth ? 'Needs authorization' : s.status === 'connected' ? `Connected (${toolInfo})` : s.status === 'error' ? `Error: ${s.error || 'unknown'}` : 'Disconnected';
       const hasTools = s.status === 'connected' && s.tool_count > 0;
       return `<div class="admin-user-row" data-adm-mcp-id="${s.id}">
         <div style="display:flex;align-items:center;justify-content:space-between;${hasTools ? 'cursor:pointer;' : ''}padding:4px 0;" data-adm-mcp-header="${s.id}">
@@ -1743,7 +1925,7 @@ async function loadMcpServers() {
         try {
           const res = await fetch(`/api/mcp/servers/${btn.dataset.admMcpReconnect}/reconnect`, { method: 'POST', credentials: 'same-origin' });
           const data = await res.json();
-          msg.textContent = data.connected ? t('admin.mcp_reconnected', { n: data.tool_count }) : t('admin.mcp_failed', { msg: data.error || 'unknown' });
+          msg.textContent = data.connected ? `Reconnected (${data.tool_count} tools)` : `Failed: ${data.error || 'unknown'}`;
           msg.className = data.connected ? 'admin-success' : 'admin-error';
           loadMcpServers();
         } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
@@ -1758,12 +1940,12 @@ async function loadMcpServers() {
     });
     list.querySelectorAll('[data-adm-mcp-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!await uiModule.styledConfirm(t('admin.delete_mcp_confirm'), { confirmText: t('admin.delete'), danger: true })) return;
+        if (!await uiModule.styledConfirm('Delete this MCP server?', { confirmText: 'Delete', danger: true })) return;
         await fetch(`/api/mcp/servers/${btn.dataset.admMcpDelete}`, { method: 'DELETE', credentials: 'same-origin' });
         loadMcpServers();
       });
     });
-    // 工具展开/折叠（点击卡片任意位置）
+    // Tools expand/collapse (click anywhere on card)
     list.querySelectorAll('[data-adm-mcp-id]').forEach(row => {
       const header = row.querySelector('[data-adm-mcp-header]');
       if (!header) return;
@@ -1835,21 +2017,21 @@ async function _saveMcpToolState(serverId, panel) {
       credentials: 'same-origin',
       body: JSON.stringify({ disabled }),
     });
-    // 更新面板中的计数标签
+    // Update the count label in the panel
     const countLabel = panel.querySelector('.mcp-tools-count');
-    if (countLabel) countLabel.textContent = `${t('admin.enabled_count', { n: total - disabled.length, m: total })}`;
-    // 更新服务器行中的徽章
+    if (countLabel) countLabel.textContent = `${total - disabled.length}/${total} enabled`;
+    // Update badge in the server row
     const row = panel.closest('[data-adm-mcp-id]');
     if (row) {
       const badge = row.querySelector('.admin-badge');
-      if (badge) badge.textContent = t('admin.connected_tools', { n: total - disabled.length, m: total });
+      if (badge) badge.textContent = `Connected (${total - disabled.length}/${total} tools enabled)`;
     }
-  } catch (e) { /* 静默忽略 */ }
+  } catch (e) { /* silent */ }
 }
 
 function initMcpForm() {
   const cmdEl = el('adm-mcpCommand');
-  if (!cmdEl) return;  // 此构建中没有 MCP 表单 — 无需绑定
+  if (!cmdEl) return;  // MCP form not present in this build — nothing to wire
   const transportSel = el('adm-mcpTransport');
   const sseRow = el('adm-mcpSseRow');
   const envRow = el('adm-mcpEnvRow');
@@ -1857,9 +2039,9 @@ function initMcpForm() {
   const helpBox = el('adm-mcpHelp');
   const cmdRow = cmdEl.parentElement;
   let _activeHelp = null;
-  let _envKeys = []; // 追踪哪些环境变量键有专用字段
-  let _activeOauthFile = null; // 预设 oauthFile 配置（用于 Google 服务器）
-  let _activeOauth = null;     // 预设 OAuth 流程配置（提供商、作用域等）
+  let _envKeys = []; // track which env keys have dedicated fields
+  let _activeOauthFile = null; // preset oauthFile config (for Google servers)
+  let _activeOauth = null;     // preset OAuth flow config (provider, scopes, etc.)
 
   function _clearEnvFields() {
     envFieldsWrap.innerHTML = '';
@@ -1875,7 +2057,7 @@ function initMcpForm() {
     if (!keys.length) return;
     _envKeys = keys;
 
-    // 提供商下拉菜单（例如用于 Email IMAP/SMTP）
+    // Provider dropdown (e.g. for Email IMAP/SMTP)
     if (preset?.providerDropdown) {
       const pd = preset.providerDropdown;
       const row = document.createElement('div');
@@ -1902,7 +2084,7 @@ function initMcpForm() {
       row.appendChild(label);
       row.appendChild(select);
       envFieldsWrap.appendChild(row);
-      // 输入框创建后自动填充第一个提供商
+      // Auto-fill with first provider after inputs are created
       setTimeout(() => {
         const first = pd.options[0];
         for (const [envKey, field] of Object.entries(pd.targets)) {
@@ -1930,7 +2112,7 @@ function initMcpForm() {
       row.appendChild(input);
       envFieldsWrap.appendChild(row);
     }
-    // 帮助切换链接
+    // Help toggle link
     if (help) {
       _activeHelp = help;
       const helpLink = document.createElement('a');
@@ -1950,7 +2132,7 @@ function initMcpForm() {
     }
   }
 
-  // 从专用字段或原始 JSON 回退中收集环境变量
+  // Collect env from either dedicated fields or raw JSON fallback
   function _collectEnv() {
     if (_envKeys.length) {
       const obj = {};
@@ -1969,7 +2151,7 @@ function initMcpForm() {
     if (isSse) { _clearEnvFields(); helpBox.style.display = 'none'; }
   });
 
-  // 预设目录
+  // Preset catalog
   const presetSel = el('adm-mcpPreset');
   if (presetSel) {
     MCP_PRESETS.forEach((p, i) => {
@@ -1991,7 +2173,7 @@ function initMcpForm() {
       _activeOauthFile = p.oauthFile || null;
       _activeOauth = p.oauth || null;
       presetSel.value = '';
-      // 如果需要密钥，聚焦第一个环境变量字段
+      // Focus first env field if keys are needed
       const firstInput = envFieldsWrap.querySelector('.mcp-env-input');
       if (firstInput) firstInput.focus();
       else el('adm-mcpAddBtn').focus();
@@ -2012,7 +2194,7 @@ function initMcpForm() {
     try { JSON.parse(env); } catch { msg.textContent = 'Env must be valid JSON'; msg.className = 'admin-error'; return; }
     const fd = new FormData();
     fd.append('name', name); fd.append('transport', transport); fd.append('command', command); fd.append('args', args); fd.append('env', env); fd.append('url', url);
-    // 如果预设包含 oauthFile 配置，发送凭证用于生成文件
+    // If preset has oauthFile config, send credentials for file generation
     if (_activeOauthFile) {
       const envObj = JSON.parse(env);
       fd.append('oauth_file', JSON.stringify({
@@ -2022,7 +2204,7 @@ function initMcpForm() {
         client_secret: envObj.GOOGLE_CLIENT_SECRET || '',
       }));
     }
-    // 如果预设包含 OAuth 流程配置，发送给服务端以处理授权
+    // If preset has OAuth flow config, send it so the server can handle authorization
     if (_activeOauth) {
       fd.append('oauth_config', JSON.stringify(_activeOauth));
     }
@@ -2031,11 +2213,11 @@ function initMcpForm() {
       const res = await fetch('/api/mcp/servers', { method: 'POST', body: fd, credentials: 'same-origin' });
       const data = await res.json();
       if (data.needs_oauth) {
-        msg.innerHTML = `${t('admin.added_mcp', { name: esc(name) })} — <a href="${data.oauth_url}" style="color:var(--red);font-weight:600;">Authorize with Google</a> to connect`;
+        msg.innerHTML = `Added ${esc(name)} — <a href="/api/mcp/oauth/authorize/${data.id}" target="_blank" style="color:var(--red);font-weight:600;">Authorize with Google</a> to connect`;
         msg.className = 'admin-success';
       } else if (data.connected) {
-        msg.textContent = t('admin.added_mcp_tools', { name: name, n: data.tool_count }); msg.className = 'admin-success';
-      } else { msg.textContent = t('admin.added_mcp_failed', { error: data.error || 'unknown' }); msg.className = 'admin-error'; }
+        msg.textContent = `Added ${name} (${data.tool_count} tools discovered)`; msg.className = 'admin-success';
+      } else { msg.textContent = `Added but connection failed: ${data.error || 'unknown'}`; msg.className = 'admin-error'; }
       el('adm-mcpName').value = ''; el('adm-mcpCommand').value = ''; el('adm-mcpArgs').value = ''; el('adm-mcpUrl').value = '';
       _clearEnvFields(); helpBox.style.display = 'none'; _activeHelp = null; _activeOauthFile = null; _activeOauth = null;
       loadMcpServers();
@@ -2043,11 +2225,11 @@ function initMcpForm() {
   });
 }
 
-/* ── 嵌入模型 ──
-   无设置界面：嵌入模型（RAG、语义记忆、工具选择）是
-   随应用发布的固定基础设施，替换它会使所有现有向量
-   失效。如果确实需要覆盖，请通过 FASTEMBED_MODEL /
-   EMBEDDING_URL 环境变量配置。 */
+/* ── Embedding model ──
+   No settings UI: the embedding model (RAG, semantic memory, tool selection)
+   is fixed infrastructure that ships with the app, and swapping it would
+   invalidate every existing vector. Configure via the FASTEMBED_MODEL /
+   EMBEDDING_URL env vars if you really need to override it. */
 
 /* ── RAG ── */
 async function loadRag() {
@@ -2061,7 +2243,7 @@ async function loadRag() {
       dirList.innerHTML = dirs.map(d => `<div class="admin-rag-item"><span class="admin-rag-item-name" title="${esc(d)}">${esc(d)}</span><button class="admin-btn-delete" data-adm-rag-dir="${esc(d)}">Remove</button></div>`).join('');
       dirList.querySelectorAll('[data-adm-rag-dir]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!await uiModule.styledConfirm(t('admin.remove_dir_confirm', { dir: btn.dataset.admRagDir }), { confirmText: t('admin.remove'), danger: true })) return;
+          if (!await uiModule.styledConfirm(`Remove directory "${btn.dataset.admRagDir}" from RAG?`, { confirmText: 'Remove', danger: true })) return;
           btn.disabled = true; btn.textContent = '...';
           try {
             const res = await fetch('/api/personal/remove_directory?directory=' + encodeURIComponent(btn.dataset.admRagDir), { method: 'DELETE' });
@@ -2081,7 +2263,7 @@ async function loadRag() {
       }).join('');
       fileList.querySelectorAll('[data-adm-rag-file]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!await uiModule.styledConfirm(t('admin.delete_rag_file_confirm', { file: btn.dataset.admRagFile }), { confirmText: t('admin.delete'), danger: true })) return;
+          if (!await uiModule.styledConfirm(`Delete "${btn.dataset.admRagFile}" from RAG?`, { confirmText: 'Delete', danger: true })) return;
           btn.disabled = true; btn.textContent = '...';
           try {
             const res = await fetch('/api/personal/file?filepath=' + encodeURIComponent(btn.dataset.admRagFile), { method: 'DELETE' });
@@ -2113,7 +2295,7 @@ async function ragUpload(files) {
   try {
     const res = await fetch('/api/personal/upload', { method: 'POST', body: fd });
     const data = await res.json();
-    if (data.success) { ragMsg(t('admin.uploaded_files', { n: data.uploaded.length, m: data.indexed_count })); loadRag(); }
+    if (data.success) { ragMsg(`Uploaded ${data.uploaded.length} file(s), ${data.indexed_count} chunks indexed`); loadRag(); }
     else ragMsg(data.detail || 'Upload failed', true);
   } catch (e) { ragMsg('Upload error: ' + e.message, true); }
 }
@@ -2134,7 +2316,7 @@ function initRag() {
     try {
       const res = await fetch('/api/personal/add_directory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory: dir }) });
       const data = await res.json();
-      if (data.success) { ragMsg(t('admin.indexed_chunks', { n: data.indexed_count })); el('adm-ragDirInput').value = ''; loadRag(); }
+      if (data.success) { ragMsg(`Indexed ${data.indexed_count} chunks from directory`); el('adm-ragDirInput').value = ''; loadRag(); }
       else ragMsg(data.detail || data.message || 'Failed', true);
     } catch (e) { ragMsg('Error: ' + e.message, true); }
     btn.disabled = false; btn.textContent = 'Add Directory';
@@ -2145,7 +2327,7 @@ function initRag() {
     try {
       const res = await fetch('/api/personal/reload', { method: 'POST' });
       const data = await res.json();
-      ragMsg(t('admin.index_reloaded', { n: data.count }));
+      ragMsg(`Index reloaded: ${data.count} documents`);
       loadRag();
     } catch (e) { ragMsg('Reload failed: ' + e.message, true); }
     btn.disabled = false; btn.textContent = 'Reload Index';
@@ -2153,30 +2335,128 @@ function initRag() {
 }
 
 /* ═══════════════════════════════════════════
-   系统标签 — 令牌
+   SYSTEM TAB — Tokens
    ═══════════════════════════════════════════ */
+// Catalog mirrors the one in settings.js integration form. Keep keys in
+// sync with the backend scope allowlist.
+const _TOKEN_SCOPES = [
+  { key: 'todos:read',        label: 'Todos read',        detail: 'Read notes and checklists' },
+  { key: 'todos:write',       label: 'Todos write',       detail: 'Create, update, delete, and toggle todo items' },
+  { key: 'documents:read',    label: 'Documents read',    detail: 'Read documents when a document API is enabled' },
+  { key: 'documents:write',   label: 'Documents write',   detail: 'Create and update draft documents' },
+  { key: 'email:read',        label: 'Email read',        detail: 'Read email when an email API is enabled' },
+  { key: 'email:draft',       label: 'Email draft',       detail: 'Create email reply drafts without sending' },
+  { key: 'email:send',        label: 'Email send',        detail: 'Send email directly' },
+  { key: 'calendar:read',     label: 'Calendar read',     detail: 'Read calendar events when enabled' },
+  { key: 'calendar:write',    label: 'Calendar write',    detail: 'Create and update calendar events' },
+  { key: 'memory:read',       label: 'Memory read',       detail: 'Read memory when enabled' },
+  { key: 'memory:write',      label: 'Memory write',      detail: 'Write memory when enabled' },
+  { key: 'cookbook:read',     label: 'Cookbook read',     detail: 'List cookbook tasks + tail their tmux output' },
+  { key: 'cookbook:launch',   label: 'Cookbook launch',   detail: 'Launch and stop cookbook serve tasks' },
+];
+
+function _renderTokenScopeRows(t) {
+  const have = new Set(t.scopes || []);
+  return _TOKEN_SCOPES.map(s => {
+    const action = (s.key.split(':')[1] || '').toLowerCase();
+    const pill = action === 'read'
+      ? 'background:rgba(150,150,150,0.18);color:var(--fg-muted,#888);'
+      : 'background:color-mix(in srgb, var(--accent, var(--red)) 18%, transparent);color:var(--accent, var(--red));';
+    const tool = s.label.replace(/\s+(read|write|draft|send|launch)$/i, '');
+    return `
+      <label style="display:flex;align-items:center;gap:8px;min-height:28px;padding:1px 0;">
+        <span class="settings-label" style="width:90px;flex-shrink:0;padding:0;font-size:12px;">${esc(tool)}</span>
+        <span style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;padding:1px 7px;border-radius:999px;flex-shrink:0;min-width:44px;text-align:center;box-sizing:border-box;${pill}">${esc(action)}</span>
+        <span style="font-size:11px;line-height:1.35;opacity:0.62;flex:1;min-width:0;">${esc(s.detail)}</span>
+        <label class="admin-switch" style="margin-left:auto;flex-shrink:0;"><input type="checkbox" class="adm-tok-scope" data-token-id="${esc(t.id)}" data-scope="${esc(s.key)}" ${have.has(s.key) ? 'checked' : ''}><span class="admin-slider"></span></label>
+      </label>`;
+  }).join('');
+}
+
 async function loadTokens() {
   const list = el('adm-tokenList');
+  if (!list) return;
   try {
     const res = await fetch('/api/tokens', { credentials: 'same-origin' });
     const tokens = await res.json();
-    if (!tokens.length) { list.innerHTML = '<div class="admin-empty">No API tokens</div>'; return; }
+    if (!tokens.length) { list.innerHTML = '<div class="admin-empty" style="color:var(--accent, var(--red));opacity:0.7;font-size:10px;">No API tokens</div>'; return; }
     list.innerHTML = tokens.map(t => `
-      <div class="admin-user-row">
-        <div class="admin-user-info" style="flex:1;flex-wrap:wrap;gap:0.3rem;">
-          <span class="admin-user-name">${esc(t.name)}</span>
-          <span class="admin-badge">${esc(t.token_prefix)}...</span>
-          <span class="admin-badge" title="Allowed API scopes">${esc((t.scopes || ['chat']).join(', '))}</span>
-          ${t.owner ? `<span style="font-size:0.75rem;opacity:0.5;">Owner: ${esc(t.owner)}</span>` : ''}
-          ${t.last_used_at ? `<span style="font-size:0.75rem;opacity:0.5;">Last used: ${new Date(t.last_used_at).toLocaleDateString()}</span>` : '<span style="font-size:0.75rem;opacity:0.4;">Never used</span>'}
+      <div class="admin-user-row" data-adm-tok-row="${esc(t.id)}" style="display:block;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="admin-user-info" style="flex:1;min-width:0;flex-wrap:wrap;gap:0.3rem;">
+            <input type="text" class="adm-tok-rename" data-token-id="${esc(t.id)}" value="${esc(t.name || '')}" placeholder="Token name" style="font-size:13px;font-weight:600;padding:3px 6px;background:transparent;border:1px solid transparent;border-radius:4px;min-width:160px;" title="Click to rename">
+            <span class="admin-badge">${esc(t.token_prefix)}...</span>
+            ${t.owner ? `<span style="font-size:0.75rem;opacity:0.5;">Owner: ${esc(t.owner)}</span>` : ''}
+            ${t.last_used_at ? `<span style="font-size:0.75rem;opacity:0.5;">Last used: ${new Date(t.last_used_at).toLocaleDateString()}</span>` : '<span style="font-size:0.75rem;opacity:0.4;">Never used</span>'}
+          </div>
+          <button class="admin-btn-sm" data-adm-tok-toggle="${esc(t.id)}" style="opacity:0.75;">Permissions</button>
+          <button class="admin-btn-delete" data-adm-del-token="${esc(t.id)}">Revoke</button>
         </div>
-        <button class="admin-btn-delete" data-adm-del-token="${t.id}">Revoke</button>
+        <div data-adm-tok-perm="${esc(t.id)}" style="display:none;margin-top:8px;padding:8px 4px 0;border-top:1px solid var(--border);">
+          ${_renderTokenScopeRows(t)}
+          <div class="adm-tok-scope-msg" data-token-id="${esc(t.id)}" style="font-size:11px;min-height:14px;margin-top:4px;"></div>
+        </div>
       </div>`).join('');
+
+    // Revoke
     list.querySelectorAll('[data-adm-del-token]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!await uiModule.styledConfirm(t('admin.revoke_token_confirm'), { confirmText: t('admin.revoke'), danger: true })) return;
+        if (!await uiModule.styledConfirm('Revoke this API token? External integrations using it will stop working.', { confirmText: 'Revoke', danger: true })) return;
         await fetch(`/api/tokens/${btn.dataset.admDelToken}`, { method: 'DELETE', credentials: 'same-origin' });
         loadTokens();
+        // Codex / Claude integration cards on the Integrations panel are
+        // backed by these tokens — let them re-render so the deleted token
+        // disappears there too.
+        try { window.dispatchEvent(new CustomEvent('odysseus-integrations-changed')); } catch (_) {}
+      });
+    });
+    // Toggle permissions panel
+    list.querySelectorAll('[data-adm-tok-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const panel = list.querySelector(`[data-adm-tok-perm="${btn.dataset.admTokToggle}"]`);
+        if (!panel) return;
+        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+      });
+    });
+    // Rename
+    list.querySelectorAll('.adm-tok-rename').forEach(input => {
+      const original = input.value;
+      const commit = async () => {
+        const name = (input.value || '').trim();
+        if (!name || name === original) return;
+        try {
+          const r = await fetch(`/api/tokens/${input.dataset.tokenId}`, {
+            method: 'PATCH', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+          });
+          if (!r.ok) throw new Error('Save failed');
+          loadTokens();
+        } catch (_) { input.value = original; }
+      };
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+    });
+    // Scope toggle change → PATCH the whole scopes array for this token.
+    list.querySelectorAll('.adm-tok-scope').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const tokenId = cb.dataset.tokenId;
+        const panel = list.querySelector(`[data-adm-tok-perm="${tokenId}"]`);
+        const msg = list.querySelector(`.adm-tok-scope-msg[data-token-id="${tokenId}"]`);
+        const scopes = Array.from(panel.querySelectorAll('.adm-tok-scope:checked')).map(input => input.dataset.scope);
+        try {
+          const r = await fetch(`/api/tokens/${tokenId}`, {
+            method: 'PATCH', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scopes }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.detail || 'Failed');
+          if (msg) { msg.textContent = 'Saved'; msg.style.color = 'var(--green, #50fa7b)'; setTimeout(() => { msg.textContent = ''; }, 1200); }
+        } catch (err) {
+          cb.checked = !cb.checked;
+          if (msg) { msg.textContent = (err && err.message) || 'Failed'; msg.style.color = 'var(--red)'; }
+        }
       });
     });
   } catch (e) { list.innerHTML = '<div class="admin-error">Failed to load tokens</div>'; }
@@ -2208,11 +2488,20 @@ function initTokenForm() {
       else { msg.textContent = data.detail || 'Failed'; msg.className = 'admin-error'; }
     } catch (e) { msg.textContent = 'Request failed'; msg.className = 'admin-error'; }
   });
+  const TOKEN_COPY_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const TOKEN_CHECK_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
   el('adm-tokenCopyBtn').addEventListener('click', () => {
     const val = el('adm-tokenValue').textContent;
+    const btn = el('adm-tokenCopyBtn');
     navigator.clipboard.writeText(val).then(() => {
-      el('adm-tokenCopyBtn').textContent = 'Copied!';
-      setTimeout(() => { el('adm-tokenCopyBtn').textContent = 'Copy'; }, 2000);
+      btn.innerHTML = TOKEN_CHECK_ICON;
+      btn.style.color = 'var(--accent, var(--red))';
+      btn.style.opacity = '1';
+      setTimeout(() => {
+        btn.innerHTML = TOKEN_COPY_ICON;
+        btn.style.color = '';
+        btn.style.opacity = '0.7';
+      }, 1600);
     });
   });
 }
@@ -2262,7 +2551,7 @@ async function loadWebhooks() {
     });
     list.querySelectorAll('[data-adm-wh-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!await uiModule.styledConfirm(t('admin.delete_webhook_confirm'), { confirmText: t('admin.delete'), danger: true })) return;
+        if (!await uiModule.styledConfirm('Delete this webhook?', { confirmText: 'Delete', danger: true })) return;
         await fetch(`/api/webhooks/${btn.dataset.admWhDelete}`, { method: 'DELETE', credentials: 'same-origin' }); loadWebhooks();
       });
     });
@@ -2290,7 +2579,7 @@ function initWebhookForm() {
   });
 }
 
-/* ── 功能 ── */
+/* ── Features ── */
 const featureLabels = {
   web_search: 'Web Search', deep_research: 'Deep Research',
   memory: 'Memory', document_editor: 'Document Editor', rag: 'RAG Knowledge Base', sensitive_filter: 'Sensitive Info Filter',
@@ -2316,7 +2605,7 @@ async function loadFeatures() {
   } catch (e) { container.innerHTML = '<div class="admin-error">Failed to load features</div>'; }
 }
 
-/* ── CalDAV 配置 ── */
+/* ── CalDAV Config ── */
 function initCalDAV() {
   const urlIn = el('caldav-url');
   const userIn = el('caldav-user');
@@ -2326,7 +2615,7 @@ function initCalDAV() {
   const status = el('caldav-status');
   if (!urlIn || !saveBtn) return;
 
-  // 加载当前配置
+  // Load current config
   fetch(`${API_BASE}/api/calendar/config`, { credentials: 'same-origin' })
     .then(r => r.json()).then(d => {
       urlIn.value = d.caldav_url || '';
@@ -2352,7 +2641,7 @@ function initCalDAV() {
   testBtn.addEventListener('click', async () => {
     status.textContent = 'Testing...';
     try {
-      // 先保存
+      // Save first
       await fetch(`${API_BASE}/api/calendar/config`, {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
@@ -2360,14 +2649,14 @@ function initCalDAV() {
       });
       const res = await fetch(`${API_BASE}/api/calendar/test`, { method: 'POST', credentials: 'same-origin' });
       const d = await res.json();
-      status.textContent = d.ok ? t('admin.caldav_connected', { n: d.calendars }) : t('admin.caldav_failed', { error: d.error });
+      status.textContent = d.ok ? `Connected (${d.calendars} calendars)` : `Failed: ${d.error}`;
       status.style.color = d.ok ? 'var(--green)' : 'var(--red)';
     } catch (e) { status.textContent = 'Error'; status.style.color = 'var(--red)'; }
     setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 5000);
   });
 }
 
-/* ── 数据备份（导出/导入） ── */
+/* ── Data Backup (export/import) ── */
 function initBackup() {
   el('adm-exportDataBtn').addEventListener('click', async () => {
     const btn = el('adm-exportDataBtn');
@@ -2413,7 +2702,7 @@ function initBackup() {
       });
       const result = await res.json().catch(() => null);
       if (!result) {
-        throw new Error(t('admin.import_failed_status', { status: res.status }));
+        throw new Error(`Import failed: server returned ${res.status}`);
       }
       if (res.ok && result.ok) {
         msg.textContent = result.message || 'Import successful.'; msg.className = 'admin-success';
@@ -2425,11 +2714,11 @@ function initBackup() {
   });
 }
 
-/* ── 危险区域 ── */
+/* ── Danger Zone ── */
 function initDangerZone() {
-  // 按类别危险区域清除。每个按钮通过 data-wipe-kind
-  // 声明其目标；一个委托处理程序处理双重确认，
-  // POST 到 /api/admin/wipe/{kind}，并写入结果。
+  // Per-category Danger Zone wipes. Each button declares its target
+  // via data-wipe-kind; one delegated handler handles double-confirm,
+  // POSTs to /api/admin/wipe/{kind}, and writes the result.
   const _LABELS = {
     chats: 'chats', memory: 'memory entries', skills: 'skills',
     notes: 'notes', tasks: 'tasks', documents: 'documents',
@@ -2439,33 +2728,258 @@ function initDangerZone() {
   modalEl.querySelectorAll('[data-wipe-kind]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const kind = btn.dataset.wipeKind;
-      const label = _LABELS[kind] || kind;
-      if (!await uiModule.styledConfirm(t('admin.wipe_all_confirm', { label: label }), { confirmText: t('admin.wipe'), danger: true })) return;
-      if (!await uiModule.styledConfirm(t('admin.wipe_really_confirm', { label: label }), { confirmText: t('admin.wipe_confirm_button'), danger: true })) return;
-      btn.disabled = true; const prev = btn.textContent; btn.textContent = 'Wiping…';
+      const isAll = kind === '__all__';
+      const label = isAll ? 'data across every category' : (_LABELS[kind] || kind);
+      if (!await uiModule.styledConfirm(`Delete ALL ${label}? This cannot be undone.`, { confirmText: 'Delete', danger: true })) return;
+      if (!await uiModule.styledConfirm(`Really delete every one of your ${label}?`, { confirmText: isAll ? 'Yes, delete everything' : 'Yes, delete everything', danger: true })) return;
+      btn.disabled = true;
+      const prevHtml = btn.innerHTML;
+      btn.innerHTML = isAll ? 'Deleting all…' : 'Deleting…';
       if (_wipeMsg) { _wipeMsg.textContent = ''; _wipeMsg.className = ''; }
       try {
-        const res = await fetch(`/api/admin/wipe/${kind}`, { method: 'DELETE', credentials: 'same-origin' });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          if (_wipeMsg) { _wipeMsg.textContent = t('admin.wiped_count', { n: data.count ?? 0, label: label }); _wipeMsg.className = 'admin-success'; }
+        if (isAll) {
+          // Iterate every known category. Failures in one shouldn't stop
+          // the rest — record per-category counts and surface a summary.
+          const kinds = Object.keys(_LABELS);
+          const results = [];
+          for (const k of kinds) {
+            try {
+              const r = await fetch(`/api/admin/wipe/${k}`, { method: 'DELETE', credentials: 'same-origin' });
+              const d = await r.json().catch(() => ({}));
+              results.push({ k, ok: r.ok, count: d.count ?? 0, error: r.ok ? null : (d.detail || 'failed') });
+            } catch (e) {
+              results.push({ k, ok: false, count: 0, error: e.message });
+            }
+          }
+          const okCount = results.filter(r => r.ok).length;
+          const total = results.reduce((n, r) => n + (r.ok ? r.count : 0), 0);
+          const fails = results.filter(r => !r.ok).map(r => r.k);
+          if (_wipeMsg) {
+            if (!fails.length) {
+              _wipeMsg.textContent = `Deleted ${total} items across all ${okCount} categories.`;
+              _wipeMsg.className = 'admin-success';
+            } else {
+              _wipeMsg.textContent = `Deleted ${total} items; failed: ${fails.join(', ')}.`;
+              _wipeMsg.className = 'admin-error';
+            }
+          }
         } else {
-          if (_wipeMsg) { _wipeMsg.textContent = data.detail || 'Failed'; _wipeMsg.className = 'admin-error'; }
+          const res = await fetch(`/api/admin/wipe/${kind}`, { method: 'DELETE', credentials: 'same-origin' });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            if (_wipeMsg) { _wipeMsg.textContent = `Deleted ${data.count ?? 0} ${label}.`; _wipeMsg.className = 'admin-success'; }
+          } else {
+            if (_wipeMsg) { _wipeMsg.textContent = data.detail || 'Failed'; _wipeMsg.className = 'admin-error'; }
+          }
         }
       } catch (e) {
         if (_wipeMsg) { _wipeMsg.textContent = 'Request failed: ' + e.message; _wipeMsg.className = 'admin-error'; }
       }
-      btn.disabled = false; btn.textContent = prev;
+      btn.disabled = false; btn.innerHTML = prevHtml;
     });
   });
 }
 
 /* ═══════════════════════════════════════════
-   初始化 & 刷新
+   TERMINAL LOGS VIEWER
+   ═══════════════════════════════════════════ */
+let logsPollInterval = null;
+let isLogsPolling = false;
+let cachedLogs = [];
+let logsAbortController = null;
+
+function renderLogs(isAutoPoll = false) {
+  const consoleContainer = el('log-console-container');
+  const levelSelect = el('log-level-select');
+  const searchInput = el('log-search-input');
+
+  if (!consoleContainer) return;
+
+  const levelFilter = levelSelect ? levelSelect.value : 'ALL';
+  const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  let logs = cachedLogs;
+
+  // Filter by level locally
+  if (levelFilter !== 'ALL') {
+    logs = logs.filter(line => line.includes(` - ${levelFilter} - `));
+  }
+
+  // Filter by search query locally
+  if (searchQuery) {
+    logs = logs.filter(line => line.toLowerCase().includes(searchQuery));
+  }
+
+  if (logs.length === 0) {
+    consoleContainer.innerHTML = '<div class="settings-system-logs-placeholder">No logs found matching current filters.</div>';
+    return;
+  }
+
+  // Preserve scroll position if user is reading previous logs
+  const atBottom = consoleContainer.scrollHeight - consoleContainer.scrollTop - consoleContainer.clientHeight < 40;
+
+  consoleContainer.innerHTML = logs.map(line => {
+    let levelClass = 'log-line-default';
+
+    if (line.includes(' - INFO - ')) {
+      levelClass = 'log-line-info';
+    } else if (line.includes(' - WARNING - ')) {
+      levelClass = 'log-line-warning';
+    } else if (line.includes(' - ERROR - ') || line.includes(' - CRITICAL - ')) {
+      levelClass = 'log-line-error';
+    } else if (line.includes(' - DEBUG - ')) {
+      levelClass = 'log-line-debug';
+    }
+
+    // XSS safe escape
+    const escaped = line
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    return `<div class="log-line ${levelClass}">${escaped}</div>`;
+  }).join('');
+
+  if (!isAutoPoll || atBottom) {
+    consoleContainer.scrollTop = consoleContainer.scrollHeight;
+  }
+}
+
+async function loadLogs(isAutoPoll = false) {
+  const consoleContainer = el('log-console-container');
+  const limitSelect = el('log-limit-select');
+
+  if (!consoleContainer) return;
+
+  const limit = limitSelect ? limitSelect.value : 200;
+
+  if (logsAbortController) {
+    logsAbortController.abort();
+  }
+  logsAbortController = new AbortController();
+  const { signal } = logsAbortController;
+
+  try {
+    const res = await fetch(`/api/diagnostics/logs?limit=${limit}`, {
+      credentials: 'same-origin',
+      signal
+    });
+
+    if (!res.ok) {
+      if (!isAutoPoll) {
+        consoleContainer.innerHTML = '';
+        const errDiv = document.createElement('div');
+        errDiv.style.color = 'var(--red)';
+        errDiv.style.fontWeight = '600';
+        errDiv.textContent = `Failed to load logs: HTTP ${res.status}`;
+        consoleContainer.appendChild(errDiv);
+      }
+      return;
+    }
+
+    const data = await res.json();
+    if (data.status !== 'success' || !data.logs) {
+      if (!isAutoPoll) {
+        consoleContainer.innerHTML = '';
+        const errDiv = document.createElement('div');
+        errDiv.style.color = 'var(--red)';
+        errDiv.style.fontWeight = '600';
+        errDiv.textContent = 'Failed to parse logs data';
+        consoleContainer.appendChild(errDiv);
+      }
+      return;
+    }
+
+    cachedLogs = data.logs;
+    renderLogs(isAutoPoll);
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      return; // Silently ignore deliberate abort
+    }
+    if (!isAutoPoll) {
+      consoleContainer.innerHTML = '';
+      const errDiv = document.createElement('div');
+      errDiv.style.color = 'var(--red)';
+      errDiv.style.fontWeight = '600';
+      errDiv.textContent = `Error retrieving logs: ${err.message}`;
+      consoleContainer.appendChild(errDiv);
+    }
+  } finally {
+    if (logsAbortController?.signal === signal) {
+      logsAbortController = null;
+    }
+  }
+}
+
+function startLogsPolling() {
+  if (isLogsPolling) return;
+  isLogsPolling = true;
+  const toggle = el('log-auto-refresh-toggle');
+  if (toggle) toggle.checked = true;
+
+  logsPollInterval = setInterval(() => {
+    const modal = el('settings-modal');
+    const systemPanel = el('settings-modal')?.querySelector('[data-settings-panel="system"]');
+
+    // Safe self-cleanup if modal or panel is hidden/closed
+    if (!modal || modal.classList.contains('hidden') || !systemPanel || systemPanel.classList.contains('hidden')) {
+      stopLogsPolling();
+      return;
+    }
+
+    loadLogs(true);
+  }, 3000);
+}
+
+function stopLogsPolling() {
+  if (!isLogsPolling) return;
+  isLogsPolling = false;
+  if (logsPollInterval) {
+    clearInterval(logsPollInterval);
+    logsPollInterval = null;
+  }
+  const toggle = el('log-auto-refresh-toggle');
+  if (toggle) toggle.checked = false;
+}
+
+function initLogsView() {
+  const refreshBtn = el('log-refresh-btn');
+  const levelSelect = el('log-level-select');
+  const limitSelect = el('log-limit-select');
+  const searchInput = el('log-search-input');
+  const autoRefreshToggle = el('log-auto-refresh-toggle');
+
+  if (refreshBtn) refreshBtn.addEventListener('click', () => loadLogs(false));
+  if (levelSelect) levelSelect.addEventListener('change', () => renderLogs(false));
+  if (limitSelect) limitSelect.addEventListener('change', () => loadLogs(false));
+  if (searchInput) searchInput.addEventListener('input', () => renderLogs(false));
+
+  if (autoRefreshToggle) {
+    autoRefreshToggle.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        startLogsPolling();
+      } else {
+        stopLogsPolling();
+      }
+    });
+  }
+
+  // Initial fetch on view loading
+  loadLogs(false);
+}
+
+/* ═══════════════════════════════════════════
+   INIT & REFRESH
    ═══════════════════════════════════════════ */
 function initAll() {
   modalEl = el('settings-modal');
-  const inits = [initSignupToggle, initAddUser, initEndpointForm, initMcpForm, initCalDAV, initBackup, initDangerZone, initTokenForm, () => settingsModule.initIntegrations()];
+  const inits = [
+    initSignupToggle, initAddUser, initEndpointForm, initMcpForm,
+    initCalDAV, initBackup, initDangerZone, initTokenForm, initLogsView,
+    () => settingsModule.initIntegrations()
+  ];
   for (const fn of inits) {
     try { fn(); } catch (e) { console.error('Admin init error in', fn.name || 'anonymous', e); }
   }
@@ -2479,10 +2993,11 @@ function refreshAll() {
   loadBuiltinTools();
   loadMcpServers();
   loadTokens();
+  loadLogs(false);
 }
 
 /* ═══════════════════════════════════════════
-   公共 API
+   PUBLIC API
    ═══════════════════════════════════════════ */
 export function _initData() {
   if (!initialized) initAll();
@@ -2495,6 +3010,7 @@ export function open(tab) {
 }
 
 export function close() {
+  stopLogsPolling();
   settingsModule.close();
 }
 

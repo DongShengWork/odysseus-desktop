@@ -11,41 +11,42 @@ from core.session_manager import SessionManager
 from core.models import ChatMessage
 from src.request_models import SessionResponse
 from core.database import Session as DbSession, SessionLocal, Document, GalleryImage, utcnow_naive
-from src.auth_helpers import get_current_user, effective_user, _auth_disabled
+from src.auth_helpers import get_current_user, effective_user, _auth_disabled, owner_filter
 from src.session_actions import is_session_recently_active
 
 
 def _sanitize_export_filename(name: str) -> str:
-    """返回一个安全的导出文件名，适用于 Content-Disposition 头。"""
+    """Return a conservative filename safe for Content-Disposition."""
     name = name if isinstance(name, str) else ""
     name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
     return name[:128]
 
 
-# 盲比辅助会话使用此前缀名称创建。其真实模型
-# 绝不能出现在会话列表/侧边栏中 — 否则盲比会在用户
-# 投票之前被去匿名化（issue #1285）。
+# Blind-compare helper sessions are created with this name prefix. Their real
+# model must never surface in the session list / sidebar — otherwise a blind
+# comparison can be de-anonymized before the user votes (issue #1285).
 COMPARE_SESSION_PREFIX = "[CMP] "
 
 
 def _public_model(name: str, model: str) -> str:
-    """隐藏盲比辅助会话的真实模型，使会话列表无法用于
-    将中性面板标签（"Model A"）映射回其模型。Compare UI 在客户端
-    跟踪模型，所以在此隐藏不会对侧边栏造成任何损失。参见 issue #1285。"""
+    """Blank out the real model of blind-compare helper sessions so the
+    session list can't be used to map a neutral pane label ("Model A") back
+    to its model. The Compare UI tracks models client-side, so hiding it here
+    costs the sidebar nothing. See issue #1285."""
     if (name or "").startswith(COMPARE_SESSION_PREFIX):
         return ""
     return model
 
 
 def _content_to_text(content) -> str:
-    """将消息的 content 展平为纯文本，用于基于文本的导出。
+    """Flatten a message's content to plain text for text-based exports.
 
-    历史记录条目有三种形式：纯字符串、多模态内容块列表
-    （vision/image 附件），或 None（仅持久化了原生 tool_calls 的
-    assistant 轮次）。txt/html/md 导出器对这些值进行 join 和
-    字符串处理，因此列表会导致导出崩溃（join 时 TypeError，
-    .replace 时 AttributeError），而 None 会渲染为字面量 "None"。
-    强制转换为文本块，对无文本的内容返回 ""。
+    History entries carry three shapes: a plain string, a multimodal list of
+    content blocks (vision/image attachments), or None (assistant turns that
+    persisted only native tool_calls). The txt/html/md exporters join and
+    string-munge this value, so a list crashed the export (TypeError on join,
+    AttributeError on .replace) and None rendered as the literal "None".
+    Coerce to the text blocks, returning "" for anything without text.
     """
     if isinstance(content, str):
         return content
@@ -92,13 +93,13 @@ def _reject_compact_during_active_run(session_id: str) -> None:
 
 
 def _verify_session_owner(request: Request, session_id: str, session_manager=None):
-    """验证当前用户拥有该会话，并适配单用户模式。
+    """Verify the current user owns the session, honoring single-user modes.
 
-    认证请求必须匹配存储的 DB 或内存中的所有者。当认证禁用
-    且没有用户时，将应用视为单用户模式：验证会话存在，
-    但不比较其存储的所有者。这使得 AUTH_ENABLED=false 的
-    QA/开发实例不会拒绝之前在认证启用时创建的
-    被所有者标记的行。
+    Authenticated requests must match the stored DB or in-memory owner. When
+    auth is disabled and no user is present, treat the app as single-user mode:
+    verify that the session exists, but do not compare its stored owner. This
+    keeps QA/dev instances with AUTH_ENABLED=false from rejecting owner-stamped
+    rows created while auth was previously enabled.
     """
     user = effective_user(request)
     if not user and not _auth_disabled():
@@ -112,7 +113,7 @@ def _verify_session_owner(request: Request, session_id: str, session_manager=Non
         if user and row.owner != user:
             raise HTTPException(404, f"Session {session_id} not found")
         return
-    # 无数据库行 — 允许调用方操作其拥有的内存中的幽灵会话。
+    # No DB row — allow the caller to act on an in-memory ghost they own.
     if session_manager is not None:
         ghost = getattr(session_manager, "sessions", {}).get(session_id)
         if ghost is not None and (not user or getattr(ghost, "owner", None) == user):
@@ -142,20 +143,20 @@ def _reject_raw_endpoint_url_for_non_admin(
     endpoint_id: str | None,
     endpoint_url: str | None,
 ) -> None:
-    """要求非管理员用户在更改会话时使用已注册的端点。"""
+    """Require registered endpoints for signed-in non-admin session changes."""
     if endpoint_id and endpoint_id.strip():
         return
     if not endpoint_url:
         return
-    # 原始 URL 使服务器连接请求中提供的任意主机。对于
-    # 非管理员用户，需要已保存的端点行，以确保正常的所有者作用域和
-    # 端点验证已经完成。
+    # Raw URLs make the server dial whatever host the request supplies. For
+    # non-admin users, require a saved endpoint row so normal owner scoping and
+    # endpoint validation have already happened.
     if user and not _current_user_is_admin(request, user):
         raise HTTPException(403, "Choose a registered model endpoint")
 
 
 def _persist_session_headers(session_id: str, headers: dict | None) -> None:
-    """为基于 DB 的会话元数据持久化端点认证头。"""
+    """Persist endpoint auth headers for DB-backed session metadata."""
     db = SessionLocal()
     try:
         db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
@@ -182,13 +183,13 @@ _HIDDEN_SYSTEM_SESSION_NAMES = {
 
 
 def _pick_endpoint_for_sort(owner=None):
-    """为自动排序 LLM 调用选择模型端点 — 使用工具端点设置，回退到默认端点。"""
+    """Pick model endpoint for auto-sort LLM call — uses utility endpoint setting, falls back to default."""
     from src.endpoint_resolver import resolve_endpoint
-    # 首先尝试工具端点（用户为后台任务配置的）
+    # Try utility endpoint first (what the user configured for background tasks)
     url, model, headers = resolve_endpoint("utility", owner=owner)
     if url and model:
         return url, model, headers
-    # 回退到任务端点
+    # Fall back to task endpoint
     try:
         from src.task_endpoint import resolve_task_endpoint
         url, model, headers = resolve_task_endpoint(owner=owner)
@@ -196,14 +197,14 @@ def _pick_endpoint_for_sort(owner=None):
             return url, model, headers
     except Exception:
         pass
-    # 回退到默认端点
+    # Fall back to default
     url, model, headers = resolve_endpoint("default", owner=owner)
     if url and model:
         return url, model, headers
     return None, None, None
 
 def setup_session_routes(session_manager: SessionManager, config: dict, webhook_manager=None):
-    """使用提供的管理器设置会话路由和配置"""
+    """Setup session routes with the provided manager and config"""
 
     REQUEST_TIMEOUT = config.get("REQUEST_TIMEOUT", 20)
     OPENAI_API_KEY = config.get("OPENAI_API_KEY")
@@ -212,15 +213,15 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
     @router.get("/sessions")
     def list_sessions(request: Request):
         user = effective_user(request)
-        # 延迟清除：匿名会话按设计是临时的 — 清除数据库中
-        # 和 session_manager 中的残留项，以便在下次页面刷新时消失。
-        # 但是：跳过最近 10 分钟内创建的会话。
-        # 如果没有此保护，清除操作会在首次 /api/sessions 调用时
-        # 就删除刚创建的活跃 "Nobody" 会话，从而破坏正在进行的
-        # 聊天。前端的 _cleanupIncognitoSessions 处理器知道哪个
-        # 会话是当前会话，不会删除活跃会话 — 此服务器端清除
-        # 仅用于捕获前端遗漏的残留会话（标签页关闭、崩溃）。
-        # 只清除足够旧、确定是孤立会话的行。
+        # Lazy purge: incognito sessions are ephemeral by design — wipe leftovers
+        # from the DB and session_manager so they vanish on the next page refresh.
+        # BUT: skip sessions that were created within the last 10 minutes.
+        # Without that guard, the purge nukes the active "Nobody" session on the
+        # very first /api/sessions call after creation, killing the in-flight
+        # chat. The frontend's own _cleanupIncognitoSessions handler knows which
+        # session is current and won't delete the live one — this server-side
+        # purge exists only to catch ghosts the frontend missed (tab close,
+        # crash). Only clean up rows old enough to be definitely orphaned.
         try:
             from datetime import datetime as _dt, timedelta as _td
             _cutoff = _dt.utcnow() - _td(minutes=10)
@@ -246,7 +247,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         except Exception:
             pass
         user_sessions = session_manager.get_sessions_for_user(user)
-        # 从数据库中获取每个会话的文件夹信息
+        # Fetch folder info from DB for each session
         db = SessionLocal()
         try:
             folder_map = {}
@@ -257,15 +258,17 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             last_msg_map = {}
             mode_map = {}
             msg_count_map = {}
-            rows = db.query(DbSession.id, DbSession.folder, DbSession.total_input_tokens, DbSession.total_output_tokens, DbSession.is_important, DbSession.created_at, DbSession.updated_at, DbSession.last_message_at, DbSession.mode, DbSession.message_count).filter(DbSession.archived == False, DbSession.owner == user).all()
+            q = db.query(DbSession.id, DbSession.folder, DbSession.total_input_tokens, DbSession.total_output_tokens, DbSession.is_important, DbSession.created_at, DbSession.updated_at, DbSession.last_message_at, DbSession.mode, DbSession.message_count).filter(DbSession.archived == False)
+            q = owner_filter(q, DbSession, user)
+            rows = q.all()
             for row in rows:
                 folder_map[row.id] = row.folder
                 token_map[row.id] = (row.total_input_tokens or 0) + (row.total_output_tokens or 0)
                 important_map[row.id] = row.is_important or False
                 created_map[row.id] = row.created_at.isoformat() if row.created_at else None
                 updated_map[row.id] = row.updated_at.isoformat() if row.updated_at else None
-                # 回退到 updated_at，再回退到 created_at，使早于
-                # 该列（或无消息）的会话仍然能合理排序。
+                # Fall back to updated_at then created_at so sessions that
+                # predate the column (or have no messages) still sort sanely.
                 last_msg_map[row.id] = (
                     row.last_message_at.isoformat() if row.last_message_at
                     else (row.updated_at.isoformat() if row.updated_at
@@ -273,20 +276,22 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                 )
                 mode_map[row.id] = row.mode
                 msg_count_map[row.id] = row.message_count or 0
-            # 有活跃内容文档的会话
+            # Sessions with active documents that have content
             from sqlalchemy import func
             doc_session_ids = set(
-                r[0] for r in db.query(Document.session_id)
-                .filter(Document.is_active == True,
-                        Document.current_content != None,
-                        func.trim(Document.current_content) != "",
-                        Document.owner == user)
+                r[0] for r in owner_filter(
+                    db.query(Document.session_id)
+                    .filter(Document.is_active == True,
+                            Document.current_content != None,
+                            func.trim(Document.current_content) != ""),
+                    Document, user)
                 .distinct().all()
             )
             img_session_ids = set(
-                r[0] for r in db.query(GalleryImage.session_id)
-                .filter(GalleryImage.session_id != None,
-                        GalleryImage.owner == user)
+                r[0] for r in owner_filter(
+                    db.query(GalleryImage.session_id)
+                    .filter(GalleryImage.session_id != None),
+                    GalleryImage, user)
                 .distinct().all()
             )
         finally:
@@ -360,10 +365,10 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             validation_headers = build_headers(effective_api_key, endpoint_base_url or endpoint_url)
 
         if skip_val:
-            # skip_validation = 信任调用方，不探测 /v1/models。
-            # 用于自定义端点以及完全没有模型的裸占位会话
-            # （例如邮件回复草稿只需要一个会话容器）。
-            # 之前此处探测会因 "Cannot reach /v1/models" 而 400 报错。
+            # skip_validation = trust the caller and do NOT probe /v1/models.
+            # Used for custom endpoints AND for bare placeholder sessions with no
+            # model at all (e.g. an email reply draft just needs a session to live
+            # in). Probing here was 400-ing those with "Cannot reach /v1/models".
             pass
         elif not model_to_use:
             from src.llm_core import list_model_ids
@@ -376,9 +381,9 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             )
             if not ids:
                 raise HTTPException(400, "Cannot reach /v1/models")
-            # 默认选择第一个 CHAT 模型 — 端点通常会先列出 embedding/
-            # tts/whisper 模型（例如 text-embedding-ada-002），这些
-            # 无法进行对话。
+            # Default to the first CHAT model — endpoints often list embedding/
+            # tts/whisper models first (e.g. text-embedding-ada-002), which
+            # can't hold a conversation.
             _NON_CHAT = ("text-embedding", "embedding", "tts-", "whisper",
                          "text-moderation", "moderation-", "dall-e", "rerank")
             chat_ids = [m for m in ids if not any(p in m.lower() for p in _NON_CHAT)]
@@ -417,7 +422,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             rag=str(rag).lower() == "true" if rag else False,
             owner=user,
         )
-        # 为自定义 API 密钥端点设置认证头
+        # Set auth headers for custom API-key endpoints
         resolved_key = request_api_key
         resolved_base = endpoint_url
         if not resolved_key and endpoint_api_key:
@@ -427,12 +432,12 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             from src.endpoint_resolver import build_headers
             session.headers = build_headers(resolved_key, resolved_base)
             _persist_session_headers(sid, session.headers)
-        # 触发 webhook（同步安全）
+        # Fire webhook (sync-safe)
         if webhook_manager:
             webhook_manager.fire_and_forget("session.created", {
                 "session_id": sid, "name": session.name, "model": model_to_use,
             })
-        # 触发事件供自动化任务使用
+        # Fire event for automation tasks
         from src.event_bus import fire_event
         fire_event("session_created", user)
         return SessionResponse(
@@ -458,7 +463,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         if name is not None:
             session_manager.update_session_name(sid, name)
             result["name"] = name
-        # 更新文件夹分配
+        # Update folder assignment
         if folder is not None:
             db = SessionLocal()
             try:
@@ -470,7 +475,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                     result["folder"] = folder if folder else None
             finally:
                 db.close()
-        # 会话中切换模型/端点
+        # Switch model/endpoint mid-session
         if model is not None and endpoint_url is not None:
             user = get_current_user(request)
             _reject_raw_endpoint_url_for_non_admin(request, user, endpoint_id, endpoint_url)
@@ -498,13 +503,13 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                     _db.close()
             session.model = model
             session.endpoint_url = endpoint_url
-            # 从端点存储的 API 密钥更新认证头
+            # Update auth headers from the endpoint's stored API key
             if endpoint_api_key:
                 from src.endpoint_resolver import build_headers
                 session.headers = build_headers(endpoint_api_key, endpoint_base_url)
             else:
                 session.headers = {}
-            # 持久化到数据库
+            # Persist to DB
             db = SessionLocal()
             try:
                 db_session = db.query(DbSession).filter(DbSession.id == sid).first()
@@ -522,7 +527,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
     
     @router.post("/session/{sid}/inject_messages")
     async def inject_messages(request: Request, sid: str):
-        """批量注入消息到会话历史中（用于群聊同步）。"""
+        """Bulk-inject messages into a session's history (for group chat sync)."""
         _verify_session_owner(request, sid)
         try:
             sess = session_manager.get_session(sid)
@@ -538,12 +543,12 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
 
     @router.post("/session/{sid}/delete")
     def delete_session_beacon(request: Request, sid: str):
-        """通过 POST 删除会话（用于页面关闭时的 navigator.sendBeacon）。"""
+        """Delete session via POST (for navigator.sendBeacon on page close)."""
         return delete_session(request, sid)
 
     @router.post("/sessions/bulk-delete")
     async def bulk_delete_sessions(request: Request):
-        """删除多个会话（用于 compare 清理的 sendBeacon）。"""
+        """Delete multiple sessions (for compare cleanup via sendBeacon)."""
         from core.database import ChatMessage as _CM
         try:
             body = await request.json()
@@ -555,7 +560,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             try:
                 _verify_session_owner(request, sid, session_manager)
                 
-                # 强制"收藏"保护，与单会话删除保持一致
+                # Enforce "starred" protection consistent with single-session delete
                 db = SessionLocal()
                 try:
                     db_sess = db.query(DbSession).filter(DbSession.id == sid).first()
@@ -572,10 +577,10 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
 
     @router.delete("/session/{sid}")
     def delete_session(request: Request, sid: str):
-        """永久删除会话及其所有消息。"""
+        """Permanently delete a session and all its messages."""
         _verify_session_owner(request, sid, session_manager)
         try:
-            # 阻止删除标星/收藏的会话
+            # Block deletion of starred/favorited sessions
             db = SessionLocal()
             try:
                 db_sess = db.query(DbSession).filter(DbSession.id == sid).first()
@@ -587,7 +592,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             finally:
                 db.close()
 
-            # 删除会话及其所有消息
+            # Delete the session and all its messages
             if session_manager.delete_session(sid):
                 return {"status": "deleted"}
             else:
@@ -606,7 +611,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
     
     @router.delete("/sessions/all")
     def delete_all_sessions(request: Request):
-        """仅限管理员：永久删除所有会话及其消息。"""
+        """Admin only: permanently delete ALL sessions and their messages."""
         from core.middleware import require_admin
         require_admin(request)
 
@@ -629,13 +634,13 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
 
     @router.post("/session/{sid}/archive")
     def archive_session(request: Request, sid: str):
-        """归档会话，保留数据但从活跃会话列表中移除。"""
+        """Archive a session, keeping its data but removing it from active sessions."""
         _verify_session_owner(request, sid)
         try:
-            # 首先检查会话是否存在
+            # First check if session exists
             session_manager.get_session(sid)
             
-            # 归档会话
+            # Archive the session
             db = SessionLocal()
             try:
                 db_session = db.query(DbSession).filter(DbSession.id == sid).first()
@@ -644,7 +649,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                     db_session.updated_at = datetime.utcnow()
                     db.commit()
                     
-                    # 如果存在于内存中也更新
+                    # Update in memory if it exists
                     if sid in session_manager.sessions:
                         session_manager.sessions[sid].archived = True
                         
@@ -667,7 +672,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
     
     @router.post("/session/{sid}/unarchive")
     def unarchive_session(request: Request, sid: str):
-        """将已归档的会话恢复到活跃会话列表。"""
+        """Restore an archived session back to the active session list."""
         _verify_session_owner(request, sid)
         db = SessionLocal()
         try:
@@ -677,14 +682,14 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             db_session.archived = False
             db_session.updated_at = datetime.utcnow()
             db.commit()
-            # 重新加载到 session manager 以便出现在活跃列表中
+            # Reload into session manager so it appears in the active list
             try:
                 if sid in session_manager.sessions:
                     session_manager.sessions[sid].archived = False
                 else:
                     session_manager._load_session_from_db(sid)
             except Exception:
-                pass  # 非致命 — 会话将在下次访问时加载
+                pass  # Non-fatal — session will load on next access
             return {"status": "unarchived"}
         except HTTPException:
             raise
@@ -697,7 +702,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
 
     @router.get("/sessions/archived")
     def list_archived_sessions(request: Request, search: str = "", offset: int = 0, limit: int = 20, sort: str = "recent", model: str = ""):
-        """列出已归档会话供归档浏览器查看。"""
+        """List archived sessions for the archive browser."""
         user = effective_user(request)
         db = SessionLocal()
         try:
@@ -709,10 +714,10 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                 safe_search = search.replace('%', r'\%').replace('_', r'\_')
                 q = q.filter(DbSession.name.ilike(f"%{safe_search}%", escape='\\'))
             if model:
-                # 包含匹配（镜像上面的名称过滤）。旧的
-                # f"%{model}" 是后缀匹配，所以过滤 "gpt-4"
-                # 会漏掉 "gpt-4o"，并在共享后缀上过度匹配；它还会
-                # 让用户值中的 LIKE 通配符不转义。
+                # Contains match (mirrors the name filter above). The old
+                # f"%{model}" was a SUFFIX-only match, so filtering by "gpt-4"
+                # dropped "gpt-4o" and over-matched on shared suffixes; it also
+                # left LIKE wildcards in the user value unescaped.
                 safe_model = model.replace('%', r'\%').replace('_', r'\_')
                 q = q.filter(DbSession.model.ilike(f"%{safe_model}%", escape='\\'))
             total = q.count()
@@ -750,9 +755,9 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
     
     @router.get("/session/{sid}/export")
     def export_session(request: Request, sid: str, fmt: str = "md", filename: str = ""):
-        """将会话历史导出为可下载文件。
+        """Export conversation history as a downloadable file.
 
-        支持的格式：md (markdown)、txt (纯文本)、json、html
+        Supported formats: md (markdown), txt (plain text), json, html
         """
         _verify_session_owner(request, sid)
         try:
@@ -817,7 +822,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                 headers={"Content-Disposition": f"attachment; filename={out_name}"},
             )
 
-        # 默认格式：markdown
+        # Default: markdown
         markdown_lines = []
         markdown_lines.append(f"# Conversation: {session.name}")
         markdown_lines.append(f"*Exported on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
@@ -873,13 +878,13 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
     
     @router.post("/session/{session_id}/important")
     async def mark_session_important(request: Request, session_id: str, important: bool = Form(True)):
-        """标记会话为重要，防止自动清理删除。"""
+        """Mark a session as important to protect it from automatic cleanup."""
         _verify_session_owner(request, session_id)
         try:
-            # 验证会话存在
+            # Validate session exists
             session_manager.get_session(session_id)
 
-            # 在数据库中更新
+            # Update in database
             db = SessionLocal()
             try:
                 db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
@@ -888,7 +893,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                     db_session.updated_at = datetime.utcnow()
                     db.commit()
 
-                    # 如果存在于内存中也更新
+                    # Update in memory if it exists
                     if session_id in session_manager.sessions:
                         session_manager.sessions[session_id].is_important = important
 
@@ -910,7 +915,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
 
     @router.post("/session/{session_id}/compact")
     async def compact_session(request: Request, session_id: str):
-        """将较早的消息摘要为一条压缩的历史记录条目。"""
+        """Summarize older messages into one compacted history entry."""
         _verify_session_owner(request, session_id)
         try:
             session = session_manager.get_session(session_id)
@@ -922,8 +927,8 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         if len(history) < 6:
             raise HTTPException(400, "Not enough messages to compact")
 
-        # 保留少量最近的消息原样。旧的半聊天/20条消息
-        # 的尾部使手动压缩在正常聊天中看起来毫无效果。
+        # Keep a small recent tail verbatim. The prior half-chat/20-message
+        # tail made manual compaction look like it did nothing on normal chats.
         recent_keep = min(8, max(4, len(history) // 4))
         older = history[:-recent_keep]
         recent = history[-recent_keep:]
@@ -990,23 +995,23 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
 
     @router.post("/sessions/auto-sort")
     def auto_sort_sessions(request: Request, skip_llm: bool = False):
-        """使用 AI 将所有会话分类到文件夹中。
+        """Use AI to categorize all sessions into folders.
 
-        第一阶段删除空/临时会话，第二阶段让 LLM
-        分配文件夹。当 `skip_llm=true` 时，端点在
-        第一阶段后返回 — 用于"整理（无 AI）"UI 操作，
-        让用户在不消耗 token 的情况下清理垃圾。
+        Phase 1 deletes empty/throwaway sessions and Phase 2 asks the LLM
+        to assign folders. When `skip_llm=true` the endpoint returns
+        after Phase 1 — used by the "Tidy (no AI)" UI affordance so
+        users can clean junk without spending tokens.
         """
         from src.llm_core import llm_call
         user = effective_user(request)
         user_sessions = session_manager.get_sessions_for_user(user)
 
-        # 排序前删除空会话和临时会话
+        # Delete empty and throwaway sessions before sorting
         from core.database import ChatMessage as DbMsg
         db = SessionLocal()
         deleted_empty = 0
         deleted_throwaway = 0
-        # 表示临时/测试会话的名称（不区分大小写的精确匹配或前缀匹配）
+        # Names that indicate a throwaway/test session (case-insensitive exact or prefix match)
         _THROWAWAY_NAMES = {
             "test", "testing", "asdf", "asd", "hello", "hi", "hey",
             "yo", "sup", "hola", "hii", "hiii", "heyo",
@@ -1019,9 +1024,9 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         try:
             rows = db.query(DbSession).filter(DbSession.archived == False, DbSession.owner == user).limit(2000).all()
             folder_map = {r.id: r.folder for r in rows}
-            # 使用两个聚合查询预计算每个会话的消息数
-            # 而不是每个会话 1-3 次查询 — 会话较多时，
-            # 逐行循环会进行数千次往返并超时。
+            # Precompute per-session message counts in TWO aggregate queries
+            # instead of 1–3 queries PER session — with many chats the per-row
+            # loop was doing thousands of round-trips and blowing the timeout.
             from sqlalchemy import func as _sa_func
             _counts = dict(db.query(DbMsg.session_id, _sa_func.count(DbMsg.id)).group_by(DbMsg.session_id).all())
             _asst_counts = dict(
@@ -1030,10 +1035,10 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             )
             cleanup_now = utcnow_naive()
             for row in rows:
-                # 绝不删除重要的会话
+                # Never delete important sessions
                 if getattr(row, 'is_important', False):
                     continue
-                # 清理过程中始终删除匿名会话
+                # Always delete incognito sessions during cleanup
                 if (row.name or "").strip() == "Incognito":
                     should_delete = True
                     deleted_throwaway += 1
@@ -1050,22 +1055,22 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                     deleted_empty += 1
                 elif msg_count <= _THROWAWAY_MAX_MESSAGES:
                     name = (row.name or "").strip().lower()
-                    # 检查第一条用户消息内容（AI 会重命名会话，所以
-                    # "hi" 变成 "Casual Greeting Exchange" — 仅靠名称无法匹配）
+                    # Check first user message content (AI renames sessions, so
+                    # "hi" becomes "Casual Greeting Exchange" — name alone won't match)
                     first_msg = db.query(DbMsg.content).filter(
                         DbMsg.session_id == row.id, DbMsg.role == "user"
                     ).order_by(DbMsg.timestamp).first()
                     first_text = (first_msg[0] or "").strip().lower() if first_msg else ""
-                    # 统计 assistant 消息数 — 如果用户发了消息但 AI 从未回复，则是死会话
+                    # Count assistant messages — if user sent something but AI never replied, it's dead
                     assistant_count = _asst_counts.get(row.id, 0)
                     if name in _THROWAWAY_NAMES or name.startswith("chat:") or first_text in _THROWAWAY_NAMES:
                         should_delete = True
                         deleted_throwaway += 1
-                    # 仅一条用户消息且无 AI 响应 = 死会话
+                    # Single user message with no AI response = dead session
                     elif msg_count == 1 and assistant_count == 0:
                         should_delete = True
                         deleted_throwaway += 1
-                    # 短短语（1-3 个单词）且无真正的 AI 对话（<=2 条消息）
+                    # Short phrase (1-3 words) with no real AI conversation (<=2 msgs)
                     elif msg_count <= 2 and first_text and len(first_text.split()) <= 3 and len(first_text) <= 40:
                         should_delete = True
                         deleted_throwaway += 1
@@ -1079,13 +1084,13 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         finally:
             db.close()
 
-        # 清理后重新获取
+        # Re-fetch after cleanup
         if deleted_empty or deleted_throwaway:
             user_sessions = session_manager.get_sessions_for_user(user)
 
-        # 当调用方仅需要清理阶段时短路返回
-        # （"整理（无 AI）"路径）。格式镜像下方的第一阶段后
-        # 分支，以便前端渲染相同的提示。
+        # Short-circuit when the caller only wanted the cleanup phase
+        # (the "Tidy (no AI)" path). Shape mirrors the post-Phase-1
+        # branch below so the frontend can render the same toast.
         if skip_llm:
             return {
                 "status": "ok",
@@ -1097,19 +1102,19 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                 "skipped_llm": True,
             }
 
-        # 整理分批进行：仅处理尚未分配文件夹的会话，
-        # 上限为 TIDY_BATCH_SIZE（最新的优先）。将所有 100+ 个
-        # 聊天发给一次 LLM 调用会超出上下文窗口，使
-        # 请求变慢，并为已排序的聊天重复收取 tokens 费用。
-        # 跳过有 `current_folder` 的会话意味着每次按"整理"
-        # 仅处理新的未分类聊天。
+        # Tidy works in batches: only sessions that don't already have a
+        # folder, capped at TIDY_BATCH_SIZE (most recent first). Sending
+        # all 100+ chats to one LLM call blows the context window, makes
+        # the request slow, and re-bills the same tokens every click for
+        # already-sorted chats. Skipping sessions with `current_folder`
+        # means each Tidy press only handles new unfiled chats.
         TIDY_BATCH_SIZE = 15
         all_candidates = []
         for s in user_sessions.values():
             if s.archived or s.name == "Incognito":
                 continue
             if folder_map.get(s.id):
-                # 已在文件夹中 — 本轮跳过。
+                # Already in a folder — skip on this pass.
                 continue
             name = s.name or "(unnamed)"
             all_candidates.append({
@@ -1119,7 +1124,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                 "current_folder": None,
             })
 
-        # 最新优先，然后取前 N 个用于本轮处理。
+        # Most-recent first, then take the top N for this batch.
         all_candidates.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
         unfiled_total = len(all_candidates)
         session_list = all_candidates[:TIDY_BATCH_SIZE]
@@ -1136,7 +1141,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                 }
             return {"status": "skipped", "reason": "No unfiled sessions to sort"}
 
-        # 选择端点 — 优先使用管理员配置的任务端点
+        # Pick an endpoint — prefer admin-configured task endpoint
         from src.task_endpoint import resolve_task_endpoint
         url, model, headers = resolve_task_endpoint(owner=user)
         if not url:
@@ -1144,7 +1149,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         if not url:
             raise HTTPException(503, "No available model endpoint for auto-sort")
 
-        # 构建提示词
+        # Build prompt
         names_text = "\n".join(f'  "{s["id"][:8]}": "{s["name"]}"' for s in session_list)
         prompt = (
             "You are a session organizer. Group these chat sessions into folders by topic.\n\n"
@@ -1166,15 +1171,15 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             raw = llm_call(url, model, [{"role": "user", "content": prompt}],
                            temperature=0.3, max_tokens=16384, headers=headers, timeout=120)
             logger.info(f"Auto-sort raw response ({len(raw)} chars): {raw[:300]}")
-            # 从响应中提取 JSON — 处理 markdown 围栏、前导文本、
-            # 推理模型的 <think> 块和尾部逗号。
+            # Extract JSON from response — handle markdown fences, leading text,
+            # reasoning-model <think> blocks, and trailing commas.
             text = raw.strip()
-            # 推理模型在答案前会输出 <think>…</think>（通常包含 { }，
-            # 会干扰括号扫描）— 先将其删除。
+            # Reasoning models emit <think>…</think> (often containing { } that
+            # would derail the brace scan) before the answer — drop it first.
             text = re.sub(r'<think(?:ing)?>[\s\S]*?</think(?:ing)?>', '', text, flags=re.I).strip()
 
             def _loads_lenient(s):
-                """解析 JSON，如失败则重试一次并去除尾部逗号。"""
+                """Parse JSON, retrying once with trailing commas stripped."""
                 if not s:
                     return None
                 for cand in (s, re.sub(r',(\s*[}\]])', r'\1', s)):
@@ -1185,12 +1190,12 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                 return None
 
             result = _loads_lenient(text)
-            # Markdown 代码围栏
+            # Markdown code fence
             if result is None:
                 fence_match = re.search(r'```(?:json)?\s*\n?([\s\S]*?)```', text)
                 if fence_match:
                     result = _loads_lenient(fence_match.group(1).strip())
-            # 首 { … 末 } 块
+            # First { … last } block
             if result is None:
                 brace_start = text.find('{')
                 brace_end = text.rfind('}')
@@ -1209,22 +1214,22 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         if not folders:
             return {"status": "skipped", "reason": "AI found no groupings"}
 
-        # 构建 id → 文件夹 映射
+        # Build id -> folder map
         id_prefix_map = {s["id"][:8]: s["id"] for s in session_list}
         assignments = {}
         for folder_name, ids in folders.items():
             for sid_or_prefix in ids:
-                # 按完整 ID 或前缀匹配
+                # Match by full ID or prefix
                 full_id = None
                 if sid_or_prefix in id_prefix_map.values():
                     full_id = sid_or_prefix
                 else:
-                    # 尝试前缀匹配
+                    # Try prefix match
                     prefix = sid_or_prefix.rstrip(".").rstrip(" ")
                     if prefix in id_prefix_map:
                         full_id = id_prefix_map[prefix]
                     else:
-                        # 模糊前缀匹配
+                        # Fuzzy prefix match
                         for p, fid in id_prefix_map.items():
                             if fid.startswith(prefix) or prefix.startswith(p):
                                 full_id = fid
@@ -1232,7 +1237,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                 if full_id:
                     assignments[full_id] = folder_name
 
-        # 应用文件夹分配
+        # Apply folder assignments
         updated = 0
         db = SessionLocal()
         try:
@@ -1250,9 +1255,9 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         finally:
             db.close()
 
-        # 本轮之后还剩下多少未分类的聊天 —
-        # 前端用它来决定是显示"继续整理"还是
-        # "全部已分类！"在提示中。
+        # How many unfiled chats are left after this batch — the
+        # frontend uses this to decide whether to show "Tidy more" or
+        # "All sorted!" in the toast.
         unfiled_remaining_after = max(0, unfiled_total - updated)
         return {
             "status": "ok",
@@ -1265,7 +1270,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
 
     @router.get("/session/{session_id}/context_info")
     async def get_context_info(request: Request, session_id: str):
-        """从端点获取会话模型的真实上下文长度。"""
+        """Get the real context length for a session's model from the endpoint."""
         _verify_session_owner(request, session_id)
         session = session_manager.get_session(session_id)
         if not session:

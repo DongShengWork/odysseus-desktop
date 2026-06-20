@@ -1,13 +1,14 @@
-"""跨平台操作系统兼容性辅助工具。
+"""Cross-platform OS compatibility helpers.
 
-Odysseus 最初是一个仅支持 Linux/macOS/Docker 的应用。此模块集中管理
-使其在 Windows 上 *原生* 运行所需的小量操作系统差异，以便
-代码库的其余部分可以保持平台无关。请从此处导入，而不是在
-各个模块中散布 ``os.name == "nt"`` 检查（以及仅 POSIX 的调用）。
+Odysseus began as a Linux/macOS/Docker-only app. This module centralizes the
+small set of OS differences needed to run it *natively* on Windows so the rest
+of the codebase can stay platform-agnostic. Import from here instead of
+sprinkling ``os.name == "nt"`` checks (and POSIX-only calls) across modules.
 
-设计规则：
-  * 仅标准库 + ctypes — 不新增第三方依赖（不使用 psutil/pywinpty）。
-  * POSIX 行为不变；Windows 获得一个保真等效实现或安全的、有文档说明的空操作。
+Design rules:
+  * Stdlib + ctypes only — no new third-party deps (no psutil/pywinpty).
+  * POSIX behaviour is unchanged; Windows gets a faithful equivalent or a
+    safe, documented no-op.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ import platform
 
 IS_WINDOWS = os.name == "nt"
 IS_POSIX = not IS_WINDOWS
-# 允许在 Apple Silicon Mac 上使用 APFEL 支持及 ARM 原生二进制推荐。
+# Allows APFEL support and ARM-native binary recommendations on Apple Silicon Macs.
 IS_APPLE_SILICON = (
     IS_POSIX
     and platform.system() == "Darwin"
@@ -35,13 +36,14 @@ IS_APPLE_SILICON = (
 )
 
 
-# ── 文件权限 ────────────────────────────────────────────────────────
+# ── File permissions ────────────────────────────────────────────────────────
 def safe_chmod(path, mode: int) -> bool:
-    """在 Windows 上为无害空操作的 ``os.chmod``。
+    """``os.chmod`` that is a harmless no-op on Windows.
 
-    在 POSIX 上我们应用权限模式 — 用于将密钥/密钥文件锁定为 0o600。
-    Windows 没有 POSIX 权限位；用户配置文件下的文件已经通过 ACL 限制给该用户，
-    因此我们跳过而不是抛出异常。当模式实际被应用时返回 True。
+    On POSIX we apply the mode — used to lock secret/key files down to 0o600.
+    Windows has no POSIX permission bits; files under the user profile are
+    already ACL-restricted to that user, so we skip rather than raise. Returns
+    True when the mode was actually applied.
     """
     if IS_WINDOWS:
         return False
@@ -52,14 +54,15 @@ def safe_chmod(path, mode: int) -> bool:
         return False
 
 
-# ── 进程分离 / 存活检查 / 终止 ────────────────────────────────────
+# ── Process detach / liveness / teardown ────────────────────────────────────
 def detached_popen_kwargs() -> dict:
-    """返回 :class:`subprocess.Popen` 的关键字参数，使子进程完全分离，
-    以便在其启动的请求/流结束后继续存活。
+    """Keyword args for :class:`subprocess.Popen` that fully detach a child so
+    it outlives the request/stream that launched it.
 
-    POSIX: ``start_new_session=True`` (setsid) — 新会话 + 新进程组。
-    Windows: ``CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS`` — 子进程获得
-    自己的进程组（因此父进程控制台关闭时不会终止），并且与任何控制台分离。
+    POSIX: ``start_new_session=True`` (setsid) — new session + process group.
+    Windows: ``CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS`` — the child gets
+    its own process group (so it isn't killed when the parent's console closes)
+    and is detached from any console.
     """
     if IS_WINDOWS:
         flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200) | getattr(
@@ -70,12 +73,13 @@ def detached_popen_kwargs() -> dict:
 
 
 def pid_alive(pid: Optional[int]) -> bool:
-    """如果 ``pid`` 对应的进程正在运行，返回 True。
+    """True if a process with ``pid`` is currently running.
 
-    POSIX 使用经典的 ``os.kill(pid, 0)`` 探测。这在 Windows 上是 **不安全** 的：
-    CPython 的 ``os.kill`` 对 CTRL_C/CTRL_BREAK 以外的任何信号调用
-    ``TerminateProcess(handle, sig)``，因此 ``os.kill(pid, 0)`` 会 *杀死*
-    正在检查的进程。我们改用 Win32 API 打开进程并读取其退出码。
+    POSIX uses the classic ``os.kill(pid, 0)`` probe. That is **unsafe on
+    Windows**: CPython's ``os.kill`` calls ``TerminateProcess(handle, sig)`` for
+    any signal other than CTRL_C/CTRL_BREAK, so ``os.kill(pid, 0)`` would *kill*
+    the process it is checking. We instead open the process and read its exit
+    code via the Win32 API.
     """
     if not pid:
         return False
@@ -106,11 +110,12 @@ def pid_alive(pid: Optional[int]) -> bool:
 
 
 def kill_process_tree(pid: Optional[int]) -> None:
-    """终止 ``pid`` 及其所有后代进程。
+    """Terminate ``pid`` and all of its descendants.
 
-    POSIX: 向整个进程组发信号（``killpg``），如果 pid 不是组领导则回退到
-    普通 ``kill``。
-    Windows: ``taskkill /T /F`` 遍历并杀死子进程树（没有进程组信号机制）。
+    POSIX: signal the whole process group (``killpg``), falling back to a plain
+    ``kill`` if the pid isn't a group leader.
+    Windows: ``taskkill /T /F`` walks and kills the child tree (there is no
+    process-group signalling).
     """
     if not pid:
         return
@@ -136,11 +141,11 @@ def kill_process_tree(pid: Optional[int]) -> None:
             pass
 
 
-# ── Shell / 可执行文件解析 ───────────────────────────────────────────
+# ── Shell / executable resolution ───────────────────────────────────────────
 _BASH_CACHE: Optional[str] = None
 _BASH_PROBED = False
 
-# 当 bash 不在 PATH 中时，常见的 Git-for-Windows 安装位置，用于探测。
+# Common Git-for-Windows install locations to probe when bash isn't on PATH.
 _WINDOWS_BASH_ROOT_ENV_VARS = (
     "ProgramFiles",
     "ProgramW6432",
@@ -156,14 +161,14 @@ _WINDOWS_BASH_RELATIVE_PATHS = (
     ("usr", "bin", "bash.exe"),
 )
 
-# 添加到远程 SSH 探测命令中的路径，用于查找可能不在 PATH 中的工具，如 nvidia-smi。
+# Paths to add to the remote SSH probe command to find tools like nvidia-smi that may not be on PATH.
 _SSH_PATH_MEMBERS = (
     "/usr/bin",
     "/usr/local/bin",
     "/usr/local/cuda/bin",
     "/usr/lib/wsl/lib"
 )
-# 在 WSL 和其他可能不在 PATH 中的 Linux 发行版上 nvidia-smi 的备用位置。
+# Fallback locations for nvidia-smi on WSL and other Linux distros where it may not be on PATH.
 NVIDIA_PATH_CANDIDATES = (
     "/usr/bin/nvidia-smi",
     "/usr/local/bin/nvidia-smi",
@@ -173,7 +178,7 @@ NVIDIA_PATH_CANDIDATES = (
 
 
 def _ssh_path_override() -> str:
-    """构建用于远程 SSH Shell 探测的 PATH 导出代码片段。"""
+    """Build the PATH export snippet used for remote SSH shell probes."""
     return f"export PATH=\"$PATH:{':'.join(_SSH_PATH_MEMBERS)}\"; "
 
 
@@ -186,6 +191,8 @@ def _windows_bash_fallbacks() -> List[str]:
         base = os.environ.get(env_name)
         if base:
             roots.append(ntpath.join(base, "Git"))
+            if env_name == "LocalAppData":
+                roots.append(ntpath.join(base, "Programs", "Git"))
     roots.extend(_WINDOWS_BASH_DEFAULT_ROOTS)
 
     paths: List[str] = []
@@ -210,10 +217,10 @@ def _is_windows_bash_stub(path: str) -> bool:
 
 
 def git_bash_path(path: str | Path) -> str:
-    """将路径转换为适合 Windows 上 Git Bash 使用的 POSIX 风格。
+    """Convert a path to POSIX style suitable for Git Bash on Windows.
 
-    将盘符（例如 'C:\\path'）转换为 POSIX 格式 '/c/path'，
-    并使用正斜杠。
+    Transforms drive letters (e.g., 'C:\\path') to POSIX '/c/path',
+    and uses forward slashes.
     """
     p = Path(path)
     p_str = p.as_posix()
@@ -225,12 +232,12 @@ def git_bash_path(path: str | Path) -> str:
 
 
 def find_bash() -> Optional[str]:
-    """定位真正的 ``bash`` 解释器，或返回 None。
+    """Locate a real ``bash`` interpreter, or None.
 
-    在 Windows 上通常是 Git Bash / WSL。许多 Odysseus 功能
-    （agent ``bash`` 工具、后台作业、Cookbook 脚本）会输出 bash 语法，
-    因此当存在 bash 时，我们使用它并保持与 POSIX 的完全一致性。
-    结果会被缓存。
+    On Windows this is typically Git Bash / WSL. Many Odysseus features (the
+    agent ``bash`` tool, background jobs, Cookbook scripts) emit bash syntax, so
+    when a bash is present we use it and keep full parity with POSIX. Result is
+    cached.
     """
     global _BASH_CACHE, _BASH_PROBED
     if _BASH_PROBED:
@@ -253,11 +260,11 @@ def has_bash() -> bool:
 
 
 def which_tool(name: str) -> Optional[str]:
-    """``shutil.which`` 的增强版本，同时尝试 Windows 可执行文件后缀。
+    """``shutil.which`` that also tries Windows executable suffixes.
 
-    在 Windows 上，Node/npm 的快捷方式是 ``npx.cmd``/``npm.cmd``，
-    二进制文件以 ``.exe`` 结尾；裸 ``which("npx")`` 可能因为 PATHEXT
-    设置而错过它们。我们先尝试裸名称，然后尝试常用后缀。
+    On Windows, Node/npm shims are ``npx.cmd``/``npm.cmd`` and binaries end in
+    ``.exe``; a bare ``which("npx")`` can miss them depending on PATHEXT. We try
+    the bare name first, then the common suffixes.
     """
     found = shutil.which(name)
     if found:
@@ -271,13 +278,13 @@ def which_tool(name: str) -> Optional[str]:
 
 
 def run_script_argv(script_path) -> List[str]:
-    """构建执行 Shell *脚本文件* 所需的 argv。
+    """argv to execute a shell *script file*.
 
-    优先使用 bash（以便现有的 ``.sh`` 包装器可以直接工作，包括在
-    Windows 上通过 Git Bash）。在 Windows 上没有 bash 时，回退到
-    ``cmd.exe /c`` — 简单命令仍可运行，但 bash 特有语法不可用。
-    需要保证 bash 的调用者应先检查 :func:`has_bash` 并显示清晰的
-    "安装 Git Bash" 提示信息。
+    Prefers bash (so existing ``.sh`` wrappers work verbatim, including on
+    Windows via Git Bash). On Windows with no bash available, falls back to
+    ``cmd.exe /c`` — simple commands still run, but bash-specific syntax won't.
+    Callers that need guaranteed bash should check :func:`has_bash` first and
+    surface a clear "install Git Bash" message.
     """
     bash = find_bash()
     if bash:
@@ -289,11 +296,11 @@ def run_script_argv(script_path) -> List[str]:
 
 
 def is_wsl() -> bool:
-    """如果在 Windows Subsystem for Linux (WSL) 内运行，返回 True。"""
+    """True if running inside Windows Subsystem for Linux (WSL)."""
     import sys
     if sys.platform.startswith("linux") or os.name == "posix":
         try:
-            with open("/proc/version", "r") as f:
+            with open("/proc/version", "r", encoding="utf-8", errors="ignore") as f:
                 if "microsoft" in f.read().lower():
                     return True
         except Exception:
@@ -302,11 +309,11 @@ def is_wsl() -> bool:
 
 
 def translate_path(path_str: str) -> str:
-    """将路径（可能为 Windows 路径）转换为当前操作系统格式。
+    """Translate a path (possibly a Windows path) to the current OS format.
 
-    特别处理在 WSL 下运行时的 Windows 路径（例如 C:\\foo 或 C:/foo），
-    将其转换为 /mnt/c/foo。
-    同时处理标准路径规范化以避免字符串断裂。
+    Particularly handles Windows paths (e.g. C:\\foo or C:/foo) when running
+    under WSL, translating them to /mnt/c/foo.
+    Also handles standard path normalization to avoid string breakages.
     """
     if not path_str:
         return path_str
@@ -329,7 +336,7 @@ def translate_path(path_str: str) -> str:
 
 
 def get_wsl_windows_user_profile() -> Optional[str]:
-    """从 WSL 内部获取 Windows 主机的用户配置文件路径。"""
+    """Retrieve the Windows host User Profile path from inside WSL."""
     if not is_wsl():
         return None
     try:
@@ -360,7 +367,11 @@ def _ssh_exec_argv(
     connect_timeout: int | None = None,
     strict_host_key_checking: bool | None = None,
 ) -> list[str]:
-    """构建一致的 ssh argv 以执行远程命令。"""
+    """Build a consistent ssh argv for remote command execution."""
+    remote_value = str(remote or "").strip()
+    remote_host = remote_value.rsplit("@", 1)[-1]
+    if not remote_value or remote_value.startswith("-") or not remote_host or remote_host.startswith("-"):
+        raise ValueError("Invalid SSH remote host")
     argv = ["ssh"]
     if connect_timeout is not None:
         argv.extend(["-o", f"ConnectTimeout={int(connect_timeout)}"])
@@ -391,7 +402,7 @@ def run_ssh_command(
     strict_host_key_checking: bool | None = None,
     text: bool = True,
 ) -> subprocess.CompletedProcess:
-    """运行 ssh 命令，使用统一的超时和 stderr/stdout 捕获。"""
+    """Run an ssh command with centralized timeout and stderr/stdout capture."""
     return subprocess.run(
         _ssh_exec_argv(
             remote,
@@ -426,9 +437,9 @@ def run_wsl_windows_powershell(
     *,
     timeout: float = 5,
 ) -> subprocess.CompletedProcess[str]:
-    """从 WSL 在 Windows 主机上运行 PowerShell 命令。
+    """Run a PowerShell command on the Windows host from WSL.
 
-    在 WSL 外部调用时抛出 ``RuntimeError``。
+    Raises ``RuntimeError`` when called outside WSL.
     """
 
     if not is_wsl():

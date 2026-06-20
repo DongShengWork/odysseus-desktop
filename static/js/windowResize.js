@@ -1,31 +1,32 @@
-// 共享窗口调整大小辅助函数。makeWindowDraggable 的配套工具：为每个
-// 可拖动的工具窗口（资料库、笔记、任务、日历、画廊、邮件、
-// 食谱、记忆、设置、主题、对比、研究、会话）提供边缘和
-// 角落调整大小功能，就像原生桌面窗口调整大小一样 — 抓住
-// 四条边或四个角中的任意一个并拖动。
+// Shared window-resize helper. Companion to makeWindowDraggable: gives every
+// draggable tool window (Library, Notes, Tasks, Calendar, Gallery, Email,
+// Cookbook, Memory, Settings, Theme, Compare, Research, Sessions) edge- and
+// corner-resize, the same way a native desktop window resizes — grab any of
+// the four edges or four corners and drag.
 //
-// 为什么使用边缘接近检测而不是注入句柄元素：
-//   窗口结构各不相同。`.modal-content` 滚动自己的主体
-//   (overflow:auto)，而 `.notes-pane` 保持 overflow:hidden 并滚动
-//   内部元素。在第一种情况下，绝对定位的句柄子元素会随内容滚动移走。
-//   检测指针与窗口边框的接近度在任何溢出模型下都能统一工作，
-//   并且符合用户的心智模型（“拖动边缘或角落”）。
+// Why edge-proximity detection instead of injected handle elements:
+//   The windows differ structurally. `.modal-content` scrolls its own body
+//   (overflow:auto) while `.notes-pane` keeps overflow:hidden and scrolls an
+//   inner element. Absolutely-positioned handle children would scroll away
+//   with the content in the first case. Detecting pointer proximity to the
+//   window's border works uniformly regardless of the overflow model and
+//   matches the user's mental model ("drag the edges or corners").
 //
-// API：
+// API:
 //   makeWindowResizable(content, {
-//     modal,        // 可选的包装 .modal（用于基于 id 的尺寸持久化）
-//     mobileSkip,   // 在此视口宽度及以下禁用调整大小功能（sheet 模式）
-//     isLocked,     // () => bool — 全屏/停靠时跳过
+//     modal,        // optional wrapping .modal (for id-based size persistence)
+//     mobileSkip,   // viewport width at/below which resize is disabled (sheets)
+//     isLocked,     // () => bool — skip while fullscreen / docked
 //     minWidth, minHeight,
-//     storageKey,   // 持久化 {w,h} 的 localStorage 键；null 禁用
+//     storageKey,   // localStorage key to persist {w,h}; null disables
 //     onResizeEnd,  // ({rect}) => void
 //   })
 
-const EDGE = 7;          // 触发调整大小抓取器的边框接近距离（像素）
-const MIN_W = 320;       // 窗口可拖动到的最小宽度
+const EDGE = 7;          // px proximity to a border that arms a resize grip
+const MIN_W = 320;       // smallest a window may be dragged to
 const MIN_H = 200;
-// 即使位于窗口边框 EDGE 像素内也必须保留其自身点击/拖动行为的控件
-//（关闭按钮、滑块、输入框、链接）。
+// Controls that must keep their own click/drag behaviour even when they sit
+// within EDGE px of the window border (close buttons, sliders, inputs, links).
 const INTERACTIVE = 'button, input, select, textarea, a, [contenteditable=""], [contenteditable="true"]';
 
 export function makeWindowResizable(content, options = {}) {
@@ -40,9 +41,9 @@ export function makeWindowResizable(content, options = {}) {
 
   const _skip = () => (mobileSkip > 0 && window.innerWidth <= mobileSkip) || isLocked();
 
-  // (cx,cy) 在哪些边框的 EDGE 像素范围内？仅当指针
-  // 在垂直轴上也在窗口范围内时才计入，使角落
-  // 解析为真正的对角抓取器而不是整条边。
+  // Which borders is (cx,cy) within EDGE px of? Only counts when the pointer
+  // is also within the window's span on the perpendicular axis, so the corners
+  // resolve to true diagonal grips rather than the whole side.
   function edgesAt(cx, cy) {
     const r = content.getBoundingClientRect();
     const within = (cy >= r.top - EDGE && cy <= r.bottom + EDGE && cx >= r.left - EDGE && cx <= r.right + EDGE);
@@ -86,18 +87,20 @@ export function makeWindowResizable(content, options = {}) {
   function begin(cx, cy, edges) {
     resizing = true;
     active = edges;
-    // 在测量之前终止模态框/面板打开动画（前 ~200-250ms 运行的缩放变换）。
-    // 使用永久的內联样式而非切换类：切换类会在 mouseup 时重新触发
-    // 缩放进入动画，错误测量最终尺寸并导致窗口可见的弹跳。
-    // 打开动画是一次性的，因此对此实例终止它是无害的（下次打开时重新播放）。
+    // Kill the modal/pane open-animation (a scale transform that runs for the
+    // first ~200-250ms) BEFORE measuring. Done as a permanent inline style
+    // rather than a toggled class on purpose: a class that flips animation
+    // off→on would re-trigger the scale-in on mouseup, mis-measuring the final
+    // size and visibly popping the window. The open animation is a one-shot,
+    // so killing it for this instance is harmless (it replays on next open).
     content.style.animation = 'none';
     content.classList.add('window-resizing');
     const r = content.getBoundingClientRect();
     startRect = { left: r.left, top: r.top, width: r.width, height: r.height };
     startX = cx; startY = cy;
-    // 固定为显式盒模型定位，与拖动辅助函数相同，
-    // 使居中变换/边距停止与新尺寸争斗。移除
-    // max-width/height 限制（如 85vh），使窗口可以实际增长。
+    // Pin to fixed with explicit box, same as the drag helper does, so the
+    // centering transform / margin stops fighting the new dimensions. Drop the
+    // max-width/height caps (e.g. 85vh) so the window can actually grow.
     content.style.position = 'fixed';
     content.style.margin = '0';
     content.style.transform = 'none';
@@ -120,10 +123,11 @@ export function makeWindowResizable(content, options = {}) {
     if (active.b) height = startRect.height + dy;
     if (active.l) { width = startRect.width - dx; left = startRect.left + dx; }
     if (active.t) { height = startRect.height - dy; top = startRect.top + dy; }
-    // 最小尺寸限制 — 从左侧/顶部拉动时保持对边锚定，使窗口不会跳动。
+    // Min-size clamps — keep the opposite edge anchored when pulling from
+    // the left/top so the window doesn't jump.
     if (width < minW) { if (active.l) left = startRect.left + (startRect.width - minW); width = minW; }
     if (height < minH) { if (active.t) top = startRect.top + (startRect.height - minH); height = minH; }
-    // 保持窗口在屏幕内且不超过视口大小。
+    // Keep the window on-screen and never larger than the viewport.
     if (active.l && left < 0) { width += left; left = 0; }
     if (active.t && top < 0) { height += top; top = 0; }
     if (left + width > vw) width = Math.max(minW, vw - left);
@@ -157,8 +161,8 @@ export function makeWindowResizable(content, options = {}) {
     return true;
   }
 
-  // 捕获阶段：当抓取落在边框上时，抢占标题栏的拖动监听器
-  //（位于后代元素上，在冒泡阶段触发）。
+  // Capture phase: pre-empt the header's drag listener (which lives on a
+  // descendant and fires in the bubble phase) when the grab lands on a border.
   content.addEventListener('mousedown', (ev) => {
     if (ev.button !== 0) return;
     if (!armFrom(ev.target, ev.clientX, ev.clientY)) return;
@@ -169,9 +173,9 @@ export function makeWindowResizable(content, options = {}) {
       document.removeEventListener('mousemove', mm);
       document.removeEventListener('mouseup', mu);
     };
-    // 自愈漏掉的 mouseup（在窗口外释放、事件丢失、
-    // 窗口失焦）：无按键按下的移动意味着拖动结束 —
-    // 完成而不是在每次后续 mousemove 上失控运行。
+    // Self-heal a missed mouseup (released outside the window, dropped event,
+    // window blur): a move with no buttons pressed means the drag is over —
+    // finish instead of running away on every subsequent mousemove.
     const mm = (e) => {
       if (e.buttons === 0) { mu(); return; }
       move(e.clientX, e.clientY);
@@ -201,14 +205,15 @@ export function makeWindowResizable(content, options = {}) {
     document.addEventListener('touchcancel', te);
   }, true);
 
-  // 在（重新）打开时恢复之前选择的尺寸。在窗口仍由其覆盖层居中时
-  // 应用內联 width/height 可保持新尺寸仍居中；
-  // 一旦拖动/调整大小，则如常固定为 absolute。
+  // Restore a previously chosen size on (re)open. Applying width/height inline
+  // while the window is still centered by its overlay keeps it centered at the
+  // new size; once dragged/resized it pins to fixed as usual.
   //
-  // 故意延迟一帧：某些窗口（如 Notes）在此辅助函数接入后
-  // 会同步吸附到边缘停靠或全屏。等待一帧让那部分完成，
-  // 以便重新检查 _skip()，不会将停靠/全屏窗口拉伸为过时的窗口尺寸。
-  // 打开动画掩盖了一帧延迟，因此没有可见的跳动。
+  // Deferred one frame on purpose: some windows (e.g. Notes) snap to an edge
+  // dock or fullscreen synchronously right AFTER this helper is wired. Waiting a
+  // frame lets that settle so we can re-check _skip() and NOT stretch a
+  // docked/fullscreen window to a stale windowed size. The open animation masks
+  // the one-frame delay, so there is no visible jump.
   if (storageKey) {
     requestAnimationFrame(() => {
       if (_skip() || !content.isConnected) return;

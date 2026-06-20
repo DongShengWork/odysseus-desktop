@@ -1,16 +1,16 @@
 # src/visual_report.py
 """
-从深度研究结果生成自包含、带样式的 HTML 页面。
+Generate a self-contained, styled HTML page from deep research results.
 
-将 DeepResearcher 生成的 markdown 报告、来源和统计数据
-包装成一个具有编辑质量的 HTML 文档，包含：
-- 系统/本地字体，不使用远程字体提供商
-- 通过 prefers-color-scheme 实现深色/浅色主题
-- 带有动画渐变的 Hero 区域 + 可选的 Hero 图片
-- 章节之间的内联 OG 图片
-- 从标题自动生成目录
-- 可折叠的紧凑来源列表
-- 打印/分享工具栏
+Takes the markdown report, sources, and stats produced by DeepResearcher
+and wraps them in an editorial-quality HTML document with:
+- System/local typography, no remote font provider
+- Dark/light theme via prefers-color-scheme
+- Hero section with animated gradient + optional hero image
+- Inline OG images between sections
+- Auto-generated table of contents from headings
+- Collapsible compact sources list
+- Print/Share toolbar
 """
 import html
 import json
@@ -29,12 +29,12 @@ import nh3
 
 logger = logging.getLogger(__name__)
 
-# 在研究报告 HTML 中允许的标签/属性。从 nh3 的
-# 安全默认值开始（丢弃 <script>、内联事件处理程序和 javascript:
-# URL），并仅添加回报告本身发出的格式化标签：
-# 可折叠的原始发现块（<details>/<summary>）、
-# 目录的标题锚点（id）、代码高亮类、表格对齐，以及
-# _md_to_html 放在外部链接上的 target/rel。
+# Tags/attributes permitted in rendered research-report HTML. Starts from nh3's
+# safe defaults (which drop <script>, inline event handlers, and javascript:
+# URLs) and adds back only the formatting the report itself emits: the
+# collapsible raw-findings block (<details>/<summary>), heading anchors for the
+# table of contents (id), codehilite classes, table alignment, and the
+# target/rel that _md_to_html puts on external links.
 _REPORT_ALLOWED_TAGS = set(nh3.ALLOWED_TAGS) | {"details", "summary"}
 _REPORT_ALLOWED_ATTRS = {k: set(v) for k, v in nh3.ALLOWED_ATTRIBUTES.items()}
 for _h in ("h1", "h2", "h3", "h4", "h5", "h6"):
@@ -47,17 +47,17 @@ _REPORT_ALLOWED_ATTRS.setdefault("a", set()).update({"href", "title", "target", 
 _REPORT_ALLOWED_ATTRS.setdefault("img", set()).update({"src", "alt", "title"})
 
 # ---------------------------------------------------------------------------
-# 辅助函数
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _autolink_urls(md_text: str) -> str:
-    """处理前将裸 URL 转换为 markdown 链接。
+    """Convert bare URLs to markdown links before processing.
 
-    跳过已经在 markdown 链接语法 [text](url) 中的 URL。
+    Skips URLs already inside markdown link syntax [text](url).
     """
     if not isinstance(md_text, str):
         return md_text
-    # 匹配不在 ](...) 中的裸 URL
+    # Match bare URLs not already inside ](...)
     return re.sub(
         r'(?<!\]\()(?<!\()(https?://[^\s\)<>]+)',
         r'[\1](\1)',
@@ -66,12 +66,13 @@ def _autolink_urls(md_text: str) -> str:
 
 
 def _md_to_html(md_text: str) -> str:
-    """将 markdown 转换为支持常用扩展的 HTML。
+    """Convert markdown to HTML with common extensions.
 
-    研究报告的 markdown 是从 LLM 在爬取的网页（不受信任的内容）上输出生成的，
-    报告页面在宽松的 `script-src 'unsafe-inline'` CSP 下提供服务。
-    python-markdown 将原始 HTML 原样传递，因此渲染输出经过白名单净化，
-    以在任何 <script>/内联事件处理程序/javascript: 标记到达页面前将其剥离。
+    Research-report markdown is assembled from LLM output over crawled web
+    pages (untrusted content), and report pages are served under a relaxed
+    `script-src 'unsafe-inline'` CSP. python-markdown passes raw HTML through
+    verbatim, so the rendered output is allowlist-sanitized to strip any
+    <script>/inline-event-handler/javascript: markup before it reaches the page.
     """
     md_text = _autolink_urls(md_text)
     result = markdown.markdown(
@@ -82,14 +83,14 @@ def _md_to_html(md_text: str) -> str:
             "toc": {"marker": "", "toc_depth": "2-3"},
         },
     )
-    # 使外部链接在新标签页中打开
+    # Make external links open in new tab
     result = re.sub(
         r'<a href="(https?://)',
         r'<a target="_blank" rel="noopener noreferrer" href="\1',
         result,
     )
-    # 净化：报告内容不受信任，且报告 CSP 允许内联
-    # 脚本，因此剥离活动内容但保留上述格式。
+    # Sanitize: report content is untrusted and the report CSP allows inline
+    # scripts, so strip active content while keeping the formatting above.
     result = nh3.clean(
         result,
         tags=_REPORT_ALLOWED_TAGS,
@@ -100,7 +101,7 @@ def _md_to_html(md_text: str) -> str:
 
 
 def _extract_headings(md_text: str) -> List[Dict[str, str]]:
-    """从 markdown 中提取 h2/h3 标题用于目录。"""
+    """Pull h2/h3 headings from markdown for table of contents."""
     if not isinstance(md_text, str):
         return []
     headings = []
@@ -142,7 +143,7 @@ def _extract_headings(md_text: str) -> List[Dict[str, str]]:
 
 
 def _apply_heading_ids(report_html: str, headings: List[Dict[str, str]]) -> str:
-    """强制渲染的 h2/h3 ID 与生成的侧边栏链接匹配。"""
+    """Force rendered h2/h3 IDs to match the generated sidebar links."""
     if not headings:
         return report_html
 
@@ -180,10 +181,10 @@ _IMG_OVERLAY_BTNS = (
 
 
 def _inject_images(report_html: str, images: List[str]) -> Tuple[str, int]:
-    """在 h2 章节之间插入 OG 图片作为 figure。
+    """Insert OG images between h2 sections as figures.
 
-    返回 (html, consumed)，其中 ``consumed`` 是 ``images`` 中
-    实际被放置的数量 — 其余成为 reroll 的备用池。
+    Returns (html, consumed) where ``consumed`` is how many of ``images``
+    were actually placed — the rest become the spare pool for reroll.
     """
     if not images:
         return report_html, 0
@@ -1699,7 +1700,13 @@ _ICON_LOGO_RE = re.compile(r'/(icon|logo|favicon)([._/-]|$)', re.IGNORECASE)
 
 
 def _is_icon_or_logo_url(url: str) -> bool:
-    """如果 URL 路径指向图标/logo/favicon 资源则返回 True。"""
+    """True if a URL path points at an icon/logo/favicon asset.
+
+    Matches the icon/logo/favicon token only at a path-segment or basename
+    boundary, so a real photo whose slug merely CONTAINS the word (e.g.
+    /iconic-moment.jpg, /logos-history.png) is no longer dropped, while
+    /icon.png, /logo.svg and /favicon.ico still are.
+    """
     return bool(_ICON_LOGO_RE.search(url or ""))
 
 
@@ -1897,7 +1904,12 @@ def generate_visual_report(
 
 
 def _json_for_script(value) -> str:
-    """JSON 编码一个值，使其安全地嵌入到 <script> 块中。"""
+    """JSON-encode a value safe to embed inside a <script> block.
+
+    json.dumps doesn't escape '/', so a string containing the literal
+    substring '</script>' would terminate the script element early.
+    Escape the closing slash to keep the inline JSON inert as HTML.
+    """
     return json.dumps(value).replace("</", "<\\/")
 
 

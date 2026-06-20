@@ -1,4 +1,4 @@
-"""历史路由 — 会话历史、截断、分叉、对话主题。"""
+"""History routes — session history, truncation, fork, conversation topics."""
 
 import json
 import uuid

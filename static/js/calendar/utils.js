@@ -1,9 +1,11 @@
 // static/js/calendar/utils.js
 //
-// 日历 UI 的纯常量 + 零状态辅助函数。
-// 无 DOM、无 fetch、无全局可变状态 — 可在任何地方安全导入。
+// Pure constants + zero-state helpers for the calendar UI.
+// No DOM, no fetch, no global mutable state — safe to import anywhere.
 
-export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const WEEKDAYS     = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const WEEKDAYS_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -17,7 +19,7 @@ export const CAL_PALETTE = [
 
 export const CAL_COLORS = [
   { name: 'default', hex: '' },
-  // 浅色/柔和调色板 — 更柔和的事件色调。
+  // Pale/pastel palette — softer event tints.
   { name: 'red',     hex: '#f0b5ba' },
   { name: 'orange',  hex: '#e8ccb2' },
   { name: 'yellow',  hex: '#f2dfbd' },
@@ -26,17 +28,17 @@ export const CAL_COLORS = [
   { name: 'purple',  hex: '#e2bcee' },
   { name: 'teal',    hex: '#abdbe0' },
   { name: 'pink',    hex: '#f0b5cc' },
-  // 自定义 — 镜像笔记颜色选择器。点击打开文件选择器，
-  // 所选图片 URL 存储为 `bg:<url>` 标识。
+  // Custom — mirrors the notes color picker. Clicking opens a file picker
+  // and the chosen image URL is stored as a `bg:<url>` sentinel.
   { name: 'custom',  hex: 'custom' },
 ];
 
 export const _CAL_CUSTOM_GRADIENT = 'conic-gradient(from 0deg, #e06c75, #d19a66, #e5c07b, #98c379, #61afef, #c678dd, #e06c75)';
 
-// 每种事件类型强调色调色板。用于月/年
-// 网格中的彩色圆点和议程行旁的彩色条。
+// Per-event-type accent palette. Used by the colored dots in month/year
+// grids and the chip stripe behind agenda rows.
 export const _TYPE_PALETTE = {
-  '!':      '#e5a33a',  // 重要 — 琥珀色，比红色柔和
+  '!':      '#e5a33a',  // important — amber, less harsh than red
   work:     '#5b8abf',
   personal: '#a07ae0',
   health:   '#e06c75',
@@ -48,12 +50,12 @@ export const _TYPE_PALETTE = {
   untagged: '#555',
 };
 
-// 跨日历 UI 复用的 SVG 图标字面量。
+// SVG icon literals reused across the calendar UI.
 export const _trashIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';
 export const _moreIcon  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
 export const _bellIcon  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
 
-// ── 背景 CSS 辅助函数 ──
+// ── background CSS helpers ──
 
 export function _isCalBgImage(c) {
   return typeof c === 'string' && c.startsWith('bg:');
@@ -63,9 +65,9 @@ export function _calBgImageUrl(c) {
   return _isCalBgImage(c) ? c.slice(3) : '';
 }
 
-// 返回可安全放入 `style="background:..."` 的值。
-// 对于图片背景事件，在图片太小无法有效渲染的位置
-//（小网格圆点、多日横条）回退到日历默认值。
+// Returns a value safe to drop into `style="background:..."`. Falls back to
+// the calendar default for bg-image events in spots where an image would be
+// too small to render usefully (small grid dots, multi-day bars).
 export function _calBgCss(c, fallback) {
   if (_isCalBgImage(c)) {
     const u = _calBgImageUrl(c);
@@ -110,9 +112,9 @@ export function _calReadableTextColor(bg) {
   return ink >= white ? '#111820' : '#ffffff';
 }
 
-// ── 日期辅助函数 ──
+// ── date helpers ──
 
-// 从 Date 生成 `YYYY-MM-DD` 字符串。
+// `YYYY-MM-DD` string from a Date.
 export function _ds(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
@@ -133,8 +135,8 @@ export function _shiftDT(iso, days) {
   return _ds(d) + (iso.length > 10 ? 'T' + iso.slice(11) : '');
 }
 
-// 当前用户的 UTC 偏移，格式为 `±HH:MM`。用于标记事件负载，
-// 使后端可以在用户时区中解释无时区日期时间。
+// Current user's UTC offset as `±HH:MM`. Used to stamp event payloads so
+// the backend can interpret naive datetimes in the user's tz.
 export function _tzOffset() {
   const o = -new Date().getTimezoneOffset();
   const sign = o >= 0 ? '+' : '-';
@@ -143,13 +145,13 @@ export function _tzOffset() {
   return `${sign}${h}:${m}`;
 }
 
-// 对于无时区日期时间（无时区后缀），按书写显示日期部分 —
-// TimeTree 和许多同步工具存储“本地时间”而不带偏移量，
-// 因此通过用户时区重新解释会改变日期。
+// For naive datetimes (no tz suffix), display the date portion as written —
+// TimeTree and many sync tools store "local time" without an offset, so
+// re-interpreting them via the user's tz would shift days.
 //
-// 对于带时区信息的 ISO（`Z` 或 `±HH:MM`），解析为绝对时刻并
-// 按用户的本地日期分组。没有这个，一个
-// "2026-05-13T22:00:00Z"（日本标准时间 5月14日 07:00）的事件会显示为 5月13日。
+// For tz-aware ISO (`Z` or `±HH:MM`), parse as an absolute instant and
+// bucket by the USER's local date. Without this an event at
+// "2026-05-13T22:00:00Z" (07:00 May 14 JST) would render on May 13.
 export function _localDateOf(isoStr) {
   if (typeof isoStr !== 'string' || !isoStr) return '';
   if (isoStr.length === 10) return isoStr;

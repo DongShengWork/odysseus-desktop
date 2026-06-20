@@ -1,10 +1,11 @@
 """
 ai_interaction.py
 
-AI 间交互工具：chat_with_model、create_session、list_sessions、
-send_to_session、pipeline。
+AI-to-AI interaction tools: chat_with_model, create_session, list_sessions,
+send_to_session, pipeline.
 
-这些是 agent 工具 —— LLM 编写围栏代码块，通过标准 agent_tools.py 管道执行。
+These are agent tools — the LLM writes fenced code blocks and they execute
+through the standard agent_tools.py pipeline.
 """
 
 import json
@@ -17,13 +18,15 @@ from src.constants import GENERATED_IMAGES_DIR
 
 logger = logging.getLogger(__name__)
 
-AI_CHAT_TIMEOUT = 120  # 单次 LLM 调用的超时秒数
+AI_CHAT_TIMEOUT = 120  # seconds for a single LLM call
 MAX_DEBATE_ROUNDS = 5
 MAX_PIPELINE_STEPS = 10
 
 # ---------------------------------------------------------------------------
-# 全局管理器（从 app.py 设置，与 _mcp_manager 模式相同）
-# ---------------------------------------------------------------------------
+# Global managers (set from app.py, same pattern as _mcp_manager)
+# _session_manager is kept as a local cache for performance (avoiding
+# repeated get_session_manager_instance() calls). It's synced with
+# the authoritative singleton in core.models.
 _session_manager = None
 _memory_manager = None
 _memory_vector = None
@@ -32,11 +35,15 @@ _personal_docs_manager = None
 
 
 def set_session_manager(mgr):
+    """Set the global session manager. Syncs local cache + core singleton."""
     global _session_manager
     _session_manager = mgr
+    from core.models import set_session_manager_instance
+    set_session_manager_instance(mgr)
 
 
 def get_session_manager():
+    """Get the global session manager."""
     return _session_manager
 
 
@@ -53,20 +60,20 @@ def set_rag_manager(rag_mgr, personal_docs_mgr=None):
 
 
 # ---------------------------------------------------------------------------
-# 模型解析
+# Model resolution
 # ---------------------------------------------------------------------------
 
 from src.endpoint_resolver import build_chat_url, build_headers, build_models_url, resolve_endpoint_runtime
 
 
 def _resolve_model(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Dict]:
-    """将模型标识符解析为 (endpoint_url, model_id, headers)。
+    """Resolve a model specifier to (endpoint_url, model_id, headers).
 
-    接受格式：
-      "model_name"              — 搜索所有已配置的端点
-      "model_name@endpoint_name" — 按显示名称查找特定端点
+    Accepts:
+      "model_name"              — searches all configured endpoints
+      "model_name@endpoint_name" — looks up specific endpoint by display name
 
-    找不到模型时抛出 ValueError。
+    Raises ValueError if model not found.
     """
     import httpx
     from src.database import SessionLocal, ModelEndpoint
@@ -105,7 +112,7 @@ def _resolve_model(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Di
             headers = build_headers(api_key, base)
 
             if provider == "anthropic":
-                # Anthropic：匹配硬编码的模型列表
+                # Anthropic: match against hardcoded model list
                 matched = None
                 for am in ANTHROPIC_MODELS:
                     if model_name.lower() in am.lower() or am.lower() in model_name.lower():
@@ -114,7 +121,7 @@ def _resolve_model(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Di
                 if matched:
                     return build_chat_url(base), matched, headers
             else:
-                # OpenAI 兼容和原生 Ollama：探测提供商的模型列表。
+                # OpenAI-compatible and native Ollama: probe the provider's model list.
                 try:
                     models_url = build_models_url(base)
                     if models_url:
@@ -133,12 +140,12 @@ def _resolve_model(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Di
                 except Exception:
                     model_ids = []
 
-                # 先精确匹配
+                # Exact match first
                 for mid in model_ids:
                     if mid.lower() == model_name.lower():
                         return build_chat_url(base), mid, headers
 
-                # 部分匹配
+                # Partial match
                 for mid in model_ids:
                     if model_name.lower() in mid.lower() or mid.lower() in model_name.lower():
                         return build_chat_url(base), mid, headers
@@ -149,15 +156,15 @@ def _resolve_model(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Di
 
 
 # ---------------------------------------------------------------------------
-# 工具实现
+# Tool implementations
 # ---------------------------------------------------------------------------
 
 async def do_chat_with_model(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """向特定模型发送消息并返回其响应。
+    """Send a message to a specific model and return its response.
 
-    内容格式：
-      第 1 行：model_name（或 model_name@endpoint_name）
-      第 2 行及以后：要发送的消息
+    Content format:
+      Line 1: model_name (or model_name@endpoint_name)
+      Line 2+: the message to send
     """
     from src.llm_core import llm_call_async
 
@@ -182,7 +189,7 @@ async def do_chat_with_model(content: str, session_id: Optional[str] = None, own
             headers=headers,
             timeout=AI_CHAT_TIMEOUT,
         )
-        # 截断过长的响应
+        # Truncate very long responses
         if len(response) > 10000:
             response = response[:10000] + "\n... (truncated)"
         return {"model": model, "response": response}
@@ -202,11 +209,11 @@ _TEACHER_SYSTEM_PROMPT = (
 
 
 async def do_ask_teacher(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """向更强大的模型寻求帮助。
+    """Ask a more capable model for help.
 
-    内容格式：
-      第 1 行：model_name（或 'auto'）
-      第 2 行及以后：问题描述
+    Content format:
+      Line 1: model_name (or 'auto')
+      Line 2+: the problem description
     """
     from src.llm_core import llm_call_async
     from src.settings import get_setting
@@ -247,17 +254,18 @@ async def do_ask_teacher(content: str, session_id: Optional[str] = None, owner: 
 
 
 async def do_second_opinion(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """从另一个模型获取第二意见，然后让原模型评估反馈并生成统一版本。
+    """Get a second opinion from another model, then have the original model
+    evaluate the feedback and produce a unified version.
 
-    内容格式：
-      第 1 行：model_name（或 model_name@endpoint_name）
-      第 2 行及以后（可选）：具体问题或关注领域
+    Content format:
+      Line 1: model_name (or model_name@endpoint_name)
+      Line 2+ (optional): specific question or focus area
 
-    流程：
-      1. 拉取最近的对话上下文
-      2. 发送给审阅模型 → 获取诚实的反馈
-      3. 将反馈发回会话自身的模型 → 评估并统一
-      4. 返回审阅结果和统一后的响应
+    Flow:
+      1. Pull recent conversation context
+      2. Send to reviewer model → get honest feedback
+      3. Send feedback back to the session's own model → evaluate & unify
+      4. Return both the review and the unified response
     """
     from src.llm_core import llm_call_async
 
@@ -273,7 +281,7 @@ async def do_second_opinion(content: str, session_id: Optional[str] = None, owne
     except ValueError as e:
         return {"error": str(e)}
 
-    # 从当前会话拉取最近的对话上下文
+    # Pull recent conversation context from current session
     context_text = ""
     sess = None
     if session_id and _session_manager:
@@ -296,7 +304,7 @@ async def do_second_opinion(content: str, session_id: Optional[str] = None, owne
     if not context_text:
         return {"error": "No conversation context found to review"}
 
-    # ── 步骤 1：获取审阅者的反馈 ──
+    # ── Step 1: Get the reviewer's feedback ──
     reviewer_system = (
         "You are giving a second opinion on a conversation between a user and an AI assistant. "
         "Your job is to be genuinely helpful and honest — not a yes-man, but not a contrarian either.\n\n"
@@ -332,7 +340,7 @@ async def do_second_opinion(content: str, session_id: Optional[str] = None, owne
         logger.error(f"second_opinion reviewer call failed: {e}")
         return {"error": f"Failed to get second opinion from {model_spec}: {e}"}
 
-    # ── 步骤 2：将审阅发回会话自身的模型进行评估 ──
+    # ── Step 2: Send review back to session's own model for evaluation ──
     unified = ""
     original_model = "unknown"
     if sess:
@@ -375,7 +383,7 @@ async def do_second_opinion(content: str, session_id: Optional[str] = None, owne
             logger.error(f"second_opinion unify call failed: {e}")
             unified = f"(Failed to get unified response: {e})"
 
-    # 构建合并结果
+    # Build combined result
     combined = (
         f"## Second Opinion from {reviewer_model}\n\n{review}"
         f"\n\n---\n\n"
@@ -390,11 +398,11 @@ async def do_second_opinion(content: str, session_id: Optional[str] = None, owne
 
 
 async def do_create_session(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """创建新的聊天会话。
+    """Create a new chat session.
 
-    内容格式：
-      第 1 行：会话名称
-      第 2 行：model_name（或 model_name@endpoint_name）
+    Content format:
+      Line 1: session name
+      Line 2: model_name (or model_name@endpoint_name)
     """
     if not _session_manager:
         return {"error": "Session manager not available"}
@@ -424,7 +432,7 @@ async def do_create_session(content: str, session_id: Optional[str] = None, owne
             rag=False,
             owner=owner,
         )
-        # 将会话的 headers 存储起来供将来调用使用
+        # Store headers on session for future calls
         sess = _session_manager.get_session(sid)
         if sess and headers:
             sess.headers = headers
@@ -441,12 +449,13 @@ async def do_create_session(content: str, session_id: Optional[str] = None, owne
 
 
 async def do_list_sessions(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """列出会话，按最近活跃时间排序，最新的排在最前面。
+    """List sessions sorted by most-recently-active first.
 
-    输出每行包含相对"最后活跃"时间戳，以便 agent 可以回答"打开我最近一次聊天"
-    而无需从标题猜测。最近的会话始终排在列表第一位。
+    Output includes a relative "last active" timestamp per row so the
+    agent can answer "open my last chat" without guessing from titles.
+    The most-recent session is always first in the list.
 
-    Content = 可选的过滤关键字（匹配会话名称）。
+    Content = optional filter keyword (matches session name).
     """
     if not _session_manager:
         return {"error": "Session manager not available"}
@@ -457,29 +466,31 @@ async def do_list_sessions(content: str, session_id: Optional[str] = None, owner
         from core.database import SessionLocal, Session as DbSession
         from datetime import datetime, timezone
 
-        # 从数据库拉取每个会话的 last_accessed，以便按最近时间排序。
-        # 内存中的会话持有 name + model + msg_count；数据库行持有时间戳。
+        # Pull every session's last_accessed from the DB so we can sort
+        # by recency. In-memory sessions hold name + model + msg_count;
+        # the DB row holds the timestamps.
         db = SessionLocal()
         try:
             db_rows = {r.id: r for r in db.query(DbSession).all()}
         finally:
             db.close()
 
-        # 安全：限定为调用者自身的会话。传入 None 会返回所有用户的会话，
-        # 这会导致 agent 工具通过"列出我的聊天"回复暴露这些会话。
+        # SECURITY: scope to the caller's sessions. Passing None returned
+        # every user's sessions, which the agent tool then exposed via the
+        # "list my chats" reply.
         sessions = _session_manager.get_sessions_for_user(owner)
         rows = []
         for sid, sess in sessions.items():
             if keyword and keyword not in (sess.name or "").lower():
                 continue
             db_row = db_rows.get(sid)
-            # 优先使用 last_accessed；其次 updated_at，最后 created_at。
+            # Prefer last_accessed; fall back to updated_at, then created_at.
             ts = None
             if db_row:
                 ts = getattr(db_row, 'last_accessed', None) or getattr(db_row, 'updated_at', None) or getattr(db_row, 'created_at', None)
             rows.append((ts, sid, sess))
 
-        # 按时间戳降序排序；没有时间戳的行排在最后。
+        # Sort by timestamp DESC; rows without a timestamp sink to the bottom.
         rows.sort(key=lambda r: r[0] or datetime.min, reverse=True)
 
         def _rel(ts):
@@ -525,11 +536,11 @@ async def do_list_sessions(content: str, session_id: Optional[str] = None, owner
 
 
 async def do_send_to_session(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """向现有会话发送消息并获取响应。
+    """Send a message to an existing session and get a response.
 
-    内容格式：
-      第 1 行：session_id
-      第 2 行及以后：消息
+    Content format:
+      Line 1: session_id
+      Line 2+: message
     """
     from src.llm_core import llm_call_async
     from core.models import ChatMessage
@@ -548,7 +559,7 @@ async def do_send_to_session(content: str, session_id: Optional[str] = None, own
     if not sess:
         return {"error": f"Session '{target_sid}' not found"}
 
-    # 所有者范围限制：拒绝访问其他用户的会话
+    # Owner-scope: reject access to another user's session
     if owner and getattr(sess, "owner", None) and sess.owner != owner:
         return {"error": f"Session '{target_sid}' not found"}
 
@@ -556,7 +567,7 @@ async def do_send_to_session(content: str, session_id: Optional[str] = None, own
         return {"error": "No message provided"}
 
     try:
-        # 从会话历史构建上下文
+        # Build context from session history
         context = sess.get_context_messages()
         context.append({"role": "user", "content": message})
 
@@ -566,11 +577,11 @@ async def do_send_to_session(content: str, session_id: Optional[str] = None, own
             timeout=AI_CHAT_TIMEOUT,
         )
 
-        # 将两条消息保存到会话
+        # Save both messages to session
         sess.add_message(ChatMessage("user", message))
         sess.add_message(ChatMessage("assistant", response))
 
-        # 截断以用于工具输出
+        # Truncate for tool output
         if len(response) > 10000:
             response = response[:10000] + "\n... (truncated)"
 
@@ -585,30 +596,30 @@ async def do_send_to_session(content: str, session_id: Optional[str] = None, own
 
 
 async def stream_ai_tool(tool: str, content: str, session_id: Optional[str] = None, owner: Optional[str] = None):
-    """流式 AI 工具的分发器。作为异步生成器产出事件。"""
-    # 回退：运行非流式并产出最终结果
+    """Dispatcher for streaming AI tools. Yields events as async generator."""
+    # Fallback: run non-streaming and yield final result
     desc, result = await dispatch_ai_tool(tool, content, session_id, owner=owner)
     yield {"_final": True, "desc": desc, "result": result}
 
 
 async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """执行多步骤管道，每个模型的输出作为下一个模型的输入。
+    """Execute a multi-step pipeline where each model's output feeds the next.
 
-    内容格式 (JSON)：
+    Content format (JSON):
       {"steps": [
         {"model": "model_a", "instruction": "Draft an essay about X"},
         {"model": "model_b", "instruction": "Critique the following draft"},
         {"model": "model_a", "instruction": "Revise based on this critique"}
       ]}
 
-    或行格式：
-      第 1 行：step1_model | step1_instruction
-      第 2 行：step2_model | step2_instruction
+    Or line format:
+      Line 1: step1_model | step1_instruction
+      Line 2: step2_model | step2_instruction
       ...
     """
     from src.llm_core import llm_call_async
 
-    # 先尝试 JSON 解析
+    # Try JSON parse first
     steps = None
     try:
         data = json.loads(content.strip())
@@ -619,7 +630,7 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
     except (json.JSONDecodeError, TypeError):
         pass
 
-    # 回退到行格式：model | instruction
+    # Fall back to line format: model | instruction
     if not steps:
         steps = []
         for line in content.strip().split("\n"):
@@ -637,7 +648,7 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
     if len(steps) > MAX_PIPELINE_STEPS:
         return {"error": f"Maximum {MAX_PIPELINE_STEPS} steps allowed"}
 
-    # 先解析所有模型（快速失败）
+    # Resolve all models first (fail fast)
     resolved = []
     for i, step in enumerate(steps):
         model_spec = step.get("model", "").strip()
@@ -650,7 +661,7 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
         except ValueError as e:
             return {"error": f"Step {i + 1}: {e}"}
 
-    # 执行管道
+    # Execute pipeline
     step_outputs = []
     previous_output = None
 
@@ -682,7 +693,7 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
 
             previous_output = response
 
-        # 构建可读的结果
+        # Build readable result
         result_lines = [f"# Pipeline Results ({len(resolved)} steps)\n"]
         for so in step_outputs:
             result_lines.append(f"## Step {so['step']}: {so['model']}")
@@ -701,32 +712,32 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
 
 
 # ---------------------------------------------------------------------------
-# 会话管理工具
+# Session management tool
 # ---------------------------------------------------------------------------
 
 async def do_manage_session(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """管理会话：重命名、归档、删除、标记重要、截断、派生。
+    """Manage sessions: rename, archive, delete, important, truncate, fork.
 
-    内容格式：
-      第 1 行：action（rename|archive|unarchive|delete|important|unimportant|truncate|fork）
-      第 2 行：目标 session_id（或 "current" 使用当前活动的会话）
-      第 3 行及以后：操作特定参数（例如重命名的新名称、截断的 keep_count）
+    Content format:
+      Line 1: action (rename|archive|unarchive|delete|important|unimportant|truncate|fork)
+      Line 2: target session_id (or "current" to use the active session)
+      Line 3+: action-specific params (e.g. new name for rename, keep_count for truncate)
     """
     if not _session_manager:
         return {"error": "Session manager not available"}
 
     from src.database import SessionLocal, Session as DbSession
 
-    # 同时接受工具 schema 声明的结构化 JSON 参数
-    # ({action, session_id, value}) 以及旧版的行格式
-    # (line1=action, line2=session_id, line3=value)。原生函数调用
-    # 模型发送 JSON；围栏代码块调用者发送行格式。之前只解析了
-    # 行格式，因此遵循 schema（JSON）的模型会收到
-    # "Need at least 2 lines" / "Rename needs line 3" 而无法驱动它。
+    # Accept BOTH the structured JSON args the tool schema advertises
+    # ({action, session_id, value}) AND the legacy line-based format
+    # (line1=action, line2=session_id, line3=value). Native function-calling
+    # models send JSON; fenced-block callers send lines. Previously only the
+    # line format was parsed, so a model that followed the schema (JSON) got
+    # "Need at least 2 lines" / "Rename needs line 3" and couldn't drive it.
     _raw = (content or "").strip()
     action = ""
     target_sid = ""
-    value = None      # 操作参数：新名称（rename）/ keep_count（truncate, fork）
+    value = None      # the action param: new name (rename) / keep_count (truncate, fork)
     _list_filter = ""
     _parsed = None
     if _raw.startswith("{"):
@@ -755,24 +766,25 @@ async def do_manage_session(content: str, session_id: Optional[str] = None, owne
     if not action:
         return {"error": "Missing action (rename|archive|delete|important|truncate|fork|list|switch)"}
 
-    # `list` 别名 — 分发到 do_list_sessions，这样 agent 自然的
-    # 首次猜测（每个其他 manage_* 工具都有 `list` 操作）就能正常工作。
+    # `list` alias — dispatch to do_list_sessions so the agent's natural
+    # first guess (every other manage_* tool has a `list` action) works.
     if action == "list":
         return await do_list_sessions(_list_filter, session_id, owner=owner)
 
     if not target_sid:
         return {"error": "Need a session_id (or 'current' for the active chat)"}
 
-    # 允许 "current" 指代当前活动的会话
+    # Allow "current" to refer to the active session
     if target_sid.lower() == "current" and session_id:
         target_sid = session_id
 
-    # `switch` / `open` / `select` / `view` — agent 在用户要求
-    # "打开"或"切换"会话时会使用这些操作。
-    # 没有服务端方式让浏览器导航，所以我们只返回一个
-    # 用户可点击的锚链接。前端的 chat-history 点击委托将
-    # `#session-<id>` 路由到 selectSession()。agent 的回复自然嵌入
-    # 此结果，用户看到一行可点击的内容。
+    # `switch` / `open` / `select` / `view` — the agent reaches for
+    # these when the user asks to "open" or "switch to" a session.
+    # There's no server-side way to make the browser navigate, so we
+    # just return a clickable anchor link the user can click. The
+    # frontend's chat-history click delegate routes `#session-<id>`
+    # to selectSession(). The agent's reply naturally embeds this
+    # result so the user sees a single clickable line.
     def _session_query(db):
         query = db.query(DbSession).filter(DbSession.id == target_sid)
         if owner is not None:
@@ -850,7 +862,7 @@ async def do_manage_session(content: str, session_id: Optional[str] = None, owne
             db_sess = _session_query(db).first()
             if not db_sess:
                 return {"error": f"Session '{target_sid}' not found. Use list_sessions and pass the exact id it returned."}
-            # 阻止 AI 取消星标会话 — 只有用户才能手动取消星标
+            # Prevent AI from unstarring sessions — only the user can do that manually
             if not is_important and db_sess.is_important:
                 return {"error": f"Session '{db_sess.name}' is starred by the user. Only the user can unstar sessions manually."}
             db_sess.is_important = is_important
@@ -879,7 +891,7 @@ async def do_manage_session(content: str, session_id: Optional[str] = None, owne
             db_sess = _session_query(db).first()
             if not db_sess:
                 return {"error": f"Session '{target_sid}' not found. Use list_sessions and pass the exact id it returned."}
-            keep_count = 0  # 0 = 所有消息
+            keep_count = 0  # 0 = all messages
             if value:
                 try:
                     keep_count = int(value)
@@ -899,7 +911,7 @@ async def do_manage_session(content: str, session_id: Optional[str] = None, owne
                 rag=False,
                 owner=owner,
             )
-            # 复制消息
+            # Copy messages
             history = source.get_context_messages()
             if keep_count > 0:
                 history = history[:keep_count]
@@ -927,22 +939,22 @@ async def do_manage_session(content: str, session_id: Optional[str] = None, owne
 
 
 # ---------------------------------------------------------------------------
-# 记忆管理工具
+# Memory management tool
 # ---------------------------------------------------------------------------
 
 async def do_manage_memory(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """管理记忆：列出、添加、编辑、删除、搜索。
+    """Manage memories: list, add, edit, delete, search.
 
-    内容格式：
-      第 1 行：action（list|add|edit|delete|search）
-      第 2 行及以后：操作特定参数
+    Content format:
+      Line 1: action (list|add|edit|delete|search)
+      Line 2+: action-specific params
 
-    操作：
-      list                    — 列出所有记忆（可选第 2 行：category 过滤）
-      add                     — 第 2 行：文本，可选第 3 行：category（fact|event|contact|preference）
-      edit                    — 第 2 行：memory_id，第 3 行：新文本
-      delete                  — 第 2 行：memory_id
-      search                  — 第 2 行：查询
+    Actions:
+      list                    — list all memories (optional line 2: category filter)
+      add                     — line 2: text, optional line 3: category (fact|event|contact|preference)
+      edit                    — line 2: memory_id, line 3: new text
+      delete                  — line 2: memory_id
+      search                  — line 2: query
     """
     if not _memory_manager:
         return {"error": "Memory manager not available"}
@@ -960,16 +972,15 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
             memories = [m for m in memories if m.get("category", "").lower() == category_filter]
         if not memories:
             return {"results": "No memories found" + (f" in category '{category_filter}'" if category_filter else "") + "."}
+
         result_lines = [f"Found {len(memories)} memory entries:\n"]
-        for m in memories[:100]:
+        for m in memories:
             cat = m.get("category", "fact")
             mid = m.get("id", "?")[:8]
             text = m.get("text", "")
             if len(text) > 150:
                 text = text[:150] + "..."
             result_lines.append(f"- [{cat}] `{mid}` — {text}")
-        if len(memories) > 100:
-            result_lines.append(f"... and {len(memories) - 100} more")
         return {"results": "\n".join(result_lines)}
 
     elif action == "add":
@@ -985,7 +996,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
         memories.append(entry)
         _memory_manager.save(memories)
 
-        # 如果可用，更新向量索引
+        # Update vector index if available
         if _memory_vector and hasattr(_memory_vector, 'healthy') and _memory_vector.healthy:
             try:
                 _memory_vector.add(entry["id"], text)
@@ -1012,7 +1023,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
         found = False
         for m in memories:
             if m.get("id", "").startswith(memory_id):
-                # 验证所有权
+                # Verify ownership
                 if owner and m.get("owner") != owner:
                     return {"error": f"Memory '{memory_id}' not found"}
                 m["text"] = new_text
@@ -1024,7 +1035,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
             return {"error": f"Memory '{memory_id}' not found"}
         _memory_manager.save(memories)
 
-        # 更新向量索引
+        # Update vector index
         if _memory_vector and hasattr(_memory_vector, 'healthy') and _memory_vector.healthy:
             try:
                 _memory_vector.add(full_id, new_text)
@@ -1045,7 +1056,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
         delete_id = None
         for m in memories:
             if m.get("id", "").startswith(memory_id):
-                # 验证所有权
+                # Verify ownership
                 if owner and m.get("owner") != owner:
                     return {"error": f"Memory '{memory_id}' not found"}
                 full_id = m["id"]
@@ -1056,7 +1067,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
             return {"error": f"Memory '{memory_id}' not found"}
         _memory_manager.save(memories)
 
-        # 从向量索引中移除
+        # Remove from vector index
         if _memory_vector and full_id and hasattr(_memory_vector, 'healthy') and _memory_vector.healthy:
             try:
                 _memory_vector.remove(full_id)
@@ -1075,7 +1086,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
         if hasattr(_memory_manager, 'get_relevant_memories'):
             results = _memory_manager.get_relevant_memories(query, memories, threshold=0.05, max_items=20)
         else:
-            # 回退：简单文本搜索
+            # Fallback: simple text search
             query_lower = query.lower()
             results = [m for m in memories if query_lower in m.get("text", "").lower()][:20]
 
@@ -1094,13 +1105,13 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
 
 
 # ---------------------------------------------------------------------------
-# 列出模型工具
+# List models tool
 # ---------------------------------------------------------------------------
 
 async def do_list_models(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """列出所有已配置端点上的可用模型。
+    """List all available models across configured endpoints.
 
-    Content = 可选的过滤关键字。
+    Content = optional filter keyword.
     """
     import httpx
     from src.database import SessionLocal, ModelEndpoint
@@ -1173,15 +1184,15 @@ async def do_list_models(content: str, session_id: Optional[str] = None, owner: 
 
 
 # ---------------------------------------------------------------------------
-# RAG 管理工具
+# RAG management tool
 # ---------------------------------------------------------------------------
 
 async def do_manage_rag(content: str, session_id: Optional[str] = None) -> Dict:
-    """管理 RAG 索引文档：列出、添加目录、移除目录。
+    """Manage RAG indexed documents: list, add_directory, remove_directory.
 
-    内容格式：
-      第 1 行：action（list|add_directory|remove_directory）
-      第 2 行：目录路径（用于 add/remove）
+    Content format:
+      Line 1: action (list|add_directory|remove_directory)
+      Line 2: directory path (for add/remove)
     """
     lines = content.strip().split("\n")
     if not lines:
@@ -1249,9 +1260,10 @@ async def do_manage_rag(content: str, session_id: Optional[str] = None) -> Dict:
 
         try:
             if hasattr(_personal_docs_manager, 'remove_directory'):
-                # 执行针对特定目录的删除（#1660）。之前
-                # 无条件的 _rag_manager.rebuild_index() 会在每次移除时
-                # 清空整个集合（即使目录未被跟踪），现已移除。
+                # Performs a targeted per-directory delete (#1660). The previous
+                # unconditional _rag_manager.rebuild_index() here wiped the whole
+                # collection on every remove (even for untracked dirs) and has
+                # been removed.
                 _personal_docs_manager.remove_directory(directory)
             return {"action": "remove_directory", "directory": directory,
                     "results": f"Directory '{directory}' removed from RAG index"}
@@ -1263,25 +1275,25 @@ async def do_manage_rag(content: str, session_id: Optional[str] = None) -> Dict:
 
 
 # ---------------------------------------------------------------------------
-# UI 控制工具（返回事件供前端应用）
+# UI control tool (returns events for frontend to apply)
 # ---------------------------------------------------------------------------
 
 async def do_ui_control(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """控制前端 UI：切换设置、切换模型、更改主题。
+    """Control frontend UI: toggle settings, switch model, change theme.
 
-    内容格式：
-      第 1 行：action
-      第 2 行及以后：操作特定参数
+    Content format:
+      Line 1: action
+      Line 2+: action-specific params
 
-    操作：
-      toggle <name> <on|off>  — 切换设置（web, bash, rag, research, incognito, document_editor）
-      set_mode <agent|chat>   — 在 agent 和 chat 模式之间切换
-      switch_model <model>    — 更改当前会话的模型
-      set_theme <preset>      — 应用内置主题预设（dark, light, midnight, paper, cyberpunk, retrowave, forest, ocean, ume, copper, terminal, organs, lavender, gpt, claude, cute）
-      create_theme <name> <bg> <fg> <panel> <border> <accent> [key=val ...] — 创建自定义主题。可选 key=val：高级颜色覆盖以及背景效果：bgPattern=<none|dots|synapse|rain|constellations|perlin-flow|petals|sparkles|embers>, bgEffectColor=#RRGGBB, bgEffectIntensity=<num>, bgEffectSize=<num>, frosted=true|false
-      open_panel <name>       — 打开面板（documents, gallery, email, sessions, notes, memories, skills, settings, cookbook）
-      open_email_reply <uid> [folder] [reply|reply-all|ai-reply] — 打开邮件回复草稿文档；不发送
-      get_toggles             — 返回当前开关状态（服务端已知）
+    Actions:
+      toggle <name> <on|off>  — Toggle a setting (web, bash, rag, research, incognito, document_editor)
+      set_mode <agent|chat>   — Switch between agent and chat mode
+      switch_model <model>    — Change the model for the current session
+      set_theme <preset>      — Apply a built-in theme preset (dark, light, midnight, paper, cyberpunk, retrowave, forest, ocean, ume, copper, terminal, organs, lavender, gpt, claude, cute)
+      create_theme <name> <bg> <fg> <panel> <border> <accent> [key=val ...] — Create custom theme. Optional key=val: advanced color overrides AND background effects: bgPattern=<none|dots|synapse|rain|constellations|perlin-flow|petals|sparkles|embers>, bgEffectColor=#RRGGBB, bgEffectIntensity=<num>, bgEffectSize=<num>, frosted=true|false
+      open_panel <name>       — Open a panel (documents, gallery, email, sessions, notes, memories, skills, settings, cookbook)
+      open_email_reply <uid> [folder] [reply|reply-all|ai-reply] [body text] — Open a reply draft document for an email; does not send. ALWAYS append the body text when the user told you what to say (one-shot draft); only omit body when the user just asked to "open a reply" without content.
+      get_toggles             — Return current toggle states (server-side knowledge)
     """
     lines = content.strip().split("\n")
     if not lines:
@@ -1295,7 +1307,7 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
             return {"error": "toggle needs: toggle <name> <on|off>"}
         toggle_name = parts[1].lower()
         state = parts[2].lower() in ("on", "true", "1", "yes", "enable", "enabled")
-        # 友好的别名 — 用户自然地会说 "shell" / "search"。
+        # Friendly aliases — users say "shell" / "search" naturally.
         _toggle_aliases = {
             "shell": "bash",
             "terminal": "bash",
@@ -1339,13 +1351,13 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
         if not model_spec:
             return {"error": "switch_model needs a model name"}
 
-        # 解析模型以验证其存在
+        # Resolve the model to validate it exists
         try:
             url, model_id, headers = _resolve_model(model_spec, owner=owner)
         except ValueError as e:
             return {"error": str(e)}
 
-        # 如果有会话，更新当前会话的模型
+        # Update current session's model if we have a session
         if session_id and _session_manager:
             from src.database import SessionLocal as SL2, Session as DbSess2
             db2 = SL2()
@@ -1374,10 +1386,10 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
 
     elif action == "set_theme":
         theme_name = parts[1].lower() if len(parts) > 1 else ""
-        # 主题颜色在前端 static/js/theme.js 中定义。
-        # 我们传递名称；前端从预设和自定义主题中查找。
-        # 同时检查存储在 prefs 中的用户自定义主题。
-        # 必须与 static/js/theme.js 中的 THEMES 键匹配。
+        # Theme colors are defined in static/js/theme.js on the frontend.
+        # We pass the name; the frontend looks it up from presets + custom themes.
+        # Also check user's custom themes stored in prefs.
+        # Must match the THEMES keys in static/js/theme.js.
         known_presets = [
             "dark", "light", "midnight", "paper", "cyberpunk", "retrowave",
             "forest", "ocean", "ume", "copper", "terminal", "organs",
@@ -1400,19 +1412,19 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
         }
 
     elif action == "create_theme":
-        # 重新分割不设限制以获取所有部分
+        # Re-split without limit to get all parts
         parts = lines[0].strip().split()
         # create_theme <name> <bg> <fg> <panel> <border> <accent> [key=value ...]
         if len(parts) < 7:
             return {"error": "create_theme needs: create_theme <name> <bg> <fg> <panel> <border> <accent> (all hex colors). Optional advanced color key=value pairs (userBubbleBg, aiBubbleBg, bubbleBorder, sidebarBg, sectionAccent, brandColor, inputBg, inputBorder, sendBtnBg, sendBtnHover, codeBg, codeFg, toggleBg, toggleActive, accentPrimary, accentError). Optional background EFFECTS: bgPattern=<none|dots|synapse|rain|constellations|perlin-flow|petals|sparkles|embers>, bgEffectColor=#RRGGBB, bgEffectIntensity=<num e.g. 1>, bgEffectSize=<num e.g. 1>, frosted=true|false"}
         name = parts[1].lower().replace(" ", "-")
         colors = {"bg": parts[2], "fg": parts[3], "panel": parts[4], "border": parts[5], "red": parts[6]}
-        # 验证基础十六进制颜色
+        # Validate base hex colors
         import re as _re
         for k, v in colors.items():
             if not _re.match(r'^#[0-9a-fA-F]{6}$', v):
                 return {"error": f"Invalid hex color for {k}: '{v}'. Use format #RRGGBB"}
-        # 解析可选的高级 key=value 对
+        # Parse optional advanced key=value pairs
         adv_keys = {
             "userBubbleBg", "aiBubbleBg", "bubbleBorder", "sidebarBg",
             "sectionAccent", "brandColor", "inputBg", "inputBorder",
@@ -1420,8 +1432,8 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
             "toggleBg", "toggleActive", "accentPrimary", "accentError",
         }
         advanced = {}
-        # 背景效果字段（动画图案 + 磨砂玻璃）。与纯十六进制的
-        # 高级键的类型不同，因此单独解析。
+        # Background-effect fields (animated pattern + frosted glass). Different
+        # value types than the hex-only advanced keys, so parse separately.
         _BG_PATTERNS = {"none", "dots", "synapse", "rain", "constellations",
                         "perlin-flow", "petals", "sparkles", "embers"}
         bg = {}
@@ -1479,8 +1491,8 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
         }
 
     elif action == "open_panel":
-        # 打开顶层面板/模态框：documents/library、gallery、
-        # email、sessions、notes、memories、skills、settings、cookbook。
+        # Open a top-level panel/modal: documents/library, gallery,
+        # email, sessions, notes, memories, skills, settings, cookbook.
         panel = parts[1].lower() if len(parts) > 1 else ""
         _panel_aliases = {
             "documents": "documents",
@@ -1524,21 +1536,54 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
         }
 
     elif action == "open_email_reply":
-        reply_parts = lines[0].strip().split()
-        uid = reply_parts[1].strip() if len(reply_parts) > 1 else ""
-        folder = reply_parts[2].strip() if len(reply_parts) > 2 else "INBOX"
-        mode = reply_parts[3].strip().lower() if len(reply_parts) > 3 else "reply"
+        # Two forms supported:
+        #   open_email_reply <uid> [folder] [reply|reply-all|ai-reply]
+        #   open_email_reply <uid> [folder] [reply|reply-all|ai-reply]
+        #     <body text on subsequent lines or after the mode token>
+        # The body text (if any) gets pre-filled into the reply draft so the
+        # agent can compose-and-open in one tool call instead of opening an
+        # empty draft and leaving the user to wonder what happened.
+        first_line = lines[0].strip()
+        parts = first_line.split(maxsplit=4)
+        uid = parts[1].strip() if len(parts) > 1 else ""
+        folder = parts[2].strip() if len(parts) > 2 else "INBOX"
+        mode = parts[3].strip().lower() if len(parts) > 3 else "reply"
+        # Body: everything on the first line after the mode token, plus any
+        # subsequent lines. Allows multi-line bodies.
+        inline_body = parts[4] if len(parts) > 4 else ""
+        rest_lines = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+        body = (inline_body + ("\n" + rest_lines if rest_lines else "")).strip()
         if not uid:
-            return {"error": "open_email_reply needs: open_email_reply <uid> [folder] [reply|reply-all|ai-reply]"}
+            return {"error": "open_email_reply needs: open_email_reply <uid> [folder] [reply|reply-all|ai-reply] [body text]"}
         if mode not in ("reply", "reply-all", "ai-reply"):
             mode = "reply"
-        return {
+        # Body is REQUIRED for the agent path. Opening an empty draft is what
+        # users do by clicking the Reply button — they don't ask the agent
+        # for that. Every agent invocation of open_email_reply MUST include
+        # the body. Reject empty so the agent retries with the content the
+        # user asked for. Exception: ai-reply mode triggers the existing
+        # AI-Reply path on the frontend which generates its own body.
+        if not body and mode != "ai-reply":
+            return {
+                "error": (
+                    "open_email_reply called without body. The agent path REQUIRES a body — "
+                    "opening an empty draft is the wrong response when the user asked you to write. "
+                    "Re-call with the reply text included: "
+                    f"`open_email_reply {uid} {folder or 'INBOX'} {mode} <your reply text here>`. "
+                    "Compose the reply now based on the open email's content and the user's request, "
+                    "then call this tool again with the body. Do NOT call create_document instead."
+                ),
+            }
+        result = {
             "ui_event": "open_email_reply",
             "uid": uid,
             "folder": folder or "INBOX",
             "mode": mode,
-            "results": f"Opening reply draft for email UID {uid}",
+            "results": f"Opening reply draft for email UID {uid}" + (" with pre-filled body" if body else ""),
         }
+        if body:
+            result["body"] = body
+        return result
 
     elif action == "get_toggles":
         return {
@@ -1554,17 +1599,17 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
 
 
 # ---------------------------------------------------------------------------
-# 图像生成
+# Image generation
 # ---------------------------------------------------------------------------
 
 async def do_generate_image(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
-    """使用支持图像的模型（例如 gpt-image-1）生成图像。
+    """Generate an image using an image-capable model (e.g. gpt-image-1).
 
-    内容格式：
-      第 1 行：描述图像的提示
-      第 2 行：模型名称（可选，默认自动检测：优先 gpt-image-1.5 > gpt-image-1）
-      第 3 行：尺寸（可选，默认 1024x1024）
-      第 4 行：质量（可选，默认 medium — 选项：low, medium, high, auto）
+    Content format:
+      Line 1: prompt describing the image
+      Line 2: model name (optional, default auto-detects: prefers gpt-image-1.5 > gpt-image-1)
+      Line 3: size (optional, defaults to 1024x1024)
+      Line 4: quality (optional, defaults to medium — options: low, medium, high, auto)
     """
     import base64
     import httpx
@@ -1579,20 +1624,20 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
     if not prompt:
         return {"error": "Image prompt is required (line 1)"}
 
-    # 加载管理设置以获取默认值
+    # Load admin settings for defaults
     try:
         from src.settings import load_settings
         _settings = load_settings()
     except Exception:
         _settings = {}
 
-    # 如果工具调用未指定，使用管理员配置的模型/质量
+    # Use admin-configured model/quality if not specified by the tool call
     if not model_spec:
         model_spec = _settings.get("image_model", "")
     if quality == "medium" and _settings.get("image_quality"):
         quality = _settings["image_quality"]
 
-    # 如果仍未设置，自动检测最佳可用图像模型
+    # Auto-detect best available image model if still not set
     if not model_spec:
         for candidate in ("gpt-image-1.5", "gpt-image-1", "dall-e-3"):
             try:
@@ -1601,7 +1646,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
                 break
             except ValueError:
                 continue
-        # 回退：查找任何本地注册的图像类型端点
+        # Fallback: find any locally registered image-type endpoint
         if not model_spec:
             try:
                 from src.database import SessionLocal, ModelEndpoint
@@ -1636,23 +1681,23 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
         if not model_spec:
             return {"error": "No image model found. Configure one in Admin → Image Generation."}
 
-    # 解析模型以找到正确的端点
+    # Resolve the model to find the right endpoint
     try:
         url, model_id, headers = _resolve_model(model_spec, owner=owner)
     except ValueError:
         return {"error": f"No endpoint found with image model '{model_spec}'. "
                 "Configure an OpenAI-compatible endpoint with image generation support."}
 
-    # 检测是否是 GPT 图像模型 vs DALL-E vs 本地扩散
+    # Detect if this is a GPT image model vs DALL-E vs local diffusion
     is_gpt_image = "gpt-image" in model_id.lower()
     is_dalle = "dall-e" in model_id.lower()
     is_local_diffusion = not is_gpt_image and not is_dalle
 
-    # 从聊天补全 URL 构建图像端点 URL
+    # Build the images endpoint URL from the chat completions URL
     base_url = url.replace("/chat/completions", "").replace("/v1/messages", "").rstrip("/")
     images_url = base_url + "/images/generations"
 
-    # 验证云图像模型的尺寸（本地扩散接受任意 WxH）
+    # Validate size for cloud image models (local diffusion accepts any WxH)
     valid_gpt_sizes = {"1024x1024", "1024x1536", "1536x1024", "auto"}
     valid_dalle3_sizes = {"1024x1024", "1024x1792", "1792x1024"}
     if is_gpt_image and size not in valid_gpt_sizes:
@@ -1667,7 +1712,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
         "size": size,
     }
 
-    # GPT 图像模型和本地扩散支持 quality；DALL-E 不支持
+    # GPT image models and local diffusion support quality; DALL-E does not
     if is_gpt_image or is_local_diffusion:
         if quality in ("low", "medium", "high", "auto"):
             payload["quality"] = quality
@@ -1677,7 +1722,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
     logger.info(f"Image generation: model={model_id}, size={size}, quality={quality}, prompt={prompt[:80]}")
 
     try:
-        # GPT 图像模型可能需要 30-120 秒以上，取决于质量
+        # GPT image models can take 30-120s+ depending on quality
         async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=30.0)) as client:
             resp = await client.post(images_url, json=payload, headers=headers)
 
@@ -1700,7 +1745,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
             image_id = None
 
             def _save_to_gallery(filename: str) -> str:
-                """插入 GalleryImage 行并返回新 id（或 ''）。"""
+                """Insert a GalleryImage row and return the new id (or '')."""
                 try:
                     from src.database import SessionLocal as _GallerySL, GalleryImage
                     new_id = str(uuid.uuid4())
@@ -1722,7 +1767,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
                     logger.warning(f"Failed to save gallery record: {_ge}")
                     return ""
 
-            # GPT 图像模型始终返回 b64_json；DALL-E 可能返回 url
+            # GPT image models always return b64_json; DALL-E may return url
             if img.get("b64_json"):
                 img_dir = Path(GENERATED_IMAGES_DIR)
                 img_dir.mkdir(parents=True, exist_ok=True)
@@ -1733,7 +1778,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
                 image_id = _save_to_gallery(filename)
 
             elif img.get("url"):
-                # 下载外部 URL 并保存到本地（DALL-E 返回临时 URL）
+                # Download external URL and save locally (DALL-E returns temp URLs)
                 try:
                     dl_resp = httpx.get(img["url"], timeout=60)
                     if dl_resp.status_code == 200:
@@ -1745,10 +1790,10 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
                         image_url = f"/api/generated-image/{filename}"
                         image_id = _save_to_gallery(filename)
                     else:
-                        image_url = img["url"]  # 回退到外部 URL
+                        image_url = img["url"]  # fallback to external URL
                 except Exception as _dl_e:
                     logger.warning(f"Failed to download DALL-E image: {_dl_e}")
-                    image_url = img["url"]  # 回退到外部 URL
+                    image_url = img["url"]  # fallback to external URL
             else:
                 return {"error": "Image API returned unexpected format (no b64_json or url)"}
 
@@ -1769,13 +1814,13 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
 
 
 # ---------------------------------------------------------------------------
-# 分发器（从 agent_tools.execute_tool_block 调用）
+# Dispatcher (called from agent_tools.execute_tool_block)
 # ---------------------------------------------------------------------------
 
 async def dispatch_ai_tool(
     tool: str, content: str, session_id: Optional[str] = None, owner: Optional[str] = None
 ) -> Tuple[str, Dict]:
-    """分发 AI 交互工具。返回 (description, result_dict)。"""
+    """Dispatch an AI interaction tool. Returns (description, result_dict)."""
 
     if tool == "chat_with_model":
         model_spec = content.split("\n")[0].strip()[:60]

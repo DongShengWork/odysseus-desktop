@@ -1,10 +1,10 @@
 /**
- * 在空输入框中按上箭头键回显上一条用户消息（聊天应用惯例）。
+ * ArrowUp on an empty composer recalls the last user message (chat-app convention).
  */
 
 /**
- * 获取活跃聊天界面（#chat-history）中的最后一条用户消息，
- * 使用 dataset.raw（与 chat.js 中的重新发送/重新生成使用相同的源）。
+ * Last user bubble in the active chat surface (#chat-history), using dataset.raw
+ * (same source as resend/regenerate in chat.js).
  *
  * @param {Document | Element} [root=document]
  * @returns {string}
@@ -38,12 +38,12 @@ export function wireArrowUpRecall(composer, getLastUserMessage, options = {}) {
   const { autoResize } = options;
 
   composer.addEventListener('keydown', (e) => {
-    // 仅 ArrowUp，无修饰键，无 IME 输入法组合输入
+    // Only ArrowUp, no modifier keys, no IME composition
     if (e.key !== 'ArrowUp') return;
     if (e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.isComposing) return;
 
-    // 字面上的空内容 — 有意的空白字符不算空
+    // Literal emptiness — intentional whitespace is not empty
     if (composer.value !== '') return;
 
     const recalled = getLastUserMessage();

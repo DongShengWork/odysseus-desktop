@@ -1,6 +1,6 @@
-// AI provider logo SVG — 基于正则匹配自托管模型名称
-// 尽量使用 Simple Icons 的官方 logo，否则使用自定义的极简 SVG
-// 所有 SVG 使用 viewBox="0 0 24 24" fill="currentColor"
+// AI provider logo SVGs — regex-based matching for self-hosted model names
+// Uses official logos from Simple Icons where available, custom minimal SVGs otherwise
+// All SVGs use viewBox="0 0 24 24" fill="currentColor"
 
 const _PROVIDERS = [
   // Ollama
@@ -89,7 +89,7 @@ const _PROVIDERS = [
     '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.948 8.798v-1.43a6.7 6.7 0 0 1 .424-.018c3.922-.124 6.493 3.374 6.493 3.374s-2.774 3.851-5.75 3.851c-.398 0-.787-.062-1.158-.185v-4.346c1.528.185 1.837.857 2.747 2.385l2.04-1.714s-1.492-1.952-4-1.952a6.016 6.016 0 0 0-.796.035m0-4.735v2.138l.424-.027c5.45-.185 9.01 4.47 9.01 4.47s-4.08 4.964-8.33 4.964c-.37 0-.733-.035-1.095-.097v1.325c.3.035.61.062.91.062 3.957 0 6.82-2.023 9.593-4.408.459.371 2.34 1.263 2.73 1.652-2.633 2.208-8.772 3.984-12.253 3.984-.335 0-.653-.018-.971-.053v1.864H24V4.063zm0 10.326v1.131c-3.657-.654-4.673-4.46-4.673-4.46s1.758-1.944 4.673-2.262v1.237H8.94c-1.528-.186-2.73 1.245-2.73 1.245s.68 2.412 2.739 3.11M2.456 10.9s2.164-3.197 6.5-3.533V6.201C4.153 6.59 0 10.653 0 10.653s2.35 6.802 8.948 7.42v-1.237c-4.84-.6-6.492-5.936-6.492-5.936z"/></svg>'],
 ];
 
-// 返回给定 model ID 的 SVG 字符串，无匹配时返回 null
+// Returns an SVG string for the given model ID, or null if no match
 export function providerLogo(modelId) {
   if (!modelId) return null;
   for (const [re, svg] of _PROVIDERS) {
@@ -98,11 +98,12 @@ export function providerLogo(modelId) {
   return null;
 }
 
-// 主机后缀 → 友好的 provider 标签。model-info 卡片中显示此标签，使得
-// 同一模型名通过不同路由提供时（例如 `claude-haiku` 通过 OpenRouter vs
-// GitHub Copilot vs Anthropic 直连）可以区分；logo 仅反映模型厂商，
-// 而不反映实际端点。模式锚定到主机名的末尾 (^|.)domain$，
-// 这样像 `max.airlines.com` 这样的主机就不会匹配到 `x.ai`。
+// Host suffix → friendly provider label. The model-info card shows this so the
+// SAME model name served by DIFFERENT routes is distinguishable (e.g.
+// `claude-haiku` via OpenRouter vs GitHub Copilot vs Anthropic direct); the logo
+// only reflects the model vendor, not the actual endpoint. Patterns are anchored
+// to the end of the hostname (^|.)domain$ so a host like `max.airlines.com`
+// doesn't match `x.ai`.
 const _ENDPOINT_LABELS = [
   [/(^|\.)githubcopilot\.com$/i, "GitHub Copilot"],
   [/(^|\.)chatgpt\.com$/i, "ChatGPT Subscription"],
@@ -117,14 +118,14 @@ const _ENDPOINT_LABELS = [
   [/(^|\.)together\.(ai|xyz)$/i, "Together"],
   [/(^|\.)fireworks\.ai$/i, "Fireworks"],
   [/(^|\.)perplexity\.ai$/i, "Perplexity"],
+  [/(^|\.)nvidia\.com$/i, "NVIDIA"],
   [/(^|\.)x\.ai$/i, "xAI"],
 ];
 
 /**
- * 根据端点 URL 返回提供模型服务的端点友好标签。
- * 对于 localhost/LAN 主机返回 "Local"，
- * 匹配已知 provider 时返回其名称，否则返回裸主机名。
- * 当没有 URL 时返回 null。
+ * Friendly label for the endpoint that served a model, from its URL.
+ * Returns "Local" for loopback/LAN hosts, a known provider name when matched,
+ * else the bare host. Null when no URL is available.
  */
 export function providerLabel(endpointUrl) {
   if (!endpointUrl || typeof endpointUrl !== "string") return null;
@@ -132,7 +133,7 @@ export function providerLabel(endpointUrl) {
   try {
     host = new URL(endpointUrl).hostname;
   } catch (_) {
-    // 不是完整的 URL（例如裸 host[:port]）—— 尽力去掉 scheme/path/port。
+    // Not a full URL (e.g. bare host[:port]) — strip scheme/path/port best-effort.
     host = endpointUrl.replace(/^[a-z]+:\/\//i, "").split("/")[0].split(":")[0];
   }
   if (!host) return null;
@@ -142,8 +143,35 @@ export function providerLabel(endpointUrl) {
   for (const [re, label] of _ENDPOINT_LABELS) {
     if (re.test(host)) return label;
   }
-  // 未知主机 → 去掉前缀 "api." 以获得更清晰的显示。
+  // Unknown host → drop a leading "api." for a cleaner readout.
   return host.replace(/^api\./i, "");
 }
 
-export default { providerLogo, providerLabel };
+// Map endpoint URL → logo SVG using the same model-id regex catalog.
+// Tests host + port + path so loopback servers (e.g. Ollama on
+// localhost:11434) still match by port. Falls back to null when nothing
+// recognises the URL, so callers can render a neutral placeholder.
+export function providerLogoFromUrl(url) {
+  if (!url) return null;
+  let host = '', port = '', path = '';
+  try {
+    const u = new URL(url);
+    host = u.hostname; port = u.port; path = u.pathname || '';
+  } catch (_) {
+    const raw = String(url).replace(/^[a-z]+:\/\//i, '');
+    const slashIdx = raw.indexOf('/');
+    const hostport = slashIdx >= 0 ? raw.slice(0, slashIdx) : raw;
+    path = slashIdx >= 0 ? raw.slice(slashIdx) : '';
+    const colon = hostport.lastIndexOf(':');
+    host = colon >= 0 ? hostport.slice(0, colon) : hostport;
+    port = colon >= 0 ? hostport.slice(colon + 1) : '';
+  }
+  // Build candidate strings to test against the provider catalog.
+  const candidates = [host, port ? `${host}:${port}` : '', port ? `:${port}` : '', path].filter(Boolean);
+  for (const [re, svg] of _PROVIDERS) {
+    if (candidates.some(c => re.test(c))) return svg;
+  }
+  return null;
+}
+
+export default { providerLogo, providerLabel, providerLogoFromUrl };

@@ -18,7 +18,7 @@ _last_print = {}
 
 
 class PipeTqdm:
-    """最小化 tqdm 替代品，向 stdout 打印简洁的进度行。"""
+    """Minimal tqdm replacement that prints simple progress lines to stdout."""
 
     def __init__(self, *args, **kwargs):
         self.iterable = args[0] if args else kwargs.get("iterable")
@@ -59,7 +59,7 @@ class PipeTqdm:
             return
         now = time.time()
         key = id(self)
-        # 每 0.5 秒限流一次，完成时总是打印
+        # Throttle to every 0.5s, always print on completion
         if now - _last_print.get(key, 0) < 0.5 and self.n < total:
             return
         _last_print[key] = now
@@ -69,7 +69,7 @@ class PipeTqdm:
         speed = self.n / elapsed if elapsed > 0 else 0
         desc = (self.desc or "").strip()
 
-        # 格式化文件大小
+        # Format sizes
         if total >= 1024 ** 3:
             done_s = f"{self.n / (1024**3):.2f}"
             total_s = f"{total / (1024**3):.2f}GB"
@@ -83,7 +83,7 @@ class PipeTqdm:
             total_s = str(total)
             speed_s = f"{speed:.0f}/s"
 
-        # ASCII 进度条
+        # ASCII progress bar
         bar_len = 20
         filled = int(bar_len * self.n / total)
         bar = "#" * filled + "-" * (bar_len - filled)
@@ -123,18 +123,18 @@ class PipeTqdm:
 
 
 def _patch_tqdm():
-    """用我们的管道友好版本替换 tqdm 在各处的实现。"""
+    """Replace tqdm everywhere with our pipe-friendly version."""
     import tqdm as tqdm_mod
 
-    # 替换主类
+    # Replace the main class
     tqdm_mod.tqdm = PipeTqdm
     tqdm_mod.auto.tqdm = PipeTqdm
 
-    # huggingface_hub 使用 tqdm.auto 或其自己的 utils.tqdm
+    # huggingface_hub uses tqdm.auto or its own utils.tqdm
     try:
         import huggingface_hub.utils
         huggingface_hub.utils.tqdm = PipeTqdm
-        # 如果存在 _tqdm 模块也进行补丁
+        # Also patch the _tqdm module if it exists
         if hasattr(huggingface_hub.utils, "_tqdm"):
             huggingface_hub.utils._tqdm.tqdm = PipeTqdm
     except (ImportError, AttributeError):
@@ -147,11 +147,11 @@ def main():
     parser.add_argument("--include", help="File pattern to include (e.g. '*Q4_K_M*')")
     args = parser.parse_args()
 
-    # 禁用 HF 进度条（我们提供自己的）
+    # Disable HF progress bars (we provide our own)
     os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "0"
 
-    # 如果可用，启用 Rust 支持的并行下载器 — 大幅提升吞吐量。
-    # 必须在导入 huggingface_hub 之前设置。
+    # Enable Rust-backed parallel downloader if available — big throughput win.
+    # Must be set before importing huggingface_hub.
     try:
         import hf_transfer  # noqa: F401
         os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")

@@ -1,4 +1,4 @@
-"""基于相关性、来源质量和时效性对搜索结果进行排序。"""
+"""Search result ranking based on relevance, source quality, and recency."""
 
 import re
 import logging
@@ -12,18 +12,18 @@ _AGE_FORMATS = ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S")
 
 
 def _utcnow_naive() -> datetime:
-    """返回本地 UTC 时间。与下面解析的本地 UTC 风格发布日期匹配，
-    且在 Python 3.14 中安全（``datetime.utcnow()`` 已被移除，见 #1116）。"""
+    """Naive UTC 'now'. Matches the naive, UTC-style published dates parsed below,
+    and is safe on Python 3.14 where ``datetime.utcnow()`` is removed (#1116)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def recency_score(age_str: Optional[str], now: Optional[datetime] = None) -> float:
-    """评分结果的时效性：<=7 天为 1.0，>=30 天为 0.0。
+    """Score how recent a result is: 1.0 for <=7 days old, 0.0 for >=30 days.
 
-    年龄以 UTC 为基准，而非本地时间。旧代码使用
-    ``datetime.now()``（本地时间）对比 UTC 风格的发布日期，因此年龄
-    受主机 UTC 偏移量的影响；当相邻代码迁移到带时区的 datetime 时
-    也会产生潜在崩溃（#1116）。``now`` 可注入用于测试。
+    The age is measured against UTC, not local time. The previous code used
+    ``datetime.now()`` (local) against UTC-style published dates, so the age was
+    skewed by the host's UTC offset; it was also a latent crash once neighbouring
+    code moves to timezone-aware datetimes (#1116). ``now`` is injectable for tests.
     """
     if not age_str:
         return 0.0
@@ -50,8 +50,8 @@ _SPORTS_HINTS = {
     "sport", "sports", "soccer", "football", "hockey", "nba", "nfl", "mlb",
     "fifa", "world cup", "championship", "quarterfinal", "eliminates",
 }
-# 词边界匹配，确保 "sport" 不会在 "transport"/"passport" 内部触发，
-# 且 "transport.gov" 这样的域名不会被误判为体育网站。
+# Word-boundary match so "sport" does not fire inside "transport"/"passport"
+# and a domain like "transport.gov" is not mistaken for a sports site.
 _SPORTS_HINT_RE = re.compile(
     r"\b(?:" + "|".join(re.escape(h) for h in _SPORTS_HINTS) + r")\b"
 )
@@ -77,20 +77,20 @@ def _domain(url: str) -> str:
 
 
 def _has_word(text: str, term: str) -> bool:
-    """如果 ``term`` 在 ``text`` 中作为完整词出现则返回 True。
+    """True if ``term`` appears in ``text`` as a whole word.
 
-    查询词在词边界上匹配，因此短词不会匹配到
-    不相关词内部："us" 不能匹配 "business"/"music"，"port"
-    不能匹配 "transport"/"support"。这与构建
-    ``query_terms``（``\\b\\w+\\b``）的分词方式保持一致。#1473 将标题和体育
-    检查改为词边界匹配；下面的摘要和主题词检查使用
-    相同的辅助函数，保证整个文件一致。
+    Query terms are matched on word boundaries so a short term doesn't match
+    inside an unrelated word: "us" must not match "business"/"music", "port"
+    must not match "transport"/"support". This mirrors the tokenization used to
+    build ``query_terms`` (``\\b\\w+\\b``). #1473 converted the title and sports
+    checks to word boundaries; the snippet and subject-term checks below use
+    the same helper so the whole file stays consistent.
     """
     return re.search(rf"\b{re.escape(term)}\b", text) is not None
 
 
 def rank_search_results(query: str, results: List[dict]) -> List[dict]:
-    """按标题相关性、摘要质量、域名权威性和时效性对搜索结果进行排序。"""
+    """Rank search results by title relevance, snippet quality, domain authority, and recency."""
     query_terms = [t.lower() for t in re.findall(r"\b\w+\b", query)]
     query_lc = query.lower()
     is_news_query = any(term in _NEWS_HINTS for term in query_terms)
@@ -137,8 +137,8 @@ def rank_search_results(query: str, results: List[dict]) -> List[dict]:
             adjustment -= 0.8
         if not is_sports_query and (_SPORTS_HINT_RE.search(text) or _SPORTS_HINT_RE.search(netloc)):
             adjustment -= 1.5
-        # 国家/新闻查询不应将标题/摘要中仅勉强提到该国
-        # 的页面排在真正关于该国的新闻页面之前。
+        # A country/news query should not rank a page whose title/snippet barely
+        # mentions the country above actual news pages for that country.
         subject_terms = [t for t in query_terms if t not in _NEWS_HINTS]
         if subject_terms and not any(_has_word(text, t) or _has_word(netloc, t) for t in subject_terms):
             adjustment -= 1.0

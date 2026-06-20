@@ -1,7 +1,11 @@
 """
-OpenAI 兼容的函数工具 schema 定义，以及将原生函数调用转换回 ToolBlock 供执行管道使用的转换器。
+tool_schemas.py
 
-从 agent_tools.py 中抽离出来，以保持 schema 定义与工具解析/执行逻辑分离。
+OpenAI-compatible function tool schemas and the converter that turns
+native function calls back into ToolBlocks for the execution pipeline.
+
+Extracted from agent_tools.py to keep schema definitions separate from
+tool parsing / execution logic.
 """
 
 import json
@@ -14,14 +18,14 @@ from src.tool_parsing import _TOOL_NAME_MAP
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# OpenAI 兼容的函数工具 schema
+# OpenAI-compatible function tool schemas
 # ---------------------------------------------------------------------------
 FUNCTION_TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
             "name": "bash",
-            "description": "Run a shell command (full access)",
+            "description": "Run a shell command (full access). Prefer a dedicated tool whenever one fits the job (reading, writing, editing, searching, or listing files); use bash only for what no dedicated tool covers (installs, git, builds, running programs, system info). Do NOT create or edit files via bash redirects/heredocs/sed -- use the dedicated file tools.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -35,7 +39,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "python",
-            "description": "Execute Python code to compute a result or test something",
+            "description": "Execute Python code to compute a result or test something. Prefer a dedicated tool whenever one fits the job (reading, writing, or searching files); use python only for computation, data processing, or scripting no dedicated tool covers.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -135,6 +139,14 @@ FUNCTION_TOOL_SCHEMAS = [
                 },
                 "required": []
             }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_workspace",
+            "description": "Return the absolute path of the active workspace folder the user is working in. File tools are confined to it; the shell starts there but is not sandboxed. Call this first when the user refers to 'the project'/'the code'/'this folder' without a path, instead of asking them. Takes no arguments.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
         }
     },
     {
@@ -1010,7 +1022,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "manage_contact",
-            "description": "Create, update, delete, or list the user's CardDAV contacts. Use to save a new contact ('save Jonathan's email jon@x.com'), update an existing one ('change Maria's number'), or remove one. For update/delete you need the contact's uid — call action='list' first to find it. Writes go through the same dedupe + validation as the Contacts UI.",
+            "description": "Create, update, delete, or list the user's CardDAV contacts. Use to save a new contact, update an existing one (email/phone/address), or remove one. For update/delete you need the contact's uid — call action='list' first to find it. Writes go through the same dedupe + validation as the Contacts UI.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1021,6 +1033,7 @@ FUNCTION_TOOL_SCHEMAS = [
                     "email": {"type": "string", "description": "Single email address (convenience for add, or the primary email for update)."},
                     "emails": {"type": "array", "items": {"type": "string"}, "description": "Full list of email addresses (for update; first is primary)."},
                     "phones": {"type": "array", "items": {"type": "string"}, "description": "Full list of phone numbers (for update)."},
+                    "address": {"type": "string", "description": "Postal/mailing address as a single human-readable string."},
                 },
                 "required": ["action"]
             }
@@ -1178,11 +1191,11 @@ FUNCTION_TOOL_SCHEMAS = [
 
 
 # ---------------------------------------------------------------------------
-# 转换器：原生函数调用 -> ToolBlock
+# Converter: native function call -> ToolBlock
 # ---------------------------------------------------------------------------
 
 def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock]:
-    """将原生函数调用转换为 ToolBlock，供现有执行管道使用。"""
+    """Convert a native function call into a ToolBlock for the existing execution pipeline."""
     try:
         if not arguments or (isinstance(arguments, str) and not arguments.strip()):
             args = {}
@@ -1192,21 +1205,21 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
         logger.error(f"Failed to parse function call arguments for {name}: {arguments}")
         return None
 
-    # 一些模型会输出有效 JSON，但不是对象（例如裸数组
-    # ["ls -la"]、字符串或数字）作为函数参数。下面的每个分支
-    # 都假设是一个 dict 并调用 args.get(...)，因此非 dict 会引发
-    # AttributeError 并中止整个 agent 流。强制转为 {}。
+    # Some models emit valid JSON that isn't an object (e.g. a bare array
+    # ["ls -la"], string, or number) as the function arguments. Every branch
+    # below assumes a dict and calls args.get(...), so a non-dict would raise
+    # AttributeError and abort the whole agent stream. Coerce to {} instead.
     if not isinstance(args, dict):
         logger.warning(f"Non-object function call arguments for {name}: {args!r}; treating as empty")
         args = {}
 
     tool_type = _TOOL_NAME_MAP.get(name, name)
 
-    # 允许 MCP 工具通过（命名空间格式为 mcp__serverid__toolname）
+    # Allow MCP tools through (namespaced as mcp__serverid__toolname)
     if tool_type.startswith("mcp__"):
         content = json.dumps(args) if args else "{}"
         return ToolBlock(tool_type, content)
-    # 邮件工具通过 MCP 实现 — 路由到 email
+    # Email tools are implemented as MCP — route them to email
     _BUILTIN_EMAIL_TOOLS = {"list_email_accounts", "send_email", "list_emails", "read_email", "reply_to_email",
                             "archive_email", "delete_email", "mark_email_read", "bulk_email", "download_attachment"}
     if name in _BUILTIN_EMAIL_TOOLS:
@@ -1215,7 +1228,7 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
         logger.warning(f"Unknown function call: {name}")
         return None
 
-    # 将结构化参数转换回每个工具期望的文本格式
+    # Convert structured args back to the text format each tool expects
     if tool_type == "bash":
         content = args.get("command", "")
     elif tool_type == "python":
@@ -1228,20 +1241,22 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
             content = str(queries)
         else:
             content = args.get("query", "")
-        # 保留模型请求的新鲜度过滤器 — web_search schema
-        # 宣称支持 time_filter，执行器解析 {"query","time_filter"}，
-        # 但裸查询字符串会丢失它。与 read_file 的 JSON 惯例一致。
+        # Preserve the model-requested freshness filter — the web_search schema
+        # advertises time_filter and the executor parses {"query","time_filter"},
+        # but a bare query string dropped it. Mirrors the read_file JSON idiom.
         tf = args.get("time_filter")
         if content and isinstance(tf, str) and tf in ("day", "week", "month", "year"):
             content = json.dumps({"query": content, "time_filter": tf})
     elif tool_type == "read_file":
-        # 直接路径（向后兼容），除非请求了行范围则 → JSON。
+        # Plain path (back-compat) unless a line range is requested → JSON.
         if args.get("offset") or args.get("limit"):
             content = json.dumps(args)
         else:
             content = args.get("path", "")
     elif tool_type in ("grep", "glob", "ls"):
         content = json.dumps(args) if args else "{}"
+    elif tool_type == "get_workspace":
+        content = ""
     elif tool_type == "write_file":
         content = args.get("path", "") + "\n" + args.get("content", "")
     elif tool_type == "edit_file":
@@ -1289,15 +1304,15 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
     elif tool_type == "send_to_session":
         content = args.get("session_id", "") + "\n" + args.get("message", "")
     elif tool_type == "pipeline":
-        # 以 JSON 格式传递给管道解析器
+        # Pass as JSON for the pipeline parser
         content = json.dumps({"steps": args.get("steps", [])})
     elif tool_type == "manage_session":
         action = args.get("action", "")
         value = args.get("value", "")
-        # `list` 是唯一接受可选关键字过滤器的
-        # 操作 — 永不会是 session_id。不要将 "current" 默认值
-        # 泄漏到过滤器槽中（当 agent 省略 session_id 时会产生
-        # "No sessions found matching 'current'"）。
+        # `list` is the only action that takes an OPTIONAL keyword
+        # filter — never a session_id. Don't leak the "current" default
+        # into the filter slot (was producing "No sessions found
+        # matching 'current'" when the agent omitted session_id).
         if action == "list":
             keyword = args.get("session_id", "") or args.get("keyword", "") or value
             content = "list" + (("\n" + keyword) if keyword and keyword.lower() != "current" else "")
@@ -1354,7 +1369,7 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
             border = colors.get("border", "#355a66")
             accent = colors.get("accent", "#e06c75")
             content = f"create_theme {theme_name} {bg} {fg} {panel} {border} {accent}"
-            # 以 key=value 形式追加高级覆盖项
+            # Append advanced overrides as key=value
             adv_keys = [
                 "userBubbleBg", "aiBubbleBg", "bubbleBorder", "sidebarBg",
                 "sectionAccent", "brandColor", "inputBg", "inputBorder",

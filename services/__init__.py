@@ -1,11 +1,11 @@
 # services/__init__.py
 """
-服务层 — 为聊天核心提供可插拔的能力模块。
+Service layer — plug-in capabilities for the chat core.
 
-每个服务：
-- 专注做好一件事
-- 暴露清晰的异步接口
-- 可以作为进程内模块运行，也可以作为独立的 HTTP 服务运行
+Each service:
+- Does one thing well
+- Exposes a clean async interface
+- Can run in-process or as a standalone HTTP service
 """
 
 from .search import SearchService, SearchResult, SearchResponse

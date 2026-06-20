@@ -1,4 +1,5 @@
-"""Shell 服务 — 安全的命令执行。"""
+# services/shell/__init__.py
+"""Shell service — safe command execution."""
 
 from .service import ShellService, ShellResult
 

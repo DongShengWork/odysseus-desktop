@@ -1,16 +1,18 @@
-"""对暴露给非管理员/未认证调用者的设置进行密钥脱敏。
+"""Secret-scrubbing for settings exposed to non-admin / unauthenticated callers.
 
-刻意保持依赖精简（仅标准库），并与
-``routes/auth_routes.py`` 分离，以便可以独立导入和单元测试，
-而无需引入 FastAPI 应用/认证/数据库的导入链。
+Deliberately dependency-light (stdlib only) and separate from
+``routes/auth_routes.py`` so it can be imported and unit-tested without dragging
+in the FastAPI app / auth / database import chain.
 
-``/api/auth/settings`` 免认证——前端（和登录前页面）
-读取它来获取快捷键 + TTS 偏好，因此非管理员和未认证调用者会收到
-*脱敏后* 的副本。密钥（服务商 API key、IMAP/SMTP 密码、OAuth token）
-必须不能泄露给他们——当应用通过 Cloudflare
-隧道/反向代理对外可达时，这一点至关重要。脱敏是深度的（递归嵌套的 dict/list），并基于
-密钥形态的名称进行匹配。
+``/api/auth/settings`` is auth-exempt — the frontend (and the pre-login page)
+read it for keybinds + TTS prefs, so non-admin and unauthenticated callers get a
+*scrubbed* copy. Secrets (provider API keys, IMAP/SMTP passwords, OAuth tokens)
+must NOT leak to them — load-bearing when the app is reachable over a Cloudflare
+tunnel / reverse proxy. Scrubbing is deep (recurses nested dicts/lists) and keyed
+on secret-shaped names.
 """
+
+import re
 
 _SECRET_KEY_PATTERNS = (
     "_api_key", "_apikey", "_password", "_passwd", "_pass", "_pwd",
@@ -19,14 +21,23 @@ _SECRET_KEY_PATTERNS = (
 )
 _SECRET_KEY_ALLOW = ("google_pse_cx",)  # public identifiers, not secrets
 _SENSITIVE_KEY_EXACT = (
-    # 一个稳定的全局集成 ID 是可以触发外发 webhook 发送的路由的能力句柄；
-    # 即使它不是密钥形态的，也不要将其暴露给非管理员的设置调用者。
+    # A stable global integration id is a capability handle for routes that can
+    # trigger outbound webhook sends; do not expose it to non-admin settings
+    # callers even though it is not secret-shaped.
     "reminder_webhook_integration_id",
 )
 
 
+def _canonical_key_name(name: str) -> str:
+    """Normalize common JS-style key names so secret matching is style-agnostic."""
+    n = (name or "").replace("-", "_")
+    n = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", n)
+    n = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", n)
+    return n.lower()
+
+
 def is_secret_key(name: str) -> bool:
-    n = (name or "").lower()
+    n = _canonical_key_name(name)
     if n in _SECRET_KEY_ALLOW:
         return False
     if n in _SENSITIVE_KEY_EXACT:
@@ -35,10 +46,10 @@ def is_secret_key(name: str) -> bool:
 
 
 def _scrub_value(key, value):
-    """遮罩密钥形态的叶子值，递归进入嵌套的 dict/list，以确保
-    存储在非密钥父键下的密钥（例如
-    ``{"email_account": {"smtp_password": "..."}}``）仍然被清空。仅
-    清空非空的*字符串*值；保留存在性。"""
+    """Mask secret-shaped leaves, recursing into nested dicts/lists so a secret
+    stored under a non-secret parent key (e.g.
+    ``{"email_account": {"smtp_password": "..."}}``) is still blanked. Only
+    non-empty *string* values are blanked; presence is preserved."""
     if isinstance(value, dict):
         return {
             k: ("" if (is_secret_key(k) and isinstance(v, str) and v)
@@ -53,7 +64,7 @@ def _scrub_value(key, value):
 
 
 def scrub_settings(settings: dict) -> dict:
-    """返回 ``settings`` 的副本，其中密钥形态的值已被遮罩（深度）。"""
+    """Return a copy of ``settings`` with secret-shaped values masked (deep)."""
     if not isinstance(settings, dict):
         return {}
     return {k: _scrub_value(k, v) for k, v in (settings or {}).items()}

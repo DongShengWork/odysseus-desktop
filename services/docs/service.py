@@ -1,5 +1,5 @@
 # services/docs/service.py
-"""文档服务 — 个人文档 RAG。"""
+"""Docs service — personal document RAG."""
 
 from dataclasses import dataclass
 from typing import List, Dict, Any
@@ -10,7 +10,7 @@ from src.constants import CHROMA_DIR
 
 @dataclass
 class DocChunk:
-    """检索到的文档片段。"""
+    """A retrieved document chunk."""
     text: str
     source: str
     score: float
@@ -19,7 +19,7 @@ class DocChunk:
 
 @dataclass
 class IndexResult:
-    """文档索引结果。"""
+    """Result of indexing documents."""
     indexed: int
     failed: int
     errors: List[str]
@@ -27,9 +27,9 @@ class IndexResult:
 
 class DocsService:
     """
-    文档 RAG 服务。
+    Document RAG service.
 
-    用法：
+    Usage:
         service = DocsService()
         await service.index("/path/to/docs")
         results = await service.query("what is async await?")
@@ -40,14 +40,14 @@ class DocsService:
 
     async def query(self, query: str, top_k: int = 5) -> List[DocChunk]:
         """
-        查询文档索引。
+        Query the document index.
 
         Args:
-            query: 搜索查询
-            top_k: 返回结果数量
+            query: Search query
+            top_k: Number of results
 
         Returns:
-            DocChunk 对象列表
+            List of DocChunk objects
         """
         results = self.rag.search(query, k=top_k)
         return [
@@ -63,13 +63,13 @@ class DocsService:
 
     async def index(self, directory: str) -> IndexResult:
         """
-        从目录索引文档。
+        Index documents from a directory.
 
         Args:
-            directory: 文档路径
+            directory: Path to documents
 
         Returns:
-            包含统计信息的 IndexResult
+            IndexResult with stats
         """
         result = self.rag.index_personal_documents(directory)
         return IndexResult(
@@ -79,13 +79,13 @@ class DocsService:
         )
 
     async def add_document(self, text: str, metadata: Dict[str, Any]) -> bool:
-        """向索引添加单个文档。"""
+        """Add a single document to the index."""
         return self.rag.add_document(text, metadata)
 
     def get_stats(self) -> Dict[str, Any]:
-        """获取索引统计信息。"""
+        """Get index statistics."""
         return self.rag.get_stats()
 
     def rebuild_index(self) -> bool:
-        """重建整个索引。"""
+        """Rebuild the entire index."""
         return self.rag.rebuild_index()

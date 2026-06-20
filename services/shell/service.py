@@ -1,4 +1,5 @@
-"""Shell 服务 — 安全的命令执行。"""
+# services/shell/service.py
+"""Shell service — safe command execution."""
 
 from dataclasses import dataclass
 from typing import Optional, AsyncIterator
@@ -8,7 +9,7 @@ from pathlib import Path
 
 @dataclass
 class ShellResult:
-    """Shell 命令的执行结果。"""
+    """Result of a shell command."""
     stdout: str
     stderr: str
     exit_code: int
@@ -17,9 +18,9 @@ class ShellResult:
 
 class ShellService:
     """
-    Shell 执行服务。
+    Shell execution service.
 
-    用法：
+    Usage:
         service = ShellService()
         result = await service.execute("ls -la")
         print(result.stdout)
@@ -37,15 +38,15 @@ class ShellService:
         cwd: Optional[str] = None,
     ) -> ShellResult:
         """
-        执行 Shell 命令。
+        Execute a shell command.
 
         Args:
-            command: 要运行的 Shell 命令
-            timeout: 超时时间（秒），默认使用 self.timeout
-            cwd: 工作目录，默认使用 home 目录
+            command: Shell command to run
+            timeout: Timeout in seconds (default: self.timeout)
+            cwd: Working directory (default: home)
 
         Returns:
-            包含 stdout、stderr、exit_code 的 ShellResult
+            ShellResult with stdout, stderr, exit_code
         """
         timeout = timeout or self.timeout
         cwd = cwd or self.cwd
@@ -90,7 +91,7 @@ class ShellService:
         timeout: int = 120,
     ) -> AsyncIterator[dict]:
         """
-        执行命令并流式输出。
+        Execute a command and stream output.
 
         Yields:
             {"stream": "stdout"|"stderr", "data": line}

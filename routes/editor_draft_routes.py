@@ -1,17 +1,19 @@
-"""编辑器草稿路由 — 持久化的进行中画廊编辑器会话。
+"""Editor draft routes — persisted in-progress gallery-editor sessions.
 
-画廊编辑器（图像画布）允许用户在照片（或空白画布）上叠加编辑操作。
-将这些分层会话持久化到服务器使其能够在缓存清理后存活，并在设备间漫游 —
-与传统的每图像 localStorage 草稿不同。
+The gallery editor (image canvas) lets users layer edits on top of a
+photo (or a blank canvas). Persisting those layered sessions to the
+server makes them survive cache clears and roams across devices —
+unlike the legacy per-image localStorage drafts.
 
-每个草稿包含：
-  - id — 不透明 uuid（客户端永远不会看到画廊图像 id
-                   作为草稿 id，因此空白画布草稿也能正常工作）
-  - source_image_id（可为空）— 回指指针，表示"此草稿始于
-                    对 GalleryImage X 的编辑"
-  - payload — 完整的 JSON 快照（图层为 base64 PNG dataURL、
-                    偏移量、透明度等），编辑器知道如何还原
-  - thumbnail — 用于列表网格的小型 data URL
+Each draft carries:
+  - id           — opaque uuid (the client never sees gallery-image ids
+                    as draft ids, so blank-canvas drafts work too)
+  - source_image_id (nullable) — back-pointer for "this draft started as
+                    an edit of GalleryImage X"
+  - payload      — full JSON snapshot (layers as base64 PNG dataURLs,
+                    offsets, opacities, etc.) the editor knows how to
+                    rehydrate
+  - thumbnail    — small data URL for the landing-list grid
 """
 
 import json

@@ -1,25 +1,27 @@
 /**
- * 修复面板控件 — 修复工具的非 AI 侧面板 UI
- * （AI 生成/移除/外扩按钮在 editor/ai-inpaint.js 中）。
+ * Inpaint panel controls — the non-AI side-panel UI for the inpaint
+ * tool (the AI Generate/Remove/Outpaint buttons live in
+ * editor/ai-inpaint.js).
  *
- *   生成前滑块（羽化 + 强度色块预览）：
- *     #ge-strength-slider     仅更新标签和色块
+ *   Pre-gen sliders (Feather + Strength swatch previews):
+ *     #ge-strength-slider     just-updates-the-label-and-swatch
  *
- *   生成后实时边缘调节器 — 对最近的修复结果图层进行 alpha 模糊 +
- *   膨胀/腐蚀，通过 rAF 节流使大画布上拖动保持流畅：
- *     #ge-feather-slider       调用 applyInpaintFeather + composite
- *     #ge-edgestroke-slider    同上
+ *   Post-gen live edge tuners — alpha-blur + dilate/erode on the most
+ *   recent Inpaint Result layer, rAF-throttled so dragging stays
+ *   smooth on big canvases:
+ *     #ge-feather-slider       calls applyInpaintFeather + composite
+ *     #ge-edgestroke-slider    same
  *
- *   蒙版控件：
- *     #ge-mask-vis             切换红色覆盖层可见性
- *     #ge-inpaint-invert       反转活动蒙版子图层
- *     #ge-inpaint-clear        清除活动蒙版
- *     #ge-inpaint-mode-paint   设置持久涂抹模式
- *     #ge-inpaint-mode-erase   设置持久擦除模式
+ *   Mask controls:
+ *     #ge-mask-vis             toggle red-overlay visibility
+ *     #ge-inpaint-invert       invert the active mask sub-layer
+ *     #ge-inpaint-clear        wipe the active mask
+ *     #ge-inpaint-mode-paint   set persistent paint mode
+ *     #ge-inpaint-mode-erase   set persistent erase mode
  *
- *   蒙版颜色选择器（保持两者视觉同步）：
- *     .ge-inpaint-mask-color   （修复区域）
- *     #ge-topbar-mask-color    （顶部栏色块 — 附带了 HSV 颜色选择器）
+ *   Mask tint pickers (wired to keep both visually in sync):
+ *     .ge-inpaint-mask-color   (inpaint section)
+ *     #ge-topbar-mask-color    (topbar swatch — HSV picker attached)
  *
  * @param {{
  *   composite:                () => void,
@@ -38,7 +40,7 @@ export function wireInpaintControls({
   composite, applyInpaintFeather, syncToolClearIndicators,
   attachColorPicker, uiModule,
 }) {
-  // ── 羽化 + 强度预览色块 ──
+  // ── Feather + Strength preview swatches ──
   const featherPrev = document.getElementById('ge-feather-preview');
   const strengthPrev = document.getElementById('ge-strength-preview');
   function syncFeatherPreview(v) {
@@ -51,9 +53,9 @@ export function wireInpaintControls({
     strengthPrev.style.opacity = (v / 100).toFixed(2);
   }
 
-  // ── 修复后实时边缘调节器 ──
-  // Alpha 模糊（羽化）+ 膨胀/腐蚀（边缘描边）作用于最近的
-  // 修复结果图层。通过 rAF 节流使拖动保持流畅。
+  // ── Post-inpaint live edge tuner ──
+  // Alpha-blur (Feather) + dilate/erode (Edge Stroke) on the last
+  // Inpaint Result layer. rAF-throttled so dragging stays smooth.
   let featherRafPending = false;
   function scheduleInpaintEdgeRefresh() {
     if (featherRafPending) return;
@@ -80,7 +82,7 @@ export function wireInpaintControls({
     if (label) label.textContent = (v > 0 ? '+' : '') + v + 'px';
     const prev = document.getElementById('ge-edgestroke-preview');
     if (prev) {
-      // 可视化方向：膨胀（+）→ 绿色，腐蚀（−）→ 红色。
+      // Visualise direction: dilate (+) → green, erode (−) → red.
       const dir = v === 0 ? 'transparent' : (v > 0 ? 'rgba(120,200,120,0.5)' : 'rgba(200,120,120,0.5)');
       prev.style.background = dir;
       prev.style.opacity = Math.min(1, Math.abs(v) / 80).toFixed(2);
@@ -94,7 +96,7 @@ export function wireInpaintControls({
   syncFeatherPreview(0);
   syncStrengthPreview(75);
 
-  // ── 蒙版可见性 / 反转 / 清除 ──
+  // ── Mask vis / invert / clear ──
   document.getElementById('ge-mask-vis')?.addEventListener('click', () => {
     state.maskVisible = !state.maskVisible;
     const btn = document.getElementById('ge-mask-vis');
@@ -126,7 +128,7 @@ export function wireInpaintControls({
     syncToolClearIndicators();
   });
 
-  // ── 涂抹 / 擦除分段切换 ──
+  // ── Paint / Erase segmented toggle ──
   function setInpaintMode(eraseMode) {
     state.inpaintEraseMode = !!eraseMode;
     const paintBtn = document.getElementById('ge-inpaint-mode-paint');
@@ -137,10 +139,10 @@ export function wireInpaintControls({
   document.getElementById('ge-inpaint-mode-paint')?.addEventListener('click', () => setInpaintMode(false));
   document.getElementById('ge-inpaint-mode-erase')?.addEventListener('click', () => setInpaintMode(true));
 
-  // ── 蒙版颜色选择器 ──
-  // 实时更新 state.maskTintColor，让用户可以选择与照片
-  // 形成对比的颜色。同时连接顶部栏选择器和修复区域选择器，
-  // 使更改一个即可同步另一个。
+  // ── Mask color picker ──
+  // Updates state.maskTintColor live so the user can pick a colour
+  // that contrasts with their photo. Wire both the topbar picker AND
+  // the inpaint-section picker so changing one syncs the other.
   function applyMaskTintFromHex(hex) {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -154,7 +156,7 @@ export function wireInpaintControls({
   }
   document.querySelector('.ge-inpaint-mask-color')?.addEventListener('input', (e) => applyMaskTintFromHex(e.target.value));
   document.getElementById('ge-topbar-mask-color')?.addEventListener('input', (e) => applyMaskTintFromHex(e.target.value));
-  // 使用内置 HSV 颜色选择器来处理顶部栏色块。
+  // Use the in-house HSV picker for the topbar swatch.
   const topbarMaskColor = document.getElementById('ge-topbar-mask-color');
   if (topbarMaskColor) {
     try { attachColorPicker(topbarMaskColor); topbarMaskColor.value = topbarMaskColor.value; } catch {}

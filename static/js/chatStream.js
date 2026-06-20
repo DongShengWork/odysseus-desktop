@@ -1,6 +1,6 @@
 // static/js/chatStream.js
-// 从 chat.js handleChatSubmit 中提取的 SSE 事件处理器
-// 处理：ui_control 事件、后台流管理
+// SSE event handlers extracted from chat.js handleChatSubmit
+// Handles: ui_control events, background stream management
 
 import uiModule from './ui.js';
 import Storage from './storage.js';
@@ -9,8 +9,8 @@ import markdownModule from './markdown.js';
 import sessionModule from './sessions.js';
 
 /**
- * 处理 ui_control SSE 事件 — AI 驱动的 UI 操作。
- * 从重复的 ui_control + tool_output.ui_event 处理器中提取。
+ * Handle a ui_control SSE event — AI-driven UI manipulation.
+ * Extracted from the duplicated ui_control + tool_output.ui_event handlers.
  */
 export function handleUIControl(uiData) {
   var uiEvent = uiData.ui_event || uiData;
@@ -66,7 +66,7 @@ export function handleUIControl(uiData) {
       var tm = themeModule;
       if (tm && tm.THEMES && tm.applyColors && tm.save) {
         var themeName = uiData.theme_name;
-        if (themeName === 'chatgpt') themeName = 'gpt';  // 已重命名的预设主题
+        if (themeName === 'chatgpt') themeName = 'gpt';  // renamed preset
         var customThemes = tm.getCustomThemes ? tm.getCustomThemes() : {};
         var colors = tm.THEMES[themeName] || customThemes[themeName] || uiData.colors;
         if (colors) {
@@ -89,8 +89,9 @@ export function handleUIControl(uiData) {
         if (colors2) {
           tm2.applyColors(colors2);
           tm2.save(name, colors2);
-          // 背景效果（动画图案 / 磨砂玻璃），由模型可选设置 —
-          // 实时应用并随主题持久化，确保后续重新应用主题时不会丢失。
+          // Background effects (animated pattern / frosted glass) the model
+          // optionally set — apply them live and persist with the theme so
+          // they survive re-applying it later.
           var bg = uiData.bg || null;
           var opts = {};
           if (bg) {
@@ -125,17 +126,20 @@ export function handleUIControl(uiData) {
       document.querySelectorAll('.odysseus-hl-label').forEach(function(e) { e.remove(); });
 
     } else if (uiEvent === 'research_started' || uiData.ui_event === 'research_started') {
-      // Agent 启动了深度研究 — 将会话立即纳入侧边栏，
-      // 用户无需等待 12 秒的 active-poll 即可看到。
+      // Agent kicked off deep research — adopt the session into the
+      // sidebar immediately so the user sees it without waiting for
+      // the 12s active-poll.
       var rsid = uiData.research_session_id || uiData.session_id;
       if (rsid) {
         import('./research/jobs.js').then(function(mod) {
           var fn = mod.adoptSession || (mod.default && mod.default.adoptSession);
           if (fn) fn(rsid);
         }).catch(function(){});
-        // 可点击的"在深度研究中打开"链接现在由 agent 循环作为助手回复
-        // 文本中的 `#research-<id>` markdown 锚点发出 — 它渲染为普通的可点击
-        // 聊天链接，并在刷新时持久化（随消息保存）。此处不再需要临时 chip 注入。
+        // The clickable "Open in Deep Research" link is now emitted by the
+        // agent loop as a `#research-<id>` markdown anchor in the assistant's
+        // response text — it renders as a regular clickable chat link AND
+        // persists across refresh (saved with the message). No ephemeral
+        // chip injection needed here anymore.
       }
 
     } else if (uiEvent === 'open_panel' || uiData.ui_event === 'open_panel') {
@@ -171,7 +175,8 @@ export function handleUIControl(uiData) {
           if (fn) fn();
         }).catch(function(){});
       } else if (panel === 'memories' || panel === 'skills' || panel === 'settings') {
-        // 这些功能在侧边栏/设置抽屉中 — 大多只需点击已有按钮即可。
+        // These live in the sidebar / settings drawer — most just need
+        // an existing button click.
         var ids = { memories: 'tool-memory-btn', skills: 'skills-btn', settings: 'open-settings-btn' };
         var btn = document.getElementById(ids[panel]);
         if (btn) btn.click();
@@ -180,7 +185,7 @@ export function handleUIControl(uiData) {
     } else if (uiEvent === 'open_email_reply' || uiData.ui_event === 'open_email_reply') {
       import('./emailInbox.js').then(function(mod) {
         var fn = mod.openReplyDraft || (mod.default && mod.default.openReplyDraft);
-        if (fn) fn(uiData.uid, uiData.folder || 'INBOX', uiData.mode || 'reply');
+        if (fn) fn(uiData.uid, uiData.folder || 'INBOX', uiData.mode || 'reply', uiData.body || '');
       }).catch(function(e) {
         console.warn('open_email_reply failed:', e);
       });
@@ -191,7 +196,7 @@ export function handleUIControl(uiData) {
 }
 
 /**
- * 后台流完成时通知用户。
+ * Notify user when a background stream completes.
  */
 export function notifyStreamComplete(sessionId, query) {
   var isHidden = document.hidden;
@@ -214,7 +219,7 @@ export function notifyStreamComplete(sessionId, query) {
 }
 
 /**
- * 后台流完成时在聊天中插入可点击的提示消息。
+ * Insert a clickable in-chat toast when a background stream finishes.
  */
 export function insertStreamDoneToast(sessionId, query) {
   var box = document.getElementById('chat-history');
@@ -239,7 +244,7 @@ export function insertStreamDoneToast(sessionId, query) {
 }
 
 /**
- * 研究完成时通知用户（浏览器通知）。
+ * Notify when research completes (browser notification).
  */
 export function notifyResearchComplete(sessionId, query) {
   var isHidden = document.hidden;

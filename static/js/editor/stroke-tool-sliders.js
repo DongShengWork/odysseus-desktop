@@ -1,22 +1,26 @@
 /**
- * 各工具的笔画调节滑块（不透明度 / 流量 / 柔和度），
- * 适用于橡皮擦、画笔和克隆。三个部分共享相同的 UX：
+ * Per-tool stroke-modifier sliders (Opacity / Flow / Softness) for
+ * Eraser, Brush, and Clone. The three sections share identical UX:
  *
- *   - 不透明度滑块：写入 state，更新标签，淡入淡出预览色板的不透明度。
- *   - 流量滑块：写入 state，更新标签，淡入淡出色板的不透明度，
- *     并切换其边框样式（低流量 → 虚线，高流量 → 点线），用户可看到"密度"变化。
- *   - 柔和度滑块：写入 state，更新标签，调整色板上径向渐变内停止点，
- *     使其视觉效果从硬圆盘过渡到柔和衰减。
+ *   - Opacity slider: writes to state, updates label, fades the
+ *     preview swatch opacity.
+ *   - Flow slider: writes to state, updates label, fades the swatch
+ *     opacity AND swaps its border style (dashed at low flow → dotted
+ *     at high flow) so the user sees the "denseness" change.
+ *   - Softness slider: writes to state, updates label, tweens the
+ *     radial-gradient inner stop on the swatch so it visually fades
+ *     from hard disk to soft falloff.
  *
- * 整个模块之前是三个几乎相同的 30 行代码副本；现在是一个
- * 接收工具前缀 + state 字段包的辅助函数。
+ * The whole block was three near-identical 30-LOC copies before; now
+ * it's one helper that takes the tool's prefix + a state-field bag.
  *
- * 用法：只需调用 wireStrokeToolSliders() — DOM ID 从
- * #ge-{eraser,brush,clone}-{opacity,flow,softness} 及其标签和预览色板静态连接。
+ * Usage: just call wireStrokeToolSliders() — the DOM IDs are wired
+ * statically from #ge-{eraser,brush,clone}-{opacity,flow,softness}
+ * + their labels + preview swatches.
  */
 import { state } from './state.js';
 
-/** 为一个笔画工具连接三个滑块。 */
+/** Wire the three sliders for one stroke tool. */
 function wireToolSliders(prefix, fields) {
   const opPrev   = document.getElementById(`ge-${prefix}-preview-opacity`);
   const flPrev   = document.getElementById(`ge-${prefix}-preview-flow`);
@@ -31,8 +35,8 @@ function wireToolSliders(prefix, fields) {
   document.getElementById(`ge-${prefix}-flow`)?.addEventListener('input', (e) => {
     state[fields.flow] = parseInt(e.target.value);
     document.getElementById(`ge-${prefix}-flow-label`).textContent = state[fields.flow] + '%';
-    // 低流量 → 点更少/更稀疏。通过切换虚线/点线边框样式和
-    // 淡入淡出不透明度来循环点密度。
+    // Lower flow → fewer / sparser dots. Cycle dot densities by
+    // swapping the dashed/dotted border style and fading opacity.
     if (flPrev) {
       const denseness = Math.max(1, Math.round(state[fields.flow] / 20));
       flPrev.style.borderStyle = denseness <= 2 ? 'dashed' : 'dotted';
@@ -43,8 +47,9 @@ function wireToolSliders(prefix, fields) {
   document.getElementById(`ge-${prefix}-softness`)?.addEventListener('input', (e) => {
     state[fields.softness] = parseInt(e.target.value);
     document.getElementById(`ge-${prefix}-softness-label`).textContent = state[fields.softness] + '%';
-    // 预览随柔和度增加从硬圆盘过渡到柔和径向渐变（CSS 已设置径向渐变 —
-    // 只需调整内部实心半径来传达衰减效果）。
+    // Preview tweens from a hard disk into a soft radial gradient as
+    // softness rises (the CSS already sets the radial gradient — we
+    // just tween the inner solid radius to communicate the falloff).
     if (softPrev) {
       const innerStop = Math.max(0, 60 - state[fields.softness] * 0.55);
       softPrev.style.background = `radial-gradient(circle, var(--fg) 0%, var(--fg) ${innerStop}%, transparent 90%)`;

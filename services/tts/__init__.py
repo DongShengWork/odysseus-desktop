@@ -1,4 +1,5 @@
-"""TTS 服务 — 文字转语音。"""
+# services/tts/__init__.py
+"""TTS service — text-to-speech."""
 
 from .tts_service import (
     TTSService,

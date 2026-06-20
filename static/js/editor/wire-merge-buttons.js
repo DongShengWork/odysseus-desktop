@@ -1,13 +1,14 @@
 /**
- * 图层面板底部的图层合并/扁平化按钮：
+ * Layer merge / flatten buttons in the layer-panel footer:
  *
- *   #ge-flatten     扁平化复制 — 将所有可见图层合并为一个新的
- *                   "Flattened" 图层，保留原始图层。
- *   #ge-merge-all   合并全部 — 将所有可见图层扁平化到最底层可见
- *                   图层中。隐藏图层被丢弃。基图层 = 最底层可见
- *                   图层（而非堆栈底部），这样隐藏的基图层不会
- *                   将可见堆栈吸收到不可见结果中。
- *   #ge-merge-down  将活动图层合并到其下方的图层。
+ *   #ge-flatten     Flatten Copy — merge every visible layer into a
+ *                   new "Flattened" layer, keep originals.
+ *   #ge-merge-all   Merge All — flatten every VISIBLE layer into the
+ *                   lowest visible one. Hidden layers dropped. Base
+ *                   = lowest visible (not bottom of stack) so a
+ *                   hidden base can't absorb the visible stack into
+ *                   an invisible result.
+ *   #ge-merge-down  Merge active layer into the one beneath it.
  *
  * @param {{
  *   saveState:        (label?: string) => void,
@@ -40,7 +41,7 @@ export function mergeLayerDownAtIndex(idx) {
 }
 
 export function wireMergeButtons({ saveState, createLayer, renderLayerPanel, composite, uiModule }) {
-  // 扁平化复制。
+  // Flatten Copy.
   document.getElementById('ge-flatten')?.addEventListener('click', () => {
     if (state.layers.length < 2) return;
     saveState('Flatten copy');
@@ -60,7 +61,7 @@ export function wireMergeButtons({ saveState, createLayer, renderLayerPanel, com
     uiModule.showToast('Flattened copy created');
   });
 
-  // 合并全部 — 丢弃隐藏图层；基图层 = 最底层可见图层。
+  // Merge All — drop hidden layers; base = lowest visible.
   document.getElementById('ge-merge-all')?.addEventListener('click', () => {
     const visibleLayers = state.layers.filter(l => l.visible);
     if (visibleLayers.length < 2) {
@@ -77,7 +78,7 @@ export function wireMergeButtons({ saveState, createLayer, renderLayerPanel, com
       baseCtx.drawImage(l.canvas, off.x, off.y);
       baseCtx.globalAlpha = 1;
     }
-    // 释放被丢弃图层的偏移量条目；保留基图层。
+    // Free offset entries for the discarded layers; keep base.
     for (const l of state.layers) {
       if (l === base) continue;
       state.layerOffsets.delete(l.id);
@@ -89,10 +90,10 @@ export function wireMergeButtons({ saveState, createLayer, renderLayerPanel, com
     uiModule.showToast('Visible layers merged');
   });
 
-  // 向下合并。
+  // Merge Down.
   document.getElementById('ge-merge-down')?.addEventListener('click', () => {
     const idx = state.layers.findIndex(l => l.id === state.activeLayerId);
-    if (idx < 1) return; // 无法合并最底层图层
+    if (idx < 1) return; // can't merge the bottom layer
     saveState('Merge down');
     mergeLayerDownAtIndex(idx);
     renderLayerPanel();

@@ -1,8 +1,8 @@
 """
 session_actions.py
 
-可复用会话操作，既可从 REST 路由调用，
-也可从任务调度器/内置操作系统中调用。
+Reusable session actions that can be called from both REST routes
+and the task scheduler / builtin actions system.
 """
 
 import json
@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-# 表示一次性/测试会话的名称
+# Names that indicate a throwaway/test session
 _THROWAWAY_NAMES = {
     "test", "testing", "asdf", "asd", "hello", "hi", "hey",
     "yo", "sup", "hola", "hii", "hiii", "heyo",
@@ -27,7 +27,7 @@ _FRESH_SESSION_GRACE = _FRESH_EMPTY_SESSION_GRACE
 
 
 def _utcnow_naive() -> datetime:
-    """返回对应于现有会话 DateTime 列的本地 UTC 时间。"""
+    """Return naive UTC for existing session DateTime columns."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
@@ -40,7 +40,7 @@ def _as_naive_utc(value):
 
 
 def is_session_recently_active(row, now=None, grace=_FRESH_SESSION_GRACE) -> bool:
-    """新创建或活跃的会话在保护期内返回 True，不自动删除。"""
+    """Return True while a new or active session is too fresh to auto-delete."""
     now = _as_naive_utc(now) or _utcnow_naive()
     for attr in ("last_message_at", "last_accessed", "updated_at", "created_at"):
         value = _as_naive_utc(getattr(row, attr, None))
@@ -54,16 +54,16 @@ def is_session_recently_active(row, now=None, grace=_FRESH_SESSION_GRACE) -> boo
 
 
 async def run_auto_sort(owner: str, skip_llm: bool = False, delete_throwaway: bool = True) -> str:
-    """对指定用户运行会话清理 + （可选）AI 文件夹分类。
+    """Run session cleanup + (optional) AI folder sort for the given owner.
 
     Args:
-        owner: 需要处理其会话的用户
-        skip_llm: 为 True 时，仅执行阶段 1（删除空/废弃会话）；
-            跳过阶段 2（AI 文件夹分配）。内置每日后台清理使用此参数，
-            以避免消耗 LLM token。
-        delete_throwaway: 为 False 时，仅删除空/隐私会话。
+        owner: user whose sessions to process
+        skip_llm: when True, do only Phase 1 (delete empty/throwaway sessions);
+            skip Phase 2 (AI folder assignment). Used by the built-in daily
+            background sweep so it never burns LLM tokens.
+        delete_throwaway: when False, only empty/incognito sessions are deleted.
 
-    返回可读的已完成操作摘要。
+    Returns a human-readable summary of what was done.
     """
     from core.database import SessionLocal, Session as DbSession, ChatMessage as DbMsg
     from src.llm_core import llm_call_async
@@ -71,7 +71,7 @@ async def run_auto_sort(owner: str, skip_llm: bool = False, delete_throwaway: bo
 
     db = SessionLocal()
     try:
-        # ── 阶段 1: 删除空/废弃会话 ──
+        # ── Phase 1: Delete empty/throwaway sessions ──
         deleted_empty = 0
         deleted_throwaway = 0
 
@@ -120,11 +120,11 @@ async def run_auto_sort(owner: str, skip_llm: bool = False, delete_throwaway: bo
                     should_delete = True
                     deleted_throwaway += 1
                 elif msg_count <= 4 and first_text and len(first_text.split()) <= 8 and len(first_text) <= 80:
-                    # 简短的无意义对话 — 例如 "write hi to a friend" → "Hi!"
+                    # Short trivial chats — e.g. "write hi to a friend" → "Hi!"
                     should_delete = True
                     deleted_throwaway += 1
                 else:
-                    # 激进策略：总消息文本合计低于 250 字符 = 无意义
+                    # Aggressive: total message text under 250 chars combined = trivial
                     msg_rows = db.query(DbMsg.content).filter(
                         DbMsg.session_id == row.id
                     ).all()
@@ -140,7 +140,7 @@ async def run_auto_sort(owner: str, skip_llm: bool = False, delete_throwaway: bo
             db.commit()
             logger.info(f"Auto-sort: deleted {deleted_empty} empty + {deleted_throwaway} throwaway sessions")
 
-        # ── 阶段 2: AI 文件夹分配 ──
+        # ── Phase 2: AI folder assignment ──
         remaining = db.query(DbSession).filter(
             DbSession.archived == False,
             *([DbSession.owner == owner] if owner else []),
@@ -159,7 +159,7 @@ async def run_auto_sort(owner: str, skip_llm: bool = False, delete_throwaway: bo
         if len(session_list) < 2:
             return f"Cleaned {deleted_empty + deleted_throwaway} sessions. Too few remaining to sort."
 
-        # 内置后台清理跳过文件夹分类，以保持纯基础设施角色。
+        # Background built-in sweep skips folder-sort to stay pure infra.
         if skip_llm:
             return f"Cleaned {deleted_empty + deleted_throwaway} sessions (folder sort skipped)."
 
@@ -181,15 +181,15 @@ async def run_auto_sort(owner: str, skip_llm: bool = False, delete_throwaway: bo
         )
 
         try:
-            # 16384（原为 4096）：大型文件夹 JSON + reasoning-model thinking
-            # 超出了 4096 并截断了 JSON，导致永远无法解析。
+            # 16384 (was 4096): large folder JSON + reasoning-model thinking
+            # overflowed 4096 and truncated the JSON, so it never parsed.
             raw = await llm_call_async(url, model, [{"role": "user", "content": prompt}],
                                        temperature=0.3, max_tokens=16384, headers=headers, timeout=120)
         except Exception as e:
             logger.warning(f"Auto-sort LLM call failed: {e}")
             return f"Cleaned {deleted_empty + deleted_throwaway} sessions. Folder sort skipped (model unreachable)."
 
-        # 从响应中解析 JSON
+        # Parse JSON from response
         text = raw.strip()
         result = None
         try:
@@ -218,7 +218,7 @@ async def run_auto_sort(owner: str, skip_llm: bool = False, delete_throwaway: bo
         if not folders:
             return f"Cleaned {deleted_empty + deleted_throwaway} sessions. No folder groupings found."
 
-        # 应用分配
+        # Apply assignments
         id_prefix_map = {s["id"][:8]: s["id"] for s in session_list}
         updated = 0
         for folder_name, ids in folders.items():

@@ -1,31 +1,32 @@
 /**
- * 变换工具手柄渲染 + 命中测试 + 覆盖层同步。
+ * Transform-tool handle rendering + hit-testing + overlay sync.
  *
- * 与 `transform-drag.js`（拥有拖拽状态机）分离，
- * 因为这三个辅助函数是纯几何运算，只是读取共享状态 —
- * 它们不跟踪正在进行的拖拽，只负责绘制和命中测试。
+ * Lives separately from `transform-drag.js` (which owns the drag
+ * STATE MACHINE) because these three helpers are pure geometry that
+ * happens to read shared state — they don't track in-progress drags,
+ * they just paint and hit-test.
  *
- *  - `syncOverlay(margin)`  根据主画布 + 缩放来定位覆盖层画布
- *                           并调整其位图大小。
- *  - `drawHandles(margin)`  绘制旋转后的边界轮廓 + 4 个
- *                           角点手柄 + 旋转旋钮（带
- *                           悬停/激活视觉状态）。
- *  - `getHandleAt(x, y)`    返回 (x, y) 处的手柄 ID，或
- *                           null。几何计算必须与 `drawHandles`
- *                           完全一致，否则用户会抓到幽灵点。
+ *  - `syncOverlay(margin)`  positions the overlay canvas + sizes its
+ *                           bitmap based on the main canvas + zoom.
+ *  - `drawHandles(margin)`  draws the rotated bounding outline + 4
+ *                           corner handles + the rotation knob (with
+ *                           hover / active visual states).
+ *  - `getHandleAt(x, y)`    returns the handle id under (x, y), or
+ *                           null. Geometry MUST mirror `drawHandles`
+ *                           exactly or the user grabs phantom points.
  *
- * 此处不附加任何事件监听器 — editor/tools/transform-drag.js
- * 中的分发器调用 `getHandleAt` 并路由
- * 指针事件。
+ * No event listeners attached here — the dispatcher in
+ * editor/tools/transform-drag.js calls `getHandleAt` and routes
+ * pointer events.
  */
 import { state } from '../state.js';
 
 /**
- * 定位变换覆盖层画布并调整其后台位图大小。
- * margin 是图像空间中每侧的富余空间，以便手柄可以
- * 渲染在主画布之外（与 galleryEditor.js 中的
- * _TRANSFORM_OVERLAY_MARGIN 匹配 — 保留为参数，
- * 这样本模块就不依赖其他地方定义的魔法数字）。
+ * Position the transform overlay canvas + size its backing bitmap.
+ * Margin is the image-space slack each side so handles can render
+ * outside the main canvas (matches _TRANSFORM_OVERLAY_MARGIN in
+ * galleryEditor.js — kept as a parameter so this module has no
+ * dependency on a magic number defined elsewhere).
  */
 export function syncOverlay(margin) {
   if (!state.transformOverlay || !state.mainCanvas) return;
@@ -37,23 +38,23 @@ export function syncOverlay(margin) {
   const H = state.mainCanvas.height + 2 * margin;
   if (state.transformOverlay.width !== W) state.transformOverlay.width = W;
   if (state.transformOverlay.height !== H) state.transformOverlay.height = H;
-  // 覆盖层必须随 state.zoom 缩放，使手柄在屏幕上
-  // 以与主画布内容相同的尺寸渲染。否则，叠加层以完整
-  // 位图大小渲染而主画布缩小（缩小视图时），
-  // 手柄会显得巨大。
+  // Overlay must scale with state.zoom so its handles render at the
+  // SAME on-screen size as the main canvas content. Without this, the
+  // overlay renders at full bitmap size while main canvas shrinks
+  // (zoomed-out), making handles look massive.
   state.transformOverlay.style.display = '';
   state.transformOverlay.style.position = 'absolute';
   state.transformOverlay.style.width  = (W * state.zoom) + 'px';
   state.transformOverlay.style.height = (H * state.zoom) + 'px';
   state.transformOverlay.style.pointerEvents = 'none';
   state.transformOverlay.style.zIndex = '5';
-  // 将覆盖层定位在主画布的布局位置（offsetLeft/Top —
-  // 不受 CSS 变换影响），向左上偏移覆盖层的
-  // `margin` 图像像素作为手柄富余空间。然后共享
-  // 画布的变换（平移处理器将相同的 translate3d 写入
-  // 画布和覆盖层），这样平移会同时移动它们。读取
-  // 布局偏移（而非包含平移变换的 getBoundingClientRect）
-  // 避免了双平移"弹跳"。
+  // Position the overlay at the main canvas's LAYOUT position
+  // (offsetLeft/Top — unaffected by CSS transforms), shifted up-left by
+  // the overlay's `margin` image-px of handle slack. Then SHARE the
+  // canvas's transform (the pan handler writes the same translate3d to
+  // both canvas + overlay), so pan moves them together. Reading the
+  // layout offset (not getBoundingClientRect, which includes the pan
+  // transform) is what avoids the double-pan "bounce".
   state.transformOverlay.style.left = Math.round(state.mainCanvas.offsetLeft - margin * state.zoom) + 'px';
   state.transformOverlay.style.top  = Math.round(state.mainCanvas.offsetTop  - margin * state.zoom) + 'px';
   state.transformOverlay.style.transform = state.mainCanvas.style.transform || 'none';
@@ -61,29 +62,30 @@ export function syncOverlay(margin) {
 
 
 /**
- * 根据图层的边界框中心 + 旋转计算旋转旋钮的屏幕位置。
- * 旋钮通常位于旋转图层顶部边缘的外侧；
- * 如果这会超出画布视口，则翻转到内侧。
+ * Compute the on-screen position of the rotation knob given the
+ * layer's bbox center + rotation. The knob normally sits OUTSIDE the
+ * top edge of the rotated layer; if that would land beyond the canvas
+ * viewport, flip it INSIDE.
  *
- * 由 `_knobPosition` 返回，drawHandles 和 getHandleAt
- * 共享使用，确保两者计算相同的点。
+ * Returned by `_knobPosition` and shared by drawHandles + getHandleAt
+ * so both compute the same point.
  */
 function knobPosition(cxh, cyh, rotRad, baseInnerR, rotOffset) {
   let rotInside = false;
   const outsideR = baseInnerR + rotOffset;
   const knobLocalX = cxh + Math.sin(rotRad) * outsideR;
   const knobLocalY = cyh - Math.cos(rotRad) * outsideR;
-  // 主检查：绘制在主画布像素缓冲区之外的任何内容都是
-  // 不可见的（画布操作会静默裁剪）。
+  // Primary check: anything drawn outside the main canvas's pixel
+  // buffer is invisible (canvas operations clip silently).
   if (
     knobLocalX < 0 || knobLocalY < 0 ||
     knobLocalX > state.mainCanvas.width || knobLocalY > state.mainCanvas.height
   ) {
     rotInside = true;
   }
-  // 辅助检查：即使旋钮在画布位图内，
-  // 视口可能已滚动画布，使得旋钮
-  // 落在可见的画布区域窗口之外。
+  // Secondary check: even if the knob is inside the canvas bitmap, the
+  // viewport may have scrolled the canvas such that the knob falls
+  // outside the visible canvas-area window.
   try {
     const area = state.container && state.container.querySelector('.ge-canvas-area');
     if (area && !rotInside) {
@@ -109,9 +111,9 @@ function knobPosition(cxh, cyh, rotRad, baseInnerR, rotOffset) {
 
 
 /**
- * 将旋转后的边界轮廓 + 4 个角点手柄 + 旋转旋钮
- * 绘制到叠加层画布上。覆盖层按 `margin` 平移，
- * 使图像 (0,0) 映射到叠加层的 (margin, margin)。
+ * Draw the rotated bounding outline + 4 corner handles + the rotation
+ * knob into the overlay canvas. The overlay is translated by `margin`
+ * so image (0,0) maps to overlay (margin, margin).
  */
 export function drawHandles(margin) {
   if (!state.transformActive || !state.transformLayer) return;
@@ -122,16 +124,16 @@ export function drawHandles(margin) {
   const w = layer.canvas.width;
   const h = layer.canvas.height;
   const ctx = state.transformOverlayCtx;
-  // 清除 + 按 margin 偏移绘制，使图像 (0,0) 映射到覆盖层 (M,M)。
+  // Clear + shift drawing by margin so image (0,0) maps to overlay (M,M).
   ctx.clearRect(0, 0, state.transformOverlay.width, state.transformOverlay.height);
   ctx.save();
   ctx.translate(margin, margin);
-  // 缩放修正后的手柄尺寸 + 描边，使它们在任何缩放级别下都保持可读。
+  // Zoom-corrected handle size + stroke so they stay readable at any zoom.
   const sz = 10 / state.zoom;
   const stroke = 1.5 / state.zoom;
 
-  // 旋转前的矩形尺寸（用户看到的图层外观）。
-  // 在弹窗值存在之前回退到图层边界框。
+  // Pre-rotation rectangle dims (what the user sees the layer as).
+  // Falls back to layer bbox before any popup values exist.
   const preW = state.transformPendingW || w;
   const preH = state.transformPendingH || h;
   const cxBox = off.x + w / 2;
@@ -148,8 +150,8 @@ export function drawHandles(margin) {
   const br = rotPt( preW / 2,  preH / 2);
   const bl = rotPt(-preW / 2,  preH / 2);
 
-  // 旋转矩形的轮廓 — 实心白色内线 + 细黑色光晕，
-  // 在浅色和深色背景上都保持对比度。
+  // Outline of the rotated rectangle — solid white inner line with a
+  // thin black halo for contrast on light AND dark backgrounds.
   const drawRectOutline = () => {
     ctx.beginPath();
     ctx.moveTo(tl.x, tl.y);
@@ -169,16 +171,16 @@ export function drawHandles(margin) {
   drawRectOutline();
   ctx.setLineDash([]);
 
-  // 角点手柄 + 旋转旋钮锚定在旋转图层的顶部中心
-  // （不是边界框顶部），这样旋钮在旋转时始终
-  // 附着在可见内容上。
+  // Corner handles + rotation knob anchored to the rotated layer's
+  // top-center (not bbox top), so the knob stays attached to the
+  // visible content as it spins.
   const rotOffset = 24 / state.zoom;
   const cxh = off.x + w / 2;
   const cyh = off.y + h / 2;
   const rotRad = ((state.transformPendingRot || 0) * Math.PI) / 180;
   const baseInnerR = (state.transformPendingH || h) / 2;
   const knob = knobPosition(cxh, cyh, rotRad, baseInnerR, rotOffset);
-  // 当旋钮在图层内部时，连杆线缩为一个点。
+  // Tether line collapses to a point when knob is inside the layer.
   const drawTether = !knob.rotInside;
   const innerX = cxh + Math.sin(rotRad) * baseInnerR;
   const innerY = cyh - Math.cos(rotRad) * baseInnerR;
@@ -209,7 +211,7 @@ export function drawHandles(margin) {
     ctx.strokeStyle = active ? '#fff' : 'rgba(0, 0, 0, 0.5)';
     ctx.stroke();
     if (hovered) {
-      // 悬停手柄周围细微的红色圆环，提供视觉反馈。
+      // Subtle red ring around the hovered handle for visual feedback.
       ctx.beginPath();
       ctx.arc(c.x, c.y, radius + 2 / state.zoom, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(224, 108, 117, 0.7)';
@@ -222,11 +224,11 @@ export function drawHandles(margin) {
 
 
 /**
- * 对变换手柄进行命中测试 (x, y)。返回手柄
- * ID（'tl' | 'tr' | 'br' | 'bl' | 'rot'）或 null。
+ * Hit-test (x, y) against the transform handles. Returns the handle
+ * id ('tl' | 'tr' | 'br' | 'bl' | 'rot') or null.
  *
- * 几何计算必须与 `drawHandles` 完全一致，
- * 否则用户会抓到幽灵点。
+ * Geometry MUST mirror `drawHandles` exactly, otherwise the user
+ * grabs phantom points.
  */
 export function getHandleAt(x, y) {
   if (!state.transformLayer) return null;
@@ -242,7 +244,7 @@ export function getHandleAt(x, y) {
   const baseInnerR = (state.transformPendingH || h) / 2;
   const knob = knobPosition(cxh, cyh, rotRad, baseInnerR, rotOffset);
 
-  // 围绕中心旋转角点 — 必须与 drawHandles 匹配。
+  // Rotate corners around centre — must match drawHandles.
   const preW = state.transformPendingW || w;
   const preH = state.transformPendingH || h;
   const cosA = Math.cos(rotRad);

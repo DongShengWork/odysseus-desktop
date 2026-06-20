@@ -1,12 +1,11 @@
-// static/js/rag.js — RAG 检索增强生成管理
+// static/js/rag.js
 
 /**
- * RAG（检索增强生成）管理
+ * RAG (Retrieval Augmented Generation) management
  */
 
 import uiModule from './ui.js';
 import spinnerModule from './spinner.js';
-import { t } from './i18n.js';
 
 let API_BASE = '';
 
@@ -22,7 +21,7 @@ function _humanSize(bytes) {
 }
 
 /**
- * 加载并显示 RAG 文档及删除按钮
+ * Load and display RAG documents with delete buttons
  */
 export async function loadPersonalDocs() {
   const box = document.getElementById('docs-view');
@@ -30,7 +29,7 @@ export async function loadPersonalDocs() {
 
   box.innerHTML = '';
   const { element: wpEl } = spinnerModule.createWhirlpool(24);
-  wpEl.title = t('rag.loading');
+  wpEl.title = 'Loading…';
   box.appendChild(wpEl);
 
   try {
@@ -42,7 +41,7 @@ export async function loadPersonalDocs() {
 
     if (files.length === 0) {
       const placeholder = document.createElement('div');
-      placeholder.textContent = t('rag.drop_to_add');
+      placeholder.textContent = 'Drop files above to add to RAG';
       placeholder.style.cssText = 'color:var(--color-muted);font-size:12px;padding:4px 0;';
       box.appendChild(placeholder);
       return;
@@ -68,7 +67,7 @@ export async function loadPersonalDocs() {
       const del = document.createElement('button');
       del.className = 'rag-file-delete';
       del.textContent = 'x';
-      del.title = t('rag.remove_from_rag');
+      del.title = 'Remove from RAG';
       del.style.cssText = 'background:none;border:none;color:var(--color-error);cursor:pointer;padding:2px 4px;font-size:12px;flex-shrink:0;';
       del.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -82,14 +81,14 @@ export async function loadPersonalDocs() {
     console.error(e);
     box.innerHTML = '';
     const error = document.createElement('div');
-    error.textContent = t('rag.failed_to_load');
+    error.textContent = 'Failed to load files';
     error.style.color = 'var(--color-error)';
     box.appendChild(error);
   }
 }
 
 async function _deleteFile(filepath, displayName) {
-  if (!await uiModule.styledConfirm(t('rag.remove_confirm', { name: displayName }), { confirmText: t('common.remove'), danger: true })) return;
+  if (!await uiModule.styledConfirm(`Remove "${displayName}" from RAG?`, { confirmText: 'Remove', danger: true })) return;
   try {
     const res = await fetch(`${API_BASE}/api/personal/file?filepath=${encodeURIComponent(filepath)}`, {
       method: 'DELETE',
@@ -99,18 +98,18 @@ async function _deleteFile(filepath, displayName) {
     await loadPersonalDocs();
   } catch (e) {
     console.error('Delete failed:', e);
-    alert(t('rag.delete_failed', { msg: e.message }));
+    alert('Failed to delete file: ' + e.message);
   }
 }
 
 /**
- * 上传文件到 RAG
+ * Upload files to RAG
  */
 export async function uploadRagFiles(fileList) {
   if (!fileList || !fileList.length) return;
 
   const zone = document.getElementById('rag-upload-zone');
-  if (zone) zone.textContent = t('rag.uploading');
+  if (zone) zone.textContent = 'Uploading…';
 
   const fd = new FormData();
   for (const file of fileList) {
@@ -127,13 +126,13 @@ export async function uploadRagFiles(fileList) {
     if (!res.ok) throw new Error(await res.text());
 
     const data = await res.json();
-    if (zone) zone.textContent = t('rag.drop_or_click');
+    if (zone) zone.textContent = 'Drop files here or click to upload';
     await loadPersonalDocs();
     return data;
   } catch (e) {
     console.error('Upload failed:', e);
-    if (zone) zone.textContent = t('rag.drop_or_click');
-    alert(t('rag.upload_failed', { msg: e.message }));
+    if (zone) zone.textContent = 'Drop files here or click to upload';
+    alert('Upload failed: ' + e.message);
   }
 }
 

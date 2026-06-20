@@ -1,14 +1,15 @@
 # routes/emoji_routes.py
-# 同源 emoji SVG 代理。前端将聊天中的 emoji 重写为
+# Same-origin emoji SVG proxy. The frontend rewrites emoji in chat to a
 #   <span class="emoji" style="--em:url('/api/emoji/<codepoints>.svg')">
-# 它使用返回的 SVG 作为 CSS 蒙版，着色为文本颜色，因此 emoji
-# 渲染为单色线条图标（项目规则：永不使用彩色 emoji）。
-# 黑色线稿 SVG 在首次使用时从 OpenMoji CDN 延迟加载并缓存到磁盘，因此：
-#   - 客户端仅与自己的源通信（无需 CDN 依赖，无需 CSP 变更），
-#   - 仓库不会因数千个 SVG 文件而膨胀，
-#   - 一旦某个 emoji 被看过一次，离线也能正常工作。
-# 未知/不可达的码点返回透明 SVG（非 404），因此 CSS
-# 蒙版显示为空，而非实心的 currentColor 方块。
+# which uses the returned SVG as a CSS mask tinted to the text color, so emoji
+# render as monochrome line icons (project rule: never colorful emoji). The
+# black line-art SVGs are lazily fetched from the OpenMoji CDN on first use and
+# cached on disk, so:
+#   - the client only ever talks to our own origin (no CDN dep, no CSP change),
+#   - the repo isn't bloated with thousands of SVG files,
+#   - it works offline once an emoji has been seen once.
+# Unknown/unreachable codepoints return a transparent SVG (not 404), so the CSS
+# mask shows nothing rather than a solid currentColor box.
 import logging
 import re
 from pathlib import Path

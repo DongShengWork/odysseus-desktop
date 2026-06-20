@@ -2,16 +2,16 @@
 """
 migrate_faiss_to_chroma.py
 
-将现有 FAISS 数据一次性迁移到 ChromaDB。
+One-time migration of existing FAISS data to ChromaDB.
 
-迁移内容：
-  - 内存向量：data/memory_vectors/ -> odysseus_memories collection
-  - RAG 向量：   data/rag/            -> odysseus_rag collection
+Migrates:
+  - Memory vectors: data/memory_vectors/ -> odysseus_memories collection
+  - RAG vectors:    data/rag/            -> odysseus_rag collection
 
 Usage:
     python scripts/migrate_faiss_to_chroma.py
 
-需要：faiss-cpu, chromadb-client，以及正在运行的嵌入端点。
+Requires: faiss-cpu, chromadb-client, and the embedding endpoint to be running.
 """
 
 import json
@@ -19,7 +19,7 @@ import os
 import sys
 import logging
 
-# 将项目根目录添加到路径
+# Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -60,7 +60,7 @@ def _rag_docstore(data):
 
 
 def migrate_memories():
-    """将内存向量从 FAISS 迁移到 ChromaDB。"""
+    """Migrate memory vectors from FAISS to ChromaDB."""
     from src.chroma_client import get_chroma_client
     from src.embeddings import get_embedding_client
     from src.constants import MEMORY_VECTORS_DIR, MEMORY_FILE
@@ -79,7 +79,7 @@ def migrate_memories():
         logger.info("Memory FAISS index is empty, skipping")
         return
 
-    # 加载记忆文本
+    # Load memory texts
     memories = {}
     if os.path.exists(memory_path):
         memories = _memory_map(_load_json(memory_path, []))
@@ -122,7 +122,7 @@ def migrate_memories():
 
 
 def migrate_rag():
-    """将 RAG 文档从 FAISS DocStore 迁移到 ChromaDB。"""
+    """Migrate RAG documents from FAISS DocStore to ChromaDB."""
     from src.chroma_client import get_chroma_client
     from src.embeddings import get_embedding_client
 

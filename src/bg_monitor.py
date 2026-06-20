@@ -1,10 +1,11 @@
-"""常驻监控器，在后台任务（参见 src/bg_jobs.py）完成时自动继续 agent。
+"""Always-on monitor that auto-continues the agent when a background job
+(see src/bg_jobs.py) finishes.
 
-可靠性是关键：完成 → agent 重新调用绝不能静默失败。监控器每个周期
-从 `bg_jobs.pending_followups()` 排空数据，并且仅在 agent run 成功
-之后才调用 `mark_followed_up()` — 这样临时故障会在下一个周期自动重试。
-超时/失败的任务仍然会产生后续操作（"任务失败/超时"），因此用户总能
-收到反馈。
+Reliability is the whole point: completion → agent re-invocation must never
+silently no-op. The monitor drains `bg_jobs.pending_followups()` every tick and
+only calls `mark_followed_up()` AFTER the agent run succeeds — so a transient
+failure is simply retried on the next tick. A timed-out/dead job still produces
+a follow-up ("the job failed/timed out"), so the user always hears back.
 """
 
 from __future__ import annotations
@@ -19,15 +20,15 @@ logger = logging.getLogger(__name__)
 
 _monitor_task = None
 POLL_INTERVAL_S = 5
-# 后续 agent run 被允许几轮来实际继续任务
-# （例如在 `pip install` 完成后运行转录）。
+# The follow-up agent run is allowed a few rounds to actually continue the task
+# (e.g. after `pip install` finishes, run the transcription).
 _FOLLOWUP_MAX_ROUNDS = 12
 
 
 async def _drain_agent(sess, messages):
-    """针对 session 在无界面模式下运行 agent 循环。返回
-    (final_prose, tool_events) — tool_events 与实时聊天保存的
-    格式相同，前端以标准 agent 线程工具卡片的形式重建它们。"""
+    """Run the agent loop headless against a session. Returns
+    (final_prose, tool_events) — tool_events in the same shape the live chat
+    saves, so the frontend rebuilds them as standard agent-thread tool cards."""
     from src.agent_loop import stream_agent_loop
     full = ""
     tool_events = []
@@ -54,11 +55,13 @@ async def _drain_agent(sess, messages):
         if "delta" in d:
             delta = d.get("delta")
             if isinstance(delta, str):
+                if d.get("thinking"):
+                    continue
                 full += delta
         elif d.get("type") == "agent_step":
             round_num = d.get("round", round_num)
         elif d.get("type") == "tool_output":
-            # 镜像实时聊天的 tool_event 格式（chat_routes / chatRenderer）。
+            # Mirror the live chat's tool_event shape (chat_routes / chatRenderer).
             tool_events.append({
                 "round": round_num,
                 "tool": d.get("tool"),
@@ -70,26 +73,26 @@ async def _drain_agent(sess, messages):
 
 
 async def _run_followup(rec: dict) -> bool:
-    """在任务的 session 中使用结果重新调用 agent。如果后续操作完成
-    （或无事可做）则返回 True — 即可以安全地标记 followed_up。
-    返回 False 则在下一个周期重试。"""
+    """Re-invoke the agent in the job's session with the result. Returns True
+    if the follow-up completed (or there's nothing to do) — i.e. it's safe to
+    mark followed_up. Returns False to retry on the next tick."""
     from src.ai_interaction import get_session_manager
     from core.models import ChatMessage
 
     sm = get_session_manager()
     if not sm:
-        return False  # 尚未就绪 — 重试
+        return False  # not ready yet — retry
     sess = sm.get_session(rec["session_id"])
     if not sess:
-        # Session 已删除 — 无后续操作。将其视为已处理，
-        # 避免无限重试。
+        # Session was deleted — nothing to continue. Consider it handled so we
+        # don't retry forever.
         logger.info("bg-followup: session %s gone for job %s — skipping", rec.get("session_id"), rec.get("id"))
         return True
 
-    # 不要写入正在进行流式传输的 session。后续操作追加到
-    # 历史记录 + save_sessions()；并发的实时轮次也做同样的事，
-    # 没有每个 session 的锁时两者会交错（消息重排/覆盖）。
-    # 推迟 — 返回 False 以便在下一个周期重试。
+    # Don't write into a session that's mid-stream. The followup appends to
+    # history + save_sessions(); a concurrent live turn does the same, and with
+    # no per-session lock the two interleave (reordered/clobbered messages).
+    # Defer — return False so we retry on the next tick once the turn finishes.
     try:
         from src import agent_runs
         if agent_runs.is_active(sess.id):
@@ -109,11 +112,11 @@ async def _run_followup(rec: dict) -> bool:
 
     full, tool_events = await _drain_agent(sess, context)
 
-    # 仅持久化助手后续内容，使其渲染为正常的 agent 轮次 —
-    # 标准聊天气泡加上前端重建为常规 agent 线程工具卡片的
-    # `tool_events`（chatRenderer:1494）。触发器不作为自己的消息
-    # 保存（那会是个位置不对的气泡）；原始任务输出存储在元数据中
-    # 以供追溯。
+    # Persist ONLY the assistant continuation so it renders as a normal agent
+    # turn — a standard chat bubble plus `tool_events` that the frontend
+    # rebuilds into the usual agent-thread tool cards (chatRenderer:1494). The
+    # trigger isn't saved as its own message (it'd be an out-of-place bubble);
+    # the raw job output is stashed in metadata for traceability instead.
     sm.add_message(sess.id, ChatMessage(
         "assistant", full,
         metadata={
@@ -137,7 +140,7 @@ async def _loop():
                     if await _run_followup(rec):
                         bg_jobs.mark_followed_up(rec["id"])
                 except Exception as e:
-                    # 幂等：保持 followed_up=False，下一个周期重试。
+                    # Idempotent: leave followed_up=False so the next tick retries.
                     logger.warning("bg-followup failed for %s (will retry): %s", rec.get("id"), e)
         except Exception as e:
             logger.warning("bg-monitor tick error: %s", e)
@@ -145,7 +148,7 @@ async def _loop():
 
 
 def start_bg_monitor():
-    """幂等 — 启动常驻后台任务监控器。"""
+    """Idempotent — start the always-on background-job monitor."""
     global _monitor_task
     if _monitor_task and not _monitor_task.done():
         return _monitor_task

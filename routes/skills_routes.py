@@ -1,9 +1,10 @@
 # routes/skills_routes.py
-"""Skills 系统的 REST API。
+"""REST API for the Skills system.
 
-磁盘格式为 `data/skills/<category>/<name>/` 下的 SKILL.md（frontmatter + 结构化正文）。
-旧格式（`title`、`problem`、`solution`、`steps`）仍接受作为输入 —
-它们会被转换为新字段（`description`、`when_to_use`、`body_extra`、`procedure`）。
+The on-disk format is SKILL.md (frontmatter + structured body) under
+`data/skills/<category>/<name>/`. Old shape (`title`, `problem`, `solution`,
+`steps`) still accepted on input — they're translated to the new fields
+(`description`, `when_to_use`, `body_extra`, `procedure`).
 """
 
 import logging
@@ -690,8 +691,12 @@ async def _run_skill_test_once(md: str, task: str, url, model, headers, owner) -
         {"role": "user", "content": task},
     ]
     try:
+        # max_tokens explicitly set: passing 0 lets some upstreams (Ollama,
+        # OpenAI-compat) generate an empty completion, which manifested as
+        # the skill test returning nothing while chat (which carries its
+        # preset's max_tokens) worked. 4096 matches the chat default.
         async for chunk in stream_agent_loop(url, model, messages, headers=headers,
-                                             temperature=0.3, max_tokens=0, max_rounds=8, owner=owner):
+                                             temperature=0.3, max_tokens=4096, max_rounds=8, owner=owner):
             if not chunk.startswith("data: ") or chunk.strip() == "data: [DONE]":
                 continue
             try:

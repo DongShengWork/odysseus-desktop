@@ -1,7 +1,8 @@
 """
 builtin_actions.py
 
-内置自动化操作的注册表，可由任务调度器执行而无需 LLM 调用。
+Registry of built-in automation actions that can be executed by the task
+scheduler without needing an LLM call.
 """
 
 import logging
@@ -18,18 +19,19 @@ logger = logging.getLogger(__name__)
 
 
 class TaskNoop(BaseException):
-    """由 action 在确定无事可做时抛出。
+    """Raised by an action when it determined there's nothing to do.
 
-    继承自 BaseException（而非 Exception），这样每个 action 用于
-    实际错误处理的标准 `except Exception` 包装器不会意外捕获它。
-    调度器显式捕获 TaskNoop，删除排队的 TaskRun 行，
-    推进 last_run / next_run，然后静默退出。
-    Activity 日志中不会出现任何内容；消息仅在服务端记录。
+    Inherits from BaseException (not Exception) so the standard
+    `except Exception` wrappers each action uses for real error handling
+    don't accidentally catch it. The scheduler explicitly catches TaskNoop,
+    drops the queued TaskRun row, advances last_run / next_run, and exits
+    silently. Nothing appears in the Activity log; the message is logged
+    server-side only.
     """
 
 
 class TaskDeferred(BaseException):
-    """当任务应稍后运行而不记录跳过的运行时抛出。"""
+    """Raised when a task should run later without recording a skipped run."""
 
     def __init__(self, reason: str, delay_seconds: int = 20 * 60):
         super().__init__(reason)
@@ -38,9 +40,9 @@ class TaskDeferred(BaseException):
 
 
 async def action_tidy_sessions(owner: str, **kwargs) -> Tuple[str, bool]:
-    """删除所有者的空会话。纯启发式方法 —
-    跳过 LLM 文件夹排序阶段（用户选择保持此任务
-    不依赖 LLM；可通过 Chats UI 手动触发排序）。"""
+    """Delete empty sessions for the owner. Pure heuristic —
+    the LLM folder-sort phase is skipped (user opted to keep this task
+    LLM-free; sorting can be triggered manually via the Chats UI)."""
     try:
         import asyncio
         from src.session_actions import run_auto_sort
@@ -58,7 +60,7 @@ async def action_tidy_sessions(owner: str, **kwargs) -> Tuple[str, bool]:
 
 
 async def action_tidy_documents(owner: str, **kwargs) -> Tuple[str, bool]:
-    """为所有者运行文档整理。"""
+    """Run tidy on documents for the owner."""
     try:
         from src.document_actions import run_document_tidy
         result = await run_document_tidy(owner)
@@ -69,7 +71,7 @@ async def action_tidy_documents(owner: str, **kwargs) -> Tuple[str, bool]:
 
 
 async def action_consolidate_memory(owner: str, **kwargs) -> Tuple[str, bool]:
-    """合并/去重所有者的记忆。"""
+    """Consolidate/deduplicate memories for the owner."""
     try:
         import json
         import re
@@ -287,12 +289,12 @@ async def action_consolidate_memory(owner: str, **kwargs) -> Tuple[str, bool]:
         return str(e), False
 
 
-# 注册表：action 名称 -> async function(owner, **kwargs) -> (result_str, success_bool)
+# Registry: action name -> async function(owner, **kwargs) -> (result_str, success_bool)
 
 
 async def _run_subprocess(argv, *, shell: bool = False, timeout: int = 120, label: str = "Command") -> Tuple[str, bool]:
-    """共享子进程运行器。将阻塞的 subprocess.run 包装在
-    asyncio.to_thread 中，使事件循环保持响应。"""
+    """Shared subprocess runner. Wraps the blocking subprocess.run in
+    asyncio.to_thread so the event loop stays responsive."""
     import asyncio
     import subprocess
     try:
@@ -577,6 +579,24 @@ def _classify_event_heuristic(summary: str) -> tuple:
     return etype, None
 
 
+def _memory_context_lines(mems, limit: int = 40) -> list:
+    """Render Memory rows into short personal-context bullets for event classify.
+
+    Reads the Memory ORM `text` column. The previous inline code read a
+    non-existent `content` attribute, so it raised AttributeError on the first
+    row, the surrounding except swallowed it, and the classifier ran with no
+    personal context at all. getattr keeps it robust to future schema drift.
+    """
+    lines: list = []
+    for m in mems:
+        c = (getattr(m, "text", "") or "").strip()
+        if c:
+            lines.append(f"- {c[:200]}")
+        if len(lines) >= limit:
+            break
+    return lines
+
+
 async def action_classify_events(owner: str, **kwargs) -> Tuple[str, bool]:
     """Hybrid classification of upcoming calendar events: fast heuristic for
     obvious cases, LLM fallback for ambiguous ones. Assigns event_type +
@@ -612,16 +632,11 @@ async def action_classify_events(owner: str, **kwargs) -> Tuple[str, bool]:
             try:
                 from core.database import Memory as _Mem
                 _mems = db.query(_Mem).filter(_Mem.owner == owner).limit(60).all() if owner else []
-                if _mems:
-                    _lines = []
-                    for m in _mems:
-                        c = (m.content or "").strip()
-                        if c:
-                            _lines.append(f"- {c[:200]}")
-                    if _lines:
-                        _memory_context = "USER CONTEXT (relationships, work, life):\n" + "\n".join(_lines[:40]) + "\n\n"
+                _lines = _memory_context_lines(_mems)
+                if _lines:
+                    _memory_context = "USER CONTEXT (relationships, work, life):\n" + "\n".join(_lines) + "\n\n"
             except Exception as _me:
-                logger.debug(f"Could not load memory for classify: {_me}")
+                logger.warning(f"Could not load memory for classify: {_me}")
 
             classified_h = 0
             classified_llm = 0
@@ -794,14 +809,14 @@ async def action_learn_sender_signatures(owner: str, **kwargs) -> Tuple[str, boo
         import email as _email_mod
         import asyncio as _aio
         from datetime import datetime as _dt, timedelta as _td
-        from routes.email_helpers import _imap_connect, SCHEDULED_DB
+        from routes.email_helpers import _email_cache_owner_clause, _imap_connect, SCHEDULED_DB
         from src.endpoint_resolver import resolve_endpoint
         from src.llm_core import llm_call_async
 
         # 1. Pull recent UIDs + From headers cheaply (header-only fetch).
         def _pull_headers():
             results = []
-            conn = _imap_connect(None)
+            conn = _imap_connect(None, owner=owner)
             try:
                 conn.select("INBOX", readonly=True)
                 status, data = conn.search(None, "ALL")
@@ -853,9 +868,11 @@ async def action_learn_sender_signatures(owner: str, **kwargs) -> Tuple[str, boo
         # 3. Eligibility: ≥3 emails AND (no cache OR cache > 30 days old).
         try:
             conn = _sql3.connect(SCHEDULED_DB)
+            owner_clause, owner_params = _email_cache_owner_clause(owner)
             cached = {
                 r[0]: r[1] for r in conn.execute(
-                    "SELECT from_address, last_built_at FROM sender_signatures"
+                    f"SELECT from_address, last_built_at FROM sender_signatures WHERE {owner_clause}",
+                    owner_params,
                 ).fetchall()
             }
             conn.close()
@@ -886,7 +903,7 @@ async def action_learn_sender_signatures(owner: str, **kwargs) -> Tuple[str, boo
 
             def _fetch_bodies(_msgs):
                 bodies = []
-                conn2 = _imap_connect(None)
+                conn2 = _imap_connect(None, owner=owner)
                 try:
                     conn2.select("INBOX", readonly=True)
                     for mm in _msgs:
@@ -963,11 +980,12 @@ async def action_learn_sender_signatures(owner: str, **kwargs) -> Tuple[str, boo
 
             try:
                 conn = _sql3.connect(SCHEDULED_DB)
+                owner_value = (owner or "").strip()
                 conn.execute(
                     "INSERT OR REPLACE INTO sender_signatures "
-                    "(from_address, signature_text, sample_count, last_built_at, model_used, source) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (addr, cached_sig, len(bodies), _dt.utcnow().isoformat(), model, "llm"),
+                    "(from_address, owner, signature_text, sample_count, last_built_at, model_used, source) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (addr, owner_value, cached_sig, len(bodies), _dt.utcnow().isoformat(), model, "llm"),
                 )
                 conn.commit()
                 conn.close()

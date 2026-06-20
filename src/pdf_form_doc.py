@@ -1,15 +1,15 @@
-"""提取的 PDF 表单字段与文档编辑器之间的桥梁。
+"""Bridge between extracted PDF form fields and the document editor.
 
-设计理念：用户以可读的 markdown 编辑表单 — 标签为列表项，
-值为纯文本 — 与编辑器中的其他文档完全一样。
+Design: the user edits the form as readable markdown — labels as bullets,
+values as plain text — exactly like any other document in the editor.
 
-在 markdown 顶部的隐藏 HTML 注释前置标记将文档
-链接回源 PDF 和字段 schema sidecar：
+A hidden HTML-comment front-matter pointer at the top of the markdown
+links the document back to the source PDF and the field-schema sidecar:
 
     <!-- pdf_form_source upload_id="abc.pdf" fields="441" -->
 
-导出路由读取该标记以找到源 PDF + sidecar JSON，
-然后请求 LLM 将 markdown 值映射回 AcroForm 字段名称。
+The export route reads that pointer to find the source PDF + sidecar JSON,
+then asks an LLM to map markdown values back to AcroForm field names.
 """
 
 import json
@@ -26,8 +26,8 @@ _FRONT_MATTER_RE = re.compile(
     r'<!--\s*pdf_form_source\s+upload_id="(?P<upload_id>[^"]+)"(?:\s+fields="(?P<fields>\d+)")?\s*-->'
 )
 
-# 自由形式标注的列表项 — 镜像 static/js/document.js 中的 JS 正则。
-# 坐标为页面百分比（0–100）；kind/lh 为向后兼容而可选。
+# Freeform annotation bullet — mirrors the JS regex in static/js/document.js.
+# Coords are page percentages (0–100); kind/lh are optional for backward compat.
 _ANNOTATION_RE = re.compile(
     r'^[ \t]*-\s+(?P<value>.*?)\s*<!--\s*annotation\s+id=(?P<id>[\w-]+)\s+page=(?P<page>\d+)\s+x=(?P<x>[\d.]+)\s+y=(?P<y>[\d.]+)\s+w=(?P<w>[\d.]+)\s+h=(?P<h>[\d.]+)(?:\s+kind=(?P<kind>\w+))?(?:\s+lh=(?P<lh>[\d.]+))?\s*-->[ \t]*$',
     re.MULTILINE,
@@ -35,7 +35,7 @@ _ANNOTATION_RE = re.compile(
 
 
 def _unescape_annotation_value(s: str) -> str:
-    """JS _escapeAnnotationValue 的逆操作：\\\\n → 换行，\\\\\\\\ → \\\\。"""
+    """Inverse of the JS _escapeAnnotationValue: \\\\n → newline, \\\\\\\\ → \\."""
     out: list[str] = []
     i = 0
     n = len(s or "")
@@ -57,16 +57,17 @@ def _unescape_annotation_value(s: str) -> str:
 
 
 def parse_markdown_annotations(content: str) -> list[dict]:
-    """返回嵌入在文档 markdown 中的自由形式标注字典列表。
+    """Return the list of freeform annotation dicts embedded in a doc's markdown.
 
-    每个条目：{id, page, x, y, w, h, kind, line_height, value}。
-    坐标为页面百分比（0–100）— 调用方在印章时将它们缩放到 PDF 用户单位。
+    Each entry: {id, page, x, y, w, h, kind, line_height, value}.
+    Coordinates are page percentages (0–100) — caller scales them to PDF user
+    units when stamping.
     """
     out: list[dict] = []
     for m in _ANNOTATION_RE.finditer(content or ""):
-        # 一个格式错误的列表项（例如用户手动编辑 markdown 留下
-        # `x=12.3.4`）绝不能导致文档中所有其他标注丢失。
-        # 跳过该行，继续处理。
+        # One malformed bullet (e.g. user hand-edited markdown leaving
+        # `x=12.3.4`) must NOT drop every other annotation in the doc.
+        # Skip the bad line, keep going.
         try:
             raw = m.group("value")
             value = "" if raw == "_(empty)_" else _unescape_annotation_value(raw)
@@ -86,16 +87,17 @@ def parse_markdown_annotations(content: str) -> list[dict]:
             continue
     return out
 
-# 纯 PDF 标记：形状与表单源标记相同，但为任何导入的 PDF（无 AcroForm 字段）
-# 发出。允许现有的 render-pages / render-pdf / page-png 端点也为
-# 非表单 PDF 提供查看功能。
+# Plain-PDF marker: same shape as the form-source marker but emitted for any
+# imported PDF (no AcroForm fields). Lets the existing render-pages /
+# render-pdf / page-png endpoints serve a viewer for non-form PDFs too.
 _PLAIN_FRONT_MATTER_RE = re.compile(
     r'<!--\s*pdf_source\s+upload_id="(?P<upload_id>[^"]+)"\s*-->'
 )
 
-# render_form_as_markdown 发出的列表项行。尾随注释是我们即使在
-# 用户/模型编辑值之后也能恢复字段名称的锚点。字段名经过 URL 编码，
-# 因此原始 AcroForm 名称中的空格、换行、括号和其他特殊字符不会破坏解析。
+# Bullet line emitted by render_form_as_markdown. The trailing comment is the
+# anchor we rely on to recover the field name even after the user/model edits
+# the value. The field name is percent-encoded so spaces, newlines, parens
+# and other special chars in raw AcroForm names don't break parsing.
 #   - **label:** value <!-- field=NAME-ENC type=text -->
 #   - **label** [opts]: value <!-- field=NAME-ENC type=choice -->
 #   - [x] **label** <!-- field=NAME-ENC type=checkbox -->
@@ -105,10 +107,10 @@ _FIELD_BULLET_RE = re.compile(
 
 
 def _encode_name(name: str) -> str:
-    """对任何非正则/HTML 注释安全 token 的字符进行 URL 编码。
+    """Percent-encode any char that's not a regex/HTML-comment-safe token.
 
-    保留 A-Z a-z 0-9 _ . - 。其他所有字符（空格、换行、括号、
-    逗号、引号等）变为 %XX。JS 端必须使用相同的方案。
+    Keeps A-Z a-z 0-9 _ . - . Everything else (spaces, newlines, parens,
+    commas, quotes, etc.) becomes %XX. JS side must use the same scheme.
     """
     out = []
     for ch in name or "":
@@ -121,14 +123,14 @@ def _encode_name(name: str) -> str:
 
 
 def _decode_name(enc: str) -> str:
-    """_encode_name 的逆操作。"""
+    """Inverse of _encode_name."""
     import urllib.parse
     return urllib.parse.unquote(enc or "")
-# 标签段为非贪婪 (.+?)，使得包含 '*' 的标签 — 几乎通用的必填字段
-# 标记，例如 "Email *" — 可以容忍，同时仍然在第一个 ':**' / '**[' 处分割，
-# 因此本身包含 ':**' 的值会被保留。
-# （旧的 [^*]+ 拒绝匹配任何包含星号的标签，并静默地
-# 在导出时丢弃该字段的值。）
+# Label segment is non-greedy (.+?) so labels containing '*' — the near-universal
+# required-field marker, e.g. "Email *" — are tolerated, while still splitting at
+# the FIRST ':**' / '**[' so a value that itself contains ':**' is preserved.
+# (The old [^*]+ refused to match any label with an asterisk and silently
+# dropped that field's value on export.)
 _TEXT_VALUE_RE = re.compile(r'\*\*.+?:\*\*\s*(?P<value>.*)$')
 _CHOICE_VALUE_RE = re.compile(r'\*\*.+?\*\*\s*\[[^\]]*\]\s*:\s*(?P<value>.*)$')
 _CHECKBOX_VALUE_RE = re.compile(r'^\s*\[(?P<state>[xX ])\]')
@@ -137,12 +139,12 @@ _PLACEHOLDERS = {"_(empty)_", "_(not selected)_", "_(empty)_.", "_(unsigned)_"}
 
 
 def sidecar_path(pdf_path: str) -> str:
-    """存储在 PDF 上传旁边的字段 schema JSON 的路径。"""
+    """Path of the field-schema JSON stored next to a PDF upload."""
     return pdf_path + ".fields.json"
 
 
 def save_field_sidecar(pdf_path: str, fields: list[dict[str, Any]]) -> str:
-    """将字段 schema 持久化到其源 PDF 旁边。返回 sidecar 路径。"""
+    """Persist the field schema next to its source PDF. Returns the sidecar path."""
     path = sidecar_path(pdf_path)
     try:
         with open(path, "w", encoding="utf-8") as f:
@@ -153,7 +155,7 @@ def save_field_sidecar(pdf_path: str, fields: list[dict[str, Any]]) -> str:
 
 
 def load_field_sidecar(pdf_path: str) -> Optional[list[dict[str, Any]]]:
-    """返回 PDF 的字段 schema，如果不存在 sidecar 则返回 None。"""
+    """Return field schema for a PDF, or None if no sidecar exists."""
     path = sidecar_path(pdf_path)
     if not os.path.exists(path):
         return None
@@ -166,11 +168,11 @@ def load_field_sidecar(pdf_path: str) -> Optional[list[dict[str, Any]]]:
 
 
 def find_source_upload_id(content: str) -> Optional[str]:
-    """从文档的前置标记中返回 upload_id，如果没有则返回 None。
+    """Return the upload_id from the doc's front-matter pointer, or None.
 
-    匹配用于可填充 PDF 的表单源标记（`pdf_form_source`）
-    和用于任何导入 PDF 的纯标记（`pdf_source`）。
-    在任何查找之前拒绝格式错误的 ID（路径遍历、错误的形状）。
+    Matches both the form-source marker (`pdf_form_source`) used for fillable
+    PDFs and the plain marker (`pdf_source`) used for any imported PDF.
+    Rejects malformed ids (path traversal, wrong shape) before any lookup.
     """
     from src.upload_handler import is_valid_upload_id
 
@@ -185,12 +187,12 @@ def find_source_upload_id(content: str) -> Optional[str]:
 
 
 def render_plain_pdf_markdown(upload_id: str, title: str, body_text: Optional[str] = None) -> str:
-    """为导入到编辑器的非表单 PDF 构建 markdown 包装。
+    """Build the markdown wrapper for a non-form PDF imported into the editor.
 
-    隐藏的前置标记将文档链接到源 PDF，以便查看端点
-    （render-pages / page-png）可以提供渲染的页面。
-    在标题下方包含任何提取的文本，以便 markdown 源视图
-    仍然有用（搜索、复制/粘贴、AI 工具）。
+    The hidden front-matter pointer links the doc to the source PDF so the
+    viewer endpoints (render-pages / page-png) can serve the rendered pages.
+    Any extracted text is included below the title so the markdown source view
+    is still useful (search, copy/paste, AI tools).
     """
     lines: list[str] = [
         f'<!-- pdf_source upload_id="{upload_id}" -->',
@@ -210,14 +212,14 @@ def create_plain_pdf_document(
     title: str,
     body_text: Optional[str] = None,
 ) -> Optional[str]:
-    """为非表单 PDF 创建 markdown Document 并将其设为活动。
+    """Create a markdown Document for a non-form PDF and set it active.
 
-    返回新的 doc_id，失败则返回 None。与 `find_source_upload_id` 配对，
-    以便现有的 /render-pages 和 /page/{n}.png 端点可以在没有
-    表单字段覆盖的情况下提供页面。
+    Returns the new doc_id, or None on failure. Pairs with `find_source_upload_id`
+    so the existing /render-pages and /page/{n}.png endpoints can serve the
+    pages without form-field overlays.
     """
     from src.database import SessionLocal, Document, DocumentVersion, Session as DbSession
-    from src.tool_implementations import set_active_document
+    from src.agent_tools.document_tools import set_active_document
 
     content = render_plain_pdf_markdown(upload_id, title, body_text)
     db = SessionLocal()
@@ -257,14 +259,15 @@ def create_plain_pdf_document(
 
 
 def parse_markdown_to_values(content: str) -> dict[str, Any]:
-    """从渲染的 markdown 中恢复 {field_name: value}。
+    """Recover {field_name: value} from the rendered markdown.
 
-    确定性 — 依赖每个列表项中的隐藏 HTML 注释字段标记。
-    标记完整的行可以在标签和值文本的任意编辑下存活。
-    标记被移除的行会被静默跳过；这些字段只是不会在输出 PDF 中被填充。
+    Deterministic — relies on the hidden HTML-comment field markers in each
+    bullet. Lines whose markers are intact survive arbitrary edits to label
+    and value text. Lines whose markers were stripped are silently skipped;
+    those fields just won't be filled in the output PDF.
 
-    空占位符（"_(empty)_", "_(not selected)_"）映射为 ""。
-    复选框状态来自行首的 `[ ]` / `[x]` 标记。
+    Empty placeholders ("_(empty)_", "_(not selected)_") map to "".
+    Checkbox state comes from the leading `[ ]` / `[x]` marker.
     """
     values: dict[str, Any] = {}
     for line in (content or "").splitlines():
@@ -301,22 +304,23 @@ def _checkbox_marker(value: Any) -> str:
 
 
 def _flatten(value: Any) -> str:
-    """将 PDF 换行符序列（\\r, \\n）折叠，使值适合单行列表项。"""
+    """Collapse PDF newline runs (\\r, \\n) so a value fits on one bullet line."""
     if value is None:
         return ""
     return re.sub(r"\s+", " ", str(value)).strip()
 
 
 def _format_field_bullet(f: dict[str, Any]) -> str:
-    """将一个表单字段渲染为 markdown 列表项行。
+    """Render one form field as a markdown bullet line.
 
-    隐藏的 HTML 注释携带 URL 编码的字段名称，因此导出/保存逻辑
-    有一个健壮的锚点，无论原始 AcroForm 字段名称中出现什么空白、
-    括号或特殊字符。可见标签是人类可读的部分。
+    Hidden HTML comment carries the percent-encoded field name so the
+    export/save logic has a robust anchor regardless of what whitespace,
+    parens, or special chars appear in the raw AcroForm field name. The
+    visible label is the human-readable bit.
 
-    签名字段将选定的签名 ID 编码为 `signature:<id>`，
-    以便选择器的选中状态保留在文档中，导出路由可以在无需
-    额外状态的情况下印章保存的 PNG。
+    Signature fields encode the chosen signature ID inline as
+    `signature:<id>` so the picker selection persists in the doc and the
+    export route can stamp the saved PNG without extra state.
     """
     label = _flatten(f.get("label")) or f["name"]
     name = _encode_name(f["name"])
@@ -346,13 +350,13 @@ def render_form_as_markdown(
     title: str,
     intro_text: Optional[str] = None,
 ) -> str:
-    """构建用户在编辑器中编辑的 markdown 文档。
+    """Build the markdown document the user edits in the editor.
 
-    布局：
-      前置标记（在编辑器渲染中隐藏但在源中存在）
-      标题
-      一段引言 + 如何导出
-      每页一节，带列表字段
+    Layout:
+      front-matter pointer (hidden in editor render but present in source)
+      title
+      one-paragraph intro + how to export
+      one section per page, bulleted fields
     """
     lines: list[str] = [
         f'<!-- pdf_form_source upload_id="{upload_id}" fields="{len(fields)}" -->',
@@ -391,14 +395,14 @@ def create_form_markdown_document(
     title: str,
     intro_text: Optional[str] = None,
 ) -> Optional[str]:
-    """为可编辑表单创建 markdown Document 并将其设为活动。
+    """Create a markdown Document for an editable form and set it active.
 
-    返回新的 doc_id，失败则返回 None。Document 的语言为
-    "markdown" — 表单性质仅由内容内部的前置标记表示，
-    导出路由会查找该标记。
+    Returns the new doc_id, or None on failure. The Document's language is
+    "markdown" — the form-ness is signalled only by the front-matter pointer
+    inside the content, which the export route looks for.
     """
     from src.database import SessionLocal, Document, DocumentVersion, Session as DbSession
-    from src.tool_implementations import set_active_document
+    from src.agent_tools.document_tools import set_active_document
 
     content = render_form_as_markdown(fields, upload_id, title, intro_text=intro_text)
     db = SessionLocal()

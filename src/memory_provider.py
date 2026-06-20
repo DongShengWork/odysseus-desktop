@@ -1,4 +1,4 @@
-"""原生和外部记忆系统的记忆提供者接口。"""
+"""Memory provider interfaces for native and external memory systems."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 @dataclass
 class MemoryRecord:
-    """与提供者无关的记忆条目。"""
+    """Provider-neutral memory entry."""
 
     id: str
     text: str
@@ -23,7 +23,7 @@ class MemoryRecord:
 
 @dataclass
 class MemorySearchHit:
-    """提供者召回返回的记忆结果。"""
+    """A memory returned by provider recall."""
 
     memory: MemoryRecord
     provider_id: str
@@ -31,11 +31,11 @@ class MemorySearchHit:
 
 
 class MemoryProvider(ABC):
-    """Odysseus 记忆提供者的基础契约。
+    """Base contract for Odysseus memory providers.
 
-    原生记忆提供者应始终可用。外部提供者可以添加
-    召回/写入行为和自己的工具，而无需替换
-    内置的本地记忆基线。
+    The native memory provider should always be available. External providers
+    can add recall/write behavior and their own tools without replacing the
+    built-in local memory baseline.
     """
 
     provider_id = "unknown"
@@ -43,10 +43,10 @@ class MemoryProvider(ABC):
     enabled = True
 
     async def initialize(self) -> None:
-        """使用前准备提供者资源。"""
+        """Prepare provider resources before use."""
 
     async def shutdown(self) -> None:
-        """释放提供者资源。"""
+        """Release provider resources."""
 
     @abstractmethod
     async def remember(
@@ -59,7 +59,7 @@ class MemoryProvider(ABC):
         source: str = "user",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> MemoryRecord:
-        """存储一条记忆并返回存储的记录。"""
+        """Store a memory and return the stored record."""
 
     @abstractmethod
     async def recall(
@@ -69,7 +69,7 @@ class MemoryProvider(ABC):
         owner: Optional[str] = None,
         top_k: int = 5,
     ) -> List[MemorySearchHit]:
-        """返回与查询相关的提供者记忆。"""
+        """Return provider memories relevant to the query."""
 
     @abstractmethod
     async def list_memories(
@@ -78,23 +78,23 @@ class MemoryProvider(ABC):
         owner: Optional[str] = None,
         limit: int = 100,
     ) -> List[MemoryRecord]:
-        """列出所有者可见的记忆。"""
+        """List memories visible to the owner."""
 
     @abstractmethod
     async def delete(self, memory_id: str, *, owner: Optional[str] = None) -> bool:
-        """在提供者允许的情况下按 ID 删除记忆。"""
+        """Delete a memory by ID when allowed by the provider."""
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
-        """当此提供者启用时，返回提供者定义的工具 schema。"""
+        """Return provider-defined tool schemas when this provider is enabled."""
         return []
 
     async def handle_tool_call(self, name: str, arguments: Dict[str, Any]) -> Any:
-        """处理提供者定义的工具调用。"""
+        """Handle a provider-defined tool call."""
         raise KeyError(f"Provider {self.provider_id} does not expose tool {name}")
 
 
 class NativeMemoryProvider(MemoryProvider):
-    """Odysseus 内置记忆管理器和向量存储的提供者适配器。"""
+    """Provider adapter for Odysseus' built-in memory manager and vector store."""
 
     provider_id = "native"
     display_name = "Odysseus native memory"
@@ -249,7 +249,7 @@ class NativeMemoryProvider(MemoryProvider):
 
 
 class MemoryProviderRegistry:
-    """原生和可选外部记忆提供者的容器。"""
+    """Container for native and optional external memory providers."""
 
     def __init__(self, providers: Optional[Iterable[MemoryProvider]] = None):
         self._providers: Dict[str, MemoryProvider] = {}

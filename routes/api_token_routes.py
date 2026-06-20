@@ -1,4 +1,4 @@
-"""API Token 管理路由 — /api/tokens/*。"""
+"""API Token management routes — /api/tokens/*."""
 
 import secrets
 import uuid
@@ -68,6 +68,7 @@ def _normalize_scopes(scopes: str | list[str] | None = None, profile: str | None
     ensure_before("calendar:write", "calendar:read")
     ensure_before("memory:write", "memory:read")
     ensure_before("email:draft", "email:read")
+    ensure_before("cookbook:launch", "cookbook:read")
 
     return normalized or [DEFAULT_SCOPES]
 
@@ -95,7 +96,7 @@ def setup_api_token_routes() -> APIRouter:
             ]
 
     def _invalidate_cache(request: Request):
-        """通知 auth 中间件其缓存的 token 映射已过期。"""
+        """Tell the auth middleware its cached token map is stale."""
         try:
             invalidator = getattr(request.app.state, "invalidate_token_cache", None)
             if invalidator:
@@ -154,6 +155,7 @@ def setup_api_token_routes() -> APIRouter:
     @router.patch("/tokens/{token_id}")
     async def update_token(request: Request, token_id: str):
         require_admin(request)
+        current_user = get_current_user(request)
         try:
             payload = await request.json()
         except Exception:
@@ -162,12 +164,14 @@ def setup_api_token_routes() -> APIRouter:
             token = db.query(ApiToken).filter(ApiToken.id == token_id).first()
             if not token:
                 raise HTTPException(404, "Token not found")
+            if current_user and token.owner != current_user:
+                raise HTTPException(403, "Not your token")
             if isinstance(payload.get("name"), str) and payload["name"].strip():
                 token.name = payload["name"].strip()[:MAX_NAME_LEN]
-            # 仅在调用者实际发送了 scopes 参数时才修改。部分更新
-            # 如重命名（{"name": ...} 不含 "scopes" 键）必须
-            # 不能静默地将 token 重置为默认 scope — 这会导致
-            # 之前授予的所有 scope 被丢弃。
+            # Only touch scopes when the caller actually sent them. A partial
+            # update such as a rename ({"name": ...} with no "scopes" key) must
+            # not silently reset the token to the default scope — that dropped
+            # every previously granted scope.
             if "scopes" in payload:
                 token.scopes = ",".join(_normalize_scopes(payload.get("scopes")))
             db.add(token)
@@ -189,10 +193,14 @@ def setup_api_token_routes() -> APIRouter:
     @router.delete("/tokens/{token_id}")
     def delete_token(request: Request, token_id: str):
         require_admin(request)
+        current_user = get_current_user(request)
         with get_db_session() as db:
-            deleted = db.query(ApiToken).filter(ApiToken.id == token_id).delete()
-            if not deleted:
+            token = db.query(ApiToken).filter(ApiToken.id == token_id).first()
+            if not token:
                 raise HTTPException(404, "Token not found")
+            if current_user and token.owner != current_user:
+                raise HTTPException(403, "Not your token")
+            db.delete(token)
         _invalidate_cache(request)
         return {"status": "deleted"}
 

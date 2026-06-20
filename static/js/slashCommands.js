@@ -1,5 +1,5 @@
 // static/js/slashCommands.js
-// 斜杠命令处理器和调度器，从 chat.js 提取
+// Slash command handlers and dispatcher, extracted from chat.js
 
 window.cancelActiveTour = function cancelActiveTour() {
   document.querySelectorAll('.odysseus-highlight, .odysseus-highlight-click')
@@ -17,13 +17,13 @@ import chatRenderer from './chatRenderer.js';
 import spinnerModule from './spinner.js';
 import themeModule from './theme.js';
 import documentModule from './document.js';
+import workspaceModule from './workspace.js';
 import settingsModule from './settings.js';
 import cookbookModule from './cookbook.js';
 import { EVAL_PROMPTS } from './compare/index.js';
 import { PROVIDER_DEVICE_FLOWS, formatDeviceFlowError, runProviderDeviceFlow } from './providerDeviceFlow.js';
-import { t } from './i18n.js';
 
-// ── 模块状态 ──────────────────────────────────────────────────────
+// ── Module state ──────────────────────────────────────────────────────
 
 let API_BASE = '';
 let setupMode = false;
@@ -31,12 +31,12 @@ let pendingSetupApiKey = '';
 let pendingSetupProvider = null;
 let setupIntroShown = false;
 
-// 通过 initSlashCommands 设置的外部引用
+// External references set via initSlashCommands
 let _addMessage = chatRenderer.addMessage;
 let _hideWelcomeScreen = chatRenderer.hideWelcomeScreen;
-let _isStreamingFn = () => false;  // 检查流式传输状态的回调
+let _isStreamingFn = () => false;  // callback to check streaming state
 
-// 用于自动检测提供商的 API 密钥模式
+// API key patterns for provider auto-detection
 const PROVIDER_PATTERNS = [
   { re: /^sk-ant-/,          name: 'Anthropic',  url: 'https://api.anthropic.com/v1' },
   { re: /^sk-or-/,           name: 'OpenRouter', url: 'https://openrouter.ai/api/v1' },
@@ -44,6 +44,7 @@ const PROVIDER_PATTERNS = [
   { re: /^gsk_/,             name: 'Groq',       url: 'https://api.groq.com/openai/v1' },
   { re: /^AIza/,             name: 'Gemini',     url: 'https://generativelanguage.googleapis.com/v1beta/openai' },
   { re: /^xai-/,             name: 'xAI',        url: 'https://api.x.ai/v1' },
+  { re: /^nvapi-/,           name: 'NVIDIA',     url: 'https://integrate.api.nvidia.com/v1' },
 ];
 const SETUP_PROVIDER_URLS = {
   deepseek: { name: 'DeepSeek', url: 'https://api.deepseek.com/v1' },
@@ -57,8 +58,9 @@ const SETUP_PROVIDER_URLS = {
   google: { name: 'Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai' },
   'opencode-zen': { name: 'OpenCode Zen', url: 'https://opencode.ai/zen/v1' },
   'opencode-go': { name: 'OpenCode Go', url: 'https://opencode.ai/zen/go/v1' },
+  nvidia: { name: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1' },
 };
-const SETUP_PROVIDER_NAMES = ['deepseek', 'openai', 'openrouter', 'ollama', 'xai', 'anthropic', 'groq', 'gemini', 'opencode-zen', 'opencode-go'];
+const SETUP_PROVIDER_NAMES = ['deepseek', 'openai', 'openrouter', 'ollama', 'xai', 'anthropic', 'groq', 'gemini', 'opencode-zen', 'opencode-go', 'nvidia'];
 const SETUP_DEVICE_AUTH_PROVIDERS = [
   { key: 'copilot', name: 'GitHub Copilot', aliases: ['github'], command: '/setup copilot' },
   { key: 'chatgpt-subscription', name: 'ChatGPT Subscription', aliases: ['chatgptsubscription', 'chatgpt-sub', 'codex'], command: '/setup chatgpt-subscription' },
@@ -98,6 +100,7 @@ function _setupProviderFromInput(input) {
     google: 'gemini',
     xai: 'xai',
     grok: 'xai',
+    nvidia: 'nvidia',
   };
   return SETUP_PROVIDER_URLS[aliases[raw] || raw] || null;
 }
@@ -125,6 +128,7 @@ function _extractSetupProviderCredential(input) {
     ['groq', 'groq'],
     ['google', 'gemini'], ['gemini', 'gemini'],
     ['x ai', 'xai'], ['xai', 'xai'], ['grok', 'xai'],
+    ['nvidia', 'nvidia'],
   ];
   for (const [alias, key] of providerAliases) {
     const re = new RegExp('(^|\\s|[,;:])(' + alias.replace(/\s+/g, '\\s+') + ')(?=$|\\s|[,;:])', 'i');
@@ -173,7 +177,7 @@ function _showSetupUserBubble(input, isUrl) {
     if (lastBubble) {
       lastBubble.style.filter = 'blur(4px)';
       lastBubble.style.userSelect = 'none';
-      lastBubble.title = t('slash.api_key_hidden');
+      lastBubble.title = 'API key (hidden)';
       lastBubble.style.cursor = 'pointer';
       lastBubble.addEventListener('click', () => {
         lastBubble.style.filter = lastBubble.style.filter ? '' : 'blur(4px)';
@@ -267,10 +271,10 @@ function _setupProviderPrompt() {
 }
 
 // -----------------------------------------------------------------------
-// 斜杠命令 — 直接执行，无需 AI
+// Slash commands — execute directly without AI
 // -----------------------------------------------------------------------
 
-/** 将消息持久化到当前会话（发后即忘） */
+/** Persist a message to the current session (fire-and-forget) */
 function _persistMsg(role, content, metadata) {
   const sid = sessionModule.getCurrentSessionId();
   if (!sid || !content) return;
@@ -294,7 +298,7 @@ function slashReply(text) {
   const body = document.createElement('div');
   body.className = 'body';
   body.innerHTML = text;
-  // 向所有 <pre> 块添加复制按钮
+  // Add copy buttons to any <pre> blocks
   body.querySelectorAll('pre').forEach(pre => {
     if (!pre.querySelector('.copy-code')) {
       const btn = document.createElement('button');
@@ -335,10 +339,13 @@ function _submitComposedMessage(text) {
   const msgInput = document.getElementById('message');
   const form = document.getElementById('chat-form');
   if (!msgInput || !form) return false;
-  msgInput.value = text;
-  msgInput.dispatchEvent(new Event('input', { bubbles: true }));
-  if (typeof form.requestSubmit === 'function') form.requestSubmit();
-  else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  // The slash handler and app-level form debounce must both release before
+  // sending the pinned prompt, otherwise the follow-up submit is dropped.
+  setTimeout(() => {
+    msgInput.value = text;
+    msgInput.dispatchEvent(new Event('input', { bubbles: true }));
+    form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  }, 350);
   return true;
 }
 
@@ -361,31 +368,31 @@ async function _invokeSkillByName(name, requestText, ctx) {
   return true;
 }
 
-/** 斜杠回复的最小页脚：复制 + 关闭 */
+/** Minimal footer for slash replies: copy + dismiss */
 function _slashFooter(msgEl) {
   const footer = document.createElement('div');
   footer.className = 'msg-footer';
   const actions = document.createElement('span');
   actions.className = 'msg-actions';
-  // 复制
+  // Copy
   const copyBtn = document.createElement('button');
   copyBtn.className = 'footer-copy-btn';
   copyBtn.type = 'button';
-  copyBtn.title = t('slash.copy_message');
+  copyBtn.title = 'Copy message';
   const _copySvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   const _checkSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
   copyBtn.innerHTML = _copySvg;
   copyBtn.onclick = (e) => {
     e.stopPropagation();
-    uiModule.copyToClipboard(msgEl.dataset.raw || msgEl.querySelector('.body')?.textContent || '');
+    uiModule.copyToClipboard(chatRenderer.copyMessageText(msgEl));
     copyBtn.innerHTML = _checkSvg;
     setTimeout(() => { copyBtn.innerHTML = _copySvg; }, 1500);
   };
-  // 关闭
+  // Dismiss
   const delBtn = document.createElement('button');
   delBtn.className = 'msg-action-btn msg-delete-btn';
   delBtn.type = 'button';
-  delBtn.title = t('ui.dismiss');
+  delBtn.title = 'Dismiss';
   delBtn.textContent = '\u2715';
   delBtn.onclick = (e) => { e.stopPropagation(); msgEl.remove(); };
   actions.appendChild(copyBtn);
@@ -395,8 +402,8 @@ function _slashFooter(msgEl) {
 }
 
 /**
- * 打字机风格的回复，看起来像流式 AI 响应。
- * 返回一个 promise，当动画完成时 resolve。
+ * Typewriter-style reply that looks like a streamed AI response.
+ * Returns a promise that resolves when the animation finishes.
  */
 function typewriterReply(text, options = {}) {
   return new Promise(resolve => {
@@ -475,7 +482,7 @@ function typewriterBlocksReply(blocks, options = {}) {
         const useBtn = document.createElement('button');
         useBtn.type = 'button';
         useBtn.className = 'use-code';
-        useBtn.title = t('slash.use_in_chat');
+        useBtn.title = 'Use in Chat';
         useBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>';
         const copyText = block.copyText || block.text || '';
         const useNow = (e) => {
@@ -503,7 +510,7 @@ function typewriterBlocksReply(blocks, options = {}) {
         btn.type = 'button';
         btn.className = 'copy-code';
         btn.setAttribute('data-code', copyText);
-        btn.title = t('compare.copy');
+        btn.title = 'Copy';
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
         const copyNow = (e) => {
           e.preventDefault();
@@ -561,7 +568,7 @@ function typewriterBlocksReply(blocks, options = {}) {
 }
 
 /**
- * 对现有元素施加打字机效果（用于流式传输期间的错误消息）。
+ * Typewriter effect into an existing element (for error messages during streaming).
  */
 export function typewriterInto(el, text) {
   el.textContent = '';
@@ -576,7 +583,7 @@ export function typewriterInto(el, text) {
 }
 
 /**
- * 遮盖 API 密钥以便安全显示：显示前 6 位和后 4 位字符。
+ * Mask an API key for safe display: show first 6 and last 4 chars.
  */
 function maskKey(key) {
   if (key.length <= 12) return key.slice(0, 4) + '...' + key.slice(-2);
@@ -584,17 +591,17 @@ function maskKey(key) {
 }
 
 /**
- * 从粘贴的 API 密钥或 URL 中检测提供商。
- * 返回 { base_url, api_key, name }，如果无法识别则返回 null。
+ * Detect provider from a pasted API key or URL.
+ * Returns { base_url, api_key, name } or null if unrecognised.
  */
 function detectProvider(input) {
   const trimmed = input.trim();
-  // URL 或裸 IP/主机名 — 自托管端点
-  // 匹配: http://..., https://..., llm-host:8080, localhost:8000, myserver:8080/v1
+  // URL or bare IP/hostname — self-hosted endpoint
+  // Matches: http://..., https://..., llm-host:8080, localhost:8000, myserver:8080/v1
   if (/^https?:\/\//i.test(trimmed) || /^(\d{1,3}\.){1,3}\d{1,3}(:\d+)?/i.test(trimmed) || /^(localhost|[\w.-]+:\d{2,5})/i.test(trimmed)) {
     let url = trimmed.replace(/\/+$/, '');
     if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
-    // 去除尾部路径段以获取干净的 base
+    // Strip trailing path segments to get a clean base
     for (const suffix of ['/models', '/chat/completions', '/completions', '/v1/messages']) {
       if (url.endsWith(suffix)) url = url.slice(0, -suffix.length).replace(/\/+$/, '');
     }
@@ -603,19 +610,19 @@ function detectProvider(input) {
       const parsed = new URL(url);
       if (parsed.hostname.endsWith('ollama.com')) url = 'https://ollama.com/api';
     } catch(e) {}
-    // 如果是裸 host:port，添加 /v1
+    // Add /v1 if bare host:port
     if (/^https?:\/\/[^/]+$/.test(url) && !url.includes('api.') && !url.includes('ollama.com')) url += '/v1';
     return { base_url: url, api_key: '', name: '' };
   }
-  // 已知密钥模式
+  // Known key patterns
   for (const p of PROVIDER_PATTERNS) {
     if (p.re.test(input)) {
       return { base_url: p.url, api_key: input, name: p.name };
     }
   }
-  // 通用的 sk- 密钥是模棱两可的（可能是 OpenAI legacy、DeepSeek 等）。
-  // 永远不要猜测密钥对应的提供商：询问可避免在设置探测期间
-  // 错误地将密钥发送给 OpenRouter/OpenAI 等。
+  // Generic sk- keys are ambiguous (OpenAI legacy, DeepSeek, and others).
+  // Never guess a provider for a secret: asking avoids sending the key to
+  // OpenRouter/OpenAI/etc. by mistake during setup probing.
   if (/^sk-[a-zA-Z0-9_\-]{20,}$/.test(input)) {
     return { ambiguous: true, api_key: input };
   }
@@ -700,10 +707,10 @@ async function connectDetectedSetupEndpoint(detected) {
 }
 
 /**
- * 处理设置模式输入 — 用户粘贴了 API 密钥或 URL。
+ * Handle setup mode input — user pasted an API key or URL.
  */
 async function handleSetupInput(input) {
-  // 显示遮盖后的用户气泡（不显示原始密钥）
+  // Show masked user bubble (don't display raw key)
   const isUrl = /^https?:\/\//i.test(input) || /^(\d{1,3}\.){1,3}\d{1,3}/i.test(input) || /^localhost/i.test(input);
   _showSetupUserBubble(input, isUrl);
 
@@ -740,7 +747,7 @@ async function handleSetupInput(input) {
 }
 
 /**
- * 处理设置向导的子模式（endpoint、theme、features）。
+ * Handle setup wizard sub-modes (endpoint, theme, features).
  */
 async function handleSetupWizard(mode, input) {
   if (mode === 'endpoint-provider-first') {
@@ -803,10 +810,10 @@ async function handleSetupWizard(mode, input) {
     pendingSetupApiKey = '';
     _addMessage('user', input);
 
-    // 用户可能重新输入了"provider key"合在一起（匹配原始
-    // /setup 提示的示例）。在这种情况下使用刚粘贴的
-    // 密钥 — _setupProviderFromInput 会去除空格，
-    // 否则会看到"deepseeksk-..."然后放弃。
+    // User may have re-typed "provider key" together (matching the
+    // original /setup prompt's example). Honor the freshly-pasted
+    // key in that case — _setupProviderFromInput strips whitespace
+    // and would otherwise see "deepseeksk-..." and bail.
     const paired = _extractSetupProviderCredential(raw);
     if (paired?.provider) {
       const credential = paired.credential || key;
@@ -913,11 +920,11 @@ async function _applyToggle(name, val) {
   await typewriterReply(`${name}: ${newState ? 'on' : 'off'}`);
 }
 
-// ── 提取的处理函数 ─────────────────────────────────────
-// 每个 _cmd* 接收 (args, ctx)，其中 args 是剩余的 token，
-// ctx = { sid, esc }。返回 true 表示"已处理"。
+// ── Extracted handler functions ─────────────────────────────────────
+// Each _cmd* receives (args, ctx) where args is the remaining tokens
+// and ctx = { sid, esc }.  They return true to signal "handled".
 
-/** 将短 ID 或名称解析为完整的会话 UUID */
+/** Resolve a short ID or name to a full session UUID */
 function _resolveSession(idOrName) {
   if (!idOrName || idOrName.length === 36) return idOrName;
   const sessions = sessionModule.getSessions();
@@ -934,7 +941,7 @@ async function _cmdSessionNew(args, ctx) {
   let model = curSess ? curSess.model || '' : '';
   let endpointId = curSess ? curSess.endpoint_id || '' : '';
 
-  // 没有当前会话 — 先尝试默认聊天，再尝试任何有模型的最近会话
+  // No current session — try default chat, then any recent session with a model
   if (!endpointUrl || !model) {
     try {
       const dcRes = await fetch(`${API_BASE}/api/default-chat`);
@@ -944,7 +951,7 @@ async function _cmdSessionNew(args, ctx) {
         model = dc.model;
         endpointId = dc.endpoint_id || '';
       }
-    } catch (e) { /* 忽略 */ }
+    } catch (e) { /* ignore */ }
   }
   if (!endpointUrl || !model) {
     const withModel = sessions.filter(s => s.endpoint_url && s.model && !s.archived);
@@ -954,7 +961,7 @@ async function _cmdSessionNew(args, ctx) {
       endpointId = withModel[0].endpoint_id || '';
     }
   }
-  // 最后手段 — 从 /api/models 拉取第一个模型
+  // Last resort — pull first model from /api/models
   if (!endpointUrl || !model) {
     try {
       const mRes = await fetch(`${API_BASE}/api/models`, { credentials: 'same-origin' });
@@ -967,7 +974,7 @@ async function _cmdSessionNew(args, ctx) {
           break;
         }
       }
-    } catch (e) { /* 忽略 */ }
+    } catch (e) { /* ignore */ }
   }
   if (!endpointUrl || !model) {
     slashReply('No model available — open the model picker and use the <code>+</code> button to add a model endpoint.');
@@ -997,7 +1004,7 @@ async function _cmdSessionDelete(args, ctx) {
   const force = /-(rf|fr)\b/.test(raw);
   const cleanArg = raw.replace(/\s*-(rf|fr)\b\s*/, '').trim();
 
-  // /s del all 或 /s rm -rf
+  // /s del all  or  /s rm -rf
   if (cleanArg === 'all' || (force && !cleanArg)) {
     const sessions = sessionModule.getSessions().filter(s => !s.archived);
     const targets = force ? sessions : sessions.filter(s => !s.important);
@@ -1016,7 +1023,7 @@ async function _cmdSessionDelete(args, ctx) {
     return true;
   }
 
-  // 单个会话删除
+  // Single session delete
   const target = _resolveSession(cleanArg) || ctx.sid;
   if (!target) { slashReply('No session to delete'); return true; }
   const sessions = sessionModule.getSessions();
@@ -1133,7 +1140,7 @@ async function _cmdSessionSort(args, ctx) {
   if (res.ok) {
     const data = await res.json();
     await sessionModule.loadSessions();
-    // 处理跳过状态
+    // Handle skipped status
     if (data.status === 'skipped') {
       await typewriterReply(`Auto-sort skipped: ${data.reason || 'No sessions to sort'}`);
     } else {
@@ -1166,7 +1173,7 @@ async function _cmdSessionClear(args, ctx) {
 
 async function _cmdSessionExport(args, ctx) {
   if (!ctx.sid) { slashReply('No active session'); return true; }
-  // 解析 linux 风格：cat > file.json, cat > notes.txt, cat > chat.html
+  // Parse linux-style: cat > file.json, cat > notes.txt, cat > chat.html
   let filename = '';
   let fmt = 'md';
   const raw = args.join(' ').trim();
@@ -1186,7 +1193,7 @@ async function _cmdSessionExport(args, ctx) {
   return true;
 }
 
-// ── 开关处理 ──
+// ── Toggle handlers ──
 
 async function _cmdToggleWeb(args, ctx) { const v = (args[0]||'').toLowerCase(); if (v === 'on' || v === 'off') _applyToggle('web', v); else _quickToggle('web'); return true; }
 async function _cmdToggleBash(args, ctx) { const v = (args[0]||'').toLowerCase(); if (v === 'on' || v === 'off') _applyToggle('bash', v); else _quickToggle('bash'); return true; }
@@ -1226,6 +1233,40 @@ async function _cmdToggleDoc(args, ctx) {
   return true;
 }
 
+// Workspace: confine the agent's file/shell tools to a folder. Not a boolean -
+// show / set <path> / clear / pick (open the directory browser).
+async function _cmdWorkspace(args, ctx) {
+  const sub = (args[0] || '').toLowerCase();
+  const rest = args.slice(1).join(' ').trim();
+  const cur = workspaceModule.getWorkspace();
+  if (!sub || sub === 'show' || sub === 'status' || sub === 'info') {
+    slashReply(cur ? `Workspace: <code>${uiModule.esc(cur)}</code>` : 'No workspace set. <code>/workspace pick</code> or <code>/workspace set /path</code>.');
+    return true;
+  }
+  if (sub === 'set' || sub === 'cd' || sub === 'use') {
+    if (!rest) { slashReply('Usage: <code>/workspace set /absolute/path</code>'); return true; }
+    // Validate server-side before persisting so the pill never claims a
+    // workspace the backend will refuse to bind (typo, file path, deleted
+    // folder, sensitive dir, filesystem root).
+    workspaceModule.vetAndSetWorkspace(rest).then(({ ok, path }) => {
+      if (ok) slashReply(`Workspace set: <code>${uiModule.esc(path)}</code>`);
+      else slashReply(`Not a usable workspace folder: <code>${uiModule.esc(rest)}</code>. It must be an existing directory, not a filesystem root or sensitive path.`);
+    });
+    return true;
+  }
+  if (sub === 'clear' || sub === 'off' || sub === 'none' || sub === 'unset') {
+    workspaceModule.clearWorkspace();
+    slashReply('Workspace cleared.');
+    return true;
+  }
+  if (sub === 'pick' || sub === 'browse' || sub === 'open') {
+    workspaceModule.openWorkspaceBrowser();
+    return true;
+  }
+  slashReply('Usage: <code>/workspace</code> · <code>set /path</code> · <code>clear</code> · <code>pick</code>');
+  return true;
+}
+
 async function _cmdToggleShow(args, ctx) {
   const name = (args[0] || '').toLowerCase();
   const val = (args[1] || '').toLowerCase();
@@ -1250,20 +1291,20 @@ async function _cmdToggleSidebar(args, ctx) {
   const sidebarHidden = sidebar.classList.contains('hidden');
   const railHidden = iconRail ? iconRail.classList.contains('rail-hidden') : true;
 
-  // 确定目标状态
+  // Determine target state
   const arg = (args[0] || '').toLowerCase();
   let target;
   if (arg === '1' || arg === 'full')  target = 'full';
   else if (arg === '2' || arg === 'mini') target = 'mini';
   else if (arg === '3' || arg === 'off' || arg === 'hide') target = 'off';
   else {
-    // 循环：full → mini → off → full
+    // Cycle: full → mini → off → full
     if (!sidebarHidden) target = 'mini';
     else if (!railHidden) target = 'off';
     else target = 'full';
   }
 
-  // 应用
+  // Apply
   if (target === 'full') {
     sidebar.classList.remove('hidden');
     if (iconRail) iconRail.classList.remove('rail-hidden');
@@ -1279,7 +1320,7 @@ async function _cmdToggleSidebar(args, ctx) {
   return true;
 }
 
-// ── 设置 ──
+// ── Settings ──
 
 async function _cmdOpen(args, ctx) {
   const target = (args[0] || '').trim().toLowerCase();
@@ -1377,14 +1418,14 @@ async function _cmdToolPanel(tool, args, ctx) {
 }
 
 async function _cmdSettings(args, ctx) {
-  // 打开设置模态框 — 主要用于用户在"外观"中隐藏了
-  // 设置齿轮图标后需要一种重新进入的方式。
+  // Opens the Settings modal — primarily useful when the user has hidden the
+  // Settings cog in Appearance and needs a way back in.
   const tab = (args[0] || '').toLowerCase() || undefined;
   try {
     if (settingsModule && typeof settingsModule.open === 'function') {
       settingsModule.open(tab);
     } else {
-      // 降级方案：如果模块未加载，直接点击齿轮图标。
+      // Fallback: click the cog directly if the module isn't loaded.
       const cog = document.getElementById('user-bar-settings');
       if (cog) cog.click();
     }
@@ -1396,7 +1437,7 @@ async function _cmdSettings(args, ctx) {
   return true;
 }
 
-// ── 主题 ──
+// ── Theme ──
 
 async function _cmdTheme(args, ctx) {
   const tm = themeModule;
@@ -1451,7 +1492,7 @@ async function _cmdTheme(args, ctx) {
   return true;
 }
 
-// ── 模型 ──
+// ── Models ──
 
 async function _cmdModels(args, ctx) {
   slashReply('Fetching models...');
@@ -1502,7 +1543,7 @@ async function _cmdMcp(args, ctx) {
   return true;
 }
 
-// ── 记忆 ──
+// ── Memory ──
 
 async function _cmdMemoryList(args, ctx) {
   const res = await fetch(`${API_BASE}/api/memory`, { credentials: 'same-origin' });
@@ -1553,7 +1594,7 @@ async function _cmdMemoryDelete(args, ctx) {
 
   let memId = cleanArg;
   if (!memId) { slashReply('Usage: /memory delete &lt;id&gt; or /m rm -rf to wipe all'); return true; }
-  // 将短 ID 解析为完整 UUID 并获取预览
+  // Resolve short ID to full UUID and get preview
   let preview = memId.slice(0, 8);
   if (memId.length < 36) {
     const listRes = await fetch(`${API_BASE}/api/memory`, { credentials: 'same-origin' });
@@ -1580,7 +1621,7 @@ async function _cmdMemorySearch(args, ctx) {
   return true;
 }
 
-// ── 技能 ──
+// ── Skills ──
 
 async function _cmdSkills(args, ctx) {
   const sub = (args[0] || 'list').toLowerCase();
@@ -1647,7 +1688,7 @@ async function _cmdReloadSkills(args, ctx) {
   return true;
 }
 
-// ── 笔记（快速笔记快捷方式）──
+// ── Note (quick Notes shortcut) ──
 
 async function _cmdNote(args, ctx) {
   const text = args.join(' ');
@@ -1662,27 +1703,27 @@ async function _cmdNote(args, ctx) {
   return true;
 }
 
-// ── 待办 / 提醒 / 事件 ───────────────────────────────────────────────
-// 基于 /api/notes 和 /api/calendar/events 的快速确定性包装器。
-// 它们不涉及 LLM — 在本地解析字符串并直接调用 API，
-// 因此无论处于聊天还是代理模式都能即时生效。
+// ── Todo / Remind / Event ───────────────────────────────────────────────
+// Quick deterministic wrappers over /api/notes and /api/calendar/events.
+// They never involve the LLM — they parse the string locally and hit the
+// API directly, so they work instantly regardless of chat/agent mode.
 
 function _pad2(n) { return String(n).padStart(2, '0'); }
 
-/** 本地时间 ISO-8601 字符串（无 Z，无偏移）— 日历 API 所需的格式。 */
+/** Local-time ISO-8601 string (no Z, no offset) — what the calendar API wants. */
 function _toLocalIso(d) {
   return `${d.getFullYear()}-${_pad2(d.getMonth()+1)}-${_pad2(d.getDate())}T${_pad2(d.getHours())}:${_pad2(d.getMinutes())}:00`;
 }
 
 /**
- * 从字符串的*开头*解析自然语言时间规格。
- * 返回 { date: Date, rest: string } 或 null（如果没有匹配到任何内容）。
- * 支持：
+ * Parse a natural-language time spec from the *start* of the string.
+ * Returns { date: Date, rest: string } or null if nothing matched.
+ * Supported:
  *   "in 30m" / "in 2h" / "in 1d"
  *   "today 14:00" / "tomorrow 9am"
- *   "HH:MM" / "9am" / "9pm"   (今天，或者如果已过今天的时间则明天)
+ *   "HH:MM" / "9am" / "9pm"   (today, or tomorrow if already past)
  *   "YYYY-MM-DD HH:MM"
- * 会吞掉常见的停用词："me"、"at"、"on"、"to"。
+ * Swallows common stop words: "me", "at", "on", "to".
  */
 function _parseTimeSpec(input) {
   let s = (input || '').trim().replace(/^(me\s+)/i, '').trim();
@@ -1722,7 +1763,7 @@ function _parseTimeSpec(input) {
     return { date: d, rest: m[5].trim() };
   }
 
-  // 裸 "HH:MM" / "9am" / "9pm" / "at HH:MM" — 今天，或者如果已过今天的时间则明天
+  // bare "HH:MM" / "9am" / "9pm" / "at HH:MM" — today, or tomorrow if past
   m = s.match(/^(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b\s*(?:to\s+)?(.*)$/i);
   if (m) {
     const d = new Date(now);
@@ -1731,8 +1772,8 @@ function _parseTimeSpec(input) {
     const mer = (m[3] || '').toLowerCase();
     if (mer === 'pm' && hh < 12) hh += 12;
     if (mer === 'am' && hh === 12) hh = 0;
-    // 要求有效的小时/分钟，并且要么有分钟字段要么有 am/pm，
-    // 避免吞掉普通数字如"3 apples"。
+    // Require a valid hour/minute and either a minute field or am/pm to
+    // avoid eating plain numbers like "3 apples".
     if (hh > 23 || mm > 59) return null;
     if (m[2] == null && !mer) return null;
     d.setHours(hh, mm, 0, 0);
@@ -1755,7 +1796,7 @@ async function _cmdTodo(args, ctx) {
     slashReply(`<pre>${lines.join('\n')}</pre>`);
     return true;
   }
-  // 将 /todo 之后（或 /todo add 之后）的所有内容视为待办文本
+  // Treat everything after /todo (or after /todo add) as the todo text
   const rest = (sub === 'add' ? args.slice(1) : args).join(' ').trim();
   if (!rest) { slashReply('Usage: /todo Your task here  ·  /todo list'); return true; }
   const res = await fetch(`${API_BASE}/api/notes`, {
@@ -1774,7 +1815,7 @@ async function _cmdEvent(args, ctx) {
   const parsed = _parseTimeSpec(raw);
   if (!parsed || !parsed.rest) { slashReply(`Could not parse time from: ${ctx.esc(raw)}`); return true; }
   const start = parsed.date;
-  const end = new Date(start.getTime() + 60 * 60 * 1000); // 默认 1 小时时间块
+  const end = new Date(start.getTime() + 60 * 60 * 1000); // default 1h block
   const body = {
     summary: parsed.rest,
     dtstart: _toLocalIso(start),
@@ -1795,7 +1836,7 @@ async function _cmdEvent(args, ctx) {
   return true;
 }
 
-// ── Shell（用户命令执行）──
+// ── Shell (user command execution) ──
 
 async function _cmdShell(args, ctx) {
   const cmd = args.join(' ');
@@ -1820,7 +1861,7 @@ async function _cmdShell(args, ctx) {
   return true;
 }
 
-// ── 文档检索 ──
+// ── RAG ──
 
 async function _cmdRagList(args, ctx) {
   const res = await fetch(`${API_BASE}/api/personal`, { credentials: 'same-origin' });
@@ -1889,12 +1930,12 @@ async function _cmdRagRemove(args, ctx) {
   return true;
 }
 
-// ── 网页搜索 ──
+// ── Web Search ──
 
 async function _cmdWebSearch(args, ctx) {
   const query = args.join(' ');
   if (!query) { slashReply('Usage: /search &lt;query&gt;'); return true; }
-  // 为本次搜索启用网页切换，然后回退到正常聊天
+  // Enable web toggle for this search, then fall through to normal chat
   const chk = document.getElementById('web-toggle');
   const btn = document.getElementById('web-toggle-btn');
   if (chk) chk.checked = true;
@@ -1903,7 +1944,7 @@ async function _cmdWebSearch(args, ctx) {
   return false; // fall through to normal chat submit
 }
 
-// ── 搜索 ──
+// ── Search ──
 
 async function _cmdSearch(args, ctx) {
   const query = args.join(' ');
@@ -1924,7 +1965,7 @@ async function _cmdSearch(args, ctx) {
   return true;
 }
 
-// ── 统计 ──
+// ── Stats ──
 
 async function _cmdStats(args, ctx) {
   const res = await fetch(`${API_BASE}/api/db/stats`, { credentials: 'same-origin' });
@@ -1986,7 +2027,7 @@ async function _cmdUsage(args, ctx) {
   return true;
 }
 
-// ── 上下文压缩 ──
+// ── Context compaction ──
 
 async function _cmdCompact(args, ctx) {
   if (!ctx.sid) { slashReply('No active chat to compact'); return true; }
@@ -2020,7 +2061,7 @@ async function _cmdCompact(args, ctx) {
   return true;
 }
 
-// ── 文本转语音 ──
+// ── TTS ──
 
 async function _cmdTts(args, ctx) {
   const text = args.join(' ');
@@ -2044,7 +2085,7 @@ async function _cmdTts(args, ctx) {
   return true;
 }
 
-// ── 演示 ──
+// ── Demo ──
 
 async function _cmdDemo(args, ctx) {
   const hasModels = await _hasConfiguredModels();
@@ -2053,12 +2094,12 @@ async function _cmdDemo(args, ctx) {
     return true;
   }
 
-  // ── 交互式引导游览 ──
-  // 用红色轮廓高亮元素，显示带箭头指针的工具提示。
-  // 导航：← 返回，跳过游览，→ 下一个。
+  // ── Interactive guided tour ──
+  // Highlights elements with red outline, shows tooltip with pointer arrow.
+  // Navigation: ← back, skip tour, → next.
 
-  // _onTyped / _draftPoll / _draftObserver 在下面绑定；在此声明以便
-  // 可以在这里清理它们。
+  // _onTyped / _draftPoll / _draftObserver get bound below; declare so they
+  // can be cleaned up here.
   let _onTyped = null;
   let _msgEl = null;
   let _draftObserver = null;
@@ -2070,23 +2111,25 @@ async function _cmdDemo(args, ctx) {
     document.querySelectorAll('.tour-halo').forEach(e => e.remove());
     document.getElementById('tour-tooltip')?.remove();
     document.body.classList.remove('tour-active');
-    // 在游览视觉上结束后，保持草稿恢复机制再存活几秒钟，
-    // 因为关闭的 `typewriterReply` 和任何异步追赶者可能在 resolve('next')
-    // 和用户实际阅读文本之间清除 #message。交接给延迟清理。
+    // Keep the draft-restore mechanism alive for a few seconds AFTER the
+    // tour visually ends, because the closing `typewriterReply` and any
+    // async stragglers can clear #message in between resolve('next') and
+    // the user actually reading the text. Hand-off to a deferred cleanup.
     setTimeout(() => {
       if (_msgEl && _onTyped) _msgEl.removeEventListener('input', _onTyped);
       if (_draftObserver) _draftObserver.disconnect();
       if (_draftPoll) clearInterval(_draftPoll);
     }, 3000);
   };
-  // Body 标志让 CSS 在父元素（如 .sidebar）上解除 overflow:hidden，
-  // 这样在游览运行期间高亮光环不会被裁剪。
+  // Body flag lets CSS lift overflow:hidden on parents (e.g. .sidebar) so
+  // the highlight halo isn't clipped while the tour is running.
   document.body.classList.add('tour-active');
 
-  // 持久化用户在游览期间输入的任何内容。流程中的几个动作
-  //（createDirectChat、斜杠命令处理）故意清除 #message，
-  // 这也会抹掉用户为最后一步输入的内容。我们监控 textarea 上
-  // 非游览驱动的变更，并在下一个 tick 恢复。
+  // Persist anything the user types during the tour. Several actions inside
+  // the flow (createDirectChat, slash-command handling) intentionally clear
+  // #message, which would also wipe what the user typed for the final step.
+  // We watch the textarea for non-tour-driven mutations and restore on the
+  // next tick.
   let _typedDraft = '';
   _msgEl = document.getElementById('message');
   _onTyped = () => { if (_msgEl) _typedDraft = _msgEl.value; };
@@ -2100,10 +2143,10 @@ async function _cmdDemo(args, ctx) {
   if (_msgEl) _msgEl.addEventListener('input', _onTyped);
   _draftObserver = new MutationObserver(() => _restoreIfCleared());
   if (_msgEl) _draftObserver.observe(_msgEl, { attributes: true, attributeFilter: ['value'] });
-  // 轮询降级方案 — MutationObserver 无法捕获对 `.value` 的赋值。
+  // Polling fallback — MutationObserver doesn't catch assignment to `.value`.
   _draftPoll = setInterval(_restoreIfCleared, 200);
 
-  // 一次性注入样式
+  // Inject styles once
   if (!document.getElementById('tour-styles')) {
     const s = document.createElement('style');
     s.id = 'tour-styles';
@@ -2137,7 +2180,7 @@ async function _cmdDemo(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // 创建工具提示
+  // Create tooltip
   const tooltip = document.createElement('div');
   tooltip.id = 'tour-tooltip';
   document.body.appendChild(tooltip);
@@ -2145,7 +2188,7 @@ async function _cmdDemo(args, ctx) {
   let cancelled = false;
 
   function positionTooltip(target) {
-    // 移除旧箭头
+    // Remove old arrow
     tooltip.querySelector('.tour-arrow')?.remove();
     const r = target.getBoundingClientRect();
     const ttW = 280;
@@ -2159,24 +2202,24 @@ async function _cmdDemo(args, ctx) {
     const gap = 12;
     let top, left, arrowSide;
 
-    // 优先下方
+    // Prefer below
     if (r.bottom + gap + ttH < window.innerHeight - 10) {
       top = r.bottom + gap;
       left = r.left + r.width / 2 - ttW / 2;
       arrowSide = 'top';
-    // 尝试上方
+    // Try above
     } else if (r.top - gap - ttH > 10) {
       top = r.top - gap - ttH;
       left = r.left + r.width / 2 - ttW / 2;
       arrowSide = 'bottom';
-    // 尝试右侧
+    // Try right
     } else {
       top = r.top + r.height / 2 - ttH / 2;
       left = r.right + gap;
       arrowSide = 'left';
     }
 
-    // 限制在视口内
+    // Clamp to viewport
     if (left + ttW > window.innerWidth - 10) left = window.innerWidth - ttW - 10;
     if (left < 10) left = 10;
     if (top < 10) top = 10;
@@ -2184,7 +2227,7 @@ async function _cmdDemo(args, ctx) {
     tooltip.style.top = top + 'px';
     tooltip.style.left = left + 'px';
 
-    // 定位箭头指向目标
+    // Position arrow pointing at target
     if (arrowSide === 'top') {
       arrow.style.cssText = `top:-6px;left:${Math.min(Math.max(r.left + r.width / 2 - left - 5, 10), ttW - 20)}px;border-right:none;border-bottom:none`;
     } else if (arrowSide === 'bottom') {
@@ -2196,9 +2239,9 @@ async function _cmdDemo(args, ctx) {
     tooltip.style.visibility = '';
   }
 
-  // 逐字符将 HTML 流式写入元素，在标签边界处瞬间跳过
-  // 以保持 <b>、<i> 等完整。返回一个句柄，以便
-  // 如果步骤在流完成之前结束可以取消。
+  // Stream HTML into an element character by character, skipping tag
+  // boundaries instantly so <b>, <i> etc stay intact. Returns a handle so we
+  // can cancel if the step ends before the stream finishes.
   function streamHTML(el, html, speedMs = 14) {
     el.innerHTML = '';
     let i = 0, out = '';
@@ -2217,10 +2260,10 @@ async function _cmdDemo(args, ctx) {
     return { cancel: () => { if (timer) { clearInterval(timer); el.innerHTML = html; } } };
   }
 
-  // 浮动光环覆盖层 — 通过 getBoundingClientRect 定位到目标上。
-  // 返回一个带有 .update() 和 .destroy() 的句柄。我们使用这个而不是
-  // 目标上的 CSS class，因为每个目标的样式（outline、box-shadow）
-  // 和裁剪祖先会吞掉光晕。
+  // Floating halo overlay — positioned over a target via getBoundingClientRect.
+  // Returns a handle with .update() and .destroy(). We use this instead of a
+  // CSS class on the target because per-target styles (outline, box-shadow)
+  // and clipping ancestors otherwise eat the glow.
   function makeHalo(target) {
     const halo = document.createElement('div');
     halo.className = 'tour-halo';
@@ -2252,18 +2295,18 @@ async function _cmdDemo(args, ctx) {
       document.querySelectorAll('.odysseus-highlight').forEach(e => e.classList.remove('odysseus-highlight'));
       document.querySelectorAll('.tour-halo').forEach(e => e.remove());
 
-      // 支持多个选择器（逗号分隔）
+      // Support multiple selectors (comma-separated)
       const sels = sel.split(',').map(s => s.trim());
       const targets = sels.map(s => document.querySelector(s)).filter(Boolean);
       if (!targets.length) return resolve('skip');
 
       const clickMode = mode === 'click';
-      // 在领域事件（消息提交）上推进的步骤也会获得
-      // 点击式的"呼吸"光环，让它们感觉有吸引力。我们故意
-      // 从该列表中排除 `#model-picker-btn` — 模型选择器步骤
-      // 以前隐藏了箭头并且不支持点击推进，如果用户没有实际选择模型，
-      // 就会留下一个毫无作用的光环。现在它以正常箭头 +
-      // `advanceOnClick` 渲染，请参见步骤数组。
+      // Steps that advance on a domain event (message submitted) also get the
+      // click-style "breathing" halo so they feel inviting. We intentionally
+      // exclude `#model-picker-btn` from this list — the model-picker step
+      // used to hide its arrows AND not click-advance, leaving the user with
+      // a halo that did nothing if they didn't actually pick a model. It now
+      // renders with normal arrows + `advanceOnClick`, see the steps array.
       const waitsForEvent = sels.includes('#message');
       const breathing = clickMode || waitsForEvent;
       const advanceOnClick = !!stepOpts.advanceOnClick;
@@ -2271,7 +2314,7 @@ async function _cmdDemo(args, ctx) {
 
       targets.forEach(t => t.classList.add('odysseus-highlight'));
       const halos = breathing ? targets.map(makeHalo) : [];
-      // 将工具提示重置为"渐入前"状态，以便新步骤过渡进入。
+      // Reset tooltip into the "pre-fade" state so the new step phases in.
       tooltip.classList.remove('tour-fade-in');
       targets[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
@@ -2283,9 +2326,9 @@ async function _cmdDemo(args, ctx) {
           ${breathing ? '' : `<button class="tour-btn-arrow${pulseNext ? ' tour-btn-arrow-pulse' : ''}" data-act="next">\u2192</button>`}
         </div>`;
 
-      // 基于完全渲染后的工具提示进行定位，这样在文本流式进入时不会跳动，
-      // 然后将文本流式写入 .tour-text 并淡入所有内容，
-      // 使步骤之间的过渡不会太突兀。
+      // Position based on the fully-rendered tooltip so it doesn't jump as
+      // text streams in, then stream the text into .tour-text and fade
+      // everything in so the transition between steps isn't jarring.
       let streamHandle = null;
       requestAnimationFrame(() => {
         positionTooltip(targets[0]);
@@ -2305,12 +2348,12 @@ async function _cmdDemo(args, ctx) {
         if (act === 'skip') { cancelled = true; resolve('cancel'); }
         else resolve(act);
       };
-      // 文档级别捕获，这样我们能在任何可能调用 preventDefault /
-      // stopPropagation 的内部处理器之前听到点击。我们从 e.target
-      // 通过 .closest(selector) 向上遍历 — 当点击落在 SVG/path 子元素
-      // 或 textNode 包装器上时，比 t.contains(e.target) 更健壮。
-      // 有守卫保护，多个绑定的事件类型（click/pointerdown/mousedown）
-      // 不会双重 resolve。
+      // Document-level capture so we hear the click before any inner handler
+      // that might preventDefault / stopPropagation. We walk up from e.target
+      // via .closest(selector) — more robust than t.contains(e.target) when
+      // the click lands on a SVG/path child or a textNode wrapper. Guarded so
+      // the multiple bound event types (click/pointerdown/mousedown) can't
+      // double-resolve.
       let _advanced = false;
       const onDocClickCapture = (e) => {
         if (_advanced) return;
@@ -2320,25 +2363,26 @@ async function _cmdDemo(args, ctx) {
         });
         if (!matches) return;
         _advanced = true;
-        // 先 resolve — 即使 cleanup 中抛出异常，我们仍然推进。
+        // resolve first — if anything in cleanup throws we still advance.
         resolve('clicked');
         try { cleanup(); } catch (err) { console.warn('tour cleanup:', err); }
       };
-      // 按 Enter 推进，让用户可以自然地"发送"来完成游览。
-      // 我们故意不每次输入事件都推进 — 那样做会在用户键入
-      // 第一个字符时就拆除工具提示的点击处理器，使 `→` 按钮
-      // 可见但不可点击，并且键入的草稿容易在后续清除中被丢失。
-      // 我们还对 Enter 执行 stopPropagation+preventDefault，使其
-      // 不会同时提交聊天表单 — 否则消息会在用户完成游览的
-      // 瞬间被发送（并且输入被清除）。
+      // Advance on Enter so the user can hit "send" naturally to finish
+      // the tour. We deliberately do NOT advance on every input event —
+      // doing so used to tear down the tooltip's click handler the moment
+      // the user typed a single character, leaving the `→` button visible
+      // but unclickable, and the typed draft vulnerable to later clears.
+      // We also stopPropagation+preventDefault on the Enter so it can't
+      // ALSO submit the chat form — otherwise the message would get sent
+      // (and the input cleared) the moment the user finishes the tour.
       const onMessageInput = (e) => {
         if (e.type !== 'keydown') return;
         if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
         const ta = document.getElementById('message');
         if (!ta || !ta.value.trim()) return;
-        // 快照用户输入的内容。如果有任何异步操作在现在和下一次
-        // 绘制之间清除 textarea（typewriterReply、submit-debounce 重置等），
-        // 我们显式地将其恢复。
+        // Snapshot what the user typed. If anything async clears the
+        // textarea between now and the next paint (typewriterReply, the
+        // submit-debounce reset, etc.), we explicitly put it back.
         const saved = ta.value;
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -2350,7 +2394,8 @@ async function _cmdDemo(args, ctx) {
             ta.dispatchEvent(new Event('input', { bubbles: true }));
           }
         };
-        // 多个 tick — 同步、微任务和几个帧 — 以捕获任何清除它的操作。
+        // Multiple ticks — synchronous, micro-task, and a couple frames
+        // out — to catch whatever is clearing it.
         _restore();
         Promise.resolve().then(_restore);
         requestAnimationFrame(_restore);
@@ -2374,11 +2419,11 @@ async function _cmdDemo(args, ctx) {
       if (sels.includes('#message')) {
         const msg = document.getElementById('message');
         if (msg) {
-          // 在 `document` 上以 CAPTURE 阶段监听，这样我们在
-          // chat.js 在 #message 上冒泡阶段的 Enter 处理器（发送
-          // 消息并清除输入）之前触发。同一元素上的监听器
-          // 无论阶段如何都按插入顺序触发，因此我们
-          // 必须向上附加一级才能赢得竞争。
+          // Listen on `document` in CAPTURE phase so we fire BEFORE
+          // chat.js's bubble-phase Enter handler on #message (which sends
+          // the message and clears the input). Listeners on the same
+          // element fire in insertion order regardless of phase, so we
+          // have to attach a level up to win the race.
           messageInputListener = (e) => {
             if (e.target !== msg) return;
             onMessageInput(e);
@@ -2393,10 +2438,10 @@ async function _cmdDemo(args, ctx) {
 
       tooltip.addEventListener('click', onClick);
       if (clickMode || advanceOnClick) {
-        // 在捕获阶段同时监听 click + pointerdown + mousedown，
-        // 在 document 和目标上都监听，这样即使上游的任何处理器
-        // 调用了 preventDefault/stopPropagation，我们仍然能捕获到。
-        // 通过 cleanup() 内部的 resolved 守卫，我们只 resolve 一次。
+        // Listen on click + pointerdown + mousedown in capture phase, at both
+        // document and target, so we still catch even if any handler upstream
+        // calls preventDefault/stopPropagation. We resolve only once via the
+        // resolved guard inside cleanup().
         ['click', 'pointerdown', 'mousedown'].forEach(evt => {
           document.addEventListener(evt, onDocClickCapture, true);
           targets.forEach(t => t.addEventListener(evt, onDocClickCapture, true));
@@ -2407,13 +2452,13 @@ async function _cmdDemo(args, ctx) {
 
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  // ── 欢迎 ──
+  // ── Welcome ──
   await typewriterReply('Welcome to Odysseus! Lets begin the tour!');
-  // 在欢迎行和第一个提示之间留节奏，避免突兀地跳入。
+  // Beat between the welcome line and the first hint so it doesn't snap in.
   await delay(900);
 
-  // 重置到已知的起始状态，使交互步骤（切换到 Agent、
-  // 打开 Web）确实有操作要做。
+  // Reset to a known starting state so the interactive steps (switch to Agent,
+  // turn Web on) actually have something to do.
   try {
     const _agentBtn = document.getElementById('mode-agent-btn');
     const _chatBtn  = document.getElementById('mode-chat-btn');
@@ -2423,15 +2468,16 @@ async function _cmdDemo(args, ctx) {
       const _t = _agentBtn.closest('.mode-toggle');
       if (_t) _t.classList.add('mode-chat');
     }
-    // Web 按模式在下持久化到 web_chat / web_agent。将它们全部置零，
-    // 这样当用户到达"打开它"步骤时，开关确实是关闭的。
+    // Web is persisted per-mode under web_chat / web_agent. Zero both so the
+    // toggle is genuinely off when the user reaches the "turn it on" step.
     const _st = Storage.getJSON(Storage.KEYS.TOGGLES, {});
     _st.mode = 'chat';
     _st.web_chat = false;
     _st.web_agent = false;
     Storage.setJSON(Storage.KEYS.TOGGLES, _st);
-    // 如果 web 按钮当前是开启的，点击它以通过现有处理器完全展开
-    //（覆盖点击处理器跟踪的任何我们在此看不到的状态）。
+    // If the web button is currently on, click it to fully unwind it via the
+    // existing handler (covers any state the click handler tracks that we
+    // can't see from here).
     const _wbtn = document.getElementById('web-toggle-btn');
     if (_wbtn && _wbtn.classList.contains('active')) _wbtn.click();
     _wbtn?.classList.remove('active');
@@ -2462,9 +2508,9 @@ async function _cmdDemo(args, ctx) {
     if (res === 'cancel') { _clearTour(); return true; }
     if (res === 'back') { if (i > 0) i--; continue; }
     i++;
-    // 步骤之间的喘息时间，这样游览不会让人觉得在疾驰。
+    // Breather between steps so the tour doesn't feel like it's racing ahead.
     await delay(step.afterDelay || 750);
-    // 在消息输入步骤之后，等待任何活动流完成
+    // After the message input step, wait for any active stream to finish
     if (step.sel === '#message' && _isStreamingFn()) {
       document.querySelectorAll('.odysseus-highlight').forEach(e => e.classList.remove('odysseus-highlight'));
       tooltip.style.display = 'none';
@@ -2480,11 +2526,11 @@ async function _cmdDemo(args, ctx) {
   return true;
 }
 
-// ── Compare 游览 ──
+// ── Compare tour ──
 async function _cmdTourCompare(args, ctx) {
-  // 斜杠调度器不会自动清除输入，所以显式
-  // 清除它 — 否则 "/tour-compare" 会停在 textarea 中
-  // 并在视觉上与游览导览竞争。
+  // The slash dispatcher doesn't auto-clear the input, so explicitly
+  // wipe it — otherwise "/tour-compare" stays parked in the textarea
+  // and visually competes with the tour walkthrough.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -2533,9 +2579,9 @@ async function _cmdTourCompare(args, ctx) {
   tooltip.id = 'tour-tooltip';
   document.body.appendChild(tooltip);
 
-  // 跟踪光环以便在步骤之间销毁它们。光环位于
-  // body 上（在模态框之上），这样轮廓不会被 modal-content 的
-  // overflow:auto 裁剪 — 与 _cmdDemo 的 makeHalo 模式相同。
+  // Track halos so we can destroy them between steps. Halos sit on the
+  // body (above modals) so the outline isn't clipped by modal-content's
+  // overflow:auto — same pattern as _cmdDemo's makeHalo.
   let _halos = [];
   function _makeHalo(target) {
     const halo = document.createElement('div');
@@ -2639,8 +2685,8 @@ async function _cmdTourCompare(args, ctx) {
         if (advanceOnClick) document.removeEventListener('click', onTargetClick, true);
         resolve(act);
       };
-      // 捕获阶段监听器，这样我们在任何可能 stopPropagation 的
-      // 子处理器之前听到目标点击。
+      // Capture-phase listener so we hear the target click before any
+      // child handler that might stopPropagation.
       const onTargetClick = (e) => {
         if (resolved) return;
         if (!target.contains(e.target) && e.target !== target) return;
@@ -2656,11 +2702,11 @@ async function _cmdTourCompare(args, ctx) {
     });
   }
 
-  // ── 阶段 1：模型选择器模态框 ──
-  // 将每个选择器限定在 #compare-model-overlay 内，以免意外
-  // 匹配 Group Chat 面板的 .compare-parallel-toggle（index.html 第 1053 行），
-  // 它具有相同的类名并且是隐藏的 — 其零边界矩形
-  // 将工具提示放在了左上角。
+  // ── Phase 1: model-selector modal ──
+  // Scope every selector to #compare-model-overlay so we don't accidentally
+  // match the Group Chat panel's .compare-parallel-toggle (line 1053 of
+  // index.html), which has the same class name and is hidden — its zero
+  // bounding-rect was putting the tooltip in the top-left corner.
   const phase1 = [
     { sel: '#compare-model-overlay .modal-body',
       text: 'Pick what type of test you want to run. <b>Chat</b>, <b>Agent</b>, <b>Search</b> or <b>Deep Research</b>.',
@@ -2687,22 +2733,22 @@ async function _cmdTourCompare(args, ctx) {
     if (res === 'back') { if (i > 0) i -= 2; continue; }
   }
 
-  // ── 等待模态框关闭并显示比较面板 ──
+  // ── Wait for the modal to close and the compare panes to come up ──
   _clearHalos();
   tooltip.innerHTML =
     '<div class="tour-text">Click <b>Start</b> when ready — it will probe the models before beginning.</div>' +
     '<div class="tour-nav">' +
       '<button class="tour-btn-skip" data-act="skip">skip</button>' +
     '</div>';
-  // 将工具提示锚定在实际"Start"按钮旁边，这样
-  // 用户的视线会被吸引到下一次点击。同时也给它光环，
-  // 让它像前几步那样发光。
+  // Anchor the tooltip next to the actual "Start" button so
+  // the user's eye is drawn to the next click. Halo on it too so it
+  // glows the same way as the previous steps.
   const startBtn = document.querySelector('#compare-model-overlay .research-start-btn');
   if (startBtn) {
     _halos.push(_makeHalo(startBtn));
     requestAnimationFrame(() => _positionTooltip(startBtn));
   } else {
-    // 降级方案：如果 start 按钮（还）不存在，停在顶部附近。
+    // Fallback: park near the top if the start button isn't around (yet).
     tooltip.style.left = ((window.innerWidth / 2) - 140) + 'px';
     tooltip.style.top  = '20px';
   }
@@ -2730,13 +2776,13 @@ async function _cmdTourCompare(args, ctx) {
   const waitRes = await Promise.race([skipDuringWait, modalClosed]);
   if (waitRes === 'skip') { _clear(); return true; }
 
-  // 短暂喘息，让入口动画在我们测量之前完成。
+  // Small breather so any entry animation finishes before we measure.
   await new Promise(r => setTimeout(r, 300));
 
-  // ── 阶段 2：比较面板（关闭模态框后）──
-  // 注意：Probe 按钮（`#compare-check-btn`）是动态的 — 只有
-  // 当有至少一个未验证的模型时才可见 — 所以我们不在这里
-  // 引导它；用户会在需要时自然地发现它。
+  // ── Phase 2: compare panes (post-modal) ──
+  // Note: the Probe button (`#compare-check-btn`) is dynamic — only
+  // visible when there's at least one unverified model — so we don't
+  // tour it here; the user will discover it naturally when needed.
   const phase2 = [
     { sel: '#compare-add-btn',
       text: 'Add more <b>Models</b> here, keep stacking, who’s stopping ya? (you can also remove btw).' },
@@ -2763,16 +2809,16 @@ async function _cmdTourCompare(args, ctx) {
   return true;
 }
 
-// ── Cookbook 游览 ──
+// ── Cookbook tour ──
 async function _cmdTourCookbook(args, ctx) {
-  // 清除聊天输入，这样"/tour-cookbook"不会残留。
+  // Clear the chat input so "/tour-cookbook" doesn't linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
     _msgEl.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  // 幂等的 tour-styles 注入（与 /tour 和 /tour-compare 共享）。
+  // Idempotent tour-styles injection (shared with /tour and /tour-compare).
   if (!document.getElementById('tour-styles')) {
     const s = document.createElement('style');
     s.id = 'tour-styles';
@@ -2796,7 +2842,7 @@ async function _cmdTourCookbook(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // 如果 Cookbook 模态框尚未打开，则打开它。
+  // Open the cookbook modal if it's not already up.
   let modal = document.getElementById('cookbook-modal');
   if (!modal || modal.classList.contains('hidden')) {
     const opener = document.getElementById('tool-cookbook-btn') || document.getElementById('rail-cookbook');
@@ -2857,7 +2903,7 @@ async function _cmdTourCookbook(args, ctx) {
     const tw = tooltip.offsetWidth || 260;
     const th = tooltip.offsetHeight || 100;
     if (placement === 'center-above') {
-      // 水平居中，位于视口的上三分之一处。
+      // Centered horizontally, sitting in the upper third of the viewport.
       const top = Math.max(10, window.innerHeight * 0.32 - th / 2);
       const left = Math.max(10, window.innerWidth / 2 - tw / 2);
       tooltip.style.top = top + 'px';
@@ -2930,9 +2976,9 @@ async function _cmdTourCookbook(args, ctx) {
     if (tab) tab.click();
   }
 
-  // ── 步骤 ──
-  // 标签通过 `before()` 自动切换，这样用户能看到相关部分而无需手动导航。
-  // 保持文案简洁 — 不要长篇大论。
+  // ── Steps ──
+  // Tabs auto-switch via `before()` so the user sees the relevant section
+  // without having to navigate manually. Keep copy tight — no walls of text.
   const steps = [
     { sel: '#cookbook-modal .modal-content',
       text: '<b>Welcome to Cookbook!</b> Download / Cook / Serve models here!',
@@ -2959,8 +3005,8 @@ async function _cmdTourCookbook(args, ctx) {
       before: () => _clickTab('Dependencies') },
   ];
 
-  // Running 标签仅在存在活动任务时才出现。如果存在，
-  // 将其作为最后一站。
+  // Running tab is only present when there are active tasks. If it exists,
+  // tack it on as the final stop.
   const runTab = modal.querySelector('.cookbook-tab[data-backend="Running"]');
   if (runTab) {
     steps.push({
@@ -2982,23 +3028,23 @@ async function _cmdTourCookbook(args, ctx) {
     if (res === 'back') { if (i > 0) i -= 2; continue; }
   }
 
-  // 让 Cookbook 停留在 Download 标签页，以便用户可以立即开始下载。
+  // Leave Cookbook on the Download tab so the user can start downloading immediately.
   _clickTab('Search');
   _clear();
   await typewriterReply('That’s Cookbook. Pick a model that catches your eye and let it cook.');
   return true;
 }
 
-// ── 主题游览 ──
+// ── Theme tour ──
 async function _cmdTourTheme(args, ctx) {
-  // 清除聊天输入，这样"/tour-theme"不会残留。
+  // Clear the chat input so "/tour-theme" doesn't linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
     _msgEl.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  // 幂等的 tour-styles 注入（与其他游览共享）。
+  // Idempotent tour-styles injection (shared with other tours).
   if (!document.getElementById('tour-styles')) {
     const s = document.createElement('style');
     s.id = 'tour-styles';
@@ -3022,8 +3068,8 @@ async function _cmdTourTheme(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // 如果主题模态框尚未打开，则打开它。使用与其他游览相同的汉堡菜单/侧栏
-  // 打开模式。
+  // Open the theme modal if it isn't already up. Same hamburger / rail
+  // opener pattern as the other tours.
   let modal = document.getElementById('theme-modal');
   if (!modal || modal.classList.contains('hidden')) {
     const opener = document.getElementById('tool-theme-btn')
@@ -3115,10 +3161,10 @@ async function _cmdTourTheme(args, ctx) {
     tooltip.style.visibility = '';
   }
 
-  // 交互步骤 — 在一个或多个目标上显示工具提示 + 光环，
-  // 当用户实际点击其中一个高亮元素时 resolve 'next'。
-  // Skip 按钮仍然退出。`extraSel`（可选）添加一个
-  // 第二高亮目标，其点击也会推进步骤。
+  // Interactive step — show tooltip + halo over one or more targets and
+  // resolve 'next' when the user actually clicks one of the highlighted
+  // elements. Skip button still exits. `extraSel` (optional) adds a
+  // second highlight target whose click also advances the step.
   function _showStep(sel, text, opts) {
     opts = opts || {};
     const isFirst = !!opts.isFirst;
@@ -3167,9 +3213,9 @@ async function _cmdTourTheme(args, ctx) {
           resolve(act);
         };
         tooltip.addEventListener('click', onClick);
-        // 交互式：点击高亮目标即推进。我们让
-        // 原始点击传播，以便用户的实际操作（应用
-        // 主题、切换标签等）确实生效。
+        // Interactive: clicking the highlighted target advances. We let
+        // the original click propagate so the user's real action (apply
+        // theme, switch tab, etc.) actually happens.
         if (interactive) {
           _onTarget = () => { cleanup(); resolve('next'); };
           target.addEventListener('click', _onTarget, true);
@@ -3179,16 +3225,16 @@ async function _cmdTourTheme(args, ctx) {
     });
   }
 
-  // 通过 data-tab ID 点击主题模态框的顶级标签之一。
+  // Clicks one of the theme modal's top-level tabs by data-tab id.
   function _clickTab(tabId) {
     const tab = modal.querySelector('.admin-tab[data-tab="' + tabId + '"]');
     if (tab) tab.click();
   }
 
-  // ── 步骤 ──
-  // 交互流程：用户实际点击每个高亮元素
-  // 来推进。Skip 按钮随时可退出；箭头按钮仍然
-  // 作为降级方案工作（不用触碰任何东西即可浏览过去）。
+  // ── Steps ──
+  // Interactive flow: the user actually clicks each highlighted element
+  // to progress. Skip button exits at any point; arrow buttons still
+  // work as a fallback (read past without touching anything).
   const steps = [
     { sel: '#theme-popup',
       text: '<b>Welcome to Theme.</b> Odysseus is yours to customize!',
@@ -3235,16 +3281,16 @@ async function _cmdTourTheme(args, ctx) {
   return true;
 }
 
-// ── 设置游览 ──
+// ── Settings tour ──
 async function _cmdTourSettings(args, ctx) {
-  // 清除聊天输入，这样"/tour-settings"不会残留。
+  // Clear the chat input so "/tour-settings" doesn't linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
     _msgEl.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  // 幂等的 tour-styles 注入。
+  // Idempotent tour-styles injection.
   if (!document.getElementById('tour-styles')) {
     const s = document.createElement('style');
     s.id = 'tour-styles';
@@ -3268,7 +3314,7 @@ async function _cmdTourSettings(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // 打开设置模态框。
+  // Open the settings modal.
   let modal = document.getElementById('settings-modal');
   if (!modal || modal.classList.contains('hidden')) {
     const opener = document.getElementById('rail-settings')
@@ -3303,7 +3349,7 @@ async function _cmdTourSettings(args, ctx) {
       halo.style.height = (r.height + 8) + 'px';
     };
     update();
-    // 跟踪 modal-enter 缩放动画（参见 task-tour 笔记）。
+    // Track the modal-enter scale animation (see task-tour notes).
     const _tStart = performance.now();
     let _rafId = 0;
     const tick = () => {
@@ -3460,16 +3506,16 @@ async function _cmdTourSettings(args, ctx) {
     if (res === 'back') { if (i > 0) i -= 2; continue; }
   }
 
-  // 落在第一个标签上，让用户有一个熟悉的起点。
+  // Land on the first tab so the user has a familiar starting point.
   _clickNav('services');
   _clear();
   await typewriterReply('See? Not so bad. Tweak away.');
   return true;
 }
 
-// ── 图库游览 ──
+// ── Gallery tour ──
 async function _cmdTourGallery(args, ctx) {
-  // 清除聊天输入，这样"/tour-gallery"不会残留。
+  // Clear the chat input so "/tour-gallery" doesn't linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -3501,7 +3547,7 @@ async function _cmdTourGallery(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // 打开图库模态框。
+  // Open the gallery modal.
   let modal = document.getElementById('gallery-modal');
   if (!modal || modal.classList.contains('hidden')) {
     const opener = document.getElementById('tool-gallery-btn')
@@ -3675,16 +3721,16 @@ async function _cmdTourGallery(args, ctx) {
     if (res === 'back') { if (i > 0) i -= 2; continue; }
   }
 
-  // 落在 Photos 标签上，让用户有一个熟悉的起点。
+  // Land on Photos so the user has a familiar starting point.
   _clickTab('images');
   _clear();
   await typewriterReply('That\'s Gallery. Editor is rough — feedback welcome.');
   return true;
 }
 
-// ── 笔记游览 ──
+// ── Notes tour ──
 async function _cmdTourNotes(args, ctx) {
-  // 清除聊天输入，这样"/tour-notes"不会残留。
+  // Clear the chat input so "/tour-notes" doesn't linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -3714,7 +3760,7 @@ async function _cmdTourNotes(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // 打开笔记面板（它是侧边栏，不是 .modal）。
+  // Open the notes pane (it's a side sheet, not a .modal).
   let pane = document.getElementById('notes-pane');
   if (!pane) {
     const opener = document.getElementById('tool-notes-btn')
@@ -3885,7 +3931,7 @@ async function _cmdTourNotes(args, ctx) {
   return true;
 }
 
-// ── 游览：记忆库 ──
+// ── Tour: Brain ──
 async function _cmdTourBrain(args, ctx) {
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
@@ -4086,7 +4132,7 @@ async function _cmdTourBrain(args, ctx) {
   return true;
 }
 
-// ── 任务游览 ──
+// ── Task tours ──
 async function _openTasksForTour() {
   let modal = document.getElementById('tasks-modal');
   if (!modal) {
@@ -4103,9 +4149,9 @@ async function _openTasksForTour() {
 
 async function _runTaskTour(steps, doneText, opts) {
   opts = opts || {};
-  // 当设置了 `continueLabel` 时，游览以居中的"continue?"
-  // 工具提示结束，而不是直接跳转到 doneText。用户可以选择
-  // 继续（返回 'continue'）或在此停止。
+  // When `continueLabel` is set, the tour ends with a centered "continue?"
+  // tooltip instead of going straight to doneText. The user can pick to
+  // keep going (returns 'continue') or stop here.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -4163,10 +4209,11 @@ async function _runTaskTour(steps, doneText, opts) {
       halo.style.height = (r.height + 8) + 'px';
     };
     update();
-    // 任务 modal-content 在首次打开时运行 250ms 的 `modal-enter` 缩放动画。
-    // 一次性 getBoundingClientRect() 捕获了动画中间（缩小中的）矩形，
-    // 光环被锁定到"裁剪"版本。每帧重新同步约 500ms，
-    // 以便我们跟踪入口到其最终尺寸。
+    // The tasks modal-content runs a 250ms `modal-enter` scale animation
+    // when it first opens. A one-shot getBoundingClientRect() captures
+    // the mid-animation (scaled-down) rect and the halo gets locked to
+    // a "cropped" version. Re-sync every animation frame for ~500ms so
+    // we track the entrance to its final size.
     const _tStart = performance.now();
     let _rafId = 0;
     const tick = () => {
@@ -4231,10 +4278,10 @@ async function _runTaskTour(steps, doneText, opts) {
           const hit = e.target.closest && e.target.closest('[data-act]');
           if (!hit) return;
           tooltip.removeEventListener('click', onClick);
-          // 离开步骤时始终触发 step.after，无论方向如何 —
-          // 它是 `before` 的对称配对（撤销临时状态更改），
-          // 用户在聊天输入步骤上点击"back"
-          // 仍然需要恢复任务模态框。
+          // Always fire step.after when leaving the step, regardless of
+          // direction — it's the symmetric pair to `before` (undo the
+          // temporary state change), and a user clicking "back" on the
+          // chat-input step still needs the tasks modal restored.
           if (step.after) { try { step.after(); } catch (_) {} }
           resolve(hit.dataset.act);
         };
@@ -4248,8 +4295,8 @@ async function _runTaskTour(steps, doneText, opts) {
     if (res === 'skip') { clear(); return 'skipped'; }
     if (res === 'back' && i > 0) i -= 2;
   }
-  // 可选的"Continue to part X?"提示 — 在拆除游览覆盖之前
-  // 显示一个带有两个按钮的居中工具提示。
+  // Optional "Continue to part X?" prompt — show a centered tooltip
+  // with two buttons before tearing down the tour overlay.
   if (opts.continueLabel) {
     clearHalos();
     tooltip.classList.remove('tour-fade-in');
@@ -4259,7 +4306,7 @@ async function _runTaskTour(steps, doneText, opts) {
         '<button class="tour-btn-skip" data-act="stop">no thanks</button>' +
         '<button class="tour-btn-arrow" data-act="continue">' + opts.continueLabel + '</button>' +
       '</div>';
-    // 视口上三分之一处居中。
+    // Centered in the upper third of the viewport.
     tooltip.style.visibility = 'hidden';
     requestAnimationFrame(() => {
       const tw = tooltip.offsetWidth || 260;
@@ -4315,9 +4362,9 @@ async function _cmdTourTask2(args, ctx) {
     { sel: '#task-form-save, #tasks-modal .tasks-tab[data-tab="tasks"]',
       text: 'Tasks can be edited, paused, resumed, run now, or deleted from their cards.',
       before: () => document.querySelector('#tasks-modal .tasks-tab[data-tab="tasks"]')?.click() },
-    // 把模态框挪开，这样聊天框不会被遮挡，然后
-    // 当用户过了这一步时重新显示它，
-    // 这样游览就回到了起点。
+    // Tuck the modal out of the way so the chatbox is unmistakable, then
+    // re-show it when the user moves past this step so the tour lands
+    // back where it started.
     { sel: '#message',
       text: 'You can also <b>just ask in chat</b> — say "every weekday at 9am check for urgent emails" and Odysseus will create the task for you.',
       before: () => document.getElementById('tasks-modal')?.classList.add('hidden'),
@@ -4325,17 +4372,17 @@ async function _cmdTourTask2(args, ctx) {
   ], 'That\'s Tasks. Have it run the background bits so you can stay in chat.');
 }
 
-// ── 游览：深度研究 ──
+// ── Tour: Deep Research ──
 
 async function _cmdTourResearch(args, ctx) {
-  // 清除聊天输入，这样"/tour-research"不会残留。
+  // Clear the chat input so "/tour-research" doesn't linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
     _msgEl.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  // 共享的 tour-styles 注入（与 /tour、/tour-compare、/tour-cookbook 相同的代码块）。
+  // Shared tour-styles injection (same block as /tour, /tour-compare, /tour-cookbook).
   if (!document.getElementById('tour-styles')) {
     const s = document.createElement('style');
     s.id = 'tour-styles';
@@ -4359,7 +4406,7 @@ async function _cmdTourResearch(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // 如果 Research 覆盖层尚未打开，则打开它。
+  // Open the research overlay if it's not already up.
   let overlay = document.getElementById('research-overlay');
   if (!overlay) {
     const opener = document.getElementById('tool-research-btn') || document.getElementById('rail-research');
@@ -4524,7 +4571,7 @@ async function _cmdTourResearch(args, ctx) {
     const _body = await typewriterReply('That’s Deep Research — hit Start or queue up many. You can also view past research in your ');
     const libLink = document.createElement('button');
     libLink.type = 'button';
-    libLink.textContent = t('slash.library');
+    libLink.textContent = 'Library';
     libLink.style.cssText = 'background:none;border:none;padding:0;margin:0;color:var(--accent,var(--red));font:inherit;text-decoration:underline;cursor:pointer;';
     libLink.addEventListener('click', () => {
       if (window.documentModule && window.documentModule.openLibrary) {
@@ -4539,17 +4586,17 @@ async function _cmdTourResearch(args, ctx) {
   return true;
 }
 
-// ── 游览：文档库 + 文档编辑器 ──
+// ── Tour: Library + Document editor ──
 
 async function _cmdTourLibrary(args, ctx) {
-  // 清除聊天输入，这样"/tour-library"不会残留。
+  // Clear the chat input so "/tour-library" doesn't linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
     _msgEl.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  // 共享的 tour-styles 注入。
+  // Shared tour-styles injection.
   if (!document.getElementById('tour-styles')) {
     const s = document.createElement('style');
     s.id = 'tour-styles';
@@ -4573,7 +4620,7 @@ async function _cmdTourLibrary(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // 如果 Library 模态框尚未打开，则打开它。
+  // Open the library modal if it's not already up.
   let libModal = document.getElementById('doclib-modal');
   if (!libModal) {
     const opener = document.getElementById('tool-library-btn') || document.getElementById('rail-archive');
@@ -4705,9 +4752,9 @@ async function _cmdTourLibrary(args, ctx) {
         resolve(act);
       };
       tooltip.addEventListener('click', onClick);
-      // 交互步骤在用户点击高亮元素时推进 —
-      // 让原始点击通过，以便实际操作
-      //（在文档库场景中，打开创建模态框）实际触发。
+      // Interactive steps advance when the user clicks the highlighted
+      // element — letting the original click through so the real action
+      // (open the Create modal, in the Library case) actually fires.
       if (interactive) {
         _onTarget = () => { cleanup(); resolve('next'); };
         target.addEventListener('click', _onTarget, true);
@@ -4715,14 +4762,14 @@ async function _cmdTourLibrary(args, ctx) {
     });
   }
 
-  // ── 阶段 1：文档库概览 ──
+  // ── Phase 1: Library overview ──
   const libSteps = [
     { sel: '#doclib-modal .doclib-modal-content',
       text: '<b>Welcome to Library!</b> Your hub for <b>Chats</b>, <b>Documents</b>, <b>Research</b>, and <b>Archive</b> — search, sort and tidy!',
       placement: 'center-above',
       before: () => {
-        // 强制模态框填充其预期框架，让光环包裹
-        // 整个 Library 窗口，而不仅仅是（可能折叠的）内容。
+        // Force the modal box to fill its intended frame so the halo wraps the
+        // whole library window, not just the (possibly collapsed) content.
         const c = document.querySelector('#doclib-modal .doclib-modal-content');
         if (c) {
           c.style.height = '85vh';
@@ -4751,8 +4798,8 @@ async function _cmdTourLibrary(args, ctx) {
     if (res === 'back') { if (i > 0) i -= 2; continue; }
   }
 
-  // ── 阶段 2：打开文档并浏览编辑器 ──
-  // 尝试加载用户最近的文档。如果不存在，以提示结束。
+  // ── Phase 2: open a document & walk the editor ──
+  // Try to load the user's most recent document. If none exist, end with a hint.
   let firstDocId = null;
   try {
     const r = await fetch('/api/documents/library?limit=1&sort=recent', { credentials: 'same-origin' });
@@ -4768,7 +4815,7 @@ async function _cmdTourLibrary(args, ctx) {
     return true;
   }
 
-  // 关闭 Library，在编辑器中打开文档，等待面板挂载。
+  // Close library, open the doc in the editor, wait for the pane to mount.
   document.getElementById('doclib-close')?.click();
   await new Promise(r => setTimeout(r, 200));
   try { await window.documentModule.loadDocument(firstDocId); } catch (_) {}
@@ -4814,12 +4861,12 @@ async function _cmdTourLibrary(args, ctx) {
   return true;
 }
 
-// ── 提示词 ──
+// ── Prompt ──
 
 async function _cmdPrompt(args, ctx) {
-  // 从 compare 模板中拉取适合聊天的提示。跳过
-  // `image` 分类（原始图片生成提示 — 不适合文本聊天）
-  // 和 `search`（裸关键词查询，不是完整提示）。
+  // Pull chat-appropriate prompts from compare templates. Skip the
+  // `image` category (raw image-gen prompts — wrong for a text chat)
+  // and `search` (bare keyword queries, not full prompts).
   const CHAT_CATS = ['chat', 'code', 'agent', 'html'];
   const all = [];
   for (const cat of CHAT_CATS) {
@@ -4835,7 +4882,7 @@ async function _cmdPrompt(args, ctx) {
   if (firstUse) localStorage.setItem(firstUseKey, '1');
   const ta = document.getElementById('message');
   if (ta) {
-    // 使用 setTimeout 以便在调用者清除输入后运行
+    // Use setTimeout so this runs AFTER the caller clears the input
     setTimeout(() => {
       ta.value = prompt;
       ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -4845,7 +4892,7 @@ async function _cmdPrompt(args, ctx) {
   return true;
 }
 
-// ── 设置 ──
+// ── Setup ──
 
 function _ensureSetupSpotlightStyles() {
   if (document.getElementById('setup-spotlight-styles')) return;
@@ -5032,11 +5079,11 @@ async function _cmdSetup(args, ctx) {
     } else {
       pendingSetupProvider = provider;
       setupMode = 'endpoint-key-for-provider';
-      // 显示规范的"/setup <provider> <key>"用法，让用户学会
-      // 一次性形式，而不是依赖总是用通用提示
-      // 问候他们的粘贴密钥模式。
-      // _setupReply 以纯文本渲染（非 HTML）—— 使用 markdown
-      // 反引号用于内联代码，而不是 <code> + &lt;&gt;。
+      // Show the canonical "/setup <provider> <key>" usage so the user
+      // learns the one-shot form instead of relying on the pasted-key
+      // mode that always greets them with a generic prompt.
+      // _setupReply renders as plain text (no HTML) — use markdown
+      // backticks for the inline code instead of <code> + &lt;&gt;.
       const _slug = (topic || '').toLowerCase();
       await _setupReply(
         `Paste your ${provider.name} API key, or run \`/setup ${_slug} <api-key>\` to set it in one step.`
@@ -5057,7 +5104,7 @@ async function _cmdSetup(args, ctx) {
     return true;
   }
 
-  // 检查模型是否已配置
+  // Check if models are already configured
   const modelsBox = document.getElementById('models');
   const hasModels = modelsBox && modelsBox.querySelector('.models-row');
 
@@ -5078,7 +5125,7 @@ async function _cmdSetup(args, ctx) {
       const customObj = tm && tm.getCustomThemes ? tm.getCustomThemes() : {};
       const customKeys = Object.keys(customObj);
 
-      // 一次性：/setup theme <name> -> 直接应用
+      // One-shot: /setup theme <name> -> apply directly
       const themeName = topicArgs.join(' ').trim().toLowerCase().replace(/\s+/g, '-');
       if (themeName && tm) {
         const colors = (tm.THEMES && tm.THEMES[themeName]) || customObj[themeName];
@@ -5125,12 +5172,12 @@ async function _cmdSetup(args, ctx) {
       return true;
     }
 
-    // 未知主题 — 提示
+    // Unknown topic — hint
     await typewriterReply(`I don't have a setup wizard for "${topic}" yet. Try: endpoint, theme, memory, or features.`);
     return true;
   }
 
-  // 首次设置 — 粘贴 API 密钥流程
+  // First-time setup — paste API key flow
   _clearSetupGuideMessages();
   if (setupIntroShown) {
     return _showSetupEndpointGuide();
@@ -5139,10 +5186,10 @@ async function _cmdSetup(args, ctx) {
   return _showSetupEndpointGuide();
 }
 
-// ── 快捷键 ──
+// ── Shortcuts ──
 
 async function _cmdShortcuts(args, ctx) {
-  // 尝试从设置加载用户键位绑定
+  // Try to load user keybinds from settings
   let keybinds = {
     search: 'ctrl+k',
     toggle_sidebar: 'ctrl+b',
@@ -5197,7 +5244,7 @@ async function _cmdShortcuts(args, ctx) {
   return true;
 }
 
-// ── 彩蛋 ──
+// ── Easter eggs ──
 
 const _ODYSSEY_QUOTES = [
   "Tell me, O Muse, of that ingenious hero who travelled far and wide...",
@@ -5244,7 +5291,7 @@ const _FORTUNES = [
   "Your ability to juggle many tasks will take you far.",
 ];
 
-// 彩蛋视觉助手 — 在常规聊天气泡内渲染
+// Easter egg visual helper — renders inside a regular chat bubble
 function _eggRender(html) {
   const chatBox = document.getElementById('chat-history');
   const div = document.createElement('div');
@@ -5280,7 +5327,7 @@ async function _cmdFlip(args, ctx) {
   if (edge) { const lbl = document.createElement('div'); lbl.style.cssText='font-size:0.8em;opacity:0.5;';lbl.textContent='The coin landed on its edge.';wrap.appendChild(lbl); }
   chatBox.appendChild(wrap);
   uiModule.scrollHistory();
-  // 如果不存在则注入关键帧
+  // Inject keyframes if not present
   if (!document.getElementById('egg-styles')) {
     const s = document.createElement('style');
     s.id = 'egg-styles';
@@ -5506,11 +5553,11 @@ async function _cmdPing(args, ctx) {
 }
 
 async function _cmdProbe(args, ctx) {
-  // 如果提供了名称，通过名称查找端点
+  // Find endpoint by name if provided
   const query = args.join(' ').trim();
   let url = `${API_BASE}/api/probe`;
   if (query) {
-    // 获取端点列表以解析 name -> id
+    // Fetch endpoint list to resolve name -> id
     try {
       const epRes = await fetch(`${API_BASE}/api/model-endpoints`, { credentials: 'same-origin' });
       const eps = await epRes.json();
@@ -5531,7 +5578,7 @@ async function _cmdProbe(args, ctx) {
   }
 
   slashReply('<span style="opacity:0.5">Probing models... this may take a while.</span>');
-  // 获取我们刚刚添加的消息的引用，以便可以实时更新
+  // Get reference to the message we just added so we can update it live
   const chatBox = document.getElementById('chat-history');
   const msgEl = chatBox ? chatBox.lastElementChild : null;
   const bodyEl = msgEl ? msgEl.querySelector('.body') : null;
@@ -5592,11 +5639,11 @@ async function _cmdProbe(args, ctx) {
           } else if (data.type === 'probe_done') {
             summary = { total: data.total || 0, ok: data.ok || 0 };
           }
-        } catch (e) { /* 跳过解析错误 */ }
+        } catch (e) { /* skip parse errors */ }
       }
     }
 
-    // 最终摘要
+    // Final summary
     const pct = summary.total > 0 ? Math.round((summary.ok / summary.total) * 100) : 0;
     const sumColor = pct === 100 ? 'var(--color-success)' : pct >= 50 ? 'var(--color-blind-orange)' : 'var(--color-error)';
     html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-weight:600;color:' + sumColor + '">';
@@ -5624,7 +5671,7 @@ async function _cmdColor(args, ctx) {
   return true;
 }
 
-// ── 帮助（从 COMMANDS 动态生成）──
+// ── Help (generated dynamically from COMMANDS) ──
 
 async function _cmdHelp(args, ctx) {
   const categories = {};
@@ -5634,7 +5681,7 @@ async function _cmdHelp(args, ctx) {
     if (!categories[cat]) categories[cat] = [];
     if (def.subs) {
       for (const [sub, sDef] of Object.entries(def.subs)) {
-        if (sub.startsWith('_')) continue; // 跳过内部子命令
+        if (sub.startsWith('_')) continue; // skip internal subs
         const usage = sDef.usage || `/${name} ${sub}`;
         const desc = sDef.help || '';
         categories[cat].push(`  ${usage.padEnd(21)}${desc}`);
@@ -5654,7 +5701,7 @@ async function _cmdHelp(args, ctx) {
       lines.push('');
     }
   }
-  // 不在预定义顺序中的任何剩余分类
+  // Any remaining categories not in the predefined order
   for (const cat of Object.keys(categories)) {
     if (!order.includes(cat) && categories[cat].length) {
       lines.push(`${cat}:`);
@@ -5680,10 +5727,10 @@ async function _cmdHelp(args, ctx) {
   return true;
 }
 
-// ── 命令注册表 ──────────────────────────────────────────────
-// 每个顶级键是一个命令组。扁平命令直接有处理器；
-// 分组命令使用 `subs`。`default` 是裸调用命令时
-// 运行的子命令（例如 `/chats` -> info）。
+// ── Command registry ──────────────────────────────────────────────
+// Each top-level key is a command group.  Flat commands have a handler
+// directly; grouped commands use `subs`.  `default` is the sub run
+// when the command is invoked bare (e.g. `/chats` -> info).
 
 const COMMANDS = {
   chats: {
@@ -5721,6 +5768,14 @@ const COMMANDS = {
       'sidebar':   { handler: _cmdToggleSidebar,   alias: ['sb'], help: 'Cycle sidebar (full/mini/off)', usage: '/toggle sidebar [1|2|3]' },
       '_show':     { handler: _cmdToggleShow,      alias: [],     help: 'Show all toggle states',  usage: '/toggle' }
     }
+  },
+  workspace: {
+    alias: ['ws'],
+    category: 'Agent',
+    help: 'Set the folder the agent works in',
+    handler: _cmdWorkspace,
+    noUserBubble: true,
+    usage: '/workspace [set <path> | clear | pick]',
   },
   memory: {
     alias: ['m'],
@@ -5782,13 +5837,13 @@ const COMMANDS = {
     help: 'Add local or API model endpoints',
     handler: _cmdSetup,
     usage: '/setup local URL  ·  /setup groq KEY  ·  /setup copilot  ·  /setup chatgpt-subscription',
-    // 提供商子命令，这样当用户输入"/setup de"时，自动补全弹出窗口会显示
-    // "/setup deepseek"、"/setup openai"等，而不仅仅是"/setup"。每个子命令的
-    // 处理器是一个薄包装，重新添加子命令名称并
-    // 重新调度到 _cmdSetup，它已经知道如何处理
-    // 裸提供商（提示输入密钥）和有密钥的提供商（保存它）。
-    // 没有显式处理器，斜杠调度器会报错
-    // "subDef.handler is not a function"。
+    // Provider subs so the autocomplete popup surfaces "/setup deepseek",
+    // "/setup openai", etc. when the user types "/setup de". Each sub's
+    // handler is a thin wrapper that re-prepends the sub name and
+    // re-dispatches into _cmdSetup, which already knows how to handle
+    // bare-provider (prompts for the key) AND provider-with-key (saves it).
+    // Without the explicit handler, the slash-dispatcher errors with
+    // "subDef.handler is not a function".
     subs: {
       deepseek:   { help: 'DeepSeek',      usage: '/setup deepseek sk-...',     handler: (a, c) => _cmdSetup(['deepseek',   ...a], c) },
       openai:     { help: 'OpenAI',        usage: '/setup openai sk-proj-...',  handler: (a, c) => _cmdSetup(['openai',     ...a], c) },
@@ -6068,7 +6123,7 @@ const COMMANDS = {
     handler: _cmdNote,
     usage: '/note text'
   },
-  // ── 彩蛋（在 /help 中隐藏）──
+  // ── Easter eggs (hidden from /help) ──
   flip:    { alias: ['coin'],       hidden: true, handler: _cmdFlip,    usage: '/flip' },
   roll:    { alias: ['dice', 'r'],  hidden: true, handler: _cmdRoll,    usage: '/roll [NdN|sides]' },
   '8ball': { alias: ['8-ball'],     hidden: true, handler: _cmd8Ball,   usage: '/8ball question' },
@@ -6084,8 +6139,8 @@ const COMMANDS = {
   color:   { alias: ['colour'],     hidden: true, handler: _cmdColor,   usage: '/color [hex]' },
 };
 
-// ── 旧版别名 ────────────────────────────────────────────────
-// 将旧的扁平命令名称映射到 { parent, sub }，这样 `/new` 仍然有效。
+// ── Legacy aliases ────────────────────────────────────────────────
+// Maps old flat command names to { parent, sub } so `/new` still works.
 
 export const LEGACY_ALIASES = {
   'new':         { parent: 'chats', sub: 'new' },
@@ -6116,7 +6171,7 @@ export const LEGACY_ALIASES = {
   'sidebar':     { parent: 'toggle', sub: 'sidebar' },
   'memories':    { parent: 'memory', sub: 'list' },
   'forget':      { parent: 'memory', sub: 'delete' },
-  // Linux 风格的别名
+  // Linux-style aliases
   'rm':          { parent: 'chats', sub: 'delete' },
   'mv':          { parent: 'chats', sub: 'rename' },
   'cd':          { parent: 'chats', sub: 'switch' },
@@ -6128,9 +6183,9 @@ export const LEGACY_ALIASES = {
   'status':      { parent: 'toggle', sub: '_show' }
 };
 
-// ── 调度辅助函数 ──────────────────────────────────────────────
+// ── Dispatch helpers ──────────────────────────────────────────────
 
-/** 为处理器构建上下文对象 */
+/** Build context object for handlers */
 function _makeCtx() {
   return {
     sid: sessionModule.getCurrentSessionId(),
@@ -6138,7 +6193,7 @@ function _makeCtx() {
   };
 }
 
-/** 构建扁平映射：别名 -> 规范命令名称（来自 COMMANDS 别名数组） */
+/** Build a flat map: alias -> canonical command name (from COMMANDS alias arrays) */
 function _buildAliasMap() {
   const map = {};
   for (const [name, def] of Object.entries(COMMANDS)) {
@@ -6149,12 +6204,12 @@ function _buildAliasMap() {
 }
 const _ALIAS_MAP = _buildAliasMap();
 
-/** 将键入的命令解析为其规范的 COMMANDS 键 */
+/** Resolve a typed command to its canonical COMMANDS key */
 function _resolveCommand(cmd) {
   return _ALIAS_MAP[cmd] || null;
 }
 
-/** 在命令定义中解析子命令，检查子别名 */
+/** Resolve a subcommand within a command definition, checking sub aliases */
 function _resolveSubcommand(def, sub) {
   if (!def.subs) return null;
   if (def.subs[sub]) return sub;
@@ -6164,7 +6219,7 @@ function _resolveSubcommand(def, sub) {
   return null;
 }
 
-/** 用于模糊匹配的 Levenshtein 距离 */
+/** Levenshtein distance for fuzzy matching */
 function _levenshtein(a, b) {
   const m = a.length, n = b.length;
   const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
@@ -6180,11 +6235,11 @@ function _levenshtein(a, b) {
   return dp[m][n];
 }
 
-/** 为错误输入的命令建议近似匹配 */
+/** Suggest close matches for a mistyped command */
 function _fuzzyMatch(typed, maxDist) {
   maxDist = maxDist || 2;
   const candidates = Object.keys(_ALIAS_MAP);
-  // 也包括旧版别名键
+  // Also include legacy alias keys
   Object.keys(LEGACY_ALIASES).forEach(k => { if (!candidates.includes(k)) candidates.push(k); });
   const matches = [];
   for (const c of candidates) {
@@ -6194,11 +6249,11 @@ function _fuzzyMatch(typed, maxDist) {
   return matches;
 }
 
-// ── 命令前缀 ──────────────────────────────────────────────
+// ── Command prefix ──────────────────────────────────────────────
 
 function _isCmd(str) { return str.startsWith('/') || str.startsWith('!'); }
 
-// ── 主调度器 ───────────────────────────────────────────────
+// ── Main dispatcher ───────────────────────────────────────────────
 
 async function handleSlashCommand(input) {
   const parts = input.slice(1).split(/\s+/);
@@ -6206,19 +6261,19 @@ async function handleSlashCommand(input) {
   let args = parts.slice(1);
   const ctx = _makeCtx();
   let _userShown = false;
-  // 用 source:'slash' 标记回显的命令，使其在对话记录中渲染
-  // 但排除在 LLM 上下文之外（get_context_messages），就像回复一样。
+  // Tag the echoed command with source:'slash' so it renders in the transcript
+  // but is excluded from LLM context (get_context_messages), like the replies.
   function _showUser() { if (!_userShown) { _userShown = true; _addMessage('user', input); _persistMsg('user', input, { source: 'slash' }); } }
 
   try {
-    // --- 检查任何命令的 --help / -h ---
+    // --- Check for --help / -h on any command ---
     const wantsHelp = args.includes('--help') || args.includes('-h');
 
-    // --- 1. 尝试直接命令解析 ---
+    // --- 1. Try direct command resolution ---
     let cmdKey = _resolveCommand(rawCmd);
     let cmdDef = cmdKey ? COMMANDS[cmdKey] : null;
 
-    // --- 2. 尝试旧版别名 ---
+    // --- 2. Try legacy alias ---
     if (!cmdDef && LEGACY_ALIASES[rawCmd]) {
       const leg = LEGACY_ALIASES[rawCmd];
       cmdDef = COMMANDS[leg.parent];
@@ -6245,18 +6300,18 @@ async function handleSlashCommand(input) {
       }
     }
 
-    // --- 3. 解析为已知命令 ---
+    // --- 3. Resolved to a known command ---
     if (cmdDef) {
       if (!cmdDef.noUserBubble) _showUser();
-      // 有子命令的命令
+      // Command with subcommands
       if (cmdDef.subs) {
-        // 显示整个组的帮助
+        // Show help for the whole group
         if (wantsHelp && !args.filter(a => a !== '--help' && a !== '-h').length) {
           let lines = [`${cmdDef.help || cmdKey}`];
           if (cmdDef.alias && cmdDef.alias.length) lines[0] += ` (aliases: ${cmdDef.alias.map(a => '/'+a).join(', ')})`;
           lines.push('');
           for (const [sub, sDef] of Object.entries(cmdDef.subs)) {
-            if (sub.startsWith('_')) continue; // 跳过内部子命令 like _show
+            if (sub.startsWith('_')) continue; // skip internal subs like _show
             const usage = sDef.usage || `/${cmdKey} ${sub}`;
             lines.push(`  ${usage.padEnd(25)}${sDef.help || ''}`);
           }
@@ -6264,14 +6319,14 @@ async function handleSlashCommand(input) {
           return true;
         }
 
-        // 尝试将第一个参数匹配为子命令
+        // Try to match first arg as subcommand
         const subArg = (args[0] || '').toLowerCase();
         const subKey = subArg ? _resolveSubcommand(cmdDef, subArg) : null;
 
         if (subKey) {
           const subDef = cmdDef.subs[subKey];
           const subArgs = args.slice(1);
-          // 特定子命令的帮助
+          // Help for specific subcommand
           if (wantsHelp || subArgs.includes('--help') || subArgs.includes('-h')) {
             const usage = subDef.usage || `/${cmdKey} ${subKey}`;
             slashReply(`<pre>${usage}\n${subDef.help || 'No help available.'}</pre>`);
@@ -6280,22 +6335,22 @@ async function handleSlashCommand(input) {
           return await subDef.handler(subArgs, ctx);
         }
 
-        // 没有匹配的子命令 — 如果定义了则使用 default
+        // No matching sub — use default if defined
         if (cmdDef.default) {
           const defKey = cmdDef.default;
           const defSub = cmdDef.subs[defKey];
           if (defSub) {
-            // 对于 default 子命令，传递所有参数（它们未作为子名称被消费）
+            // For the default sub, pass all args through (they weren't consumed as a sub name)
             return await defSub.handler(args, ctx);
           }
         }
 
-        // 未知子命令 — 显示用法
+        // Unknown sub — show usage
         slashReply(`Unknown subcommand. Try /${cmdKey} --help`);
         return true;
       }
 
-      // 扁平命令（无子命令）
+      // Flat command (no subs)
       if (wantsHelp) {
         const usage = cmdDef.usage || `/${cmdKey}`;
         slashReply(`<pre>${usage}\n${cmdDef.help || 'No help available.'}</pre>`);
@@ -6304,18 +6359,18 @@ async function handleSlashCommand(input) {
       return await cmdDef.handler(args, ctx);
     }
 
-    // --- 4. 技能调用：/<skill-name> [request] ---
-    // 如果 `rawCmd` 匹配已发布的 skill，后端记录使用情况并
-    // 返回一条 skill 固定的消息，作为下一个 agent 轮次提交。
+    // --- 4. Skill invocation: /<skill-name> [request] ---
+    // If `rawCmd` matches a published skill, the backend records usage and
+    // returns a skill-pinned message to submit as the next agent turn.
     try {
       const catalog = await _loadSkillSlashCatalog(false);
       if (catalog.some(s => s.name === rawCmd)) {
         _showUser();
         return await _invokeSkillByName(rawCmd, args.join(' ').trim(), ctx);
       }
-    } catch (_) { /* 穿透到模糊匹配 */ }
+    } catch (_) { /* fall through to fuzzy match */ }
 
-    // --- 5. 对拼写错误进行模糊匹配 ---
+    // --- 5. Fuzzy match for typos ---
     const suggestions = _fuzzyMatch(rawCmd);
     if (suggestions.length) {
       _showUser();
@@ -6329,25 +6384,25 @@ async function handleSlashCommand(input) {
     return true;
   }
 
-  // 未知斜杠命令 — 传递给 AI
+  // Unknown slash command — pass through to AI
   return false;
 }
 
-// ── 公共 API ──────────────────────────────────────────────────────
+// ── Public API ──────────────────────────────────────────────────────
 
 /**
- * 初始化斜杠命令模块。
- * @param {object} deps - 来自 chat.js 的依赖
- * @param {string} deps.apiBase - API 基础 URL
- * @param {function} deps.isStreaming - 返回当前流式传输状态的回调
+ * Initialize the slash commands module.
+ * @param {object} deps - Dependencies from chat.js
+ * @param {string} deps.apiBase - The API base URL
+ * @param {function} deps.isStreaming - Callback returning current streaming state
  */
 export function initSlashCommands(deps) {
   API_BASE = deps.apiBase || '';
   if (deps.isStreaming) _isStreamingFn = deps.isStreaming;
 
-  // 全局委托用于入门和设置点击
+  // Global delegation for onboarding and setup clicks
   document.addEventListener('click', (e) => {
-    // 1. 检查是否点击了欢迎页上的"/setup"触发链接
+    // 1. Check for clicking the "/setup" trigger link on the welcome screen
     const trigger = e.target.closest('.setup-trigger-link');
     if (trigger) {
       e.preventDefault();
@@ -6364,7 +6419,7 @@ export function initSlashCommands(deps) {
       return;
     }
 
-    // 2. 检查是否点击了设置向导中的可点击提供商
+    // 2. Check for clicking a clickable provider inside the setup guide
     const providerEl = e.target.closest('.setup-clickable-provider');
     if (providerEl) {
       e.preventDefault();
@@ -6383,7 +6438,7 @@ export function initSlashCommands(deps) {
       return;
     }
 
-    // 3. 检查是否点击了设置向导中的可点击代码块
+    // 3. Check for clicking a clickable code block inside the setup guide
     const codeEl = e.target.closest('.setup-clickable-code');
     if (codeEl) {
       e.preventDefault();
@@ -6404,21 +6459,21 @@ export function initSlashCommands(deps) {
 }
 
 /**
- * 检查输入是否看起来像斜杠命令。
+ * Check if input looks like a slash command.
  */
 export function isCommand(str) {
   return _isCmd(str);
 }
 
 /**
- * 获取当前 setupMode 状态。
+ * Get the current setupMode state.
  */
 export function getSetupMode() {
   return setupMode;
 }
 
 /**
- * 清除设置模式（例如在设置期间输入斜杠命令时）。
+ * Clear setup mode (e.g. when a slash command is typed during setup).
  */
 export function clearSetupMode(preservePendingState = false) {
   setupMode = false;

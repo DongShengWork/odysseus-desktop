@@ -1,16 +1,16 @@
 /**
- * 杂项 AI 工具绑定 — 三个不共享
- * 修复流程的 AI 工具：
+ * Misc AI-tool wiring — the three AI tools that don't share the
+ * inpaint pipeline:
  *
- *   Harmonize：在身体遮罩上进行 Reinhard 颜色迁移（无 AI 重绘）
- *              + 如果"接缝修复"滑块 > 0，则在接缝遮罩上
- *              进行可选的窄范围修复。
- *   Canvas 2×/4× 放大：浏览器内双三次重采样，无需服务器。
- *   AI 放大：通过 /api/image/upscale-local 使用 Real-ESRGAN。
- *   风格迁移：通过 /api/gallery/style-transfer 进行 img2img。
+ *   Harmonize: Reinhard color transfer on a body mask (no AI redraw)
+ *              + an optional narrow inpaint on a seam mask if the
+ *              "Seam fix" slider > 0.
+ *   Canvas 2×/4× Upscale: in-browser bicubic resampling, no server.
+ *   AI Upscale: Real-ESRGAN via /api/image/upscale-local.
+ *   Style Transfer: img2img via /api/gallery/style-transfer.
  *
- * 外加小型 `_addEmptyLayer` 辅助函数及其工具栏绑定，
- * 因为它紧邻这些功能。
+ * Plus the small `_addEmptyLayer` helper and its toolbar wiring,
+ * since it lived next to these.
  *
  * @param {{
  *   apiBase:             string,
@@ -31,14 +31,12 @@
  */
 import { state } from './state.js';
 
-import { t } from './i18n.js';
-
 export function wireAIToolsMisc({
   apiBase, buildLayerBodyMask, buildSeamMask, applyImageTool,
   flatten, saveState, fitZoom, composite, createLayer, renderLayerPanel,
   spinnerModule, uiModule,
 }) {
-  // ── 协调滑块 — 颜色匹配 + 接缝修复 ──
+  // ── Harmonize sliders — Color match + Seam fix ──
   const harmColorPrev = document.getElementById('ge-harmonize-color-preview');
   const harmSeamPrev = document.getElementById('ge-harmonize-seam-preview');
   document.getElementById('ge-harmonize-color')?.addEventListener('input', (e) => {
@@ -50,9 +48,9 @@ export function wireAIToolsMisc({
     if (harmSeamPrev) harmSeamPrev.style.opacity = (parseInt(e.target.value, 10) / 100).toFixed(2);
   });
 
-  // 协调按钮 — 两阶段：
-  //   1) 在身体遮罩上进行 Reinhard 颜色迁移（无 AI 重绘）
-  //   2) 如果 seam_fix > 0，在接缝遮罩上进行可选的窄范围修复
+  // Harmonize button — two-stage:
+  //   1) Reinhard color transfer on body mask (no AI redraw)
+  //   2) Optional narrow inpaint on seam mask (if seam_fix > 0)
   document.getElementById('ge-harmonize-run')?.addEventListener('click', () => {
     const prompt = document.getElementById('ge-harmonize-prompt')?.value?.trim() || 'photorealistic, natural lighting, seamless blend';
     const color_match = (parseInt(document.getElementById('ge-harmonize-color')?.value || '65')) / 100;
@@ -61,22 +59,22 @@ export function wireAIToolsMisc({
     const seamFeather = Math.max(8, Math.round(Math.min(state.imgWidth, state.imgHeight) * 0.015));
     const body_mask = buildLayerBodyMask(bodyFeather);
     const seam_mask = seam_fix > 0.01 ? buildSeamMask(seamFeather) : null;
-    // 协调需要一个非基础图层来与背景进行
-    // 颜色匹配。如果没有，服务器将回退到传统的
-    // 全图 img2img — 即重新生成整张照片。阻止
-    // 该行为并告知用户缺少什么。
+    // Harmonize needs a non-base layer to color-match against the
+    // background. Without one, the server would fall back to legacy
+    // whole-image img2img — i.e. regenerate the whole photo. Block
+    // that and tell the user what's missing.
     if (!body_mask) {
-      if (uiModule) uiModule.showToast('协调需要在基础照片上粘贴/导入第二个图层 — 没有可颜色匹配的目标。', 6000);
+      if (uiModule) uiModule.showToast('Harmonize needs a second layer pasted/imported over the base photo — nothing to color-match against.', 6000);
       return;
     }
     const payload = { prompt, color_match, seam_fix, body_mask };
     if (seam_mask) payload.seam_mask = seam_mask;
-    applyImageTool('/api/image/harmonize', payload, '协调完成', document.getElementById('ge-harmonize-run'));
+    applyImageTool('/api/image/harmonize', payload, 'Harmonized', document.getElementById('ge-harmonize-run'));
   });
 
-  // ── 画布放大（双三次）──
+  // ── Canvas upscale (bicubic) ──
   function canvasUpscale(factor) {
-    saveState(`放大 ${factor}×`);
+    saveState(`Upscale ${factor}×`);
     const newW = state.imgWidth * factor;
     const newH = state.imgHeight * factor;
     state.layers.forEach(l => {
@@ -96,12 +94,12 @@ export function wireAIToolsMisc({
     if (sizeLabel) sizeLabel.textContent = `${newW}×${newH}`;
     fitZoom();
     composite();
-    uiModule.showToast(`${t('editor.upscaled_to', { factor: factor, w: newW, h: newH })}`);
+    uiModule.showToast(`Upscaled ${factor}× to ${newW}×${newH}`);
   }
   document.getElementById('ge-upscale-2x')?.addEventListener('click', () => canvasUpscale(2));
   document.getElementById('ge-upscale-4x')?.addEventListener('click', () => canvasUpscale(4));
 
-  // ── AI 放大（Real-ESRGAN，无需 diffusion 服务器）──
+  // ── AI upscale (Real-ESRGAN, no diffusion server required) ──
   document.getElementById('ge-upscale-ai')?.addEventListener('click', async () => {
     const btn = document.getElementById('ge-upscale-ai');
     const origHTML = btn.innerHTML;
@@ -113,9 +111,9 @@ export function wireAIToolsMisc({
       btn.innerHTML = '';
       btn.appendChild(upWp.element);
       const lbl = document.createElement('span');
-      lbl.textContent = '正在放大…';
+      lbl.textContent = 'Upscaling…';
       btn.appendChild(lbl);
-    } catch (_) { btn.textContent = '正在放大…'; }
+    } catch (_) { btn.textContent = 'Upscaling…'; }
     try {
       const flat = flatten();
       const imageB64 = flat.toDataURL('image/png').split(',')[1];
@@ -124,7 +122,7 @@ export function wireAIToolsMisc({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: imageB64, scale: 2 }),
       });
-      if (!res.ok) throw new Error('服务器返回 ' + res.status);
+      if (!res.ok) throw new Error('Server returned ' + res.status);
       const data = await res.json();
       if (data.image) {
         const img = new Image();
@@ -132,7 +130,7 @@ export function wireAIToolsMisc({
           if (!state.editorOpen) return;
           saveState();
           const newW = img.width, newH = img.height;
-          const layer = createLayer('AI 放大完成', newW, newH);
+          const layer = createLayer('AI Upscaled', newW, newH);
           layer.ctx.drawImage(img, 0, 0);
           state.layers.push(layer);
           state.activeLayerId = layer.id;
@@ -144,30 +142,30 @@ export function wireAIToolsMisc({
           fitZoom();
           composite();
           renderLayerPanel();
-          uiModule.showToast(`${t('editor.ai_upscaled_to', { w: newW, h: newH })}`);
+          uiModule.showToast(`AI upscaled to ${newW}×${newH}`);
         };
         img.src = 'data:image/png;base64,' + data.image;
       } else {
-        throw new Error(data.error || '未返回图像');
+        throw new Error(data.error || 'No image returned');
       }
     } catch (e) {
-      uiModule.showToast('AI 放大失败: ' + e.message);
+      uiModule.showToast('AI upscale failed: ' + e.message);
     }
     try { upWp?.destroy(); } catch (_) {}
     btn.disabled = false;
     btn.innerHTML = origHTML;
   });
 
-  // ── 风格迁移 ──
+  // ── Style transfer ──
   document.getElementById('ge-style-strength')?.addEventListener('input', (e) => {
     document.getElementById('ge-style-strength-label').textContent = (parseInt(e.target.value) / 100).toFixed(2);
   });
   document.getElementById('ge-style-run')?.addEventListener('click', async () => {
     const btn = document.getElementById('ge-style-run');
     const prompt = document.getElementById('ge-style-prompt').value.trim();
-    if (!prompt) { uiModule.showToast('请输入风格提示词'); return; }
+    if (!prompt) { uiModule.showToast('Enter a style prompt'); return; }
     const strength = parseInt(document.getElementById('ge-style-strength').value) / 100;
-    btn.disabled = true; btn.textContent = '正在应用...';
+    btn.disabled = true; btn.textContent = 'Applying...';
     try {
       const flat = flatten();
       const blob = await new Promise(r => flat.toBlob(r, 'image/png'));
@@ -176,37 +174,37 @@ export function wireAIToolsMisc({
       fd.append('prompt', prompt);
       fd.append('strength', String(strength));
       const res = await fetch(`${apiBase}/api/gallery/style-transfer`, { method: 'POST', credentials: 'same-origin', body: fd });
-      if (!res.ok) throw new Error('服务器返回 ' + res.status);
+      if (!res.ok) throw new Error('Server returned ' + res.status);
       const data = await res.json();
       if (data.image) {
         const img = new Image();
         img.onload = () => {
           if (!state.editorOpen) return;
           saveState();
-          const layer = createLayer('风格: ' + prompt.substring(0, 20), state.imgWidth, state.imgHeight);
+          const layer = createLayer('Styled: ' + prompt.substring(0, 20), state.imgWidth, state.imgHeight);
           layer.ctx.drawImage(img, 0, 0, state.imgWidth, state.imgHeight);
           state.layers.push(layer);
           state.activeLayerId = layer.id;
           composite();
           renderLayerPanel();
-          uiModule.showToast('风格已应用');
+          uiModule.showToast('Style applied');
         };
         img.src = 'data:image/png;base64,' + data.image;
       } else {
-        throw new Error(data.error || '未返回图像');
+        throw new Error(data.error || 'No image returned');
       }
     } catch (e) {
-      uiModule.showToast('风格迁移失败: ' + e.message);
+      uiModule.showToast('Style transfer failed: ' + e.message);
     }
-    btn.disabled = false; btn.textContent = '应用风格';
+    btn.disabled = false; btn.textContent = 'Apply Style';
   });
 
-  // ── 添加空白图层（由图层面板标题按钮 + Ctrl+Alt+J
-  // 键盘快捷键使用）。返回以便 keyboard-shortcuts.js
-  // 可以通过相同路径调用。──
+  // ── Add empty layer (used by the layer-panel header button + the
+  // Ctrl+Alt+J keyboard shortcut). Returned so keyboard-shortcuts.js
+  // can call it through the same path. ──
   function addEmptyLayer() {
-    saveState('添加图层');
-    const layer = createLayer('图层 ' + state.layers.length, state.imgWidth, state.imgHeight);
+    saveState('Add layer');
+    const layer = createLayer('Layer ' + state.layers.length, state.imgWidth, state.imgHeight);
     state.layers.push(layer);
     state.activeLayerId = layer.id;
     renderLayerPanel();

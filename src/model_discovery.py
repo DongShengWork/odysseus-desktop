@@ -10,10 +10,10 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-# 已发现主机的缓存
+# Cache for discovered hosts
 _hosts_cache: List[str] = []
 _hosts_cache_time: float = 0
-_HOSTS_CACHE_TTL = 60  # 秒
+_HOSTS_CACHE_TTL = 60  # seconds
 
 
 def _parse_tailscale_status(raw: str) -> Dict[str, Any]:
@@ -34,7 +34,7 @@ def _first_tailscale_ipv4(value: Any) -> Optional[str]:
 
 
 def discover_tailscale_hosts() -> List[str]:
-    """发现在线的 Tailscale 节点，返回它们的 IPv4 地址。"""
+    """Discover online Tailscale peers, returning their IPv4 addresses."""
     global _hosts_cache, _hosts_cache_time
 
     now = time.time()
@@ -53,13 +53,13 @@ def discover_tailscale_hosts() -> List[str]:
         if not data:
             return hosts
 
-        # 添加自身
+        # Add self
         self_data = data.get("Self") if isinstance(data.get("Self"), dict) else {}
         self_ip = _first_tailscale_ipv4(self_data.get("TailscaleIPs"))
         if self_ip:
             hosts.append(self_ip)
 
-        # 添加在线节点（跳过 funnel-ingress-nodes 和 android 设备）
+        # Add online peers (skip funnel-ingress-nodes and android devices)
         peers = data.get("Peer") if isinstance(data.get("Peer"), dict) else {}
         for peer in peers.values():
             if not isinstance(peer, dict):
@@ -92,11 +92,11 @@ class ModelDiscovery:
         self.default_host = default_host
         self.openai_api_key = openai_api_key
         self.openai_compat_path = "/v1/chat/completions"
-        # 来自环境变量的自定义端口，合并到 discover_models 的扫描列表中。
+        # Custom ports from env vars, merged into the scan list by discover_models.
         self._extra_ports: set = set()
 
     def _get_hosts(self) -> List[str]:
-        """获取所有要扫描的主机，使用环境变量覆盖、Tailscale 或默认值。"""
+        """Get all hosts to scan, using env override, Tailscale, or default."""
         self._extra_ports = set()
 
         def _append_host(out: List[str], host: str) -> None:
@@ -106,7 +106,7 @@ class ModelDiscovery:
             out.append(host)
 
         def _append_env_hosts(out: List[str]) -> None:
-            """从提供商特定的环境变量添加主机（和任何自定义端口）。"""
+            """Add hosts (and any custom ports) from provider-specific env vars."""
             for env_name in ("OLLAMA_BASE_URL", "OLLAMA_URL", "LM_STUDIO_URL"):
                 raw = os.getenv(env_name, "").strip()
                 if not raw:
@@ -119,21 +119,21 @@ class ModelDiscovery:
                 except Exception:
                     pass
 
-        # 手动覆盖优先
+        # Manual override takes priority
         extra = os.getenv("LLM_HOSTS", "").strip()
         if extra:
             hosts = [h.strip() for h in extra.split(",") if h.strip()]
-            # 始终也要包含默认主机
+            # Always include the default host too
             if self.default_host not in hosts:
                 hosts.insert(0, self.default_host)
             _append_host(hosts, "host.docker.internal")
             _append_env_hosts(hosts)
             return hosts
 
-        # 尝试 Tailscale 发现
+        # Try Tailscale discovery
         ts_hosts = discover_tailscale_hosts()
         if ts_hosts:
-            # 确保 default_host 包含在内
+            # Ensure default_host is included
             if self.default_host not in ts_hosts:
                 ts_hosts.insert(0, self.default_host)
             _append_host(ts_hosts, "host.docker.internal")
@@ -141,14 +141,14 @@ class ModelDiscovery:
             return ts_hosts
 
         hosts = [self.default_host]
-        # Docker desktop/Linux compose 将此映射到宿主机。这是
-        # 常见的"我在这台电脑上正常启动了 Ollama"的情况。
+        # Docker desktop/Linux compose maps this to the host machine. That is
+        # the common "I started Ollama normally on this computer" case.
         _append_host(hosts, "host.docker.internal")
         _append_env_hosts(hosts)
         return hosts
 
     def _fingerprint_provider(self, host: str, port: int) -> Optional[str]:
-        """通过其原生 API 识别服务器软件，与端口无关。"""
+        """Identify the server software via its native API, independent of port."""
         try:
             r = httpx.get(f"http://{host}:{port}/api/v1/models", timeout=1.5)
             if r.is_success:
@@ -166,7 +166,7 @@ class ModelDiscovery:
         return None
 
     def _check_port(self, host: str, port: int) -> Optional[Dict[str, Any]]:
-        """检查单个 host:port 是否有可用的模型。"""
+        """Check a single host:port for models."""
         base = f"http://{host}:{port}/v1"
         try:
             r = httpx.get(f"{base}/models", timeout=3)
@@ -188,22 +188,22 @@ class ModelDiscovery:
         return None
 
     def discover_models(self) -> Dict[str, List[Dict[str, Any]]]:
-        """从所有可访问的主机发现可用模型。"""
+        """Discover available models from all reachable hosts."""
         hosts = self._get_hosts()
         items = []
 
         logger.info(f"Scanning {len(hosts)} hosts for models: {hosts}")
 
-        # 知名端口：8000-8020 (vLLM, llama.cpp, SGLang, Cookbook)，
-        # 1234 (LM Studio), 11434 (Ollama), 11435（APFEL 的默认端口，因为
-        # Ollama 占用了它的默认端口）。环境变量可以添加更多端口，它们将被合并进去。
+        # Well-known ports: 8000-8020 (vLLM, llama.cpp, SGLang, Cookbook),
+        # 1234 (LM Studio), 11434 (Ollama), 11435 for APFEL as its default port is
+        # occupied by Ollama. The env vars can add more ports which will be merged in.
         ports = list(range(8000, 8021)) + [1234, 11434, 11435]
         ports += [p for p in sorted(self._extra_ports) if p not in ports]
         targets = [(h, p) for h in hosts for p in ports]
 
         seen_models = (
             set()
-        )  # 按 (port, model_ids) 去重，避免同一台机器通过不同 IP 重复出现
+        )  # dedupe by (port, model_ids) to avoid same machine via different IPs
 
         with ThreadPoolExecutor(max_workers=50) as pool:
             futures = {pool.submit(self._check_port, h, p): (h, p) for h, p in targets}
@@ -215,7 +215,7 @@ class ModelDiscovery:
                         seen_models.add(key)
                         items.append(result)
 
-        # 按主机名再按端口排序，确保一致性
+        # Sort by host then port for consistent ordering
         items.sort(key=lambda x: (x["host"], x["port"]))
 
         logger.info(
@@ -223,8 +223,27 @@ class ModelDiscovery:
         )
         return {"hosts": hosts, "items": items}
 
+    def warmup_ping_urls(self, limit: int = 5) -> List[str]:
+        """The ``/models`` URLs of up to ``limit`` discovered endpoints.
+
+        Used by the startup warmup / keepalive loop to prime connections. Each
+        discovered item already carries a ``/v1/chat/completions`` url; swap the
+        suffix for the cheap ``/models`` probe. Failures degrade to an empty list
+        so warmup never crashes the caller.
+        """
+        try:
+            items = (self.discover_models() or {}).get("items", [])
+        except Exception:
+            return []
+        urls: List[str] = []
+        for ep in items[:limit]:
+            url = (ep.get("url") or "").replace("/chat/completions", "/models")
+            if url:
+                urls.append(url)
+        return urls
+
     def get_providers(self) -> Dict[str, Any]:
-        """获取所有可用的提供商"""
+        """Get all available providers"""
         discovery = self.discover_models()
         items = discovery["items"]
         providers = [{"provider": "vllm", "hosts": discovery["hosts"], "items": items}]

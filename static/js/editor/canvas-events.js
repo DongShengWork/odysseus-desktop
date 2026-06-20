@@ -1,27 +1,29 @@
 /**
- * 画布事件绑定 — 鼠标、触摸（包括双指缩放）以及画布区域平移处理器。
+ * Canvas event wiring — mouse, touch (including pinch-zoom on two
+ * fingers), and the canvas-area pan handler.
  *
- *   鼠标：
- *     mousedown 在画布上    → beginDraw
- *     mousemove 在 window 上 → continueDraw（在 window 上以便拖拽
- *                              可以延续到画布边缘之外）
- *     mouseup 在 window 上   → endDraw
- *     mouseenter/mouseleave  → 显示/隐藏画笔光标叠加层
- *     mousedown 在画布区域上（不在画布本身，仅套索工具）
- *                            → beginDraw（套索从画布外部开始）
+ *   Mouse:
+ *     mousedown on canvas    → beginDraw
+ *     mousemove on window    → continueDraw (window so a drag can
+ *                              continue past the canvas edge)
+ *     mouseup on window      → endDraw
+ *     mouseenter/mouseleave  → show/hide the brush-cursor overlay
+ *     mousedown on canvas-area (NOT on the canvas itself, lasso only)
+ *                            → beginDraw (lasso starts outside canvas)
  *
- *   触摸：
- *     touchstart 1 个手指    → beginDraw
- *     touchmove  1 个手指    → continueDraw
+ *   Touch:
+ *     touchstart 1 finger    → beginDraw
+ *     touchmove  1 finger    → continueDraw
  *     touchend / touchcancel → endDraw
- *     touchstart 2 个手指    → 双指缩放 + 双指平移
+ *     touchstart 2 fingers   → pinch-zoom + 2-finger pan
  *
- *   平移（画布周围的任意空闲区域）：
- *     canvas-area 上的 pointerdown / pointermove / pointerup，
- *     跳过画布 + 变换叠加层 + 它们上方的 UI 元素。
- *     在 canvasArea.dataset.panX/Y 上设置值 + 对两个画布应用 CSS transform。
+ *   Pan (any free space around the canvas):
+ *     pointerdown / pointermove / pointerup on canvas-area, skipping
+ *     the canvas + transform overlay + UI elements above them. Sets
+ *     canvasArea.dataset.panX/Y + CSS transform on both canvases.
  *
- *   暴露 `canvasArea._resetPan()` 以便缩放/适配重置可以清除平移偏移。
+ *   Exposes `canvasArea._resetPan()` so the zoom/fit reset can clear
+ *   the pan offset.
  *
  * @param {{
  *   canvasArea:        HTMLDivElement,
@@ -35,30 +37,30 @@
 import { state } from './state.js';
 
 export function wireCanvasEvents({ canvasArea, beginDraw, continueDraw, endDraw, updateBrushCursor, syncZoomControls }) {
-  // 鼠标 — mousedown 绑定在画布上；mousemove/up 绑定在
-  // WINDOW 上，以便拖拽可以继续（并结束）到画布边缘之外。
-  // 对于调整大小工具尤其重要，因为用户可能拖出画布范围。
+  // Mouse — mousedown stays on the canvas; mousemove/up are bound to
+  // the WINDOW so a drag can continue (and end) past the canvas edge.
+  // Critical for the Resize tool where users overshoot.
   state.mainCanvas.addEventListener('mousedown', beginDraw);
   window.addEventListener('mousemove', continueDraw);
   window.addEventListener('mouseup', endDraw);
-  // 套索可以从画布外部开始 — 在周围的 canvas-area 上
-  // 绑定 mousedown 回退，以便用户可以在图像周围的空白区域
-  // 开始套索路径。其他工具保持仅画布触发。
+  // Lasso can start OUTSIDE the canvas — fallback mousedown on the
+  // surrounding canvas-area so the user can begin a lasso path in
+  // the empty space around the image. Other tools stay canvas-only.
   canvasArea.addEventListener('mousedown', (e) => {
     if (state.tool !== 'lasso') return;
-    if (e.target === state.mainCanvas) return; // 已被处理
+    if (e.target === state.mainCanvas) return; // already handled
     beginDraw(e);
   });
   state.mainCanvas.addEventListener('mouseenter', (e) => {
     if (['brush', 'eraser', 'inpaint', 'lasso', 'clone'].includes(state.tool)) updateBrushCursor(e);
   });
   state.mainCanvas.addEventListener('mouseleave', () => {
-    // 仅在离开时隐藏画笔光标叠加层 — 不要结束
-    // 拖拽，这样用户可以将调整大小手柄拖到画布边缘之外。
+    // Only hide the brush-cursor overlay on leave — DO NOT end the
+    // drag, so the user can drag a resize handle past the canvas edge.
     if (state.cursorEl) state.cursorEl.style.display = 'none';
   });
 
-  // 触摸 — 单指绘制；双指平移 + 双指缩放。
+  // Touch — single finger draws; two fingers pan + pinch-zoom.
   let multiActive = false;
   let multiStartDist = 0;
   let multiStartZoom = 1;
@@ -82,7 +84,7 @@ export function wireCanvasEvents({ canvasArea, beginDraw, continueDraw, endDraw,
   state.mainCanvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     if (e.touches.length >= 2) {
-      // 在切换模式之前结束任何进行中的单指绘制。
+      // End any in-progress single-finger draw before switching modes.
       if (!multiActive) endDraw();
       multiActive = true;
       const info = touchInfo(e);
@@ -132,9 +134,11 @@ export function wireCanvasEvents({ canvasArea, beginDraw, continueDraw, endDraw,
     endDraw();
   });
 
-  // 在画布周围的空白区域按住并拖拽，通过 CSS transform
-  // 平移画布 + 叠加层。即使图像充满视口（无需滚动）也能工作。
-  // 跳过画布本身（画布拥有自己的绘制输入）或它上方的 UI 元素的按压。
+  // Press-and-drag in the empty space AROUND the canvas pans the
+  // canvas + overlay via CSS transform. Works even when the image
+  // fits the viewport (no scroll needed). Skips presses on the canvas
+  // itself (the canvas owns its own drawing input) or on UI elements
+  // above it.
   let panning = false;
   let pid = null;
   let startX = 0, startY = 0;
@@ -154,15 +158,16 @@ export function wireCanvasEvents({ canvasArea, beginDraw, continueDraw, endDraw,
     if (state.tool === 'lasso') return;
     if (e.target === state.mainCanvas || e.target === state.transformOverlay) return;
     if (e.target.closest('button, input, .ge-adj-popup, .ge-transform-popup, .ge-fx-popup, .ge-inpaint-popup, .ge-controls, .ge-right-panel, .ge-fx-menu')) return;
-    // 在活动变换期间，角/旋转手柄渲染在画布外部
-    // （在周围区域上方），而叠加层是 pointer-events:none — 
-    // 因此对外部手柄的抓取会落在此处。
-    // 将其路由到变换工具（getHandleAt 在图像空间中工作，
-    // 即使对于超出画布的点也可以），而不是平移画布。
+    // During an active transform the corner/rotation handles render
+    // OUTSIDE the canvas (over the surrounding area), and the overlay is
+    // pointer-events:none — so a grab on an outside handle lands here.
+    // Route it to the transform tool (getHandleAt works in image space,
+    // even for points beyond the canvas) instead of panning the canvas.
     if (state.transformActive) {
       beginDraw(e);
-      // 仅当抓取了手柄或触发了图层移动回退时才吞掉事件（跳过平移）；
-      // 否则让下面的平移逻辑运行，以便在变换工具打开时空闲区域仍然可以平移。
+      // Only swallow the event (skip pan) if a handle was grabbed OR the
+      // layer-move fallback engaged; otherwise let the pan logic below
+      // run so empty space still pans while the transform tool is open.
       if (state.transformHandle || state.moving) return;
     }
     const off = getOffset();
@@ -187,6 +192,6 @@ export function wireCanvasEvents({ canvasArea, beginDraw, continueDraw, endDraw,
   };
   canvasArea.addEventListener('pointerup', endPan);
   canvasArea.addEventListener('pointercancel', endPan);
-  // 每当缩放/适配改变画布大小时重置偏移。
+  // Reset offset whenever zoom/fit changes the canvas size.
   canvasArea._resetPan = () => applyOffset(0, 0);
 }

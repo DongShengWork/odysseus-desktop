@@ -1,7 +1,7 @@
 """
 rag_server.py
 
-MCP 服务器，暴露 RAG 文档管理功能（列表、添加目录、移除目录）。
+MCP server exposing RAG document management (list, add_directory, remove_directory).
 """
 
 import asyncio
@@ -23,7 +23,7 @@ _initialized = False
 
 
 def _ensure_init():
-    """首次使用时延迟初始化 RAG 管理器。"""
+    """Lazy-init RAG managers on first use."""
     global _rag_manager, _personal_docs_manager, _initialized
     if _initialized:
         return
@@ -105,8 +105,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         directory = _dir.strip() if isinstance(_dir, str) else ""
         if not directory:
             return [TextContent(type="text", text="Error: add_directory needs a directory path")]
-        # 存储绝对路径，以便索引的 `source` 元数据为绝对路径，
-        # 并且 remove_directory（使用 abspath 规范化）后续可以匹配它 (#1660)。
+        # Store an absolute path so indexed `source` metadata is absolute and
+        # remove_directory (which abspath-normalizes) can match it later (#1660).
         directory = os.path.abspath(os.path.expanduser(directory))
         if not os.path.isdir(directory):
             return [TextContent(type="text", text=f"Error: Directory not found: {directory}")]
@@ -115,10 +115,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         try:
             result = _rag_manager.index_personal_documents(directory)
             indexed = result.get("indexed_count", 0) if isinstance(result, dict) else 0
-            # 记录目录以便 `list` 和 `remove_directory` 可以看到它。
-            # 索引刚刚在上面完成，因此传入 index=False 以避免第二次
-            # （无所有者）扫描。否则目录已被索引但从未在 indexed_directories
-            # 中被跟踪，导致其不可见/不可移除。
+            # Record the directory so `list` and `remove_directory` can see it.
+            # Indexing was just done above, so pass index=False to avoid a second
+            # (ownerless) pass. Without this the directory was indexed but never
+            # tracked in indexed_directories, so it was invisible/unremovable.
             if _personal_docs_manager and hasattr(_personal_docs_manager, "add_directory"):
                 try:
                     _personal_docs_manager.add_directory(directory, index=False)
@@ -133,8 +133,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         directory = _dir.strip() if isinstance(_dir, str) else ""
         if not directory:
             return [TextContent(type="text", text="Error: remove_directory needs a directory path")]
-        # 展开 ~ 以匹配 add_directory（add_directory 索引的是展开后的路径）。
-        # 否则移除 "~/docs" 永远无法匹配存储的绝对路径。
+        # Expand ~ to match add_directory, which indexes the expanded path.
+        # Without this, removing "~/docs" never matches the stored absolute path.
         directory = os.path.expanduser(directory)
         if not _personal_docs_manager:
             return [TextContent(type="text", text="Error: Personal docs manager not available")]

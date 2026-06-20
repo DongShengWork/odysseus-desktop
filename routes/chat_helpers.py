@@ -1,4 +1,4 @@
-"""聊天路由的共享辅助函数 — 上下文构建、响应后任务、认证解析。"""
+"""Shared helpers for chat routes — context building, post-response tasks, auth resolution."""
 
 import asyncio
 import json
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PresetInfo:
-    """提取的预设参数。"""
+    """Extracted preset parameters."""
     temperature: Optional[float]
     max_tokens: Optional[int]
     system_prompt: Optional[str]
@@ -36,7 +36,7 @@ class PresetInfo:
 
 @dataclass
 class PreprocessedMessage:
-    """chat_handler.preprocess_message 的结果。"""
+    """Result of chat_handler.preprocess_message."""
     enhanced_message: str
     user_content: Any  # str or list (multimodal)
     text_for_context: str
@@ -46,7 +46,7 @@ class PreprocessedMessage:
 
 @dataclass
 class ChatContext:
-    """上下文构建完成后调用 LLM 所需的所有信息。"""
+    """Everything needed to call the LLM after context-building."""
     preface: list
     rag_sources: list
     web_sources: list
@@ -58,24 +58,24 @@ class ChatContext:
     uprefs: dict
     preset: PresetInfo
     preprocessed: PreprocessedMessage
-    # 在预处理过程中服务端自动创建的文档（例如
-    # 将附件的可填写 PDF 渲染为 Markdown 编辑器文档）。
-    # 聊天路由在开始流式传输前为每个文档发出 doc_update SSE 事件，
-    # 以便编辑器面板立即切换到新文档。
+    # Documents auto-created server-side during preprocess (e.g. when an
+    # attached fillable PDF gets rendered into a markdown editor doc).
+    # The chat route emits a doc_update SSE event for each before streaming
+    # begins, so the editor pane switches to the new doc immediately.
     auto_opened_docs: list = field(default_factory=list)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────── #
 
 def _enforce_chat_privileges(request, sess) -> None:
-    """应用每个用户的权限门控——/api/chat 和 /api/chat_stream 在
-    任何 LLM 工作之前必须强制执行 allowed_models 和 max_messages_per_day。
+    """Apply the per-user privilege gates (allowed_models + max_messages_per_day)
+    that both /api/chat and /api/chat_stream must enforce BEFORE any LLM work.
 
-    如果会话的模型不在用户的允许列表中，抛出 HTTPException(403)；
-    如果用户达到每日消息上限，抛出 HTTPException(429)。
-    对于未认证的调用者或 auth_manager 不存在时（单用户模式），
-    不做任何操作。管理员从 get_privileges 获得 ADMIN_PRIVILEGES，
-    即无限制的 allowed_models / 零上限 → 对他们无操作。
+    Raises HTTPException(403) if the session's model is not in the user's
+    allowlist, or HTTPException(429) if the user has hit their daily message
+    cap. No-op for unauthenticated callers or when auth_manager is absent
+    (single-user mode). Admins receive ADMIN_PRIVILEGES from get_privileges,
+    which means unrestricted allowed_models / zero cap -> no-op for them.
     """
     try:
         user = get_current_user(request)
@@ -89,9 +89,10 @@ def _enforce_chat_privileges(request, sess) -> None:
 
     privs = auth_manager.get_privileges(user) or {}
 
-    # 显式的"阻止一切"哨兵优先于白名单 —
-    # 这是区分用户点击"无"（阻止全部）和用户点击"全部"（无限制）
-    # 的唯一方式，否则两者都会产生空的 allowed_models 列表。
+    # Explicit "block everything" sentinel takes precedence over the
+    # allowlist — it's the only way to distinguish "user clicked [None]"
+    # (block all) from "user clicked [All]" (no restriction), since both
+    # otherwise produce an empty `allowed_models` list.
     if privs.get("block_all_models"):
         raise HTTPException(403, f"Your account is not allowed to use model '{sess.model}'.")
 
@@ -124,24 +125,24 @@ def _enforce_chat_privileges(request, sess) -> None:
 
 
 def needs_auto_name(name: str) -> bool:
-    """检查会话是否仍使用默认/占位名称。"""
+    """Check if a session still has its default/placeholder name."""
     if not name:
         return True
     if name.startswith("Chat:") or name == "Chat":
         return True
-    # 默认前端名称："modelname HH:MM:SS AM/PM"
+    # Default frontend name: "modelname HH:MM:SS AM/PM"
     if re.match(r"^.+ \d{1,2}:\d{2}:\d{2}(\s*(AM|PM))?$", name, re.IGNORECASE):
         return True
     return False
 
 
 async def auto_name_session(session_manager, sess):
-    """从会话的第一条用户消息生成简短标题。"""
+    """Generate a short title for a session from its first user message."""
     try:
         from src.llm_core import llm_call_async
         from src.task_endpoint import resolve_task_endpoint
 
-        # 查找第一条用户消息
+        # Find first user message
         first_msg = ""
         for msg in sess.history:
             if msg.role == "user":
@@ -158,18 +159,26 @@ async def auto_name_session(session_manager, sess):
             return
 
         owner = getattr(sess, "owner", None)
-        t_url, t_model, t_headers = resolve_task_endpoint(
-            sess.endpoint_url, sess.model, sess.headers, owner=owner,
-        )
+        t_url, t_model, t_headers = resolve_task_endpoint(owner=owner)
+        if not t_model:
+            # If no task/utility model is configured at all, fall back to
+            # the session's own model so auto-naming still works even on
+            # minimal setups.
+            from src.endpoint_resolver import resolve_endpoint
+            _fallback = resolve_endpoint("default", owner=owner)
+            if _fallback and _fallback[1]:
+                t_url, t_model, t_headers = _fallback
+            else:
+                t_url, t_model, t_headers = sess.endpoint_url, sess.model, sess.headers
         if not t_model:
             logger.debug("[auto-name] No model provided, skipping")
             return
 
-        # max_tokens 足够大，让推理模型（Minimax M2、
-        # DeepSeek R1、QwQ 等）有空间完成 <think>…</think>
-        # 再加上实际的标题 — 200 会导致它们在中途被截断，
-        # strip_think 留下空字符串而没有发生重命名。
-        # 超时匹配：60 秒给慢速本地推理模型留出完成空间。
+        # max_tokens big enough that reasoning models (Minimax M2,
+        # DeepSeek R1, QwQ, etc.) have headroom for <think>…</think>
+        # plus the actual title — 200 used to clip them mid-reasoning
+        # so strip_think left an empty string and no rename happened.
+        # Timeout matches: 60s gives slow local reasoners room to finish.
         title = await llm_call_async(
             t_url,
             t_model,
@@ -184,7 +193,8 @@ async def auto_name_session(session_manager, sess):
         )
 
         title = title.strip().strip('"\'').strip()
-        # 通过中心辅助函数去除 <think>/<thinking> 块（已闭合、悬空或孤立的标签）。
+        # Strip <think>/<thinking> blocks (closed, dangling, or stray tags)
+        # via the central helper.
         from src.text_helpers import strip_think
         title = strip_think(title, prose=False, prompt_echo=False)
         if title and len(title) < 80:
@@ -197,9 +207,9 @@ async def auto_name_session(session_manager, sess):
 
 
 def try_fallback_endpoint(sess, session_id: str) -> dict | None:
-    """当前端点失败时查找替代的工作端点。
+    """Find an alternative working endpoint when the current one fails.
 
-    返回 {"model": ..., "endpoint_url": ..., "endpoint_name": ...} 或 None。
+    Returns {"model": ..., "endpoint_url": ..., "endpoint_name": ...} or None.
     """
     import requests as _req
     from src.endpoint_resolver import (
@@ -227,7 +237,7 @@ def try_fallback_endpoint(sess, session_id: str) -> dict | None:
 
     for ep in endpoints:
         base = normalize_base(ep.base_url)
-        # 跳过当前端点
+        # Skip current endpoint
         if current_url and base in current_url:
             continue
         try:
@@ -252,7 +262,7 @@ def try_fallback_endpoint(sess, session_id: str) -> dict | None:
                 models = json.loads(ep.cached_models or "[]")
             if not models:
                 continue
-            # 找到一个可用的端点 — 更新会话
+            # Found a working endpoint — update session
             new_model = models[0]
             chat_url = build_chat_url(base)
             new_headers = build_headers(api_key, base)
@@ -262,7 +272,7 @@ def try_fallback_endpoint(sess, session_id: str) -> dict | None:
             sess.endpoint_url = chat_url
             sess.headers = new_headers
 
-            # 持久化
+            # Persist
             _db = SessionLocal()
             try:
                 _db.query(DBSession).filter(DBSession.id == session_id).update({
@@ -287,7 +297,7 @@ def try_fallback_endpoint(sess, session_id: str) -> dict | None:
 
 
 def extract_preset(chat_handler, preset_id) -> PresetInfo:
-    """通过 chat_handler 提取预设参数。"""
+    """Extract preset parameters via chat_handler."""
     temperature, max_tokens, system_prompt, char_name = (
         chat_handler.validate_and_extract_preset(preset_id)
     )
@@ -304,7 +314,7 @@ async def preprocess(
     auto_opened_docs: Optional[list] = None,
     allow_tool_preprocessing: bool = True,
 ) -> PreprocessedMessage:
-    """运行 chat_handler.preprocess_message 并封装结果。"""
+    """Run chat_handler.preprocess_message and wrap the result."""
     enhanced, user_content, text_ctx, yt_transcripts, att_meta = (
         await chat_handler.preprocess_message(
             message,
@@ -324,9 +334,9 @@ async def preprocess(
 
 
 def add_user_message(sess, chat_handler, preprocessed: PreprocessedMessage, incognito: bool = False):
-    """将用户消息添加到会话历史并更新会话名称。
-    在隐身模式下，仍然添加到内存历史（用于对话上下文）
-    但跳过会话名称更新（该操作会持久化）。"""
+    """Add user message to session history and update session name.
+    In incognito mode, still add to in-memory history (for conversation context)
+    but skip session name update (which would persist)."""
     user_meta = {"attachments": preprocessed.attachment_meta} if preprocessed.attachment_meta else None
     sess.add_message(ChatMessage("user", preprocessed.user_content, metadata=user_meta))
     if not incognito:
@@ -334,7 +344,7 @@ def add_user_message(sess, chat_handler, preprocessed: PreprocessedMessage, inco
 
 
 def fire_message_event(request, webhook_manager, session_id: str, sess, message: str, compare_mode: bool = False):
-    """针对新用户消息触发 webhook 和 event_bus 事件。"""
+    """Fire webhook and event_bus events for a new user message."""
     if webhook_manager and not compare_mode:
         asyncio.create_task(webhook_manager.fire("chat.message", {
             "session_id": session_id, "model": sess.model, "message": message[:2000],
@@ -362,14 +372,14 @@ def _session_url_matches_endpoint(session_url: str, endpoint_base: str) -> bool:
 
 
 def _has_auth_keys(headers) -> bool:
-    """如果 headers 字典包含 Authorization/x-api-key 条目则返回 True。"""
+    """True if a headers dict carries an Authorization/x-api-key entry."""
     return isinstance(headers, dict) and any(
         k.lower() in ('authorization', 'x-api-key') for k in headers
     )
 
 
 def resolve_session_auth(sess, session_id: str, owner: Optional[str] = None):
-    """确保会话有认证头 — 如果缺失则从端点数据库解析。"""
+    """Ensure session has auth headers — resolve from endpoint DB if missing."""
     try:
         from src.chatgpt_subscription import is_chatgpt_subscription_base
         is_chatgpt_subscription = is_chatgpt_subscription_base(getattr(sess, "endpoint_url", "") or "")
@@ -388,9 +398,9 @@ def resolve_session_auth(sess, session_id: str, owner: Optional[str] = None):
                 return
             q = db.query(ModelEndpoint).filter(ModelEndpoint.is_enabled == True)
             if owner:
-                # 缺失的 headers 通常意味着"从已保存的端点恢复"。
-                # 将该查询范围限定到会话所有者，否则两个
-                # 拥有相似端点 URL 的用户可能相互借用对方的 API key。
+                # Missing headers usually means "recover from the saved endpoint".
+                # Scope that lookup to the session owner, otherwise two users
+                # with similar endpoint URLs can borrow each other's API key.
                 from src.auth_helpers import owner_filter
                 q = owner_filter(q, ModelEndpoint, owner)
             for ep in q.all():
@@ -402,14 +412,14 @@ def resolve_session_auth(sess, session_id: str, owner: Optional[str] = None):
                     logger.warning("Failed to resolve provider auth for session %s: %s", session_id, e)
                     return
                 if not api_key:
-                    # 没有可用的 key（例如 ChatGPT Subscription 需要重新授权）。
+                    # No usable key (e.g. ChatGPT Subscription needs re-auth).
                     return
                 sess.headers = build_headers(api_key, base)
                 if is_chatgpt_subscription:
-                    # bearer 是短期的，每个请求重新解析，因此
-                    # 它保持在请求本地，永远不会写入明文
-                    # sessions.headers 列。主动清除旧代码路径
-                    # 可能已持久化的任何 bearer 以免残留。
+                    # The bearer is short-lived and re-resolved per request, so it
+                    # stays request-local and is never written to the plaintext
+                    # sessions.headers column. Proactively strip any bearer an
+                    # older code path may have persisted so it does not linger.
                     stale_q = db.query(DBSession).filter(DBSession.id == session_id)
                     if owner:
                         stale_q = stale_q.filter(DBSession.owner == owner)
@@ -448,7 +458,7 @@ def _match_cached_model_id(requested: str, models) -> Optional[str]:
 
 
 def _normalize_model_id_from_cache(sess) -> Optional[str]:
-    """优先使用存储的端点模型 ID，然后回退到实时的 /models 探测。"""
+    """Use stored endpoint model IDs before falling back to a live /models probe."""
     endpoint_url = getattr(sess, "endpoint_url", "") or ""
     requested = getattr(sess, "model", "") or ""
     if not endpoint_url or not requested:
@@ -495,6 +505,29 @@ def _normalize_model_id_from_cache(sess) -> Optional[str]:
     return None
 
 
+def _session_is_research_spinoff(sess) -> bool:
+    """True if this session was created via research "Discuss" spin-off.
+
+    Detected by the primer system message the spin-off endpoint seeds into
+    history (metadata ``research_spinoff_from``). Such sessions are grounded
+    on the seeded report, so global memory + personal-doc RAG injection is
+    suppressed for them (the report is the sole knowledge base). Handles both
+    ChatMessage objects and plain dicts.
+    """
+    for m in getattr(sess, "history", []) or []:
+        role = getattr(m, "role", None)
+        if role is None and isinstance(m, dict):
+            role = m.get("role")
+        if role != "system":
+            continue
+        md = getattr(m, "metadata", None)
+        if md is None and isinstance(m, dict):
+            md = m.get("metadata")
+        if (md or {}).get("research_spinoff_from"):
+            return True
+    return False
+
+
 async def build_chat_context(
     sess,
     request,
@@ -517,18 +550,18 @@ async def build_chat_context(
     agent_mode: bool = False,
     allow_tool_preprocessing: bool = True,
 ) -> ChatContext:
-    """构建 LLM 调用的完整上下文（前言 + 消息）。
+    """Build the full context (preface + messages) for an LLM call.
 
-    这是 /chat 和 /chat_stream 的共享逻辑 — 预设提取、
-    消息预处理、记忆/RAG/网络注入、压缩、归一化。
+    This is the shared logic between /chat and /chat_stream — preset extraction,
+    message preprocessing, memory/RAG/web injection, compaction, normalization.
     """
-    # 预设
+    # Preset
     preset = extract_preset(chat_handler, preset_id)
 
-    # 预处理消息（CoT、YouTube、VL 图片、构建内容）。
-    # auto_opened_docs 收集器捕获服务端创建的任何文档
-    #（例如可填写 PDF → Markdown 编辑器文档），以便聊天路由
-    # 在流式传输前向前端通知它们。
+    # Preprocess message (CoT, YouTube, VL images, build content). The
+    # auto_opened_docs collector captures any docs created server-side
+    # (e.g. fillable PDF → markdown editor doc) so the chat route can
+    # announce them to the frontend before streaming.
     auto_opened_docs: list = []
     preprocessed = await preprocess(
         chat_handler, message, att_ids or [], sess,
@@ -536,21 +569,21 @@ async def build_chat_context(
         allow_tool_preprocessing=allow_tool_preprocessing,
     )
 
-    # 将用户消息添加到历史记录
+    # Add user message to history
     add_user_message(sess, chat_handler, preprocessed, incognito=incognito)
 
-    # 触发事件
+    # Fire events
     if not incognito:
         fire_message_event(request, webhook_manager, session_id, sess, message, compare_mode)
 
-    # 解析用户偏好
+    # Resolve user prefs
     user = get_current_user(request)
     uprefs = load_prefs_for_user(user)
 
-    # 记忆已启用？
+    # Memory enabled?
     mem_enabled = not incognito and not no_memory and uprefs.get("memory_enabled", True)
-    # 技能注入遵循自己的启用开关（镜像 memory_enabled）。
-    # 关闭时，"可用技能"索引不添加到提示中。
+    # Skills injection respects its own enable toggle (mirrors memory_enabled).
+    # When off, the "Available skills" index is not added to the prompt.
     skills_enabled = not incognito and uprefs.get("skills_enabled", True)
     if not allow_tool_preprocessing:
         mem_enabled = False
@@ -560,17 +593,25 @@ async def build_chat_context(
         mem_enabled, user, incognito, no_memory, uprefs.get("memory_enabled", "NOT_SET"),
     )
 
-    # 使用 RAG？
+    # Research-spinoff ("Discuss") sessions are grounded on the seeded report:
+    # the primer system message IS the knowledge base. Injecting global memory
+    # or personal-doc RAG on every turn pulls in keyword-matched but off-topic
+    # facts ("wrong data") and competes with the report, so suppress both here.
+    is_research_spinoff = _session_is_research_spinoff(sess)
+    if is_research_spinoff:
+        mem_enabled = False
+
+    # Use RAG?
     use_rag_val = (str(use_rag).lower() != "false") if use_rag is not None else True
-    if incognito or not allow_tool_preprocessing:
+    if incognito or not allow_tool_preprocessing or is_research_spinoff:
         use_rag_val = False
 
-    # 如果提供了预获取的搜索上下文（比较模式），跳过实时网络搜索
+    # If pre-fetched search context was provided (compare mode), skip live web search
     skip_web = bool(search_context) or not allow_tool_preprocessing
 
-    # 构建上下文前言
-    # 流式路径使用 enhanced_message（已应用 CoT/预处理），
-    # 同步路径使用 text_for_context。
+    # Build context preface
+    # The stream path uses enhanced_message (with CoT/preprocessing applied),
+    # the sync path uses text_for_context.
     _ctx_msg = preprocessed.enhanced_message if use_enhanced_message else preprocessed.text_for_context
     _preface_kwargs = dict(
         message=_ctx_msg,
@@ -585,23 +626,23 @@ async def build_chat_context(
         incognito=incognito,
         use_skills=skills_enabled,
     )
-    if use_rag is not None:
+    if use_rag is not None or is_research_spinoff:
         _preface_kwargs["use_rag"] = use_rag_val
     preface, rag_sources, web_sources = chat_processor.build_context_preface(**_preface_kwargs)
 
-    # 立即捕获已使用的记忆
+    # Capture used memories immediately
     used_memories = getattr(chat_processor, '_last_used_memories', [])
 
-    # 注入预获取的搜索上下文（比较模式）
+    # Inject pre-fetched search context (compare mode)
     if search_context and allow_tool_preprocessing:
         preface.append(untrusted_context_message("prefetched search context", search_context))
 
-    # YouTube 转录
+    # YouTube transcripts
     for transcript in preprocessed.youtube_transcripts:
         preface.append(untrusted_context_message("youtube transcript", transcript))
 
-    # 规范化模型 ID。优先使用缓存的端点模型，以便群聊不会
-    # 在每次参与者轮次时重新访问缓慢的本地 /models 端点。
+    # Normalize model ID. Prefer cached endpoint models so group chat does not
+    # re-hit slow local /models endpoints on every participant turn.
     norm = _normalize_model_id_from_cache(sess) or normalize_model_id(
         sess.endpoint_url,
         sess.model,
@@ -610,10 +651,30 @@ async def build_chat_context(
     if norm:
         sess.model = norm
 
-    # 构建消息
+    # Build messages
     messages = preface + sess.get_context_messages()
 
-    # 自动压缩
+    # Current date/time — injected as a standalone *user*-role context message
+    # placed immediately before the latest user turn, NOT folded into the
+    # system prompt. Its text changes every minute, and local OpenAI-compatible
+    # backends (llama.cpp / LM Studio) key their KV-cache prefix off the
+    # system message byte-for-byte; mixing ever-changing timestamp text into
+    # it would invalidate the cached prefix on every request (issue #2927).
+    # Placing it at the tail also keeps it out of the stable
+    # preface+history prefix, so that prefix stays byte-identical turn over
+    # turn (modulo the genuinely new history entries) and the cache survives.
+    if not agent_mode:
+        try:
+            from src.user_time import current_datetime_context_message
+            _dt_msg = current_datetime_context_message()
+            if messages and messages[-1].get("role") == "user":
+                messages.insert(len(messages) - 1, _dt_msg)
+            else:
+                messages.append(_dt_msg)
+        except Exception:
+            logger.debug("Failed to add current date/time context", exc_info=True)
+
+    # Auto-compact
     messages, context_length, was_compacted = await maybe_compact(
         sess, sess.endpoint_url, sess.model, messages, sess.headers, owner=user,
     )
@@ -636,7 +697,7 @@ async def build_chat_context(
 
 
 def accumulate_token_usage(session_id: str, metrics: dict):
-    """将输入/输出 token 计数累加到会话的运行总计中。"""
+    """Add input/output token counts to the session's running totals."""
     in_t = metrics.get("input_tokens", 0)
     out_t = metrics.get("output_tokens", 0)
     if not (in_t or out_t):
@@ -655,12 +716,12 @@ def accumulate_token_usage(session_id: str, metrics: dict):
 
 
 def _normalize_thinking(text: str) -> str:
-    """将内联思考模式包裹在 <think> 标签中，使其在重新加载时持久化。
+    """Wrap inline thinking patterns in <think> tags so they persist on reload.
 
-    处理：
-    - "Thinking Process:"（Qwen3.5）
-    - Gemma 风格的内联推理（"The user said/asked..."、"I should/need to..."）
-    - 损坏的 <think> 标签（标签前的推理、未闭合的标签）
+    Handles:
+    - "Thinking Process:" (Qwen3.5)
+    - Gemma-style inline reasoning ("The user said/asked...", "I should/need to...")
+    - Garbled <think> tags (reasoning before the tag, unclosed tags)
     """
     import re
     if not text:
@@ -673,7 +734,7 @@ def _normalize_thinking(text: str) -> str:
     )
     thinking_prefix_re = re.compile(r'^thinking(?:\s+process)?\s*:\s*', re.IGNORECASE)
 
-    # 处理乱码的 <think> 标签：推理文本后跟 <think> 作为分隔符
+    # Handle garbled <think> tags: reasoning text followed by <think> as separator
     # e.g. "The user said...I should respond.\n<think>Hey! What's up?"
     garbled = re.match(
         r'^([\s\S]+?)\n*<think(?:ing)?>\s*([\s\S]*?)(?:</think(?:ing)?>)?\s*$',
@@ -682,7 +743,7 @@ def _normalize_thinking(text: str) -> str:
     if garbled:
         before = garbled.group(1).strip()
         after = garbled.group(2).strip()
-        # 仅当 <think> 之前的部分看起来像推理时才视为乱码
+        # Only treat as garbled if the part before <think> looks like reasoning
         reasoning_starts = (
             'The user ', 'I need ', 'I should ', 'I will ',
             'They are ', 'The question ', 'I can ',
@@ -690,16 +751,16 @@ def _normalize_thinking(text: str) -> str:
         )
         stripped_before = before.lstrip()
         if any(stripped_before.startswith(p) for p in reasoning_starts) or reasoning_prefix_re.match(stripped_before):
-            # 从 thinking 内容中移除 "Thinking:" 前缀
+            # Strip "Thinking:" prefix from the thinking content
             stripped_before = thinking_prefix_re.sub('', stripped_before)
             return '<think>' + stripped_before + '</think>\n' + after
 
     if '<think' in text.lower():
         return text  # already has proper think tags
 
-    # Qwen3.5："Thinking Process:" 或 "Thinking:" 前缀
+    # Qwen3.5: "Thinking Process:" or "Thinking:" prefix
     if thinking_prefix_re.match(text.lstrip()):
-        # 首先尝试干净的边界
+        # Try clean boundary first
         m = re.match(
             r'^(Thinking(?:\s+Process)?:[\s\S]*?)(\n\n(?=[A-Z]|Hey|Yo|Hi|Sure|I |What|Here|Let|The |This |OK|Ok|Yes|No |So |Well |Thank|Alright|Of course|Absolutely|Great|Hello|As ))',
             text, re.IGNORECASE | re.MULTILINE
@@ -707,7 +768,7 @@ def _normalize_thinking(text: str) -> str:
         if m:
             think = thinking_prefix_re.sub('', m.group(1)).strip()
             return '<think>' + think + '</think>' + text[m.end()-2:]
-        # 回退：查找最后一段非缩进段落作为回复
+        # Fallback: find last non-indented paragraph as reply
         parts = text.split('\n\n')
         for i in range(len(parts) - 1, 0, -1):
             line = parts[i].strip()
@@ -715,18 +776,18 @@ def _normalize_thinking(text: str) -> str:
                 think = thinking_prefix_re.sub('', '\n\n'.join(parts[:i])).strip()
                 reply = '\n\n'.join(parts[i:])
                 return '<think>' + think + '</think>\n\n' + reply
-        # 最后手段：在 thinking 中查找引用的最终响应
-        # Qwen 通常将回复起草为 "Option: ..." 或 * "回复文本"
+        # Last resort: look for a quoted final response inside the thinking
+        # Qwen often drafts the reply as "Option: ..." or * "reply text"
         last_quote = re.findall(r'["\u201c]([^"\u201d]{10,})["\u201d]', text)
         if last_quote:
             reply = last_quote[-1].strip()
             think = thinking_prefix_re.sub('', text).strip()
             return '<think>' + think + '</think>\n\n' + reply
-        # 确实没有找到回复
+        # Truly no reply found
         think = thinking_prefix_re.sub('', text).strip()
         return '<think>' + think + '</think>'
 
-    # Gemma 风格：以推理开头（"The user"、"I need"、"I should" 等）
+    # Gemma-style: starts with reasoning ("The user", "I need", "I should", etc.)
     stripped_text = text.lstrip()
     first_line = stripped_text.split('\n')[0].strip()
     reasoning_starts = (
@@ -739,7 +800,7 @@ def _normalize_thinking(text: str) -> str:
         'Thanks', 'Welcome', 'Good ', "I'm happy", "I'd be",
     )
     if any(first_line.startswith(p) for p in reasoning_starts):
-        # 先尝试逐行分割
+        # Try line-by-line split first
         lines = stripped_text.split('\n')
         for i, line in enumerate(lines):
             stripped = line.strip()
@@ -750,10 +811,10 @@ def _normalize_thinking(text: str) -> str:
                 reply = '\n'.join(lines[i:])
                 return '<think>' + think + '</think>\n' + reply
 
-        # 尝试行内分割 — 模型将 thinking + reply 混合在一行中
-        # 在句号或句子结尾后查找回复模式
+        # Try within-line split — model mashed thinking + reply on one line
+        # Look for reply pattern after a period or sentence end
         for p in reply_starts:
-            # 匹配："...推理文本。回复文本" 或 "...推理文本。回复文本"
+            # Match: "...reasoning text.Reply text" or "...reasoning text. Reply text"
             pattern = r'([.!?])\s*(' + re.escape(p) + r')'
             m = re.search(pattern, stripped_text)
             if m and m.start() > 20:  # at least 20 chars of reasoning before
@@ -761,7 +822,7 @@ def _normalize_thinking(text: str) -> str:
                 reply = stripped_text[m.start() + 1:].lstrip()
                 return '<think>' + think + '</think>\n' + reply
 
-        # 最后手段：查找最后一行非推理行
+        # Last resort: find last non-reasoning line
         for i in range(len(lines) - 1, 0, -1):
             stripped = lines[i].strip()
             if stripped and not any(stripped.startswith(p) for p in reasoning_starts) and not stripped.startswith('*') and len(stripped) > 3:
@@ -773,7 +834,7 @@ def _normalize_thinking(text: str) -> str:
 
 
 def _extract_thinking_meta(text: str) -> dict | None:
-    """将思考内容提取到元数据中，返回 {thinking, reply, time} 或 None。"""
+    """Extract thinking content into metadata, return {thinking, reply, time} or None."""
     import re
     if not text:
         return None
@@ -782,26 +843,26 @@ def _extract_thinking_meta(text: str) -> dict | None:
     text = normalize_thinking_markup(text)
     normalized_changed = text != original_text
 
-    # 检查 <think> 标签（原生或注入的）
+    # Check for <think> tags (native or injected)
     time_match = re.search(r'<think(?:ing)?\s+time="([\d.]+)"', text)
     think_time = time_match.group(1) if time_match else None
-    # 移除 time 属性以进行解析
+    # Strip time attr for parsing
     clean = re.sub(r'<think(?:ing)?\s+time="[\d.]+"', '<think', text)
 
     think_match = re.match(r'^[\s]*<think(?:ing)?>([\s\S]*?)</think(?:ing)?>\s*([\s\S]*)', clean, re.IGNORECASE)
     if think_match:
         thinking = think_match.group(1).strip()
         reply = think_match.group(2).strip()
-        # 只有当还有实际回复剩下来时才将思考内容提取到元数据中。
-        # 如果回复为空（模型在 <think> 内部达到 max_tokens，或者
-        # 该轮次仅是推理），将原始文本作为内容保留 — 否则
-        # 保存的消息内容为空，气泡在重新加载时看起来是空白的。
-        # 渲染器的 processWithThinking 仍会在显示时提取
-        # <think> 块，所以正常情况没有变化。
+        # Only strip the thinking out into metadata when there's an actual reply
+        # left over. If reply is empty (model hit max_tokens inside <think>, or
+        # the turn was reasoning-only), keep the raw text as content — otherwise
+        # the saved message has empty content and the bubble looks blank on
+        # reload. The renderer's processWithThinking still extracts the <think>
+        # block visually at display time, so nothing changes for the normal case.
         if thinking and reply:
             return {"thinking": thinking, "reply": reply, "time": think_time}
 
-    # 检测 Thinking Process：或 Gemma 风格推理
+    # Detect Thinking Process: or Gemma-style reasoning
     normalized = _normalize_thinking(text)
     if '<think>' in normalized:
         think_match2 = re.match(r'^[\s]*<think(?:ing)?>([\s\S]*?)</think(?:ing)?>\s*([\s\S]*)', normalized, re.IGNORECASE)
@@ -818,7 +879,7 @@ def _extract_thinking_meta(text: str) -> dict | None:
 
 
 def clean_thinking_for_save(content: str, metadata: dict | None = None) -> tuple[str, dict]:
-    """从内容中提取思考到元数据。用于绕过 save_assistant_response 的保存路径。"""
+    """Extract thinking from content into metadata. Use for save paths that bypass save_assistant_response."""
     md = dict(metadata) if metadata else {}
     info = _extract_thinking_meta(content)
     if info:
@@ -846,7 +907,7 @@ def save_assistant_response(
     tool_events: list = None,
     incognito: bool = False,
 ):
-    """添加助手回复到会话历史。在隐身模式下，保留内存上下文但跳过数据库持久化。"""
+    """Add assistant response to session history. In incognito mode, keeps in-memory context but skips DB persistence."""
     md = dict(last_metrics) if last_metrics else {}
     def _model_value(value) -> str:
         if value is None:
@@ -876,7 +937,7 @@ def save_assistant_response(
     if tool_events:
         md["tool_events"] = tool_events
 
-    # 将思考内容提取到元数据中（不要用 <think> 标签污染消息内容）
+    # Extract thinking into metadata (don't pollute message content with <think> tags)
     _think_info = _extract_thinking_meta(full_response)
     if _think_info:
         if _think_info.get("thinking"):
@@ -893,10 +954,10 @@ def save_assistant_response(
         update_session_last_accessed(session_id)
         session_manager.save_sessions()
 
-    # 返回已持久化消息的数据库 id，以便流式传输可以将其连接到
-    # 刚渲染的气泡 — 让用户无需重新加载即可编辑/删除刚流式传输的回复。
-    # 隐身模式返回 None：这些消息是临时的，
-    # 所以不为它们提供编辑/删除的句柄。
+    # Return the persisted message's DB id so the stream can wire it onto the
+    # freshly-rendered bubble — lets the user edit/delete a just-streamed reply
+    # without reloading. Incognito returns None: those messages are ephemeral,
+    # so we don't hand out an edit/delete handle for them.
     if incognito:
         return None
     try:
@@ -907,6 +968,54 @@ def save_assistant_response(
     except (IndexError, AttributeError):
         pass
     return None
+
+
+def _is_session_stream_active(session_id: str) -> bool:
+    """Best-effort check for "is a chat completion currently streaming for
+    this session?" — used to keep background extraction from overlapping a
+    main completion and competing for the local backend's processing slots
+    (issue #2927). Lazily imports the route module's live registry to avoid
+    a circular import (chat_routes imports this module at load time)."""
+    try:
+        from routes import chat_routes as _cr
+        return session_id in getattr(_cr, "_active_streams", {})
+    except Exception:
+        return False
+
+
+async def _run_extraction_jobs_sequentially(session_id: str, jobs: list, max_wait_s: float = 120.0):
+    """Run queued background-extraction coroutines one at a time, only once
+    no chat completion is actively streaming for this session.
+
+    As diagnosed in issue #2927, firing memory/skill extraction concurrently
+    with the main chat completion (or with each other) makes them compete for
+    the local backend's limited processing slots, evicting the main
+    conversation's cached KV-cache checkpoint and forcing a full prompt
+    re-evaluation on the next turn. Waiting for the stream to go idle and then
+    running the jobs strictly in sequence keeps at most one "side" request in
+    flight against the backend at any time, and never alongside the user's
+    own conversation.
+    """
+    # Wait for the triggering turn's own stream to finish winding down (it
+    # almost always already has by the time this task gets scheduled — this
+    # is a small safety margin, not the primary mechanism).
+    waited = 0.0
+    poll = 0.25
+    while _is_session_stream_active(session_id) and waited < max_wait_s:
+        await asyncio.sleep(poll)
+        waited += poll
+
+    for name, job in jobs:
+        # Re-check before each job: a fast follow-up message from the user
+        # may have started a new stream for this session while we waited.
+        waited = 0.0
+        while _is_session_stream_active(session_id) and waited < max_wait_s:
+            await asyncio.sleep(poll)
+            waited += poll
+        try:
+            await job
+        except Exception:
+            logger.warning("[bg-extract] %s extraction job failed for session %s", name, session_id, exc_info=True)
 
 
 def run_post_response_tasks(
@@ -931,8 +1040,23 @@ def run_post_response_tasks(
     extract_skills: bool = True,
     allow_background_extraction: bool = True,
 ):
-    """在响应完成后触发后台任务：记忆提取、webhook、自动命名、技能提取。"""
-    # 记忆提取 — 仅每第 4 对消息执行以避免过多 LLM 调用
+    """Fire background tasks after a completed response: memory extraction, webhooks, auto-name, skill extraction.
+
+    Memory/skill extraction are queued to run *sequentially*, after the main
+    completion stream for this session has fully wound down — never
+    concurrently with it or with each other. As diagnosed in issue #2927,
+    firing these "side" LLM calls in parallel with the main chat completion
+    makes them compete for the local backend's limited processing slots
+    (llama.cpp defaults to 4), evicting the main conversation's cached
+    checkpoint and forcing a full prompt re-evaluation on the next turn. By
+    the time this function runs the main response is already saved, but the
+    extraction calls themselves are still async — queuing them through
+    ``_queue_background_extraction`` keeps them from overlapping the *next*
+    turn's request too.
+    """
+    _extraction_jobs: list = []
+
+    # Memory extraction — only every 4th message pair to avoid excess LLM calls
     _msg_count = len(sess.history) if hasattr(sess, 'history') else 0
     _should_extract = (_msg_count >= 4) and (_msg_count % 4 == 0)
     if allow_background_extraction and not incognito and not compare_mode and _should_extract and uprefs.get("auto_memory", True):
@@ -941,16 +1065,16 @@ def run_post_response_tasks(
         t_url, t_model, t_headers = resolve_task_endpoint(
             sess.endpoint_url, sess.model, sess.headers, owner=owner,
         )
-        asyncio.create_task(extract_and_store(
+        _extraction_jobs.append(("memory", extract_and_store(
             sess, memory_manager, memory_vector,
             t_url, t_model, t_headers,
-        ))
+        )))
 
-    # 从复杂 agent 运行中提取技能。仅在用户实际使用了 agent 工具时。
+    # Skill extraction from complex agent runs. Only when the user actually
     # chose agent mode — not a chat we auto-escalated for a notes/calendar
     # intent, and never in incognito/compare.
     auto_skills_enabled = bool(uprefs.get("auto_skills", True))
-    # 默认保持安静 — 完整的 gate/dispatch/start 跟踪在 DEBUG 级别运行，
+    # Quiet by default — full gate/dispatch/start trace runs at DEBUG so
     # users can re-enable diagnostics with LOG_LEVEL=DEBUG when something
     # silently breaks. INFO-level only shows the outcome inside
     # maybe_extract_skill (Auto-extracted / dropped / failed).
@@ -980,14 +1104,17 @@ def run_post_response_tasks(
                 sess.endpoint_url, sess.model, sess.headers, owner=owner,
             )
             logger.debug("[skill-extract] dispatching extractor (model=%s)", s_model)
-            asyncio.create_task(maybe_extract_skill(
+            _extraction_jobs.append(("skill", maybe_extract_skill(
                 sess, skills_manager,
                 s_url, s_model, s_headers,
                 agent_rounds, agent_tool_calls,
                 owner=owner,
-            ))
+            )))
 
-    # Token 累积
+    if _extraction_jobs:
+        asyncio.create_task(_run_extraction_jobs_sequentially(session_id, _extraction_jobs))
+
+    # Token accumulation
     if last_metrics:
         accumulate_token_usage(session_id, last_metrics)
 
@@ -998,6 +1125,6 @@ def run_post_response_tasks(
             "user_message": message, "response": full_response[:2000],
         }))
 
-    # 自动命名
+    # Auto-name
     if needs_auto_name(sess.name):
         asyncio.create_task(auto_name_session(session_manager, sess))

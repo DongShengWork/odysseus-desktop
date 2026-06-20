@@ -1,29 +1,27 @@
 /**
- * tileManager.js — 桌面端工具模态框的窗口平铺管理。
+ * tileManager.js — desktop window tiling for tool modals.
  *
- * 钩子到任何 .modal-header 被拖拽的模态框上（每个工具绑定自己的
- * 拖拽；我们只观察指针移动）。当光标靠近吸附区域时显示半透明
- * 幽灵预览。释放时，将 modal-content 吸附到该区域，带弹性动画。
+ * Hooks into any modal whose `.modal-header` is dragged (each tool wires its
+ * own drag; we just watch pointer moves). Shows a translucent ghost preview
+ * when the cursor is near a snap zone. On release, snaps the modal-content
+ * to fill that zone with a springy animation.
  *
- * 吸附区域（9 个）：
- *   - 顶部边缘（10% 条带）        → 最大化
- *   - 左上角                      → 左上四分之一
- *   - 右上角                      → 右上四分之一
- *   - 左侧边缘                    → 左半屏
- *   - 右侧边缘                    → 右半屏
- *   - 左下角                      → 左下四分之一
- *   - 右下角                      → 右下四分之一
- *   - 底部边缘                    → 下半屏
- *   - 侧边栏边缘（如果存在）      → 吸附到侧边栏旁边
+ * Snap zones:
+ *   - over top edge               → fullscreen
+ *   - top strip                   → maximize
+ *   - top edge                    → top half
+ *   - left edge                   → left half
+ *   - right edge                  → right half
+ *   - bottom edge                 → bottom half
  *
- * 移动端（≤768px）排除 — 滑动关闭 UX 优先。
+ * Mobile (≤768px) is excluded — the swipe-dismiss UX takes precedence.
  *
- * 每个 modal-content 记住其吸附前的几何信息，以便拖离时恢复原始尺寸。
+ * Each modal-content remembers its pre-snap geometry so dragging away restores
+ * the original size.
  */
 
-const EDGE_THRESHOLD_PX = 24;     // 多近算"靠近"边缘
-const CORNER_THRESHOLD_PX = 64;   // 角落框大小
-const TOP_FULL_STRIP_PX = 8;      // 顶部条带 → 最大化
+const EDGE_THRESHOLD_PX = 24;     // how close to an edge counts as "near"
+const TOP_FULL_STRIP_PX = 8;      // top strip → maximize
 
 let _ghost = null;
 let _activeZone = null;
@@ -77,7 +75,7 @@ function _showGhost(rect) {
 }
 
 function _viewportSafeRect() {
-  // 考虑视口左侧的图标栏 / 侧边栏。
+  // Account for the icon rail / sidebar on the left side of the viewport.
   const sidebar = document.getElementById('sidebar');
   const rail = document.querySelector('.icon-rail') || document.querySelector('#icon-rail');
   let leftEdge = 0;
@@ -98,20 +96,24 @@ function _zoneForPointer(x, y) {
   const W = safe.right - safe.left;
   const H = safe.bottom - safe.top;
 
-  // 拖到顶部边缘上方（光标在最顶部或超过顶部）→ 真正的全屏，
-  // 覆盖所有内容，包括侧边栏。
+  // Dragged OVER the top edge (cursor at/past the very top) → TRUE fullscreen
+  // that covers everything, including the sidebar.
   if (y <= 0) {
     return { name: 'fullscreen', rect: { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight } };
   }
-  // 靠近顶部边缘（但未超过）→ "最大化"：填满安全区域，
-  // 即位于侧边栏/图标栏旁边而非覆盖它们。
+  // Near the top edge (but not over it) → "maximize": fill the safe area,
+  // which sits NEXT TO the sidebar/rail rather than covering it.
   if (y <= safe.top + TOP_FULL_STRIP_PX) {
     return { name: 'maximize', rect: { left: safe.left, top: safe.top, width: W, height: H } };
   }
 
-  // 四角吸附已禁用（用户要求）— 仅保留顶部条带
-  // （最大化）和右侧/底部半屏吸附。左侧半屏吸附
-  // 也已禁用（侧边栏在那里；停靠在上面体验不好）。
+  // Symmetric edge half-snaps. The safe rect already starts to the right of
+  // the sidebar/rail, so left-half fills the left side of the workspace
+  // without covering navigation.
+  if (y <= safe.top + EDGE_THRESHOLD_PX)
+    return { name: 'top-half', rect: { left: safe.left, top: safe.top, width: W, height: H / 2 } };
+  if (x <= safe.left + EDGE_THRESHOLD_PX)
+    return { name: 'left-half', rect: { left: safe.left, top: safe.top, width: W / 2, height: H } };
   if (x >= safe.right - EDGE_THRESHOLD_PX)
     return { name: 'right-half', rect: { left: safe.left + W / 2, top: safe.top, width: W / 2, height: H } };
   if (y >= safe.bottom - EDGE_THRESHOLD_PX)
@@ -124,13 +126,12 @@ function _zoneForContent(content, x, y) {
   const modal = content && content.closest && content.closest('.modal, .research-overlay');
   const zone = _zoneForPointer(x, y);
   if (!zone) return null;
-  // 设置面板有密集的双列布局；全高侧边栏式停靠会
-  // 压缩它。只允许平铺到普通的右半部分，当窗口变窄时
-  // 导航可通过 CSS 翻转为顶部标签页。
+  // Settings has a dense two-column layout; the full-height sidebar-style dock
+  // crushes it. Let it tile only into the normal right half, where the nav can
+  // flip to top tabs via CSS when the window gets narrow.
   if (modal && modal.id === 'settings-modal' && zone.name !== 'right-half') return null;
   if (modal && (modal.id === 'cookbook-modal'
-      || modal.id === 'theme-modal'
-      || modal.id === 'memory-modal')
+      || modal.id === 'theme-modal')
       && zone.name !== 'fullscreen') return null;
   return zone;
 }
@@ -168,22 +169,23 @@ function _clearEdgeDockResidue(modal, content) {
 }
 
 function _applySnap(content, rect, zoneName) {
-  // 平铺吸附覆盖同一模态框上的任何边缘停靠。两个
-  // 系统（windowDrag→modalSnap 边缘停靠，和这个平铺管理器）都在
-  // 左/右边缘拖拽释放时触发。如果留下 modalSnap 的
-  // `left-dock-active` body class + `--left-dock-w` 内边距，它会在左侧
-  // 预留条带，而此管理器的 safe-rect 已经考虑了侧边栏的
-  // （现在被内边距偏移的）位置 — 两者会重复计算并将窗口挤到
-  // 右侧一大片空白区域后面，每次切换侧边栏都会更糟。清除
-  // 孤立的边缘停靠状态，只让平铺吸附来定位窗口。
+  // A tile-snap supersedes any edge-dock on this same modal. The two
+  // systems (windowDrag→modalSnap edge-dock, and this tile manager) both
+  // fire on a left/right-edge drag-release. If we leave modalSnap's
+  // `left-dock-active` body class + `--left-dock-w` padding in place, it
+  // reserves a strip on the left AND this manager's safe-rect already
+  // accounts for the sidebar's (now padding-shifted) position — the two
+  // double-count and jam the window to the right behind a massive empty
+  // zone, which gets worse each time the sidebar is toggled. Clear the
+  // orphaned edge-dock state so only the tile-snap positions the window.
   const _modal = content.closest && content.closest('.modal, .research-overlay');
   const _fromRect = content.getBoundingClientRect();
   _clearEdgeDockResidue(_modal, content);
 
-  // 保存一次吸附前几何信息；如果重新吸附，保留原始信息。捕获一个
-  // 具体的固定位置（当内联值为空时从渲染的矩形获取）
-  // 和位置本身 — 否则取消吸附恢复空的 left/top
-  // + 无定位，而 .modal flex 父元素会重新居中窗口。
+  // Stash pre-snap geometry once; if we re-snap, keep the original. Capture a
+  // CONCRETE fixed position (from the rendered rect when the inline value is
+  // empty) and the position itself — otherwise un-snap restored empty left/top
+  // + no position, and the .modal flex parent re-centered the window.
   if (!content.dataset._tilePreSnap) {
     content.dataset._tilePreSnap = JSON.stringify({
       position: 'fixed',
@@ -196,9 +198,9 @@ function _applySnap(content, rect, zoneName) {
     });
   }
   content.style.transition = 'left 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)';
-  // 使用 !important — 某些模态框（如 cookbook）带有内联宽/高
-  // 和会重新居中 .modal-content 的 CSS，这会让吸附在释放时
-  // "跳回中间"。
+  // Use !important — some modals (e.g. cookbook) carry inline width/height
+  // and CSS that otherwise re-center the .modal-content, which made the snap
+  // "jump back to the middle" on release.
   content.style.setProperty('position', 'fixed', 'important');
   content.style.setProperty('left',   rect.left   + 'px', 'important');
   content.style.setProperty('top',    rect.top    + 'px', 'important');
@@ -214,15 +216,15 @@ function _applySnap(content, rect, zoneName) {
 function _unsnap(content) {
   const pre = content.dataset._tilePreSnap;
   if (!pre) return;
-  // 先清除 !important 吸附属性 — Object.assign 无法覆盖它们。
+  // Clear the !important snap props first — Object.assign can't override them.
   ['position', 'left', 'top', 'width', 'height', 'max-height', 'margin', 'transform']
     .forEach(p => content.style.removeProperty(p));
   try {
     const r = JSON.parse(pre);
     Object.assign(content.style, r);
   } catch {}
-  // 保持固定浮动窗口使恢复的 left/top 真正生效 —
-  // 没有 position:fixed 的话 .modal flex 父元素会重新居中它。
+  // Keep it a fixed floating window so the restored left/top actually take
+  // effect — without position:fixed the .modal flex parent re-centers it.
   if (!content.style.position) content.style.position = 'fixed';
   delete content.dataset._tilePreSnap;
   delete content.dataset._tileZone;
@@ -231,7 +233,7 @@ function _unsnap(content) {
 function _findDragTarget(e) {
   const header = e.target.closest('.modal-header');
   if (!header) return null;
-  // 跳过标题栏按钮上的点击（关闭、最小化等）
+  // Skip clicks on header buttons (close, minimize, etc.)
   if (e.target.closest('button')) return null;
   const modal = header.closest('.modal, .research-overlay');
   if (!modal) return null;
@@ -244,9 +246,10 @@ document.addEventListener('pointerdown', (e) => {
   const content = _findDragTarget(e);
   if (!content) return;
 
-  // 如果已经吸附，拖离应立即可取消吸附，让用户自由移动。
+  // If we're already snapped, dragging away should unsnap immediately so the
+  // user can move freely.
   if (content.dataset._tileZone) {
-    // 稍微延迟使 pointermove 阈值在取消吸附前满足
+    // Defer slightly so pointermove threshold is met before unsnap kicks in
     _tracking = { content, startX: e.clientX, startY: e.clientY, willUnsnap: true };
   } else {
     _tracking = { content, startX: e.clientX, startY: e.clientY, willUnsnap: false };
@@ -260,13 +263,13 @@ document.addEventListener('pointermove', (e) => {
   const dy = e.clientY - _tracking.startY;
   if (Math.hypot(dx, dy) < 6) return;
 
-  // 首次显著移动时取消吸附
+  // Unsnap on first significant move
   if (_tracking.willUnsnap) {
     _unsnap(_tracking.content);
     _tracking.willUnsnap = false;
   }
 
-  // 检测光标下的吸附区域
+  // Detect snap zone under cursor
   const zone = _zoneForContent(_tracking.content, e.clientX, e.clientY);
   if (zone) {
     _showGhost(zone.rect);
@@ -288,7 +291,8 @@ document.addEventListener('pointerup', () => {
   _activeZone = null;
 });
 
-// 在安全区域变化（视口调整大小、侧边栏切换等）后，重新夹紧每个当前吸附的窗口。
+// Re-clamp every currently-snapped window so it keeps filling its zone after
+// the safe-rect changes (viewport resize, sidebar toggle, etc.).
 function _reclampAll(animate = false) {
   document.querySelectorAll('.modal-content[data-_tile-zone], .research-pane[data-_tile-zone]').forEach(c => {
     const name = c.dataset._tileZone;
@@ -299,6 +303,7 @@ function _reclampAll(animate = false) {
     switch (name) {
       case 'fullscreen':     r = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }; break;
       case 'maximize':       r = { left: safe.left, top: safe.top, width: W, height: H }; break;
+      case 'top-half':       r = { left: safe.left, top: safe.top, width: W, height: H/2 }; break;
       case 'left-half':      r = { left: safe.left, top: safe.top, width: W/2, height: H }; break;
       case 'right-half':     r = { left: safe.left + W/2, top: safe.top, width: W/2, height: H }; break;
       case 'bottom-half':    r = { left: safe.left, top: safe.top + H/2, width: W, height: H/2 }; break;
@@ -331,12 +336,12 @@ function _reclampAllThrottled(animate) {
 
 window.addEventListener('resize', () => _reclampAllThrottled(false));
 
-// 观察侧边栏的 class 属性，使切换 hidden/right-side 时重新平铺
-// 任何锚定到旧 safe-rect 的已吸附模态框。
+// Watch the sidebar's class attribute so toggling hidden/right-side re-tiles
+// any snapped modal that was anchored to the old safe-rect.
 function _watchSidebar() {
   const sidebar = document.getElementById('sidebar');
   if (!sidebar) {
-    // 侧边栏可能在早期初始化时还不在 DOM 中。
+    // Sidebar may not be in the DOM yet during early init.
     requestAnimationFrame(_watchSidebar);
     return;
   }
@@ -349,10 +354,10 @@ if (document.readyState === 'loading') {
   _watchSidebar();
 }
 
-// ── 公共 API，供其他拖拽源（例如将最小化停靠标签拖到
-// 屏幕边缘）复用相同的吸附区域 + 幽灵预览 + 应用。 ──
+// ── Public API for other drag sources (e.g. dragging a minimized dock chip
+// to a screen edge) to reuse the same snap zones + ghost preview + apply. ──
 
-// 对某个点显示吸附区域幽灵并返回区域（或 null）。
+// Show the snap-zone ghost for a point and return the zone (or null).
 export function previewZoneAt(x, y, target = null) {
   if (!_isDesktop()) { _hideGhost(); _activeZone = null; return null; }
   const content = target && target.querySelector
@@ -369,7 +374,15 @@ export function clearPreview() {
   _activeZone = null;
 }
 
-// 将模态框（其 .modal-content）吸附到之前检测到的区域。
+export function _zoneForPointerForTests(x, y) {
+  return _zoneForPointer(x, y);
+}
+
+export function _zoneForContentForTests(content, x, y) {
+  return _zoneForContent(content, x, y);
+}
+
+// Snap a modal (its .modal-content) into a previously-detected zone.
 export function snapModalToZone(modal, zone) {
   if (!modal || !zone) return;
   const content = modal.querySelector ? (modal.querySelector('.modal-content, .research-pane') || modal) : modal;

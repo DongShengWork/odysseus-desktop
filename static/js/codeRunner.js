@@ -3,7 +3,7 @@
 import * as uiModule from './ui.js';
 
 /**
- * 浏览器内置代码运行器 — 支持 Python（Pyodide）、JavaScript 和 HTML
+ * In-browser code runner for Python (Pyodide), JavaScript, and HTML
  */
 
 let pyodideInstance = null;
@@ -11,7 +11,7 @@ let pyodideLoading = false;
 const pyodideQueue = [];
 
 /**
- * 获取或创建 <pre> 元素下方的输出面板
+ * Get or create an output panel below the <pre> element
  */
 function getOrCreatePanel(pre) {
   let panel = pre.nextElementSibling;
@@ -27,14 +27,14 @@ function getOrCreatePanel(pre) {
 }
 
 /**
- * 在面板中显示加载消息
+ * Show a loading message in the panel
  */
 function showLoading(panel, msg) {
   panel.innerHTML = `<div class="code-runner-loading">${msg}</div>`;
 }
 
 /**
- * 在面板中显示输出文本
+ * Show output text in the panel
  */
 function showOutput(panel, text, isError) {
   const el = document.createElement('pre');
@@ -42,8 +42,8 @@ function showOutput(panel, text, isError) {
   el.textContent = text;
   panel.innerHTML = '';
   panel.appendChild(el);
-  // 复制按钮 — 带文本标签的可见按钮，位于面板右上角
-  // （无独立页脚/分隔线，无微小角落图标）。
+  // Copy button — visible labeled pill at the top-right of the panel
+  // itself (no separate footer / divider, no tiny icon corner).
   if (text) {
     const cbtn = document.createElement('button');
     cbtn.type = 'button';
@@ -77,8 +77,8 @@ function showOutput(panel, text, isError) {
       cbtn.textContent = ok ? 'Copied!' : 'Copy failed';
       setTimeout(() => { cbtn.innerHTML = orig; }, 1500);
     });
-    // 按钮直接放在面板中 — 无包装栏。面板使用
-    // position:relative，因此按钮可以绝对定位在面板右上角。
+    // Button lives directly in the panel — no wrapping bar. The panel is
+    // position:relative so the button can sit absolute-top-right of it.
     panel.appendChild(cbtn);
   }
   if (isError) {
@@ -87,22 +87,23 @@ function showOutput(panel, text, isError) {
 }
 
 /**
- * 旧版绝对定位复制按钮 — 已被 showOutput 中的内联按钮栏取代。
- * 保留为空操作，确保旧调用方不会崩溃。
+ * Legacy absolute-positioned copy button — replaced by the inline bar in
+ * showOutput. Kept here as no-op so any earlier callers don't crash.
  */
 function addCopyBtn_unused(panel, text) {
   if (!text) return;
   const btn = document.createElement('button');
-  btn.type = 'button';  // 默认 <button> 类型是 'submit' — 显式设为 "button" 避免意外的表单提交。
+  btn.type = 'button';  // Default <button> type is 'submit' — explicit "button" avoids any accidental form submission.
   btn.className = 'code-runner-copy';
   btn.title = 'Copy output';
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   btn.addEventListener('click', async (e) => {
     e.stopPropagation();
     e.preventDefault();
-    // 通过隐藏 textarea + execCommand 同步复制 — 这是跨浏览器 /
-    // 非安全上下文 / 移动端 Firefox 最可靠的单一路径。在异步
-    // navigator.clipboard 尝试之前执行，以保留用户手势上下文。
+    // Synchronous copy via a hidden textarea + execCommand — this is the
+    // single most reliable path across browsers / non-secure contexts /
+    // mobile Firefox. Run BEFORE any async navigator.clipboard attempt so
+    // the user-gesture context is preserved.
     let ok = false;
     try {
       const ta = document.createElement('textarea');
@@ -115,8 +116,8 @@ function addCopyBtn_unused(panel, text) {
       ok = document.execCommand && document.execCommand('copy');
       ta.remove();
     } catch (_) {}
-    // 作为备用方案，也尝试现代剪贴板 API（不会因为旧路径
-    // 已成功复制而造成问题）。
+    // As a backup, also try the modern clipboard API (won't hurt if the
+    // legacy path already copied).
     if (!ok && navigator.clipboard && window.isSecureContext) {
       try { await navigator.clipboard.writeText(text); ok = true; } catch (_) {}
     }
@@ -132,14 +133,14 @@ function addCopyBtn_unused(panel, text) {
 }
 
 /**
- * 为面板添加折叠/关闭按钮。
- * 已禁用 — 运行输出面板现通过编辑器底部的 Code↔Run 统一切换按钮关闭，
- * 因此单独的 X 按钮是冗余且杂乱的。
+ * Add a collapse/close button to the panel.
+ * Disabled \u2014 the run-output panel is now closed via the unified Code\u2194Run
+ * toggle in the editor footer, so a separate X was redundant + cluttered.
  */
-function addCloseBtn(_panel) { /* 无操作 */ }
+function addCloseBtn(_panel) { /* no-op */ }
 
 /**
- * 从 CDN 延迟加载 Pyodide
+ * Lazy-load Pyodide from CDN
  */
 function loadPyodide() {
   if (pyodideInstance) return Promise.resolve(pyodideInstance);
@@ -181,7 +182,7 @@ function loadPyodide() {
 }
 
 /**
- * 通过 Pyodide 运行 Python 代码
+ * Run Python code via Pyodide
  */
 export async function runPython(code, panel) {
   showLoading(panel, 'Loading Python runtime (first time ~10 MB)...');
@@ -238,7 +239,7 @@ finally:
 }
 
 /**
- * 在沙盒 iframe 中运行 JavaScript 代码
+ * Run JavaScript code in a sandboxed iframe
  */
 export function runJavaScript(code, panel) {
   showLoading(panel, 'Running...');
@@ -305,13 +306,13 @@ try {
 }
 
 /**
- * 通过 POST /api/shell/exec 在服务端运行代码
+ * Run code server-side via POST /api/shell/exec
  */
 export async function runServer(code, panel, lang) {
   showLoading(panel, 'Running on server...');
-  // 将脚本进行 Base64 编码，确保换行符在 shell 引用中完整保留。
-  // JSON.stringify 会把 \n 转换为字面的 \\n，python3 -c 会将其解释为反斜杠-n；
-  // base64 避免所有引用/转义的陷阱。
+  // Base64-encode the script so newlines survive the shell quoting intact.
+  // JSON.stringify turns \n into literal \\n which python3 -c sees as backslash-n;
+  // base64 avoids every quoting/escaping pitfall.
   const b64 = btoa(unescape(encodeURIComponent(code)));
   var command;
   if (lang === 'python' || lang === 'py') {
@@ -354,7 +355,7 @@ export async function runServer(code, panel, lang) {
 }
 
 /**
- * 在独立的弹出窗口中运行 HTML 代码
+ * Run HTML code in its own popup window
  */
 export function runHTML(code, panel) {
   panel.innerHTML = '';
@@ -375,7 +376,7 @@ export function runHTML(code, panel) {
 }
 
 /**
- * 主入口 — 点击运行按钮时调用
+ * Main entry point — called when a Run button is clicked
  */
 export function run(btn) {
   const code = btn.getAttribute('data-code');

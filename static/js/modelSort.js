@@ -1,4 +1,4 @@
-// 模型选择器和下拉菜单的共享字母排序。
+// Shared alphabetical sorting for model pickers and dropdowns.
 
 function _sortText(value) {
   return String(value || '').split('/').pop().trim() || String(value || '');

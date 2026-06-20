@@ -1,23 +1,23 @@
 // static/js/escMenuStack.js
 //
-// 临时即席覆盖层的关闭注册表 —— 下拉菜单和
-// 即时构建并附加到 <body> 的上下文弹出窗口，位于
-// .modal 系统之外。ui.js 中的全局 Escape 仲裁器可以找到
-// 模态框，但找不到这些，因此每个菜单在打开时在此注册关闭回调，
-// 关闭时注销。
+// Dismissal registry for transient, ad-hoc overlays — dropdown menus and
+// context popups that are built on the fly and appended to <body>, living
+// OUTSIDE the .modal system. The global Escape arbiter in ui.js can find
+// modals but not these, so each menu registers a dismiss callback here while
+// it is open and unregisters when it closes.
 //
-// 堆栈是 LIFO：dismissTopMenu() 首先关闭最近打开的菜单，
-// 这样在模态框上打开的下拉菜单会在模态框之前关闭。
-// 刻意不依赖 DOM，以便在普通 node 下进行单元测试（参见
-// tests/test_esc_menu_stack_js.py）。
+// The stack is LIFO: dismissTopMenu() closes the most-recently-opened menu
+// first, so a dropdown opened on top of a modal closes before the modal does.
+// Deliberately DOM-free so it can be unit-tested under plain node (see
+// tests/test_esc_menu_stack_js.py).
 
 const _stack = [];
 
 /**
- * 注册菜单的关闭回调。返回一个注销函数，菜单
- * 必须从其自身的清理逻辑中调用（外部点击关闭、项目点击等），
- * 以确保堆栈永远不会包含过期条目。多次调用返回的函数，
- * 或在菜单已通过 Escape 关闭后调用，都是安全的。
+ * Register a menu's dismiss callback. Returns an unregister function that the
+ * menu MUST call from its own teardown (outside-click close, item click, etc.)
+ * so the stack never holds a stale entry. Calling the returned function more
+ * than once, or after the menu was already dismissed via Escape, is safe.
  */
 export function registerMenuDismiss(dismissFn) {
   if (typeof dismissFn !== 'function') return () => {};
@@ -30,11 +30,11 @@ export function registerMenuDismiss(dismissFn) {
 }
 
 /**
- * 关闭最近注册的菜单（如果有）。当菜单被关闭时返回 true
- * （以便调用方可以吞下 Escape 键），当没有菜单打开时返回 false。
- * 条目在其回调运行之前弹出，因此即使
- * dismissFn 忘记注销或抛出异常，单次 Escape 恰好关闭
- * 一个菜单，堆栈永远不会卡住。
+ * Dismiss the most-recently-registered menu, if any. Returns true when a menu
+ * was dismissed (so the caller can swallow the Escape key), false when nothing
+ * was open. The entry is popped BEFORE its callback runs, so even if a
+ * dismissFn forgets to unregister or throws, a single Escape closes exactly
+ * one menu and the stack never gets stuck.
  */
 export function dismissTopMenu() {
   const entry = _stack.pop();
@@ -43,17 +43,17 @@ export function dismissTopMenu() {
   return true;
 }
 
-/** 测试/调试辅助：当前已注册菜单的数量。 */
+/** Test/debug helper: number of currently-registered menus. */
 export function _openMenuCount() {
   return _stack.length;
 }
 
 /**
- * 通过其注册的关闭回调拆除临时菜单（如果有的
- * 话），释放其 Escape 堆栈条目和任何监听器，否则回退到
- * 普通节点删除。在任何批量清除菜单的地方使用 —— 滚动 /
- * 滑动 / 模态框关闭清理，或"关闭前一个"重新打开扫描 ——
- * 而不是使用原始的 `el.remove()`，后者会导致堆栈条目孤立。
+ * Tear a transient menu down through its registered dismiss callback if it has
+ * one (releasing its Escape-stack entry and any listeners), else fall back to a
+ * plain node removal. Use this anywhere menus are cleared in bulk — scroll /
+ * swipe / modal-dismiss cleanup, or a "close the previous one" reopen sweep —
+ * instead of a raw `el.remove()`, which would strand the stack entry.
  */
 export function dismissOrRemove(el) {
   if (!el) return;
@@ -61,23 +61,23 @@ export function dismissOrRemove(el) {
   else el.remove();
 }
 
-// ── DOM 便捷包装 ──────────────────────────────────────────────
-// 上述注册表刻意不依赖 DOM（并以此方式进行单元测试）。
-// bindMenuDismiss 是大多数调用方实际需要的一层薄 DOM 层：它将
-// 无处不在的"覆盖层附加到 <body>，外部点击关闭"
-// 惯用法同时连接到外部点击监听器和 Escape 堆栈，一次调用完成，
-// 这样菜单只需要描述一次如何拆除自身。
+// ── DOM convenience wrapper ──────────────────────────────────────────────
+// The registry above is intentionally DOM-free (and unit-tested as such).
+// bindMenuDismiss is the thin DOM layer most callers actually want: it wires
+// the ubiquitous "overlay appended to <body>, closes on an outside click"
+// idiom to BOTH the outside-click listener AND the Escape stack in one call,
+// so a menu only has to describe how to tear itself down once.
 //
 //   const close = bindMenuDismiss(popup, () => popup.remove());
-//   // 外部点击和 Escape 现在都调用 close()；你也可以在
-//   // 项目处理器中手动调用。
+//   // outside-click and Escape now both call close(); call it yourself from
+//   // item handlers too.
 //
-// `onClose` 恰好运行一次（幂等），并拥有实际的拆除工作
-// （移除/隐藏节点，清除锚点状态等）。`isOutside(ev)`
-// 默认为"点击落在 `el` 之外的区域"；当额外的锚点
-// 应被视为菜单内部时，可以覆盖它。返回的幂等 close() 也
-// 存储在 `el._dismiss` 上，因此批量移除器（参见 dismissOrRemove）可以通过
-// 其真实的拆除逻辑关闭菜单，而不是孤立其堆栈条目。
+// `onClose` runs exactly once (idempotent) and owns the actual teardown
+// (removing/hiding the node, clearing anchor state, …). `isOutside(ev)`
+// defaults to "the click landed outside `el`"; override it when extra anchors
+// should count as inside the menu. The returned idempotent close() is also
+// stashed on `el._dismiss`, so bulk removers (see dismissOrRemove) can tear the
+// menu down through its real teardown rather than orphaning its stack entry.
 export function bindMenuDismiss(el, onClose, isOutside) {
   let done = false;
   let unreg = () => {};
@@ -92,9 +92,9 @@ export function bindMenuDismiss(el, onClose, isOutside) {
     document.removeEventListener('click', onDocClick, true);
     try { if (typeof onClose === 'function') onClose(); } catch {}
   }
-  // 延迟附加外部点击监听器，使打开菜单的点击不会
-  // 立即关闭菜单。如果 close() 已在同一事件循环中运行
-  // （例如即时的 Escape），则跳过附加，避免留下悬空的监听器。
+  // Defer attaching the outside-click listener so the opening click doesn't
+  // immediately close the menu. Skip the attach if close() already ran in the
+  // same tick (e.g. an instant Escape) so we never leave a dangling listener.
   setTimeout(() => { if (!done) document.addEventListener('click', onDocClick, true); }, 0);
   unreg = registerMenuDismiss(close);
   el._dismiss = close;

@@ -1,21 +1,21 @@
 # src/research_utils.py
-"""深度研究系统的共享工具。
+"""Shared utilities for the deep research system.
 
-集中管理文本清理、质量过滤和其他逻辑，
-在 deep_research.py、research_handler.py 和 visual_report.py 中共同使用。
+Centralizes text cleaning, quality filtering, and other logic
+used across deep_research.py, research_handler.py, and visual_report.py.
 """
 
 # ---------------------------------------------------------------------------
-# 思考/推理块剥离
+# Thinking / reasoning block stripping
 # ---------------------------------------------------------------------------
 
 def strip_thinking(text):
-    """从 LLM 输出中剥离思考/推理模式。
+    """Strip thinking / reasoning patterns from LLM output.
 
-    委托给 `src.text_helpers.strip_think`（唯一真相来源）。
-    在此保留为别名，以便现有的 `from src.research_utils import strip_thinking`
-    调用方不会中断。保留 None 透传 — 许多调用方传递
-    `Optional[str]` LLM 结果，并期望调用失败时返回 None。
+    Delegates to `src.text_helpers.strip_think` (single source of truth).
+    Kept as an alias here so existing `from src.research_utils import strip_thinking`
+    callers don't break. Preserves None passthrough — many callers pass an
+    `Optional[str]` LLM result and expect None back when the call failed.
     """
     if text is None:
         return None
@@ -24,11 +24,11 @@ def strip_thinking(text):
 
 
 # ---------------------------------------------------------------------------
-# 源质量过滤
+# Source quality filtering
 # ---------------------------------------------------------------------------
 
-# 表示提取内容为模板文本、错误文本或空文本的标记。
-# 如果找到任何标记（不区分大小写），内容将被过滤掉。
+# Markers indicating extracted content is boilerplate, error text, or empty.
+# If any marker is found (case-insensitive), the content is filtered out.
 LOW_QUALITY_MARKERS = [
     "insufficient to",
     "content is insufficient",
@@ -40,9 +40,9 @@ LOW_QUALITY_MARKERS = [
     "completely unrelated",
     "boilerplate",
     "footer text",
-    # 短语（而非裸的 "cookie"/"copyright"），以便我们仍能捕获
-    # 如同意横幅和页脚等模板文本，而不会丢弃仅是
-    # 讨论 cookie 或版权作为主题的合法发现。
+    # Phrases (not bare "cookie"/"copyright") so we still catch boilerplate
+    # like consent banners and footers without discarding legitimate findings
+    # that merely discuss cookies or copyright as their subject.
     "cookie consent",
     "cookie banner",
     "cookie notice",
@@ -53,11 +53,11 @@ LOW_QUALITY_MARKERS = [
 
 
 def is_low_quality(summary: str) -> bool:
-    """检查发现摘要是否表示无用的或不相关的内容。"""
+    """Check if a finding summary indicates useless or irrelevant content."""
     try:
         if not isinstance(summary, str) or not summary:
             return True
         low = summary.lower()
         return any(marker in low for marker in LOW_QUALITY_MARKERS)
     except Exception:
-        return False  # 开放失败
+        return False  # fail open

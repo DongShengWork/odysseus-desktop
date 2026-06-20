@@ -1,4 +1,4 @@
-"""用户偏好设置 API — 基于 JSON 文件的每用户键值存储。"""
+"""User preferences API — per-user key/value store backed by a JSON file."""
 import json
 import os
 from typing import Optional

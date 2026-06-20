@@ -1,4 +1,4 @@
-"""定时任务的 CRUD 路由。"""
+"""CRUD routes for scheduled tasks."""
 
 import json
 import logging
@@ -151,6 +151,7 @@ class TaskCreate(BaseModel):
     endpoint_url: Optional[str] = None
     then_task_id: Optional[str] = None            # chain: run this task after success
     notifications_enabled: Optional[bool] = None  # None lets action-specific defaults apply
+    character_id: Optional[str] = None             # built-in persona id (PERSONAS) — biases output voice
 
 
 class TaskUpdate(BaseModel):
@@ -171,6 +172,7 @@ class TaskUpdate(BaseModel):
     endpoint_url: Optional[str] = None
     then_task_id: Optional[str] = None
     notifications_enabled: Optional[bool] = None
+    character_id: Optional[str] = None
 
 
 def _display_task_name(t: ScheduledTask) -> str:
@@ -203,6 +205,7 @@ def _task_to_dict(t: ScheduledTask, include_last_run_result: bool = False) -> di
         "output_target": t.output_target,
         "session_id": t.session_id,
         "crew_member_id": getattr(t, "crew_member_id", None),
+        "character_id": getattr(t, "character_id", None),
         "model": t.model,
         "endpoint_url": t.endpoint_url,
         "run_count": t.run_count or 0,
@@ -552,6 +555,7 @@ def setup_task_routes(task_scheduler) -> APIRouter:
                 then_task_id=then_task_id,
                 webhook_token=webhook_token,
                 notifications_enabled=notifications_enabled,
+                character_id=(req.character_id or None),
             )
             db.add(task)
             db.commit()
@@ -705,6 +709,9 @@ def setup_task_routes(task_scheduler) -> APIRouter:
                 task.then_task_id = _validate_then_task_id(db, req.then_task_id, user, current_task_id=task.id)
             if req.notifications_enabled is not None:
                 task.notifications_enabled = bool(req.notifications_enabled)
+            if req.character_id is not None:
+                # Empty string clears the persona; non-empty stores the id.
+                task.character_id = req.character_id or None
             if req.cron_expression is not None:
                 if req.cron_expression:
                     try:
@@ -1064,7 +1071,10 @@ def setup_task_routes(task_scheduler) -> APIRouter:
     # --- PARSE NATURAL LANGUAGE → TASK DRAFT (AI) ---
     @router.post("/parse")
     async def parse_task(request: Request) -> Dict[str, Any]:
-        """将自然语言描述解析为结构化任务草稿，供前端预填表单。"""
+        """Turn a free-form description ("every weekday at 7am research the top
+        AI news and summarize it") into a structured task draft the frontend
+        can pre-fill the form with. Returns a draft only — the user reviews and
+        saves it, so a misread schedule never goes live unreviewed."""
         from src.endpoint_resolver import resolve_endpoint
         from src.llm_core import llm_call_async
         from src.text_helpers import strip_think as _strip_think

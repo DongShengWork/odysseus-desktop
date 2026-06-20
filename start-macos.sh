@@ -130,11 +130,12 @@ fi
 # 3. Python environment + dependencies (kept inside the repo, in venv/).
 #    Named `venv` to match the manual steps and build-macos-app.sh, so the
 #    clickable .app reuses this same environment.
-if [ ! -d venv ]; then
+VENV_PY="./venv/bin/python3"
+if [ ! -x "$VENV_PY" ] || ! "$VENV_PY" -m pip --version >/dev/null 2>&1; then
+    [ -d venv ] && { echo "▶ Existing venv is incomplete (no working pip) — rebuilding…"; rm -rf venv; }
     echo "▶ Creating Python environment…"
     "$PY" -m venv venv
 fi
-VENV_PY="./venv/bin/python3"
 REQ_HASH="$(md5 -q requirements.txt 2>/dev/null || md5sum requirements.txt | cut -d' ' -f1)"
 REQ_HASH_FILE="venv/.requirements_hash"
 if [ ! -f "$REQ_HASH_FILE" ] || [ "$REQ_HASH" != "$(cat "$REQ_HASH_FILE" 2>/dev/null)" ]; then
@@ -162,27 +163,6 @@ fi
 echo "▶ Preparing Odysseus…"
 ODYSSEUS_SKIP_RUN_HINT=1 ./venv/bin/python setup.py
 
-# 3b. ChromaDB — 向量存储（RAG / 语义记忆 / 工具索引均依赖）。
-#     原生模式不自带 ChromaDB，需要 Docker 容器提供。
-#     如果 Docker 可用且 8100 端口空闲，自动拉起；否则跳过（功能降级）。
-CHROMADB_PORT="${CHROMADB_PORT:-8100}"
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    if ! (exec 3<>"/dev/tcp/127.0.0.1/$CHROMADB_PORT") 2>/dev/null; then
-        echo "▶ Starting ChromaDB container on port $CHROMADB_PORT…"
-        docker-compose up -d chromadb 2>/dev/null || docker compose up -d chromadb 2>/dev/null || \
-            echo "  ⚠ Couldn't start ChromaDB — RAG/vector-memory will be degraded."
-        # 防止 Docker/Colima 下次启动时自动拉起（与 docker-compose.yml 的
-        # restart 设置解耦 —— compose 文件保留 unless-stopped 给全栈部署用）。
-        for _cid in $(docker ps -a --filter "name=chromadb" --format '{{.Names}}' 2>/dev/null); do
-            docker update --restart no "$_cid" >/dev/null 2>&1
-        done
-    else
-        echo "  ✓ ChromaDB already running on port $CHROMADB_PORT"
-    fi
-else
-    echo "▶ Docker not available; ChromaDB will not start (RAG/vector-memory degraded)."
-fi
-
 # Local provider bootstrap.
 #     On Apple Silicon macOS, Apfel is treated as a sibling local model server
 #     to Ollama: if Homebrew has it installed, we start its OpenAI-compatible
@@ -201,6 +181,35 @@ if [ "$MACHINE_ARCH" = "arm64" ]; then
     fi
 else
     echo "▶ Non-ARM macOS detected; skipping Apfel server bootstrap."
+fi
+
+# ChromaDB backs the tool index and vector RAG. chromadb ships in the venv, so
+# start a local server before launching. Skip when one is already reachable, or
+# when CHROMADB_HOST points at a remote host.
+CHROMA_PID=""
+CHROMA_HOST="${CHROMADB_HOST:-localhost}"   # what the app connects to
+CHROMA_PORT="${CHROMADB_PORT:-8100}"
+# Bind + probe on IPv4 loopback: the app's "localhost" resolves to 127.0.0.1,
+# but binding chroma to the literal "localhost" can land on IPv6 ::1, which the
+# app can't then reach. Pin both to 127.0.0.1.
+CHROMA_BIN="$(dirname "$VENV_PY")/chroma"
+case "$CHROMA_HOST" in
+    localhost|127.0.0.1) CHROMA_BIND="127.0.0.1" ;;
+    0.0.0.0)             CHROMA_BIND="0.0.0.0" ;;
+    *)                   CHROMA_BIND="" ;;   # remote host - don't start locally
+esac
+if (exec 3<>"/dev/tcp/127.0.0.1/$CHROMA_PORT") 2>/dev/null; then
+    echo "▶ ChromaDB already running on 127.0.0.1:$CHROMA_PORT - using it."
+elif [ -z "$CHROMA_BIND" ]; then
+    echo "▶ CHROMADB_HOST=$CHROMA_HOST is remote - not starting a local ChromaDB."
+elif [ -x "$CHROMA_BIN" ]; then
+    CHROMA_LOG="${TMPDIR:-/tmp}/odysseus-chromadb.log"
+    echo "▶ Starting ChromaDB in the background on $CHROMA_BIND:$CHROMA_PORT…"
+    echo "  logging to $CHROMA_LOG"
+    nohup "$CHROMA_BIN" run --host "$CHROMA_BIND" --port "$CHROMA_PORT" --path "$PWD/data/chroma" >"$CHROMA_LOG" 2>&1 &
+    CHROMA_PID=$!
+else
+    echo "▶ ChromaDB CLI not found in venv; skipping (tool index will be degraded)."
 fi
 
 # 5. Launch. Bind to loopback by default; opt into LAN/Tailscale with
@@ -245,7 +254,7 @@ fi
 # Setup is done — drop the setup-failure handler, and clean up the background
 # opener when the server exits or the user presses Ctrl+C.
 trap - ERR
-trap '[ -n "$POLLER_PID" ] && kill "$POLLER_PID" 2>/dev/null; [ -n "$APFEL_PID" ] && kill "$APFEL_PID" 2>/dev/null' EXIT INT TERM
+trap '[ -n "$POLLER_PID" ] && kill "$POLLER_PID" 2>/dev/null; [ -n "$APFEL_PID" ] && kill "$APFEL_PID" 2>/dev/null; [ -n "$CHROMA_PID" ] && kill "$CHROMA_PID" 2>/dev/null' EXIT INT TERM
 
 echo
 echo "▶ Starting Odysseus — it will open in your browser at $URL"

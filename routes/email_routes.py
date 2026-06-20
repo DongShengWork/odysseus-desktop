@@ -1,15 +1,15 @@
 """
 email_routes.py
 
-邮件功能的 FastAPI 路由处理函数。所有非路由逻辑
-（IMAP 连接辅助、邮件解析、账户配置、
-自动摘要 + 定时邮件 poller、Pydantic 模型）位于：
+FastAPI route handlers for the email feature. All non-route logic
+(IMAP connection helpers, message parsing, account config, the
+auto-summarize + scheduled-email pollers, Pydantic models) lives in:
 
-    routes/email_helpers.py — 同步辅助函数 + 模型 + 常量
-    routes/email_pollers.py — 后台循环，由 `_start_poller` 启动
+    routes/email_helpers.py   — synchronous helpers + models + constants
+    routes/email_pollers.py   — background loops, started by `_start_poller`
 
-从 helpers 模块导入可获得这些路由处理函数所需的一切。
-拆分是纯机械操作 — 无行为变更。
+Importing from the helpers module brings in everything those route
+handlers need. The split is mechanical — no behavior change.
 """
 
 import asyncio
@@ -96,8 +96,8 @@ def _email_tag_owner_aliases(account_id: str | None, owner: str = "") -> list[st
 def _email_tag_owner_clause(account_id: str | None, owner: str = "") -> tuple[str, list[str]]:
     aliases = _email_tag_owner_aliases(account_id, owner)
     placeholders = ",".join("?" * len(aliases))
-    # 在已配置的多用户模式下，不将 legacy owner='' 行视为所有人可见。
-    # 单用户/未配置模式保留 legacy 行。
+    # In configured multi-user mode, do not treat legacy owner='' rows as
+    # visible to everyone. Single-user/unconfigured mode keeps legacy rows.
     if owner:
         return f"owner IN ({placeholders})", aliases
     return f"(owner IN ({placeholders}) OR owner IS NULL)", aliases
@@ -249,6 +249,41 @@ def _uid_from_fetch_meta(meta_b: bytes) -> str:
     return m.group(1).decode() if m else ""
 
 
+_FETCH_SEQ_RE = re.compile(rb"^(\d+)\s+\(")
+
+
+def _group_uid_fetch_records(msg_data) -> list:
+    """Group an imaplib UID FETCH response into per-message (meta, payload).
+
+    imaplib yields an interleaved list: ``(meta, literal)`` tuples for
+    attributes that carry a literal (``RFC822.HEADER {n}`` etc.) plus bare
+    ``bytes`` elements for everything the server sends outside a literal.
+    Where each attribute lands is server-specific: Dovecot sends FLAGS
+    *before* the header literal (so it ends up inside the tuple meta), while
+    Gmail sends FLAGS *after* it, arriving as a bare ``b' FLAGS (\\Seen))'``
+    element. Dropping bare elements therefore silently loses FLAGS on Gmail
+    and every message renders as unread/unflagged.
+
+    A tuple whose meta starts with a sequence number opens a new record;
+    every other part — continuation tuple or bare bytes — is folded into the
+    current record's meta so attribute regexes see the full meta text.
+    Plain ``b')'`` terminators get folded in too, which is harmless.
+    """
+    grouped: list = []  # list of (meta_bytes, payload_bytes_or_None)
+    for part in (msg_data or []):
+        if isinstance(part, tuple):
+            meta_b = part[0] if isinstance(part[0], (bytes, bytearray)) else str(part[0]).encode()
+            if _FETCH_SEQ_RE.match(meta_b):
+                grouped.append((meta_b, part[1]))
+            elif grouped:
+                cur_meta, cur_payload = grouped[-1]
+                grouped[-1] = (cur_meta + b" " + meta_b, cur_payload or part[1])
+        elif isinstance(part, (bytes, bytearray)) and grouped:
+            cur_meta, cur_payload = grouped[-1]
+            grouped[-1] = (cur_meta + b" " + bytes(part), cur_payload)
+    return grouped
+
+
 def _smtp_ready(cfg: dict) -> bool:
     return bool(cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password"))
 
@@ -385,7 +420,7 @@ def _md_to_email_html(text: str) -> str:
     return "<html><body>" + "\n".join(parts) + "</body></html>"
 
 
-# WYSIWYG 邮件编辑器可能合理生成的标签。
+# Tags the WYSIWYG email composer may legitimately produce.
 _EMAIL_ALLOWED_TAGS = {
     "b", "strong", "i", "em", "u", "s", "strike", "del", "a", "br", "p", "div",
     "ul", "ol", "li", "blockquote", "span", "h1", "h2", "h3", "code", "pre",
@@ -462,7 +497,7 @@ def setup_email_routes():
     router = APIRouter(prefix="/api/email", tags=["email"])
 
     # ── In-memory cache + prefetch + IMAP connection pool ──
-    # 三层堆叠，因为每次冷点击都会命中 Dovecot
+    # Three layers stacked because every cold click was hitting Dovecot
     # over a fresh TCP+TLS+LOGIN handshake plus a full RFC822 fetch.
     #   1. _LIST_CACHE: list-emails responses keyed by (account, folder, filter,
     #      limit, offset). 8s TTL — short enough that flag changes show up
@@ -509,7 +544,7 @@ def setup_email_routes():
                 if (now - last_used) < _IMAP_IDLE_MAX:
                     try:
                         conn.noop()
-                        # 使用期间从池中取出（序列化）
+                        # Pop it out of the pool while we use it (serialize)
                         del _IMAP_POOL[pool_key]
                         return conn, True  # reused
                     except Exception:
@@ -520,11 +555,11 @@ def setup_email_routes():
                     try: conn.logout()
                     except Exception: pass
                     del _IMAP_POOL[pool_key]
-        # 新连接
+        # Fresh connection
         return _imap_connect(account_id, owner=owner), False
 
     def _pooled_release(account_id, conn, ok=True, owner=""):
-        # 安全性：匹配 _pooled_connect 使用的 (account_id, owner) 键
+        # SECURITY: match the (account_id, owner) key used by _pooled_connect
         # so a pooled handle is returned to the same per-user slot.
         if not ok:
             try: conn.logout()
@@ -537,8 +572,8 @@ def setup_email_routes():
         return (account_id or "", folder, filter_, int(limit), int(offset), from_addr or "")
 
     def _read_cache_key(account_id, folder, uid, owner=""):
-        # 安全性：包含 owner，防止两个 `account_id == ""` /
-        # None（即通过每用户默认值解析）的用户共享连接
+        # SECURITY: include owner so two users with `account_id == ""` /
+        # None (i.e. resolved through the per-user default) don't share
         # a cached message body.
         return (account_id or "", folder, str(uid), owner)
 
@@ -552,7 +587,7 @@ def setup_email_routes():
 
     def _list_cache_put(key, value):
         _LIST_CACHE[key] = (_time.monotonic() + _LIST_TTL, value)
-        # 限制大小
+        # Cap size
         if len(_LIST_CACHE) > 64:
             for k in list(_LIST_CACHE.keys())[:-32]:
                 _LIST_CACHE.pop(k, None)
@@ -588,7 +623,7 @@ def setup_email_routes():
             for k in list(_READ_CACHE.keys())[:-128]:
                 _READ_CACHE.pop(k, None)
 
-    # 在闭包中暴露辅助函数，供下面的处理器使用
+    # Expose helpers in the closure to be used by handlers below
     router._email_pool = {
         "connect": _pooled_connect,
         "release": _pooled_release,
@@ -599,7 +634,7 @@ def setup_email_routes():
         "read_cache_put": _read_cache_put,
         "read_cache_key": _read_cache_key,
     }
-    # 将模块级 _imap() 上下文管理器接入连接池，以便每个
+    # Wire the module-level _imap() context manager into the pool so every
     # `with _imap(account_id, owner=owner) as conn:` reuses an existing connection
     # instead of paying TCP+TLS+LOGIN per request.
     _POOL_HOOKS["connect"] = _pooled_connect
@@ -627,22 +662,22 @@ def setup_email_routes():
 
             from_clause = ""
             if from_addr:
-                # 转义引号/反斜杠用于 IMAP SEARCH FROM
+                # Escape quotes/backslashes for IMAP SEARCH FROM
                 _safe = from_addr.replace("\\", "\\\\").replace('"', '\\"')
                 from_clause = f' FROM "{_safe}"'
 
             if filter_ == "unread":
                 status, data = _imap_uid_search(conn, f"(UNSEEN{from_clause})")
             elif filter_ == "favorites":
-                # 已标记/收藏的邮件（星标切换设置 \Flagged 标志）。
+                # Flagged/favorited emails (the star toggle sets the \Flagged flag).
                 status, data = _imap_uid_search(conn, f"(FLAGGED{from_clause})")
             elif filter_ == "unanswered":
                 status, data = _imap_uid_search(conn, f"(UNSEEN UNANSWERED{from_clause})")
             elif filter_ == "undone":
-                # 所有未标记为已处理/完成的邮件（已读或未读）。
+                # All emails NOT marked as answered/done (read or unread).
                 status, data = _imap_uid_search(conn, f"(UNANSWERED{from_clause})")
             elif filter_ == "reminders":
-                # 优先使用 Odysseus 标记头，但也包含主题
+                # Prefer the Odysseus marker header, but include the subject
                 # fallback too. The fallback uses a distinct Odysseus prefix
                 # so ordinary emails containing "Reminder" don't get mixed in.
                 status, data = _imap_uid_search(
@@ -657,12 +692,12 @@ def setup_email_routes():
                 status, data = _imap_uid_search(conn, f'(UNANSWERED SINCE "{_since}"{from_clause})')
             elif filter_ == "stale_30d":
                 # "What's been sitting too long" — UNANSWERED + delivered
-                # 超过 30 天以前。BEFORE 排除截止日期本身。
+                # MORE than 30 days ago. BEFORE excludes the cutoff date itself.
                 from datetime import datetime as _dt, timedelta as _td
                 _before = (_dt.utcnow() - _td(days=30)).strftime("%d-%b-%Y")
                 status, data = _imap_uid_search(conn, f'(UNANSWERED BEFORE "{_before}"{from_clause})')
             elif filter_ and filter_.startswith("tag:"):
-                # 基于标签的过滤 — 首先从 email_tags 解析 UID，然后
+                # Tag-based filter — resolve UIDs from email_tags first, then
                 # ask IMAP for those messages by Message-ID. `tag:spam` reads
                 # spam_verdict=1; any other tag matches JSON-array membership
                 # in `tags`.
@@ -673,7 +708,7 @@ def setup_email_routes():
                     import sqlite3 as _sql3t
                     _ct = _sql3t.connect(SCHEDULED_DB)
                     _owner_clause, _owner_params = _email_tag_owner_clause(account_id, owner)
-                    # 安全性：owner 范围化查询（审查 C2/H8）。没有
+                    # SECURITY: owner-scope the lookup (review C2/H8). Without
                     # this, user A's `tag:urgent` filter would surface UIDs
                     # written by user B and IMAP would return whatever
                     # happens to live at those UIDs in A's mailbox. Account
@@ -719,7 +754,7 @@ def setup_email_routes():
                 if not _tag_message_ids and not _tag_seq_fallback:
                     conn.logout()
                     return {"emails": [], "total": 0, "folder": folder}
-                # 优先使用稳定的 Message-ID 行。旧的标签行可能只有 UID。
+                # Prefer stable Message-ID rows. Older tag rows may have only
                 # numeric ids; those were sequence numbers historically, but
                 # may be real UIDs for newer rows. Treat them as UIDs only.
                 def _imap_search_quote(value: str) -> str:
@@ -750,10 +785,10 @@ def setup_email_routes():
 
             uid_list = data[0].split()
             total = len(uid_list)
-            # 反转以最新优先，应用分页
+            # Reverse for newest first, apply pagination
             uid_list = list(reversed(uid_list))
             if has_attachments_only:
-                # 无法通过 IMAP 过滤 — 扩大窗口以便后过滤
+                # Can't filter via IMAP — widen the window so post-filter
                 # still yields enough rows to fill `limit` after dropping
                 # rows without attachments.
                 scan_window = max(400, offset + limit * 8)
@@ -761,7 +796,7 @@ def setup_email_routes():
             else:
                 uid_list = uid_list[offset:offset + limit]
 
-            # 一次性预加载标签行 — 按 uid（字符串）键值对应要渲染的邮件
+            # Preload tag rows once — keyed by uid (as str) for the emails we'll render
             _tag_by_uid = {}
             try:
                 import sqlite3 as _sql3
@@ -787,8 +822,8 @@ def setup_email_routes():
             except Exception as e:
                 logger.warning(f"Tag preload failed: {e}")
 
-            # 在单个 IMAP 往返中批量获取所有请求的 UID。
-            # 逐 UID 获取是主要成本 — N 个往返 × (约 5-20ms
+            # Batch fetch ALL requested UIDs in a single IMAP round-trip.
+            # Per-UID fetch was the dominant cost — N round-trips × (~5-20ms
             # each on localhost) made 50-message lists take 250ms-1s+. The
             # batched form trades a slightly bigger response for one round-trip.
             emails = []
@@ -799,20 +834,11 @@ def setup_email_routes():
                 except Exception as e:
                     logger.warning(f"Batch fetch failed, falling back to per-UID: {e}")
                     status, msg_data = "NO", []
-                # imaplib batch responses interleave (meta, payload) tuples and
-                # `b')'` terminators. Group by message: each tuple where the
-                # meta begins with a seq number starts a new message record.
-                seq_re = re.compile(rb'^(\d+)\s+\(')
-                grouped = []  # list of (meta_str, payload_bytes)
-                for part in (msg_data or []):
-                    if isinstance(part, tuple):
-                        meta_b = part[0] if isinstance(part[0], (bytes, bytearray)) else str(part[0]).encode()
-                        if seq_re.match(meta_b):
-                            grouped.append((meta_b, part[1]))
-                        elif grouped:
-                            # continuation of previous message — concatenate meta info if any
-                            cur_meta, cur_payload = grouped[-1]
-                            grouped[-1] = (cur_meta + b" " + meta_b, cur_payload or part[1])
+                # Group the batched response into per-message (meta, payload)
+                # records. Bare bytes parts must be kept: Gmail returns FLAGS
+                # after the header literal as a bare element, and dropping it
+                # rendered every Gmail message as unread/unflagged.
+                grouped = _group_uid_fetch_records(msg_data)
 
                 if status != "OK" and not grouped:
                     conn.logout()
@@ -872,13 +898,13 @@ def setup_email_routes():
                         date_str = msg.get("Date", "")
                         message_id = msg.get("Message-ID", "")
                         sender_name, sender_addr = email.utils.parseaddr(sender)
-                        # To/Cc — from-sender 侧边栏需要
+                        # To/Cc — needed for the from-sender sidebar's
                         # multi-tag filter ("emails involving ALL these
                         # people"). Decoded raw strings; client splits.
                         to_str = _decode_header(msg.get("To", ""))
                         cc_str = _decode_header(msg.get("Cc", ""))
                         parsed_date = email.utils.parsedate_to_datetime(date_str) if date_str else None
-                        # 将无时区解析标准化为 UTC，使 timestamp()
+                        # Normalise tz-naive parses to UTC so timestamp() is
                         # deterministic across hosts.
                         if parsed_date and parsed_date.tzinfo is None:
                             from datetime import timezone as _tz
@@ -914,7 +940,7 @@ def setup_email_routes():
                     except Exception as e:
                         logger.warning(f"Error parsing batched email entry: {e}")
                         continue
-                # IMAP 按 seq-set 顺序返回批量结果，而非
+                # IMAP returns batched results in seq-set order, not the
                 # newest-first order we want. Sort by the parsed UTC epoch
                 # so cross-timezone dates compare chronologically (ISO-string
                 # sort had `+02:00` beating `+00:00` at the same local time).
@@ -922,12 +948,12 @@ def setup_email_routes():
 
             if has_attachments_only:
                 emails = [e for e in emails if e.get("has_attachments")]
-                # Total 现在反映扫描窗口内的匹配，而非整个邮箱
+                # Total now reflects matches inside the scanned window, not
                 # the whole folder — see scan_window above.
                 total = len(emails)
                 emails = emails[offset:offset + limit]
 
-            # 按 Message-ID 批量附加缓存的 AI 摘要，使前端
+            # Bulk-attach cached AI summaries by Message-ID so the frontend
             # can show them on hover (avoids a per-card round-trip).
             try:
                 ids = [e.get("message_id", "") for e in emails if e.get("message_id")]
@@ -979,7 +1005,7 @@ def setup_email_routes():
         _deferred = getattr(_start_poller, '_deferred', None)
         if _deferred:
             await _deferred()
-        # 安全性：在缓存键中包含 `owner`，防止两个
+        # SECURITY: include `owner` in the cache key so two users with
         # different account scopes don't share a cached list.
         ck = _list_cache_key(account_id, folder, filter, limit, offset, from_addr or "") + (int(bool(has_attachments)), owner)
         if not cache_bust:
@@ -1050,7 +1076,7 @@ def setup_email_routes():
                     continue
                 seen[addr_l] = {"name": (name or addr).strip(), "address": addr}
             items = list(seen.values())
-            # 优先名称以查询开头的条目，然后按字母顺序。
+            # Prefer entries whose name starts with the query, then alphabetical.
             items.sort(key=lambda c: (
                 0 if ql and (c["name"] or "").lower().startswith(ql) else 1,
                 (c["name"] or c["address"]).lower(),
@@ -1061,30 +1087,58 @@ def setup_email_routes():
             return {"contacts": [], "error": "Mail operation failed"}
 
     @router.get("/search")
-    async def search_emails(
+    # Sync def: the body is blocking IMAP I/O with no awaits. As `async def` it ran
+    # directly on the event loop and stalled the whole app during a search; as a sync
+    # def FastAPI runs it in a threadpool, keeping the loop responsive.
+    def search_emails(
         q: str = Query(""),
         folder: str = Query("INBOX"),
         limit: int = Query(50),
         account_id: str | None = Query(None),
         owner: str = Depends(require_owner),
     ):
-        """Search emails server-side via IMAP SEARCH. Matches subject, from, or body text."""
+        """Search emails server-side via IMAP SEARCH. Matches subject, from, or body text.
+
+        When the caller asks for INBOX and the account has an "All Mail"
+        folder (Gmail does), we transparently swap to All Mail so the
+        search surfaces archived / labelled emails too. Plain IMAP
+        accounts fall back to whatever folder the caller specified."""
         if not q or len(q) < 2:
             return {"emails": [], "total": 0, "query": q}
-        # q 中的 CRLF 会提前终止 IMAP 命令 — 防御性拒绝。
+        # CRLF in q would terminate the IMAP command early — reject defensively.
         if "\r" in q or "\n" in q:
             raise HTTPException(400, "Invalid query")
         try:
             with _imap(account_id, owner=owner) as conn:
-                conn.select(_q(folder), readonly=True)
+                # If the user asked for INBOX, try to upgrade to All Mail —
+                # one folder == every email on Gmail-class servers.
+                effective_folder = folder
+                if (folder or "").upper() == "INBOX":
+                    try:
+                        status, folder_lines = conn.list()
+                        if status == "OK" and folder_lines:
+                            for raw in folder_lines:
+                                if isinstance(raw, bytes):
+                                    raw = raw.decode("utf-8", errors="replace")
+                                m = re.match(r"\((?P<flags>[^)]*)\)\s+\"[^\"]*\"\s+(?P<name>.+)", raw)
+                                if not m:
+                                    continue
+                                flags = (m.group("flags") or "").lower()
+                                name = m.group("name").strip().strip('"')
+                                if "\\all" in flags or "all mail" in name.lower():
+                                    effective_folder = name
+                                    break
+                    except Exception:
+                        pass
+                conn.select(_q(effective_folder), readonly=True)
 
-                # 为 IMAP-SEARCH 引用字符串转义反斜杠和引号。
+                # Escape backslash and quote for the IMAP-SEARCH quoted-string.
                 q_escaped = q.replace('\\', '\\\\').replace('"', '\\"')
                 search_cmd = f'(OR OR FROM "{q_escaped}" SUBJECT "{q_escaped}" TEXT "{q_escaped}")'
 
                 status, data = _imap_uid_search(conn, search_cmd)
                 if status != "OK" or not data[0]:
-                    return {"emails": [], "total": 0, "query": q}
+                    return {"emails": [], "total": 0, "query": q, "folder": effective_folder}
 
                 uid_list = data[0].split()
                 total = len(uid_list)
@@ -1098,14 +1152,15 @@ def setup_email_routes():
                             continue
                         raw_header = None
                         flags = ""
-                        for part in msg_data:
-                            if isinstance(part, tuple):
-                                meta = part[0].decode() if isinstance(part[0], bytes) else str(part[0])
-                                if b"RFC822.HEADER" in part[0] if isinstance(part[0], bytes) else "RFC822.HEADER" in meta:
-                                    raw_header = part[1]
-                                flag_match = re.search(r'FLAGS \(([^)]*)\)', meta)
-                                if flag_match:
-                                    flags = flag_match.group(1)
+                        # Same Gmail caveat as the list route: FLAGS may
+                        # arrive after the header literal, so group bare
+                        # parts back into the message meta before scanning.
+                        for meta_b, payload in _group_uid_fetch_records(msg_data):
+                            if payload and b"RFC822.HEADER" in meta_b:
+                                raw_header = payload
+                            flag_match = re.search(rb'FLAGS \(([^)]*)\)', meta_b)
+                            if flag_match:
+                                flags = flag_match.group(1).decode(errors="replace")
                         if not raw_header:
                             continue
                         msg = email_mod.message_from_bytes(raw_header)
@@ -1148,6 +1203,13 @@ def setup_email_routes():
                             "is_flagged": "\\Flagged" in flags,
                             "flags": flags,
                             "has_attachments": has_attachments,
+                            # Stamp the folder so the frontend opens each
+                            # email from the folder it actually lives in
+                            # (the search may have run against All Mail
+                            # even though the caller asked for INBOX),
+                            # otherwise clicks open whatever happens to
+                            # have the same UID in INBOX → wrong email.
+                            "folder": effective_folder,
                         })
                     except Exception as e:
                         logger.warning(f"Error parsing search result {uid}: {e}")
@@ -1198,7 +1260,7 @@ def setup_email_routes():
             attachments = _list_attachments_from_msg(msg)
 
             if mark_seen:
-                # 在单独的读写会话中设置 \Seen，以便并发读取
+                # Set \Seen in a separate readwrite session so concurrent reads
                 # of the same UID don't fight over a shared SELECT state.
                 try:
                     with _imap(account_id, owner=owner) as conn2:
@@ -1214,7 +1276,7 @@ def setup_email_routes():
                     f"size={len(raw)} total={_t_total*1000:.0f}ms"
                 )
 
-            # 查找缓存的摘要、AI 回复和 LLM 检测的边界
+            # Look up cached summary, AI reply, and LLM-detected boundaries
             # by Message-ID
             cached_summary = None
             cached_ai_reply = None
@@ -1241,14 +1303,15 @@ def setup_email_routes():
                 ).fetchone()
                 cached_turns = None
                 cached_sender_sig = None
-                # 查找每发送者缓存的签名（由设置页面构建）
+                # Look up a per-sender cached signature (built by the
                 # `learn_sender_signatures` action). Used by the renderer
                 # to fold sigs consistently from the same address.
                 try:
                     if sender_addr:
                         _rs = _c.execute(
-                            "SELECT signature_text FROM sender_signatures WHERE from_address = ?",
-                            (sender_addr.lower().strip(),),
+                            f"SELECT signature_text FROM sender_signatures "
+                            f"WHERE from_address = ? AND {owner_clause}",
+                            (sender_addr.lower().strip(), *owner_params),
                         ).fetchone()
                         if _rs and _rs[0]:
                             cached_sender_sig = _rs[0]
@@ -1260,8 +1323,8 @@ def setup_email_routes():
                         try:
                             from src.email_thread_parser import THREAD_PARSER_VERSION
                             _parsed = json.loads(_row3[2])
-                            # 版本化信封：{"v": N, "turns": [...]}
-                            # 其他（旧代码的裸列表、错误格式）
+                            # Versioned envelope: {"v": N, "turns": [...]}.
+                            # Anything else (bare list from older code, wrong
                             # version) is treated as a cache miss so the
                             # on-the-fly parser re-runs and the next write
                             # warms the cache with the current shape.
@@ -1277,7 +1340,7 @@ def setup_email_routes():
             except Exception:
                 pass
 
-            # 如果没有缓存的 turns，即时解析以避免客户端
+            # If no cached turns, parse on-the-fly so the client never has
             # to do the heavy lifting. Cheap on a 50KB body, free for short
             # ones. The background task warms the cache for next reads.
             if cached_turns is None:
@@ -1425,7 +1488,7 @@ def setup_email_routes():
             raw = msg_data[0][1]
             msg = email_mod.message_from_bytes(raw)
 
-            # 提取到每封邮件的文件夹
+            # Extract to a per-email folder
             target_dir = attachment_extract_dir(folder, uid)
             filepath = _extract_attachment_to_disk(msg, index, target_dir)
             if not filepath:
@@ -1475,7 +1538,7 @@ def setup_email_routes():
             import os as _os
             title = _os.path.splitext(filepath.name)[0]
 
-            # 捕获源邮件的身份信息，以便后续文档可用于
+            # Capture the source email's identity so the doc can later be used
             # to thread a signed-reply back to the original sender.
             src_message_id = (msg.get("Message-ID") or "").strip()
             def _tag_doc_with_source(doc_id_to_tag: str):
@@ -1497,7 +1560,7 @@ def setup_email_routes():
                 except Exception as _e:
                     logger.warning(f"tag doc source-email failed: {_e}")
 
-            # 提取的文档必须属于调用者拥有的会话 —
+            # Extracted docs MUST belong to a session the caller owns — a
             # session-less ("orphan") doc is rejected by get_document's owner
             # check (404), so the frontend's loadDocument() throws and nothing
             # opens (the "open in document didn't open" bug). Attach it to the
@@ -1577,7 +1640,7 @@ def setup_email_routes():
                     d = _Docx(str(filepath))
                 except Exception as e:
                     return {"error": f"Failed to read docx: {e}", "filename": base}
-                # 将段落转换为 markdown — 保留标题样式为 #/##/###，
+                # Convert paragraphs to markdown — preserve heading styles as #/##/###,
                 # bullet lists as `- `, numbered lists as `1.`, and keep tables as
                 # simple pipe-delimited rows.
                 lines: list[str] = []
@@ -1693,6 +1756,22 @@ def setup_email_routes():
             logger.error(f"Failed to mark unread {uid}: {e}")
             return {"success": False, "error": "Mail operation failed"}
 
+    @router.post("/flag/{uid}")
+    async def flag_email(uid: str, folder: str = Query("INBOX"), account_id: str | None = Query(None),
+                         on: bool = Query(True), owner: str = Depends(require_owner)):
+        """Toggle the \\Flagged flag (a.k.a. favorite / star) on an email.
+        Pass `on=true` to favorite, `on=false` to unfavorite."""
+        try:
+            with _imap(account_id, owner=owner) as conn:
+                conn.select(_q(folder))
+                if not _store_email_flag(conn, uid, "\\Flagged", add=bool(on)):
+                    return {"success": False, "error": "Email not found"}
+            _invalidate_list_cache(account_id, folder)
+            return {"success": True, "flagged": bool(on)}
+        except Exception as e:
+            logger.error(f"Failed to flag {uid}: {e}")
+            return {"success": False, "error": "Mail operation failed"}
+
     @router.post("/mark-read/{uid}")
     async def mark_read(uid: str, folder: str = Query("INBOX"), account_id: str | None = Query(None), owner: str = Depends(require_owner)):
         """Mark an email as read (set \\Seen flag)."""
@@ -1708,7 +1787,9 @@ def setup_email_routes():
             return {"success": False, "error": "Mail operation failed"}
 
     @router.post("/archive/{uid}")
-    async def archive_email(uid: str, folder: str = Query("INBOX"), account_id: str | None = Query(None), owner: str = Depends(require_owner)):
+    # Sync def: blocking IMAP I/O with no awaits — see search_emails above. Runs in a
+    # threadpool instead of blocking the event loop.
+    def archive_email(uid: str, folder: str = Query("INBOX"), account_id: str | None = Query(None), owner: str = Depends(require_owner)):
         """Move email to Archive folder."""
         try:
             with _imap(account_id, owner=owner) as conn:
@@ -1791,7 +1872,7 @@ def setup_email_routes():
                             continue
                         folders_checked.append(folder_name)
                         uids = set()
-                        # 匹配提醒过滤器：新消息具有
+                        # Match the Reminders filter: new messages have the
                         # explicit kind header, and subject fallback catches
                         # clients/providers that stripped custom headers.
                         uids.update(_search_uids(conn, f'(HEADER X-Odysseus-Kind {_search_quote("reminder")})'))
@@ -1799,7 +1880,7 @@ def setup_email_routes():
                         for addr in own_addrs:
                             addr_q = _search_quote(addr)
                             uids.update(_search_uids(conn, f'(FROM {addr_q} SUBJECT {_search_quote("Reminder (Odysseus):")})'))
-                            # Odysseus 之前创建的 Legacy 提醒
+                            # Legacy reminders created before the Odysseus
                             # prefix still came from this mailbox as
                             # "Reminder: ..."; include them in Clear without
                             # sweeping unrelated external reminder emails.
@@ -2069,6 +2150,79 @@ def setup_email_routes():
             return {"success": True}
         except Exception as e:
             logger.error(f"cancel_scheduled {sid!r} failed: {e}")
+            return {"success": False, "error": "Mail operation failed"}
+
+    # ── Agent send-confirm: list/approve/cancel ──────────────────────────
+    # When `agent_email_confirm` is on, the MCP send_email tool drops the
+    # composed email into scheduled_emails with status='agent_draft' (a
+    # far-future send_at so the poller never picks it up). These endpoints
+    # let the chat UI surface them for the user and either approve (flip
+    # to status='pending' with send_at=now so the poller delivers it) or
+    # cancel (status='cancelled').
+    @router.get("/pending")
+    async def list_pending_agent_drafts(owner: str = Depends(require_owner)):
+        import sqlite3
+        try:
+            conn = sqlite3.connect(SCHEDULED_DB)
+            conn.row_factory = sqlite3.Row
+            # The MCP server can't easily set owner, so it stores '' — fall
+            # back to those rows in addition to the caller's owner.
+            rows = conn.execute(
+                """SELECT id, to_addr, subject, body, created_at, account_id
+                   FROM scheduled_emails
+                   WHERE status = 'agent_draft' AND (owner = ? OR owner = '')
+                   ORDER BY created_at DESC""",
+                (owner or "",),
+            ).fetchall()
+            conn.close()
+            return {"pending": [dict(r) for r in rows]}
+        except Exception as e:
+            logger.error(f"list_pending_agent_drafts failed: {e}")
+            return {"pending": [], "error": "Mail operation failed"}
+
+    @router.post("/pending/{sid}/approve")
+    async def approve_agent_draft(sid: str, owner: str = Depends(require_owner)):
+        """Approve a draft staged by the agent: flip status → pending and
+        backdate send_at so the scheduled-send poller picks it up
+        immediately."""
+        import sqlite3
+        try:
+            conn = sqlite3.connect(SCHEDULED_DB)
+            cur = conn.execute(
+                """UPDATE scheduled_emails
+                   SET status = 'pending', send_at = ?
+                   WHERE id = ? AND status = 'agent_draft' AND (owner = ? OR owner = '')""",
+                (datetime.utcnow().isoformat(), sid, owner or ""),
+            )
+            conn.commit()
+            affected = cur.rowcount
+            conn.close()
+            if not affected:
+                return {"success": False, "error": "Draft not found or already handled"}
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"approve_agent_draft {sid!r} failed: {e}")
+            return {"success": False, "error": "Mail operation failed"}
+
+    @router.delete("/pending/{sid}")
+    async def cancel_agent_draft(sid: str, owner: str = Depends(require_owner)):
+        """Discard a draft the agent staged for approval."""
+        import sqlite3
+        try:
+            conn = sqlite3.connect(SCHEDULED_DB)
+            cur = conn.execute(
+                """UPDATE scheduled_emails SET status = 'cancelled'
+                   WHERE id = ? AND status = 'agent_draft' AND (owner = ? OR owner = '')""",
+                (sid, owner or ""),
+            )
+            conn.commit()
+            affected = cur.rowcount
+            conn.close()
+            if not affected:
+                return {"success": False, "error": "Draft not found or already handled"}
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"cancel_agent_draft {sid!r} failed: {e}")
             return {"success": False, "error": "Mail operation failed"}
 
     @router.get("/resolve-contact")
@@ -2584,11 +2738,15 @@ def setup_email_routes():
             source_uid = (data.get("uid") or "").strip()
             source_folder = (data.get("folder") or "INBOX").strip()
             fast_reply = bool(data.get("fast", False))
+            user_hint = (data.get("user_hint") or "").strip()
 
             if not original_body:
                 return {"success": False, "error": "No email body provided"}
 
-            if message_id:
+            # Skip cache lookup when the caller supplied a user_hint — the
+            # cached generic reply doesn't reflect the instructions and
+            # would silently override them.
+            if message_id and not user_hint:
                 try:
                     _c = _sql3.connect(SCHEDULED_DB)
                     owner_clause, owner_params = _email_cache_owner_clause(owner)
@@ -2728,8 +2886,13 @@ def setup_email_routes():
             user_msg = (
                 f"Recipient: {to}\nSubject: {subject}\n\n"
                 f"Original email and any current draft:\n{original_body[:6000]}\n\n"
-                f"Draft a reply. Return only the reply body text."
             )
+            if user_hint:
+                user_msg += (
+                    f"User's instructions for THIS reply (follow these — they override "
+                    f"defaults like length/tone):\n{user_hint[:2000]}\n\n"
+                )
+            user_msg += "Draft a reply. Return only the reply body text."
 
             # Build a candidate chain so a stale session-stored API key
             # (the most common cause of "authentication failed" here)
@@ -3078,7 +3241,7 @@ def setup_email_routes():
 
     @router.post("/accounts/test")
     async def test_account_config(req: Request, owner: str = Depends(require_user)):
-        """测试实际的 IMAP（和可选的 SMTP）服务器连接。
+        """Try to actually connect to the provided IMAP (and optionally SMTP)
         server with the given credentials. Lets the user verify a config
         BEFORE saving it. Returns per-protocol status so the UI can show
         which half failed.

@@ -1,19 +1,19 @@
 /**
- * 顶栏下拉菜单 — 图像、滤镜和调整大小。
+ * Topbar dropdown menus — Image, Filter, and Resize.
  *
- *   图像菜单 (#ge-image-menu-btn → #ge-image-menu):
- *     调整大小、选区（边缘羽化/删除）、填充、旋转 90/180、
- *     水平/垂直翻转。
+ *   Image menu (#ge-image-menu-btn → #ge-image-menu):
+ *     resize, selection (edge feather/delete), fill, rotate 90/180,
+ *     flip horizontal/vertical.
  *
- *   滤镜菜单 (#ge-filter-menu-btn → #ge-filter-menu):
- *     模糊子菜单 — 高斯模糊、缩放模糊。
+ *   Filter menu (#ge-filter-menu-btn → #ge-filter-menu):
+ *     Blur sub-menu — Gaussian, Zoom.
  *
- *   调整大小菜单 (#ge-resize-menu-btn → #ge-resize-menu):
- *     预设宽×高项 (data-resize-w/-h) 立即应用；
- *     [data-resize-custom] 打开一个主题化的提示框用于输入自定义尺寸。
+ *   Resize menu (#ge-resize-menu-btn → #ge-resize-menu):
+ *     preset W×H items (data-resize-w/-h) apply immediately;
+ *     [data-resize-custom] opens a themed prompt for arbitrary sizes.
  *
- * 返回调整大小辅助函数，以便键盘快捷键模块也可以
- * 调用它们（Ctrl+Shift+T 打开自定义提示框）。
+ * Returns the resize helpers so the keyboard-shortcuts module can
+ * call them too (Ctrl+Shift+T opens the custom prompt).
  *
  * @param {{
  *   closeOtherTopbarMenus: (keepId: string) => void,
@@ -37,8 +37,6 @@
  */
 import { state } from './state.js';
 
-import { t } from './i18n.js';
-
 export function wireTopbarMenus({
   closeOtherTopbarMenus, registerDocClickAway,
   saveState, composite, fitZoom,
@@ -47,17 +45,18 @@ export function wireTopbarMenus({
   applyGaussianBlur, applyZoomBlur,
   uiModule,
 }) {
-  // ── 调整画布大小 ──
-  // 提取为独立函数，使弹出预设和 Ctrl+Shift+T 快捷键
-  // 都可以调用它。
+  // ── Resize canvas ──
+  // Extracted so both the popup presets and the Ctrl+Shift+T shortcut
+  // can call it.
   function applyResize(newW, newH) {
     if (!newW || !newH || newW < 1 || newH < 1) {
       uiModule.showToast('Invalid size');
       return;
     }
     saveState('Resize canvas');
-    // 仅调整主画布大小 — 图层保持其原始大小。
-    // 超出新边界的内容在合成时被裁剪，不会销毁。
+    // Only resize the main canvas — layers keep their original size.
+    // Content outside the new bounds is clipped during composite, not
+    // destroyed.
     if (state.maskCanvas) {
       const tmpMask = document.createElement('canvas');
       tmpMask.width = state.maskCanvas.width;
@@ -75,7 +74,7 @@ export function wireTopbarMenus({
     if (sizeLabel) sizeLabel.textContent = `${newW}×${newH}`;
     fitZoom();
     composite();
-    uiModule.showToast(t('editor.canvas_resized', { w: newW, h: newH }));
+    uiModule.showToast(`Canvas resized to ${newW}×${newH}`);
   }
 
   async function resizeCustomPrompt() {
@@ -89,7 +88,7 @@ export function wireTopbarMenus({
     applyResize(result.w, result.h);
   }
 
-  // ── 图像菜单 ──
+  // ── Image menu ──
   {
     const btn = document.getElementById('ge-image-menu-btn');
     const menu = document.getElementById('ge-image-menu');
@@ -119,7 +118,7 @@ export function wireTopbarMenus({
     }
   }
 
-  // ── 滤镜菜单（模糊子菜单 — 高斯模糊 / 缩放模糊）──
+  // ── Filter menu (Blur sub-menu — Gaussian / Zoom) ──
   {
     const btn = document.getElementById('ge-filter-menu-btn');
     const menu = document.getElementById('ge-filter-menu');
@@ -144,7 +143,7 @@ export function wireTopbarMenus({
     }
   }
 
-  // ── 调整大小弹出菜单（预设项 + 自定义… → resizeCustomPrompt）──
+  // ── Resize popup (preset items + Custom… → resizeCustomPrompt) ──
   {
     const btn = document.getElementById('ge-resize-menu-btn');
     const menu = document.getElementById('ge-resize-menu');

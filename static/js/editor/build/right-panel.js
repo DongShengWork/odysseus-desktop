@@ -1,14 +1,16 @@
 /**
- * 构建右侧面板（控件 + 图层）——DOM 创建、控件 innerHTML 填充、
- * 移动端底部面板滑动行为、移动端控件面板重新挂载、滑块值标签
- * 布局规范化、图层面板头部 + 移动端 peek/expanded 滑动，
- * 以及面板宽度拖拽调整手柄。
+ * Build the right-hand panel (controls + layers) — DOM creation,
+ * controls innerHTML population, mobile bottom-sheet swipe behavior,
+ * controls-panel re-parenting on mobile, slider value-chip layout
+ * normalization, layer-panel header + mobile peek/expand swipe, and
+ * the panel-width drag-resize handle.
  *
- * 负责自己的事件监听器（触摸滑动手势、鼠标调整大小拖拽）。
- * 返回 `rightPanel` 元素 + `panelResize` 手柄 + 内部 `controls`
- * 元素，以便调用者可以进行挂载后的调整。读取 state.container
- * （用于移动端重新挂载）和 state.color / state.brushSize /
- * state.wandTolerance（初始滑块值）。
+ * Owns its own event listeners (touch swipe gestures, mouse resize
+ * drag). Returns the `rightPanel` element + the `panelResize` handle
+ * + the inner `controls` element so the caller can wire any post-
+ * mount tweaks. Reads state.container (for mobile re-parenting) and
+ * state.color / state.brushSize / state.wandTolerance (initial slider
+ * values).
  *
  * @param {{
  *   controlsHTML:     (ctx: {color, brushSize, wandTolerance}) => string,
@@ -28,19 +30,19 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
   const rightPanel = document.createElement('div');
   rightPanel.className = 'ge-right-panel';
 
-  // 控件区域。
+  // Controls section.
   const controls = document.createElement('div');
   controls.className = 'ge-controls';
-  // 移动端向下滑动以关闭面板。再次点击同一工具可重新显示面板。
-  // 只有顶部约 40px 区域（抓握手柄区域）可触发手势，
-  // 因此面板内输入框/滑块的点击操作仍能正常响应。
+  // Swipe-down to dismiss on mobile. Tap the same tool again to bring
+  // the sheet back. Only the top ~40 px (grab handle area) initiates
+  // the gesture so taps on inputs/sliders inside the panel still work.
   {
     let sy = 0, dragging = false;
     controls.addEventListener('touchstart', (e) => {
       if (window.innerWidth > 700) return;
       const rect = controls.getBoundingClientRect();
       const t = e.touches[0];
-      // 仅当触摸从顶部抓取区域开始时才激活。
+      // Only engage if touch starts in the top grab zone.
       if (t.clientY - rect.top > 40) return;
       sy = t.clientY;
       dragging = true;
@@ -66,18 +68,20 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
     wandTolerance: state.wandTolerance,
   });
   rightPanel.appendChild(controls);
-  // 仅移动端（≤ 700px——与 .ge-editor-body 列堆叠断点
-  // 一致）：右侧面板变为变换后的底部面板，因此任何
-  // position:fixed 的子元素都会被 transform 捕获并随面板一起
-  // 移动。将控件面板重新挂载到编辑器根节点下，以便它能够
-  // 真正固定到视口底部，不受图层面板状态影响。
-  // 在桌面端，控件保持在右侧面板内并位于图层列表上方。
+  // Mobile only (≤ 700 px — matches the .ge-editor-body column-stack
+  // breakpoint): the right panel becomes a transformed bottom-sheet,
+  // so any position:fixed descendant gets trapped by the transform
+  // and rides along with the panel. Re-parent the controls panel to
+  // the editor root so it can truly fix to the viewport bottom
+  // regardless of the layers-sheet state. On desktop, controls stay
+  // docked inside the right panel above the layers list.
   if (window.innerWidth <= 700 && state.container) {
     state.container.appendChild(controls);
   }
 
-  // 将每个滑块行的数值标签从其 <label> 中取出，放到滑块
-  // 之后，使数值显示在行的右边缘，而不是被挤在左侧滑块轨道旁。
+  // Move every slider-row's value chip out of its <label> and place
+  // it AFTER the slider, so the value sits on the right edge of the
+  // row instead of being smashed against the slider track on the left.
   controls.querySelectorAll('.ge-eraser-row').forEach(row => {
     const valueSpan = row.querySelector('label > span[id$="-label"]');
     const slider = row.querySelector('input[type="range"]');
@@ -87,14 +91,14 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
     }
   });
 
-  // 图层面板。
+  // Layer panel.
   const layerPanel = document.createElement('div');
   layerPanel.className = 'ge-layers';
   layerPanel.innerHTML = layerPanelHTML();
   rightPanel.appendChild(layerPanel);
-  // 移动端：点击头部抓握手柄或上下滑动，在图层面板的
-  // peek 和 expanded 状态之间切换。peek 状态始终显示
-  // 当前活动图层，确保用户始终能访问到它。
+  // Mobile: tap the header grab handle or swipe up/down to toggle
+  // the layers sheet between peek and expanded. The peek state
+  // always shows the active layer so users never lose access to it.
   {
     const header = layerPanel.querySelector('.ge-layers-header');
     if (header) {
@@ -112,9 +116,9 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
         dragging = false;
         const dy = e.changedTouches[0].clientY - sy;
         const dx = Math.abs(e.changedTouches[0].clientX - sx);
-        // 真正的滑动——按方向循环切换三种状态：
-        //   minimized → peek → expanded   （向上滑动）
-        //   expanded → peek → minimized   （向下滑动）
+        // Real swipe — three states cycle by direction:
+        //   minimized → peek → expanded   (swipe up)
+        //   expanded → peek → minimized   (swipe down)
         if (Math.abs(dy) > 20 && Math.abs(dy) > dx) {
           didSwipe = true;
           const isExpanded = rightPanel.classList.contains('expanded');
@@ -139,8 +143,9 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
         if (window.innerWidth > 700) return;
         if (e.target.closest('button')) return;
         if (didSwipe) { didSwipe = false; return; }
-        // 点击在 peek 和 expanded 之间循环切换；minimized 状态
-        // 会返回到 peek（因此点击手柄至少会显示活动图层行）。
+        // Click cycles between peek and expanded; minimized comes
+        // back to peek (so a tap on the handle always reveals at
+        // least the active layer row).
         if (rightPanel.classList.contains('minimized')) {
           rightPanel.classList.remove('minimized');
         } else {
@@ -150,10 +155,11 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
     }
   }
 
-  // 右侧面板左边缘的水平拖拽手柄——向左拖拽加宽，向右拖拽收窄。
-  // 将选择的宽度持久化到 localStorage，以便重新打开时保留。
-  // （早期版本是垂直拖拽调整高度；水平方向更自然，
-  // 因为图层行的拥挤问题主要是宽度相关，而非高度。）
+  // Horizontal drag handle on the LEFT edge of the right panel — drag
+  // left to widen, right to narrow. Persists chosen width in
+  // localStorage so it survives reopens. (Earlier version was a
+  // vertical-drag for height; horizontal feels more natural since
+  // cramped LAYER ROWS are about width, not height.)
   const panelResize = document.createElement('div');
   panelResize.className = 'ge-panel-resize';
   panelResize.title = 'Drag to resize panel';
@@ -174,8 +180,8 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
   });
   document.addEventListener('mousemove', (e) => {
     if (!panelResizing) return;
-    // 向左拖拽 → 面板变宽（面板位于编辑器右侧，
-    // 因此向左拖拽会将其左边缘向左拉）。
+    // Dragging left → wider panel (the panel sits on the right of
+    // the editor, so a leftward drag pulls its left edge left).
     const delta = panelStartX - e.clientX;
     const next = Math.max(160, Math.min(window.innerWidth - 200, panelStartW + delta));
     rightPanel.style.flex = `0 0 ${next}px`;

@@ -1,9 +1,9 @@
 """
 email_server.py
 
-MCP 服务器，暴露电子邮件工具：列出未读/未回复的邮件、
-读取邮件内容，并将回复起草为电子邮件文档。
-连接到本地 Dovecot IMAP 并从 AI 摘要缓存中读取。
+MCP server exposing email tools: list unread/unresponded emails,
+read email content, and draft replies as email documents.
+Connects to local Dovecot IMAP and reads from the AI summary cache.
 """
 
 import asyncio
@@ -41,24 +41,24 @@ def _b(value) -> bytes:
 
 
 def _q(name: str) -> str:
-    """引用 IMAP 邮箱名称，用于接受邮箱参数的命令。"""
+    """Quote an IMAP mailbox name for commands that take mailbox args."""
     return '"' + (name or "").replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _uid_fetch_rows(data) -> list:
     return [d for d in (data or []) if isinstance(d, bytes) and b"UID " in d]
 
-# ── 配置 ──
-# 支持多账户。账户存储在 data/app.db :: email_accounts 中。
-# 调用者可以传递 `account=`（按名称、用户或 ID 匹配）来选择特定
-# 收件箱；None 则解析为默认行。当没有匹配的数据库行时，
-# 回退到环境变量 / settings.json 的扁平键（旧版单账户行为）。
+# ── Config ──
+# Multi-account aware. Accounts live in data/app.db :: email_accounts.
+# Callers can pass `account=` (match by name, user, or id) to pick a specific
+# inbox; None resolves to the default row. Falls back to env vars / settings.json
+# flat keys when no DB row matches (legacy single-account behaviour).
 
-_ACCOUNT_CACHE: dict = {}  # key = 标准化的账户选择器 -> 配置字典
+_ACCOUNT_CACHE: dict = {}  # key = normalized account selector -> config dict
 
 
 def _clean_header_value(value) -> str:
-    """EmailMessage 拒绝分配的头部值中的 CR/LF；安全地展开。"""
+    """EmailMessage rejects CR/LF in assigned header values; unfold safely."""
     if value is None:
         return ""
     return re.sub(r"[\r\n]+[ \t]*", " ", str(value)).strip()
@@ -69,7 +69,7 @@ def _db_path() -> Path:
 
 
 def _load_email_writing_style() -> str:
-    """返回设置 > 邮箱 > 写作风格中现有的值。"""
+    """Return the existing Settings > Email > Writing Style value."""
     try:
         settings_path = DATA_DIR / "settings.json"
         if not settings_path.exists():
@@ -95,11 +95,11 @@ def _writing_style_guidance() -> str:
 
 
 def _default_document_owner() -> str | None:
-    """尽力为 MCP 创建的文档确定所有者。
+    """Best-effort owner for MCP-created documents.
 
-    MCP stdio 工具不会收到浏览器请求的已认证用户，
-    但文档库是按所有者过滤的。将草稿标记到配置的
-    单/默认管理员，以便助手创建的邮件草稿可见。
+    MCP stdio tools do not receive the browser request's authenticated user,
+    but the document library is owner-filtered. Stamp drafts to the configured
+    single/default admin so assistant-created email drafts are visible.
     """
     owner = os.environ.get("ODYSSEUS_DOCUMENT_OWNER", "").strip()
     if owner:
@@ -122,7 +122,8 @@ def _default_document_owner() -> str | None:
 
 
 def _list_accounts_raw() -> list:
-    """从 email_accounts 表返回字典列表。表缺失或为空时返回空列表。永不抛出异常。"""
+    """Return list of dicts from the email_accounts table. Empty list if table
+    missing or empty. Never raises."""
     path = _db_path()
     if not path.exists():
         return []
@@ -147,9 +148,9 @@ def _list_accounts_raw() -> list:
 
 
 def _resolve_account(selector: str | None) -> dict | None:
-    """给定一个选择器（None = 默认，或名称/用户/ID 字符串），返回
-    匹配的行或 None。匹配是大小写不敏感的，在 name +
-    imap_user + from_address 上进行子串匹配，外加精确 ID 匹配。"""
+    """Given a selector (None = default, or a name/user/id string), return the
+    matching row or None. Matching is case-insensitive substring on name +
+    imap_user + from_address, plus exact id match."""
     rows = _list_accounts_raw()
     if not rows:
         return None
@@ -159,7 +160,7 @@ def _resolve_account(selector: str | None) -> dict | None:
                 return r
         return rows[0]
     sel = selector.strip().lower()
-    # 优先精确 ID 匹配
+    # Exact id match first
     for r in rows:
         if r["id"] == selector:
             return r
@@ -186,12 +187,12 @@ def _resolve_account(selector: str | None) -> dict | None:
 
 
 def _load_config(account: str | None = None) -> dict:
-    """返回请求账户（或默认账户）的完整配置字典。
+    """Return the full config dict for the requested account (or default).
 
-    每字段的解析顺序：
-      1. email_accounts 行（由 `account` 选择或默认）
-      2. 环境变量 + settings.json 扁平键（旧版）
-      3. 硬编码回退值（localhost:31143 等）
+    Resolution order per-field:
+      1. email_accounts row (selected by `account` or default)
+      2. env vars + settings.json flat keys (legacy)
+      3. hardcoded fallbacks (localhost:31143 etc.)
     """
     cache_key = (account or "").strip().lower() or "__default__"
     if cache_key in _ACCOUNT_CACHE:
@@ -236,17 +237,18 @@ def _load_config(account: str | None = None) -> dict:
         cfg["imap_host"] = row["imap_host"] or cfg["imap_host"]
         cfg["imap_port"] = int(row["imap_port"] or cfg["imap_port"])
         cfg["imap_user"] = row["imap_user"] or cfg["imap_user"]
-        # email_accounts 中的密码通过 src.secret_storage.encrypt 加密存储 —
-        # 在传递给 IMAP 之前解密（与 email_helpers.py:369 使用的路径相同）。
-        # 之前使用原始密文回退导致了 AUTHENTICATIONFAILED 错误。
+        # Passwords in email_accounts are stored encrypted via
+        # src.secret_storage.encrypt — decrypt before handing to IMAP
+        # (same path email_helpers.py:369 uses). Falling back to the raw
+        # ciphertext is what produced AUTHENTICATIONFAILED previously.
         try:
             from src.secret_storage import decrypt as _decrypt
         except Exception:
             _decrypt = lambda v: v  # noqa: E731
         cfg["imap_password"] = _decrypt(row["imap_password"]) if row["imap_password"] else cfg["imap_password"]
         cfg["imap_starttls"] = bool(row["imap_starttls"])
-        # email_accounts 表存储 STARTTLS 但没有显式的 IMAP SSL 标志。
-        # 对于 Gmail 等 IMAP 提供商，端口 993 是隐式 TLS。
+        # The email_accounts table stores STARTTLS but not an explicit IMAP SSL
+        # flag. Port 993 is implicit TLS for IMAP providers like Gmail.
         cfg["imap_ssl"] = int(cfg["imap_port"]) == 993 and not cfg["imap_starttls"]
         cfg["smtp_host"] = row["smtp_host"] or cfg["smtp_host"]
         cfg["smtp_port"] = int(row["smtp_port"] or cfg["smtp_port"])
@@ -255,7 +257,7 @@ def _load_config(account: str | None = None) -> dict:
         cfg["smtp_password"] = _decrypt(row["smtp_password"]) if row["smtp_password"] else cfg["smtp_password"]
         cfg["from_address"] = row["from_address"] or row["imap_user"] or cfg["from_address"]
     else:
-        # 旧版回退：settings.json 扁平键
+        # Legacy fallback: settings.json flat keys
         try:
             settings_path = Path(_SETTINGS_FILE)
             if settings_path.exists():
@@ -277,12 +279,12 @@ def _load_config(account: str | None = None) -> dict:
     return cfg
 
 
-# ── IMAP 辅助函数 ──
+# ── IMAP helpers ──
 
 
 def _imap_connect(account: str | None = None):
-    """连接到 IMAP 服务器，返回已登录的连接。account 选择
-    邮箱（None = 默认）。"""
+    """Connect to IMAP server, returns logged-in connection. account selects
+    the mailbox (None = default)."""
     cfg = _load_config(account)
     if cfg["imap_ssl"]:
         conn = imaplib.IMAP4_SSL(
@@ -300,7 +302,7 @@ def _imap_connect(account: str | None = None):
             try:
                 conn.starttls()
             except Exception:
-                # 不要泄漏被拒绝的 STARTTLS 上打开的明文套接字。(#3174)
+                # Don't leak the open plain socket on a rejected STARTTLS. (#3174)
                 try:
                     conn.shutdown()
                 except Exception:
@@ -311,8 +313,8 @@ def _imap_connect(account: str | None = None):
     try:
         conn.login(cfg["imap_user"], cfg["imap_password"])
     except Exception:
-        # 登录失败会导致已连接的套接字孤立；在传播异常之前
-        # 关闭它（shutdown() 是认证前的低级关闭）。(#3174)
+        # A failed login otherwise orphans the connected socket; close it
+        # before propagating (shutdown() is the pre-auth low-level close). (#3174)
         try:
             conn.shutdown()
         except Exception:
@@ -322,7 +324,7 @@ def _imap_connect(account: str | None = None):
 
 
 def _detect_sent_folder(conn):
-    """查找账户的已发送文件夹名称；回退到 'Sent'。"""
+    """Find the account's Sent folder name; fall back to 'Sent'."""
     candidates = ("Sent", "[Gmail]/Sent Mail", "Sent Mail", "Sent Items", "INBOX.Sent")
     try:
         status, folders = conn.list()
@@ -367,7 +369,7 @@ def _list_folder_lines(conn) -> list:
 
 
 def _resolve_folder(conn, preferred: str, role: str) -> str:
-    """解析特定提供商的文件夹名称，如 Gmail 的 [Gmail]/Trash。"""
+    """Resolve provider-specific folder names like Gmail's [Gmail]/Trash."""
     folders = _list_folder_lines(conn)
     names = [name for name in (_folder_name_from_list_line(f) for f in folders) if name]
     if preferred and preferred in names:
@@ -409,16 +411,18 @@ def _folder_role_from_name(name: str) -> str:
 
 
 def _decode_header(raw):
-    """解码 MIME 编码的头部。"""
+    """Decode MIME encoded header."""
     if not raw:
         return ""
     try:
-        # make_header 按 RFC 2047 拼接：编码词和相邻纯文本之间没有多余空格
-        # （纯文本保留自己的空白），两个相邻编码词之间的空白被丢弃。
-        # 旧的 " ".join 在每次非 ASCII 主题或发件人上产生 "Re:  Jose" 式的双空格。
+        # make_header concatenates per RFC 2047: no spurious space between an
+        # encoded-word and adjacent plain text (plain runs keep their own
+        # whitespace), and whitespace between two adjacent encoded-words is
+        # dropped. The old " ".join produced "Re:  Jose" style double spaces
+        # on every non-ASCII subject or sender.
         return str(email.header.make_header(email.header.decode_header(raw)))
     except Exception:
-        # 格式错误的头部或未知字符集：有损逐部分解码
+        # Malformed header or unknown charset: lossy per-part decode
         decoded = []
         for data, charset in email.header.decode_header(raw):
             if isinstance(data, bytes):
@@ -432,7 +436,7 @@ def _decode_header(raw):
 
 
 def _extract_text(msg):
-    """从电子邮件消息中提取纯文本正文。"""
+    """Extract plain text body from email message."""
     if msg.is_multipart():
         text_parts = []
         for part in msg.walk():
@@ -462,7 +466,7 @@ def _extract_text(msg):
 
 
 def _get_cached_summaries():
-    """从 SQLite 缓存中读取预计算的摘要。"""
+    """Read pre-computed summaries from SQLite cache."""
     cfg = _load_config()
     db_path = cfg["cache_db"]
     if not os.path.exists(db_path):
@@ -481,15 +485,15 @@ def _get_cached_summaries():
         return {}
 
 
-# ── 工具实现 ──
+# ── Tool implementations ──
 
 
 def _list_emails(folder="INBOX", max_results=20, unresponded_only=False,
                  unread_only=False, account=None):
-    """按最新优先列出邮件。默认返回最新消息，
-    包括已读邮件，因此与正常的收件箱 UI 体验一致。
-    传递 unread_only=True 和/或 unresponded_only=True 进行关注扫描。
-    account 选择邮箱（None = 默认）。
+    """List emails newest-first. By default returns the latest messages,
+    including read mail, so it matches normal inbox UI expectations.
+    Pass unread_only=True and/or unresponded_only=True for attention scans.
+    account selects mailbox (None = default).
     """
     conn = None
     try:
@@ -503,12 +507,12 @@ def _list_emails(folder="INBOX", max_results=20, unresponded_only=False,
         elif unread_only:
             status, data = conn.uid("SEARCH", None, "(UNSEEN)")
         elif unresponded_only:
-            # 之前缺失 — unresponded_only=True（不带 unread_only）会走到
-            # "ALL" 并返回已回复的邮件，尽管文档说应该是
-            # "没有回复的邮件" 行为。
+            # Was missing — unresponded_only=True (without unread_only) fell through
+            # to "ALL" and returned answered mail too, despite the documented
+            # "emails without replies" behaviour.
             status, data = conn.uid("SEARCH", None, "(UNANSWERED)")
         else:
-            # 也包含已读 — IMAP 搜索 "ALL" 返回整个文件夹
+            # Include read too — IMAP search "ALL" returns the entire folder
             status, data = conn.uid("SEARCH", None, "ALL")
 
         if status != "OK" or not data[0]:
@@ -531,11 +535,11 @@ def _list_emails(folder="INBOX", max_results=20, unresponded_only=False,
                 date_str = msg.get("Date", "")
                 message_id = msg.get("Message-ID", "")
 
-                # 解析发件人名称
+                # Parse sender name
                 sender_name, sender_addr = email.utils.parseaddr(sender)
                 sender_display = sender_name or sender_addr
 
-                # 检查缓存中的摘要
+                # Check cache for summary
                 cached = cache.get(subject, {})
                 summary = cached.get("summary", "")
 
@@ -599,15 +603,15 @@ def _list_emails_across_accounts(folder="INBOX", max_results=20,
 
 
 def _search_emails(query, folders=None, max_results=20, account=None):
-    """按自由文本查询 IMAP 搜索邮件。匹配 FROM、SUBJECT 和
-    正文 TEXT。遍历多个文件夹，这样 INBOX 之外的旧线程
-    （Sent/Archive）仍然可以被找到。返回与 _list_emails 相同的形状
-    外加一个 `_folder` 标签。"""
+    """IMAP-search emails by free-text query. Matches FROM, SUBJECT, and
+    body TEXT. Walks multiple folders so older threads outside INBOX
+    (Sent/Archive) are still findable. Returns the same shape as
+    _list_emails plus an `_folder` tag."""
     if not query or not str(query).strip():
         return []
     q = str(query).replace("\\", "\\\\").replace('"', '\\"')
-    # 邮件客户端通常使用 OR FROM/SUBJECT/TEXT 来匹配任一字段。
-    # IMAP SEARCH OR 是二元的，所以我们嵌套它。
+    # Mail clients commonly use OR FROM/SUBJECT/TEXT to match either field.
+    # IMAP SEARCH OR is binary, so we nest it.
     search_cmd = f'(OR OR FROM "{q}" SUBJECT "{q}" TEXT "{q}")'
     if folders is None:
         folders = ["INBOX", "Sent", "Archive"]
@@ -660,12 +664,12 @@ def _search_emails(query, folders=None, max_results=20, account=None):
     finally:
         try: conn.logout()
         except Exception: pass
-    # 跨文件夹限制总数。
+    # Cap total across folders.
     return out[: max_results * len(folders)]
 
 
 def _list_attachments_from_msg(msg):
-    """返回附件元数据。"""
+    """Return attachment metadata."""
     if not msg.is_multipart():
         return []
     attachments = []
@@ -695,7 +699,7 @@ def _list_attachments_from_msg(msg):
 
 
 def _extract_attachment_to_disk(msg, index, target_dir):
-    """将特定附件提取到磁盘。"""
+    """Extract a specific attachment to disk."""
     if not msg.is_multipart():
         return None
     idx = 0
@@ -726,7 +730,7 @@ def _extract_attachment_to_disk(msg, index, target_dir):
 
 
 def _read_email(uid=None, message_id=None, folder="INBOX", account=None):
-    """通过 UID 或消息 ID 读取完整邮件内容。account = 邮箱选择器。"""
+    """Read full email content by UID or message-ID. account = mailbox selector."""
     cfg = _load_config(account)
     conn = None
     try:
@@ -831,7 +835,7 @@ def _resolve_send_config(account=None):
 
 
 def _smtp_connect(account=None, cfg=None):
-    """连接到 SMTP 服务器，返回已登录的连接。"""
+    """Connect to SMTP server, returns logged-in connection."""
     cfg = cfg or _load_config(account)
     if not _smtp_ready(cfg):
         raise ValueError(f"Email account {cfg.get('account_name') or account or 'default'} has no SMTP configured")
@@ -848,8 +852,8 @@ def _smtp_connect(account=None, cfg=None):
         try:
             conn.starttls()
         except Exception:
-            # 不要泄漏被拒绝的 STARTTLS 上打开的明文套接字。SMTP 没有
-            # shutdown()；close() 是低级套接字关闭（没有 QUIT）。(#3174)
+            # Don't leak the open plain socket on a rejected STARTTLS. SMTP has
+            # no shutdown(); close() is the low-level socket close (no QUIT). (#3174)
             try:
                 conn.close()
             except Exception:
@@ -871,8 +875,8 @@ def _smtp_connect(account=None, cfg=None):
         try:
             conn.login(cfg["smtp_user"], cfg["smtp_password"])
         except Exception:
-            # 登录失败会导致已连接的套接字孤立；在传播异常之前
-            # 关闭它（SMTP 没有 shutdown()；close() = 套接字关闭）。(#3174)
+            # A failed login otherwise orphans the connected socket; close it
+            # before propagating (SMTP has no shutdown(); close() = socket close). (#3174)
             try:
                 conn.close()
             except Exception:
@@ -881,8 +885,109 @@ def _smtp_connect(account=None, cfg=None):
     return conn
 
 
+def _read_agent_email_confirm_setting() -> bool:
+    """True if the user wants agent send_email/reply_to_email calls to be
+    queued for manual approval instead of SMTPed immediately. Defaults to
+    True so a fresh install is safe — agents have been observed inventing
+    signatures and sending to real recipients without the user's review."""
+    try:
+        from src.settings import get_setting
+        return bool(get_setting("agent_email_confirm", True))
+    except Exception:
+        return True
+
+
+def _stash_agent_draft(*, to, subject, body, in_reply_to=None, references=None,
+                      cc=None, bcc=None, account=None) -> dict:
+    """Insert the composed email into scheduled_emails with status
+    'agent_draft' and a far-future send_at so the scheduled-send poller
+    never picks it up. Returns the pending payload the model surfaces to
+    the user (and that the chat UI can render as an approval card)."""
+    try:
+        from src.constants import SCHEDULED_EMAILS_DB
+    except Exception:
+        return {"success": False, "error": "Pending-email storage unavailable"}
+    pending_id = uuid.uuid4().hex[:16]
+    far_future = "9999-12-31T00:00:00"
+    now = datetime.utcnow().isoformat()
+    try:
+        conn = sqlite3.connect(SCHEDULED_EMAILS_DB)
+        # Touch the schema in case the email-routes init hasn't run yet
+        # (MCP server can boot independently).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_emails (
+                id TEXT PRIMARY KEY,
+                to_addr TEXT NOT NULL,
+                cc TEXT,
+                bcc TEXT,
+                subject TEXT,
+                body TEXT NOT NULL,
+                in_reply_to TEXT,
+                references_hdr TEXT,
+                attachments TEXT,
+                send_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                error TEXT,
+                owner TEXT DEFAULT '',
+                account_id TEXT,
+                odysseus_kind TEXT
+            )
+        """)
+        conn.execute("""
+            INSERT INTO scheduled_emails
+            (id, to_addr, cc, bcc, subject, body, in_reply_to, references_hdr,
+             attachments, send_at, created_at, status, account_id, odysseus_kind, owner)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'agent_draft', ?, ?, ?)
+        """, (
+            pending_id,
+            to if isinstance(to, str) else ", ".join(to),
+            cc if isinstance(cc, str) else (", ".join(cc) if cc else None),
+            bcc if isinstance(bcc, str) else (", ".join(bcc) if bcc else None),
+            subject or "",
+            body or "",
+            in_reply_to or None,
+            references if isinstance(references, str) else (" ".join(references) if references else None),
+            "[]",
+            far_future,
+            now,
+            account or None,
+            "agent_draft",
+            "",
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        return {"success": False, "error": f"Failed to stash draft: {e}"}
+    return {
+        "success": True,
+        "pending": True,
+        "pending_id": pending_id,
+        "to": to if isinstance(to, str) else ", ".join(to),
+        "subject": subject or "",
+        "body": body or "",
+        "message": (
+            "✋ Draft staged for your approval — nothing has been sent yet.\n"
+            "Review the To/Subject/Body above. Reply 'send' to deliver, or "
+            "'cancel' to discard."
+        ),
+    }
+
+
 def _send_email(to, subject, body, in_reply_to=None, references=None, cc=None, bcc=None, account=None):
-    """通过 SMTP 发送电子邮件。返回包含状态的字典。"""
+    """Send an email via SMTP. Returns dict with status.
+
+    When the `agent_email_confirm` setting is on (the default), the email
+    is NOT SMTPed — instead it lands in scheduled_emails as an
+    `agent_draft` row and the user reviews + approves it from the chat
+    UI. This closes the auto-send hole that let earlier models invent
+    signatures and ship them to real recipients without confirmation."""
+    if _read_agent_email_confirm_setting():
+        return _stash_agent_draft(
+            to=to, subject=subject, body=body,
+            in_reply_to=in_reply_to, references=references,
+            cc=cc, bcc=bcc, account=account,
+        )
     send_account, cfg = _resolve_send_config(account)
     msg = EmailMessage()
     msg["From"] = _clean_header_value(cfg["from_address"])
@@ -930,8 +1035,8 @@ def _send_email(to, subject, body, in_reply_to=None, references=None, cc=None, b
         finally:
             imap.logout()
     except Exception:
-        # 传递已成功；已发送副本失败不应将已发送
-        # 的消息变成用户的硬失败。
+        # Delivery already succeeded; Sent-copy failure should not turn a sent
+        # message into a hard failure for the user.
         pass
 
     return {
@@ -976,7 +1081,7 @@ def _build_email_document_content(
 
 
 def _merge_email_reply_body(existing_content: str, reply_body: str) -> str:
-    """在替换可编辑的回复正文时，保留邮件头和引用的对话链。"""
+    """Preserve email headers and quoted chain while replacing the editable reply body."""
     if "\n---\n" not in (existing_content or ""):
         return reply_body or ""
     head, body = existing_content.split("\n---\n", 1)
@@ -1012,7 +1117,7 @@ def _create_email_draft_document(
     account=None,
     source_message_id=None,
 ):
-    """创建一个 Odysseus 电子邮件撰写文档供用户审查。不发送。"""
+    """Create an Odysseus email compose document for user review. Does not send."""
     from core.database import SessionLocal, Document, DocumentVersion
     try:
         from src.event_bus import fire_event
@@ -1124,7 +1229,7 @@ def _create_email_draft_document(
 
 
 def _draft_reply_to_email(uid, body, folder="INBOX", reply_all=False, account=None, title=None):
-    """创建一个线程化的 Odysseus 回复草稿文档。不发送。"""
+    """Create a threaded Odysseus reply draft document. Does not send."""
     conn = _imap_connect(account)
     conn.select(_q(folder), readonly=True)
     status, msg_data = conn.uid("FETCH", _b(uid), "(BODY.PEEK[])")
@@ -1176,7 +1281,7 @@ def _draft_reply_to_email(uid, body, folder="INBOX", reply_all=False, account=No
 
 
 async def _ai_draft_reply_to_email(uid, folder="INBOX", reply_all=False, account=None, title=None):
-    """使用 Odysseus 的 AI 回复提示/风格生成回复，然后创建撰写文档。"""
+    """Generate a reply with Odysseus' AI-reply prompt/style, then create a compose doc."""
     read_result = _read_email(uid=uid, folder=folder, account=account)
     if "error" in read_result:
         return read_result
@@ -1281,7 +1386,7 @@ async def _ai_draft_reply_to_email(uid, folder="INBOX", reply_all=False, account
 
 
 def _reply_to_email(uid, body, folder="INBOX", reply_all=False, account=None):
-    """通过 UID 回复现有邮件。通过 In-Reply-To/References 进行线程化。"""
+    """Reply to an existing email by UID. Threads via In-Reply-To/References."""
     conn = None
     try:
         conn = _imap_connect(account)
@@ -1328,7 +1433,7 @@ def _reply_to_email(uid, body, folder="INBOX", reply_all=False, account=None):
 
 
 def _set_flag(uid, folder, flag, add=True, account=None):
-    """添加或移除 IMAP 标志（如 \\Seen、\\Answered、\\Deleted）。"""
+    """Add or remove an IMAP flag (e.g. \\Seen, \\Answered, \\Deleted)."""
     conn = _imap_connect(account)
     conn.select(_q(folder))
     op = "+FLAGS" if add else "-FLAGS"
@@ -1344,9 +1449,9 @@ def _set_flag(uid, folder, flag, add=True, account=None):
 
 
 def _bulk_set_flag(uids, folder, flag, add=True, account=None):
-    """在单次连接中对 MANY 条消息添加/移除 IMAP 标志。
-    `uids` 是一个列表；我们通过逗号连接的集合发出单个 STORE
-    （IMAP 支持消息集语法）。返回尝试的计数。"""
+    """Add/remove an IMAP flag on MANY messages in one connection.
+    `uids` is a list; we issue a single STORE over the comma-joined set
+    (IMAP supports message-set syntax). Returns count attempted."""
     if not uids:
         return 0
     conn = _imap_connect(account)
@@ -1373,7 +1478,7 @@ def _bulk_set_flag(uids, folder, flag, add=True, account=None):
 
 
 def _bulk_move(uids, source_folder, dest_folder, account=None, role: str = ""):
-    """在单次连接中将 MANY 条消息在文件夹之间移动。"""
+    """Move MANY messages between folders in one connection."""
     if not uids:
         return 0
     conn = _imap_connect(account)
@@ -1393,7 +1498,7 @@ def _bulk_move(uids, source_folder, dest_folder, account=None, role: str = ""):
         dest_arg = _q(dest_folder)
         status, _ = conn.uid("MOVE", _b(msg_set), dest_arg)
         if status != "OK":
-            # 回退：UID 复制 + 标记删除 + 清除
+            # Fallback: UID copy + flag-delete + expunge
             status, _ = conn.uid("COPY", _b(msg_set), dest_arg)
             if status != "OK":
                 return 0
@@ -1407,8 +1512,8 @@ def _bulk_move(uids, source_folder, dest_folder, account=None, role: str = ""):
 
 
 def _search_uids(folder="INBOX", criteria="UNSEEN", account=None):
-    """返回与 IMAP 搜索匹配的 UID 列表（如 UNSEEN、
-    ALL、ANSWERED）。用于将选择器如 all_unread 解析为 uid。"""
+    """Return a list of UIDs matching an IMAP search (e.g. UNSEEN,
+    ALL, ANSWERED). Used to resolve selectors like all_unread → uids."""
     conn = _imap_connect(account)
     try:
         conn.select(_q(folder), readonly=True)
@@ -1421,7 +1526,7 @@ def _search_uids(folder="INBOX", criteria="UNSEEN", account=None):
 
 
 def _move_message(uid, source_folder, dest_folder, account=None, role: str = ""):
-    """在文件夹之间移动消息。尝试 IMAP MOVE，回退到复制+删除。"""
+    """Move a message between folders. Tries IMAP MOVE, falls back to copy+delete."""
     conn = _imap_connect(account)
     conn.select(_q(source_folder))
     try:
@@ -1437,7 +1542,7 @@ def _move_message(uid, source_folder, dest_folder, account=None, role: str = "")
         status, _ = conn.uid("MOVE", _b(uid), dest_arg)
         if status == "OK":
             return True
-        # 回退：UID 复制 + 删除
+        # Fallback: UID copy + delete
         status, _ = conn.uid("COPY", _b(uid), dest_arg)
         if status != "OK":
             return False
@@ -1452,7 +1557,7 @@ def _move_message(uid, source_folder, dest_folder, account=None, role: str = "")
 
 
 def _delete_email(uid, folder="INBOX", permanent=False, account=None):
-    """删除邮件。默认移动到回收站；permanent=True 直接永久删除。"""
+    """Delete an email. By default moves to Trash; permanent=True expunges."""
     cfg = _load_config(account)
     if permanent:
         return _set_flag(uid, folder, "\\Deleted", add=True, account=account)
@@ -1460,13 +1565,13 @@ def _delete_email(uid, folder="INBOX", permanent=False, account=None):
 
 
 def _archive_email(uid, folder="INBOX", account=None):
-    """将邮件移动到存档文件夹。"""
+    """Move an email to the archive folder."""
     cfg = _load_config(account)
     return _move_message(uid, folder, cfg["archive_folder"], account=account, role="archive")
 
 
 def _download_attachment(uid, index, folder="INBOX", account=None):
-    """将特定附件提取到磁盘并返回其本地路径。"""
+    """Extract a specific attachment to disk and return its local path."""
     conn = None
     try:
         conn = _imap_connect(account)
@@ -1489,14 +1594,14 @@ def _download_attachment(uid, index, folder="INBOX", account=None):
     return {"path": filepath, "filename": os.path.basename(filepath), "size": size}
 
 
-# ── MCP 工具注册 ──
+# ── MCP Tool Registration ──
 
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
-    # 用户可能配置了多个 IMAP 账户。每个工具都接受一个
-    # 可选的 `account` 参数 — 按名称（如 "work"）、电子邮件地址
-    # 或账户 ID 进行匹配。省略则使用默认账户。
+    # The user may have multiple IMAP accounts configured. Every tool accepts an
+    # optional `account` param — match by name (e.g. "work"), email address,
+    # or account id. Leave it out to use the default account.
     ACCOUNT_PROP = {
         "account": {
             "type": "string",
@@ -1841,9 +1946,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             max_results = arguments.get("max_results", arguments.get("limit", 20))
             unresponded_only = arguments.get("unresponded_only", False)
             unread_only = arguments.get("unread_only", False)
-            # 构建头部注释，以便 LLM 始终知道命中了哪个账户
-            # 以及存在哪些其他账户。防止 "I can see emails" →
-            # 用户："I have 2 inboxes" → "which one?" 循环。
+            # Build a header note so the LLM always knows which account was hit
+            # AND what other accounts exist. Prevents "I can see emails" →
+            # user: "I have 2 inboxes" → "which one?" loop.
             all_accounts = _list_accounts_raw()
             header_lines = []
             errors = []
@@ -2045,7 +2150,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             )
             if "error" in result:
                 return [TextContent(type="text", text=f"Error: {result['error']}")]
-            # mark original as answered
+            # Mark original as answered
             try:
                 _set_flag(uid, arguments.get("folder", "INBOX"), "\\Answered", add=True, account=acct)
             except Exception:
@@ -2180,7 +2285,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"Error: {e}")]
 
 
-# ── 主入口 ──
+# ── Main ──
 
 async def run():
     async with stdio_server() as (read_stream, write_stream):

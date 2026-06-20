@@ -1,9 +1,10 @@
 /**
- * 构建编辑器的顶部栏（撤销/重做/历史记录、缩放组、图片
- * 菜单、滤镜菜单、选区边缘菜单、快捷键、导入、保存）。
+ * Build the editor's top bar (undo/redo/history, zoom group, Image
+ * menu, Filter menu, Selection-edge menu, Shortcuts, Import, Save).
  *
- * 纯 DOM——无模块状态，无事件监听器。所有连接由调用方
- * 通过 `document.getElementById(...)` 对标记中内嵌的 ID 完成。
+ * Pure DOM — no module state, no event listeners. All wiring is done
+ * by the caller via `document.getElementById(...)` against the IDs
+ * baked into the markup.
  *
  * @returns {HTMLDivElement}
  */

@@ -1,9 +1,9 @@
 """
 skill_extractor.py
 
-从复杂 agent 运行中后台自动提取技能。
-当 agent 需要 >= 2 轮或 >= 2 次工具调用来完成任务时，
-我们要求 LLM 将方法提炼为可复用的技能。
+Background auto-extraction of skills from complex agent runs.
+When the agent takes >= 2 rounds or >= 2 tool calls to complete a task,
+we ask the LLM to distill the approach into a reusable skill.
 """
 
 import json
@@ -40,11 +40,11 @@ SKILL_EXTRACT_PROMPT = (
     "Return ONLY valid JSON (or the bare word null), no markdown fences."
 )
 
-# 模型不确定的技能（或看起来是一次性的）会增加杂乱 —
-# 丢弃低于此置信度的任何内容。
+# Skills the model is unsure about (or that read as one-offs) add clutter —
+# drop anything below this confidence.
 MIN_CONFIDENCE = 0.6
 
-# 包含多少条最近消息
+# How many recent messages to include
 CONTEXT_WINDOW = 12
 
 
@@ -64,43 +64,59 @@ def _has_duplicate_title(skills, title: str) -> bool:
 
 
 def _extract_json_object(text: str) -> Optional[dict]:
-    """尽力从 LLM 响应中提取 JSON 对象。
+    """Best-effort extraction of a JSON object from an LLM response.
 
-    响应可能被代码围栏包裹或被散文包围，且某些
-    模型在真实对象之前发出一段多余的括号
-    （例如 "uses {placeholder} then {...}"）。截取第一个 '{' 到最后 '}'
-    会得到一段无法解析的跨度，技能静默丢失。先尝试
-    整个字符串，然后依次尝试每个 '{' 起始位置，返回第一个
-    解析为 JSON 对象（dict）的候选。如果都没有则返回 None。
+    The response may be wrapped in code fences or surrounded by prose. Uses
+    json.JSONDecoder().raw_decode() to locate the boundaries of complete JSON
+    objects starting at each '{' position. Nested objects are filtered out to
+    keep only top-level candidates. If multiple non-overlapping valid JSON
+    objects are found, it is treated as ambiguous and returns None. Otherwise,
+    returns the single valid candidate dictionary.
     """
     if not text:
         return None
     s = text.strip()
     if s.startswith("```"):
         s = s.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    end = s.rfind("}")
-    if end == -1:
+
+    decoder = json.JSONDecoder()
+    candidates = []
+
+    start = s.find("{")
+    while start != -1:
+        try:
+            obj, idx = decoder.raw_decode(s[start:])
+            end_pos = start + idx
+            if isinstance(obj, dict):
+                candidates.append((start, end_pos, obj))
+        except (json.JSONDecodeError, ValueError):
+            pass
+        start = s.find("{", start + 1)
+
+    # Filter out nested candidates to identify top-level dictionaries
+    top_level = []
+    for c in candidates:
+        is_nested = False
+        for other in candidates:
+            if other == c:
+                continue
+            if other[0] <= c[0] and c[1] <= other[1]:
+                is_nested = True
+                break
+        if not is_nested:
+            top_level.append(c)
+
+    if not top_level:
         return None
 
-    def _as_dict(candidate):
-        try:
-            obj = json.loads(candidate)
-        except (json.JSONDecodeError, ValueError):
-            return None
-        return obj if isinstance(obj, dict) else None
+    if len(top_level) > 1:
+        logger.debug(
+            "[skill-extract] Found multiple non-overlapping JSON objects: %s",
+            [item[2].get("title") for item in top_level]
+        )
+        return None
 
-    # 干净、常见的情况：整个（去除围栏后的）字符串就是对象。
-    obj = _as_dict(s)
-    if obj is not None:
-        return obj
-    # 否则从每个 '{' 位置向前扫描到最后一个 '}'。
-    start = s.find("{")
-    while 0 <= start < end:
-        obj = _as_dict(s[start : end + 1])
-        if obj is not None:
-            return obj
-        start = s.find("{", start + 1)
-    return None
+    return top_level[0][2]
 
 
 async def maybe_extract_skill(
@@ -113,12 +129,12 @@ async def maybe_extract_skill(
     tool_count: int,
     owner: Optional[str] = None,
 ):
-    """如果 agent 运行复杂到值得提取，则提取技能。"""
+    """Extract a skill if the agent run was complex enough."""
     if not model:
         logger.debug("[skill-extract] No model provided, skipping")
         return None
 
-    # 默认静默；追踪提取器问题时翻到 DEBUG。
+    # Quiet by default; flip to DEBUG when chasing extractor issues.
     logger.debug(
         "[skill-extract] start: rounds=%d tools=%d model=%s owner=%s",
         round_count, tool_count, model, owner,
@@ -130,14 +146,14 @@ async def maybe_extract_skill(
     try:
         from src.llm_core import llm_call_async
 
-        # 获取最近消息
+        # Get recent messages
         history = session.get_context_messages()
         recent = history[-CONTEXT_WINDOW:] if len(history) > CONTEXT_WINDOW else history
         if not recent:
             logger.debug("[skill-extract] no recent messages, skipping")
             return None
 
-        # 从消息中移除媒体内容（图片/音频）
+        # Strip media (images/audio) from messages
         stripped_recent = []
         for msg in recent:
             content = msg.get("content", "")
@@ -151,7 +167,7 @@ async def maybe_extract_skill(
         if not stripped_recent:
             return None
 
-        # 构建提取用的对话摘要
+        # Build conversation summary for extraction
         conv_lines = []
         for msg in stripped_recent:
             role = msg.get("role", "?")
@@ -160,7 +176,7 @@ async def maybe_extract_skill(
                 content = " ".join(
                     b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
                 )
-            # 截断过长的消息
+            # Truncate long messages
             if len(content) > 500:
                 content = content[:500] + "..."
             conv_lines.append(f"[{role}] {content}")
@@ -197,23 +213,23 @@ async def maybe_extract_skill(
             )
             return None
 
-        # 部分模型（MiniMax, Qwen-Thinker, DeepSeek-R1）即使在要求
-        # 纯 JSON 时也会在 JSON 输出之前发出
-        # 思维链。`strip_think(prose=True, prompt_echo=True)` 移除
-        # <think>…</think> 标签和散文风格的 "Let me analyze this…"
-        # 前言。没有它，json.loads 每次都在字符 0 崩溃，
-        # 静默退出看起来像 "提取器不工作"。
+        # Some models (MiniMax, Qwen-Thinker, DeepSeek-R1) emit their
+        # chain-of-thought BEFORE the JSON output even when asked for
+        # raw JSON. `strip_think(prose=True, prompt_echo=True)` removes
+        # <think>…</think> tags AND prose-style "Let me analyze this…"
+        # preambles. Without it, json.loads bombed on character 0 every
+        # time and the silent-bail looked like "extractor doesn't work".
         try:
             from src.text_helpers import strip_think as _strip_think
             response = _strip_think(response, prose=True, prompt_echo=True)
         except Exception:
             pass
 
-        # 解析 JSON。对象可能被代码围栏包裹或被
-        # 评论包围（且可能包含一个游离/无效的括号片段，
-        # 在真实对象之前 — 包括让响应本身看起来
-        # 像以 '{' 开头的），因此使用一个宽容的提取器，先尝试
-        # 整个字符串，然后从左到右依次尝试每个 '{' 候选。
+        # Parse JSON. The object may be wrapped in code fences or surrounded by
+        # commentary (and may contain a stray/invalid brace fragment before
+        # the real object — including one that makes the response itself look
+        # like it starts with '{'), so use a tolerant extractor that tries the
+        # whole string first and then each '{' candidate left-to-right.
         data = _extract_json_object(response)
         if not data:
             logger.debug("[skill-extract] no JSON object found in response, dropping")
@@ -224,8 +240,8 @@ async def maybe_extract_skill(
             logger.debug("[skill-extract] LLM returned object with no title, dropping")
             return None
 
-        # 遵守模型自身的可靠性/可复用性评估 — 低
-        # 置信度的提取结果通常是一次性或不可靠的程序。
+        # Honour the model's own reliability/reusability estimate — low-
+        # confidence extractions are usually one-offs or shaky procedures.
         try:
             _conf = float(data.get("confidence", 0.7))
         except (TypeError, ValueError):
@@ -237,17 +253,17 @@ async def maybe_extract_skill(
             )
             return None
 
-        # 检查重复技能
+        # Check for duplicate skills
         existing = skills_manager.load(owner=owner)
         if _has_duplicate_title(existing, title):
             logger.debug("[skill-extract] '%s' already exists — dropped as duplicate", title)
             return None
 
-        # 自动发布闸门：如果用户开启了 `auto_approve_skills`，
-        # 新提取的技能会立即创建为 `published`，而非
-        # 等待下一次审计批次。审计会在稍后运行
-        # 并可在失败时将技能降级回 `draft`（或删除）。默认
-        # ON 匹配 UI 标签 "自动批准技能"。
+        # Auto-publish gate: if the user has `auto_approve_skills` on, the
+        # newly-extracted skill is created `published` immediately rather
+        # than waiting for the next audit batch. The audit still runs later
+        # and can demote it back to `draft` (or delete) on failure. Default
+        # ON matches the UI label "Auto-approve skills".
         _initial_status = "draft"
         try:
             from routes.prefs_routes import _load_for_user as _load_prefs
@@ -281,9 +297,9 @@ async def maybe_extract_skill(
         logger.debug("[skill-extract] non-JSON LLM response, dropping: %s", e)
         return None
     except Exception as e:
-        # 真实的异常保持 INFO+warning 级别，这样即使
-        # 用户仅使用默认日志级别也不会丢失。`exc_info=True` 发送
-        # 完整回溯，以便超时 vs 认证 vs 导入错误可以
-        # 从外部区分。
+        # Real exceptions stay INFO+warning so they don't get lost when
+        # users only have default log level. `exc_info=True` ships the
+        # full traceback so timeouts vs auth vs import errors are
+        # distinguishable from outside.
         logger.warning("[skill-extract] FAILED: %s", e, exc_info=True)
         return None

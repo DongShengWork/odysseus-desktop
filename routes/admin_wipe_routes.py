@@ -1,12 +1,12 @@
-"""管理员危险区域 — 按类别清理数据。
+"""Admin Danger Zone — per-category wipes.
 
-每个端点仅限管理员访问，精确截断一个数据域，
-用户可以按需重置记忆/技能/笔记等，而不会一键清空所有数据。
-`chats` 端点统一映射到已有的 /api/sessions/all，
-使危险区域遵循一致的 URL 模式。
+Each endpoint is admin-only and truncates exactly one domain so the
+user can selectively reset memory / skills / notes / etc. without
+nuking everything. The catch-all `chats` endpoint mirrors the
+existing /api/sessions/all so the Danger Zone speaks one URL pattern.
 
-URL 格式: DELETE /api/admin/wipe/{kind}
-类别: chats, memory, skills, notes, tasks, documents, gallery, calendar。
+URL shape: DELETE /api/admin/wipe/{kind}
+Kinds: chats, memory, skills, notes, tasks, documents, gallery, calendar.
 """
 
 import json
@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 
 def _wipe_memory_files():
-    """清空 memory.json + 删除每个用户的整理状态附属文件，
-    避免下次审计时对已删除的记忆做差异比较。"""
+    """Blank memory.json + drop the per-owner tidy-state sidecar so the
+    next audit doesn't try to diff against gone memories."""
     for name in ("memory.json", "memory_tidy_state.json"):
         p = os.path.join(DATA_DIR, name)
         if not os.path.exists(p):
@@ -54,7 +54,7 @@ def _wipe_memory_files():
 
 
 def _rmtree_quiet(path: str):
-    """rmtree，路径不存在时不报错。"""
+    """rmtree that doesn't crash if the path doesn't exist."""
     if os.path.isdir(path):
         try:
             shutil.rmtree(path)
@@ -63,7 +63,9 @@ def _rmtree_quiet(path: str):
 
 
 def setup_admin_wipe_routes(session_manager):
-    """所有管理端清除路由。"""
+    """The session_manager is passed in so we can also clear its
+    in-memory cache when wiping chats — without it the DB is empty
+    but the next /api/sessions returns stale entries."""
     router = APIRouter(prefix="/api/admin")
 
     @router.delete("/wipe/{kind}")

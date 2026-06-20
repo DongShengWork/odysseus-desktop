@@ -1,4 +1,4 @@
-"""UI 和 agent 工具共享的会话历史搜索。"""
+"""Shared session transcript search for UI and agent tools."""
 
 from __future__ import annotations
 
@@ -77,11 +77,11 @@ def _snippet(content: str, query: str, radius: int = 60) -> str:
 
 
 def _sanitize_fts_query(query: str) -> str | None:
-    """将自由文本转换为保守的 FTS5 MATCH 查询。
+    """Convert free text into a conservative FTS5 MATCH query.
 
-    用户输入可能包含 FTS5 运算符或标点符号，会触发
-    sqlite3.OperationalError。对于历史搜索，v1 不需要高级
-    语法，因此只保留词词和平衡的引号短语。
+    User input can contain FTS5 operators or punctuation that raises
+    sqlite3.OperationalError. For transcript search we do not need advanced
+    syntax in v1, so keep only words and balanced quoted phrases.
     """
     parts: list[str] = []
     for match in re.finditer(r'"([^"]+)"|[\w][\w._-]*', query, flags=re.UNICODE):
@@ -214,6 +214,24 @@ def _search_like(
     return _rows_to_results(db, shaped, query, context_messages)
 
 
+def _fetch_messages_by_id(db, message_ids):
+    """Fetch (message, session_name) for many message ids in a single query.
+
+    The FTS search returns a list of hit ids; fetching each row on its own was an
+    N+1 query (one SELECT per hit). Batch them with one IN(...) query and return
+    a lookup so the caller can reassemble results in hit (relevance) order.
+    """
+    if not message_ids:
+        return {}
+    rows = (
+        db.query(DBChatMessage, DBSession.name)
+        .join(DBSession, DBChatMessage.session_id == DBSession.id)
+        .filter(DBChatMessage.id.in_(message_ids))
+        .all()
+    )
+    return {msg.id: (msg, session_name) for msg, session_name in rows}
+
+
 def _search_fts(
     db,
     query: str,
@@ -267,19 +285,13 @@ def _search_fts(
     if not hits:
         return None
 
+    by_id = _fetch_messages_by_id(db, [hit[0] for hit in hits])
     rows = []
     for hit in hits:
-        message_id = hit[0]
-        snippet = hit[1] or ""
-        row = (
-            db.query(DBChatMessage, DBSession.name)
-            .join(DBSession, DBChatMessage.session_id == DBSession.id)
-            .filter(DBChatMessage.id == message_id)
-            .first()
-        )
-        if row:
-            msg, session_name = row
-            rows.append((msg, session_name, snippet))
+        found = by_id.get(hit[0])
+        if found:
+            msg, session_name = found
+            rows.append((msg, session_name, hit[1] or ""))
     return _rows_to_results(db, rows, query, context_messages)
 
 
@@ -293,10 +305,10 @@ def search_session_messages(
     include_legacy_owner: bool = True,
     db=None,
 ) -> list[SessionSearchResult]:
-    """使用 FTS5（可用时）搜索会话历史记录。
+    """Search session transcripts using FTS5 when available.
 
-    `owner=None` 有意作为旧版/空所有者范围处理，而非
-    全局访问。
+    `owner=None` is deliberately treated as legacy/null-owner scope rather
+    than global access.
     """
     query = (query or "").strip()
     if not query:

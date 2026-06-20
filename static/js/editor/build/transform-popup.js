@@ -1,9 +1,9 @@
 /**
- * 变换弹窗的静态标记，当用户激活调整大小/变换工具时，
- * 浮于画布之上。
+ * Static markup for the Transform popup that floats over the canvas
+ * when the user activates the Resize/Transform tool.
  *
- * 纯 DOM——无模块状态，无事件监听器。调用方通过
- * document.getElementById / pop.querySelector 绑定所有 ID。
+ * Pure DOM — no module state, no event listeners. The caller wires all
+ * IDs via document.getElementById / pop.querySelector.
  *
  * @returns {string}
  */
@@ -57,17 +57,17 @@ export function transformPopupHTML() {
 
 
 /**
- * 将一个 `<span class="ge-transform-spin">…<button data-spin="up|down"/>…</span>`
- * 组合绑定点击递增 + 长按连续递增。1.5 秒后连续递增
- * 间隔从 70ms 加速到 30ms，使用户可以快速滚动
- * 数字字段而无需狂按按钮。
+ * Wire a `<span class="ge-transform-spin">…<button data-spin="up|down"/>…</span>`
+ * group with tap-to-tick + hold-to-repeat. After 1.5 s the repeat
+ * accelerates from 70ms→30ms intervals so users can rapidly scrub a
+ * numeric field without mashing the button.
  *
- * 每次递增时，辅助函数根据 spin-group 的 `data-spin-for` 属性
- * 查找目标 `<input>` 并派发 `input` 事件，
- * 以便弹窗的其余绑定能拾取到变化。
+ * On each tick, the helper looks up the target `<input>` by the
+ * spin-group's `data-spin-for` attribute and dispatches an `input`
+ * event so the rest of the popup's wiring picks up the change.
  *
- * @param {HTMLElement} root   拥有一个或多个 spin group 的元素
- *                             （如变换弹窗）。
+ * @param {HTMLElement} root   Element that owns one or more spin groups
+ *                             (e.g. the transform popup).
  */
 export function attachSpinRepeat(root) {
   root.querySelectorAll('.ge-transform-spin button').forEach(btn => {

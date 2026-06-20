@@ -1,8 +1,8 @@
 """
 memory_server.py
 
-MCP 服务器，暴露内存管理功能（列表、添加、编辑、删除、搜索）。
-从 Odysseus 代码库导入 MemoryManager 和 MemoryVectorStore。
+MCP server exposing memory management (list, add, edit, delete, search).
+Imports MemoryManager and MemoryVectorStore from the Odysseus codebase.
 """
 
 import asyncio
@@ -18,14 +18,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 server = Server("memory")
 
-# 延迟初始化的管理器（在首次工具调用时设置）
+# Late-initialized managers (set during first tool call)
 _memory_manager = None
 _memory_vector = None
 _initialized = False
 
 
 def _ensure_init():
-    """首次使用时延迟初始化内存管理器。"""
+    """Lazy-init memory managers on first use."""
     global _memory_manager, _memory_vector, _initialized
     if _initialized:
         return
@@ -93,16 +93,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             if category_filter:
                 msg += f" in category '{category_filter}'"
             return [TextContent(type="text", text=msg + ".")]
+
         lines = [f"Found {len(memories)} memory entries:\n"]
-        for m in memories[:100]:
+        for m in memories:
             cat = m.get("category", "fact")
             mid = m.get("id", "?")[:8]
             text = m.get("text", "")
             if len(text) > 150:
                 text = text[:150] + "..."
             lines.append(f"- [{cat}] `{mid}` — {text}")
-        if len(memories) > 100:
-            lines.append(f"... and {len(memories) - 100} more")
         return [TextContent(type="text", text="\n".join(lines))]
 
     elif action == "add":

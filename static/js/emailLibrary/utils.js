@@ -1,13 +1,13 @@
 // static/js/emailLibrary/utils.js
 //
-// 从 emailLibrary.js 中提取的纯函数辅助工具。无 DOM 状态、无 fetch、
-// 无共享可变引用 — 可安全导入任何地方。
+// Pure helpers extracted from emailLibrary.js. No DOM state, no fetch,
+// no shared mutable references — safe to import anywhere.
 
-// ── 受 Talon 启发的多语言引用检测正则表达式 ───────────
-// （大致）借鉴自 Mailgun 的 `talon` 库。这些是部分正则源码字符串 —
-// 调用方将它们与周围的模式组合使用。
-// 刻意支持多语言：输入的 "wrote:" 行具有区域限定性，而且人们经常
-// 跨语言设置转发/回复邮件。
+// ── Talon-inspired multilingual quote-detection regexes ───────────
+// Borrowed (loosely) from Mailgun's `talon` library. These are partial
+// regex source strings — combined with surrounding patterns by callers.
+// Multilingual on purpose: a typed "wrote:" line is locale-bound, and
+// people forward / reply across language settings all the time.
 
 export const _TALON_WROTE = '(?:wrote|écrit|escribió|scrisse|schrieb|skrev|schreef|napisał|написал|napsal|написа|έγραψε|katselivat|napisao|написав|napisała|napisali|hat geschrieben|kirjoitti|написала|escreveu|napisao|написа|написала)';
 
@@ -17,13 +17,13 @@ export const _TALON_SUBJ = '(?:Subject|Ämne|Betreff|Objet|Oggetto|Asunto|Onderw
 export const _TALON_TO   = '(?:To|Till|An|À|A|Voor|Para|Naar|Кому|Do|宛先|收件人|Emri|Komu)';
 export const _TALON_ORIG_RE = /(?:^|\n)[\s>]*[-_=]{3,}\s*(?:Original\s+Message|Forwarded\s+message|Ursprüngliche\s+Nachricht|Mensaje\s+original|Messaggio\s+originale|Message\s+d['’]origine|Oorspronkelijk\s+bericht|Original\s+meddelande|Vor[ ]asal[a]\s+meddelande|原文|原始邮件|転送)\s*[-_=]{3,}/i;
 
-// 最小纯文本长度，达到此长度的"签名"才会被折叠。
-// 简短的落款（"Cheers, John"）保持内联 — 折叠只会为
-// 短短几个字增加一个点击操作。
+// Minimum plain-text length of a "signature" before we bother folding it.
+// Short closings ("Cheers, John") stay inline — folding them would add
+// a click for two bytes of saving.
 export const _SIG_BLOAT_MIN_CHARS = 200;
 
-// 通过 detached div 来回传值来 HTML 转义字符串。
-// 简单且正确（处理 innerHTML 所需的所有实体）。
+// HTML-escape a string by round-tripping through a detached div. Cheap
+// and correct (handles all the entities that matter for innerHTML).
 export function _esc(text) {
   const div = document.createElement('div');
   div.textContent = text || '';
@@ -52,10 +52,10 @@ function _isDangerousSrcset(value) {
   return String(value || '').split(',').some(candidate => _isDangerousUrl(candidate));
 }
 
-// 转义并链接化 URL 和电子邮件地址。返回 innerHTML 安全的标记。
+// Escape + linkify URLs and email addresses. Returns innerHTML-safe markup.
 export function _escLinkify(text) {
   const escaped = _esc(text);
-  // URL: http(s)://... 或 www....
+  // URLs: http(s)://... or www....
   const urlRe = /\b((?:https?:\/\/|www\.)[^\s<>"']+[^\s<>"'.,;:!?)\]])/g;
   const mailRe = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
   return escaped
@@ -66,8 +66,8 @@ export function _escLinkify(text) {
     .replace(mailRe, (m) => `<a href="${_attrEsc(`mailto:${m}`)}">${m}</a>`);
 }
 
-// 从 "Name <email@x>" 中提取显示名称；回退到邮件的本地部分；
-// 最终回退到输入字符串。
+// Pull display name out of "Name <email@x>"; fallback to local-part of
+// the email; final fallback to the input string.
 export function _extractName(addr) {
   const m = addr.match(/^"?([^"<]+?)"?\s*<([^>]+)>\s*$/);
   if (m) return m[1].trim();
@@ -75,7 +75,8 @@ export function _extractName(addr) {
   return localPart || addr;
 }
 
-// 解析服务端线程解析器发出的 "Author <email> · Date" 元数据字符串。
+// Parse the "Author <email> · Date" metadata string emitted by the
+// server-side thread parser.
 export function _parseTurnMeta(meta) {
   if (!meta) return { author: '', email: '', date: '' };
   const m = String(meta);
@@ -93,8 +94,8 @@ export function _parseTurnMeta(meta) {
   return { author, email, date };
 }
 
-// 聊天气泡时间戳的简短、区域感知显示字符串。
-// 对无效/空输入返回 ''。
+// Short, locale-aware display string for a chat-bubble timestamp.
+// Returns '' for invalid / empty input.
 export function _formatBubbleDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -106,9 +107,9 @@ export function _formatBubbleDate(iso) {
   } catch (_) { return ''; }
 }
 
-// 将原始 "to" 地址字符串（"Foo <foo@x.com>, bar@y.com"）格式化为
-// 简短、可读的列表 — 有显示名称时使用显示名称，否则只显示邮箱的本地部分，
-// 超过 2 个收件人时显示 ", +N"。
+// Format a raw "to" address string ("Foo <foo@x.com>, bar@y.com") into a
+// short, readable list — display names when present, just the local part
+// of the email otherwise, and ", +N" once there are more than 2 recipients.
 export function _formatRecipients(raw) {
   if (!raw) return '';
   const addrs = String(raw).split(',').map(s => s.trim()).filter(Boolean);
@@ -124,8 +125,9 @@ export function _formatRecipients(raw) {
   return friendly.slice(0, 2).join(', ') + ' +' + (friendly.length - 2);
 }
 
-// 确定性按发件人着色。与 emailInbox.js#_senderColor 使用相同的哈希算法，
-// 使发件人头像/名称颜色在列表视图和气泡阅读器中保持一致。
+// Deterministic per-sender colour. Same hashing as
+// emailInbox.js#_senderColor so a sender's avatar / name colour matches
+// across the list view and the bubble reader.
 export function _senderColor(name) {
   if (!name) return 'hsl(220, 55%, 65%)';
   const key = String(name).toLowerCase();
@@ -137,7 +139,7 @@ export function _senderColor(name) {
   return `hsl(${hue}, 55%, 65%)`;
 }
 
-// 头像气泡的 1-2 个字母缩写，支持 Unicode。
+// 1- or 2-letter initials for an avatar bubble. Unicode-friendly.
 export function _initials(s) {
   if (!s) return '?';
   const clean = String(s).replace(/<[^>]+>/g, '').replace(/[^\p{L}\s]/gu, ' ').trim();
@@ -148,11 +150,11 @@ export function _initials(s) {
   return (first + last).toUpperCase();
 }
 
-// 用于渲染远程邮件正文的 HTML 消毒器。剥离 script/iframe/
-// form/style/ 等标签，清除 `on*` 处理器，阻止所有已知 URL 属性上的
-// `javascript:`/`vbscript:`/`data:` URL，清除内联颜色/字体/
-// 位置样式以便主题可以接管显示，并将带有高亮背景的内联标签
-// 包裹在 <mark> 中，使其在不同主题下清晰可见。
+// HTML sanitizer for rendering remote email bodies. Strips script/iframe/
+// form/style/etc., kills `on*` handlers, blocks `javascript:`/`vbscript:`/
+// `data:` URLs on every known URL attribute, scrubs inline colour/font/
+// position styles so the theme can take over, and wraps highlight-bearing
+// inline tags in <mark> so they render legibly across themes.
 function _sanitizeHtmlOnce(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll(

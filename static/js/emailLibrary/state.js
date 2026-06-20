@@ -1,13 +1,14 @@
 // static/js/emailLibrary/state.js
 //
-// 电子邮件库弹窗的共享可变状态。将这些状态放在单个导出对象上，
-// 让兄弟模块（utils、signatureFold，以及未来的 render/menu/composer 拆分）
-// 可以读写相同的值，而不需要每个模块各自导入 19 个 `let` 绑定——
-// ES 模块本来也不允许从定义模块外部访问这些绑定。
+// Shared mutable state for the email-library popup. Keeping these on a
+// single exported object lets sibling modules (utils, signatureFold,
+// future render/menu/composer splits) read and write the same values
+// without each one importing 19 `let` bindings — which ES modules
+// don't allow from outside the defining module anyway.
 //
-// 写入操作在任何地方都像 `state._libOpen = true`；读取操作像
-// `state._libOpen`。名称与原始变量匹配，因此这次重构纯粹是重命名，
-// 不涉及语义变更。
+// Writes look like `state._libOpen = true` everywhere; reads look like
+// `state._libOpen`. The names match the originals so the refactor is a
+// pure rename, not a semantic change.
 
 export const state = {
   _libOpen: false,

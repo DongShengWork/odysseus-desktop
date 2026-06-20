@@ -1,4 +1,5 @@
-"""搜索服务 — 网页搜索的干净接口。"""
+# services/search/service.py
+"""Search service — clean interface for web search."""
 
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
@@ -12,7 +13,7 @@ from . import (
 
 @dataclass
 class SearchResult:
-    """单条搜索结果。"""
+    """A single search result."""
     url: str
     title: str
     snippet: str
@@ -21,7 +22,7 @@ class SearchResult:
 
 @dataclass
 class SearchResponse:
-    """搜索查询的响应。"""
+    """Response from a search query."""
     query: str
     results: List[SearchResult]
     total: int
@@ -30,9 +31,9 @@ class SearchResponse:
 
 class SearchService:
     """
-    网页搜索服务。
+    Web search service.
 
-    用法：
+    Usage:
         service = SearchService()
         result = await service.search("python async patterns")
         for r in result.results:
@@ -50,23 +51,23 @@ class SearchService:
         fetch_content: Optional[bool] = None,
     ) -> SearchResponse:
         """
-        搜索网页。
+        Search the web.
 
         Args:
-            query: 搜索查询
-            depth: 搜索深度（1=快速, 2=深入, 3=全面）
-            fetch_content: 是否获取全页内容
+            query: Search query
+            depth: Search depth (1=quick, 2=thorough, 3=comprehensive)
+            fetch_content: Whether to fetch full page content
 
         Returns:
-            包含搜索结果的 SearchResponse
+            SearchResponse with results
         """
         depth = depth or self.default_depth
 
-        # comprehensive_web_search 是同步的，配合 return_sources=True
-        # 返回 (context_str, [{"url", "title"}, ...])。在事件循环外运行它
-        # 以免阻塞，并使用源列表作为结果行。
-        # `fetch_content` 参数被接受以保持 API 兼容性；全面搜索
-        # 总是抓取页面内容。
+        # comprehensive_web_search is synchronous and, with return_sources=True,
+        # returns (context_str, [{"url", "title"}, ...]). Run it off the event
+        # loop so we don't block it, and use the source list as the result rows.
+        # `fetch_content` is accepted for API compatibility; the comprehensive
+        # search always fetches page content.
         import asyncio
         _context, raw_results = await asyncio.to_thread(
             comprehensive_web_search,
@@ -93,9 +94,9 @@ class SearchService:
         )
 
     async def fetch_content(self, url: str) -> Optional[str]:
-        """从 URL 获取内容。"""
+        """Fetch content from a URL."""
         return await fetch_webpage_content(url)
 
     def get_config(self) -> Dict[str, Any]:
-        """获取当前搜索配置。"""
+        """Get current search configuration."""
         return get_search_config()

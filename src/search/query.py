@@ -1,7 +1,7 @@
-"""标准 services.search.query 模块的兼容性包装。
+"""Compatibility wrapper for the canonical services.search.query module.
 
-``src.search.query`` 保持可导入以兼容旧版 agent/deep-research 代码，但
-实现已移至 ``services.search.query``，以避免两份实现出现差异。
+``src.search.query`` stays importable for older agent/deep-research code, but the
+implementation now lives in ``services.search.query`` so the two cannot drift.
 """
 
 import sys

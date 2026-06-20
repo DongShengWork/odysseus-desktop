@@ -1,5 +1,5 @@
 # routes/embedding_routes.py
-"""管理本地 fastembed 嵌入模型和自定义端点的路由。"""
+"""Routes for managing local fastembed embedding models and custom endpoints."""
 import os
 import json
 import shutil

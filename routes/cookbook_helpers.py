@@ -1,50 +1,56 @@
-"""cookbook_helpers.py — cookbook 路由共享的验证器和小型辅助函数。
-从 cookbook_routes.py 中提取；路由模块导入其所需的符号。"""
+"""cookbook_helpers.py — validators + small helpers shared by the cookbook routes.
+Extracted from cookbook_routes.py; the routes module imports the symbols it needs."""
 
+import json
 import logging
 import ntpath
 import os
 import posixpath
 import re
 import shlex
+from pathlib import Path
 
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from routes._validators import validate_remote_host, validate_ssh_port
 from core.platform_compat import _ssh_exec_argv
 
 logger = logging.getLogger(__name__)
 
 
-# HuggingFace repo ID 格式为 <org>/<name>，均为字母数字加 ._-
-# 预先拒绝其他内容可关闭 shell 插值攻击向量。
+# HuggingFace repo IDs are <org>/<name>, both alphanumerics plus ._-
+# Rejecting anything else up front closes off shell-interpolation vectors.
 _REPO_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
-# 从自定义/本地模型目录扫描的缓存模型以其叶子
-# 文件夹名（无斜杠）为键，如 `DeepSeek-R1-UD-IQ4_XS`。serve 命令使用
-# 真实的磁盘路径；此标识符仅用于 UI/任务
-# 簿记，因此服务应接受与 repo ID 相同安全字符集。
+# Cached models scanned from a custom/local model dir are keyed by their leaf
+# folder name (no slash), e.g. `DeepSeek-R1-UD-IQ4_XS`. The serve command uses
+# the real on-disk path separately; this identifier is only for UI/task
+# bookkeeping, so serving should accept the same safe glyph set as repo IDs.
 _LOCAL_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-# Ollama 模型名称包含标签，如 `qwen2.5:0.5b` 或 `llama3.2:latest`。
-# 某些注册表也使用命名空间路径。保持 shell 安全：无空格、
-# 引号、`$`、`;`、`&`、管道或重定向。
+# Ollama model names include tags, e.g. `qwen2.5:0.5b` or `llama3.2:latest`.
+# Some registries also use a namespace path. Keep this shell-safe: no spaces,
+# quotes, `$`, `;`, `&`, pipes, or redirects.
 _OLLAMA_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,200}$")
-# Include 模式是 glob：仅允许典型安全字符。
+# Include pattern is a glob: allow typical safe glyphs only.
 _INCLUDE_RE = re.compile(r"^[A-Za-z0-9._\-*?/\[\]]+$")
-# 远程主机：`user@host` 或纯 `host`（允许别名），其中 host
-# 是安全的 DNS 风格标记或短 SSH 配置别名。
-_REMOTE_HOST_RE = re.compile(r"^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9._-]+$")
-# HF token 和 API token 是 URL 安全的 base64 风格。
+# HF tokens and API tokens are url-safe base64-like.
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]+$")
-# 我们生成的 Session ID 形如 "cookbook-deadbeef" 或 "serve-deadbeef"。
-# 超出纯字母数字 + 连字符 + 下划线的内容可能逃逸
-# 该值所处的 shell/PowerShell 上下文。
+# Session IDs we mint look like "cookbook-deadbeef" or "serve-deadbeef".
+# Anything beyond plain alphanumerics + dash + underscore could break out
+# of the shell/PowerShell contexts the value lands in.
 _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-_SSH_PORT_RE = re.compile(r"^\d{1,5}$")
 _GPU_LIST_RE = re.compile(r"^\d+(?:,\d+)*$")
-# 下载目标目录。绝对路径或 ~ 相对路径；仅安全路径字符
-# （无引号、shell 元字符或空格），因为它会出现在 shell
-# 命令中。前导 ~ 在命令构建时展开为 $HOME。
-_LOCAL_DIR_RE = re.compile(r"^~?/[A-Za-z0-9._/-]*$|^~$")
+# A download target directory. Absolute or ~-relative path; safe path glyphs
+# only (no quotes or shell metacharacters). Spaces are allowed because command
+# builders pass the value through quoted shell/Python contexts. The character
+# class uses ``\w`` — Unicode word characters under Python 3's default str
+# matching — so non-ASCII folder names pass validation too: Cyrillic, accented
+# Latin, CJK, e.g. ``/Volumes/Модели`` or ``D:\AI Models\Модели``. This stays
+# shell-safe: none of ``; & | ` $ '' "" () {}`` newlines etc. are in ``[\w. -]``,
+# so injection vectors remain rejected. A leading ~ is expanded to $HOME at
+# command-build time. (Drive letters stay ASCII: ``[A-Za-z]:``.)
+_LOCAL_DIR_RE = re.compile(r"^~?(?:/[\w. -]*)+$|^~$")
+_WINDOWS_LOCAL_DIR_RE = re.compile(r"^[A-Za-z]:[\\/](?:[\w. -]+(?:[\\/][\w. -]+)*[\\/]?)?$")
 _WINDOWS_DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]")
 
 
@@ -78,14 +84,6 @@ def _validate_include(v: str | None) -> str | None:
     return v
 
 
-def _validate_remote_host(v: str | None) -> str | None:
-    if v is None or v == "":
-        return None
-    if not _REMOTE_HOST_RE.match(v):
-        raise HTTPException(400, "Invalid remote_host — must be host or user@host, no SSH option syntax")
-    return v
-
-
 def _validate_token(v: str | None) -> str | None:
     if v is None or v == "":
         return None
@@ -94,24 +92,41 @@ def _validate_token(v: str | None) -> str | None:
     return v
 
 
+def load_stored_hf_token(*, state_path: Path | str | None = None) -> str:
+    """Return the decrypted HF token from cookbook_state.json, else env fallback."""
+    path = Path(state_path) if state_path else Path(os.environ.get("DATA_DIR", "data")) / "cookbook_state.json"
+    token = ""
+    if path.exists():
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+            env = state.get("env") if isinstance(state, dict) else {}
+            if isinstance(env, dict) and env.get("hfToken"):
+                from src.secret_storage import decrypt
+                token = decrypt(env.get("hfToken") or "")
+        except Exception:
+            token = ""
+    if not token:
+        token = (os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN") or "").strip()
+    return token
+
+
 def _validate_local_dir(v: str | None) -> str | None:
     if v is None or v == "":
         return None
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in {"'", '"'}:
+        v = v[1:-1]
     v = v.rstrip("/") or "/"
-    if not _LOCAL_DIR_RE.match(v):
-        raise HTTPException(400, "Invalid local_dir — must be an absolute or ~ path with no spaces or shell metacharacters")
+    if not (_LOCAL_DIR_RE.match(v) or _WINDOWS_LOCAL_DIR_RE.match(v)):
+        raise HTTPException(400, "Invalid local_dir — must be an absolute or ~ path with no shell metacharacters")
+    # Reject path segments that start with '-' (option injection). '-' is in the
+    # allowlist, so a dir like ``/models/-rf`` or ``D:\models\-rf`` could be read
+    # as a CLI flag by hf/etc. — and quoting does NOT stop a value from being
+    # parsed as an option. This is the one residual that command-build-time
+    # quoting can't cover, so the guard lives here, keeping the safety wholly
+    # inside the validator rather than relying on consumers.
+    if any(seg.startswith("-") for seg in re.split(r"[\\/]", v) if seg):
+        raise HTTPException(400, "Invalid local_dir — path segments cannot start with '-'")
     return v
-
-
-def _validate_ssh_port(v: str | None) -> str | None:
-    if v is None or v == "":
-        return None
-    if not _SSH_PORT_RE.fullmatch(str(v)):
-        raise HTTPException(400, "Invalid ssh_port")
-    port = int(v)
-    if port < 1 or port > 65535:
-        raise HTTPException(400, "Invalid ssh_port")
-    return str(port)
 
 
 def _validate_gpus(v: str | None) -> str | None:
@@ -123,8 +138,9 @@ def _validate_gpus(v: str | None) -> str | None:
 
 
 def _shell_path(p: str) -> str:
-    """在双引号 shell 上下文中渲染已验证的路径，将前导 ~ 展开为 $HOME
-    （单引号不会展开它）。因为 _validate_local_dir 已限制字符集，所以是安全的。"""
+    """Render a validated path for a double-quoted shell context, expanding a
+    leading ~ to $HOME (single quotes wouldn't expand it). Safe because
+    _validate_local_dir already rejects quotes and shell metacharacters."""
     if p == "~":
         return '"$HOME"'
     if p.startswith("~/"):
@@ -133,14 +149,14 @@ def _shell_path(p: str) -> str:
 
 
 def _local_tooling_path_export(executable: str) -> str:
-    """Bash 行，将运行中解释器的 bin 目录前置到 PATH。
+    """Bash line prepending the running interpreter's bin dir to PATH.
 
-    当 Odysseus 从虚拟环境运行时，该 bin 目录包含 cookbook 运行器
-    调用的工具（`hf`、`python`）。tmux 运行器从新的登录 shell 启动，
-    虚拟环境未激活，因此没有此操作就找不到 `hf`，下载失败提示
-    "hf: command not found" — 特别是在 macOS 上，`pip --user` 自修复也
-    会失败（不是 `pip` 命令，只有 `pip3`/`python3 -m pip`）。
-    仅本地运行；SSH 下无意义。
+    When Odysseus runs from a virtualenv, that bin dir holds the tools the
+    cookbook runners shell out to (`hf`, `python`). tmux runners start from a
+    fresh login shell with the venv NOT activated, so without this they can't
+    find `hf` and downloads fail with "hf: command not found" — notably on
+    macOS, where the `pip --user` self-heal also misses (`pip` isn't a command,
+    only `pip3`/`python3 -m pip`). Local runs only; meaningless over SSH.
     """
     # This builds a bash snippet, so an explicit POSIX absolute path should keep
     # POSIX semantics even when the app/tests run on Windows. Otherwise
@@ -164,29 +180,30 @@ def _local_tooling_path_export(executable: str) -> str:
 
 
 def _pip_install_no_cache(cmd: str) -> str:
-    """为 pip install 命令添加 ``--no-cache-dir``。
+    """Add ``--no-cache-dir`` to a pip install command.
 
-    Cookbook 依赖安装（vLLM、llama-cpp-python 等）构建大型 wheel；
-    pip 的默认缓存位于 ``$HOME/.cache/pip``，这些构建可能在中途
-    填满小型主文件系统，出现 ``[Errno 28] No space left on device``
-    （issue #1219），导致依赖"已安装"但不可用（#1459）。
-    为这些一次性安装禁用缓存，避免占用主磁盘
-    （维护者建议的 ``PIP_CACHE_DIR=`` 变通方案，已设为默认）。
-    幂等；对非 pip install 命令不做任何修改。"""
+    Cookbook dependency installs (vLLM, llama-cpp-python, …) build large wheels;
+    pip's default cache lives under ``$HOME/.cache/pip`` and these builds can fill
+    a small home filesystem with ``[Errno 28] No space left on device`` mid-build
+    (issue #1219), leaving the dependency "installed" but unusable (#1459).
+    Disabling the cache for these one-off installs keeps them off the home disk
+    (the maintainer's suggested ``PIP_CACHE_DIR=`` workaround, made the default).
+    Idempotent; leaves non-pip-install commands untouched."""
     if not cmd or "pip install" not in cmd or "--no-cache-dir" in cmd:
         return cmd
     return cmd.replace("pip install", "pip install --no-cache-dir", 1)
 
 
 def _pip_install_attempt(pip_cmd: str) -> str:
-    """包装单个 pip install 命令，使其退出状态在回退链中存活，
-    失败时其 stderr 在 tmux 日志中可见。
+    """Wrap a single pip install command so its exit status survives the
+    fallback chain and its stderr is visible in the tmux log on failure.
 
-    没有此包装器，`pip ... 2>&1 | tail -5` 返回 ``tail`` 的
-    退出码（0），掩盖 pip 真正的失败并阻止下一条回退运行。
-    生成的代码片段捕获所有输出到临时文件，
-    失败时打印最后 5 行（使 Cookbook 日志面板显示有用的诊断），
-    清理临时文件，并以 pip 原始状态退出。
+    Without this wrapper, `pip … 2>&1 | tail -5` returns ``tail``'s exit
+    code (0), masking pip's real failure and preventing the next fallback
+    from running.  The generated snippet captures all output to a temp
+    file, prints the last 5 lines on failure (so the Cookbook log panel
+    shows useful diagnostics), cleans up, and exits with pip's original
+    status.
     """
     return (
         "bash -c '"
@@ -197,7 +214,7 @@ def _pip_install_attempt(pip_cmd: str) -> str:
 
 
 def _pip_command(python_cmd: str) -> str:
-    """返回 pip 可执行文件或 Python 可执行文件的 pip 命令。"""
+    """Return a pip command for either a pip executable or a Python executable."""
     cmd = python_cmd.strip()
     if " -m pip" in cmd or cmd in {"pip", "pip3"}:
         return python_cmd
@@ -211,14 +228,15 @@ def _pip_break_system_packages_check(pip_cmd: str) -> str:
 
 
 def _pip_install_fallback_chain(package: str, *, python_cmd: str = "python3 -m pip", upgrade: bool = False) -> str:
-    """构建一个暴露错误的 bash pip install 回退链。
+    """Build a bash pip install fallback chain that surfaces errors.
 
-    先尝试当前解释器/环境。``--user`` 在许多虚拟环境中无效，
-    因此仅在不在虚拟环境中时才尝试 ``--user`` 回退。
+    Try the active interpreter/environment first. ``--user`` is invalid
+    inside many venvs, so only attempt the ``--user`` fallback when NOT
+    inside a venv.
 
-    每次尝试都通过 :func:`_pip_install_attempt` 包装，保留 pip
-    的真实退出码（无 ``| tail`` 掩盖），失败时 pip 输出的最后 5 行
-    显示在 Cookbook 日志中。
+    Each attempt is wrapped via :func:`_pip_install_attempt` so pip's real
+    exit code is preserved (no ``| tail`` masking) and the last 5 lines of
+    pip output appear in the Cookbook log on failure.
     """
     from core.platform_compat import IS_WINDOWS
     upgrade_flag = " -U" if upgrade else ""
@@ -344,7 +362,12 @@ def _user_shell_path_bootstrap() -> list[str]:
         '  ODYSSEUS_USER_PATH="$("$ODYSSEUS_USER_SHELL" -ic \'printf "__ODYSSEUS_PATH__%s\\n" "$PATH"\' 2>/dev/null | sed -n \'s/^__ODYSSEUS_PATH__//p\' | tail -n 1 || true)"',
         '  if [ -n "$ODYSSEUS_USER_PATH" ]; then export PATH="$ODYSSEUS_USER_PATH:$PATH"; fi',
         'fi',
-        'command -v python3 >/dev/null 2>&1 || python3() { python "$@"; }',
+        # Windows can expose python3 as a Microsoft Store App Execution Alias
+        # under WindowsApps. Git Bash sees that stub as present, but it exits
+        # before running Python. A Windows venv usually has python.exe, not
+        # python3.exe, so treat a missing or WindowsApps python3 as absent.
+        '_odys_py3="$(command -v python3 2>/dev/null || true)"',
+        'case "$_odys_py3" in ""|*[Ww]indows[Aa]pps*) python3() { python "$@"; } ;; esac',
         'command -v python >/dev/null 2>&1 || python() { python3 "$@"; }',
     ]
 
@@ -383,6 +406,7 @@ def _cached_model_scan_script(model_dirs: list[str] | None = None, add_hf_cache:
         "    for root, dirs, fns in safe_walk(base):",
         "        for fn in sorted(fns):",
         "            if not fn.lower().endswith('.gguf'): continue",
+        "            if fn.startswith('._'): continue  # macOS AppleDouble sidecar, not a real GGUF",
         "            fp = os.path.join(root, fn)",
         "            try: size = os.path.getsize(fp)",
         "            except Exception: size = 0",
@@ -554,6 +578,36 @@ _GGUF_PRELUDE_RE = re.compile(
 _OLLAMA_HOST_ASSIGNMENT_RE = re.compile(r"(?:^|\s)OLLAMA_HOST=([^\s]+)")
 _OLLAMA_BIND_RE = re.compile(r"^\[([^\]]+)\]:(\d+)$|^([^:]+):(\d+)$")
 _OLLAMA_BIND_HOST_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+_LLAMA_CPP_PYTHON_GGML_TYPES = {
+    "f32": "0",
+    "f16": "1",
+    "q4_0": "2",
+    "q4_1": "3",
+    "q5_0": "6",
+    "q5_1": "7",
+    "q8_0": "8",
+    "q8_1": "9",
+    "q2_k": "10",
+    "q3_k": "11",
+    "q4_k": "12",
+    "q5_k": "13",
+    "q6_k": "14",
+    "q8_k": "15",
+    "iq2_xxs": "16",
+    "iq2_xs": "17",
+    "iq3_xxs": "18",
+    "iq1_s": "19",
+    "iq4_nl": "20",
+    "iq3_s": "21",
+    "iq2_s": "22",
+    "iq4_xs": "23",
+    "mxfp4": "39",
+    "nvfp4": "40",
+    "q1_0": "41",
+}
+_LLAMA_CPP_PYTHON_TYPE_FLAG_RE = re.compile(
+    r"(?P<flag>--type_[kv])(?P<sep>\s+|=)(?P<quote>['\"]?)(?P<value>[A-Za-z0-9_]+)(?P=quote)"
+)
 
 
 def _ollama_bind_from_cmd(cmd: str | None, *, default_host: str = "127.0.0.1") -> tuple[str, str]:
@@ -583,6 +637,22 @@ def _ollama_bind_from_cmd(cmd: str | None, *, default_host: str = "127.0.0.1") -
     if port_num < 1 or port_num > 65535:
         return "127.0.0.1", "11434"
     return f"[{host}]" if bracketed_host else host, port
+
+
+def _normalize_llama_cpp_python_cache_types(cmd: str | None) -> str | None:
+    """Map llama.cpp KV cache type names to llama-cpp-python's integer enum."""
+    if not cmd or "llama_cpp.server" not in cmd:
+        return cmd
+
+    def repl(match: re.Match[str]) -> str:
+        value = match.group("value")
+        mapped = _LLAMA_CPP_PYTHON_GGML_TYPES.get(value.lower())
+        if not mapped:
+            return match.group(0)
+        quote = match.group("quote")
+        return f"{match.group('flag')}{match.group('sep')}{quote}{mapped}{quote}"
+
+    return _LLAMA_CPP_PYTHON_TYPE_FLAG_RE.sub(repl, cmd)
 
 
 def _check_serve_binary(seg: str) -> None:
@@ -723,6 +793,7 @@ def _append_llama_cpp_linux_accel_build_lines(runner_lines: list[str]) -> None:
     runner_lines.append('    done')
     # rm -rf build so a prior poisoned CMakeCache.txt (e.g. from a failed CUDA
     # or HIP attempt) doesn't cause the next configure to reuse stale settings.
+    runner_lines.append('    mkdir -p ~/bin')
     runner_lines.append('    cd ~/llama.cpp && rm -rf build')
     runner_lines.append('    if command -v hipconfig &>/dev/null || [ -d /opt/rocm ] || [ -n "$ROCM_PATH" ] || [ -n "$HIP_PATH" ]; then')
     runner_lines.append('      if command -v hipconfig &>/dev/null; then')
@@ -1026,6 +1097,16 @@ def _diagnose_serve_output(text: str) -> dict | None:
             r"vllm.*command not found|No module named vllm|ERROR: vLLM is not installed",
             "vLLM is not installed or not in PATH on this server.",
             [{"label": "install vLLM in Cookbook Dependencies", "op": "dependency", "package": "vllm"}],
+        ),
+        (
+            r"sgl_kernel[\s\S]*(Python\.h|libnuma\.so\.1|common_ops)|"
+            r"(Python\.h|libnuma\.so\.1|common_ops)[\s\S]*sgl_kernel|"
+            r"Please ensure sgl_kernel is properly installed",
+            "SGLang native dependencies are missing on this server.",
+            [
+                {"label": "install OS packages: libnuma-dev python3.12-dev build-essential", "op": "manual"},
+                {"label": "upgrade sglang-kernel after OS packages are installed", "op": "manual"},
+            ],
         ),
         (
             r"sglang.*command not found|No module named sglang|SGLang is not installed",

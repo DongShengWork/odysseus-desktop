@@ -1,5 +1,5 @@
 # routes/model_routes.py
-"""模型和提供商管理路由。"""
+"""Routes for model and provider management."""
 import os
 import re
 import uuid
@@ -50,7 +50,7 @@ _ENDPOINT_FALLBACK_FIELDS = {
 
 
 def _speech_settings_using_endpoint(settings: dict, ep_id: str) -> list:
-    """返回引用模型端点的语音设置。"""
+    """Return speech settings that reference a model endpoint."""
     endpoint_ref = f"endpoint:{ep_id}"
     return [
         label
@@ -60,7 +60,7 @@ def _speech_settings_using_endpoint(settings: dict, ep_id: str) -> list:
 
 
 def _clear_speech_settings_for_endpoint(settings: dict, ep_id: str) -> list:
-    """重置引用模型端点的语音设置。"""
+    """Reset speech settings that reference a model endpoint."""
     endpoint_ref = f"endpoint:{ep_id}"
     cleared = []
     for provider_key, model_key, default_model, label in _SPEECH_ENDPOINT_SETTINGS:
@@ -72,7 +72,7 @@ def _clear_speech_settings_for_endpoint(settings: dict, ep_id: str) -> list:
 
 
 def _endpoint_settings_using_endpoint(settings: dict, ep_id: str, *, include_speech: bool = False) -> list:
-    """返回来引用端点的设置和回退链的标签。"""
+    """Return labels for settings and fallback chains that reference an endpoint."""
     affected = []
     for ep_key, (_, label) in _ENDPOINT_SETTING_FIELDS.items():
         if (settings.get(ep_key) or "") == ep_id:
@@ -87,7 +87,7 @@ def _endpoint_settings_using_endpoint(settings: dict, ep_id: str, *, include_spe
 
 
 def _clear_endpoint_settings_for_endpoint(settings: dict, ep_id: str, *, include_speech: bool = False) -> list:
-    """从直接设置和模型回退链中移除端点。"""
+    """Remove an endpoint from direct settings and model fallback chains."""
     cleared = []
     for ep_key, (model_key, label) in _ENDPOINT_SETTING_FIELDS.items():
         if (settings.get(ep_key) or "") == ep_id:
@@ -111,7 +111,7 @@ def _clear_endpoint_settings_for_endpoint(settings: dict, ep_id: str, *, include
 
 
 def _clear_user_pref_endpoint_refs(all_prefs: dict, ep_id: str) -> int:
-    """从作用域或 legacy 扁平的用户偏好中移除端点引用。"""
+    """Remove endpoint references from scoped or legacy-flat user preferences."""
     if not isinstance(all_prefs, dict):
         return 0
     users = all_prefs.get("_users")
@@ -123,7 +123,22 @@ def _clear_user_pref_endpoint_refs(all_prefs: dict, ep_id: str) -> int:
     return cleared_users
 
 
-# 用户可能为本地模型服务器（LM Studio、Ollama 等）输入的环回地址主机
+def _default_endpoint_needs_assignment(current_default_id: str, enabled_endpoint_ids) -> bool:
+    """Whether the global default chat endpoint should be (re)assigned.
+
+    True when nothing is configured yet, or the configured default no longer
+    resolves to an enabled endpoint (e.g. the user disabled it). Without the
+    second case, adding a new endpoint after disabling the previous default
+    leaves `default_endpoint_id` pointing at the disabled endpoint, so features
+    that read the raw setting (Memory → Tidy) fail with "No default model
+    configured" even though an enabled endpoint exists. See #3586.
+    """
+    if not current_default_id:
+        return True
+    return current_default_id not in enabled_endpoint_ids
+
+
+# Loopback hosts a user might type for a local model server (LM Studio,
 # llama.cpp, vLLM, …). Inside Docker these point at the *container*, not the
 # host the server actually runs on.
 _ANY_BIND_HOSTS = {"0.0.0.0", "::"}
@@ -213,8 +228,8 @@ def _rewrite_loopback_for_docker(base_url: str, *, container_local: bool = False
 
 
 # ── Curated model lists per provider ──
-# 对于返回 100+ 模型的云服务提供商，默认只显示这些。
-# 模型 ID 如果以精选条目开头或等于精选条目则匹配。
+# For cloud providers that return 100+ models, only show these by default.
+# A model ID matches if it starts with or equals a curated entry.
 _PROVIDER_CURATED = {
     "openai": [
         "gpt-5.2", "gpt-5.2-pro", "gpt-5", "gpt-5-pro", "gpt-5-mini", "gpt-5-nano",
@@ -232,6 +247,9 @@ _PROVIDER_CURATED = {
     ],
     "zai-coding": [
         "glm-5.1", "glm-5v-turbo", "glm-5-turbo", "glm-4.7", "glm-4.5-air",
+    ],
+    "kimi-code": [
+        "kimi-for-coding",
     ],
     "deepseek": [
         "deepseek-chat", "deepseek-reasoner",
@@ -267,10 +285,10 @@ _PROVIDER_CURATED = {
     ],
 }
 
-# 将主机名映射到精选列表键，用于 _detect_provider() 返回通用键的提供商
+# Map hostnames → curated-list keys for providers whose _detect_provider()
 # returns a generic value (e.g. "openai") but deserve their own curated list.
 # "openrouter" is a sentinel meaning "no curation — show all models as curated".
-# 条目通过主机名相等或子域名后缀匹配（通过 _host_match），
+# Entries are matched by hostname equality or subdomain suffix (via _host_match),
 # so e.g. "deepseek.com" covers api.deepseek.com without matching the substring
 # inside an unrelated URL.
 _HOST_TO_CURATED = (
@@ -283,6 +301,7 @@ _HOST_TO_CURATED = (
     ("fireworks.ai", "fireworks"),
     ("googleapis.com", "google"),
     ("x.ai", "xai"),
+    ("nvidia.com", "nvidia"),
     ("openrouter.ai", "openrouter"),
     ("ollama.com", "ollama"),
 )
@@ -295,10 +314,12 @@ def _match_provider_curated(base_url: str, provider: str) -> str:
     then matches the base URL's hostname against known providers, and
     finally falls back to the raw provider string from _detect_provider().
     """
-    # 基于路径的覆盖，用于提供多个精选列表的主机。
+    # Path-based overrides for hosts that serve multiple curated lists.
     parsed = urlparse(base_url)
     if _host_match(base_url, "z.ai") and "/api/coding" in (parsed.path or ""):
         return "zai-coding"
+    if _host_match(base_url, "kimi.com") and "/coding" in (parsed.path or ""):
+        return "kimi-code"
     for domain, key in _HOST_TO_CURATED:
         if _host_match(base_url, domain):
             return key
@@ -328,7 +349,7 @@ def _curate_models(model_ids, provider):
             curated.append(mid)
         else:
             extra.append(mid)
-    # 按精选列表中的优先顺序对精选模型排序
+    # Sort curated models by their priority order in the curated list
     curated.sort(key=lambda mid: (_best_match_idx(mid), mid))
     return curated, extra
 
@@ -353,7 +374,7 @@ def _normalize_refresh_mode(value: Any, endpoint_kind: str = "auto") -> str:
         return mode
     if mode == "auto" and kind != "proxy":
         return "auto"
-    # 代理默认使用手动缓存优先行为。普通本地/API 端点按需获取。
+    # Proxies default to manual cached-first behavior. Normal local/API
     # endpoints keep automatic bounded refreshes.
     return "manual" if kind == "proxy" else "auto"
 
@@ -472,15 +493,22 @@ def _is_ollama_base(base_url: str) -> bool:
         return "ollama" in (base_url or "").lower()
 
 
-# 不兼容 chat-completions 的模型的前缀/子字符串
+# Prefixes/substrings for models that are NOT chat-completions-capable
 _NON_CHAT_PREFIXES = (
     "dall-e", "tts-", "whisper", "text-embedding", "embedding",
     "davinci", "babbage", "moderation", "omni-moderation",
     "sora", "gpt-image", "chatgpt-image",
+    # embedding / retrieval / non-chat models (common across providers)
+    "snowflake/arctic-embed", "nvidia/nv-embed", "embed",
 )
 _NON_CHAT_CONTAINS = (
     "-realtime", "-transcribe", "-tts", "-codex",
-    "codex-",
+    "codex-", "content-safety", "-safety", "-reward", "nvclip",
+    "kosmos", "fuyu", "deplot", "vila", "neva",
+    "gliner", "riva", "-parse", "-embedqa", "-nemoretriever",
+    "topic-control", "calibration",
+    "ai-synthetic-video", "cosmos-reason2",
+    "bge", "llama-guard",
 )
 _NON_CHAT_EXACT_PREFIXES = (
     "gpt-audio",  # gpt-audio, gpt-audio-mini etc. (not gpt-4o-audio-preview which is chat)
@@ -572,7 +600,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Say OK"},
     ]
-    # 用于测试工具支持的简单工具定义
+    # Simple tool definition to test tool support
     _test_tools = [{"type": "function", "function": {"name": "test", "description": "Test tool", "parameters": {"type": "object", "properties": {}}}}] if with_tools else None
 
     if provider == "anthropic":
@@ -596,7 +624,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         from src.llm_core import _uses_max_completion_tokens, _restricts_temperature
         _max_key = "max_completion_tokens" if _uses_max_completion_tokens(model_id) else "max_tokens"
         payload = {"model": model_id, "messages": messages, _max_key: 5}
-        # 推理模型（o1/o3/o4/gpt-5）拒绝显式的 temperature，因此最大令牌探测失败
+        # Reasoning models (o1/o3/o4/gpt-5) reject an explicit temperature, so a
         # probe that hardcodes one falsely reports a working endpoint as failing.
         if not _restricts_temperature(model_id):
             payload["temperature"] = 0.0
@@ -610,7 +638,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         if r.is_success:
             return {"status": "ok", "latency_ms": latency}
         else:
-            # 从响应体中提取错误详情
+            # Extract error detail from response body
             error_msg = f"HTTP {r.status_code}"
             try:
                 body = r.json()
@@ -629,7 +657,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         return {"status": "fail", "error": str(e)[:80]}
 
 
-# 表示本地端点的主机名 / IP 前缀
+# Hostnames / IP prefixes that indicate a local endpoint
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 _PRIVATE_PREFIXES = ("10.", "172.16.", "172.17.", "172.18.", "172.19.",
                      "172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
@@ -680,6 +708,7 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
     """Probe a base URL's /models endpoint and return list of model IDs.
     For Anthropic, queries their /v1/models API, falling back to hardcoded list."""
     from src.endpoint_resolver import resolve_url
+    from src.llm_core import httpx_get_kimi_aware
     base = resolve_url(_normalize_base(base_url))
     provider = _safe_detect_provider(base)
     if provider == "chatgpt-subscription":
@@ -688,7 +717,7 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
             return fetch_available_models(api_key, timeout=timeout)
         return []
     if provider == "anthropic":
-        # 首先尝试 Anthropic 的 /v1/models 端点
+        # Try Anthropic's /v1/models endpoint first
         url = _safe_build_models_url(base)
         headers = {"anthropic-version": "2023-06-01"}
         if api_key:
@@ -715,23 +744,28 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
     url = _safe_build_models_url(base)
     headers = _safe_build_headers(api_key, base)
     try:
-        r = httpx.get(url, headers=headers, timeout=timeout, verify=llm_verify())
+        r = httpx_get_kimi_aware(url, headers, timeout=timeout, verify=llm_verify())
         r.raise_for_status()
         data = r.json()
-        # OpenAI 格式：{"data": [{"id": "model-name"}]}
+        # OpenAI format: {"data": [{"id": "model-name"}]}
         models = [m.get("id") for m in (data.get("data") or []) if m.get("id")]
-        # Ollama 格式：{"models": [{"name": "model-name"}]}
+        # Ollama format: {"models": [{"name": "model-name"}]}
         if not models:
             models = [m.get("name") or m.get("model") for m in (data.get("models") or []) if m.get("name") or m.get("model")]
         if models:
-            # Z.AI coding plan 的 /models 端点省略了一些可用的模型；
+            # Z.AI coding plan omits some working models from /models;
             # append curated-only entries for that endpoint only.
             if _host_match(base, "z.ai") and "/api/coding" in (urlparse(base).path or ""):
                 _ck = _match_provider_curated(base, None)
                 for _e in _PROVIDER_CURATED.get(_ck, []):
                     if _e not in set(models) and not any(m.startswith(_e) for m in models):
                         models.append(_e)
-            return models
+            if _host_match(base, "kimi.com") and "/coding" in (urlparse(base).path or ""):
+                _ck = _match_provider_curated(base, None)
+                for _e in _PROVIDER_CURATED.get(_ck, []):
+                    if _e not in set(models) and not any(m.startswith(_e) for m in models):
+                        models.append(_e)
+            return [m for m in models if _is_chat_model(m)]
     except httpx.HTTPStatusError as e:
         if api_key:
             status = e.response.status_code if e.response is not None else "unknown"
@@ -744,7 +778,7 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
             return []
         logger.warning(f"Failed to probe {url}: {e}")
 
-    # 旧版 Ollama 构建和一些代理即使 /v1/models 不可用也暴露原生的 /api/tags
+    # Older Ollama builds and some proxies expose native /api/tags even when
     # the OpenAI-compatible /v1/models path is unavailable.
     try:
         parsed = urlparse(base)
@@ -755,10 +789,10 @@ def _probe_endpoint(base_url: str, api_key: str = None, timeout: int = 5) -> Lis
             data = r.json()
             models = [m.get("name") or m.get("model") for m in (data.get("models") or []) if m.get("name") or m.get("model")]
             if models:
-                return models
+                return [m for m in models if _is_chat_model(m)]
     except Exception as e:
         logger.debug(f"Ollama /api/tags probe failed for {base}: {e}")
-    # 如果提供商有基于 URL 的匹配（如 z.ai 没有 /models 端点），回退到精选列表
+    # Fall back to curated list if the provider has a URL-based match (e.g. z.ai has no /models endpoint)
     curated_key = _match_provider_curated(base, None)
     fallback = _PROVIDER_CURATED.get(curated_key) if curated_key else None
     if fallback:
@@ -773,7 +807,7 @@ def _ping_endpoint(base_url: str, api_key: str = None, timeout: float = 1.5) -> 
     base = resolve_url(_normalize_base(base_url))
     headers = _safe_build_headers(api_key, base)
 
-    # Ollama 暴露 /v1/models（OpenAI 兼容）和原生 /api/version，
+    # Ollama exposes /v1/models (OpenAI-compatible) AND native /api/version,
     # /api/tags. Probe native paths for Ollama-style endpoints, but avoid using
     # /models as a generic health check because large proxy catalogs can be slow.
     parsed_base = urlparse(base)
@@ -847,15 +881,52 @@ def _ping_endpoint(base_url: str, api_key: str = None, timeout: float = 1.5) -> 
 
 
 def _model_endpoint_error_message(base_url: str, ping: Dict[str, Any] = None) -> str:
-    """Return a provider-aware error message for failed endpoint probes."""
+    """Return a provider-aware error message for failed endpoint probes.
+
+    Surfaces the URL we actually probed and, when the endpoint looks like
+    LM Studio (port 1234 or hostname match), adds a hint about loading a
+    model and confirming the Developer Server is running. The user previously
+    saw a generic "No models found for that provider/key" with no way to
+    tell whether the URL was wrong, the server was down, or the server was
+    reachable but had no model loaded (issue #25).
+    """
     ping = ping or {}
     error = ping.get("error")
+    from src.endpoint_resolver import build_models_url
+    try:
+        probed = build_models_url(base_url) or base_url
+    except Exception:
+        probed = base_url
     parsed = urlparse(base_url)
     host = (parsed.hostname or "").lower()
     is_ollama = parsed.port == 11434 or "ollama" in host or "ollama" in base_url.lower()
+    is_lmstudio = (
+        parsed.port == 1234
+        or "lmstudio" in host
+        or "lm-studio" in host
+        or "lm_studio" in host
+    )
+
+    if is_lmstudio:
+        parts = [
+            "LM Studio is reachable, but no models were reported.",
+            f"Probed {probed}.",
+        ]
+        if error:
+            parts.append(f"Last probe error: {error}.")
+        parts.append(
+            "Open LM Studio, load at least one model, and confirm the "
+            "Developer Server is running on port 1234."
+        )
+        parts.append(
+            "Base URL should be http://localhost:1234/v1 (native) or "
+            "http://host.docker.internal:1234/v1 (Docker)."
+        )
+        return " ".join(parts)
 
     if is_ollama:
         parts = ["No Ollama models found for that endpoint."]
+        parts.append(f"Probed {probed}.")
         if error:
             parts.append(f"Last probe error: {error}.")
         parts.append("Check that Ollama is running and that the base URL is correct.")
@@ -865,9 +936,9 @@ def _model_endpoint_error_message(base_url: str, ping: Dict[str, Any] = None) ->
         return " ".join(parts)
 
     if error:
-        return f"No models found for that provider/key. Last probe error: {error}."
+        return f"No models found for that provider/key. Probed {probed}. Last probe error: {error}."
 
-    return "No models found for that provider/key."
+    return f"No models found for that provider/key. Probed {probed}."
 
 
 def _normalize_model_ids(value):
@@ -922,7 +993,7 @@ def _visible_models(cached_models, hidden_models, pinned_models=None):
     cloud deployment IDs the provider does not list in /v1/models). Returns an
     ordered, de-duplicated list of visible IDs.
     """
-    # 规范化每个输入，使 JSON 字符串、列表、逗号/换行符字符串和空值都正常工作
+    # Normalize each input so JSON strings, lists, comma/newline strings, and
     # malformed strings are all handled without raising.
     merged = _merge_model_ids(
         _normalize_model_ids(cached_models),
@@ -947,7 +1018,7 @@ def setup_model_routes(model_discovery):
 
     # ---- Model list cache ----
     import time as _time
-    # 每用户缓存：{ owner_key: {"data": ..., "time": ...} }。owner_key 是 "default" 或用户名。
+    # Per-user cache: { owner_key: {"data": ..., "time": ...} }. owner_key is
     # the username (or "" for the unconfigured / single-user case). Without
     # this every user shared the same cached result and the picker showed
     # whichever admin's endpoint list happened to populate it first.
@@ -960,7 +1031,7 @@ def setup_model_routes(model_discovery):
         flip)."""
         _models_cache.clear()
 
-    # 按 URL+key 跟踪模型列表刷新。这防止重复的 picker/API 调用锁定事件循环。
+    # Track model-list refreshes by URL+key. This prevents repeated picker/API
     # opens from starting duplicate /models probes, and gives slow/offline
     # providers a cooldown after failures.
     _refresh_state: Dict[str, Dict[str, Any]] = {}
@@ -1111,7 +1182,7 @@ def setup_model_routes(model_discovery):
         try:
             q = db.query(ModelEndpoint).filter(ModelEndpoint.is_enabled == True)
             if owner and not is_admin:
-                # 普通用户看到：自己的端点 + null-owner（公共端点）
+                # Regular users see: their own endpoints + null-owner
                 # (legacy / shared). Admins see everything.
                 q = owner_filter(q, ModelEndpoint, owner)
             endpoints = q.all()
@@ -1121,14 +1192,14 @@ def setup_model_routes(model_discovery):
         for ep in endpoints:
             base = _normalize_base(ep.base_url)
             provider = _safe_detect_provider(base)
-            # 合并缓存 + 固定的模型，然后过滤掉隐藏的
+            # Merge cached + pinned models, then filter out hidden ones
             ep_model_type = getattr(ep, "model_type", None) or "llm"
             model_ids = _visible_models(
                 _cached_model_ids(ep),
                 ep.hidden_models,
                 getattr(ep, "pinned_models", None),
             )
-            # 根据提供商构建正确的 URL
+            # Build correct URL based on provider
             chat_url = build_chat_url(base)
             kind = _effective_endpoint_kind(ep, base)
             category = _classify_endpoint(base, kind)
@@ -1136,7 +1207,7 @@ def setup_model_routes(model_discovery):
             if model_ids:
                 curated_key = _match_provider_curated(base, None)
                 curated, extra = _curate_models(model_ids, curated_key)
-                # 固定模型是管理员选择的 — 它们始终属于端点列表
+                # Pinned models are admin-selected — they always belong in the
                 # primary curated list, not buried in extras.
                 pinned = _normalize_model_ids(getattr(ep, "pinned_models", None))
                 for m in pinned:
@@ -1158,7 +1229,7 @@ def setup_model_routes(model_discovery):
                     "model_type": ep_model_type,
                 })
             else:
-                # 端点不可达但仍以灰色显示
+                # Endpoint unreachable but still show it greyed out
                 items.append({
                     "host": "custom",
                     "port": 0,
@@ -1181,14 +1252,14 @@ def setup_model_routes(model_discovery):
     def api_models(request: Request, refresh: bool = False):
         """Get available models — per-user (caller sees only their endpoints +
         legacy/shared null-owner rows). Cached per-user for 30s."""
-        # 需要认证；"" 是未配置的单用户模式，视为公共访问
+        # Require auth; "" is the unconfigured single-user mode, treated as
         # "see everything" by _fetch_models.
         try:
             from src.auth_helpers import get_current_user as _gcu
             owner = _gcu(request) or ""
         except Exception:
             owner = ""
-        # 在已配置的部署中拒绝匿名访问 — 不泄露模型列表
+        # Reject anonymous in configured deployments — no leaking the model
         # list to unauthenticated callers.
         try:
             auth_mgr = getattr(request.app.state, "auth_manager", None)
@@ -1719,12 +1790,19 @@ def setup_model_routes(model_discovery):
             )
             db.add(ep)
             db.commit()
-            # Auto-set as default chat endpoint if none configured yet. Seed
-            # the first CHAT model (not raw model_ids[0]) so we don't pin the
-            # global default to an embedding/tts/etc. entry a provider happens
-            # to list first.
+            # Auto-set as default chat endpoint when none is usable yet — either
+            # nothing is configured, or the configured default points at an
+            # endpoint that is now missing/disabled (#3586). Seed the first CHAT
+            # model (not raw model_ids[0]) so we don't pin the global default to
+            # an embedding/tts/etc. entry a provider happens to list first.
             settings = _load_settings()
-            if not settings.get("default_endpoint_id"):
+            enabled_ids = {
+                e.id
+                for e in db.query(ModelEndpoint).filter(
+                    ModelEndpoint.is_enabled == True  # noqa: E712
+                ).all()
+            }
+            if _default_endpoint_needs_assignment(settings.get("default_endpoint_id") or "", enabled_ids):
                 from src.endpoint_resolver import _first_chat_model
                 settings["default_endpoint_id"] = ep.id
                 settings["default_model"] = _first_chat_model(model_ids) or ""
