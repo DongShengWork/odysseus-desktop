@@ -1,4 +1,4 @@
-# routes/upload_routes.py
+# routes/upload_routes.py — 上传路由
 import os
 import time
 import json
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/upload", tags=["upload"])
 UPLOAD_RESPONSE_HEADERS = {"X-Content-Type-Options": "nosniff"}
 
 def setup_upload_routes(upload_handler):
-    """Setup upload routes with the provided handler"""
+    """使用提供的处理器设置上传路由"""
 
     def _upload_root() -> str:
         from src.constants import UPLOAD_DIR
@@ -53,7 +53,7 @@ def setup_upload_routes(upload_handler):
     
     @router.post("")
     async def api_upload(request: Request, files: List[UploadFile] = File(...)):
-        """Upload files with enhanced security and organization."""
+        """上传文件，具有增强的安全性和组织性。"""
         if not files:
             raise HTTPException(400, "No files uploaded")
             
@@ -103,14 +103,14 @@ def setup_upload_routes(upload_handler):
     
     @router.post("/cleanup")
     async def manual_cleanup(request: Request):
-        """Manually trigger cleanup of old uploads."""
+        """手动触发旧上传文件的清理。"""
         require_admin(request)
         cleaned_count = upload_handler.cleanup_old_uploads()
         return {"status": "success", "files_cleaned": cleaned_count}
 
     @router.get("/stats")
     async def upload_stats(request: Request):
-        """Get statistics about uploaded files."""
+        """获取已上传文件的统计信息。"""
         require_admin(request)
         try:
             return upload_handler.get_upload_stats()
@@ -120,9 +120,9 @@ def setup_upload_routes(upload_handler):
 
     @router.get("/{file_id}")
     async def download_file(request: Request, file_id: str, thumb: int = 0):
-        """Serve an uploaded file by its ID. `?thumb=1` returns a small cached
-        JPEG thumbnail for images (used by chat attachment previews) so the
-        client isn't downloading the full-resolution photo just to show it tiny."""
+        """通过 ID 提供上传的文件。`?thumb=1` 返回小型缓存
+        JPEG 缩略图（用于聊天附件预览），这样客户端
+        无需下载全分辨率照片只是为了小尺寸显示。"""
         if not upload_handler.validate_upload_id(file_id):
             raise HTTPException(400, "Invalid file ID")
         import mimetypes as _mt
@@ -180,7 +180,7 @@ def setup_upload_routes(upload_handler):
         )
 
     def _load_upload_info(file_id: str):
-        """Look up the uploads.json record for a file_id, with owner/auth checks."""
+        """查找 file_id 的 uploads.json 记录，包含所有者/认证检查。"""
         info = None
         uploads_db = os.path.join(_upload_root(), "uploads.json")
         if os.path.exists(uploads_db):
@@ -196,9 +196,9 @@ def setup_upload_routes(upload_handler):
 
     @router.get("/{file_id}/vision")
     async def get_vision_text(request: Request, file_id: str, force: int = 0):
-        """Return the vision-model OCR/description for an uploaded image.
-        Cached under UPLOAD_DIR/.vision/{file_id}.txt — first call computes,
-        subsequent loads are instant. Pass force=1 to recompute."""
+        """返回上传图片的视觉模型 OCR/描述。
+        缓存在 UPLOAD_DIR/.vision/{file_id}.txt — 首次调用时计算，
+        后续加载即时返回。传入 force=1 可重新计算。"""
         if not upload_handler.validate_upload_id(file_id):
             raise HTTPException(400, "Invalid file ID")
         info = _load_upload_info(file_id)
@@ -238,8 +238,8 @@ def setup_upload_routes(upload_handler):
 
     @router.put("/{file_id}/vision")
     async def put_vision_text(request: Request, file_id: str):
-        """Persist a user-edited vision/OCR text for an attachment. Stored in
-        the same cache file so the chat send picks it up as the override."""
+        """持久化用户编辑的视觉/OCR 文本。存储在同一
+        缓存文件中，以便聊天发送时将其作为覆盖文本使用。"""
         if not upload_handler.validate_upload_id(file_id):
             raise HTTPException(400, "Invalid file ID")
         info = _load_upload_info(file_id)
@@ -264,7 +264,7 @@ def setup_upload_routes(upload_handler):
         return {"ok": True}
 
     async def periodic_rate_limit_cleanup():
-        """Background task to run cleanup every hour"""
+        """后台任务：每小时运行清理"""
         while True:
             await asyncio.sleep(3600)
             upload_handler.cleanup_rate_limits()

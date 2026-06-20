@@ -1,4 +1,4 @@
-# routes/memory_routes.py
+# routes/memory_routes.py — 记忆路由
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, File
 from typing import Dict, Any, Optional, List
 import json
@@ -9,10 +9,9 @@ import time
 from datetime import datetime
 import logging
 
-# Leading list-marker like "1.", "12)", or "3:" plus surrounding whitespace.
-# Strips one prefix per call so import-from-LLM-output doesn't leave the
-# numbering inside the saved memory text. Bullet markers (-, *, •) are
-# also peeled here for the same reason.
+# 列表前缀正则，如 "1."、"12)" 或 "3:"，加上周围的空白。
+# 每次调用只剥离一个前缀，这样从 LLM 输出导入时不会留下
+# 编号在保存的记忆文本中。项目符号（-、*、•）也在此剥离。
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:\d{1,3}[.):]\s+|[-*•]\s+)")
 
 
@@ -36,30 +35,29 @@ logger = logging.getLogger(__name__)
 
 
 def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionManager, memory_vector=None):
-    """Set up memory-related routes."""
+    """设置记忆相关的路由。"""
     router = APIRouter(prefix="/api/memory", tags=["memory"])
 
     def _owner(request: Request) -> Optional[str]:
         return get_current_user(request)
 
     def _assert_session_owner(session_obj, user):
-        """SECURITY: 404 if the caller does not own this session.
+        """安全：如果调用者不拥有此会话，返回 404。
 
-        SessionManager.get_session is NOT owner-scoped — it returns any
-        session by id. These routes accept a caller-supplied session id, so
-        without this gate a user could target another tenant's session and
-        leak their chat history, their session-scoped LLM credentials, or the
-        session title. Mirrors session_routes / webhook_routes ownership.
+        SessionManager.get_session 不是按所有者作用域的 — 它按 ID 返回任何
+        会话。这些路由接受调用者提供的会话 ID，因此如果没有此门控，
+        用户可能针对其他租户的会话，泄漏其聊天历史、会话作用域的 LLM
+        凭据或会话标题。与 session_routes / webhook_routes 的所有权检查一致。
         """
         if user is not None and getattr(session_obj, "owner", None) != user:
             raise HTTPException(404, "Session not found")
 
     def _verify_memory_owner(memory: dict, user: Optional[str]):
-        """Raise 404 if user doesn't own this memory.
+        """如果用户不拥有此记忆，抛出 404。
 
-        SECURITY: strict ownership — previously `mem_owner and mem_owner != user`
-        allowed any user to read/edit/delete memories with an empty/null owner
-        field, which leaked legacy data across the multi-user deploy.
+        安全：严格所有权 — 之前 `mem_owner and mem_owner != user`
+        允许任何用户读取/编辑/删除所有者字段为空/null 的记忆，
+        这在多用户部署中泄漏了旧数据。
         """
         if user is None:
             return  # Auth disabled
@@ -68,7 +66,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.post("/debug")
     def debug_memory_relevance(request: Request, query: str = Form(...)):
-        """Debug which memories would be triggered for a query"""
+        """调试哪些记忆会被查询触发"""
         user = _owner(request)
         memories = memory_manager.load(owner=user)
         relevant = memory_manager.get_relevant_memories(query, memories, threshold=0.05)
@@ -86,7 +84,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         request: Request,
         memory_data: Optional[MemoryAddRequest] = None
     ):
-        """Add a new memory entry with optional category, source, and session reference."""
+        """添加新的记忆条目，可选类别、来源和会话引用。"""
         from src.auth_helpers import require_privilege
         require_privilege(request, "can_manage_memory")
         if memory_data is None:
@@ -131,13 +129,13 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.get("")
     def api_get_memory(request: Request):
-        """Return all memory entries with their metadata."""
+        """返回所有记忆条目及其元数据。"""
         user = _owner(request)
         return {"memory": memory_manager.load(owner=user)}
 
     @router.post("/search")
     def search_memories(request: Request, query: str = Form(...), session_id: str = Form(None), category: str = Form(None)):
-        """Search across all memories with optional filters."""
+        """搜索所有记忆，可选过滤器。"""
         user = _owner(request)
         memories = memory_manager.load(owner=user)
 
@@ -153,7 +151,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.get("/timeline")
     def memory_timeline(request: Request):
-        """Get memories in chronological order with source session information."""
+        """按时间顺序获取记忆，包含源会话信息。"""
         user = _owner(request)
         memories = memory_manager.load(owner=user)
         sorted_memories = sorted(memories, key=lambda x: x.get("timestamp", 0), reverse=True)
@@ -191,7 +189,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.get("/by-session/{session_id}")
     def get_memory_by_session(request: Request, session_id: str):
-        """Get all memories associated with a specific session."""
+        """获取与特定会话关联的所有记忆。"""
         user = _owner(request)
         try:
             _session_obj = session_manager.get_session(session_id)
@@ -221,7 +219,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.post("/extract")
     async def extract_memory(request: Request, session: str = Form(...)) -> Dict[str, List[str]]:
-        """Analyze a session's chat history and return memory suggestions."""
+        """分析会话的聊天历史并返回记忆建议。"""
         require_user(request)
         try:
             sess = session_manager.get_session(session)
@@ -271,7 +269,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.post("/audit")
     async def api_audit_memories(request: Request, session: str = Form(None)):
-        """Deduplicate and consolidate memories via LLM.
+        """通过 LLM 去重和合并记忆。
 
         Uses the default model from settings, or falls back to a session's model.
         Returns before and after memory counts.
@@ -361,7 +359,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         session: str | None = Form(None),
         file: UploadFile = File(...)
     ):
-        """Extract memory suggestions from an uploaded file (PDF, TXT, MD, etc.)."""
+        """从上传的文件中提取记忆建议（PDF、TXT、MD 等）。"""
         from src.auth_helpers import require_privilege
         require_privilege(request, "can_manage_memory")
 
@@ -510,7 +508,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.post("/{memory_id}/pin")
     def pin_memory(request: Request, memory_id: str, pinned: bool = Form(True)):
-        """Pin or unpin a memory. Pinned memories are always included in context."""
+        """固定或取消固定记忆。固定的记忆始终包含在上下文中。"""
         user = _owner(request)
         all_mem = memory_manager.load_all()
         for i, memory in enumerate(all_mem):
@@ -524,7 +522,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
     # Wildcard routes MUST come last — otherwise they swallow /import, /search, etc.
     @router.get("/{memory_id}")
     def get_memory_item(request: Request, memory_id: str):
-        """Get a specific memory item by ID."""
+        """通过 ID 获取特定记忆项。"""
         user = _owner(request)
         memories = memory_manager.load(owner=user)
         for memory in memories:
@@ -535,7 +533,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.put("/{memory_id}")
     def update_memory(request: Request, memory_id: str, text: str = Form(...), category: str = Form(None)):
-        """Update an existing memory item with new text and optional category."""
+        """用新文本和可选类别更新现有记忆项。"""
         user = _owner(request)
         all_mem = memory_manager.load_all()
         for i, memory in enumerate(all_mem):
@@ -557,7 +555,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.delete("/{memory_id}")
     def delete_memory(request: Request, memory_id: str):
-        """Delete a memory item by its ID."""
+        """通过 ID 删除记忆项。"""
         user = _owner(request)
         all_mem = memory_manager.load_all()
 
