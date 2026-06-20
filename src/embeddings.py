@@ -147,7 +147,29 @@ class FastEmbedClient:
             except Exception as _e:
                 logger.debug("embedding cache symlink-heal skipped: %s", _e)
         kwargs = {"model_name": self.model, "cache_dir": cache_dir}
-        self._embedding = TextEmbedding(**kwargs)
+        try:
+            self._embedding = TextEmbedding(**kwargs)
+        except Exception as _init_err:
+            _msg = str(_init_err)
+            # SSL 验证失败（企业代理/中间人证书）：如果模型已缓存到本地，
+            # 回退到离线模式加载 —— huggingface_hub 即使在缓存命中时也会
+            # 发起版本检查请求，在企业网络中会被自签名证书拦截。
+            if "SSL" in _msg or "CERTIFICATE" in _msg or "ssl" in _msg.lower():
+                logger.warning(
+                    "FastEmbed SSL error (%s); retrying with HF_HUB_OFFLINE=1 "
+                    "(model must be pre-cached)", _msg,
+                )
+                _prev = os.environ.get("HF_HUB_OFFLINE")
+                os.environ["HF_HUB_OFFLINE"] = "1"
+                try:
+                    self._embedding = TextEmbedding(**kwargs)
+                finally:
+                    if _prev is None:
+                        os.environ.pop("HF_HUB_OFFLINE", None)
+                    else:
+                        os.environ["HF_HUB_OFFLINE"] = _prev
+            else:
+                raise
         self._dim: Optional[int] = None
         self.url = "local://fastembed"
         logger.info(f"FastEmbed loaded model={self.model}")

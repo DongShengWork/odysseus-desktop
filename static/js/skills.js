@@ -49,7 +49,7 @@ function _preloadVisibleMarkdown() {
     const name = card.dataset.skillName;
     if (!name || card._mdLoaded) return;
     const pre = card.querySelector('.skill-md-pre');
-    const apply = (md) => { if (pre) pre.textContent = md || '(empty)'; card._mdLoaded = true; card._md = md || ''; };
+    const apply = (md) => { if (pre) pre.textContent = md || t('skills.empty'); card._mdLoaded = true; card._md = md || ''; };
     if (_mdCache.has(name)) { apply(_mdCache.get(name)); return; }
     _fetchSkillMarkdown(name).then(apply).catch(() => {});
   });
@@ -186,8 +186,8 @@ function _matches(sk, query) {
 
 function _statusPill(sk) {
   const s = sk.status || (sk._legacy ? 'legacy' : 'draft');
-  if (s === 'published') return '<span class="memory-cat-badge skill-status-pill" data-status="published" style="background:color-mix(in srgb, var(--accent, #4ade80) 30%, transparent)">published</span>';
-  if (s === 'draft')     return '<span class="memory-cat-badge skill-status-pill" data-status="draft" style="background:color-mix(in srgb, var(--fg) 14%, transparent)">draft</span>';
+  if (s === 'published') return `<span class="memory-cat-badge skill-status-pill" data-status="published" style="background:color-mix(in srgb, var(--accent, #4ade80) 30%, transparent)">${t('skills.status_published')}</span>`;
+  if (s === 'draft')     return `<span class="memory-cat-badge skill-status-pill" data-status="draft" style="background:color-mix(in srgb, var(--fg) 14%, transparent)">${t('skills.status_draft')}</span>`;
   return `<span class="memory-cat-badge skill-status-pill" data-status="${esc(s)}" style="opacity:0.6">${esc(s)}</span>`;
 }
 
@@ -532,17 +532,17 @@ async function _expandBuiltinCard(card, name) {
   if (grid) grid.scrollTop = 0;
   const pre = card.querySelector('.skill-md-pre');
   if (pre && !card._loaded) {
-    pre.textContent = 'Loading…';
+    pre.textContent = t('skills.loading');
     try {
       const res = await fetch(`${API}/api/skills/builtin/${encodeURIComponent(name)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      pre.textContent = data.text || '(empty)';
+      pre.textContent = data.text || t('skills.empty');
       card._loaded = true;
       card._text = data.text || '';
       card._default = data.default || '';
     } catch (e) {
-      pre.textContent = 'Failed to load.';
+      pre.textContent = t('skills.failed_to_load');
     }
   }
 }
@@ -574,10 +574,10 @@ async function _saveBuiltinEdit(card, name) {
       body: JSON.stringify({ text: ta.value }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    uiModule.showToast('Built-in capability updated');
-    builtinSkills = [];  // 强制重新加载内置列表（刷新“已编辑”徽章）
+    uiModule.showToast(t('skills.builtin_updated'));
+    builtinSkills = [];  // 强制重新加载内置列表（刷新”已编辑”徽章）
     await loadSkills();
-  } catch (e) { uiModule.showError('Save failed: ' + e.message); }
+  } catch (e) { uiModule.showError(t('skills.save_failed') + ': ' + e.message); }
 }
 
 async function _revertBuiltin(name) {
@@ -585,10 +585,10 @@ async function _revertBuiltin(name) {
   try {
     const res = await fetch(`${API}/api/skills/builtin/${encodeURIComponent(name)}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    uiModule.showToast('Reverted to default');
+    uiModule.showToast(t('skills.reverted_to_default'));
     builtinSkills = [];
     await loadSkills();
-  } catch (e) { uiModule.showError('Revert failed: ' + e.message); }
+  } catch (e) { uiModule.showError(t('skills.revert_failed') + ': ' + e.message); }
 }
 
 function _getFilteredSkills() {
@@ -625,7 +625,7 @@ function renderSkillsList() {
     const selectBtn = document.getElementById('skills-select-btn');
     if (selectBtn) selectBtn.disabled = true;
     if (_selectMode) _exitSelectMode();
-    container.innerHTML = `<div style="text-align:center;opacity:0.4;padding:24px 0;font-size:11px;">${loaded ? 'No skills yet, use agent for it to auto extract them.' : 'Loading…'}</div>`;
+    container.innerHTML = `<div style="text-align:center;opacity:0.4;padding:24px 0;font-size:11px;">${loaded ? t('skills.no_skills_yet') : t('skills.loading')}</div>`;
     return;
   }
 
@@ -859,7 +859,7 @@ function renderSkillsList() {
   // 内置能力 — 只读卡片（代理的原生工具）。
   if (showBuiltin) {
     const builtinCards = _buildBuiltinCards();
-    container.appendChild(_mkSectionHeader('builtin', 'Built-in capabilities', builtinCards.length));
+    container.appendChild(_mkSectionHeader('builtin', t('skills.section_builtin'), builtinCards.length));
     builtinCards.forEach(c => { c.dataset.skillSection = 'builtin'; container.appendChild(c); });
   }
 
@@ -994,18 +994,18 @@ async function _expandSkillCard(card, name) {
     // 以便内容同步就位 — 无异步稳定/跳跃。
     if (_mdCache.has(name)) {
       const md = _mdCache.get(name);
-      pre.textContent = md || '(empty)';
+      pre.textContent = md || t('skills.empty');
       card._mdLoaded = true;
       card._md = md || '';
     } else {
-      pre.textContent = 'Loading…';
+      pre.textContent = t('skills.loading');
       try {
         const md = await _fetchSkillMarkdown(name);
-        pre.textContent = md || '(empty)';
+        pre.textContent = md || t('skills.empty');
         card._mdLoaded = true;
         card._md = md;
       } catch (e) {
-        pre.textContent = 'Failed to load SKILL.md';
+        pre.textContent = t('skills.failed_to_load');
       }
     }
   }
@@ -1049,10 +1049,10 @@ async function _saveSkillEdit(card, name) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     // 刷新缓存的 markdown 以便预加载/展开显示新文本。
     _mdCache.set(name, ta.value);
-    uiModule.showToast('Saved');
+    uiModule.showToast(t('common.saved'));
     await loadSkills();  // 重新渲染（frontmatter 变化如名称/状态可能已经改变）
   } catch (e) {
-    uiModule.showError('Save failed: ' + e.message);
+    uiModule.showError(t('skills.save_failed') + ': ' + e.message);
   }
 }
 
@@ -1076,8 +1076,8 @@ async function _deleteSkill(name, card = null) {
       setTimeout(() => { if (card.parentElement) card.remove(); }, 400);
     }
     await loadSkills();
-    uiModule.showToast('Skill deleted');
-  } catch (e) { uiModule.showError('Delete failed: ' + e.message); }
+    uiModule.showToast(t('skills.skill_deleted'));
+  } catch (e) { uiModule.showError(t('skills.delete_failed') + ': ' + e.message); }
 }
 
 async function _setSkillStatus(name, status) {
@@ -1088,8 +1088,8 @@ async function _setSkillStatus(name, status) {
       body: JSON.stringify({ status }),
     });
     await loadSkills();
-    uiModule.showToast(status === 'published' ? 'Skill approved' : 'Skill moved to draft');
-  } catch (e) { uiModule.showError('Update failed: ' + e.message); }
+    uiModule.showToast(status === 'published' ? t('skills.skill_approved') : t('skills.skill_draft'));
+  } catch (e) { uiModule.showError(t('skills.update_failed') + ': ' + e.message); }
 }
 
 // ---- 测试技能（沙盒代理运行 + AI 评估） ----
@@ -1136,7 +1136,7 @@ async function _testSkill(card, name, force = false) {
   let job = force ? { status: 'none' } : await _fetchTestStatus(name);
 
   if (job.status === 'none') {
-    logEl.innerHTML = '<div class="skill-test-meta">Starting test…</div>';
+    logEl.innerHTML = `<div class="skill-test-meta">${t('skills.starting_test')}</div>`;
     let model = '', endpoint_url = '';
     try {
       const sm = window.sessionModule;
@@ -1284,15 +1284,15 @@ function _renderTestVerdict(el, v, card, name) {
   if (!el) return;
   const verdict = (v && v.verdict) || 'unknown';
   const cls = { pass: 'ok', needs_work: 'warn', fail: 'bad', inconclusive: 'unknown' }[verdict] || 'unknown';
-  const label = { pass: 'PASS', needs_work: 'NEEDS WORK', fail: 'FAIL', inconclusive: 'INCONCLUSIVE', unknown: 'UNCLEAR' }[verdict] || 'UNCLEAR';
+  const label = { pass: t('skills.verdict_pass'), needs_work: t('skills.verdict_needs_work'), fail: t('skills.verdict_fail'), inconclusive: t('skills.verdict_inconclusive'), unknown: t('skills.verdict_unclear') }[verdict] || t('skills.verdict_unclear');
   const conf = v && typeof v.confidence === 'number' ? Math.round(v.confidence * 100) + '%' : '';
   const issues = Array.isArray(v && v.issues) ? v.issues : [];
   // 反映技能的当前状态：如果已经发布，按钮
   // 表示“已批准”（点击取消发布），而非提供批准选项。
   const isPub = card && card.dataset && card.dataset.skillStatus === 'published';
-  const approveLabel = isPub ? 'Approved' : 'Approve';
+  const approveLabel = isPub ? t('skills.approved') : t('skills.approve');
   const approveCls = 'skill-eval-approve' + (isPub ? ' is-approved' : (verdict === 'pass' ? ' suggested' : ''));
-  const approveTitle = isPub ? 'Already approved — click to unpublish' : 'Publish — appears in the skills index';
+  const approveTitle = isPub ? t('skills.already_approved') : t('skills.publish_hint');
   el.innerHTML =
     '<div class="skill-eval-head"><span class="skill-eval-badge skill-eval-' + cls + '">' + label + (conf ? ' · ' + conf : '') + '</span>' +
     '<span class="skill-eval-summary">' + esc((v && v.summary) || '') + '</span></div>' +
@@ -1351,17 +1351,17 @@ function _confirmAuditSkills(label) {
       overlay.className = 'modal';
       overlay.innerHTML =
         '<div class="modal-content styled-confirm-box">' +
-          '<div class="modal-header"><h4>Audit Skills</h4></div>' +
+          `<div class="modal-header"><h4>${t('skills.audit_title')}</h4></div>` +
           '<div class="modal-body">' +
             '<p id="skills-audit-confirm-msg"></p>' +
             '<label class="memory-bulk-check-all" style="margin-top:10px;display:inline-flex;align-items:center;gap:7px;">' +
               '<input type="checkbox" id="skills-audit-skip-audited" checked />' +
-              '<span>Skip already audited</span>' +
+              `<span>${t('skills.skip_audited')}</span>` +
             '</label>' +
           '</div>' +
           '<div class="modal-footer">' +
-            '<button id="skills-audit-confirm-cancel" class="confirm-btn confirm-btn-secondary">Cancel</button>' +
-            '<button id="skills-audit-confirm-ok" class="confirm-btn confirm-btn-primary">Audit</button>' +
+            `<button id="skills-audit-confirm-cancel" class="confirm-btn confirm-btn-secondary">${t('skills.cancel')}</button>` +
+            `<button id="skills-audit-confirm-ok" class="confirm-btn confirm-btn-primary">${t('skills.audit_btn')}</button>` +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -1429,9 +1429,9 @@ async function _auditAllSkills(opts = {}) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scope: explicitNames ? 'selected' : 'all', names, skip_audited: confirmed.skipAudited }),
       });
-      if (!r.ok) { uiModule.showError('Audit failed to start (HTTP ' + r.status + ')'); return; }
+      if (!r.ok) { uiModule.showError(t('skills.audit_start_failed') + ' (HTTP ' + r.status + ')'); return; }
       st = await _fetchAuditStatus();
-    } catch (e) { uiModule.showError('Audit failed: ' + (e.message || e)); return; }
+    } catch (e) { uiModule.showError(t('skills.audit_failed') + ': ' + (e.message || e)); return; }
     _auditSeenResults = 0;
   }
   panel.classList.remove('hidden');
@@ -1544,18 +1544,18 @@ function _renderAuditPanel(panel, st) {
   const running = st.status === 'running';
   const cancelled = st.status === 'cancelled';
   const head = running
-    ? `Auditing ${done}/${total}${st.current ? ' — ' + esc(st.current) : ''}`
+    ? t('skills.auditing_progress', { done, total }) + (st.current ? ' — ' + esc(st.current) : '')
     : cancelled
-      ? `Audit cancelled — ${done}/${total}`
-    : `Audit complete — ${total} skill${total === 1 ? '' : 's'}`;
+      ? t('skills.audit_cancelled', { done, total })
+    : t('skills.audit_complete', { total });
   panel.innerHTML =
     '<div class="skills-audit-head">' +
       '<span class="skills-audit-title-wrap" style="display:inline-flex;align-items:center;gap:8px;">' +
         '<span class="skills-audit-title">' + head + '</span>' +
       '</span>' +
       (running
-        ? '<button class="memory-toolbar-btn" data-act="audit-cancel">Cancel</button>'
-        : '<button class="memory-toolbar-btn" data-act="audit-close">Close</button>') +
+        ? `<button class="memory-toolbar-btn" data-act="audit-cancel">${t('skills.cancel')}</button>`
+        : `<button class="memory-toolbar-btn" data-act="audit-close">${t('skills.close')}</button>`) +
     '</div>' +
     '<div class="skills-audit-bar"><div class="skills-audit-fill" style="width:' + pct + '%"></div></div>' +
     (summary ? '<div class="skills-audit-summary">' + esc(summary) + (st.teacher ? ' · teacher: ' + esc(st.teacher) : '') + '</div>' : '') +
@@ -1705,7 +1705,7 @@ function _selectedNonPassingSkills() {
 async function _bulkDeleteNonPassing() {
   const targets = _selectedNonPassingSkills();
   if (!targets.length) {
-    uiModule.showToast('No selected non-passing skills');
+    uiModule.showToast(t('skills.no_selected_non_passing'));
     return;
   }
   const thresholdPct = Math.round(_skillApprovalThreshold * 100);
@@ -1775,7 +1775,7 @@ async function _showSkillSource(name) {
     const data = await res.json();
     md = data.markdown || '';
   } catch (e) {
-    uiModule.showError('Failed to load SKILL.md');
+    uiModule.showError(t('skills.failed_to_load_skill'));
     return;
   }
 
@@ -1815,11 +1815,11 @@ async function _showSkillSource(name) {
         body: JSON.stringify({ markdown: ta.value }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      uiModule.showToast('Saved');
+      uiModule.showToast(t('common.saved'));
       wrap.remove();
       await loadSkills();
     } catch (e) {
-      uiModule.showError('Save failed: ' + e.message);
+      uiModule.showError(t('skills.save_failed') + ': ' + e.message);
     }
   });
 }
@@ -1828,7 +1828,7 @@ async function importSkillFromUrl() {
   const input = document.getElementById('skill-import-url');
   const url = (input?.value || '').trim();
   if (!url) {
-    uiModule.showError('Paste a GitHub or skills.sh URL first');
+    uiModule.showError(t('skills.paste_url_first'));
     return;
   }
   const btn = document.getElementById('skill-import-url-btn');
@@ -1847,7 +1847,7 @@ async function importSkillFromUrl() {
     uiModule.showToast(`Imported ${name} (${data.files || 1} file(s))`);
     if (name) openSkill(name);
   } catch (err) {
-    uiModule.showError('Import failed: ' + err.message);
+    uiModule.showError(t('skills.import_failed') + ': ' + err.message);
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -1866,7 +1866,7 @@ async function addSkill() {
   const category = document.getElementById('new-skill-category')?.value.trim() || 'general';
 
   if (!description && !name) {
-    uiModule.showError('Description (or name) is required');
+    uiModule.showError(t('skills.desc_required'));
     return;
   }
   const procedure = procedureRaw
@@ -1894,9 +1894,9 @@ async function addSkill() {
      'new-skill-category']
       .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     await loadSkills();
-    uiModule.showToast('Skill added (draft)');
+    uiModule.showToast(t('skills.skill_added'));
   } catch (err) {
-    uiModule.showError('Failed to add skill: ' + err.message);
+    uiModule.showError(t('skills.add_failed') + ': ' + err.message);
   }
 }
 

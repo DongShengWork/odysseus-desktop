@@ -149,7 +149,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
         await navigator.clipboard.writeText(text);
       }
     } catch (err) {
-      if (uiModule && uiModule.showError) uiModule.showError('Failed to copy chat');
+      if (uiModule && uiModule.showError) uiModule.showError(t('library.failed_copy_chat'));
     }
   }
 
@@ -720,7 +720,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
         a.download = (full.title || 'document') + ext;
         a.click();
         URL.revokeObjectURL(a.href);
-      } catch { if (uiModule) uiModule.showError('Failed to export document'); }
+      } catch { if (uiModule) uiModule.showError(t('library.failed_export_document')); }
     });
     dropdown.appendChild(exportItem);
 
@@ -741,8 +741,8 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
         // 从当前视图移除（它已不属于这里）并刷新。
         libraryRemoveDocumentFromState(doc.id);
         libraryRenderGrid();
-        if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : 'Restored');
-      } catch { if (uiModule) uiModule.showError('Failed to ' + (toArchived ? 'archive' : 'restore')); }
+        if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : t('library.restored'));
+      } catch { if (uiModule) uiModule.showError(toArchived ? t('library.failed_archive') : t('library.failed_restore')); }
     });
     dropdown.appendChild(archiveItem);
 
@@ -833,8 +833,8 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
         if (!res.ok) throw new Error('failed');
         libraryRemoveDocumentFromState(doc.id);
         libraryRenderGrid();
-        if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : 'Restored');
-      } catch { if (uiModule) uiModule.showError('Failed to ' + (toArchived ? 'archive' : 'restore')); }
+        if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : t('library.restored'));
+      } catch { if (uiModule) uiModule.showError(toArchived ? t('library.failed_archive') : t('library.failed_restore')); }
     });
 
     const leftGroup = document.createElement('div');
@@ -1106,10 +1106,10 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
 
       _switchToDoc(created.id);
       _syncDocIndicator();
-      if (uiModule) uiModule.showToast('Document cloned to session');
+      if (uiModule) uiModule.showToast(t('library.document_cloned_to_session'));
     } catch (e) {
       console.error('Failed to import document:', e);
-      if (uiModule) uiModule.showError('Failed to import document');
+      if (uiModule) uiModule.showError(t('library.failed_import_document'));
     }
   }
 
@@ -1183,7 +1183,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
     if (uiModule && uiModule.styledConfirm) {
       const ok = await uiModule.styledConfirm(t('library.delete_document_confirm'), { confirmText: t('common.delete'), danger: true });
       if (!ok) return;
-    } else if (!confirm('Delete this document?')) {
+    } else if (!confirm(t('library.delete_document_confirm'))) {
       return;
     }
     try {
@@ -1199,7 +1199,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
         setTimeout(() => { if (card.parentElement) card.remove(); }, 400);
       }
       libraryRemoveDocumentFromState(docId);
-      if (uiModule) uiModule.showToast('Document deleted');
+      if (uiModule) uiModule.showToast(t('library.document_deleted'));
     } catch (e) {
       if (uiModule) uiModule.showError(`Failed to delete document: ${e.message || e}`);
     }
@@ -1264,7 +1264,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
     libraryExitSelectMode();
     await libraryFetch(false);
     if (uiModule) {
-      const verb = toArchived ? t('library.archived') : 'Restored';
+      const verb = toArchived ? t('library.archived') : t('library.restored');
       const msg = failed > 0 ? `${verb} ${done} · ${failed} failed` : `${verb} ${done} document${done !== 1 ? 's' : ''}`;
       (failed > 0 ? uiModule.showError : uiModule.showToast)(msg);
     }
@@ -2051,7 +2051,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
           if (isArchive) _renderLibArchive(); else _renderLibChats();
         });
       } catch (e) {
-        preview.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:6px 4px;color:var(--color-error);">${t('library.failed_preview')}</div>';
+        preview.innerHTML = `<div style="opacity:0.5;font-size:11px;padding:6px 4px;color:var(--color-error);">${t('library.failed_preview')}</div>`;
       }
     }
 
@@ -2109,7 +2109,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
               '<div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">' + [model, _relTime(s.updated_at)].filter(Boolean).join(' \u00b7 ') + '</div>' +
             '</div>' +
             chevronSvg +
-            '<div class="memory-item-actions"><button class="memory-item-btn _chat-menu" title="${t('library.actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>' +
+            `<div class="memory-item-actions"><button class="memory-item-btn _chat-menu" title="${t('library.actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>` +
           '</div>' +
           '<div class="doclib-chat-preview" style="display:none;"></div>';
         const cb = card.querySelector('.memory-select-cb');
@@ -2288,13 +2288,13 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
       try {
         const res = await fetch(API_BASE + '/api/sessions/auto-sort', { method: 'POST', credentials: 'same-origin' });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Tidy failed');
+        if (!res.ok) throw new Error(data.detail || t('library.tidy_failed'));
         if (data.status === 'ok') {
           if (window.uiModule) window.uiModule.showToast('Sorted ' + data.updated + ' sessions into ' + data.folders.length + ' folders');
           if (window.sessionModule) await window.sessionModule.loadSessions();
           _renderLibChats();
         } else {
-          if (window.uiModule) window.uiModule.showToast(data.reason || 'Nothing to tidy');
+          if (window.uiModule) window.uiModule.showToast(data.reason || t('library.nothing_to_tidy'));
         }
       } catch (e) {
         if (window.uiModule) window.uiModule.showError('Tidy: ' + e.message);
@@ -2401,7 +2401,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
         });
         preview.appendChild(actions);
       } catch {
-        preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">${t('library.failed_preview')}</div>';
+        preview.innerHTML = `<div style="opacity:0.4;font-size:11px;padding:8px 4px;">${t('library.failed_preview')}</div>`;
       }
     }
 
@@ -2464,7 +2464,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
               '<div class="memory-item-title">' + arcIconSvg + _esc(s.name || t('library.untitled')) + '</div>' +
               '<div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">' + [model, _relTime(s.updated_at)].filter(Boolean).join(' \u00b7 ') + '</div>' +
             '</div>' +
-            '<div class="memory-item-actions"><button class="memory-item-btn _arc-menu" title="${t('library.actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>' +
+            `<div class="memory-item-actions"><button class="memory-item-btn _arc-menu" title="${t('library.actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>` +
           '</div>' +
           '<div class="doclib-chat-preview" style="display:none;"></div>';
         const cb = card.querySelector('.memory-select-cb');
@@ -2508,7 +2508,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
               '<div class="memory-item-title">' + _arcDocIco + _esc(d.title || t('library.untitled')) + '</div>' +
               '<div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">' + ['Document', (d.language || 'text'), _relTime(d.updated_at)].filter(Boolean).join(' · ') + '</div>' +
             '</div>' +
-            '<div class="memory-item-actions"><button class="memory-item-btn _arc-doc-menu" title="${t('library.actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>' +
+            `<div class="memory-item-actions"><button class="memory-item-btn _arc-doc-menu" title="${t('library.actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>` +
           '</div>' +
           '<div class="doclib-chat-preview" style="display:none;"></div>';
         const _dcbEl = card.querySelector('.memory-select-cb');
@@ -2545,7 +2545,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
               '<div class="memory-item-title">' + _arcResIco + _esc(r.query || 'Research') + '</div>' +
               '<div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">' + ['Research', (r.source_count ? r.source_count + ' sources' : ''), _relTime(r.completed_at ? new Date(r.completed_at * 1000).toISOString() : '')].filter(Boolean).join(' · ') + '</div>' +
             '</div>' +
-            '<div class="memory-item-actions"><button class="memory-item-btn _arc-res-menu" title="${t('library.actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>' +
+            `<div class="memory-item-actions"><button class="memory-item-btn _arc-res-menu" title="${t('library.actions')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>` +
           '</div>' +
           '<div class="doclib-chat-preview" style="display:none;"></div>';
         const _rcbEl = card.querySelector('.memory-select-cb');
@@ -2749,7 +2749,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
         : '';
       preview.innerHTML =
         '<div class="doclib-chat-preview-messages">' +
-          (summaryHtml || sourcesHtml || '<div style="opacity:0.4;font-size:11px;padding:6px 4px;">${t('library.no_preview')}</div>') +
+          (summaryHtml || sourcesHtml || `<div style="opacity:0.4;font-size:11px;padding:6px 4px;">${t('library.no_preview')}</div>`) +
           (summaryHtml && sourcesHtml ? sourcesHtml : '') +
         '</div>' +
         '<div class="doclib-chat-preview-actions">' +
@@ -2841,8 +2841,8 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
             _researchItems = _researchItems.filter(r => r.id !== item.id);
             _renderResearchGrid();
           }
-          if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : 'Restored');
-        } catch { if (uiModule) uiModule.showError('Failed to ' + (toArchived ? 'archive' : 'restore')); }
+          if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : t('library.restored'));
+        } catch { if (uiModule) uiModule.showError(toArchived ? t('library.failed_archive') : t('library.failed_restore')); }
       });
     }
 
@@ -2961,7 +2961,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
                 await new Promise(r => setTimeout(r, 200));
                 _researchItems = _researchItems.filter(r => r.id !== rid);
                 _renderResearchGrid();
-                if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : 'Restored');
+                if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : t('library.restored'));
               } },
             { label: t('common.delete'), danger: true, action: async () => {
                 if (!await window.styledConfirm(t('library.delete_research_confirm'), { confirmText: t('common.delete'), danger: true })) return;
@@ -3051,7 +3051,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
         }));
         for (const r of results) if (r) candidates.push(r);
         if (candidates.length === 0) {
-          if (uiModule) uiModule.showToast('Nothing to tidy');
+          if (uiModule) uiModule.showToast(t('library.nothing_to_tidy'));
           return;
         }
         await Promise.all(candidates.map(r => fetch('/api/research/' + r.id, { method: 'DELETE', credentials: 'same-origin' }).catch(() => {})));
@@ -3135,7 +3135,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
       _researchSelectMode = false;
       document.getElementById('doclib-research-bulk').classList.add('hidden');
       _renderResearchGrid();
-      if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : 'Restored');
+      if (uiModule) uiModule.showToast(toArchived ? t('library.archived') : t('library.restored'));
     });
 
     // 聊天/归档菜单的共享下拉菜单 — 在下面的模块作用域中定义
@@ -3304,7 +3304,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
       } catch (e) {
         spinner.destroy();
         console.error('Document tidy failed:', e);
-        if (uiModule) uiModule.showToast('Tidy failed');
+        if (uiModule) uiModule.showToast(t('library.tidy_failed'));
         tidyBtn.disabled = false;
         tidyBtn.classList.remove('spinning');
         tidyBtn.innerHTML = origHTML;
@@ -3344,7 +3344,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
     if (bulkActionsBtn) bulkActionsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (_librarySelectedIds.size === 0) {
-        if (uiModule) uiModule.showToast('Select documents first');
+        if (uiModule) uiModule.showToast(t('library.select_documents_first'));
         return;
       }
       _showLibDropdown(e.currentTarget, [

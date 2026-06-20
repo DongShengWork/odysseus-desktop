@@ -5863,7 +5863,7 @@ import { t } from './i18n.js';
       if (textarea) textarea.focus();
     } catch (e) {
       console.error('Failed to create document:', e);
-      if (uiModule) uiModule.showError('Failed to create document');
+      if (uiModule) uiModule.showError(t('document.failed_create_document'));
     } finally {
       _creatingDoc = false;
     }
@@ -6736,7 +6736,6 @@ import { t } from './i18n.js';
   /** 测量字符索引在镜像元素中的视觉x,y位置
    *  通过在其中插入零宽标记span并
    *  读取其边界矩形。返回相对于镜像内容框原点的{x, y}。 */
-*  content-box 原点。 */
   function _measurePos(mirror, text, pos) {
     mirror.innerHTML = '';
     if (pos > 0) mirror.appendChild(document.createTextNode(text.substring(0, pos)));
@@ -7319,7 +7318,7 @@ import { t } from './i18n.js';
 
     if (_diffChunks.length === 0) {
       _diffModeActive = false;
-      if (uiModule) uiModule.showToast('No changes');
+      if (uiModule) uiModule.showToast(t('document.no_changes'));
       return;
     }
 
@@ -7420,12 +7419,12 @@ import { t } from './i18n.js';
 
     const acceptAll = document.createElement('button');
     acceptAll.className = 'diff-toolbar-btn diff-toolbar-btn-accept';
-    acceptAll.textContent = 'Accept All';
+    acceptAll.textContent = t('document.accept_all');
     acceptAll.addEventListener('click', () => _resolveAllChunks(true));
 
     const rejectAll = document.createElement('button');
     rejectAll.className = 'diff-toolbar-btn diff-toolbar-btn-reject';
-    rejectAll.textContent = 'Reject All';
+    rejectAll.textContent = t('document.reject_all');
     rejectAll.addEventListener('click', () => _resolveAllChunks(false));
 
     toolbar.appendChild(status);
@@ -7856,7 +7855,7 @@ import { t } from './i18n.js';
         await navigator.clipboard.writeText(textarea.value);
       } catch (e) { /* ignore */ }
     }
-    if (uiModule) uiModule.showToast('Copied to clipboard');
+    if (uiModule) uiModule.showToast(t('document.copied_to_clipboard'));
   }
 
   /* ---- 每个标签上下文菜单 ---- */
@@ -8130,10 +8129,10 @@ import { t } from './i18n.js';
         docs.get(activeDocId).content = textarea.value;
       }
       _syncDocIndicator();
-      if (!silent && uiModule) uiModule.showToast('Document saved');
+      if (!silent && uiModule) uiModule.showToast(t('document.document_saved'));
     } catch (e) {
       console.error('Failed to save document:', e);
-      if (!silent && uiModule) uiModule.showError('Failed to save document');
+      if (!silent && uiModule) uiModule.showError(t('document.failed_save_document'));
     }
   }
 
@@ -8401,7 +8400,7 @@ import { t } from './i18n.js';
     a.download = _getExportBaseName() + '.html';
     a.click();
     URL.revokeObjectURL(a.href);
-    if (uiModule) uiModule.showToast('Exported as HTML');
+    if (uiModule) uiModule.showToast(t('document.exported_as_html'));
   }
 
   async function exportAsPdf() {
@@ -8483,7 +8482,7 @@ import { t } from './i18n.js';
     a.download = baseName + '.docx';
     a.click();
     URL.revokeObjectURL(a.href);
-    if (uiModule) uiModule.showToast('Exported as DOCX');
+    if (uiModule) uiModule.showToast(t('document.exported_as_docx'));
   }
 
 /** 删除活动文档 */
@@ -8510,10 +8509,10 @@ import { t } from './i18n.js';
         activeDocId = null;
         closePanel();
       }
-      if (uiModule) uiModule.showToast('Document deleted');
+      if (uiModule) uiModule.showToast(t('document.document_deleted'));
     } catch (e) {
       console.error('Failed to delete document:', e);
-      if (uiModule) uiModule.showError('Failed to delete document');
+      if (uiModule) uiModule.showError(t('document.failed_delete_document'));
     }
   }
 

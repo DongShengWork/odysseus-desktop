@@ -872,9 +872,9 @@ async function initTtsSettings() {
     try {
       await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tts_enabled: ttsEnabledToggle ? ttsEnabledToggle.checked : true, tts_provider: provSel.value, tts_model: getModel() || 'tts-1', tts_voice: getVoice() || 'alloy', tts_speed: speedSelect.value || '1' }) });
-      ttsMsg.textContent = 'Saved'; ttsMsg.style.color = 'var(--fg)'; setTimeout(() => { ttsMsg.textContent = ''; }, 2000);
+      ttsMsg.textContent = t('settings.saved'); ttsMsg.style.color = 'var(--fg)'; setTimeout(() => { ttsMsg.textContent = ''; }, 2000);
       if (window.aiTTSManager) window.aiTTSManager.checkAvailability();
-    } catch (e) { ttsMsg.textContent = 'Failed to save'; ttsMsg.style.color = 'var(--red)'; }
+    } catch (e) { ttsMsg.textContent = t('settings.failed_to_save'); ttsMsg.style.color = 'var(--red)'; }
   }
 
   async function saveAndClearCache() {
@@ -1035,11 +1035,11 @@ async function initSttSettings() {
       await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stt_enabled: enabled, stt_provider: provSel.value, stt_model: getModel() || 'base', stt_language: langInput.value.trim() }) });
-      sttMsg.textContent = 'Saved'; sttMsg.style.color = 'var(--fg)'; setTimeout(() => { sttMsg.textContent = ''; }, 2000);
+      sttMsg.textContent = t('settings.saved'); sttMsg.style.color = 'var(--fg)'; setTimeout(() => { sttMsg.textContent = ''; }, 2000);
       // 通知 voiceRecorder 有效提供者并更新发送按钮图标
       if (window.voiceRecorderModule) window.voiceRecorderModule._sttProvider = effectiveProvider();
       if (window._updateSendBtnIcon) window._updateSendBtnIcon();
-    } catch (e) { sttMsg.textContent = 'Failed to save'; sttMsg.style.color = 'var(--red)'; }
+    } catch (e) { sttMsg.textContent = t('settings.failed_to_save'); sttMsg.style.color = 'var(--red)'; }
   }
 
   provSel.addEventListener('change', function() { updateVisibility(); saveSTT(); });
@@ -1618,7 +1618,7 @@ function initAppearance() {
       if (window.UI_VIS_ADMIN_ONLY && window.UI_VIS_ADMIN_ONLY.has(key) && !chk.checked && !window._isAdmin) {
         chk.checked = true;
         if (uiModule && uiModule.showToast) {
-          uiModule.showToast('Only admins can hide Settings.');
+          uiModule.showToast(t('settings.only_admins_can_hide'));
         }
         return;
       }
@@ -1630,17 +1630,17 @@ function initAppearance() {
         try {
           ok = await (uiModule && uiModule.styledConfirm
             ? uiModule.styledConfirm(
-                'Hide the Settings cog?\n\nYou can re-open this panel any time by typing /settings in the chat input.',
-                { confirmText: 'Hide', cancelText: 'Cancel' }
+                t('settings.hide_confirm'),
+                { confirmText: t('settings.hide_btn'), cancelText: t('common.cancel') }
               )
-            : Promise.resolve(window.confirm('Hide the Settings cog?\n\nYou can re-open this panel any time by typing /settings in the chat input.')));
+            : Promise.resolve(window.confirm(t('settings.hide_confirm'))));
         } catch (_) { ok = false; }
         if (!ok) {
           chk.checked = true;
           return;
         }
         if (uiModule && uiModule.showToast) {
-          uiModule.showToast('Settings cog hidden — type /settings to bring it back.', 5000);
+          uiModule.showToast(t('settings.cog_hidden_tip'), 5000);
         }
       }
 
@@ -1972,7 +1972,7 @@ async function initShortcuts() {
       });
       // 更新全局快捷键使其立即生效
       window._odysseusKeybinds = keybinds;
-      if (uiModule && uiModule.showToast) uiModule.showToast('Shortcut saved');
+      if (uiModule && uiModule.showToast) uiModule.showToast(t('settings.shortcut_saved'));
     } catch (e) {
       console.error('Failed to save keybinds:', e);
     }
@@ -1983,7 +1983,7 @@ async function initShortcuts() {
       keybinds = { ...SHORTCUT_DEFAULTS };
       render();
       await saveKeybinds();
-      if (uiModule && uiModule.showToast) uiModule.showToast('Shortcuts reset to defaults');
+      if (uiModule && uiModule.showToast) uiModule.showToast(t('settings.shortcuts_reset'));
     });
   }
 
@@ -2065,7 +2065,7 @@ function initAccount() {
           el('tfa-disable-btn').addEventListener('click', async () => {
             const pw = el('tfa-disable-pw').value;
             const msg = el('tfa-msg');
-            if (!pw) { msg.textContent = 'Enter your password'; msg.style.color = 'var(--red)'; return; }
+            if (!pw) { msg.textContent = t('settings.enter_password_to_disable'); msg.style.color = 'var(--red)'; return; }
             try {
               const r = await fetch('/api/auth/2fa/disable', {
                 method: 'POST', credentials: 'same-origin',
@@ -2111,7 +2111,7 @@ function initAccount() {
               el('tfa-verify-btn').addEventListener('click', async () => {
                 const code = el('tfa-verify-code').value.trim();
                 const vmsg = el('tfa-msg');
-                if (!code) { vmsg.textContent = 'Enter the code'; vmsg.style.color = 'var(--red)'; return; }
+                if (!code) { vmsg.textContent = t('settings.enter_the_code'); vmsg.style.color = 'var(--red)'; return; }
                 try {
                   const vr = await fetch('/api/auth/2fa/confirm', {
                     method: 'POST', credentials: 'same-origin',
@@ -2231,7 +2231,7 @@ async function initReminderSettings() {
             setTimeout(() => { pubUrlMsg.textContent = ''; }, 2000);
           }
         } catch (_) {
-          if (pubUrlMsg) { pubUrlMsg.textContent = 'Save failed'; pubUrlMsg.style.color = 'var(--red)'; }
+          if (pubUrlMsg) { pubUrlMsg.textContent = t('settings.save_failed'); pubUrlMsg.style.color = 'var(--red)'; }
         }
       }, 600);
     });
@@ -2829,7 +2829,7 @@ async function initEmailAccountsSettings() {
       // 名称可选——回退到发件地址，让列表视图仍有标签可渲染。
       // 仅当两者都为空时才拒绝。
       if (!body.name) body.name = body.from_address;
-      if (!body.name) { el('eaf-msg').textContent = 'Need at least a Name or Email'; el('eaf-msg').style.color = 'var(--red)'; return; }
+      if (!body.name) { el('eaf-msg').textContent = t('settings.need_name_or_email'); el('eaf-msg').style.color = 'var(--red)'; return; }
 
       try {
         const url = isEdit ? `/api/email/accounts/${a.id}` : '/api/email/accounts';
@@ -2841,7 +2841,7 @@ async function initEmailAccountsSettings() {
         });
         const d = await r.json();
         if (d.ok || d.id) {
-          el('eaf-msg').textContent = 'Saved';
+          el('eaf-msg').textContent = t('settings.saved');
           el('eaf-msg').style.color = 'var(--green,#50fa7b)';
           setTimeout(() => { formEl.style.display = 'none'; renderList(); }, 400);
         } else {
@@ -2987,7 +2987,7 @@ async function initEmailSettings() {
         if (el('set-email-style')) el('set-email-style').value = data.style;
         if (msg) msg.textContent = '\u2713 ' + t('settings.style_extracted');
       } else {
-        if (msg) msg.textContent = data.error || 'Failed';
+        if (msg) msg.textContent = data.error || t('settings.failed');
       }
     } catch (e) {
       if (msg) msg.textContent = t('settings.style_extract_failed');
@@ -3009,7 +3009,7 @@ async function initEmailSettings() {
         body: JSON.stringify({ style: el('set-email-style').value }),
       });
       const result = await res.json();
-      if (msg) msg.textContent = result.success ? '✓ Saved' : 'Failed';
+      if (msg) msg.textContent = result.success ? '✓ ' + t('settings.saved') : t('settings.failed');
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
     } catch (e) {
       if (msg) msg.textContent = t('settings.failed');
@@ -3114,7 +3114,7 @@ async function initIntegrations() {
   // 开始编辑
   async function startEdit(id) {
     editingId = id;
-    formTitle.textContent = 'Edit Integration';
+    formTitle.textContent = t('settings.edit_integration');
     // 获取完整数据（通过专门的编辑获取来获得未遮蔽的密钥——我们加载现有的就行）
     try {
       const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
@@ -3137,7 +3137,7 @@ async function initIntegrations() {
   // 显示添加表单
   addBtn.addEventListener('click', () => {
     editingId = null;
-    formTitle.textContent = 'Add Integration';
+    formTitle.textContent = t('settings.add_integration');
     presetSel.value = '';
     nameIn.value = '';
     urlIn.value = '';
@@ -3175,7 +3175,7 @@ async function initIntegrations() {
       const method = editingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'same-origin' });
       if (res.ok) {
-        statusEl.textContent = 'Saved';
+        statusEl.textContent = t('settings.saved');
         statusEl.style.color = 'var(--green, #98c379)';
         formCard.style.display = 'none';
         await renderList();
@@ -3641,13 +3641,13 @@ async function initUnifiedIntegrations() {
         // 会静默丢失，导致测试一直卡在
         // "先保存"直到重新打开表单。
         if (!_editId && saved) _editId = saved.integration?.id || saved.id;
-        el('uf-api-msg').textContent = 'Saved'; el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
+        el('uf-api-msg').textContent = t('settings.saved'); el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
         await renderList();
         notifyIntegrationsChanged();
-      } catch (_) { el('uf-api-msg').textContent = 'Failed'; el('uf-api-msg').style.color = 'var(--red)'; }
+      } catch (_) { el('uf-api-msg').textContent = t('settings.failed'); el('uf-api-msg').style.color = 'var(--red)'; }
     });
     el('uf-api-test').addEventListener('click', async () => {
-      if (!_editId) { el('uf-api-msg').textContent = 'Save first'; return; }
+      if (!_editId) { el('uf-api-msg').textContent = t('settings.save_first'); return; }
       try {
         const r = await fetch(`/api/auth/integrations/${_editId}/test`, { method: 'POST', credentials: 'same-origin' });
         const d = await r.json();
@@ -3719,7 +3719,7 @@ async function initUnifiedIntegrations() {
     };
 
     el('uf-caldav-save').addEventListener('click', async () => {
-      _setCalDavMsg('Testing…', true);
+      _setCalDavMsg(t('settings.testing_dots'), true);
       el('uf-caldav-msg').style.color = '';
       const d = await _runCalDavTest();
       if (!d.ok) {
@@ -3749,20 +3749,20 @@ async function initUnifiedIntegrations() {
         }
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          _setCalDavMsg(err.detail || 'Save failed', false);
+          _setCalDavMsg(err.detail || t('settings.save_failed'), false);
           return;
         }
-        _setCalDavMsg('Saved', true);
+        _setCalDavMsg(t('settings.saved'), true);
         formEl.style.display = 'none';
         await renderList();
         notifyIntegrationsChanged();
       } catch (_) {
-        _setCalDavMsg('Save failed', false);
+        _setCalDavMsg(t('settings.save_failed'), false);
       }
     });
 
     el('uf-caldav-test').addEventListener('click', async () => {
-      _setCalDavMsg('Testing…', true);
+      _setCalDavMsg(t('settings.testing_dots'), true);
       el('uf-caldav-msg').style.color = '';
       const d = await _runCalDavTest();
       _setCalDavMsg(d.ok ? 'Connected' : (d.error || 'Failed'), d.ok);
@@ -3817,7 +3817,7 @@ async function initUnifiedIntegrations() {
       if (el('uf-carddav-pass').value) body.carddav_password = el('uf-carddav-pass').value;
       try {
         await fetch('/api/contacts/config', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        el('uf-carddav-msg').textContent = 'Saved';
+        el('uf-carddav-msg').textContent = t('settings.saved');
         el('uf-carddav-msg').style.color = 'var(--green, #50fa7b)';
         // 同时刷新子面板（联系人管理器）和外部集成列表，
         // 让 CardDAV 行立即显示，
@@ -3826,7 +3826,7 @@ async function initUnifiedIntegrations() {
         await renderList();
         notifyIntegrationsChanged();
       } catch (_) {
-        el('uf-carddav-msg').textContent = 'Failed';
+        el('uf-carddav-msg').textContent = t('settings.failed');
         el('uf-carddav-msg').style.color = 'var(--red)';
       }
     });
@@ -3854,7 +3854,7 @@ async function initUnifiedIntegrations() {
       if (btn) { btn.textContent = t('common.exporting'); btn.disabled = true; }
       try {
         const res = await fetch(`/api/contacts/export?format=${encodeURIComponent(format)}`, { credentials: 'same-origin' });
-        if (!res.ok) throw new Error('Export failed');
+        if (!res.ok) throw new Error(t('settings.export_failed'));
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -3865,7 +3865,7 @@ async function initUnifiedIntegrations() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch (_) {
-        uiModule.showError ? uiModule.showError('Export failed') : alert('Export failed');
+        uiModule.showError ? uiModule.showError(t('settings.export_failed')) : alert(t('settings.export_failed'));
       } finally {
         if (btn) { btn.textContent = orig; btn.disabled = false; }
       }
@@ -3911,7 +3911,7 @@ async function initUnifiedIntegrations() {
         const msg = `Imported ${imported}/${total}` + (failed ? ` (${failed} failed)` : '');
         uiModule.showToast ? uiModule.showToast(msg) : null;
       } catch (err) {
-        uiModule.showError ? uiModule.showError(err?.message || 'Import failed') : alert(err?.message || 'Import failed');
+        uiModule.showError ? uiModule.showError(err?.message || t('settings.import_failed')) : alert(err?.message || t('settings.import_failed'));
       } finally {
         if (btn) { btn.textContent = orig; btn.disabled = false; }
         e.target.value = '';
@@ -4431,7 +4431,7 @@ async function initUnifiedIntegrations() {
       const body = _collectBody();
       // 名称可选——回退到 Email，让列表仍有标签。
       if (!body.name) body.name = body.from_address;
-      if (!body.name) { el('uf-email-msg').textContent = 'Need at least a Name or Email'; el('uf-email-msg').style.color = 'var(--red)'; return; }
+      if (!body.name) { el('uf-email-msg').textContent = t('settings.need_name_or_email'); el('uf-email-msg').style.color = 'var(--red)'; return; }
       const saveBtn = el('uf-email-save');
       saveBtn.disabled = true;
       const saveIcoEl = saveBtn.querySelector('.uf-email-save-ico');
@@ -4454,7 +4454,7 @@ async function initUnifiedIntegrations() {
           el('uf-email-msg').style.color = 'var(--red)';
           return;
         }
-        el('uf-email-msg').textContent = 'Saved';
+        el('uf-email-msg').textContent = t('settings.saved');
         el('uf-email-msg').style.color = 'var(--green,#50fa7b)';
         integrationNotice = 'Email account saved. For more settings, go to Settings > Email.';
         formEl.style.display = 'none';
@@ -4534,8 +4534,8 @@ async function initUnifiedIntegrations() {
           body: JSON.stringify({ server_url: el('uf-vault-url').value, email: el('uf-vault-email').value }),
         });
         const d = await r.json();
-        if (d.ok) { msg('Saved', 'var(--green,#50fa7b)'); await refreshStatus(); await renderList(); }
-        else msg(d.error || 'Failed', 'var(--red)');
+        if (d.ok) { msg(t('settings.saved'), 'var(--green,#50fa7b)'); await refreshStatus(); await renderList(); }
+        else msg(d.error || t('settings.failed'), 'var(--red)');
       } catch (e) { msg('Error: ' + e.message, 'var(--red)'); }
     });
 
@@ -4692,14 +4692,14 @@ async function initUnifiedIntegrations() {
           </div>`;
         // 重新连接
         el('uf-mcp-reconnect').addEventListener('click', async () => {
-          const msg = el('uf-mcp-msg'); msg.textContent = 'Reconnecting...';
+          const msg = el('uf-mcp-msg'); msg.textContent = t('settings.reconnecting');
           try {
             const r = await fetch(`/api/mcp/servers/${srv.id}/reconnect`, { method: 'POST', credentials: 'same-origin' });
             const d = await r.json();
             msg.textContent = d.connected ? `Connected (${d.tool_count} tools)` : `Failed: ${d.error || 'unknown'}`;
             await renderList();
             showMcpForm(editId); // 刷新此视图
-          } catch (e) { msg.textContent = 'Failed'; }
+          } catch (e) { msg.textContent = t('settings.failed'); }
         });
         // 切换启用/禁用
         el('uf-mcp-toggle').addEventListener('click', async () => {
@@ -4788,11 +4788,11 @@ async function initUnifiedIntegrations() {
             el('uf-mcp-msg').textContent = `Connected (${data.tool_count || 0} tools)`;
             formEl.style.display = 'none'; await renderList();
           } else if (r.ok) {
-            el('uf-mcp-msg').textContent = 'Saved'; formEl.style.display = 'none'; await renderList();
+            el('uf-mcp-msg').textContent = t('settings.saved'); formEl.style.display = 'none'; await renderList();
           } else {
             el('uf-mcp-msg').textContent = `Failed (${r.status})`;
           }
-        } catch (_) { el('uf-mcp-msg').textContent = 'Failed'; }
+        } catch (_) { el('uf-mcp-msg').textContent = t('settings.failed'); }
         finally { _setBtnLoading(saveBtn, false, _origLabel); if (cancelBtn) cancelBtn.disabled = false; }
       });
     }
@@ -5049,7 +5049,7 @@ async function initUnifiedIntegrations() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name }),
           });
-          if (!r.ok) throw new Error('Save failed');
+          if (!r.ok) throw new Error(t('settings.save_failed'));
           input.style.borderColor = 'var(--green, #50fa7b)';
           setTimeout(() => { input.style.borderColor = 'transparent'; }, 800);
           await renderList();
@@ -5107,7 +5107,7 @@ async function initUnifiedIntegrations() {
             await renderList();
           } catch (err) {
             cb.checked = !cb.checked;
-            if (msg) { msg.textContent = err?.message || 'Failed'; msg.style.color = 'var(--red)'; }
+            if (msg) { msg.textContent = err?.message || t('settings.failed'); msg.style.color = 'var(--red)'; }
           }
         });
       });

@@ -329,9 +329,9 @@ async function _handleGalleryDrop(e) {
     dtItems.some(it => it.kind === 'string')
   );
   if (looksLikeFolderUri) {
-    uiModule.showError('Browsers can’t read folders dropped from native file managers (Thunar/Nautilus). Use the "Upload album" tile in the Albums tab instead.');
+    uiModule.showError(t(‘gallery.folder_drop_not_supported’));
   } else if (entries.length || dtItems.length) {
-    uiModule.showToast('No images found in that drop');
+    uiModule.showToast(t(‘gallery.no_images_in_drop’));
   }
 }
 
@@ -485,7 +485,7 @@ function _ensureAlbumsToolbar(container) {
   });
   container.querySelector('#gallery-albums-bulk-delete').addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!_albumSelected.size) { uiModule.showToast('Select albums first'); return; }
+    if (!_albumSelected.size) { uiModule.showToast(t('gallery.select_albums_first')); return; }
     _bulkDeleteAlbums([..._albumSelected]);
   });
 }
@@ -700,9 +700,9 @@ function _wireAlbumsEvents(scope) {
       if (r.ok) {
         await _fetchAlbums();
         _renderAlbumsTab();
-        if (uiModule) uiModule.showToast('Album renamed');
+        if (uiModule) uiModule.showToast(t('gallery.album_renamed'));
       } else if (uiModule) {
-        uiModule.showError('Rename failed');
+        uiModule.showError(t('gallery.rename_failed'));
       }
     });
     pop.querySelector('[data-action="delete"]')?.addEventListener('click', async (e) => {
@@ -722,17 +722,17 @@ function _wireAlbumsEvents(scope) {
         await _fetchAlbums();
         _renderAlbumsTab();
         _renderAlbums();
-        if (uiModule) uiModule.showToast('Album deleted');
+        if (uiModule) uiModule.showToast(t('gallery.album_deleted'));
       } else if (uiModule) {
-        uiModule.showError('Delete failed');
+        uiModule.showError(t('gallery.delete_failed'));
       }
     });
   });
 
   document.getElementById('gallery-albums-new')?.addEventListener('click', async () => {
     const name = (uiModule.styledPrompt
-      ? await uiModule.styledPrompt('Name your new album.', { title: 'New album', placeholder: 'e.g. Vacation 2026', confirmText: t('common.create') })
-      : prompt('Album name:'));
+      ? await uiModule.styledPrompt(t('gallery.name_new_album'), { title: t('gallery.new_album'), placeholder: 'e.g. Vacation 2026', confirmText: t('common.create') })
+      : prompt(t('gallery.album_name_prompt')));
     if (!name?.trim()) return;
     await fetch(`${API_BASE}/api/gallery/albums`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -755,7 +755,7 @@ function _wireAlbumsEvents(scope) {
       const images = all.filter(_isMediaFile);
       picker.remove();
       if (!images.length) {
-        if (uiModule) uiModule.showToast('No images or videos in that folder');
+        if (uiModule) uiModule.showToast(t('gallery.no_media_in_folder'));
         return;
       }
       // 从第一个文件的相对路径推导文件夹名称（例如
@@ -780,7 +780,7 @@ function _wireAlbumsEvents(scope) {
         }
       }
       if (!album) {
-        if (uiModule) uiModule.showError('Could not create album');
+        if (uiModule) uiModule.showError(t('gallery.failed_create_album'));
         return;
       }
       await _bulkUpload(images, album.id);
@@ -950,7 +950,7 @@ function _draftsPaint() {
       e.stopPropagation();
       const id = btn.dataset.draftId;
       if (!id) return;
-      const ok = await uiModule.styledConfirm('Delete this project?', {
+      const ok = await uiModule.styledConfirm(t('gallery.delete_project_confirm'), {
         confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true,
       });
       if (!ok) return;
@@ -1459,7 +1459,7 @@ function _openDetail(img) {
     const remaining = existing.filter(e => e.toLowerCase() !== String(tag).toLowerCase());
     const cleaned = remaining.join(', ');
     const ok = await _patchImage(img.id, { tags: cleaned });
-    if (!ok) { if (uiModule) uiModule.showError('Failed to remove tag'); return; }
+    if (!ok) { if (uiModule) uiModule.showError(t('gallery.failed_remove_tag')); return; }
     img.tags = cleaned;
     img.user_tags = cleaned;
     chip.remove();
@@ -1667,7 +1667,7 @@ function _openDetail(img) {
       openEditor(img.url, img.id, null, label);
     } catch (e) {
       console.error('[edit] failed:', e);
-      if (uiModule) uiModule.showError('Failed to open editor: ' + (e?.message || 'unknown'));
+      if (uiModule) uiModule.showError(t('gallery.failed_open_editor') + ': ' + (e?.message || 'unknown'));
     }
   };
   document.getElementById('gallery-edit-btn')?.addEventListener('click', _openInEditor);
@@ -1703,7 +1703,7 @@ function _openDetail(img) {
         credentials: 'same-origin',
         body: JSON.stringify({ angle }),
       });
-      if (!r.ok) { cleanup(); uiModule.showError('Rotate failed'); return; }
+      if (!r.ok) { cleanup(); uiModule.showError(t('gallery.rotate_failed')); return; }
       // 缓存破坏详情视图中的图片 URL，然后等待新图片
       // 实际加载完成再清除旋转图标，这样用户
       // 不会看到旧图片/空白图片的闪烁。
@@ -1716,11 +1716,11 @@ function _openDetail(img) {
         });
       }
       cleanup();
-      uiModule.showToast('Rotated');
+      uiModule.showToast(t('gallery.rotated'));
       _fetchLibrary(false);
     } catch (e) {
       cleanup();
-      uiModule.showError('Rotate failed');
+      uiModule.showError(t('gallery.rotate_failed'));
     }
   };
   document.getElementById('gallery-rotate-btn')?.addEventListener('click', () => _rotate(90));
@@ -1737,21 +1737,21 @@ function _openDetail(img) {
         body: JSON.stringify({ cover_id: img.id }),
       });
       if (r.ok) {
-        uiModule.showToast('Album cover updated');
+        uiModule.showToast(t('gallery.cover_updated'));
         await _fetchAlbums();
       } else {
-        uiModule.showError('Failed to set cover');
+        uiModule.showError(t('gallery.failed_set_cover'));
       }
     } catch (e) {
-      uiModule.showError('Failed to set cover');
+      uiModule.showError(t('gallery.failed_set_cover'));
     }
   });
 
   document.getElementById('gallery-delete-btn').addEventListener('click', async () => {
-    if (!await uiModule.styledConfirm('Delete this photo? This cannot be undone.', { confirmText: t('common.delete'), danger: true })) return;
+    if (!await uiModule.styledConfirm(t('gallery.delete_photo_confirm'), { confirmText: t('common.delete'), danger: true })) return;
     const ok = await _deleteImage(img.id);
     if (!ok) {
-      uiModule.showError('Failed to delete photo');
+      uiModule.showError(t('gallery.failed_delete_photo'));
       return;
     }
     detail.style.display = 'none';
@@ -1759,7 +1759,7 @@ function _openDetail(img) {
     _total = Math.max(0, _total - 1);
     _renderGrid();
     _renderStats();
-    if (uiModule) uiModule.showToast('Photo deleted');
+    if (uiModule) uiModule.showToast(t('gallery.photo_deleted'));
   });
 
   // 标签输入 — Enter 保存；同时从每个标签中去除前导 '#'
@@ -1780,10 +1780,10 @@ function _openDetail(img) {
         });
         if (!r.ok) throw new Error('Failed');
         img.prompt = newName;
-        if (uiModule) uiModule.showToast('Renamed');
+        if (uiModule) uiModule.showToast(t('gallery.renamed'));
         window.dispatchEvent(new CustomEvent('gallery-refresh'));
       } catch {
-        if (uiModule) uiModule.showError('Failed to rename');
+        if (uiModule) uiModule.showError(t('gallery.failed_rename'));
       }
     };
     _nameInput.addEventListener('keydown', (e) => {
@@ -1825,7 +1825,7 @@ function _openDetail(img) {
       if (!added.length) return;
       const cleaned = merged.join(', ');
       const ok = await _patchImage(img.id, { tags: cleaned });
-      if (!ok) { if (uiModule) uiModule.showError('Failed to save tags'); return; }
+      if (!ok) { if (uiModule) uiModule.showError(t('gallery.failed_save_tags')); return; }
       img.tags = cleaned;
       img.user_tags = cleaned;
       const chips = document.getElementById('gallery-user-tag-chips');
@@ -1857,9 +1857,9 @@ function _openDetail(img) {
   document.getElementById('gallery-detail-album').addEventListener('change', async (e) => {
     const albumId = e.target.value;
     const ok = await _patchImage(img.id, { album_id: albumId || '' });
-    if (!ok) { uiModule.showError('Failed to update album'); return; }
+    if (!ok) { uiModule.showError(t('gallery.failed_update_album')); return; }
     img.album_id = albumId || null;
-    uiModule.showToast(albumId ? 'Added to album' : 'Removed from album');
+    uiModule.showToast(albumId ? t('gallery.added_to_album') : t('gallery.removed_from_album'));
   });
 }
 
@@ -2257,7 +2257,7 @@ export function openGallery() {
           method: 'POST', credentials: 'same-origin',
         });
         listRes = await r.json();
-      } catch (e) { uiModule.showError('Failed to fetch tag queue'); return; }
+      } catch (e) { uiModule.showError(t('gallery.failed_fetch_tag_queue')); return; }
       if (!listRes.ok || !Array.isArray(listRes.image_ids) || listRes.image_ids.length === 0) {
         uiModule.showToast(t('gallery.no_untagged_photos', { scope: scope }));
         return;
@@ -2564,7 +2564,7 @@ export function openGallery() {
     // 锚点的点击，因此按钮本身需要自行关闭。
     const existing = document.querySelector('.gallery-bulk-menu');
     if (existing) { existing.remove(); return; }
-    if (!_selectedIds().length) { uiModule.showToast('Select photos first'); return; }
+    if (!_selectedIds().length) { uiModule.showToast(t('gallery.select_photos_first')); return; }
     _showGalleryBulkMenu(e.currentTarget);
   });
 
@@ -2617,7 +2617,7 @@ export function openGallery() {
         _exitSelectMode();
         if (uiModule) uiModule.showToast(t('gallery.downloaded_photos', { n: ids.length }));
       } catch (e) {
-        if (uiModule) uiModule.showError('Failed to create zip');
+        if (uiModule) uiModule.showError(t('gallery.failed_create_zip'));
       }
       return;
     }
@@ -2659,7 +2659,7 @@ export function openGallery() {
   }
 
   async function _bulkTag(ids) {
-    const tag = (await uiModule.styledPrompt('', { title: 'Add tag to selected', placeholder: 'tag', confirmText: t('common.add'), maxLength: 60 }) || '').trim().replace(/^#+/, '').trim();
+    const tag = (await uiModule.styledPrompt('', { title: t('gallery.add_tag_to_selected'), placeholder: 'tag', confirmText: t('common.add'), maxLength: 60 }) || '').trim().replace(/^#+/, '').trim();
     if (!tag) return;
     let n = 0;
     for (const id of ids) {
@@ -2755,7 +2755,7 @@ export function openGallery() {
 function _doCloseGallery() {
   const editorMounted = !!document.querySelector('#gallery-editor-container .gallery-editor');
   if ((window.__galleryEditLive || isEditorOpen() || editorMounted) && !window.__galleryAllowCloseEditor) {
-    if (uiModule) uiModule.showToast('Close the edit tab first');
+    if (uiModule) uiModule.showToast(t('gallery.close_edit_first'));
     return;
   }
   _open = false;

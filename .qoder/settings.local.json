@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /Users/dinglucheng/Documents/github/odysseus-desktop/src /Users/dinglucheng/Documents/github/odysseus-desktop/static /Users/dinglucheng/Documents/github/odysseus-desktop/routes 2>/dev/null | head -100)",
+      "Bash(\\(exec 3<>\"/dev/tcp/127.0.0.1/7860\"\\) 2>/dev/null && echo \"PORT_IN_USE\" || echo \"PORT_FREE\")",
+      "Bash(ls /Users/dinglucheng/Documents/github/odysseus-desktop/static/ 2>/dev/null && echo \"---\" && ls /Users/dinglucheng/Documents/github/odysseus-desktop/companion 2>/dev/null | head -30)",
+      "Bash(ls:*)",
+      "Bash(wc -l /Users/dinglucheng/Documents/github/odysseus-desktop/static/app.js /Users/dinglucheng/Documents/github/odysseus-desktop/static/js/*.js 2>/dev/null | tail -40)",
+      "Bash(ls venv/bin/python3 2>/dev/null && venv/bin/python3 --version)",
+      "Bash(./venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 7860 > /tmp/odysseus-server.log 2>&1 &\necho \"Server PID: $!\")",
+      "Bash(sleep 5 && \\(exec 3<>\"/dev/tcp/127.0.0.1/7860\"\\) 2>/dev/null && echo \"PORT_OPEN\" || echo \"PORT_CLOSED\")",
+      "Bash(sleep 5; tail -30 /tmp/odysseus-server.log; echo \"---\"; \\(exec 3<>\"/dev/tcp/127.0.0.1/7860\"\\) 2>/dev/null && echo \"PORT_OPEN\" || echo \"PORT_CLOSED\")",
+      "Bash(sleep 15; tail -10 /tmp/odysseus-server.log; echo \"---\"; \\(exec 3<>\"/dev/tcp/127.0.0.1/7860\"\\) 2>/dev/null && echo \"PORT_OPEN\" || echo \"PORT_CLOSED\")",
+      "Bash(ps aux | grep -E \"uvicorn|57838\" | grep -v grep; echo \"---\"; wc -l /tmp/odysseus-server.log; echo \"---\"; tail -3 /tmp/odysseus-server.log)",
+      "Bash(sleep 20; tail -15 /tmp/odysseus-server.log; echo \"---\"; \\(exec 3<>\"/dev/tcp/127.0.0.1/7860\"\\) 2>/dev/null && echo \"PORT_OPEN\" || echo \"PORT_CLOSED\")",
+      "Bash(head:*)",
+      "Bash(curl:*)",
+      "Bash(which playwright; python3 -c \"import playwright; print\\(playwright.__version__\\)\" 2>&1 | head -5)",
+      "Bash(./venv/bin/python -c \"import playwright; print\\(playwright.__version__\\)\" 2>&1 | head -3)"
+    ]
+  }
+}

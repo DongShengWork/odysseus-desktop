@@ -162,6 +162,27 @@ fi
 echo "▶ Preparing Odysseus…"
 ODYSSEUS_SKIP_RUN_HINT=1 ./venv/bin/python setup.py
 
+# 3b. ChromaDB — 向量存储（RAG / 语义记忆 / 工具索引均依赖）。
+#     原生模式不自带 ChromaDB，需要 Docker 容器提供。
+#     如果 Docker 可用且 8100 端口空闲，自动拉起；否则跳过（功能降级）。
+CHROMADB_PORT="${CHROMADB_PORT:-8100}"
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    if ! (exec 3<>"/dev/tcp/127.0.0.1/$CHROMADB_PORT") 2>/dev/null; then
+        echo "▶ Starting ChromaDB container on port $CHROMADB_PORT…"
+        docker-compose up -d chromadb 2>/dev/null || docker compose up -d chromadb 2>/dev/null || \
+            echo "  ⚠ Couldn't start ChromaDB — RAG/vector-memory will be degraded."
+        # 防止 Docker/Colima 下次启动时自动拉起（与 docker-compose.yml 的
+        # restart 设置解耦 —— compose 文件保留 unless-stopped 给全栈部署用）。
+        for _cid in $(docker ps -a --filter "name=chromadb" --format '{{.Names}}' 2>/dev/null); do
+            docker update --restart no "$_cid" >/dev/null 2>&1
+        done
+    else
+        echo "  ✓ ChromaDB already running on port $CHROMADB_PORT"
+    fi
+else
+    echo "▶ Docker not available; ChromaDB will not start (RAG/vector-memory degraded)."
+fi
+
 # Local provider bootstrap.
 #     On Apple Silicon macOS, Apfel is treated as a sibling local model server
 #     to Ollama: if Homebrew has it installed, we start its OpenAI-compatible

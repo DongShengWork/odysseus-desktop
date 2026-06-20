@@ -265,7 +265,7 @@ async function _createEvent(data) {
   }).catch((e) => {
     delete _allEvents[tempUid];
     if (_open) _render();
-    if (window.uiModule) window.uiModule.showError('Failed to create event: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError(t('calendar.failed_create_event') + ': ' + (e?.message || 'unknown'));
   });
   return { uid: tempUid };
 }
@@ -294,7 +294,7 @@ async function _updateEvent(uid, data) {
     if (_preMergeBackup) _allEvents[uid] = _preMergeBackup;
     else delete _allEvents[uid];
     if (_open) _render();
-    if (window.uiModule) window.uiModule.showError('Failed to update event: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError(t('calendar.failed_update_event') + ': ' + (e?.message || 'unknown'));
   });
   return { ok: true };
 }
@@ -346,7 +346,7 @@ async function _deleteEvent(uid) {
       _allEvents[k] = ev;
       if (Array.isArray(_events)) _events.push(ev);
     }
-    if (window.uiModule) window.uiModule.showError('Failed to delete event: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError(t('calendar.failed_delete_event') + ': ' + (e?.message || 'unknown'));
     if (_open) _render();
   });
   return { ok: true };
@@ -539,7 +539,7 @@ async function _createEventReminder(ev, dueDate) {
       try { Notification.requestPermission(); } catch {}
     }
   } catch (e) {
-    if (uiModule.showError) uiModule.showError('Failed to create reminder');
+    if (uiModule.showError) uiModule.showError(t('calendar.failed_create_reminder'));
   }
 }
 
@@ -1588,11 +1588,11 @@ async function _renderAgenda() {
     // 空状态镜像邮件面板：简短消息 + 设置 ›
     // 集成链接来设置 CalDAV，或者快速"创建事件"操作。
     h += '<div class="cal-empty" style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">' +
-      '<span>${t('calendar.no_upcoming_events')}</span>' +
+      `<span>${t('calendar.no_upcoming_events')}</span>` +
       '<span style="opacity:0.7;font-size:11px;">' +
         '<a href="#" data-cal-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">Settings &rsaquo; Integrations</a>' +
         ' &middot; ' +
-        '<a href="#" data-cal-create-event="1" style="color:var(--accent,var(--red));text-decoration:underline;">${t('calendar.create_event')}</a>' +
+        `<a href="#" data-cal-create-event="1" style="color:var(--accent,var(--red));text-decoration:underline;">${t('calendar.create_event')}</a>` +
       '</span>' +
     '</div>';
   } else {
@@ -1601,7 +1601,7 @@ async function _renderAgenda() {
       const todayBadge = (date === today) ? ' <span class="cal-agenda-today-badge">Today</span>' : '';
       h += `<div class="cal-agenda-day${date === today ? ' is-today' : ''}"><div class="cal-agenda-date">${_fmtDate(date)}${todayBadge}</div>`;
       if (!evs.length) {
-        h += '<div class="cal-agenda-empty">${t('calendar.no_events')}</div>';
+        h += `<div class="cal-agenda-empty">${t('calendar.no_events')}</div>`;
       }
       for (const ev of evs) {
         const t = ev.all_day ? 'All day' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
@@ -1671,7 +1671,7 @@ async function _renderSearch() {
   let h = _headerHTML() + _filtersRowHTML() + '<div class="cal-search-results">';
   h += `<div class="cal-search-count">${results.length} result${results.length !== 1 ? 's' : ''} for "${_e(_searchQuery)}"</div>`;
   if (!results.length) {
-    h += '<div class="cal-empty">${t('calendar.no_events_match')}</div>';
+    h += `<div class="cal-empty">${t('calendar.no_events_match')}</div>`;
   } else {
     for (const ev of results) {
       const evDate = _localDateOf(ev.dtstart);
@@ -1796,7 +1796,7 @@ function _dayDetailHTML(dateStr) {
       .sort((a, b) => (a.dtstart || '').localeCompare(b.dtstart || ''));
     h += `<div class="cal-day-search-meta">${results.length} result${results.length !== 1 ? 's' : ''}</div>`;
     if (!results.length) {
-      h += '<div class="cal-empty">${t('calendar.no_events_match_short')}</div>';
+      h += `<div class="cal-empty">${t('calendar.no_events_match_short')}</div>`;
     } else {
       results.forEach(ev => {
         const date = ev.all_day ? ev.dtstart : _localDateOf(ev.dtstart);
@@ -1816,7 +1816,7 @@ function _dayDetailHTML(dateStr) {
     return h + '</div>';
   }
   const evs = _eventsForDay(dateStr);
-  if (!evs.length) h += '<div class="cal-empty">${t('calendar.no_events')}</div>';
+  if (!evs.length) h += `<div class="cal-empty">${t('calendar.no_events')}</div>`;
   else evs.forEach(ev => {
     const t = ev.all_day ? 'All day' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
     const _bgStyle = _calItemBgStyle(ev);
@@ -2138,7 +2138,7 @@ function _wireAll(body) {
         window._calSyncDone = false;
         if (_open) _render();
       }, 900);
-      if (uiModule?.showToast) uiModule.showToast('Calendar refreshed');
+      if (uiModule?.showToast) uiModule.showToast(t('calendar.refreshed'));
     }
   });
   // 新建事件表单打开前"+"符号短暂旋转。
@@ -2569,7 +2569,7 @@ async function _showCalSettings() {
     const file = e.target.files[0];
     if (!file) return;
     const status = overlay.querySelector('#cal-import-status');
-    status.textContent = 'Importing...';
+    status.textContent = t('common.importing');
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -2610,7 +2610,7 @@ async function _showCalSettings() {
     const btn = e.currentTarget;
     const status = overlay.querySelector('#cal-settings-sync-status');
     btn.disabled = true;
-    status.textContent = 'Syncing…';
+    status.textContent = t('calendar.syncing');
     const data = await _syncCaldav(true) || {};
     if (data.errors && data.errors.length) {
       status.textContent = t('calendar.sync_failed', { error: data.errors[0] });
@@ -2977,7 +2977,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   document.getElementById('cal-form-mobile-cancel')?.addEventListener('click', _cancelEventForm);
   document.getElementById('cal-f-save')?.addEventListener('click', async () => {
     const summary = document.getElementById('cal-f-sum').value.trim();
-    if (!summary) { uiModule.showToast('Title required'); return; }
+    if (!summary) { uiModule.showToast(t('calendar.title_required')); return; }
     const dv = document.getElementById('cal-f-date').value;
     const dvEnd = document.getElementById('cal-f-date-end').value || dv;
     const isAD = document.getElementById('cal-f-allday').checked;
@@ -3034,14 +3034,14 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         }
       }
       _selectedDay = dv; _render();
-    } catch (e) { uiModule.showToast('Failed to save'); }
+    } catch (e) { uiModule.showToast(t('calendar.failed_save')); }
   });
   document.getElementById('cal-f-del')?.addEventListener('click', async () => {
     const name = existing && existing.summary ? `"${existing.summary}"` : 'this event';
     const ok = await uiModule.styledConfirm(t('calendar.delete_event_confirm', { name: name }), { confirmText: t('common.delete'), danger: true });
     if (!ok) return;
     try { await _deleteEvent(existing.uid); _render(); }
-    catch (e) { uiModule.showToast('Failed to delete'); }
+    catch (e) { uiModule.showToast(t('calendar.failed_delete')); }
   });
   // ── 自定义表单行为 ──────────────────────────────────────────
   const formEl = body.querySelector('.cal-form');
@@ -3134,7 +3134,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     const clockEl = document.getElementById('cal-hero-clock');
     const ampmEl = document.getElementById('cal-hero-ampm');
     const dateEl = document.getElementById('cal-hero-date');
-    if (clockEl) clockEl.innerHTML = allday ? '<span class="cal-hero-clock-allday">${t('calendar.all_day')}</span>' : _clockFace(startVal);
+    if (clockEl) clockEl.innerHTML = allday ? `<span class="cal-hero-clock-allday">${t('calendar.all_day')}</span>` : _clockFace(startVal);
     if (ampmEl) ampmEl.textContent = allday ? '' : _clockAmpm(startVal);
     if (dateEl) dateEl.textContent = _clockDate(dateVal);
   };

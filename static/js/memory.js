@@ -70,13 +70,13 @@ function _wireMemoryDrag() {
 function relativeTime(timestamp) {
   const now = Math.floor(Date.now() / 1000);
   const diff = now - timestamp;
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  if (diff < 2592000) return `${Math.floor(diff / 604800)}w ago`;
-  if (diff < 31536000) return `${Math.floor(diff / 2592000)}mo ago`;
-  return `${Math.floor(diff / 31536000)}y ago`;
+  if (diff < 60) return t('brain.relative_just_now');
+  if (diff < 3600) return t('brain.relative_m_ago', { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t('brain.relative_h_ago', { n: Math.floor(diff / 3600) });
+  if (diff < 604800) return t('brain.relative_d_ago', { n: Math.floor(diff / 86400) });
+  if (diff < 2592000) return t('brain.relative_w_ago', { n: Math.floor(diff / 604800) });
+  if (diff < 31536000) return t('brain.relative_mo_ago', { n: Math.floor(diff / 2592000) });
+  return t('brain.relative_y_ago', { n: Math.floor(diff / 31536000) });
 }
 
 function buildCategoryChips() {
@@ -108,13 +108,13 @@ function buildCategoryChips() {
 
 async function syncToggles() {
   // 设置标签页不再单独托管"上下文中的记忆"开关——头部开关现在直接管理该偏好设置。
-  await syncPrefToggle('memory-enabled-header-toggle', 'memory_enabled', 'Memory enabled', 'Memory disabled', false);
+  await syncPrefToggle('memory-enabled-header-toggle', 'memory_enabled', t('brain.memory_enabled'), t('brain.memory_disabled'), false);
   // 技能头部开关管理 'skills_enabled' 偏好设置（此前从未连线——切换它没有任何效果，所以技能一直开启）。
   // 现在它真正控制技能注入（参见 chat_helpers.py: uprefs.skills_enabled）。
-  await syncPrefToggle('skills-enabled-header-toggle', 'skills_enabled', 'Skills enabled', 'Skills disabled', false);
+  await syncPrefToggle('skills-enabled-header-toggle', 'skills_enabled', t('brain.skills_enabled_msg'), t('brain.skills_disabled_msg'), false);
   await syncPrefToggle('auto-memory-toggle', 'auto_memory', 'Auto-extract memories enabled', 'Auto-extract memories disabled', false);
   await syncPrefToggle('auto-skills-toggle', 'auto_skills', 'Auto-extract skills enabled', 'Auto-extract skills disabled', false);
-  await syncPrefToggle('auto-approve-skills-toggle', 'auto_approve_skills', 'Auto-approve skills enabled', 'Auto-approve skills disabled', false);
+  await syncPrefToggle('auto-approve-skills-toggle', 'auto_approve_skills', t('brain.auto_approve_on'), t('brain.auto_approve_off'), false);
   await syncPrefSlider('skill-confidence-slider', 'skill_min_confidence', 'skill-confidence-label', 0.85);
   await syncPrefNumber('skill-max-input', 'skill_max_injected', 3);
 
@@ -197,11 +197,11 @@ async function syncPrefSlider(elementId, prefKey, labelId, defaultVal) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: pref })
         });
-        if (!res.ok) { showError('Failed to save preference'); return; }
+        if (!res.ok) { showError(t('brain.pref_save_failed')); return; }
         showToast(pref === 0 ? 'Skill confidence: All' : `Skill confidence ≥ ${Math.round(pref * 100)}%`);
       } catch (e) {
         console.error(`Failed to save ${prefKey} pref:`, e);
-        showError('Failed to save preference');
+        showError(t('brain.pref_save_failed'));
       }
     });
   }
@@ -239,11 +239,11 @@ async function syncPrefNumber(elementId, prefKey, defaultVal) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: v })
         });
-        if (!res.ok) { showError('Failed to save preference'); return; }
-        showToast(v === 0 ? 'No skills injected' : `Max injected skills: ${v}`);
+        if (!res.ok) { showError(t('brain.pref_save_failed')); return; }
+        showToast(v === 0 ? t('brain.no_skills_injected') : `Max injected skills: ${v}`);
       } catch (e) {
         console.error(`Failed to save ${prefKey} pref:`, e);
-        showError('Failed to save preference');
+        showError(t('brain.pref_save_failed'));
       }
     });
   }
@@ -276,7 +276,7 @@ async function syncPrefToggle(elementId, prefKey, onMsg, offMsg, dimBelow = true
           console.error(`PUT ${prefKey} returned ${res.status}`);
           toggle.checked = !toggle.checked; // 恢复原值
           if (dimBelow) syncToggleDim(toggle);
-          showError('Failed to save preference');
+          showError(t('brain.pref_save_failed'));
           return;
         }
         showToast(toggle.checked ? onMsg : offMsg);
@@ -284,7 +284,7 @@ async function syncPrefToggle(elementId, prefKey, onMsg, offMsg, dimBelow = true
         console.error(`Failed to save ${prefKey} pref:`, e);
         toggle.checked = !toggle.checked; // 恢复原值
         if (dimBelow) syncToggleDim(toggle);
-        showError('Failed to save preference');
+        showError(t('brain.pref_save_failed'));
       }
     });
   }
@@ -446,7 +446,7 @@ export async function tidyMemories() {
     if ((data.removed || 0) === 0) {
       if (tidySpinner) tidySpinner.destroy();
       if (tidyBtn) { tidyBtn.disabled = false; tidyBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> Tidy'; }
-      showToast('Already clean');
+      showToast(t('brain.tidy_already'));
       return;
     }
 
@@ -467,7 +467,7 @@ export async function tidyMemories() {
       }
     }
 
-    if (tidySpinner) tidySpinner.updateMessage('Tidying memories');
+    if (tidySpinner) tidySpinner.updateMessage(t('brain.tidy_running'));
 
     // 在当前渲染的列表上动画显示差异
     await animateTidyDiff(removed, edited);
@@ -481,7 +481,7 @@ export async function tidyMemories() {
     showToast(t('brain.tidied_result', { removed: data.removed, before: data.before, after: data.after }));
   } catch (error) {
     console.error('Tidy failed:', error);
-    showError('Tidy failed — check console');
+    showError(t('brain.tidy_failed'));
   } finally {
     if (tidySpinner) tidySpinner.destroy();
     if (tidyBtn) {
@@ -610,7 +610,7 @@ export function renderMemoryList() {
     const searchTerm = document.getElementById('memory-search')?.value?.trim() || '';
     const _smiley = '<span style="vertical-align:-3px;margin-left:6px;">' + uiModule.emptyStateIcon('smiley') + '</span>';
     if (searchTerm || activeCategory !== 'all') {
-      memoryList.innerHTML = `<div class="memory-empty">No matches.</div>`;
+      memoryList.innerHTML = `<div class="memory-empty">${t('brain.no_matches')}</div>`;
     } else {
       memoryList.innerHTML = `<div class="memory-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
         <span>No memories yet${_smiley}</span>
@@ -668,7 +668,7 @@ export function renderMemoryList() {
     if (memory.pinned) {
       const pinBadge = document.createElement('span');
       pinBadge.className = 'memory-cat-badge memory-cat-pinned';
-      pinBadge.textContent = 'pinned';
+      pinBadge.textContent = t('brain.pinned_badge');
       meta.appendChild(pinBadge);
     }
 
@@ -956,14 +956,14 @@ async function saveInlineEdit(id, newText, newCategory) {
 
     if (response.ok) {
       await loadMemories();
-      showToast('Memory updated');
+      showToast(t('brain.memory_updated'));
     } else {
       const errorData = await response.json();
-      throw new Error(errorData.detail || 'Failed to update memory');
+      throw new Error(errorData.detail || t('brain.memory_update_failed'));
     }
   } catch (error) {
     console.error('Error updating memory:', error);
-    showError('Failed to update memory');
+    showError(t('brain.memory_update_failed'));
   }
 }
 
@@ -996,7 +996,7 @@ export async function addNewMemory() {
   const category = _readNewMemoryCategory();
 
   if (!text) {
-    showError('Memory text cannot be empty');
+    showError(t('brain.memory_text_empty'));
     return;
   }
 
@@ -1015,15 +1015,15 @@ export async function addNewMemory() {
     if (response.ok) {
       input.value = '';
       await loadMemories();
-      showToast('Memory added');
+      showToast(t('brain.memory_added'));
     } else {
       const errorData = await response.json();
       console.error('Server error details:', errorData);
-      throw new Error(errorData.detail || 'Failed to add memory');
+      throw new Error(errorData.detail || t('brain.memory_save_failed'));
     }
   } catch (error) {
     console.error('Error adding memory:', error);
-    showError('Failed to add memory');
+    showError(t('brain.memory_save_failed'));
   }
 }
 
@@ -1051,7 +1051,7 @@ async function togglePin(id, pinned) {
     }
   } catch (e) {
     console.error('Failed to toggle pin:', e);
-    showError('Failed to update pin');
+    showError(t('brain.pin_update_failed'));
   }
 }
 
@@ -1069,12 +1069,12 @@ export async function deleteMemory(id) {
     if (response.ok) {
       await animateMemoryRemoval([id]);
       await loadMemories();
-      showToast('Memory deleted');
+      showToast(t('brain.memory_deleted'));
     } else {
       throw new Error('Failed to delete');
     }
   } catch (error) {
-    showError('Failed to delete memory');
+    showError(t('brain.memory_delete_failed'));
   }
 }
 
@@ -1084,7 +1084,7 @@ export async function extractMemory(sessionId) {
     body: new URLSearchParams({ session: sessionId })
   });
   if (!res.ok) {
-    showError('Failed to extract memory suggestions');
+    showError(t('brain.extract_failed'));
     return;
   }
   const data = await res.json();
@@ -1108,7 +1108,7 @@ export async function extractMemory(sessionId) {
   } else {
     const header = document.createElement('div');
     header.className = 'memory-suggestions-header';
-    header.innerHTML = '<span>${t('brain.suggested_memories')}</span>';
+    header.innerHTML = `<span>${t('brain.suggested_memories')}</span>`;
     const backBtn = document.createElement('button');
     backBtn.className = 'memory-item-btn';
     backBtn.textContent = 'back';
@@ -1136,8 +1136,8 @@ export async function extractMemory(sessionId) {
           body: JSON.stringify({ text: s })
         });
         btn.disabled = true;
-        btn.textContent = 'saved';
-        showToast('Saved to memory');
+        btn.textContent = t('brain.saved_label');
+        showToast(t('brain.saved_to_memory'));
       });
       div.appendChild(txt);
       div.appendChild(btn);
@@ -1152,7 +1152,7 @@ export async function extractMemory(sessionId) {
 
 export function exportMemories() {
   if (!memories || memories.length === 0) {
-    showToast('No memories to export');
+    showToast(t('brain.no_memories_export'));
     return;
   }
   const data = JSON.stringify(memories, null, 2);
@@ -1188,7 +1188,7 @@ async function handleImportFile(file) {
     importSpin = spinnerModule.createWhirlpool(12);
     importSpin.element.style.cssText = 'width:12px;height:12px;margin:0 5px 0 0;display:inline-flex;vertical-align:-2px;transform:translateY(-1px);';
     importBtn.appendChild(importSpin.element);
-    importBtn.appendChild(document.createTextNode('Importing'));
+    importBtn.appendChild(document.createTextNode(t('brain.importing')));
   }
 
   try {
@@ -1309,8 +1309,8 @@ async function handleImportFile(file) {
           div.remove();
           updateHeaderTitle();
           btn.disabled = true;
-          btn.textContent = 'saved';
-          showToast('Saved to memory');
+          btn.textContent = t('brain.saved_label');
+          showToast(t('brain.saved_to_memory'));
         });
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'memory-item-btn delete';
@@ -1333,7 +1333,7 @@ async function handleImportFile(file) {
     document.querySelector('.memory-tab[data-memory-tab="browse"]')?.click();
   } catch (error) {
     console.error('Import failed:', error);
-    showError('Import failed — ' + error.message);
+    showError(t('brain.import_failed') + ' — ' + error.message);
   } finally {
     if (importSpin) importSpin.destroy();
     if (importBtn) {

@@ -486,7 +486,7 @@ async function _deleteEmailAndAdvance(em, card, opts = {}) {
   if (!em || em.uid == null) return;
   if (opts.confirm !== false) {
     const subject = em.subject || '(no subject)';
-    const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
+    const ok = await styledConfirm(`${t('email.delete_confirm_prefix')}"${subject}"${t('email.delete_confirm_suffix')}`, { confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true });
     if (!ok) return;
   }
   const wasExpanded = !!card?.classList?.contains('doclib-card-expanded');
@@ -498,7 +498,7 @@ async function _deleteEmailAndAdvance(em, card, opts = {}) {
     await fetch(`${API_BASE}/api/email/delete/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
   } catch (err) {
     console.error('Failed to delete email:', err);
-    showToast('Failed to delete email');
+    showToast(t('email.delete_failed'));
     return;
   }
   await _animateEmailCardRemoval([em.uid]);
@@ -976,9 +976,9 @@ export function openEmailLibrary(opts = {}) {
     _loadEmailsFresh();
   });
   document.getElementById('email-reminders-clear-btn')?.addEventListener('click', async () => {
-    const ok = await styledConfirm('Permanently delete all Odysseus reminder emails?', {
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
+    const ok = await styledConfirm(t('email.delete_reminders_confirm'), {
+      confirmText: t('common.delete'),
+      cancelText: t('common.cancel'),
       danger: true,
     });
     if (!ok) return;
@@ -1003,7 +1003,7 @@ export function openEmailLibrary(opts = {}) {
       _loadEmailsFresh();
     } catch (err) {
       console.error(err);
-      showToast('Failed to clear reminder emails');
+      showToast(t('email.clear_reminders_failed'));
     }
   });
   document.getElementById('email-undone-btn')?.addEventListener('click', () => {
@@ -1697,7 +1697,7 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
     // 如果我们已绘制了缓存列表，保留在屏幕上 — 比擦除它显示
     // "加载失败"更好，因为仍有可读内容。
     if (!cached) {
-      const msg = e && e.message ? `Failed to load: ${e.message}` : 'Failed to load';
+      const msg = e && e.message ? `${t('settings.failed_to_load')}: ${e.message}` : t('settings.failed_to_load');
       grid.innerHTML = `<div class="email-loading">${_esc(msg)}${_emailSetupHintHtml()}</div>`;
       _wireEmailSetupHint(grid);
     }
@@ -1754,7 +1754,7 @@ async function _loadScheduled(grid, sp) {
     cancelBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const { styledConfirm } = await import('./ui.js');
-      const ok = await styledConfirm(`Cancel scheduled email "${subject}"?`, { confirmText: 'Cancel Send', cancelText: 'Keep', danger: true });
+      const ok = await styledConfirm(`${t('email.cancel_scheduled_confirm')}"${subject}"?`, { confirmText: t('email.cancel_send'), cancelText: t('email.keep'), danger: true });
       if (!ok) return;
       try {
         await fetch(`${API_BASE}/api/email/scheduled/${it.id}`, { method: 'DELETE' });
@@ -4338,7 +4338,7 @@ async function _generateSummary(reader, data, btn) {
   } catch (e) {
     sp.destroy();
     panel.remove();
-    if (uiModule) uiModule.showError?.('Failed to summarize');
+    if (uiModule) uiModule.showError?.(t('email.failed_to_summarize'));
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -4444,7 +4444,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
     {
       // 将发件人保存到 CardDAV 联系人。从列表项 (em) 中提取姓名 + 地址；
       // 回退到拆分本地部分作为姓名。
-      label: 'Save sender to contacts',
+      label: t('email.save_to_contacts'),
       icon: _contactIcon,
       action: async () => {
         const email = (em.from_address || em.from || '').trim();
@@ -4462,12 +4462,12 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
           const d = await r.json();
           import('./ui.js').then(m => {
             if (!m.showToast) return;
-            if (d.success && d.message === 'Already exists') m.showToast('Already in contacts');
-            else if (d.success) m.showToast('Saved to contacts');
-            else m.showError && m.showError('Failed to save contact');
+            if (d.success && d.message === 'Already exists') m.showToast(t('email.already_in_contacts'));
+            else if (d.success) m.showToast(t('email.saved_to_contacts'));
+            else m.showError && m.showError(t('email.save_contact_failed'));
           }).catch(() => {});
         } catch (_) {
-          import('./ui.js').then(m => m.showError && m.showError('Failed to save contact')).catch(() => {});
+          import('./ui.js').then(m => m.showError && m.showError(t('email.save_contact_failed'))).catch(() => {});
         }
       },
     },
@@ -4544,14 +4544,14 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: 'Delete Permanently',
+      label: t('email.delete_permanently'),
       icon: _deleteForeverIcon,
       danger: true,
       action: async () => {
         const subject = em.subject || '(no subject)';
         const ok = await styledConfirm(
-          `Permanently delete "${subject}"? This cannot be undone.`,
-          { confirmText: 'Delete', cancelText: 'Cancel', danger: true }
+          `${t('email.delete_permanently_confirm')}"${subject}"? ${t('email.cannot_be_undone')}`,
+          { confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true }
         );
         if (!ok) return;
         try {
@@ -4584,7 +4584,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
   const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelItem.innerHTML = _icon(_cancelIco) + '<span>Cancel</span>';
+  cancelItem.innerHTML = _icon(_cancelIco) + `<span>${t('common.cancel')}</span>`;
   cancelItem.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.remove();
@@ -4712,9 +4712,9 @@ function _showCardMenu(em, anchor) {
   });
 
   actions.push(
-    { label: 'Delete', icon: _delIcon, danger: true, action: async () => {
+    { label: t('common.delete'), icon: _delIcon, danger: true, action: async () => {
       const subject = em.subject || '(no subject)';
-      const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
+      const ok = await styledConfirm(`${t('email.delete_confirm_prefix')}"${subject}"${t('email.delete_confirm_suffix')}`, { confirmText: t('common.delete'), cancelText: t('common.cancel'), danger: true });
       if (!ok) return;
       await fetch(`${API_BASE}/api/email/delete/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
       await _animateEmailCardRemoval([em.uid]);
@@ -4746,7 +4746,7 @@ function _showCardMenu(em, anchor) {
   const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelItem.innerHTML = _icon(_cancelIco) + '<span>Cancel</span>';
+  cancelItem.innerHTML = _icon(_cancelIco) + `<span>${t('common.cancel')}</span>`;
   cancelItem.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.remove();
@@ -4819,7 +4819,7 @@ function _updateBulkBar() {
   const selectBtn = document.getElementById('email-lib-select-btn');
   if (bar) bar.classList.toggle('hidden', !state._selectMode);
   if (selectBtn) {
-    selectBtn.textContent = state._selectMode ? 'Cancel' : 'Select';
+    selectBtn.textContent = state._selectMode ? t('common.cancel') : t('email.select');
     selectBtn.classList.toggle('active', state._selectMode);
   }
   const count = document.getElementById('email-lib-selected-count');
@@ -5141,7 +5141,7 @@ async function _createEmailReplyReminder(em, dueDate) {
     }
   } catch (e) {
     const { showError } = await import('./ui.js');
-    showError('Failed to create reminder');
+    showError(t('email.create_reminder_failed'));
   }
 }
 

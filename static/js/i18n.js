@@ -156,7 +156,12 @@ export async function initI18n() {
 export function translateDOM(root = document) {
   root.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
-    if (key) el.textContent = t(key);
+    if (!key) return;
+    if (el.tagName === 'OPTGROUP') {
+      el.label = t(key);
+    } else {
+      el.textContent = t(key);
+    }
   });
   // data-i18n-placeholder
   root.querySelectorAll('[data-i18n-placeholder]').forEach(el => {

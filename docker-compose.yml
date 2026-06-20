@@ -68,7 +68,10 @@ services:
         condition: service_healthy
       chromadb:
         condition: service_started
-    restart: unless-stopped
+    # "no" — 原生模式 (start-macos.sh) 下不需要此容器，
+    # 设为 "no" 防止 Docker/Colima 启动时自动拉起占用端口。
+    # 需要 Docker 全栈部署时显式运行 docker-compose up -d。
+    restart: "no"
 
   chromadb:
     image: docker.io/chromadb/chroma:latest
@@ -128,7 +131,9 @@ services:
       timeout: 6s
       retries: 20
       start_period: 10s
-    restart: unless-stopped
+    # "no" — 原生模式 (start-macos.sh) 自带搜索或不使用 SearXNG，
+    # 设为 "no" 防止自动启动占用端口 8080。
+    restart: "no"
 
   ntfy:
     image: docker.io/binwiederhier/ntfy
@@ -139,7 +144,8 @@ services:
       - ntfy-cache:/var/cache/ntfy
     environment:
       - NTFY_BASE_URL=${NTFY_BASE_URL:-http://localhost:8091}
-    restart: unless-stopped
+    # "no" — 原生模式不需要通知推送服务，防止自动启动占用端口 8091。
+    restart: "no"
 
 volumes:
   searxng-data:
