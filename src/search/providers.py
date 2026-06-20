@@ -1,7 +1,7 @@
-"""Compatibility wrapper for the canonical services.search.providers module.
+"""标准 services.search.providers 模块的兼容性包装。
 
 Historically Odysseus carried duplicate provider implementations under both
-``src.search`` and ``services.search``. Keep the old import path working, but
+历史原因下，Odysseus 在 ``src.search`` 和 ``services.search`` 下各有一份重复的
 make provider behavior come from one source of truth.
 """
 

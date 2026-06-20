@@ -1,10 +1,10 @@
 """
 tool_execution.py
 
-Tool dispatcher and result formatter for the agent loop.
-Routes tool blocks to MCP servers or native implementations.
+Agent 循环的工具调度器和结果格式化器。
+将工具块路由到 MCP 服务器或原生实现。
 
-Extracted from agent_tools.py.
+从 agent_tools.py 提取。
 """
 
 import asyncio
@@ -26,31 +26,31 @@ from src.tool_policy import ToolPolicy
 from src.constants import MAX_OUTPUT_CHARS, MAX_READ_CHARS, MAX_DIFF_LINES, DATA_DIR
 from src.tool_utils import _truncate, get_mcp_manager
 
-# Persistent working directory for agent subprocesses.
-# Resolves to <repo_root>/data, which is the bind-mounted volume in Docker
-# (/app/data) and the local data directory for manual installs.
-# Using this as cwd and HOME prevents the agent from silently creating files
-# in ephemeral container layers that are lost on the next rebuild.
+# Agent 子进程的持久化工作目录。
+# 解析为 <repo_root>/data，即 Docker 中的绑定挂载卷
+# （/app/data），手动安装时为本地数据目录。
+# 使用此路径作为 cwd 和 HOME，避免 agent 在临时容器层中
+# 静默创建文件，这些文件在下一次重建时丢失。
 _AGENT_WORKDIR = DATA_DIR
 
 
 
 # ---------------------------------------------------------------------------
-# Path confinement for read_file / write_file
+# read_file / write_file 的路径限制
 # ---------------------------------------------------------------------------
-# read_file + write_file are admin-only tools, but the path the agent
-# supplies is model-controlled. Prompt-injection in an admin's chat can
-# weaponise "read /etc/shadow" or "write ~/.ssh/authorized_keys" without
-# the admin noticing.
+# read_file + write_file 是仅管理员工具，但 agent 提供的
+# 路径由模型控制。管理员聊天中的提示注入可能
+# 武器化 "read /etc/shadow" 或 "write ~/.ssh/authorized_keys"，
+# 而管理员不会察觉。
 #
-# Policy:
-#   1. Sensitive-subpath deny list — checked FIRST. Blocks .ssh,
-#      .gnupg, shell rc files, token/env files even if the root above
-#      them is on the allowlist.
-#   2. Allowlist — only the directories the agent legitimately needs
-#      (project data/, system tmp). $HOME is NOT on the default list.
-#   3. Opt-in extra roots — admin can add broader roots via the
-#      "tool_path_extra_roots" setting (list of path strings).
+# 策略：
+#   1. 敏感子路径拒绝列表 — 首先检查。阻止 .ssh、
+#      .gnupg、shell rc 文件、token/env 文件，即使它们
+#      的上层根路径在白名单中。
+#   2. 白名单 — 仅 agent 合法需要的目录
+#      （项目 data/、系统 tmp）。$HOME 不在默认列表中。
+#   3. 可选额外根路径 — 管理员可通过
+#      "tool_path_extra_roots" 设置（路径字符串列表）添加。
 # ---------------------------------------------------------------------------
 
 _SENSITIVE_BASENAMES: set[str] = {
@@ -68,18 +68,18 @@ _SENSITIVE_FILE_PATTERNS: tuple[str, ...] = (
 
 
 def _is_sensitive_path(resolved: str) -> bool:
-    """Return True if *resolved* falls under a sensitive directory or
-    matches a sensitive filename — regardless of what root it sits under.
+    """如果 *resolved* 落入敏感目录或匹配敏感文件名，
+    则返回 True — 无论其上层根路径是什么。
     """
     parts = resolved.split(os.sep)
     filenames: set[str] = {parts[-1]} if parts else set()
 
-    # Check if any path component is a sensitive directory.
+    # 检查路径组件中是否有敏感目录。
     for part in parts:
         if part in _SENSITIVE_BASENAMES:
             return True
 
-    # Check filename against known sensitive files.
+    # 对文件名检查已知敏感文件。
     for pat in _SENSITIVE_FILE_PATTERNS:
         if pat in filenames:
             return True
@@ -88,17 +88,17 @@ def _is_sensitive_path(resolved: str) -> bool:
 
 
 def _tool_path_roots() -> list[str]:
-    """Return the list of directory roots that read_file / write_file
-    may touch. Default: project data/ + system temp dirs. Extra roots
-    are loaded from the ``tool_path_extra_roots`` setting.
+    """返回 read_file / write_file 可操作的目录根路径列表。
+    默认：项目 data/ + 系统临时目录。额外根路径
+    从 ``tool_path_extra_roots`` 设置加载。
     """
     roots: list[str] = []
 
-    # Project data directory — the agent's primary workspace.
+    # 项目数据目录 — agent 的主要工作区。
     from src.constants import DATA_DIR
     roots.append(DATA_DIR)
 
-    # /tmp (and its macOS realpath /private/tmp).
+    # /tmp（及其在 macOS 上的真实路径 /private/tmp）。
     roots.append("/tmp")
     try:
         private_tmp = os.path.realpath("/tmp")
@@ -107,12 +107,12 @@ def _tool_path_roots() -> list[str]:
     except OSError:
         pass
 
-    # $TMPDIR — per-user temp root on macOS (e.g. /var/folders/.../T/).
+    # $TMPDIR — macOS 上每个用户的临时根路径（如 /var/folders/.../T/）。
     tmpdir = os.environ.get("TMPDIR")
     if tmpdir:
         roots.append(tmpdir)
 
-    # Opt-in extra roots from settings.
+    # 从设置中选择性的额外根路径。
     try:
         from src.settings import get_setting
         extra = get_setting("tool_path_extra_roots")
@@ -121,7 +121,7 @@ def _tool_path_roots() -> list[str]:
     except Exception:
         pass
 
-    # Deduplicate; resolve symlinks so containment is unambiguous.
+    # 去重；解析符号链接以消除包含歧义。
     seen: set[str] = set()
     out: list[str] = []
     for r in roots:
@@ -137,16 +137,16 @@ def _tool_path_roots() -> list[str]:
 
 
 def _resolve_tool_path(raw_path: str) -> str:
-    """Resolve and confine a model-supplied path.
+    """解析并限制模型提供的路径。
 
-    Order of checks:
-      1. Non-empty path.
-      2. Sensitive-subpath deny list (blocks .ssh, .gnupg, etc.
-         even when the root is on the allowlist).
-      3. Allowlist containment (must land under one of the roots).
+    检查顺序：
+      1. 非空路径。
+      2. 敏感子路径拒绝列表（阻止 .ssh、.gnupg 等，
+         即使根路径在白名单中）。
+      3. 白名单包含（必须位于某个根路径下）。
 
-    Returns the realpath on success. Raises ValueError on rejection.
-    Symlinks are resolved before comparison.
+    成功时返回真实路径。被拒绝时抛出 ValueError。
+    比较前解析符号链接。
 
     When a workspace is active for this turn, paths are confined to it instead
     of the default allowlist (see _resolve_tool_path_in_workspace).
@@ -180,13 +180,13 @@ def _resolve_tool_path(raw_path: str) -> str:
 
 
 def _resolve_tool_path_in_workspace(workspace: str, raw_path: str) -> str:
-    """Confine a model-supplied path to the active workspace.
+    """将模型提供的路径限制在活动工作区内。
 
-    Layered on top of upstream's path policy: the workspace is the allowed
-    root (relative paths resolve under it; paths that escape it are rejected),
-    and the sensitive-file deny list (.ssh, .gnupg, id_rsa, …) still applies
-    inside it. When no workspace is set, callers use _resolve_tool_path (the
-    default data/tmp allowlist) instead.
+    叠加在上游的路径策略之上：工作区是允许的
+    根目录（相对路径在其下解析；逃逸它的路径被拒绝），
+    并且敏感文件拒绝列表（.ssh、.gnupg、id_rsa、…）仍然适用
+    于其中。当未设置工作区时，调用者使用 _resolve_tool_path（默认的
+    data/tmp 白名单）代替。
     """
     if raw_path is None or not str(raw_path).strip():
         raise ValueError("path is required")
@@ -200,10 +200,10 @@ def _resolve_tool_path_in_workspace(workspace: str, raw_path: str) -> str:
             f"(e.g. .ssh, .gnupg) or matches a sensitive filename"
         )
     if resolved != base:
-        # normcase so containment holds on case-insensitive filesystems
-        # (Windows, default macOS): it lowercases on Windows and is a no-op on
-        # POSIX. commonpath raises ValueError across Windows drives (C: vs D:)
-        # or mixed abs/rel — both mean "outside", so the except rejects them.
+        # normcase 使大小写不敏感文件系统上的包含检查成立
+        # （Windows、默认 macOS）：Windows 上小写化，POSIX 上无操作。
+        # 跨 Windows 盘符（C: 对 D:）或混合绝对/相对时 commonpath 抛出
+        # ValueError — 两者都表示"外部"，所以异常块拒绝它们。
         nbase = os.path.normcase(base)
         try:
             if os.path.commonpath([os.path.normcase(resolved), nbase]) != nbase:
@@ -271,7 +271,7 @@ def get_mcp_manager():
 
 
 def _resolve_search_root(raw_path: str) -> str:
-    """Resolve + confine a code-nav path (grep/glob/ls).
+    """解析并限制代码导航路径（grep/glob/ls）。
 
     With a workspace active, the workspace folder is the root and a supplied
     path is confined inside it. Otherwise an empty path defaults to the agent's
@@ -306,14 +306,14 @@ _ADMIN_TOOLS = {
 
 
 def _owner_is_admin(owner: Optional[str]) -> bool:
-    """Mirror route-level admin behavior for agent tool execution."""
+    """为 agent 工具执行镜像路由级别的管理员行为。"""
     return owner_is_admin_or_single_user(owner)
 
 # ---------------------------------------------------------------------------
-# MCP-backed tool helpers
+# MCP 支持的工具体辅助函数
 # ---------------------------------------------------------------------------
 
-# Map legacy tool names -> (MCP server_id, MCP tool_name)
+# 映射旧工具名称 -> (MCP 服务器 ID, MCP 工具名称)
 _MCP_TOOL_MAP = {
     "bash":           ("bash",       "bash"),
     "python":         ("python",     "python"),
@@ -373,7 +373,7 @@ _MCP_ARG_PARSERS: Dict[str, Callable[[str], Dict[str, str]]] = {
 
 
 def _build_mcp_args(tool: str, content: str) -> Dict:
-    """Convert fenced-block text content to structured MCP arguments."""
+    """将代码块文本内容转换为结构化的 MCP 参数。"""
     parser = _MCP_ARG_PARSERS.get(tool)
     return parser(content) if parser else {}
 
@@ -383,7 +383,7 @@ async def _call_mcp_tool(
     content: str,
     progress_cb: Optional[Callable[[Dict], Awaitable[None]]] = None,
 ) -> Dict:
-    """Route a legacy tool call through the MCP manager, with direct fallbacks."""
+    """通过 MCP 管理器路由旧工具调用，带有直接回退路径。"""
     mcp = get_mcp_manager()
     if not mcp:
         return await _direct_fallback(tool, content, progress_cb=progress_cb) or {"error": f"MCP manager not available for tool '{tool}'", "exit_code": 1}
@@ -393,17 +393,17 @@ async def _call_mcp_tool(
     args = _build_mcp_args(tool, content)
     result = await mcp.call_tool(qualified, args)
 
-    # If MCP server not connected, try direct fallback
+    # 如果 MCP 服务器未连接，尝试直接回退
     if isinstance(result, dict) and result.get("exit_code") == 1 and "not connected" in result.get("error", ""):
         fallback = await _direct_fallback(tool, content, progress_cb=progress_cb)
         if fallback:
             return fallback
 
-    # generate_image runs as a text-only MCP tool, so the saved image URL never
-    # reaches the agent loop's structured forwarding (which renders the image via
-    # buildImageBubble on result["image_url"]). Lift it out of the tool's stdout so
-    # the image renders deterministically — no dependence on the model echoing the
-    # URL into its prose (which it mangles/hallucinates).
+    # generate_image 作为纯文本 MCP 工具运行，所以保存的图片 URL 永远不会
+    # 到达 agent 循环的结构化转发（它通过 result["image_url"]
+    # 上的 buildImageBubble 渲染图片）。从工具 stdout 中提取出来，
+    # 使图片确定性地渲染 — 不依赖模型在文本中回显 URL
+    # （模型可能会破坏/幻觉化 URL）。
     if tool == "generate_image":
         _promote_image_fields(result)
 
@@ -411,11 +411,11 @@ async def _call_mcp_tool(
 
 
 def _promote_image_fields(result: Dict) -> None:
-    """Lift the image URL (+ prompt/model/size) from a successful generate_image MCP
-    text result into structured fields the agent loop already forwards to
-    buildImageBubble. Only acts on a dict result with exit_code 0; matches the
-    generated-image URL by pattern (absolute or relative) so it's robust to the
-    result's wording."""
+    """从成功的 generate_image MCP 文本结果中提取图片 URL（+ prompt/model/size）
+    到结构化字段中，agent 循环已将其转发到
+    buildImageBubble。仅对 exit_code 0 的字典结果操作；按模式
+    匹配生成的图片 URL（绝对或相对），对
+    结果的措辞具有鲁棒性。"""
     if not isinstance(result, dict) or result.get("exit_code") != 0:
         return
     out = result.get("stdout") or ""
@@ -437,8 +437,8 @@ _BG_MARKERS = {"#!bg", "#bg", "# bg", "#background", "# background", "@backgroun
 
 
 def _split_bg_marker(content: str):
-    """If the bash content's first non-empty line is a background marker
-    (e.g. `#!bg`), return (True, command_without_marker); else (False, content)."""
+    """如果 bash 内容的第一非空行是后台标记
+    （如 `#!bg`），返回 (True, 去除标记的命令)；否则 (False, 内容)。"""
     lines = content.split("\n")
     i = 0
     while i < len(lines) and not lines[i].strip():
@@ -493,7 +493,7 @@ async def _document_tool_dispatch(
 
 
 # ---------------------------------------------------------------------------
-# Dispatcher
+# 调度器
 # ---------------------------------------------------------------------------
 
 async def execute_tool_block(
@@ -505,7 +505,7 @@ async def execute_tool_block(
     workspace: Optional[str] = None,
     tool_policy: Optional[Any] = None,
 ) -> Tuple[str, Dict]:
-    """Execute a single tool block. Returns (description, result_dict).
+    """执行单个工具块。返回 (描述, 结果字典)。
 
     Thin wrapper: bind the per-turn workspace (so the path resolvers + subprocess
     cwd confine to it) for the duration of this call, then delegate. Reset on the
@@ -533,11 +533,11 @@ async def _execute_tool_block_impl(
     progress_cb: Optional[Callable[[Dict], Awaitable[None]]] = None,
     tool_policy: Optional[Any] = None,
 ) -> Tuple[str, Dict]:
-    """Execute a single tool block. Returns (description, result_dict).
+    """执行单个工具块。返回 (描述, 结果字典)。
 
-    `progress_cb` is forwarded to long-running subprocess tools
-    (bash, python) so the agent loop can emit `tool_progress` SSE
-    events while the command is in flight. Ignored by other tools.
+    `progress_cb` 转发给长时间运行的子进程工具
+    （bash、python），使 agent 循环能在命令执行中
+    发送 `tool_progress` SSE 事件。其他工具忽略。
     """
     from src.tool_implementations import (
         do_search_chats, do_manage_tasks,
@@ -559,9 +559,9 @@ async def _execute_tool_block_impl(
     tool = block.tool_type
     content = block.content
 
-    # Misformatted tool call detection: model put JSON inside ```python``` (or
-    # similar) without naming the tool. Common with MiniMax-style outputs.
-    # Return a helpful error so the model retries with the correct format.
+    # 格式错误的工具调用检测：模型将 JSON 放在 ```python```（或类似）
+    # 中而未命名工具。常见于 MiniMax 风格输出。
+    # 返回有帮助的错误信息，使模型用正确格式重试。
     if tool in ("python", "json", "xml") and content.strip().startswith("{") and content.strip().endswith("}"):
         try:
             parsed = json.loads(content.strip())
@@ -585,7 +585,7 @@ async def _execute_tool_block_impl(
         except (ValueError, TypeError):
             pass
 
-    # Reject tools that the user has disabled for this request
+    # 拒绝用户为此请求禁用的工具
     if disabled_tools and tool in disabled_tools:
         desc = f"{tool}: BLOCKED"
         result = {"error": f"Tool '{tool}' is disabled by user.", "exit_code": 1}
@@ -619,11 +619,11 @@ async def _execute_tool_block_impl(
         logger.warning("Public tool policy blocked owner=%r tool=%s", owner, tool)
         return desc, result
 
-    # ask_user: the agent poses a multiple-choice question to the user to get a
-    # decision/clarification. This is a pure UI-control marker — no subprocess,
-    # no filesystem. It returns an `ask_user` payload that the agent loop turns
-    # into an `ask_user` SSE event and then ENDS the turn, so the chat waits for
-    # the user's selection (their choice arrives as the next message).
+    # ask_user：agent 向用户提出多选题以获取决定/澄清。
+    # 这是纯 UI 控制标记 — 无子进程，无文件系统。
+    # 返回 `ask_user` 负载，agent 循环将其转换为
+    # `ask_user` SSE 事件然后结束回合，聊天等待
+    # 用户选择（其选项作为下一条消息到达）。
     if tool == "ask_user":
         question, options, multi = "", [], False
         raw = (content or "").strip()
@@ -654,7 +654,7 @@ async def _execute_tool_block_impl(
                 ),
                 "exit_code": 1,
             }
-        options = options[:6]  # keep the choice list sane
+        options = options[:6]  # 保持选项列表合理
         desc = f"ask_user: {question[:80]}"
         labels = ", ".join(o["label"] for o in options)
         result = {
@@ -665,11 +665,11 @@ async def _execute_tool_block_impl(
         logger.info("Tool executed: %s (%d options, multi=%s)", desc, len(options), multi)
         return desc, result
 
-    # update_plan: the agent writes back to the active plan — tick an item done
-    # or revise steps (e.g. when the user asks to change something). Pure UI
-    # marker: returns a `plan_update` payload the agent loop turns into a
-    # `plan_update` SSE event; the frontend replaces the stored plan and refreshes
-    # the docked plan window. Does NOT end the turn.
+    # update_plan：agent 写回活动计划 — 标记项目完成
+    # 或修订步骤（如用户要求更改某些内容）。纯 UI
+    # 标记：返回 `plan_update` 负载，agent 循环将其转换为
+    # `plan_update` SSE 事件；前端替换存储的计划并刷新
+    # 停靠的计划窗口。不结束回合。
     if tool == "update_plan":
         import json as _json
         raw = (content or "").strip()
@@ -681,7 +681,7 @@ async def _execute_tool_block_impl(
         if isinstance(parsed, dict) and parsed.get("plan"):
             plan = str(parsed.get("plan", "")).strip()
         else:
-            # Plain-string call (raw checklist) or JSON without a usable `plan`.
+            # 纯字符串调用（原始清单）或无可用 `plan` 的 JSON。
             plan = raw
         if not plan:
             return "update_plan: invalid", {
@@ -700,10 +700,10 @@ async def _execute_tool_block_impl(
         logger.info("Tool executed: %s", desc)
         return desc, result
 
-    # Background execution: a `bash` block whose first line is the `#!bg`
-    # marker runs DETACHED — returns a job id immediately so the chat stream
-    # isn't held open for a multi-minute install/ffmpeg/download. The always-on
-    # monitor re-invokes the agent with the full output when the job finishes.
+    # 后台执行：`bash` 代码块，第一行为 `#!bg` 标记
+    # 则分离运行 — 立即返回任务 ID，聊天流不会为
+    # 数分钟的 install/ffmpeg/download 保持打开。常驻监控
+    # 在任务完成时用完整输出重新调用 agent。
     if tool == "bash" and session_id:
         _is_bg, _bg_cmd = _split_bg_marker(content)
         if _is_bg and _bg_cmd:
@@ -724,15 +724,15 @@ async def _execute_tool_block_impl(
             logger.info(f"Tool executed: {desc} -> bg job {rec['id']}")
             return desc, result
 
-    # Route MCP-extracted tools through the MCP manager. Forward
-    # the progress callback so long-running subprocess tools
-    # (bash, python) can stream `tool_progress` events to the UI.
+    # 通过 MCP 管理器路由 MCP 提取的工具。转发
+    # 进度回调，使长时间运行的子进程工具
+    # （bash、python）可以流式发送 `tool_progress` 事件到 UI。
     if tool in _MCP_TOOL_MAP:
         first_line = content.split(chr(10))[0][:80]
         desc = f"{tool}: {first_line}"
         result = await _call_mcp_tool(tool, content, progress_cb=progress_cb)
     elif tool in ("grep", "glob", "ls", "get_workspace"):
-        # Code-navigation tools — no MCP server; run the direct implementation.
+        # 代码导航工具 — 无 MCP 服务器；运行直接实现。
         first_line = content.split(chr(10))[0][:80]
         desc = f"{tool}: {first_line}"
         result = await _direct_fallback(tool, content, progress_cb=progress_cb) \
@@ -855,7 +855,7 @@ async def _execute_tool_block_impl(
         desc = "vault_unlock"
         result = await do_vault_unlock(content, owner=owner)
     elif tool.startswith("mcp__"):
-        # MCP tool dispatch
+        # MCP 工具分发
         mcp = get_mcp_manager()
         if mcp:
             try:
@@ -876,10 +876,10 @@ async def _execute_tool_block_impl(
 
 
 # ---------------------------------------------------------------------------
-# Result formatting
+# 结果格式化
 # ---------------------------------------------------------------------------
 
-# Keys handled by the dedicated branches below — never echo them as raw JSON.
+# 下面专用分支处理的键 — 永远不要将它们回显为原始 JSON。
 _FORMATTER_HANDLED_KEYS = {
     "stdout", "stderr", "exit_code", "content", "size",
     "response", "results", "session_id", "name", "model", "session_name",
@@ -889,7 +889,7 @@ _FORMATTER_HANDLED_KEYS = {
 
 
 def format_tool_result(description: str, result: Dict) -> str:
-    """Format a tool result into text for feeding back to the LLM."""
+    """将工具结果格式化为文本以供反馈给 LLM。"""
     parts = [f"### {description}"]
 
     if "stdout" in result:
@@ -899,7 +899,7 @@ def format_tool_result(description: str, result: Dict) -> str:
             parts.append(f"**stderr:**\n```\n{result['stderr']}\n```")
         parts.append(f"**exit_code:** {result.get('exit_code', 'unknown')}")
     elif "output" in result:
-        # bash / python canonical result shape: {"output": ..., "exit_code": ...}
+        # bash / python 规范结果格式：{"output": ..., "exit_code": ...}
         parts.append(f"```\n{result['output']}\n```")
         if result.get("exit_code") not in (0, None):
             parts.append(f"**exit_code:** {result['exit_code']}")
@@ -931,15 +931,15 @@ def format_tool_result(description: str, result: Dict) -> str:
     elif "error" in result:
         parts.append(f"**Error:** {result['error']}")
 
-    # Surface any additional structured payload (events, tasks, notes, calendars,
-    # documents, attachments, etc.) that the dedicated branches above don't show.
-    # Without this, tools that return {"response": "...", "events": [...]} would
-    # silently drop the events list and the model would only see the summary line.
+    # 暴露任何额外的结构化负载（事件、任务、笔记、日历、
+    # 文档、附件等），上方专用分支不显示的。
+    # 没有此操作，返回 {"response": "...", "events": [...]} 的工具会
+    # 静默丢弃事件列表，模型只能看到摘要行。
     extra = {k: v for k, v in result.items() if k not in _FORMATTER_HANDLED_KEYS}
     if extra:
         try:
             extra_json = json.dumps(extra, indent=2, default=str, ensure_ascii=False)
-            # Cap to avoid blowing the context window on huge payloads.
+            # 限制大小以避免超大负载撑爆上下文窗口。
             if len(extra_json) > 8000:
                 extra_json = extra_json[:8000] + f"\n... (truncated, {len(extra_json)} chars total)"
             parts.append(f"**data:**\n```json\n{extra_json}\n```")

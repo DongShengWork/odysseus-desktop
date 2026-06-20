@@ -1,10 +1,10 @@
 /**
- * Build the editor's left-side tool palette.
+ * 构建编辑器左侧的工具面板。
  *
  * Pure DOM construction — no module state. The big tool-switch logic
  * (cursor swap, control-section toggle, transform entry, inpaint
  * mask plumbing, etc.) stays in the caller and arrives here as the
- * `onSelectTool` callback.
+ * 保留在调用方，并通过 `onSelectTool` 回调传入。
  *
  * @param {{
  *   currentTool: string,
@@ -60,8 +60,8 @@ export function buildToolbar({ currentTool, onSelectTool, onClearSelection }) {
         '</span>'
       : '';
     btn.innerHTML = `${aiStar}<span class="ge-tool-icon"${t.small ? ' style="font-size:14px"' : ''}>${t.icon}</span><span class="ge-tool-label">${t.label}</span>${clearBadge}`;
-    // Clear-badge click stops propagation so the tool itself doesn't
-    // toggle; the actual clear is handled by the caller.
+    // 清除徽章的点击阻止冒泡，防止工具本身切换；
+    // 实际的清除操作由调用方处理。
     btn.querySelector('.ge-tool-clear')?.addEventListener('click', (ev) => {
       ev.stopPropagation();
       onClearSelection(ev.currentTarget.dataset.clearTool);

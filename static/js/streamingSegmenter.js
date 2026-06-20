@@ -1,18 +1,18 @@
 // streamingSegmenter.js
 //
-// Pure logic for incremental ("block-at-a-time") streaming markdown rendering.
+// 纯逻辑模块，用于增量（"逐块"）流式 markdown 渲染。
 //
 // While an assistant message streams in, re-rendering the whole accumulated
 // markdown on every token is wasteful (O(N^2)) and recreates DOM nodes, which
 // makes code-block hover buttons flicker. The fix is to FREEZE the leading part
 // of the message that can no longer change, and only re-render the growing tail.
 //
-// This module answers the one hard question that makes freezing safe:
+// 本模块回答使冻结安全的一个核心问题：
 //
-//     Given the full markdown received so far, how many leading characters can
-//     be finalized without changing the rendered output?
+//     给定目前收到的完整 markdown，有多少个前导字符可以被最终化，
+//     而不会改变渲染输出？
 //
-// The contract callers rely on (`render` is the canonical markdown renderer):
+// 调用者依赖的契约（`render` 是规范的 markdown 渲染器）：
 //
 //     const n = splitFinalized(text, render);
 //     render(text.slice(0, n)) + render(text.slice(n))  ===  render(text)
@@ -33,8 +33,8 @@
 //   transient: chat.js re-renders the finished message from source, so the settled
 //   output is always canonical.
 
-// A fenced-code delimiter line: up to 3 leading spaces, then >=3 backticks or
-// tildes, then an optional info string.
+// 围栏代码分隔行：最多 3 个前导空格，然后是 >=3 个反引号或波浪号，
+// 后面可选跟信息字符串。
 const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
 /**
@@ -44,9 +44,9 @@ const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
  *
  * @returns {{ boundaries: Array<{offset:number, afterClosedFence:boolean}>, inFence:boolean }}
  *   - A blank-line run at top level yields a boundary at the start of the next
- *     non-blank line (`afterClosedFence: false`).
+ *   - 顶层的空行序列在下一个非空行的起始位置产生边界 (`afterClosedFence: false`)。
  *   - A fence close yields a boundary just past the closing fence line
- *     (`afterClosedFence: true`) — such a cut is unconditionally safe, since
+ *   - 围栏关闭在关闭围栏行之后产生边界 (`afterClosedFence: true`) —
  *     nothing can ever merge into a completed code block.
  */
 function findBoundaries(text, fromOffset) {
@@ -71,7 +71,7 @@ function findBoundaries(text, fromOffset) {
       } else if (
         marker[0] === fenceMarker[0] &&
         marker.length >= fenceMarker.length &&
-        fence[2].trim() === '' // a closing fence carries no info string
+        fence[2].trim() === '' // 关闭围栏不能携带信息字符串
       ) {
         inFence = false;
         fenceMarker = '';
@@ -119,15 +119,15 @@ function cutIsRenderSafe(before, after, render) {
 }
 
 /**
- * Return how many leading characters of `text` can be safely finalized, scanning
- * forward from `committedLen` (the amount already finalized).
+ * 返回 `text` 中可安全冻结的前导字符数，从 `committedLen`（已被冻结的数量）
+ * 开始向前扫描。
  *
- * Guarantees `render(text.slice(0, n)) + render(text.slice(n)) === render(text)`,
- * and `committedLen <= n <= text.length`.
+ * 保证 `render(text.slice(0, n)) + render(text.slice(n)) === render(text)`，
+ * 且 `committedLen <= n <= text.length`。
  *
- * @param {string} text       Full markdown accumulated so far.
- * @param {(src:string)=>string} render  Canonical markdown renderer.
- * @param {number} [committedLen=0]  Characters already finalized (always a prior boundary).
+ * @param {string} text       目前为止累积的完整 markdown。
+ * @param {(src:string)=>string} render  规范的 markdown 渲染器。
+ * @param {number} [committedLen=0]  已冻结的字符数（始终是之前的边界值）。
  * @returns {number}
  */
 export function splitFinalized(text, render, committedLen = 0) {
@@ -140,7 +140,7 @@ export function splitFinalized(text, render, committedLen = 0) {
     const { offset, afterClosedFence } = boundaries[k];
 
     if (afterClosedFence) {
-      // A completed code block — always safe to freeze through here.
+      // 已完成的代码块 — 始终可以安全冻结到此位置。
       best = offset;
     } else {
       // A prose/list/table boundary. We need a following block to compare
@@ -162,7 +162,7 @@ export function splitFinalized(text, render, committedLen = 0) {
 /**
  * If `text` begins with a fenced-code opener whose fence never closes, describe it
  * so the renderer can stream the code in append-mode instead of re-rendering it.
- * Returns `{ lang, contentStart }` (contentStart = offset of the first code char),
+ * 流式传输代码，而不是重新渲染。返回 `{ lang, contentStart }`（contentStart =
  * or null when `text` does not start with a still-open fence.
  *
  * The opener line must be complete (terminated by a newline) so the info string /
@@ -179,7 +179,7 @@ export function describeOpenFence(text) {
     const line = text.slice(i, nl === -1 ? text.length : nl);
     const close = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
     if (close && close[1][0] === marker[0] && close[1].length >= marker.length) {
-      return null; // the fence closes — let the normal finalize path handle it
+      return null; // 围栏关闭 — 让正常的冻结路径处理
     }
     if (nl === -1) break;
     i = nl + 1;

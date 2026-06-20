@@ -1,19 +1,19 @@
 """
 email_pollers.py
 
-Background loops that periodically scan IMAP and act on mail:
+定期扫描 IMAP 并对邮件执行操作的后台循环：
 
-    - `_auto_summarize_pass` / `_auto_summarize_pass_single` — daily/hourly
+    - `_auto_summarize_pass` / `_auto_summarize_pass_single` — 对最近收到的邮件执行
       summary + AI-reply + spam-classification pass over recently received mail.
-    - `_auto_summarize_poller` — driver that wakes the pass on a 30-min cadence.
-    - `_scheduled_email_poller` — polls the `scheduled_emails` SQLite for
+    - `_auto_summarize_poller` — 以 30 分钟周期唤醒该 pass 的驱动程序。
+    - `_scheduled_email_poller` — 轮询 `scheduled_emails` SQLite 中到期的
       due rows and delivers them via SMTP.
     - `_start_poller` — entry point called once at app startup; spawns both
       pollers + handles the deferred-start trick when the event loop is not
       yet running.
 
-Pure helpers live in `email_helpers.py`. Routes themselves live in
-`email_routes.py`.
+纯辅助函数位于 `email_helpers.py` 中。路由本身位于
+`email_routes.py` 中。
 """
 
 import email as email_mod

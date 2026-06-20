@@ -1,5 +1,5 @@
 """
-tool_schemas.py
+OpenAI 兼容的函数工具 schema 定义，以及将原生函数调用转换回 ToolBlock 供执行管道使用的转换器。
 
 OpenAI-compatible function tool schemas and the converter that turns
 native function calls back into ToolBlocks for the execution pipeline.
@@ -18,7 +18,7 @@ from src.tool_parsing import _TOOL_NAME_MAP
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# OpenAI-compatible function tool schemas
+# OpenAI 兼容的函数工具 schema
 # ---------------------------------------------------------------------------
 FUNCTION_TOOL_SCHEMAS = [
     {
@@ -1191,11 +1191,11 @@ FUNCTION_TOOL_SCHEMAS = [
 
 
 # ---------------------------------------------------------------------------
-# Converter: native function call -> ToolBlock
+# 转换器：原生函数调用 -> ToolBlock
 # ---------------------------------------------------------------------------
 
 def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock]:
-    """Convert a native function call into a ToolBlock for the existing execution pipeline."""
+    """将原生函数调用转换为 ToolBlock，供现有执行管道使用。"""
     try:
         if not arguments or (isinstance(arguments, str) and not arguments.strip()):
             args = {}
@@ -1205,21 +1205,21 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
         logger.error(f"Failed to parse function call arguments for {name}: {arguments}")
         return None
 
-    # Some models emit valid JSON that isn't an object (e.g. a bare array
-    # ["ls -la"], string, or number) as the function arguments. Every branch
-    # below assumes a dict and calls args.get(...), so a non-dict would raise
-    # AttributeError and abort the whole agent stream. Coerce to {} instead.
+    # 一些模型会输出有效 JSON，但不是对象（例如裸数组
+    # ["ls -la"]、字符串或数字）作为函数参数。下面的每个分支
+    # 都假设是一个 dict 并调用 args.get(...)，因此非 dict 会引发
+    # AttributeError 并中止整个 agent 流。强制转为 {}。
     if not isinstance(args, dict):
         logger.warning(f"Non-object function call arguments for {name}: {args!r}; treating as empty")
         args = {}
 
     tool_type = _TOOL_NAME_MAP.get(name, name)
 
-    # Allow MCP tools through (namespaced as mcp__serverid__toolname)
+    # 允许 MCP 工具通过（命名空间格式为 mcp__serverid__toolname）
     if tool_type.startswith("mcp__"):
         content = json.dumps(args) if args else "{}"
         return ToolBlock(tool_type, content)
-    # Email tools are implemented as MCP — route them to email
+    # 邮件工具通过 MCP 实现 — 路由到 email
     _BUILTIN_EMAIL_TOOLS = {"list_email_accounts", "send_email", "list_emails", "read_email", "reply_to_email",
                             "archive_email", "delete_email", "mark_email_read", "bulk_email", "download_attachment"}
     if name in _BUILTIN_EMAIL_TOOLS:
@@ -1228,7 +1228,7 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
         logger.warning(f"Unknown function call: {name}")
         return None
 
-    # Convert structured args back to the text format each tool expects
+    # 将结构化参数转换回每个工具期望的文本格式
     if tool_type == "bash":
         content = args.get("command", "")
     elif tool_type == "python":
@@ -1241,14 +1241,14 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
             content = str(queries)
         else:
             content = args.get("query", "")
-        # Preserve the model-requested freshness filter — the web_search schema
-        # advertises time_filter and the executor parses {"query","time_filter"},
-        # but a bare query string dropped it. Mirrors the read_file JSON idiom.
+        # 保留模型请求的新鲜度过滤器 — web_search schema
+        # 宣称支持 time_filter，执行器解析 {"query","time_filter"}，
+        # 但裸查询字符串会丢失它。与 read_file 的 JSON 惯例一致。
         tf = args.get("time_filter")
         if content and isinstance(tf, str) and tf in ("day", "week", "month", "year"):
             content = json.dumps({"query": content, "time_filter": tf})
     elif tool_type == "read_file":
-        # Plain path (back-compat) unless a line range is requested → JSON.
+        # 直接路径（向后兼容），除非请求了行范围则 → JSON。
         if args.get("offset") or args.get("limit"):
             content = json.dumps(args)
         else:
@@ -1304,15 +1304,15 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
     elif tool_type == "send_to_session":
         content = args.get("session_id", "") + "\n" + args.get("message", "")
     elif tool_type == "pipeline":
-        # Pass as JSON for the pipeline parser
+        # 以 JSON 格式传递给管道解析器
         content = json.dumps({"steps": args.get("steps", [])})
     elif tool_type == "manage_session":
         action = args.get("action", "")
         value = args.get("value", "")
-        # `list` is the only action that takes an OPTIONAL keyword
-        # filter — never a session_id. Don't leak the "current" default
-        # into the filter slot (was producing "No sessions found
-        # matching 'current'" when the agent omitted session_id).
+        # `list` 是唯一接受可选关键字过滤器的
+        # 操作 — 永不会是 session_id。不要将 "current" 默认值
+        # 泄漏到过滤器槽中（当 agent 省略 session_id 时会产生
+        # "No sessions found matching 'current'"）。
         if action == "list":
             keyword = args.get("session_id", "") or args.get("keyword", "") or value
             content = "list" + (("\n" + keyword) if keyword and keyword.lower() != "current" else "")
@@ -1369,7 +1369,7 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
             border = colors.get("border", "#355a66")
             accent = colors.get("accent", "#e06c75")
             content = f"create_theme {theme_name} {bg} {fg} {panel} {border} {accent}"
-            # Append advanced overrides as key=value
+            # 以 key=value 形式追加高级覆盖项
             adv_keys = [
                 "userBubbleBg", "aiBubbleBg", "bubbleBorder", "sidebarBg",
                 "sectionAccent", "brandColor", "inputBg", "inputBorder",

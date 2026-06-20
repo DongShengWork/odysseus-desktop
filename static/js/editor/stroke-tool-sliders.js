@@ -1,6 +1,6 @@
 /**
- * Per-tool stroke-modifier sliders (Opacity / Flow / Softness) for
- * Eraser, Brush, and Clone. The three sections share identical UX:
+ * 各工具的笔画调节滑块（不透明度 / 流量 / 柔和度），
+ * 适用于橡皮擦、画笔和克隆。三个部分共享相同的 UX：
  *
  *   - Opacity slider: writes to state, updates label, fades the
  *     preview swatch opacity.
@@ -11,16 +11,16 @@
  *     radial-gradient inner stop on the swatch so it visually fades
  *     from hard disk to soft falloff.
  *
- * The whole block was three near-identical 30-LOC copies before; now
- * it's one helper that takes the tool's prefix + a state-field bag.
+ * 整个模块之前是三个几乎相同的 30 行代码副本；现在是一个
+ * 接收工具前缀 + state 字段包的辅助函数。
  *
- * Usage: just call wireStrokeToolSliders() — the DOM IDs are wired
- * statically from #ge-{eraser,brush,clone}-{opacity,flow,softness}
+ * 用法：只需调用 wireStrokeToolSliders() — DOM ID 从
+ * #ge-{eraser,brush,clone}-{opacity,flow,softness} 及其标签和预览色板静态连接。
  * + their labels + preview swatches.
  */
 import { state } from './state.js';
 
-/** Wire the three sliders for one stroke tool. */
+/** 为一个笔画工具连接三个滑块。 */
 function wireToolSliders(prefix, fields) {
   const opPrev   = document.getElementById(`ge-${prefix}-preview-opacity`);
   const flPrev   = document.getElementById(`ge-${prefix}-preview-flow`);
@@ -35,8 +35,8 @@ function wireToolSliders(prefix, fields) {
   document.getElementById(`ge-${prefix}-flow`)?.addEventListener('input', (e) => {
     state[fields.flow] = parseInt(e.target.value);
     document.getElementById(`ge-${prefix}-flow-label`).textContent = state[fields.flow] + '%';
-    // Lower flow → fewer / sparser dots. Cycle dot densities by
-    // swapping the dashed/dotted border style and fading opacity.
+    // 低流量 → 点更少/更稀疏。通过切换虚线/点线边框样式和
+    // 淡入淡出不透明度来循环点密度。
     if (flPrev) {
       const denseness = Math.max(1, Math.round(state[fields.flow] / 20));
       flPrev.style.borderStyle = denseness <= 2 ? 'dashed' : 'dotted';

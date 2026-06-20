@@ -1,13 +1,13 @@
 /**
- * Crop tool — drag-rect selection that lets the user cut down the
- * canvas to a smaller region. Supports Shift-lock aspect ratio and
- * click-inside-rect to reposition an existing crop without redrawing.
+ * 裁剪工具 — 拖拽矩形选区，让用户将画布裁切为
+ * 更小的区域。支持 Shift 锁定宽高比和点击矩形内部
+ * 重新定位已有裁剪框而不重绘。
  *
- * Owns its own begin/drag/end handlers and reads/writes shared state.
- * The factory takes a small dependency bag for things still living in
- * galleryEditor.js — `composite` redraws the canvas, `showCropApply`
- * mounts the floating W×H + Apply panel after the user finishes
- * dragging.
+ * 拥有自己的 begin/drag/end 处理器，读写共享状态。
+ * 工厂函数接受一个小的依赖包，用于仍在
+ * galleryEditor.js 中的功能 — `composite` 重绘画布，
+ * `showCropApply` 在用户完成拖拽后挂载浮动的
+ * W×H + 应用面板。
  *
  * @param {{
  *   composite: () => void,
@@ -22,8 +22,8 @@ export function createCropTool({ composite, showCropApply }) {
   return {
     begin(e) {
       const coords = canvasCoords(e, state.mainCanvas);
-      // Click inside an existing crop rect → switch to move-mode so
-      // the user can reposition without redrawing.
+      // 点击已有裁剪矩形内部 → 切换到移动模式，
+      // 让用户可以重新定位而无需重绘。
       if (state.cropRect &&
           coords.x >= state.cropRect.x && coords.x <= state.cropRect.x + state.cropRect.w &&
           coords.y >= state.cropRect.y && coords.y <= state.cropRect.y + state.cropRect.h) {
@@ -36,13 +36,13 @@ export function createCropTool({ composite, showCropApply }) {
       state.cropEnd = { ...state.cropStart };
       state.cropRect = null;
       state.cropAspectLock = null;
-      // Tear down the size panel while the user is drawing a new rect.
+      // 用户绘制新矩形时移除尺寸面板。
       const old = state.container?.querySelector('.ge-crop-apply');
       if (old) old.remove();
     },
 
     drag(e) {
-      // Move-mode: drag the existing rect around the canvas.
+      // 移动模式：在画布上拖拽已有矩形。
       if (state.cropMoving && state.cropRect && state.cropMoveStart) {
         e.preventDefault();
         const c = canvasCoords(e, state.mainCanvas);
@@ -50,7 +50,7 @@ export function createCropTool({ composite, showCropApply }) {
         const dy = c.y - state.cropMoveStart.y;
         let nx = state.cropMoveStart.rx + dx;
         let ny = state.cropMoveStart.ry + dy;
-        // Clamp to canvas bounds so the rect stays fully visible.
+        // 限制在画布边界内，矩形保持完全可见。
         nx = Math.max(0, Math.min(nx, state.mainCanvas.width - state.cropRect.w));
         ny = Math.max(0, Math.min(ny, state.mainCanvas.height - state.cropRect.h));
         state.cropRect = { ...state.cropRect, x: nx, y: ny };
@@ -60,9 +60,9 @@ export function createCropTool({ composite, showCropApply }) {
       if (!state.cropping) return;
       e.preventDefault();
       state.cropEnd = canvasCoords(e, state.mainCanvas);
-      // Shift-held = lock aspect ratio. First Shift press during the
-      // drag snapshots the current aspect; subsequent moves stay locked.
-      // Releasing Shift resets so the user can re-lock at a new ratio.
+      // Shift 按住 = 锁定宽高比。拖拽过程中第一次按下 Shift
+      // 会快照当前比例；后续移动保持锁定。
+      // 释放 Shift 重置，用户可以重新锁定新比例。
       if (e.shiftKey) {
         const rawDx = state.cropEnd.x - state.cropStart.x;
         const rawDy = state.cropEnd.y - state.cropStart.y;
@@ -73,8 +73,8 @@ export function createCropTool({ composite, showCropApply }) {
         }
         const absDx = Math.abs(rawDx);
         const absDy = Math.abs(rawDy);
-        // Whichever axis the user moved more (relative to the lock) is
-        // the driver; scale the other to preserve aspect.
+        // 用户移动更多的轴（相对于锁定比例）为主导轴；
+        // 缩放另一轴以保持比例。
         let dx, dy;
         if (absDx >= absDy * state.cropAspectLock) {
           dx = rawDx;
@@ -88,7 +88,7 @@ export function createCropTool({ composite, showCropApply }) {
         state.cropAspectLock = null;
       }
       composite();
-      // Draw crop overlay.
+      // 绘制裁剪覆盖层。
       const x = Math.min(state.cropStart.x, state.cropEnd.x);
       const y = Math.min(state.cropStart.y, state.cropEnd.y);
       const w = Math.abs(state.cropEnd.x - state.cropStart.x);
@@ -96,7 +96,7 @@ export function createCropTool({ composite, showCropApply }) {
       state.mainCtx.fillStyle = 'rgba(0,0,0,0.4)';
       state.mainCtx.fillRect(0, 0, state.mainCanvas.width, state.mainCanvas.height);
       state.mainCtx.clearRect(x, y, w, h);
-      // Redraw layers inside the crop rect (dim everything outside).
+      // 重绘裁剪矩形内的图层（外部全部变暗）。
       state.mainCtx.save();
       state.mainCtx.beginPath();
       state.mainCtx.rect(x, y, w, h);
@@ -110,7 +110,7 @@ export function createCropTool({ composite, showCropApply }) {
       }
       state.mainCtx.globalAlpha = 1;
       state.mainCtx.restore();
-      // Dashed border around the kept region.
+      // 保留区域周围的虚线边框。
       state.mainCtx.strokeStyle = '#fff';
       state.mainCtx.lineWidth = 1;
       state.mainCtx.setLineDash([4, 4]);
@@ -120,8 +120,8 @@ export function createCropTool({ composite, showCropApply }) {
     },
 
     end() {
-      // Move-mode wrap-up: refresh the floating panel so Apply follows
-      // the rect to its new spot.
+      // 移动模式收尾：刷新浮动面板，使"应用"按钮
+      // 跟随矩形到新位置。
       if (state.cropMoving) {
         state.cropMoving = false;
         state.cropMoveStart = null;

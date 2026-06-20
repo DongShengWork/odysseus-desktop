@@ -1,4 +1,4 @@
-"""Search analytics, metrics tracking, and exception hierarchy."""
+"""搜索分析、指标追踪和异常层次结构。"""
 
 import json
 import logging
@@ -12,8 +12,8 @@ from .cache import cache_metrics
 
 logger = logging.getLogger(__name__)
 
-# Dedicated error logger — write to the data logs directory (writable on both
-# native runs and Docker, where DATA_DIR resolves to the bind-mounted volume).
+# 专用错误日志器 — 写入 data logs 目录（原生运行和 Docker 均可写，
+# Docker 中 DATA_DIR 解析为绑定的挂载卷）。
 _log_dir = Path(DATA_DIR) / "logs"
 _error_log_path = _log_dir / "search_engine_error.log"
 error_logger = logging.getLogger("search_engine_error")
@@ -27,31 +27,31 @@ try:
 except Exception as _e:
     logging.getLogger(__name__).warning("search_engine_error log handler unavailable: %s", _e)
 
-# Analytics file — also in the writable logs volume.
+# 分析日志文件 — 同样位于可写入的日志卷中。
 ANALYTICS_FILE = _log_dir / "search_analytics.json"
 
 
 # ----------------------------------------------------------------------
-# Custom exception hierarchy
+# 自定义异常层次结构
 # ----------------------------------------------------------------------
 class SearchEngineError(Exception):
-    """Base class for all search-engine related errors."""
+    """所有搜索引擎相关错误的基类。"""
 
 
 class NetworkError(SearchEngineError):
-    """Raised when a network request fails (e.g., timeout, DNS error)."""
+    """当网络请求失败时抛出（例如超时、DNS 错误）。"""
 
 
 class ParseError(SearchEngineError):
-    """Raised when HTML or other content cannot be parsed."""
+    """当 HTML 或其他内容无法解析时抛出。"""
 
 
 class RateLimitError(SearchEngineError):
-    """Raised when the remote service returns a rate-limit (HTTP 429)."""
+    """当远程服务返回速率限制（HTTP 429）时抛出。"""
 
 
 # ----------------------------------------------------------------------
-# Analytics helpers
+# 分析辅助函数
 # ----------------------------------------------------------------------
 def _default_analytics() -> Dict[str, Any]:
     return {
@@ -65,7 +65,7 @@ def _default_analytics() -> Dict[str, Any]:
 
 
 def _load_analytics() -> Dict[str, Any]:
-    """Load analytics data from the JSON file, creating defaults if missing."""
+    """从 JSON 文件加载分析数据，如果缺失则创建默认值。"""
     if not ANALYTICS_FILE.exists():
         default = _default_analytics()
         _save_analytics(default)
@@ -86,7 +86,7 @@ def _load_analytics() -> Dict[str, Any]:
 
 
 def _save_analytics(data: Dict[str, Any]) -> None:
-    """Persist analytics data to the JSON file."""
+    """将分析数据持久化到 JSON 文件。"""
     try:
         with open(ANALYTICS_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
@@ -95,7 +95,7 @@ def _save_analytics(data: Dict[str, Any]) -> None:
 
 
 def _record_query(query: str, success: bool, cache_hit: bool) -> None:
-    """Update analytics for a single query execution."""
+    """更新单次查询执行的分析数据。"""
     analytics = _load_analytics()
     analytics["total_queries"] += 1
     if success:
@@ -121,7 +121,7 @@ def _record_query(query: str, success: bool, cache_hit: bool) -> None:
 
 
 def get_search_stats() -> Dict[str, Any]:
-    """Return aggregated search analytics."""
+    """返回汇总的搜索分析数据。"""
     analytics = _load_analytics()
     total = analytics.get("total_queries", 0) or 1
     success_rate = analytics.get("successful_queries", 0) / total

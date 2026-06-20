@@ -1,6 +1,6 @@
 // ============================================
-// Odysseus UI — Main Application Orchestrator
-// ES6 module — entry point, no exports (wires all modules together)
+// Odysseus UI — 主应用编排器
+// ES6 模块 — 入口点，无导出（将所有模块连接在一起）
 // ============================================
 import Storage from './js/storage.js';
 import uiModule from './js/ui.js';
@@ -27,16 +27,16 @@ import calendarModule from './js/calendar.js';
 import notesModule from './js/notes.js';
 import adminModule from './js/admin.js';
 import settingsModule from './js/settings.js';
-// Eagerly bind unified minimize/restore behavior across all tool modals.
+// 预先绑定所有工具模态框的统一最小化/恢复行为。
 import './js/modalManager.js';
-// Desktop window tiling — drag a modal near an edge/corner to snap.
+// 桌面窗口贴靠 — 将模态框拖到边缘/角落即可吸附。
 import './js/tileManager.js';
 import themeModule from './js/theme.js';
-// IMPORTANT: import cookbook.js with NO ?v= query — the same plain specifier
-// every other importer (cookbook-hwfit.js / cookbook-diagnosis.js) uses. A query
-// mismatch makes the browser load cookbook.js twice as separate modules (two
-// _envState objects), which broke server selection. Keep all cookbook imports
-// unversioned so this can't recur.
+// 重要提示：导入 cookbook.js 时不要使用 ?v= 查询参数 — 与其他导入者
+// （cookbook-hwfit.js / cookbook-diagnosis.js）使用相同的纯说明符。查询参数
+// 不匹配会导致浏览器将 cookbook.js 作为两个独立模块加载两次（产生两个
+// _envState 对象），这会破坏服务器选择功能。所有 cookbook 导入保持无版本号，
+// 以防此问题再次发生。
 import cookbookModule from './js/cookbook.js';
 import groupModule from './js/group.js';
 import * as researchPanelModule from './js/research/panel.js';
@@ -53,7 +53,7 @@ window.uiModule = uiModule;
 window.adminModule = adminModule;
 window.cookbookModule = cookbookModule;
 
-// Redirect to login on 401 from any fetch
+// 任何 fetch 请求返回 401 时重定向到登录页
 const _origFetch = window.fetch;
 window.fetch = async function(...args) {
   const res = await _origFetch.apply(this, args);
@@ -63,14 +63,14 @@ window.fetch = async function(...args) {
   return res;
 };
 
-// Search settings
+// 搜索设置
 
 
 const el = uiModule.el;
 
-// Default chat config — refreshed on every new-chat action so settings
-// changes take effect immediately (previously cached once at page load and
-// went stale when the user changed their default model).
+// 默认聊天配置 — 每次新建聊天操作时刷新，以便设置
+// 变更立即生效（之前仅在页面加载时缓存一次，当用户
+// 更改默认模型后会过时）。
 let _defaultChat = null;
 async function _refreshDefaultChat() {
   try {
@@ -83,8 +83,8 @@ async function _refreshDefaultChat() {
   } catch (_) {}
   return null;
 }
-// Prime the cache once at load for initial paint paths that read _defaultChat
-// synchronously; later reads should call _refreshDefaultChat() first.
+// 启动时预先填充缓存，供同步读取 _defaultChat 的初始渲染路径使用；
+// 后续读取应先调用 _refreshDefaultChat()。
 _refreshDefaultChat();
 
 async function _createDirectChatFromPreferredModel() {
@@ -112,7 +112,7 @@ async function _createDirectChatFromPreferredModel() {
 
   const withModel = sessions.filter(s => s.endpoint_url && s.model);
   if (withModel.length > 0) {
-    const last = withModel[0]; // sessions are sorted by recent
+    const last = withModel[0]; // 会话按最近使用排序
     sessionModule.createDirectChat(last.endpoint_url, last.model, last.endpoint_id);
     return true;
   }
@@ -121,24 +121,24 @@ async function _createDirectChatFromPreferredModel() {
 }
 
 // ============================================
-// EVENT LISTENERS INITIALIZATION
+// 事件监听器初始化
 // ============================================
 function initializeEventListeners() {
-  // Chat form submission
+  // 聊天表单提交
 //  document.getElementById('chat-form').addEventListener('submit', chatModule.handleChatSubmit);
 
-  // File attachments (inside overflow menu)
+  // 文件附件（溢出菜单内）
   const _overflowAttach = el('overflow-attach-btn');
   if (_overflowAttach) _overflowAttach.addEventListener('click', fileHandlerModule.openPicker);
   el('file-input').addEventListener('change', (e)=>{
     for (const f of e.target.files) fileHandlerModule.addFiles([f]);
     fileHandlerModule.renderAttachStrip();
-    // Refocus textarea after file picker closes (mobile keyboard)
+    // 文件选择器关闭后重新聚焦文本区域（移动端键盘）
     const ta = el('message');
     if (ta) setTimeout(() => ta.focus(), 100);
   });
 
-  // Paste handler
+  // 粘贴处理
   window.addEventListener('paste', async (e)=>{
     if (!e.clipboardData) return;
     let changed = false;
@@ -154,10 +154,10 @@ function initializeEventListeners() {
     if (changed) fileHandlerModule.renderAttachStrip();
   });
 
-  // Message count in the header — recount on any DOM change in
-  // #chat-history and write "· N msgs" next to the title. Counts top-
-  // level .msg elements (one per user/assistant turn); excludes the
-  // welcome screen since it isn't inside chat-history.
+  // 标题栏消息计数 — 监听 #chat-history 中的任何 DOM 变化，
+  // 并在标题旁显示"· N msgs"。统计顶层 .msg 元素
+  // （每个用户/助手轮次一个）；不包括欢迎屏幕，
+  // 因为它不在 chat-history 内。
   const _metaCountEl = el('current-meta-count');
   const _chatHistEl = el('chat-history');
   if (_metaCountEl && _chatHistEl) {
@@ -165,7 +165,7 @@ function initializeEventListeners() {
     const _updateMsgCount = () => {
       _countScheduled = false;
       const n = _chatHistEl.querySelectorAll(':scope > .msg').length;
-      _metaCountEl.textContent = n ? `· ${n} msg${n === 1 ? '' : 's'}` : '';
+      _metaCountEl.textContent = n ? i18nModule.t('notification.msg_count', { count: n }) : '';
     };
     const _scheduleCount = () => {
       if (_countScheduled) return;
@@ -176,20 +176,20 @@ function initializeEventListeners() {
     _updateMsgCount();
   }
 
-  // Scrolling
+  // 滚动
   el('chat-history').addEventListener('scroll', uiModule.debounce(() => {
     const box = el('chat-history');
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     uiModule.setAutoScroll(atBottom);
   }, 100));
-  // Close all footer popups immediately on any scroll
+  // 任何滚动时立即关闭所有底部弹窗
   el('chat-history').addEventListener('scroll', () => {
     document.querySelectorAll('.ctx-popup, .memory-used-detail, .msg-overflow-menu').forEach(p => p.remove());
     document.querySelectorAll('.memory-used-pill').forEach(p => { p._openDetail = null; });
   }, { passive: true });
 
   el('chat-history').addEventListener('wheel', (e) => {
-    // Only disable auto-scroll when user scrolls UP (deltaY < 0)
+    // 仅在用户向上滚动时禁用自动滚动（deltaY < 0）
     if (e.deltaY < 0) uiModule.setAutoScroll(false);
   });
   let _touchThrottled = false;
@@ -200,7 +200,7 @@ function initializeEventListeners() {
     requestAnimationFrame(() => { _touchThrottled = false; });
   }, { passive: true });
 
-  // Internal #session-id links from AI search results
+  // AI 搜索结果中的内部 #session-id 链接
   el('chat-history').addEventListener('click', (e) => {
     const link = e.target.closest('a.chat-link');
     if (!link) return;
@@ -211,7 +211,7 @@ function initializeEventListeners() {
     }
   });
 
-  // Export dropdown button
+  // 导出下拉按钮
   const exportDlBtn = el('export-dl-btn');
   // ── Unified popup dismissal ──
   // Lightweight popups (header dropdowns, kebab menus, pickers) should vanish
@@ -229,11 +229,11 @@ function initializeEventListeners() {
       '.skill-kebab-menu, .note-reminder-menu, .task-dropdown, .doclib-card-dropdown, .email-card-dropdown, .msg-overflow-menu'
     ).forEach(m => { if (m !== except) m.remove(); });
   };
-  // Window-opening / nav controls (rail buttons, sidebar tool rows + session
-  // rows, section headers) count as "other actions" — dismiss popups when one
-  // is clicked. Bubble phase so it runs after the control's own handler (the
-  // window is already opening; we just clear stray popups). Popup triggers
-  // themselves aren't these selectors, so toggles aren't broken.
+  // 打开窗口/导航控件（导轨按钮、侧边栏工具行 + 会话行、
+  // 分区标题）视为"其他操作"——点击时关闭弹窗。使用冒泡阶段，
+  // 以便在控件自身的处理程序之后运行（窗口已经打开；我们只是
+  // 清理多余弹窗）。弹窗触发器本身不在这些选择器范围内，
+  // 所以切换操作不会被破坏。
   document.addEventListener('click', (e) => {
     if (e.target.closest('.icon-rail-btn, #sidebar .list-item, .section-header-flex')) {
       window.closeAllPopups();
@@ -247,7 +247,7 @@ function initializeEventListeners() {
       if (exportMenu.classList.contains('open')) {
         exportMenu.classList.remove('open');
       } else {
-        // Move menu to body so it's not affected by ancestor transforms
+        // 将菜单移到 body，避免受祖先元素 transform 影响
         if (exportMenu.parentElement !== document.body) document.body.appendChild(exportMenu);
         const rect = exportDlBtn.getBoundingClientRect();
         exportMenu.style.top = (rect.bottom + 4) + 'px';
@@ -262,9 +262,9 @@ function initializeEventListeners() {
         exportMenu.classList.remove('open');
       }
     });
-    // Opening the sidebar should dismiss any open popup. Many code paths open
-    // the sidebar (toggle button, swipe, keyboard, rail), so watch its class
-    // for a hidden→visible transition rather than hooking each one.
+    // 打开侧边栏应关闭任何已打开的弹窗。许多代码路径会打开
+    // 侧边栏（切换按钮、滑动、键盘、导轨），因此监听其 class
+    // 的 hidden→visible 过渡，而不是单独挂钩每个入口。
     const _sidebarEl = el('sidebar');
     if (_sidebarEl) {
       let _wasHidden = _sidebarEl.classList.contains('hidden');
@@ -274,7 +274,7 @@ function initializeEventListeners() {
         _wasHidden = nowHidden;
       }).observe(_sidebarEl, { attributes: true, attributeFilter: ['class'] });
     }
-    // Clicking session name also opens dropdown
+    // 点击会话名称也打开下拉菜单
     const currentMeta = el('current-meta');
     if (currentMeta) {
       currentMeta.style.cursor = 'pointer';
@@ -285,8 +285,8 @@ function initializeEventListeners() {
     }
   }
 
-  // Serialize the current chat history into a plain-text transcript.
-  // Includes user messages, assistant rounds, and agent tool calls in DOM order.
+  // 将当前聊天历史序列化为纯文本副本。
+  // 按 DOM 顺序包含用户消息、助手回复和代理工具调用。
   function _serializeChatTranscript() {
     const box = document.getElementById('chat-history');
     if (!box) return '';
@@ -296,26 +296,26 @@ function initializeEventListeners() {
         const isUser = child.classList.contains('msg-user');
         let label;
         if (isUser) {
-          label = 'User';
+          label = i18nModule.t('export.user_label');
         } else {
           const roleEl = child.querySelector('.role');
           const ts = roleEl?.querySelector('.role-timestamp');
           let raw = roleEl ? roleEl.textContent : '';
           if (ts) raw = raw.replace(ts.textContent, '');
-          label = (raw || '').trim() || 'Assistant';
+          label = (raw || '').trim() || i18nModule.t('export.assistant_label');
         }
         const body = child.querySelector('.body');
-        // Prefer dataset.raw (original markdown) over innerText (rendered HTML as text)
-        // to avoid extra newlines and formatting artifacts.
+        // 优先使用 dataset.raw（原始 markdown）而非 innerText（渲染后的 HTML 文本）
+        // 以避免多余换行和格式化产物。
         const text = body ? (body.dataset.raw || body.innerText || body.textContent || '').trim() : '';
         if (text) parts.push(`${label}: ${text}`);
       } else if (child.classList?.contains('agent-thread')) {
-        const lines = ['[Tool calls]'];
+        const lines = [i18nModule.t('export.tool_calls_label')];
         for (const n of child.querySelectorAll('.agent-thread-node')) {
           const tool = n.querySelector('.agent-thread-tool')?.textContent?.trim() || 'tool';
           const cmd = n.querySelector('.agent-thread-cmd')?.textContent?.trim() || '';
           const output = n.querySelector('.agent-tool-output pre')?.textContent?.trim() || '';
-          const status = n.classList.contains('error') ? 'failed' : 'done';
+          const status = n.classList.contains('error') ? i18nModule.t('export.tool_status_failed') : i18nModule.t('export.tool_status_done');
           let line = `- ${tool} [${status}]`;
           if (cmd) line += `\n  cmd: ${cmd}`;
           if (output) {
@@ -330,7 +330,7 @@ function initializeEventListeners() {
     return parts.join('\n\n');
   }
 
-  // Export: Copy all messages
+  // 导出：复制所有消息
   const exportCopyBtn = el('export-copy-btn');
   if (exportCopyBtn) {
     exportCopyBtn.addEventListener('click', async (e) => {
@@ -339,19 +339,19 @@ function initializeEventListeners() {
       const transcript = _serializeChatTranscript();
       // A new/empty chat has nothing to copy — don't write an empty string and
       // falsely report "Copied".
-      if (!transcript.trim()) { uiModule.showToast('Nothing to copy yet'); return; }
+      if (!transcript.trim()) { uiModule.showToast(i18nModule.t('notification.nothing_to_copy')); return; }
       await uiModule.copyToClipboard(transcript);
     });
   }
 
-  // Export: PDF
+  // 导出：PDF
   const exportPdfBtn = el('export-pdf-btn');
   if (exportPdfBtn) {
     exportPdfBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       exportMenu.classList.remove('open');
       const meta = sessionModule.getSessions().find(s => s.id === sessionModule.getCurrentSessionId());
-      const sessionName = meta ? meta.name : 'Odysseus Chat';
+      const sessionName = meta ? meta.name : i18nModule.t('export.default_pdf_title');
       const originalTitle = document.title;
       document.title = sessionName;
       const chatHistory = document.getElementById('chat-history');
@@ -369,7 +369,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Export: Save to Docs
+  // 导出：保存到文档
   const exportDocBtn = el('export-doc-btn');
   if (exportDocBtn) {
     exportDocBtn.addEventListener('click', async (e) => {
@@ -379,7 +379,7 @@ function initializeEventListeners() {
         const sessionId = sessionModule.getCurrentSessionId();
         const texts = _serializeChatTranscript();
         const meta = sessionModule.getSessions().find(s => s.id === sessionId);
-        const title = meta?.name || 'Untitled';
+        const title = meta?.name || i18nModule.t('notes.untitled');
         const res = await fetch(`${API_BASE}/api/document`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -388,23 +388,23 @@ function initializeEventListeners() {
         if (!res.ok) throw new Error('Failed');
         const doc = await res.json();
         if (documentModule) documentModule.loadDocument(doc.id);
-        uiModule.showToast('Saved to documents');
+        uiModule.showToast(i18nModule.t('notification.saved_to_documents'));
       } catch (err) {
         console.error('Save to docs failed:', err);
-        uiModule.showError('Failed to save to documents');
+        uiModule.showError(i18nModule.t('notification.failed_save_to_documents'));
       }
     });
   }
 
-  // Rename session from top bar
+  // 从顶部栏重命名会话
   const exportRenameBtn = el('export-rename-btn');
   if (exportRenameBtn) {
     exportRenameBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       exportMenu.classList.remove('open');
       let sid = sessionModule.getCurrentSessionId();
-      // A brand-new chat has no session id yet — still allow renaming if there's
-      // a pending chat (we materialize it on commit so the name sticks).
+      // 全新聊天还没有会话 ID — 如果有待提交的聊天仍允许重命名
+      // （我们在提交时实体化会话以保证名称保留）。
       const hasPending = sessionModule.hasPendingChat && sessionModule.hasPendingChat();
       if (!sid && !hasPending) return;
       const meta = sid ? sessionModule.getSessions().find(s => s.id === sid) : null;
@@ -412,7 +412,7 @@ function initializeEventListeners() {
       const metaEl = el('current-meta');
       if (!metaEl) return;
 
-      // Replace title with an input
+      // 用输入框替换标题
       const input = document.createElement('input');
       input.type = 'text';
       input.value = currentName;
@@ -427,7 +427,7 @@ function initializeEventListeners() {
       const commit = async () => {
         const newName = input.value.trim();
         if (newName && newName !== currentName) {
-          // Materialize a pending (new) chat first so it has an id to rename.
+          // 先实体化待提交的（新建）聊天，使其拥有可用于重命名的 ID。
           if (!sid && sessionModule.materializePendingSession) {
             try { await sessionModule.materializePendingSession(); sid = sessionModule.getCurrentSessionId(); } catch (_) {}
           }
@@ -438,7 +438,7 @@ function initializeEventListeners() {
           const _m = sessionModule.getSessions().find(s => s.id === sid);
           if (_m) _m.name = newName;
           metaEl.textContent = newName;
-          uiModule.showToast('Renamed');
+          uiModule.showToast(i18nModule.t('notification.renamed'));
           sessionModule.loadSessions();
         } else {
           metaEl.textContent = origText;
@@ -452,7 +452,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Custom preset modal handlers
+  // 自定义预设模态框处理
   const closeCustomPreset = el('close-custom-preset');
   const cancelCustomPreset = el('cancel-custom-preset');
   const saveCustomPreset = el('save-custom-preset');
@@ -471,37 +471,37 @@ function initializeEventListeners() {
 
   if (saveCustomPreset) {
     saveCustomPreset.addEventListener('click', async () => {
-      // Skip character save when Group tab is active — group.js handles it
+      // 当分组标签页激活时跳过角色保存 — group.js 负责处理
       const activeTab = document.querySelector('.preset-tab.active');
       if (activeTab && activeTab.dataset.chartab === 'group') return;
       await presetsModule.saveCustomPreset(uiModule.showToast, uiModule.showError);
     });
   }
 
-  // Settings dropdown removed — items are now inline in sidebar section
+  // 设置下拉菜单已移除 — 项目现在内联在侧边栏分区中
 
   
 
 
-  // Close popups one by one with Escape key (topmost first)
+  // 用 Escape 键逐一关闭弹窗（最顶层优先）
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      // If a confirm dialog is open, let it handle the Escape
+      // 如果确认对话框已打开，让它自行处理 Escape
       const confirmOverlay = document.getElementById('styled-confirm-overlay');
       if (confirmOverlay && !confirmOverlay.classList.contains('hidden')) return;
 
-      // If editing a memory inline, cancel the edit instead of closing the modal
+      // 如果正在内联编辑记忆，取消编辑而不是关闭模态框
       const editingMemory = document.querySelector('.memory-item-editing');
       if (editingMemory) {
         if (window.memoryModule) window.memoryModule.renderMemoryList();
         return;
       }
 
-      // Priority order: topmost overlay first. Close exactly one per press
-      // so a window stacked on another (e.g. scoreboard over compare) only
-      // dismisses the top one, not both.
+      // 优先级顺序：最顶层的覆盖层优先。每次按键只关闭一个，
+      // 这样如果窗口堆叠在另一个窗口上（例如记分板叠在比较窗口上），
+      // 只关闭最顶层的，而不是两个都关。
 
-      // Scoreboard sits on top of the compare window — close it first.
+      // 记分板位于比较窗口之上 — 先关闭它。
       const scoreboardOverlay = document.getElementById('scoreboard-overlay');
       if (scoreboardOverlay) {
         scoreboardOverlay.remove();
@@ -513,14 +513,14 @@ function initializeEventListeners() {
         return;
       }
 
-      // Compare model selector
+      // 比较模型选择器
       const cmpOverlay = document.getElementById('compare-model-overlay');
       if (cmpOverlay) {
         cmpOverlay.remove();
         return;
       }
 
-      // Theme popup
+      // 主题弹窗
       const themeModal = document.getElementById('theme-modal');
       if (themeModal && !themeModal.classList.contains('hidden')) {
         themeModule.closePopup();
@@ -536,15 +536,15 @@ function initializeEventListeners() {
         return;
       }
 
-      // Model picker popup — close before opening any modals
+      // 模型选择器弹窗 — 在打开任何模态框之前关闭
       const modelPickerMenu = document.getElementById('model-picker-menu');
       if (modelPickerMenu && modelPickerMenu.classList.contains('open')) {
         modelPickerMenu.classList.remove('open');
         return;
       }
 
-      // Close one modal at a time (last in DOM = topmost)
-      // Map modal id → sidebar list-item id to clear active state
+      // 一次关闭一个模态框（DOM 中最后的 = 最顶层）
+      // 映射 modal id → sidebar list-item id 以清除激活状态
       const modalItemMap = {
         'cookbook-modal': null,
         'rename-session-modal': null,
@@ -553,7 +553,7 @@ function initializeEventListeners() {
         'memory-modal': null,
       };
 
-      // Dynamic modals (removed from DOM on close)
+      // 动态模态框（关闭时从 DOM 移除）
       const dynamicModals = ['library-modal', 'archive-modal', 'doclib-modal', 'gallery-modal', 'tasks-modal', 'email-lib-modal'];
       for (const id of dynamicModals) {
         const m = document.getElementById(id);
@@ -581,12 +581,12 @@ function initializeEventListeners() {
         }
       }
 
-      // No modals/popups open — minimize the document panel if open.
-      // Esc should tab the doc down to a dock chip (same as the chevron),
-      // NOT fully close it — closePanel('down') registers the chip +
-      // Modals.minimize so the doc is preserved and restorable.
+      // 没有模态框/弹窗打开 — 如果文档面板打开，则最小化它。
+      // Esc 应将文档收起到停靠标签（与折叠箭头相同），
+      // 而不是完全关闭 — closePanel('down') 注册标签 +
+      // Modals.minimize 以保留文档并可恢复。
       if (documentModule && documentModule.isPanelOpen()) {
-        // If there's a text selection in the document editor, let Escape clear that first
+        // 如果文档编辑器中有文本选中，让 Escape 先清除选中
         const docTextarea = document.getElementById('doc-editor-textarea');
         if (docTextarea && docTextarea.selectionStart !== docTextarea.selectionEnd) {
           return;
@@ -597,7 +597,7 @@ function initializeEventListeners() {
     }
   });
 
-  // ── Shared modal dismiss helper ──
+  // ── 共享的模态框关闭辅助函数 ──
   const _modalSidebarMap = {
     'memory-modal': null,
     'theme-modal': null,
@@ -628,7 +628,7 @@ function initializeEventListeners() {
           content.classList.remove('modal-closing');
         }
       }, { once: true });
-      // Fallback in case animationend doesn't fire
+      // 后备方案，以防 animationend 不触发
       setTimeout(() => {
         if (modal.parentElement && !modal.classList.contains('hidden')) {
           if (_dynamicModalIds.includes(modal.id)) modal.remove();
@@ -642,18 +642,18 @@ function initializeEventListeners() {
     }
   }
 
-  // Click outside modal content → close modal
+  // 点击模态框内容外部 → 关闭模态框
   document.addEventListener('click', (e) => {
-    if (uiModule.isTouchInsideModal()) return; // suppress synthetic events from touch scrolling
+    if (uiModule.isTouchInsideModal()) return; // 抑制触摸滚动产生的合成事件
     const modal = e.target.closest('.modal');
     if (!modal || modal.classList.contains('hidden')) return;
     if (e.target.closest('.modal-content')) return;
     dismissModal(modal);
   });
 
-  // Mobile bottom-sheet swipe-to-dismiss is handled by ui.js (header-only)
+  // 移动端底部面板滑动关闭由 ui.js 处理（仅标题栏）
 
-  // ── Helper: start a fresh chat (deselect current, clear history, show welcome) ──
+  // ── 辅助函数：开始全新聊天（取消选中当前，清除历史，显示欢迎页）──
   function _startFreshChat() {
     try {
       const prevId = sessionModule && sessionModule.getCurrentSessionId ? sessionModule.getCurrentSessionId() : null;
@@ -668,21 +668,21 @@ function initializeEventListeners() {
     if (chatModule && chatModule.showWelcomeScreen) {
       chatModule.showWelcomeScreen();
     }
-    // Close document panel if open
+    // 关闭文档面板（如果已打开）
     if (documentModule && documentModule.closePanel) documentModule.closePanel();
     if (researchPanelModule && researchPanelModule.isOpen()) researchPanelModule.closePanel();
-    // Reset research overflow dot (but don't touch research state — caller manages that)
+    // 重置研究溢出圆点（但不触碰研究状态 — 由调用者管理）
     const _overflowRes = el('overflow-research-btn');
     if (_overflowRes) _overflowRes.classList.remove('active');
     if (typeof updatePlusDot === 'function') updatePlusDot();
-    // Reset agent mode to Chat
+    // 重置代理模式为聊天
     const modeToggle = el('agent-mode-toggle');
     if (modeToggle && modeToggle.checked) { modeToggle.checked = false; modeToggle.dispatchEvent(new Event('change')); }
-    // Clear character/persona
+    // 清除角色/人设
     if (presetsModule && presetsModule.deactivateCharacter) presetsModule.deactivateCharacter();
   }
 
-  /** Sync Research indicator button + overflow + tool sidebar active state. */
+  /** 同步研究指示器按钮 + 溢出菜单 + 工具侧边栏激活状态。 */
   function _syncResearchIndicator(active) {
     const btn = el('research-toggle-btn');
     const overflow = el('overflow-research-btn');
@@ -692,14 +692,14 @@ function initializeEventListeners() {
       btn.style.display = active ? '' : 'none';
       btn.classList.toggle('active', active);
     }
-    // Hide from overflow menu when showing in chatbox (avoid duplicate)
+    // 显示在聊天框中时从溢出菜单隐藏（避免重复）
     if (overflow) {
       overflow.classList.toggle('active', active);
       overflow.style.display = active ? 'none' : '';
     }
     if (toolBtn) toolBtn.classList.toggle('active', active);
     if (chk) chk.checked = active;
-    // Research disables shell access
+    // 研究模式禁用 Shell 访问
     const bashChk = el('bash-toggle');
     const bashBtn = el('bash-toggle-btn');
     if (active) {
@@ -714,7 +714,7 @@ function initializeEventListeners() {
     document.dispatchEvent(new CustomEvent('overflow-state-change'));
   }
 
-  /** Sync Group Chat indicator button + overflow. */
+  /** 同步群组聊天指示器按钮 + 溢出菜单。 */
   function _syncGroupIndicator(active) {
     const btn = el('group-toggle-btn');
     const overflow = el('overflow-group-btn');
@@ -728,10 +728,10 @@ function initializeEventListeners() {
       overflow.style.display = active ? 'none' : '';
     }
     if (chk) chk.checked = active;
-    // Hide/show model picker
+    // 显示/隐藏模型选择器
     const _mpw = el('model-picker-wrap');
     if (_mpw) _mpw.style.display = active ? 'none' : '';
-    // Mutual exclusion: group disables research + web search
+    // 互斥：群组禁用研究 + 网页搜索
     if (active) {
       _syncResearchIndicator(false);
       const _webChk = el('web-toggle');
@@ -744,7 +744,7 @@ function initializeEventListeners() {
     updatePlusDot();
     document.dispatchEvent(new CustomEvent('overflow-state-change'));
 
-    // Update welcome screen for research mode
+    // 更新研究模式的欢迎屏幕
     const ws = el('welcome-screen');
     const welcomeName = document.querySelector('.welcome-name');
     const welcomeSub = el('welcome-sub');
@@ -753,21 +753,21 @@ function initializeEventListeners() {
     if (active) {
       if (welcomeName) {
         if (!welcomeName.dataset.researchOrigHtml) welcomeName.dataset.researchOrigHtml = welcomeName.innerHTML;
-        welcomeName.innerHTML = _resIco + 'Deep Research';
+        welcomeName.innerHTML = _resIco + i18nModule.t('research.title');
       }
       if (welcomeSub) {
         if (!welcomeSub.dataset.researchOrigText) welcomeSub.dataset.researchOrigText = welcomeSub.textContent;
-        welcomeSub.textContent = 'Deep multi-step research with source gathering and synthesis.';
+        welcomeSub.textContent = i18nModule.t('research.description');
       }
       if (tipEl) {
         if (!tipEl.dataset.researchOrigTip) tipEl.dataset.researchOrigTip = tipEl.textContent;
         tipEl.textContent = '';
         tipEl.style.display = 'none';
       }
-      // Hide Nobody toggle during research mode
+      // 研究模式期间隐藏 Nobody 切换
       const _incBtn = el('incognito-btn');
       if (_incBtn) { _incBtn.dataset.researchOrigDisplay = _incBtn.style.display; _incBtn.style.display = 'none'; }
-      // Close document panel if open
+      // 关闭文档面板（如果已打开）
       if (window.documentModule && window.documentModule.isPanelOpen()) {
         window.documentModule.closePanel();
       }
@@ -786,7 +786,7 @@ function initializeEventListeners() {
         tipEl.style.display = '';
         delete tipEl.dataset.researchOrigTip;
       }
-      // Restore Nobody toggle
+      // 恢复 Nobody 切换
       const _incBtn2 = el('incognito-btn');
       if (_incBtn2 && _incBtn2.dataset.researchOrigDisplay !== undefined) {
         _incBtn2.style.display = _incBtn2.dataset.researchOrigDisplay;
@@ -796,8 +796,8 @@ function initializeEventListeners() {
     if (ws) { ws.style.animation = 'none'; ws.offsetHeight; ws.style.animation = 'welcome-enter 0.3s ease-out both'; }
   }
 
-  // ── Close compare if active (used by all tool/sidebar activations) ──
-  // Returns true if compare was active (page will reload), caller should return early
+  // ── 如果比较激活则关闭（所有工具/侧边栏激活时使用）──
+  // 如果比较之前是激活的则返回 true（页面将重载），调用者应提前返回
   function _closeCompareIfActive() {
     if (compareModule && compareModule.isActive()) {
       compareModule.deactivate(true);
@@ -806,17 +806,17 @@ function initializeEventListeners() {
     return false;
   }
 
-  // ── Tools section click handlers ──
+  // ── 工具分区点击处理 ──
   const toolCompareBtn = el('tool-compare-btn');
   if (toolCompareBtn) {
     toolCompareBtn.addEventListener('click', () => {
       if (compareModule) {
         if (compareModule.isActive()) {
-          // Already active — toggle off
+          // 已激活 — 切换关闭
           compareModule.toggleMode();
           return;
         }
-        // Close other exclusive tools before opening compare
+        // 打开比较前关闭其他独占工具
         const resChk = el('research-toggle');
         if (resChk && resChk.checked) {
           _syncResearchIndicator(false);
@@ -834,21 +834,21 @@ function initializeEventListeners() {
     });
   }
 
-  // ── Cookbook modal toggle ──
+  // ── Cookbook 模态框切换 ──
   const toolCookbookBtn = el('tool-cookbook-btn');
   if (toolCookbookBtn) {
     toolCookbookBtn.addEventListener('click', async () => {
       if (!cookbookModule) return;
-      // Try minimized→restore or open→minimize via the manager first
+      // 先尝试通过管理器进行最小化→恢复或打开→最小化
       const Modals = await import('./js/modalManager.js');
       if (!Modals.toggle('cookbook-modal')) {
-        // Not registered yet → fresh open
+        // 尚未注册 → 全新打开
         cookbookModule.open();
       }
     });
   }
 
-  // Document library tool button
+  // 文档库工具按钮
   const toolDoclibBtn = el('tool-doclib-btn');
   if (toolDoclibBtn) {
     toolDoclibBtn.addEventListener('click', () => {
@@ -863,7 +863,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Gallery tool button
+  // 图库工具按钮
   const toolGalleryBtn = el('tool-gallery-btn');
   if (toolGalleryBtn) {
     toolGalleryBtn.addEventListener('click', async () => {
@@ -876,10 +876,10 @@ function initializeEventListeners() {
     });
   }
 
-  // Tasks tool button
+  // 任务工具按钮
   const toolTasksBtn = el('tool-tasks-btn');
   if (toolTasksBtn) {
-  // Agents buttons (sidebar + rail)
+  // 代理按钮（侧边栏 + 导轨）
   const agentsBtns = [el("rail-agents"), el("tool-agents-btn")].filter(Boolean);
   agentsBtns.forEach(btn => {
     btn.addEventListener("click", () => {
@@ -892,14 +892,14 @@ function initializeEventListeners() {
     });
   }
 
-  // Calendar tool button
+  // 日历工具按钮
   const toolCalendarBtn = el('tool-calendar-btn');
   if (toolCalendarBtn) {
     toolCalendarBtn.addEventListener('click', async () => {
       if (!calendarModule) return;
       const Modals = await import('./js/modalManager.js');
-      // toggle returns true when a registered modal was minimized/restored;
-      // returns false when nothing is registered → open fresh.
+      // toggle 在已注册的模态框被最小化/恢复时返回 true；
+      // 没有注册任何内容时返回 false → 全新打开。
       if (!Modals.toggle('calendar-modal')) {
         if (calendarModule.isCalendarOpen()) calendarModule.closeCalendar();
         else calendarModule.openCalendar();
@@ -907,7 +907,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Notes tool button
+  // 笔记工具按钮
   const toolNotesBtn = el('tool-notes-btn');
   if (toolNotesBtn) {
     toolNotesBtn.addEventListener('click', () => {
@@ -916,18 +916,18 @@ function initializeEventListeners() {
       }
     });
   }
-  // Refresh notes due-reminder badge on load and every 5 minutes
+  // 页面加载时以及每5分钟刷新笔记到期提醒标记
   if (notesModule && notesModule.refreshDueBadge) {
     notesModule.refreshDueBadge();
     setInterval(() => notesModule.refreshDueBadge(), 5 * 60 * 1000);
   }
 
-  // URL-based panel routing — bookmark /calendar, /notes, /cookbook etc
-  // and the matching tool opens automatically on page load.
+  // 基于 URL 的面板路由 — 收藏 /calendar、/notes、/cookbook 等路径，
+  // 相应的工具会在页面加载时自动打开。
   const urlPath = window.location.pathname;
-  // Current width of the always-visible icon rail. The rail is resizable
-  // and hides on narrow viewports, so read it live each call rather than
-  // baking 48px in. Returns 0 when the rail isn't rendered.
+  // 始终可见的图标导轨的当前宽度。导轨可通过拖拽调整大小，
+  // 并在窄视口上隐藏，所以每次调用时实时读取而不是硬编码 48px。
+  // 当导轨未渲染时返回 0。
   const _iconRailWidth = () => {
     const r = document.getElementById('icon-rail');
     if (!r) return 0;
@@ -952,14 +952,14 @@ function initializeEventListeners() {
     }
     sb.classList.add('hidden');
     rail.classList.remove('rail-hidden');
-    // syncRailSide() flips iconRail.style.display based on the classes
-    // we just set. Exposed by sidebar-layout.js on window.
+    // syncRailSide() 根据我们刚设置的 class 来翻转 iconRail.style.display。
+    // 由 sidebar-layout.js 暴露在 window 上。
     try { window.syncRailSide && window.syncRailSide(); } catch (_) {}
   };
-  // Paired restore: if the route opener collapsed the sidebar, re-expand
-  // it when the fullscreen view closes. Only restores if the user didn't
-  // manually toggle in between (we clear the marker on manual hamburger
-  // clicks via a MutationObserver on `.sidebar.hidden`).
+  // 配对恢复：如果路由打开器收起了侧边栏，在全屏视图关闭时
+  // 重新展开它。仅在用户在此期间未手动切换时恢复（我们通过
+  // MutationObserver 在 `.sidebar.hidden` 上监听手动汉堡菜单点击
+  // 来清除标记）。
   const _restoreSidebarIfRouteCollapsed = () => {
     if (document.body.dataset.routeCollapsedSidebar !== '1') return;
     delete document.body.dataset.routeCollapsedSidebar;
@@ -968,12 +968,12 @@ function initializeEventListeners() {
     sb.classList.remove('hidden');
     try { window.syncRailSide && window.syncRailSide(); } catch (_) {}
   };
-  // Expose so closeEmailLibrary / notes close can call this without
-  // needing to import app.js directly.
+  // 暴露出去，使 closeEmailLibrary / notes 关闭时可以调用此函数，
+  // 而无需直接导入 app.js。
   window._restoreSidebarIfRouteCollapsed = _restoreSidebarIfRouteCollapsed;
-  // Clear the marker the moment the sidebar becomes visible again (user
-  // hamburger click, or our own _restoreSidebarIfRouteCollapsed call —
-  // both endpoints are the same observable state change).
+  // 在侧边栏再次变为可见时立即清除标记（用户汉堡菜单点击，
+  // 或我们自己的 _restoreSidebarIfRouteCollapsed 调用 —
+  // 两个端点都是相同的可观察状态变化）。
   {
     const sb = document.getElementById('sidebar');
     if (sb && typeof MutationObserver !== 'undefined') {
@@ -990,7 +990,7 @@ function initializeEventListeners() {
       _collapseSidebarToRail();
       notesModule.openPanel();
       // Promote to fullscreen-with-rail-visible. The pane wires up its own
-      // fullscreen toggle (#notes-fullscreen-toggle); piggyback on that
+      // （#notes-fullscreen-toggle）；借助该路径使按钮图标翻转，
       // path so the button icon flips and overflow:hidden gets applied
       // alongside. Retry on rAF in case the panel mounts a tick later.
       const _go = () => {
@@ -1009,8 +1009,8 @@ function initializeEventListeners() {
     '/calendar': () => calendarModule && calendarModule.openCalendar(),
     '/cookbook': () => document.getElementById('tool-cookbook-btn')?.click(),
     '/email':    () => {
-      // Collapse the wide sidebar → icon rail (48px) so the user keeps
-      // navigation visible alongside the fullscreen email view.
+      // 收起宽侧边栏 → 图标导轨（48px），以便用户在全屏邮件视图
+      // 旁边保持导航可见。
       _collapseSidebarToRail();
       // Spawn a fresh chat first so a reply (or any AI work the user
       // chains off the email) lives in its own session instead of grafting
@@ -1018,17 +1018,17 @@ function initializeEventListeners() {
       // default-chat / fallback-model resolution logic baked in, so just
       // delegate to it.
       try { document.getElementById('rail-new-session')?.click(); } catch (_) {}
-      // The email library is opened by clicking the email section's HEADER
-      // row (.section-header-flex), not the title span. Trigger that, then
-      // snap the modal to fullscreen on the next frame.
+      // 邮件库通过点击邮件分区的 HEADER 行
+      // （.section-header-flex）打开，而不是标题 span。触发那个，然后
+      // 在下一帧将模态框贴靠到全屏。
       const hdr = document.querySelector('#email-section .section-header-flex');
       if (hdr) hdr.click();
-      // The modal is built synchronously inside openEmailLibrary, so a
+      // 处理所有定位（使用 !important 覆盖 openEmailLibrary
       // single frame later it's in the DOM and ready to be flagged.
       // Fullscreen leaves the icon-rail visible on the left so navigation
       // stays one click away (per #93). Width = viewport minus rail.
-      // Just add the class — the CSS rule for .email-lib-fullscreen .modal-content
-      // owns all the positioning (with !important so it beats openEmailLibrary's
+      // 只需添加 class — .email-lib-fullscreen .modal-content 的 CSS 规则
+      // 处理所有定位（使用 !important 覆盖 openEmailLibrary
       // post-mount centering rAF) and reads the rail width from --icon-rail-w.
       const _goFullscreen = () => {
         const modal = document.getElementById('email-lib-modal');
@@ -1047,14 +1047,14 @@ function initializeEventListeners() {
     '/library':  () => sessionModule && sessionModule.openLibrary && sessionModule.openLibrary(),
   };
   const _opener = _routeOpen[urlPath];
-  // Defer the opener — at this point in init, the modules whose handlers
-  // we trigger (#rail-new-session click handler, the email-section header
-  // click handler in emailInbox, sessionModule's loaded session list) are
-  // still being wired up further down in this same function. Stash the
-  // opener so it runs from sessionModule.loadSessions().finally() below.
+  // 延迟执行 opener — 在初始化到这个点时，我们触发的模块处理程序
+  // （#rail-new-session 点击处理、emailInbox 中的邮件分区标题
+  // 点击处理、sessionModule 加载的会话列表）仍在同一函数的下方
+  // 继续连接中。将 opener 暂存，使其在下方
+  // sessionModule.loadSessions().finally() 中运行。
   if (_opener) window._odysseusRouteOpener = _opener;
 
-  // Archive browser tool button
+  // 档案库浏览器工具按钮
   const toolLibraryBtn = el('tool-library-btn');
   if (toolLibraryBtn) {
     toolLibraryBtn.addEventListener('click', () => {
@@ -1062,9 +1062,9 @@ function initializeEventListeners() {
     });
   }
 
-  // "+" on the Library row → create a new blank document and open it in the
-  // editor (mirrors the email section's compose "+"). stopPropagation so it
-  // doesn't also fire the row's open-library click.
+  // 文档库行上的"+"→ 创建新的空白文档并在编辑器中打开
+  // （镜像邮件分区的撰写"+"按钮）。stopPropagation 以避免
+  // 同时触发行的打开文档库点击。
   const libraryNewDocBtn = el('library-new-doc-btn');
   if (libraryNewDocBtn) {
     libraryNewDocBtn.addEventListener('click', async (e) => {
@@ -1073,12 +1073,12 @@ function initializeEventListeners() {
         if (documentModule && documentModule.newDocument) await documentModule.newDocument();
       } catch (err) {
         console.error('New document from Library failed:', err);
-        if (uiModule && uiModule.showError) uiModule.showError('Could not create document');
+        if (uiModule && uiModule.showError) uiModule.showError(i18nModule.t('notification.could_not_create_document'));
       }
     });
   }
 
-  // Manage Chats — opens Full Library modal (decoupled from Chats accordion toggle)
+  // 管理聊天 — 打开完整文档库模态框（与聊天折叠面板切换解耦）
   const chatsLibraryBtn = el('chats-library-btn');
   if (chatsLibraryBtn) {
     chatsLibraryBtn.addEventListener('click', (e) => {
@@ -1111,7 +1111,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Sidebar user bar — settings, admin, profile
+  // 侧边栏用户栏 — 设置、管理、个人资料
   const userBarSettings = el('user-bar-settings');
   const userBarProfile = el('user-bar-profile');
   const userBarAdmin = el('user-bar-admin');
@@ -1120,15 +1120,15 @@ function initializeEventListeners() {
     userBarSettings.addEventListener('click', () => settingsModule.open());
   }
   if (userBarProfile) {
-    // Clicking the user (avatar + name) jumps straight to the Account tab
-    // instead of landing on whatever was last selected.
+    // 点击用户（头像 + 名称）直接跳转到账户标签页，
+    // 而不是落在上次选择的标签上。
     userBarProfile.addEventListener('click', () => settingsModule.open('account'));
   }
   if (userBarAdmin) {
     userBarAdmin.addEventListener('click', () => adminModule.open());
   }
 
-  // Fetch auth status — populate user bar and show admin button if admin
+  // 获取认证状态 — 填充用户栏并在管理员时显示管理按钮
   fetch(`${API_BASE}/api/auth/status`, { credentials: 'same-origin' })
     .then(r => r.json())
     .then(d => {
@@ -1138,7 +1138,7 @@ function initializeEventListeners() {
       const userBarAvatar = el('user-bar-avatar');
       if (userBarName && d.username) {
         let displayName = d.username;
-        // Mask email addresses
+        // 遮盖邮箱地址
         if (displayName.includes('@')) {
           const [local, domain] = displayName.split('@');
           const ext = domain.includes('.') ? domain.slice(domain.lastIndexOf('.')) : '';
@@ -1147,30 +1147,30 @@ function initializeEventListeners() {
         userBarName.textContent = displayName;
         if (userBarAvatar) userBarAvatar.textContent = d.username.charAt(0).toUpperCase();
       }
-      // Apply per-user privilege restrictions
+      // 应用每个用户的权限限制
       if (d.privileges) {
         window._userPrivileges = d.privileges;
         const p = d.privileges;
-        // Hide agent mode toggle
+        // 隐藏代理模式切换
         if (!p.can_use_agent) {
           const modeToggle = document.getElementById('mode-toggle');
           if (modeToggle) modeToggle.closest('.chat-input-toggle')?.style.setProperty('display', 'none');
         }
-        // Hide bash toggle
+        // 隐藏 Bash 切换
         if (!p.can_use_bash) {
           const bashToggle = document.getElementById('bash-toggle');
           if (bashToggle) bashToggle.closest('.chat-input-toggle')?.style.setProperty('display', 'none');
           const bashBtn = document.getElementById('bash-toggle-btn');
           if (bashBtn) bashBtn.style.display = 'none';
         }
-        // Hide document button
+        // 隐藏文档按钮
         if (!p.can_use_documents) {
           const docBtn = document.getElementById('overflow-doc-btn');
           if (docBtn) docBtn.style.display = 'none';
           const docInd = document.getElementById('doc-indicator-btn');
           if (docInd) docInd.style.display = 'none';
         }
-        // Hide research toggle
+        // 隐藏研究切换
         if (!p.can_use_research) {
           const resBtn = document.getElementById('research-toggle-btn');
           if (resBtn) resBtn.style.display = 'none';
@@ -1182,7 +1182,7 @@ function initializeEventListeners() {
     })
     .catch(() => {});
 
-  // Session sort dropdown
+  // 会话排序下拉菜单
   const sortBtn = el('session-sort-btn');
   const sortDropdown = el('session-sort-dropdown');
   if (sortBtn && sortDropdown) {
@@ -1193,26 +1193,26 @@ function initializeEventListeners() {
     document.addEventListener('click', () => { sortDropdown.style.display = 'none'; });
     sortDropdown.addEventListener('click', (e) => e.stopPropagation());
 
-    // Sort mode options (newest, oldest, last active) — toggleable
+    // 排序模式选项（最新、最旧、最近活跃）— 可切换
     sortDropdown.querySelectorAll('.sort-option').forEach(opt => {
       opt.addEventListener('click', () => {
         const mode = opt.dataset.sort;
         const current = sessionModule.getSortMode();
-        // Toggle: clicking the active sort reverts to manual
+        // 切换：点击当前排序恢复为手动排序
         if (current === mode) {
           sessionModule.setSortMode(null);
           sortDropdown.style.display = 'none';
-          uiModule.showToast('Manual order');
+          uiModule.showToast(i18nModule.t('notification.manual_order'));
         } else {
           sessionModule.setSortMode(mode);
           sortDropdown.style.display = 'none';
-          uiModule.showToast(`Sorted: ${opt.textContent.trim().toLowerCase()}`);
+          uiModule.showToast(i18nModule.t('notification.sorted_mode', { mode: opt.textContent.trim().toLowerCase() }));
         }
         _syncSortChecks();
       });
     });
 
-    // Sync checkmarks on sort options
+    // 同步排序选项上的对勾标记
     function _syncSortChecks() {
       const current = sessionModule.getSortMode();
       sortDropdown.querySelectorAll('.sort-option').forEach(o => {
@@ -1222,16 +1222,16 @@ function initializeEventListeners() {
         check.textContent = '\u2022';
         if (!o.querySelector('.sort-check')) o.appendChild(check);
       });
-      // Highlight filter icon when a sort is active
+      // 当排序活动时高亮筛选图标
       if (sortBtn) sortBtn.classList.toggle('active', !!current);
     }
-    // Sync on dropdown open + initial load
+    // 下拉菜单打开时同步 + 初始加载
     sortBtn.addEventListener('click', _syncSortChecks);
     _syncSortChecks();
 
-    // AI auto-sort — spinner on the sort button itself. Used by both
-    // the main "★ Tidy" button (AI) and the sub-row "Tidy" button
-    // (no AI, Phase 1 cleanup only) via the skipLlm flag.
+    // AI 自动排序 — 排序按钮自身的旋转器。通过 skipLlm 标志
+    // 同时供主导航的"★ 整理"按钮（AI）和子行"整理"按钮
+    // （无 AI，仅第一阶段清理）使用。
     async function _runTidy(skipLlm) {
       const btnIcon = sortBtn.querySelector('.sort-icon');
       if (btnIcon) btnIcon.style.display = 'none';
@@ -1247,35 +1247,35 @@ function initializeEventListeners() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Auto-sort failed');
         if (data.status === 'ok') {
-          sessionModule.setSortMode(null); // clear sort — tidy creates manual folder order
+          sessionModule.setSortMode(null); // 清除排序 — tidy 创建手动文件夹排序
           _syncSortChecks();
           if (skipLlm) {
-            // No-AI path: just report what got cleaned. No "unfiled
-            // remaining" prompt because we never tried to file anything.
+            // 无 AI 路径：仅报告清理了什么。不提示"未分类剩余"，
+            // 因为我们根本没尝试归档任何内容。
             const cleaned = (data.deleted_empty || 0) + (data.deleted_throwaway || 0);
-            uiModule.showToast(cleaned ? `Cleaned ${cleaned} empty/throwaway chat${cleaned === 1 ? '' : 's'}` : 'Already clean');
+            uiModule.showToast(cleaned ? i18nModule.t(cleaned === 1 ? 'notification.cleaned_chat' : 'notification.cleaned_chats', { count: cleaned }) : i18nModule.t('notification.already_clean'));
           } else {
-            // Tidy now works in batches (15 most-recent unfiled per click)
-            // so the user gets fast feedback and a manageable LLM call
-            // even with hundreds of chats. Tell them what's left.
+            // Tidy 现在批量工作（每次点击处理 15 个最近未归档的会话），
+            // 这样用户能获得快速反馈和可管理的 LLM 调用量，
+            // 即使有数百个聊天也是如此。告诉用户还剩多少。
             const remaining = data.unfiled_remaining || 0;
             let msg;
             if (data.updated > 0) {
-              msg = `Sorted ${data.updated} into ${data.folders.length} folder${data.folders.length === 1 ? '' : 's'}`;
+              msg = i18nModule.t(data.folders.length === 1 ? 'notification.sorted_into_folder' : 'notification.sorted_into_folders', { updated: data.updated, folders: data.folders.length });
               if (remaining > 0) msg += ` — ${remaining} unfiled left, hit Group again`;
             } else if (remaining > 0) {
               msg = `${remaining} unfiled chats — hit Group again`;
             } else {
-              msg = 'All sorted';
+              msg = i18nModule.t('notification.all_sorted');
             }
             uiModule.showToast(msg);
           }
           if (sessionModule) await sessionModule.loadSessions();
         } else {
-          uiModule.showToast(data.reason || 'Nothing to sort');
+          uiModule.showToast(data.reason || i18nModule.t('notification.nothing_to_sort'));
         }
       } catch (e) {
-        uiModule.showError('Auto-sort: ' + e.message);
+        uiModule.showError(i18nModule.t('notification.auto_sort_failed', { error: e.message }));
       } finally {
         wp.destroy();
         if (wpEl.parentNode) wpEl.parentNode.removeChild(wpEl);
@@ -1287,7 +1287,7 @@ function initializeEventListeners() {
     if (autoSortBtn) autoSortBtn.addEventListener('click', () => _runTidy(false));
   }
 
-  // Model sort dropdown
+  // 模型排序下拉菜单
   const modelSortBtn = el('model-sort-btn');
   const modelSortDropdown = el('model-sort-dropdown');
   if (modelSortBtn && modelSortDropdown) {
@@ -1303,15 +1303,15 @@ function initializeEventListeners() {
         Storage.set('odysseus-model-sort', mode);
         if (modelsModule) modelsModule.refreshModels();
         modelSortDropdown.style.display = 'none';
-        uiModule.showToast('Models sorted: ' + opt.textContent.trim().toLowerCase());
+        uiModule.showToast(i18nModule.t('notification.models_sorted', { mode: opt.textContent.trim().toLowerCase() }));
       });
     });
   }
 
 
 
-  // Feature visibility — hide admin-disabled features
-  // Use prefetched data from login page if available
+  // 功能可见性 — 隐藏管理员禁用的功能
+  // 如果可用，使用登录页预取的数据
   const _prefetchedFeatures = sessionStorage.getItem('ody-prefetch-features');
   sessionStorage.removeItem('ody-prefetch-features');
   window._initFeaturesReady = (_prefetchedFeatures
@@ -1339,18 +1339,18 @@ function initializeEventListeners() {
     })
     .catch(() => {});
 
-  // Hide Gallery when image generation is disabled in settings
+  // 当设置中图片生成被禁用时隐藏图库
   const _prefetchedSettings = sessionStorage.getItem('ody-prefetch-settings');
   sessionStorage.removeItem('ody-prefetch-settings');
   window._initSettingsReady = (_prefetchedSettings
     ? Promise.resolve(JSON.parse(_prefetchedSettings))
     : fetch(`${API_BASE}/api/auth/settings`, { credentials: 'same-origin' }).then(r => r.json())
   ).then(settings => {
-      // NOTE: image_gen_enabled only governs *generating* images in chat — the
-      // tool is blocked server-side (chat_routes / agent_loop). The Gallery
-      // holds uploads and past images too, so it stays visible regardless;
-      // use the `gallery` feature flag to hide the Gallery entirely.
-      // Hide TTS overflow button when TTS is disabled or no provider configured
+      // 注意：image_gen_enabled 仅管理在聊天中*生成*图片 — 该
+      // 工具被服务器端（chat_routes / agent_loop）阻止。图库
+      // 也包含上传和过去的图片，因此无论如何保持可见；
+      // 使用 `gallery` 功能标志来完全隐藏图库。
+      // 当 TTS 被禁用或未配置提供者时隐藏 TTS 溢出按钮
       const ttsOff = settings.tts_enabled === false || !settings.tts_provider || settings.tts_provider === 'disabled';
       const overflowTts = el('overflow-tts-btn');
       if (overflowTts) {
@@ -1359,9 +1359,9 @@ function initializeEventListeners() {
     })
     .catch(() => {});
 
-  // (Logout handler moved to sidebar user bar above)
+  // （退出登录处理已移到上方侧边栏用户栏）
 
-  // Rename AI modal
+  // 重命名 AI 模态框
   const renameAiOption = el('rename-ai-option');
   const renameAiModal = el('rename-ai-modal');
   const closeRenameAi = el('close-rename-ai');
@@ -1393,7 +1393,7 @@ function initializeEventListeners() {
       const newName = aiNameInput.value.trim();
       
       if (!newName) {
-        uiModule.showError('Please enter a name for the AI');
+        uiModule.showError(i18nModule.t('notification.ai_rename_prompt'));
         return;
       }
       
@@ -1406,21 +1406,21 @@ function initializeEventListeners() {
         
         const result = await response.json();
         if (result.success) {
-          uiModule.showToast(`AI renamed to ${newName}`);
+          uiModule.showToast(i18nModule.t('notification.ai_renamed_to', { name: newName }));
           renameAiModal.classList.add('hidden');
           aiNameInput.value = '';
         }
       } catch (e) {
-        uiModule.showError('Failed to rename AI: ' + e.message);
+        uiModule.showError(i18nModule.t('notification.failed_rename_ai', { error: e.message }));
       }
     });
   }
 
-  // Memory management
+  // 记忆管理
   const memoryModal = el('memory-modal');
   const closeMemoryBtn = el('close-memory-modal');
 
-  // Theme popup close button
+  // 主题弹窗关闭按钮
   const closeThemeBtn = el('close-theme-popup');
   if (closeThemeBtn && themeModule) {
     closeThemeBtn.addEventListener('click', () => {
@@ -1428,14 +1428,14 @@ function initializeEventListeners() {
     });
   }
 
-  // Rename session modal
+  // 重命名会话模态框
   const renameSessionModal = el('rename-session-modal');
   const closeRenameSession = el('close-rename-session');
   const cancelRenameSession = el('cancel-rename-session');
   const saveSessionName = el('save-session-name');
   const sessionNameInput = el('session-name-input');
   
-  // Close handlers for rename session modal
+  // 重命名会话模态框的关闭处理
   if (closeRenameSession) {
     closeRenameSession.addEventListener('click', () => {
       renameSessionModal.classList.add('hidden');
@@ -1453,7 +1453,7 @@ function initializeEventListeners() {
       const newName = sessionNameInput.value.trim();
       
       if (!newName) {
-        uiModule.showError('Please enter a name for the session');
+        uiModule.showError(i18nModule.t('notification.session_rename_prompt'));
         return;
       }
       
@@ -1466,23 +1466,23 @@ function initializeEventListeners() {
         
         const result = await response.json();
         if (response.ok) {
-          uiModule.showToast(`Session renamed to ${newName}`);
+          uiModule.showToast(i18nModule.t('notification.session_renamed_to', { name: newName }));
           renameSessionModal.classList.add('hidden');
           sessionNameInput.value = '';
-          // Update the current session name in the UI
+          // 更新界面中的当前会话名称
           const meta = sessionModule.getSessions().find(s => s.id === sessionModule.getCurrentSessionId());
           if (meta) {
             meta.name = newName;
             const ver = window._appVersion ? ` v${window._appVersion}` : '';
             el('current-meta').textContent = `Session: ${meta.name}${meta.model ? ' ' + meta.model.split('/').pop() : ''}${meta.rag ? ' [RAG]' : ''}${ver}`;
           }
-          // Refresh the sessions list
+            // 刷新会话列表
         await sessionModule.loadSessions();
         } else {
-          throw new Error(result.detail || 'Failed to rename session');
+          throw new Error(result.detail || i18nModule.t('notification.failed_rename_session'));
         }
       } catch (e) {
-        uiModule.showError('Failed to rename session: ' + e.message);
+        uiModule.showError(i18nModule.t('notification.failed_rename_session_error', { error: e.message }));
       }
     });
   }
@@ -1493,7 +1493,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Sidebar Memory button
+  // 侧边栏记忆按钮
   const toolMemoryBtn = el('tool-memory-btn');
   if (toolMemoryBtn && memoryModal) {
     toolMemoryBtn.addEventListener('click', () => {
@@ -1525,9 +1525,9 @@ function initializeEventListeners() {
     });
   }
 
-// Voice recording is handled by the dual-purpose send/mic button (see below)
+// 语音录制由双重用途的发送/麦克风按钮处理（见下文）
 
-  // ── Toggle persistence — delegates to Storage module ──
+  // ── 切换状态持久化 — 委托给 Storage 模块 ──
   function loadToggleState() {
     return Storage.loadToggleState();
   }
@@ -1535,8 +1535,8 @@ function initializeEventListeners() {
     Storage.saveToggleState(state);
   }
 
-  // Mode-affected tools: default ON in Agent mode, default OFF in Chat mode,
-  // but the user's explicit per-mode override is persisted and honored.
+  // 模式影响工具：Agent 模式默认开启，Chat 模式默认关闭，
+  // 但用户显式的每模式覆盖会被持久化并遵守。
   const MODE_TOOLS = [
     { btnId: 'web-toggle-btn',  checkboxId: 'web-toggle',  stateKey: 'web' },
     { btnId: 'bash-toggle-btn', checkboxId: 'bash-toggle', stateKey: 'bash' },
@@ -1548,7 +1548,7 @@ function initializeEventListeners() {
     const state = loadToggleState();
     const key = _modeKey(stateKey, mode);
     if (Object.prototype.hasOwnProperty.call(state, key)) return !!state[key];
-    return mode === 'agent'; // default: ON in agent, OFF in chat
+    return mode === 'agent'; // 默认：Agent 模式开启，Chat 模式关闭
   }
 
   function saveToolPref(stateKey, mode, value) {
@@ -1558,26 +1558,26 @@ function initializeEventListeners() {
   }
 
   const TOOL_TOGGLE_TOAST_LABELS = {
-    web: 'Web search',
-    bash: 'Shell',
+    web: 'tools.web_search_toggle',
+    bash: 'tools.shell_toggle',
   };
 
   function showToolToggleToast(stateKey, active) {
-    const label = TOOL_TOGGLE_TOAST_LABELS[stateKey];
-    if (!label || !uiModule?.showToast) return;
-    uiModule.showToast(`${label} ${active ? 'on' : 'off'}`, 1800);
+    const labelKey = TOOL_TOGGLE_TOAST_LABELS[stateKey];
+    if (!labelKey || !uiModule?.showToast) return;
+    uiModule.showToast(i18nModule.t(active ? 'notification.tool_toggle_on' : 'notification.tool_toggle_off', { tool: label }), 1800);
   }
 
   function applyModeToToggles(mode) {
     MODE_TOOLS.forEach(({ btnId, checkboxId, stateKey }) => {
       const btn = el(btnId);
       if (!btn) return;
-      // Hide bash button in chat mode
+      // Chat 模式下隐藏 Bash 按钮
       if (mode === 'chat' && stateKey === 'bash') {
         btn.style.display = 'none';
         return;
       }
-      // Show buttons in agent mode (or for web toggle in any mode)
+      // Agent 模式或任何模式下显示 Web 切换按钮
       btn.style.display = '';
       if (btn.style.display === 'none') return;
       const on = loadToolPref(stateKey, mode);
@@ -1586,7 +1586,7 @@ function initializeEventListeners() {
     });
   }
 
-  // ── Agent / Chat mode toggle ──
+  // ── Agent / Chat 模式切换 ──
   (function initModeToggle() {
     const agentBtn = el('mode-agent-btn');
     const chatBtn = el('mode-chat-btn');
@@ -1594,7 +1594,7 @@ function initializeEventListeners() {
     const state = loadToggleState();
     let currentMode = state.mode || 'chat';
 
-    // Immediately hide bash button in chat mode on page load
+    // 页面加载时 Chat 模式下立即隐藏 Bash 按钮
     if (currentMode === 'chat') {
       const bashBtn = el('bash-toggle-btn');
       if (bashBtn) bashBtn.style.display = 'none';
@@ -1609,16 +1609,16 @@ function initializeEventListeners() {
       chatBtn.classList.toggle('active', mode === 'chat');
       agentBtn.setAttribute('aria-pressed', String(mode === 'agent'));
       chatBtn.setAttribute('aria-pressed', String(mode === 'chat'));
-      // Slide the pill to the active button
+      // 将滑块滑动到激活按钮
       const toggle = agentBtn.closest('.mode-toggle');
       if (toggle) toggle.classList.toggle('mode-chat', mode === 'chat');
       // Workspace pill + overflow entry are agent-only - hide immediately (no flash).
       try { workspaceModule.applyMode(mode); } catch (_) {}
-      // Delay tool glow-up for a staggered effect
+      // 延迟工具发光效果以实现交错动画
       setTimeout(() => applyModeToToggles(mode), 500);
     }
     agentBtn.addEventListener('click', () => {
-      // Agent mode turns off research if active
+      // Agent 模式会关闭研究（如果激活）
       const resChk = el('research-toggle');
       if (resChk && resChk.checked) _syncResearchIndicator(false);
       setMode('agent');
@@ -1627,25 +1627,25 @@ function initializeEventListeners() {
     setMode(currentMode);
   })();
 
-  // ── Tool splash explainer messages (shown first 2 times per tool) ──
+  // ── 工具提示说明消息（每个工具首次使用的前2次显示）──
   const SPLASH_COUNT_KEY = 'odysseus-tool-splash-counts';
   const SPLASH_MAX = 2;
   const _toolSplashes = {
-    web: { role: 'Web Search', text: 'Searches the web for relevant information to include in the response. Results are fetched and summarized before the AI answers.' },
-    bash: { role: 'Shell Access', text: 'Gives the AI access to a sandboxed shell for running commands, installing packages, and executing scripts. Use with caution.' },
-    builder: { role: 'Tool Builder', text: 'Create custom mini-apps and tools the AI can use. Describe what you need and the AI will build a tool you can reuse across conversations.' },
-    research: { role: 'Deep Research', text: 'Multi-round web search with source analysis. Takes longer but produces comprehensive, well-sourced answers. Your next message will trigger a deep research cycle.' },
+    web: { roleKey: 'tool_splashes.web.role', textKey: 'tool_splashes.web.desc' },
+    bash: { roleKey: 'tool_splashes.bash.role', textKey: 'tool_splashes.bash.desc' },
+    builder: { roleKey: 'tool_splashes.builder.role', textKey: 'tool_splashes.builder.desc' },
+    research: { roleKey: 'tool_splashes.research.role', textKey: 'tool_splashes.research.desc' },
   };
   function _showToolSplash(key) {
     const splash = _toolSplashes[key];
     if (!splash) return;
-    // Only show the first SPLASH_MAX times per tool
+    // 每个工具仅显示前 SPLASH_MAX 次
     const counts = Storage.getJSON(SPLASH_COUNT_KEY, {});
     const seen = counts[key] || 0;
     if (seen >= SPLASH_MAX) return;
     counts[key] = seen + 1;
     Storage.setJSON(SPLASH_COUNT_KEY, counts);
-    // Hide welcome screen so splash is visible
+    // 隐藏欢迎屏幕使提示可见
     if (chatModule && chatModule.hideWelcomeScreen) {
       chatModule.hideWelcomeScreen();
     }
@@ -1653,16 +1653,16 @@ function initializeEventListeners() {
     if (!chatBox) return;
     const div = document.createElement('div');
     div.className = 'msg msg-ai tool-splash';
-    div.innerHTML = '<div class="role">' + splash.role + '</div><div class="body" style="opacity:0.7;font-size:0.92em">' + splash.text + '</div>';
+    div.innerHTML = '<div class="role">' + i18nModule.t(splash.roleKey) + '</div><div class="body" style="opacity:0.7;font-size:0.92em">' + i18nModule.t(splash.textKey) + '</div>';
     chatBox.appendChild(div);
     if (uiModule) uiModule.scrollHistory();
   }
 
-  // ── Checkbox-backed toggle buttons (with per-mode persistence) ──
+  // ── 基于复选框的切换按钮（带按模式持久化）──
   function setupToggle(btnId, checkboxId, stateKey) {
     const btn = el(btnId);
     if (!btn) return;
-    // Restore per-mode saved state for both Agent and Chat modes.
+    // 还原 Agent 和 Chat 模式的每模式保存状态。
     const mode = (loadToggleState().mode) || 'chat';
     const saved = loadToolPref(stateKey, mode);
     const chk = el(checkboxId);
@@ -1678,7 +1678,7 @@ function initializeEventListeners() {
       saveToolPref(stateKey, curMode, chk.checked);
       showToolToggleToast(stateKey, chk.checked);
       if (chk.checked) _showToolSplash(stateKey);
-      // Web search and Research are mutually exclusive — Research takes priority
+      // Web 搜索和研究互斥 — 研究优先
       if (stateKey === 'web' && chk.checked) {
         const resChk = el('research-toggle');
         if (resChk && resChk.checked) {
@@ -1691,7 +1691,7 @@ function initializeEventListeners() {
   setupToggle('bash-toggle-btn', 'bash-toggle', 'bash');
   try { workspaceModule.initWorkspace(); } catch (_) {}
 
-  // Document editor toggle (special: uses module panel, not a checkbox)
+  // 文档编辑器切换（特殊：使用模块面板，而不是复选框）
   const overflowDocBtn = el('overflow-doc-btn');
   if (overflowDocBtn) {
     overflowDocBtn.addEventListener('click', async () => {
@@ -1702,7 +1702,7 @@ function initializeEventListeners() {
         const st = loadToggleState(); st.doc = false; saveToggleState(st);
       } else {
         let sessionId = sessionModule.getCurrentSessionId();
-        // If there's a pending "New Chat", materialize it first
+        // 如果有待提交的"新建聊天"，先实体化它
         if (!sessionId && sessionModule.hasPendingChat && sessionModule.hasPendingChat()) {
           await sessionModule.materializePendingSession();
           sessionId = sessionModule.getCurrentSessionId();
@@ -1718,7 +1718,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Document indicator button (shown outside overflow when docs exist)
+  // 文档指示器按钮（文档存在时显示在溢出菜单外）
   const docIndicatorBtn = el('doc-indicator-btn');
   if (docIndicatorBtn) {
     docIndicatorBtn.addEventListener('click', () => {
@@ -1727,7 +1727,7 @@ function initializeEventListeners() {
     });
   }
 
-  // ── RAG toggle (overflow + indicator) ──
+  // ── RAG 切换（溢出 + 指示器）──
   function _syncRagIndicator(active) {
     const indicator = el('rag-indicator-btn');
     const overflow = el('overflow-rag-btn');
@@ -1748,14 +1748,14 @@ function initializeEventListeners() {
   // run locally — finds it instead of silently no-op'ing (the "group indicator
   // sometimes doesn't appear" bug).
   window._syncGroupIndicator = _syncGroupIndicator;
-  // Init RAG state on load
+  // 初始化 RAG 状态
   {
     const st = loadToggleState();
     const ragState = st.rag || false;
     _syncRagIndicator(ragState);
   }
 
-  // ── Overflow "..." menu (Research) ──
+  // ── 溢出"..."菜单（研究）──
   function updatePlusDot() {
     const plusBtn = el('overflow-plus-btn');
     if (!plusBtn) return;
@@ -1763,20 +1763,20 @@ function initializeEventListeners() {
     const anyActive = menu ? Array.from(menu.querySelectorAll('.overflow-menu-item.active')).some(item => item.style.display !== 'none') : false;
     plusBtn.classList.toggle('has-active', anyActive);
   }
-  // External modules (compare) dispatch this when their overflow state changes
+  // 外部模块（compare）在其溢出状态变化时分发此事件
   document.addEventListener('overflow-state-change', () => updatePlusDot());
 
-  // ── Prevent toolbar buttons from stealing focus (avoids mobile keyboard bounce) ──
+  // ── 防止工具栏按钮抢夺焦点（避免移动端键盘弹出）──
   const chatInputBar = document.querySelector('.chat-input-bar');
-  // ── Keep textarea focused when interacting with chat bar controls (mobile keyboard fix) ──
+  // ── 与聊天栏控件交互时保持文本区域聚焦（移动端键盘修复）──
   const _msgTextarea = el('message');
   if (chatInputBar && _msgTextarea) {
     let _refocusOnBlur = false;
     function _flagRefocus(e) {
       if (e.target.closest('textarea, input')) return;
-      // Don't refocus for attach — file picker needs full focus control
+      // 不要为附件重新聚焦 — 文件选择器需要完整的焦点控制
       if (e.target.closest('#overflow-attach-btn')) return;
-      // Don't refocus for model picker button — focus should go to picker search input
+      // 不要为模型选择器按钮重新聚焦 — 焦点应转到选择器搜索输入
       if (e.target.closest('.model-picker-btn')) return;
       // Don't refocus when tapping the +/chevron tools button — the user
       // is explicitly trying to dismiss the keyboard and open the tools
@@ -1786,13 +1786,13 @@ function initializeEventListeners() {
       if (document.activeElement === _msgTextarea) _refocusOnBlur = true;
     }
     chatInputBar.addEventListener('touchstart', _flagRefocus, { passive: true });
-    // Overflow menu is position:fixed — may not bubble through chatInputBar on mobile
+    // 溢出菜单是 position:fixed — 在移动端可能不会通过 chatInputBar 冒泡
     const _overflowMenu = el('overflow-menu');
     if (_overflowMenu) _overflowMenu.addEventListener('touchstart', _flagRefocus, { passive: true });
-    // Model picker menu too
+    // 模型选择器菜单也是
     const _pickerMenu = document.getElementById('model-picker-menu');
     if (_pickerMenu) _pickerMenu.addEventListener('touchstart', _flagRefocus, { passive: true });
-    // Attach strip (outside chat-input-bar)
+    // 附件条（在 chat-input-bar 外）
     const _attachStrip = el('attach-strip');
     if (_attachStrip) _attachStrip.addEventListener('touchstart', _flagRefocus, { passive: true });
     _msgTextarea.addEventListener('blur', () => {
@@ -1801,7 +1801,7 @@ function initializeEventListeners() {
         setTimeout(() => _msgTextarea.focus(), 0);
       }
     });
-    // Clear flag if touch ends without causing blur
+    // 如果触摸结束但未导致失焦则清除标志
     document.addEventListener('touchend', () => { setTimeout(() => { _refocusOnBlur = false; }, 50); }, { passive: true });
   }
 
@@ -1810,7 +1810,7 @@ function initializeEventListeners() {
     const menu = el('overflow-menu');
     if (!plusBtn || !menu) return;
 
-    // `.chat-input-bar` has `container-type: inline-size`, which makes it the
+    // `.chat-input-bar` 有 `container-type: inline-size`，这使它成为
     // containing block for `position: fixed` descendants — so this menu gets
     // trapped in the composer's stacking context and renders BEHIND the
     // attach-strip (worse the more files you add). Portal it to <body> while
@@ -1827,41 +1827,41 @@ function initializeEventListeners() {
       menu.style.left = r.left + 'px';
       menu.style.right = 'auto';
       menu.style.bottom = 'auto';
-      menu.style.maxHeight = '';      // reset so we can measure the natural height
+      menu.style.maxHeight = '';      // 重置以便测量自然高度
       menu.style.overflowY = '';
-      const avail = r.top - 16;        // room above the chevron
+      const avail = r.top - 16;        // 折叠箭头上方的空间
       const natural = menu.scrollHeight;
       const h = Math.min(natural, avail);
-      if (natural > avail) {           // only cap + scroll when it doesn't fit
+      if (natural > avail) {           // 仅在放不下时才限制高度并滚动
         menu.style.maxHeight = avail + 'px';
         menu.style.overflowY = 'auto';
       }
       menu.style.top = (r.top - 8 - h) + 'px';
     }
-    // Tapping the chevron must NOT steal focus from the message box, or the
-    // mobile keyboard collapses. preventDefault on pointerdown keeps the
-    // textarea focused (keyboard stays up) while click still opens the menu.
+    // 点击折叠箭头绝对不能从消息框抢夺焦点，否则移动端键盘会收起。
+    // pointerdown 上的 preventDefault 保持文本区域聚焦（键盘保持打开），
+    // 同时 click 仍然可以打开菜单。
     plusBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); });
     plusBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // Closing path needs to play the fold-in animation, not just flip
-      // .hidden — route through closeOverflowMenu so the second-click
-      // close looks the same as click-outside / Escape / item-pick.
+      // 关闭路径需要播放折叠动画，而不是简单地翻转 .hidden —
+      // 通过 closeOverflowMenu 路由，使第二次点击关闭的效果与
+      // 点击外部 / Escape / 选择项目一致。
       const isOpen = !menu.classList.contains('hidden') && !menu.classList.contains('closing');
       if (isOpen) {
         closeOverflowMenu();
         return;
       }
-      // Re-opening while a fold-in is mid-animation: cancel it cleanly.
+      // 在折叠动画进行中重新打开：干净地取消动画。
       menu.classList.remove('closing');
       menu.classList.remove('hidden');
       plusBtn.classList.add('expanded');
-      document.body.appendChild(menu);  // escape the composer's container-type trap
-      // Hide pill bar label so it doesn't show through the menu
+      document.body.appendChild(menu);  // 摆脱编辑器的 container-type 陷阱
+      // 隐藏药丸栏标签，避免透过菜单显示
       if (pickerWrap) pickerWrap.style.visibility = 'hidden';
-      // Keep the textarea focused so the keyboard stays up if it was open (the
-      // pointerdown handler above prevents the focus-steal). Still watch
-      // visualViewport so the menu follows the chevron if the viewport shifts.
+      // 保持文本区域聚焦，避免键盘收起（如果之前是打开的），
+      // 上面的 pointerdown 处理程序阻止了焦点抢夺。同时监听
+      // visualViewport，使菜单在视口移动时跟随折叠箭头。
       positionMenu();
       if (window.visualViewport && !_vvReposition) {
         _vvReposition = () => positionMenu();
@@ -1877,22 +1877,22 @@ function initializeEventListeners() {
         window.visualViewport.removeEventListener('scroll', _vvReposition);
         _vvReposition = null;
       }
-      // Play the fold-in animation (items peel top-down, then container
-      // scales back into the chevron) before flipping to display:none.
+      // 播放折叠动画（项目自上而下剥离，然后容器缩放回折叠箭头）
+      // 然后再翻转为 display:none。
       menu.classList.add('closing');
       plusBtn.classList.remove('expanded');
       if (pickerWrap) pickerWrap.style.visibility = '';
-      // Item delays max at 0.18s + 0.20s anim = 0.38s for items, container
-      // delay 0.16s + 0.22s = 0.38s. 400ms covers both with margin.
+      // 项目延迟最大 0.18s + 0.20s 动画 = 项目 0.38s，容器
+      // 延迟 0.16s + 0.22s = 0.38s。400ms 覆盖两者并有余量。
       setTimeout(() => {
         menu.classList.add('hidden');
         menu.classList.remove('closing');
-        if (ownerWrap) ownerWrap.appendChild(menu);  // restore from <body> portal
+        if (ownerWrap) ownerWrap.appendChild(menu);  // 从 <body> 传送还原
       }, 400);
     }
-    // Close menu when clicking any item inside it. preventDefault on pointerdown
-    // so tapping an item (e.g. Attach files) doesn't steal focus from the message
-    // box — keeps the mobile keyboard up.
+    // 点击菜单内任意项目时关闭。pointerdown 上的 preventDefault
+    // 使得点击项目（例如附件文件）不会从消息框抢夺焦点 —
+    // 保持移动端键盘打开。
     menu.querySelectorAll('.overflow-menu-item').forEach(item => {
       item.addEventListener('pointerdown', (e) => { e.preventDefault(); });
       item.addEventListener('click', () => closeOverflowMenu());
@@ -1904,7 +1904,7 @@ function initializeEventListeners() {
       if (e.key === 'Escape' && !menu.classList.contains('hidden')) closeOverflowMenu();
     });
 
-    // Research toggle
+    // 研究切换
     const researchBtn = el('research-toggle-btn');
     if (researchBtn) {
       const st = loadToggleState();
@@ -1912,12 +1912,12 @@ function initializeEventListeners() {
       el('research-toggle').checked = resState;
       researchBtn.classList.toggle('active', resState);
       researchBtn.style.display = resState ? '' : 'none';
-      // Sync overflow + tool sidebar on load
+      // 页面加载时同步溢出 + 工具侧边栏
       const overflowRes = el('overflow-research-btn');
       if (overflowRes) overflowRes.classList.toggle('active', resState);
       const toolRes = el('tool-research-btn');
       if (toolRes) toolRes.classList.toggle('active', resState);
-      // On load: if both research and web are ON, research wins
+      // 页面加载时：如果研究和网页搜索都已开启，研究优先
       if (resState) {
         const webChk = el('web-toggle');
         const webBtn = el('web-toggle-btn');
@@ -1934,9 +1934,9 @@ function initializeEventListeners() {
         _syncResearchIndicator(turningOn);
         if (turningOn) {
           _showToolSplash('research');
-          // Clear character — mutually exclusive with research
+          // 清除角色 — 与研究互斥
           if (presetsModule && presetsModule.deactivateCharacter) presetsModule.deactivateCharacter();
-          // Research and Web search are mutually exclusive
+          // 研究和 Web 搜索是互斥的
           const webChk = el('web-toggle');
           const webBtn = el('web-toggle-btn');
           if (webChk && webChk.checked) {
@@ -1944,7 +1944,7 @@ function initializeEventListeners() {
             if (webBtn) webBtn.classList.remove('active');
             saveToolPref('web', (loadToggleState().mode || 'chat'), false);
           }
-          // Research requires chat mode — force switch from agent
+          // 研究需要 Chat 模式 — 强制从 Agent 切换
           const rs = loadToggleState();
           if (rs.mode === 'agent') {
             rs.mode = 'chat';
@@ -1961,20 +1961,20 @@ function initializeEventListeners() {
     updatePlusDot();
   })();
 
-  // ── Auto-collapse toolbar buttons into overflow when space is tight ──
+  // ── 空间紧张时自动将工具栏按钮折叠到溢出菜单中 ──
   (function initToolbarOverflow() {
     const inputLeft = document.querySelector('.chat-input-left');
     const overflowMenu = el('overflow-menu');
     const overflowWrapper = document.querySelector('.overflow-wrapper');
     if (!inputLeft || !overflowMenu || !overflowWrapper) return;
 
-    // Buttons that can be collapsed (in reverse priority — last collapsed first)
+    // 可折叠的按钮（按反向优先级 — 最后折叠的最先被折叠）
     const collapsibleIds = ['bash-toggle-btn', 'web-toggle-btn'];
     const collapsibleBtns = collapsibleIds.map(id => el(id)).filter(Boolean);
-    // Map of toolbar btn id → overflow mirror element (created dynamically)
+    // 工具栏 btn id → 溢出镜像元素的映射（动态创建）
     const overflowMirrors = new Map();
 
-    // Create overflow mirror items for each collapsible button
+    // 为每个可折叠按钮创建溢出镜像项
     collapsibleBtns.forEach(btn => {
       const mirror = document.createElement('button');
       mirror.type = 'button';
@@ -1985,7 +1985,7 @@ function initializeEventListeners() {
         '<span class="overflow-active-dot"></span>';
       mirror.style.display = 'none';
       mirror.addEventListener('click', () => btn.click());
-      // Insert at top of overflow menu (before existing items)
+      // 插入到溢出菜单顶部（在现有项之前）
       overflowMenu.insertBefore(mirror, overflowMenu.firstChild);
       overflowMirrors.set(btn.id, mirror);
     });
@@ -2005,25 +2005,25 @@ function initializeEventListeners() {
       const available = inputBottom.clientWidth -
         (rightEl ? rightEl.offsetWidth : 0) - 16;
 
-      // Uncollapse all to measure natural widths
+      // 取消所有折叠以测量自然宽度
       collapsibleBtns.forEach(btn => btn.classList.remove('toolbar-collapsed'));
       overflowMirrors.forEach(m => m.style.display = 'none');
 
-      // Temporarily allow overflow for accurate measurement
+      // 临时允许溢出以进行准确测量
       const prevOverflow = inputLeft.style.overflow;
       inputLeft.style.overflow = 'visible';
       inputLeft.style.flexWrap = 'nowrap';
 
-      // Force reflow then measure each child
+      // 强制重排然后测量每个子元素
       void inputLeft.offsetWidth;
 
-      // Measure the overflow wrapper (always visible)
+      // 测量溢出包装器（始终可见）
       const wrapperWidth = overflowWrapper.offsetWidth + 4;
 
-      // Measure each collapsible button's natural width
+      // 测量每个可折叠按钮的自然宽度
       const btnWidths = collapsibleBtns.map(btn => btn.offsetWidth + 4);
 
-      // Measure non-collapsible, non-wrapper children (tool indicators etc)
+      // 测量不可折叠、非包装器的子元素（工具指示器等）
       let otherWidth = 0;
       Array.from(inputLeft.children).forEach(c => {
         if (c === overflowWrapper) return;
@@ -2033,7 +2033,7 @@ function initializeEventListeners() {
 
       let totalWidth = wrapperWidth + otherWidth + btnWidths.reduce((a, b) => a + b, 0);
 
-      // Force-collapse shell & search when research mode + doc panel are both active
+      // 研究模式 + 文档面板同时激活时强制折叠 Shell 和搜索
       const _resChk = el('research-toggle');
       const _researchOn = _resChk && _resChk.checked;
       const _docViewOn = document.body.classList.contains('doc-view');
@@ -2049,7 +2049,7 @@ function initializeEventListeners() {
         return;
       }
 
-      // Collapse from lowest priority until it fits
+      // 从最低优先级开始折叠，直到放得下
       if (totalWidth > available) {
         for (let i = 0; i < collapsibleBtns.length; i++) {
           collapsibleBtns[i].classList.add('toolbar-collapsed');
@@ -2060,42 +2060,42 @@ function initializeEventListeners() {
         }
       }
 
-      // Restore
+      // 恢复
       inputLeft.style.overflow = prevOverflow;
       inputLeft.style.flexWrap = '';
       syncMirrorStates();
     }
 
-    // Observe active class changes to sync mirror states
+    // 监听 active 类变化以同步镜像状态
     const observer = new MutationObserver(() => syncMirrorStates());
     collapsibleBtns.forEach(btn => {
       observer.observe(btn, { attributes: true, attributeFilter: ['class'] });
     });
 
-    // Run on resize and on load
+    // 窗口大小调整时运行和加载时运行
     window.addEventListener('resize', () => requestAnimationFrame(checkToolbarOverflow));
-    // Run immediately (state is already restored by this point)
+    // 立即运行（此时状态已恢复）
     checkToolbarOverflow();
-    // Re-check when sidebar toggles (changes available width)
+    // 侧边栏切换时重新检查（改变可用宽度）
     document.addEventListener('overflow-state-change', () =>
       requestAnimationFrame(checkToolbarOverflow));
-    // Also re-check when sidebar visibility changes
+    // 侧边栏可见性变化时也重新检查
     const sidebarEl = el('sidebar');
     if (sidebarEl) {
       new MutationObserver(() => requestAnimationFrame(checkToolbarOverflow))
         .observe(sidebarEl, { attributes: true, attributeFilter: ['class'] });
     }
-    // Re-check when doc panel opens/closes (body.doc-view toggled)
+    // 文档面板打开/关闭时重新检查（body.doc-view切换）
     new MutationObserver(() => requestAnimationFrame(checkToolbarOverflow))
       .observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    // Re-check when input bar itself resizes (e.g. doc panel drag)
+    // 输入栏自身调整大小时重新检查（例如文档面板拖拽）
     const inputBottom = inputLeft.parentElement;
     if (inputBottom) {
       new ResizeObserver(() => requestAnimationFrame(checkToolbarOverflow)).observe(inputBottom);
     }
   })();
 
-  // ── Auto-hide model picker when textarea area is too narrow ──
+  // ── 文本区域过窄时自动隐藏模型选择器 ──
   (function initModelPickerResponsive() {
     const inputTop = document.querySelector('.chat-input-top');
     const pickerWrap = el('model-picker-wrap');
@@ -2109,16 +2109,16 @@ function initializeEventListeners() {
     const _isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
     function checkPickerOverflow() {
-      // Skip responsive collapse on mobile — keyboard open/close causes flicker
+      // 移动端跳过响应式折叠 — 键盘开合会导致闪烁
       if (_isMobile) return;
       const w = inputTop.clientWidth;
-      // Hide model picker
+      // 隐藏模型选择器
       pickerWrap.classList.toggle('picker-auto-hidden', w < PICKER_HIDE_WIDTH);
-      // Hide placeholder text
+      // 隐藏占位文本
       if (textarea) {
-        textarea.setAttribute('placeholder', w < PLACEHOLDER_HIDE_WIDTH ? '' : 'Message Odysseus...');
+        textarea.setAttribute('placeholder', w < PLACEHOLDER_HIDE_WIDTH ? '' : i18nModule.t('chat.placeholder'));
       }
-      // Hide entire bottom toolbar (tools, mode toggle) — only send button remains
+      // 隐藏整个底部工具栏（工具、模式切换）— 仅保留发送按钮
       if (inputBottom) {
         inputBottom.classList.toggle('toolbar-auto-hidden', w < TOOLBAR_HIDE_WIDTH);
       }
@@ -2129,7 +2129,7 @@ function initializeEventListeners() {
     checkPickerOverflow();
   })();
 
-  // TTS Mode toggle (separate from overflow IIFE for safety)
+  // TTS模式切换（为安全起见独立于溢出菜单IIFE）
   (function initTTSToggle() {
     const ttsBtn = document.getElementById('overflow-tts-btn');
     if (!ttsBtn) return;
@@ -2151,7 +2151,7 @@ function initializeEventListeners() {
   })();
 
 
-  // ── Compare indicator (sidebar only, no overflow) ──
+  // ── 模型对比指示器（仅侧边栏，无溢出菜单）──
   const compareIndicatorBtn = el('compare-indicator-btn');
   if (compareIndicatorBtn) {
     compareIndicatorBtn.addEventListener('click', () => {
@@ -2161,7 +2161,7 @@ function initializeEventListeners() {
     });
   }
 
-  // ── Overflow RAG toggle ──
+  // ── 溢出菜单 RAG 切换 ──
   const overflowRagBtn = el('overflow-rag-btn');
   const ragIndicatorBtn = el('rag-indicator-btn');
   if (overflowRagBtn) {
@@ -2177,7 +2177,7 @@ function initializeEventListeners() {
     });
   }
 
-  // ── Overflow Research toggle ──
+  // ── 溢出菜单研究切换 ──
   const overflowResearchBtn = el('overflow-research-btn');
   if (overflowResearchBtn) {
     overflowResearchBtn.addEventListener('click', () => {
@@ -2186,9 +2186,9 @@ function initializeEventListeners() {
       _syncResearchIndicator(turningOn);
       if (turningOn) {
         _showToolSplash('research');
-        // Clear character — mutually exclusive with research
+        // 清除角色 — 与研究互斥
         if (presetsModule && presetsModule.deactivateCharacter) presetsModule.deactivateCharacter();
-        // Mutual exclusion with web search
+        // 与网页搜索互斥
         const webChk = el('web-toggle');
         const webBtn = el('web-toggle-btn');
         if (webChk && webChk.checked) {
@@ -2196,7 +2196,7 @@ function initializeEventListeners() {
           if (webBtn) webBtn.classList.remove('active');
           saveToolPref('web', (loadToggleState().mode || 'chat'), false);
         }
-        // Research requires chat mode
+        // 研究需要聊天模式
         const rs2 = loadToggleState();
         if (rs2.mode === 'agent') {
           rs2.mode = 'chat';
@@ -2210,7 +2210,7 @@ function initializeEventListeners() {
     });
   }
 
-  // ── Overflow Group Chat toggle ──
+  // ── 溢出菜单群聊切换 ──
   const overflowGroupBtn = el('overflow-group-btn');
   if (overflowGroupBtn) {
     overflowGroupBtn.addEventListener('click', async () => {
@@ -2219,34 +2219,34 @@ function initializeEventListeners() {
       if (turningOn) {
         const picked = await groupModule.showModelPicker();
         if (!picked || picked.length < 2) return;
-        groupModule.setActive(true);  // Set early so updateModelPicker sees it
+        groupModule.setActive(true);  // 提前设置以便 updateModelPicker 能看到
         _syncGroupIndicator(true);
         _startFreshChat();
-        // Clear any leftover splash screens
+        // 清除残留的启动画面
         const _chatBox = document.getElementById('chat-history');
         if (_chatBox) {
           _chatBox.querySelectorAll('.tool-splash').forEach(s => s.remove());
-          // Also hide welcome screen
+          // 同时隐藏欢迎屏幕
           if (chatModule && chatModule.hideWelcomeScreen) chatModule.hideWelcomeScreen();
         }
-        // Start group — create participant sessions immediately
+        // 启动群组 — 立即创建参与者会话
         const sid = sessionModule.getCurrentSessionId() || 'group-' + Date.now();
         await groupModule.startGroup(picked, sid);
-        // Re-hide picker after everything settles
+        // 所有操作完成后重新隐藏选择器
         const _mpw = el('model-picker-wrap');
         if (_mpw) _mpw.style.display = 'none';
-        uiModule.showToast(`Group chat ready — ${picked.length} models`);
+        uiModule.showToast(i18nModule.t('notification.group_chat_ready', { count: picked.length }));
       } else {
         _syncGroupIndicator(false);
         groupModule.stopGroup();
-        // Restore model picker
+        // 恢复 model picker
         const _mpWrap2 = el('model-picker-wrap');
         if (_mpWrap2) _mpWrap2.style.display = '';
       }
     });
   }
 
-  // ── Group toggle button (chatbox indicator) — click to deactivate ──
+  // ── 群聊切换按钮（聊天框指示器）— 点击停用 ──
   const groupToggleBtn = el('group-toggle-btn');
   if (groupToggleBtn) {
     groupToggleBtn.addEventListener('click', () => {
@@ -2255,7 +2255,7 @@ function initializeEventListeners() {
     });
   }
 
-  // ── Incognito mode toggle (on welcome screen) ──
+  // ── 无痕模式切换（在欢迎屏幕上）──
   const incognitoBtn = el('incognito-btn');
   const INCOGNITO_EYE_OPEN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const INCOGNITO_EYE_CLOSED = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>';
@@ -2273,21 +2273,21 @@ function initializeEventListeners() {
   if (incognitoBtn) {
     incognitoBtn.addEventListener('mousedown', (e) => e.preventDefault());
     incognitoBtn.addEventListener('click', () => {
-      // Don't toggle mid-chat — incognito only changeable from welcome screen
+      // 对话中途不允许切换 — 无痕模式只能从欢迎屏幕更改
       const ws = el('welcome-screen');
       if (ws && ws.classList.contains('hidden')) return;
       const chk = el('incognito-toggle');
       chk.checked = !chk.checked;
       incognitoBtn.classList.toggle('active', chk.checked);
       const tipEl = el('welcome-tip');
-      incognitoBtn.title = chk.checked ? 'Disable Nobody mode' : 'Enable Nobody mode — no memory, no history saved';
+      incognitoBtn.title = chk.checked ? i18nModule.t('incognito.disable') : i18nModule.t('incognito.enable');
       const welcomeName = document.querySelector('.welcome-name');
       if (chk.checked) {
-        incognitoBtn.innerHTML = INCOGNITO_EYE_CLOSED + '<span class="incognito-label">Nobody</span>';
+        incognitoBtn.innerHTML = INCOGNITO_EYE_CLOSED + '<span class="incognito-label">' + i18nModule.t('incognito.label') + '</span>';
         if (welcomeName) {
           welcomeName.dataset.originalHtml = welcomeName.innerHTML;
-          welcomeName.innerHTML = '<svg class="welcome-boat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>Nobody';
-          // Restart the L→R clip-wipe reveal on the new label
+          welcomeName.innerHTML = '<svg class="welcome-boat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>' + i18nModule.t('incognito.label');
+          // 在新标签上重新启动从左到右的裁剪擦除动画
           welcomeName.style.animation = 'none';
           welcomeName.offsetHeight;
           welcomeName.style.animation = '';
@@ -2296,14 +2296,14 @@ function initializeEventListeners() {
         const welcomeSub = el('welcome-sub');
         if (welcomeSub) {
           if (!welcomeSub.dataset.originalText) welcomeSub.dataset.originalText = welcomeSub.textContent;
-          welcomeSub.textContent = "Who am I? I'm nobody.";
+          welcomeSub.textContent = i18nModule.t('incognito.welcome_subtitle');
           welcomeSub.style.display = '';
         }
-        if (tipEl) { tipEl.dataset.originalTip = tipEl.textContent; tipEl.textContent = 'Temporary session \u2014 won\u2019t be saved and no memory activation.'; tipEl.style.opacity = '0.5'; tipEl.style.marginTop = '8px'; }
-        // Default to plain chat: disable tools visually, switch to chat mode.
-        // IMPORTANT: don't overwrite the user's persisted per-mode tool prefs
-        // (`web_agent`, `bash_agent`, `web_chat`, `bash_chat`). Nobody mode is
-        // ephemeral — their agent-mode defaults must come back on toggle-off.
+        if (tipEl) { tipEl.dataset.originalTip = tipEl.textContent; tipEl.textContent = i18nModule.t('incognito.welcome_tip'); tipEl.style.opacity = '0.5'; tipEl.style.marginTop = '8px'; }
+        // 默认切换到纯聊天模式：视觉上禁用工具，切换到聊天模式。
+        // 重要：不要覆盖用户持久化的各模式工具偏好
+        // （`web_agent`、`bash_agent`、`web_chat`、`bash_chat`）。无痕模式是
+        // 临时的 — 关闭后必须恢复用户的Agent模式默认值。
         const _offIds = ['web-toggle', 'bash-toggle', 'research-toggle'];
         _offIds.forEach(id => { const c = el(id); if (c) c.checked = false; });
         ['web-toggle-btn', 'bash-toggle-btn'].forEach(id => { const b = el(id); if (b) b.classList.remove('active'); });
@@ -2314,10 +2314,10 @@ function initializeEventListeners() {
         ts.research = false; ts.mode = 'chat';
         Storage.setJSON(Storage.KEYS.TOGGLES, ts);
       } else {
-        incognitoBtn.innerHTML = INCOGNITO_EYE_OPEN + '<span class="incognito-label">Nobody</span>';
+        incognitoBtn.innerHTML = INCOGNITO_EYE_OPEN + '<span class="incognito-label">' + i18nModule.t('incognito.label') + '</span>';
         if (welcomeName && welcomeName.dataset.originalHtml) {
           welcomeName.innerHTML = welcomeName.dataset.originalHtml;
-          // Restart the L→R clip-wipe reveal on the restored label
+          // 在恢复的标签上重新启动从左到右的裁剪擦除动画
           welcomeName.style.animation = 'none';
           welcomeName.offsetHeight;
           welcomeName.style.animation = '';
@@ -2332,31 +2332,31 @@ function initializeEventListeners() {
           welcomeSub2.style.display = '';
         }
         if (tipEl && tipEl.dataset.originalTip) { tipEl.textContent = tipEl.dataset.originalTip; tipEl.style.opacity = ''; tipEl.style.marginTop = ''; }
-        // Heal any previously-persisted false values from the old Nobody bug
-        // so agent-mode defaults (web/bash ON) come back.
+        // 修复以前无痕模式bug导致持久化的 false 值
+        // 使Agent模式默认值（web/bash开启）能恢复。
         const _ts = Storage.getJSON(Storage.KEYS.TOGGLES, {});
         let _dirty = false;
         ['web_agent', 'bash_agent', 'web_chat', 'bash_chat'].forEach(k => {
           if (_ts[k] === false) { delete _ts[k]; _dirty = true; }
         });
         if (_dirty) Storage.setJSON(Storage.KEYS.TOGGLES, _ts);
-        // Reapply the current mode's real defaults to the visible toggles
+        // 将当前模式的真实默认值重新应用到可见开关
         const _curMode = (Storage.getJSON(Storage.KEYS.TOGGLES, {}) || {}).mode || 'chat';
         try { applyModeToToggles(_curMode); } catch (_) {}
       }
-      // If toggled off mid-chat (welcome screen hidden), hide the button
+      // 如果在对话中关闭（欢迎屏幕隐藏），隐藏按钮
       if (!chk.checked && ws && ws.classList.contains('hidden')) {
         incognitoBtn.style.display = 'none';
       }
-      // Show/hide persistent incognito indicator in top bar
+      // 显示/隐藏顶部栏的持久无痕指示器
       const _incInd = el('incognito-indicator');
       if (_incInd) _incInd.style.display = chk.checked ? '' : 'none';
-      // Update active session icon in sidebar
+      // 更新侧边栏中的活动会话图标
       _syncSessionIncognitoIcon(chk.checked);
     });
   }
 
-  // Incognito indicator click — deactivate incognito
+  // 无痕指示器点击 — 停用无痕模式
   const incognitoIndicator = el('incognito-indicator');
   if (incognitoIndicator) {
     incognitoIndicator.addEventListener('click', () => {
@@ -2369,17 +2369,17 @@ function initializeEventListeners() {
     });
   }
 
-  // ── Deactivate incognito mode (called on new session) ──
+  // ── 停用无痕模式（新建会话时调用）──
   function _deactivateIncognito() {
     const chk = el('incognito-toggle');
     if (!chk || !chk.checked) return;
     if (incognitoBtn) incognitoBtn.click();
   }
 
-  // ── UI Visibility (Customize UI modal) ──
+  // ── UI 可见性（自定义UI模态框）──
   const UI_VIS_KEY = 'odysseus-ui-visibility';
 
-  // Selector map: key → CSS selector(s) for targets
+  // 选择器映射：键 → 目标元素的 CSS 选择器
   const UI_VIS_MAP = {
     'sidebar-brand':       '.sidebar-brand-title',
     'sidebar-new-chat':    '#sidebar-new-chat-btn',
@@ -2388,8 +2388,8 @@ function initializeEventListeners() {
     'email-section':       '#email-section',
     'models-section':      '#models-section',
     'tools-section':       '#tools-section',
-    // Per-tool visibility — fine-grained control over which entries show
-    // inside the Tools section in the sidebar.
+    // 每个工具可见性 — 精细控制哪些条目显示
+    // 在侧边栏工具区域中。
     'tool-calendar':       '#tool-calendar-btn',
     'tool-compare':        '#tool-compare-btn',
     'tool-cookbook':       '#tool-cookbook-btn',
@@ -2417,10 +2417,10 @@ function initializeEventListeners() {
     'rail-new-chat':       '#rail-new-session',
   };
 
-  // Keys hidden by default on first run (no localStorage yet)
+  // 首次运行时默认隐藏的键（尚无 localStorage）
   const UI_VIS_DEFAULT_OFF = new Set(['models-section', 'rag-toggle-btn', 'text-emojis']);
 
-  // Keys that need admin to toggle off (reserved for future use)
+  // 需要管理员才能关闭的键（保留供将来使用）
   const UI_VIS_ADMIN_ONLY = new Set([]);
 
   function loadUIVis() {
@@ -2433,27 +2433,27 @@ function initializeEventListeners() {
 
   function applyUIVis(state) {
     Object.entries(UI_VIS_MAP).forEach(([key, selector]) => {
-      // section-drag-reorder uses a body class instead of inline styles
+      // section-drag-reorder 使用body类而非内联样式
       if (key === 'section-drag-reorder') return;
       const visible = key in state ? state[key] !== false : !UI_VIS_DEFAULT_OFF.has(key);
       document.querySelectorAll(selector).forEach(el => {
         el.style.display = visible ? '' : 'none';
       });
     });
-    // Drag reorder: use body class so dynamically created handles are covered
+    // 拖拽排序：使用 body 类使动态创建的手柄也能被覆盖
     const dragEnabled = state['section-drag-reorder'] === true;
     document.body.classList.toggle('rearrange-mode', dragEnabled);
     document.querySelectorAll('.section[draggable]').forEach(el => {
       el.setAttribute('draggable', dragEnabled ? 'true' : 'false');
     });
-    // Text-only emojis toggle. Default is OFF so model-emitted shortcodes
-    // like `:blush:` render through the normal monochrome emoji path.
+    // 纯文本表情切换。默认关闭，避免模型输出的短代码
+    // 如 `:blush:` 通过正常单色表情路径渲染。
     applyTextEmojis(state['text-emojis'] === true);
-    // Hide thinking sections toggle (show-thinking: checked=show, unchecked=hide)
+    // 隐藏思考区域切换（show-thinking: 选中=显示, 未选中=隐藏）
     document.body.classList.toggle('hide-thinking', state['show-thinking'] === false);
   }
 
-  // Rearrange toggles in session/model sort dropdowns
+  // 会话/模型排序下拉框中的重新排列开关
   function syncRearrangeChecks() {
     const on = loadUIVis()['section-drag-reorder'] === true;
     document.querySelectorAll('.rearrange-toggle .rearrange-check').forEach(ch => {
@@ -2468,17 +2468,17 @@ function initializeEventListeners() {
       saveUIVis(state);
       applyUIVis(state);
       syncRearrangeChecks();
-      uiModule.showToast(!wasOn ? 'Rearrange enabled' : 'Rearrange disabled');
-      // Close the dropdown the toggle lives in — the sort dropdown's own
-      // click-stopPropagation means it won't close on its own.
+      uiModule.showToast(!wasOn ? i18nModule.t('notification.rearrange_enabled') : i18nModule.t('notification.rearrange_disabled'));
+      // 关闭切换开关所在的下拉菜单 — 排序下拉菜单自身的
+      // click-stopPropagation 意味着它不会自动关闭。
       const dd = toggle.closest('[id$="-sort-dropdown"]');
       if (dd) dd.style.display = 'none';
     });
   });
 
-  // Esc exits rearrange mode (no matter where focus/mouse is) — matches the
-  // global Esc-cancels-select pattern. Capture phase so a sort dropdown that
-  // happens to be open doesn't swallow it first.
+  // Esc 退出重新排列模式（无论焦点/鼠标在哪里）— 与全局
+  // Esc-取消-选择模式一致。使用捕获阶段，防止已打开的排序下拉菜单
+  // 先吞掉该事件。
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!document.body.classList.contains('rearrange-mode')) return;
@@ -2489,20 +2489,20 @@ function initializeEventListeners() {
     saveUIVis(state);
     applyUIVis(state);
     syncRearrangeChecks();
-    uiModule.showToast('Rearrange disabled');
+    uiModule.showToast(i18nModule.t('notification.rearrange_disabled'));
   }, true);
-  // Sync checkmarks when dropdowns open
+  // 下拉菜单打开时同步勾选标记
   const _sessionSortBtn = el('session-sort-btn');
   const _modelSortBtn = el('model-sort-btn');
   if (_sessionSortBtn) _sessionSortBtn.addEventListener('click', syncRearrangeChecks);
   if (_modelSortBtn) _modelSortBtn.addEventListener('click', syncRearrangeChecks);
   syncRearrangeChecks();
 
-  // ── Text-only emoji conversion ──
-  // Regex matching most emoji codepoints (Emoji_Presentation + common sequences)
+  // ── 纯文本 emoji 转换 ──
+  // 匹配大部分 emoji 码点的正则（Emoji_Presentation + 常见序列）
   const EMOJI_RE = /(?:\p{Emoji_Presentation}|\p{Extended_Pictographic})(?:\uFE0F|\u200D(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}))*/gu;
 
-  // Common emoji → text description map
+  // 常用表情 → 文字描述的映射表
   const EMOJI_MAP = {
     '😀':'grinning','😃':'smiley','😄':'smile','😁':'grin','😆':'laughing','😅':'sweat smile',
     '🤣':'rofl','😂':'joy','🙂':'slightly smiling','🙃':'upside down','😉':'wink',
@@ -2605,17 +2605,17 @@ function initializeEventListeners() {
     return str.replace(EMOJI_RE, (match) => {
       const desc = EMOJI_MAP[match];
       if (desc) return ':' + desc + ':';
-      // Fallback: use the emoji's Unicode name if available, or skip
+      // 降级方案：如果可用则使用表情的 Unicode 名称，否则跳过
       return ':emoji:';
     });
   }
 
   const _DEOJ_SKIP = '.sources-section, .thinking-toggle, .memory-used-pill';
 
-  /** Walk all text nodes inside an element and replace emojis with text descriptions */
+  /** 遍历元素内的所有文本节点并将表情符号替换为文本描述 */
   function deEmojify(root) {
     if (!root || !root.querySelectorAll) return;
-    // Monochrome SVG spans from svgifyEmoji — Unicode lives in aria-label only
+    // 来自 svgifyEmoji 的单色 SVG span — Unicode 仅存在于 aria-label 中
     root.querySelectorAll('.emoji[aria-label]').forEach((span) => {
       if (span.closest(_DEOJ_SKIP)) return;
       const label = span.getAttribute('aria-label') || '';
@@ -2625,16 +2625,16 @@ function initializeEventListeners() {
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
     for (const node of nodes) {
-      // Skip UI elements that use unicode symbols as functional icons
+      // 跳过使用 Unicode 符号作为功能图标的 UI 元素
       if (node.parentElement && node.parentElement.closest(_DEOJ_SKIP)) continue;
       if (EMOJI_RE.test(node.textContent)) {
-        EMOJI_RE.lastIndex = 0; // reset regex state
+        EMOJI_RE.lastIndex = 0; // 重置正则状态
         node.textContent = emojiToText(node.textContent);
       }
     }
   }
 
-  /** Apply or remove text-emoji mode on all chat messages */
+  /** 在所有聊天消息上应用或移除文本表情模式 */
   function applyTextEmojis(enabled) {
     document.body.classList.toggle('text-emojis', enabled);
     if (enabled) {
@@ -2642,7 +2642,7 @@ function initializeEventListeners() {
     }
   }
 
-  // Observe chat history for new/changed messages — de-emojify on the fly
+  // 监听聊天记录的新增/变化消息 — 动态去除emoji
   let _deEmojifyTimer = null;
   const _chatObs = new MutationObserver(() => {
     if (!document.body.classList.contains('text-emojis')) return;
@@ -2654,7 +2654,7 @@ function initializeEventListeners() {
   const _chatBox = document.getElementById('chat-history');
   if (_chatBox) _chatObs.observe(_chatBox, { childList: true, subtree: true });
 
-  // Migrate old toolbar visibility key if present
+  // 如果存在旧的工具栏可见性键则迁移
   (function migrateOldToolbarVis() {
     const OLD_KEY = 'odysseus-toolbar-visibility';
     try {
@@ -2674,7 +2674,7 @@ function initializeEventListeners() {
     } catch {}
   })();
 
-  // Expose UI visibility functions for admin.js
+  // 暴露 UI 可见性函数供 admin.js 使用
   window.loadUIVis = loadUIVis;
   window.saveUIVis = saveUIVis;
   window.applyUIVis = applyUIVis;
@@ -2682,11 +2682,11 @@ function initializeEventListeners() {
   window.UI_VIS_DEFAULT_OFF = UI_VIS_DEFAULT_OFF;
 
   (function initUIVisibility() {
-    // Apply saved visibility on load
+    // 页面加载时应用保存的可见性设置
     applyUIVis(loadUIVis());
 
-    // The only two modals without a per-module makeWindowDraggable call. Wire
-    // them onto the shared helper, drag-only, to match their old behavior.
+    // 仅有的两个没有各自 makeWindowDraggable 调用的模态框。把它们
+    // 接入共享辅助函数，仅拖拽模式，以匹配原有行为。
     try {
       ['custom-preset-modal', 'rename-session-modal'].forEach((id) => {
         const m = document.getElementById(id);
@@ -2700,8 +2700,8 @@ function initializeEventListeners() {
           enableDock: false,
           enableResize: false,
         });
-        // Re-center on open (these persist in the DOM). Guard on the
-        // hidden→visible edge so it never fires mid-drag.
+        // 打开时重新居中（这些在 DOM 中持久存在）。守卫条件：
+        // 仅在 hidden→visible 转换时触发，避免拖拽中误触发。
         let wasHidden = m.classList.contains('hidden');
         new MutationObserver(() => {
           const isHidden = m.classList.contains('hidden');
@@ -2719,17 +2719,17 @@ function initializeEventListeners() {
     } catch (e) { console.error('Dialog drag init error:', e); }
   })();
 
-  // ── Modal minimize → dock ──
-  // Adds a "_" button next to every modal's close button. Clicking it hides
-  // the modal and adds an entry to a fixed bottom dock; clicking the dock
-  // entry restores the modal. Works for hand-rolled and dynamically-created
-  // modals via a MutationObserver on document.body.
+  // ── 模态框最小化 → 停靠栏 ──
+  // 在每个模态框的关闭按钮旁边添加一个 "_" 按钮。点击后隐藏
+  // 模态框并将条目添加到固定的底部停靠栏；点击停靠栏
+  // 条目恢复模态框。通过 document.body 上的 MutationObserver
+  // 对手动创建和动态创建的模态框均有效。
   (function initModalMinimize() {
-    // custom-preset-modal (the Prompt window) is handled by the new
-    // modalManager dock (registered in _AUTO_WIRE), so the legacy dock must
-    // not also inject a `_`/chip for it.
+    // custom-preset-modal（提示窗口）由新的 modalManager 停靠栏
+    // 处理（在 _AUTO_WIRE 中注册），因此旧版停靠栏不能
+    // 也为它注入 `_`/芯片。
     const SKIP_IDS = new Set(['styled-confirm-overlay', 'custom-preset-modal']);
-    const dockEntries = new Map(); // modal element -> dock entry element
+    const dockEntries = new Map(); // 模态框元素 -> 停靠栏条目元素
 
     let dock = document.getElementById('modal-dock');
     if (!dock) {
@@ -2738,8 +2738,8 @@ function initializeEventListeners() {
       document.body.appendChild(dock);
     }
 
-    // Keep the dock clear of the sidebar (which can be collapsed, resized,
-    // hidden, or flipped to the right side).
+    // 保持停靠栏远离侧边栏（侧边栏可折叠、调整大小、
+    // 隐藏或翻转到右侧）。
     function updateDockOffset() {
       const sidebar = document.getElementById('sidebar');
       const iconRail = document.getElementById('icon-rail');
@@ -2761,7 +2761,7 @@ function initializeEventListeners() {
       dock.style.right = rightPx + 'px';
     }
     updateDockOffset();
-    // Recompute when sidebar resizes, collapses, or moves sides
+    // 侧边栏调整大小、折叠或换边时重新计算
     if (window.ResizeObserver) {
       const ro = new ResizeObserver(updateDockOffset);
       const sb = document.getElementById('sidebar');
@@ -2770,7 +2770,7 @@ function initializeEventListeners() {
       if (ir) ro.observe(ir);
     }
     window.addEventListener('resize', updateDockOffset);
-    // Side-flip / collapse toggles class names on body or sidebar
+    // 侧边翻转/折叠切换 body 或 sidebar 的类名
     new MutationObserver(updateDockOffset).observe(document.body, {
       attributes: true, attributeFilter: ['class'],
     });
@@ -2785,7 +2785,7 @@ function initializeEventListeners() {
       const h = modal.querySelector('.modal-header h4, .modal-header h3, .modal-header h2');
       if (h && h.textContent.trim()) return h.textContent.trim();
       if (modal.id) return modal.id.replace(/-modal$|-overlay$|-popup$/, '').replace(/-/g, ' ');
-      return 'Window';
+      return i18nModule.t('window.window');
     }
 
     function removeDockEntry(modal) {
@@ -2800,7 +2800,7 @@ function initializeEventListeners() {
       modal.classList.remove('minimized');
       modal.classList.remove('hidden');
       removeDockEntry(modal);
-      // Bring to front (matches existing focus-on-click behavior)
+      // 置前（匹配现有的点击聚焦行为）
       modal.style.zIndex = '';
     }
 
@@ -2811,7 +2811,7 @@ function initializeEventListeners() {
 
       const entry = document.createElement('div');
       entry.className = 'modal-dock-item';
-      entry.title = `Restore ${modalTitle(modal)}`;
+      entry.title = i18nModule.t('window.restore', { name: modalTitle(modal) });
 
       const label = document.createElement('span');
       label.className = 'modal-dock-label';
@@ -2820,7 +2820,7 @@ function initializeEventListeners() {
       const closeX = document.createElement('button');
       closeX.className = 'modal-dock-close';
       closeX.textContent = '×';
-      closeX.title = 'Close';
+      closeX.title = i18nModule.t('window.close');
       closeX.addEventListener('click', (e) => {
         e.stopPropagation();
         modal.classList.remove('minimized');
@@ -2839,9 +2839,9 @@ function initializeEventListeners() {
     function injectMinimizeButton(modal) {
       if (!modal || !modal.classList || !modal.classList.contains('modal')) return;
       if (modal.id && SKIP_IDS.has(modal.id)) return;
-      // Modals managed by the new modalManager (Modals.register) get their own
-      // .modal-minimize-btn and chips via the .minimized-dock-chip system.
-      // Skip them entirely so we don't double-up minimize buttons or chips.
+      // 由新的modalManager（Modals.register）管理的模态框各自拥有
+      // .modal-minimize-btn 和通过 .minimized-dock-chip 系统的条目标签。
+      // 完全跳过它们，避免重复添加最小化按钮或chip。
       if (modal.id && /^email-reader-/.test(modal.id)) return;
       if (modal.id && window.Modals && window.Modals.isRegistered && window.Modals.isRegistered(modal.id)) return;
       const header = modal.querySelector('.modal-header');
@@ -2853,16 +2853,16 @@ function initializeEventListeners() {
       const minBtn = document.createElement('button');
       minBtn.className = 'minimize-btn';
       minBtn.type = 'button';
-      minBtn.title = 'Minimize';
+      minBtn.title = i18nModule.t('window.minimize');
       minBtn.textContent = '_';
-      minBtn.addEventListener('mousedown', (e) => e.stopPropagation()); // don't start drag
+      minBtn.addEventListener('mousedown', (e) => e.stopPropagation()); // 不启动拖拽
       minBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         minimizeModal(modal);
       });
       closeBtn.parentElement.insertBefore(minBtn, closeBtn);
 
-      // Watch this modal's class so close-from-elsewhere clears the dock entry
+      // 监听此模态框的类变化，以便从其他地方关闭时清除dock入口
       new MutationObserver(() => {
         if (modal.classList.contains('hidden') && !modal.classList.contains('minimized')) {
           removeDockEntry(modal);
@@ -2870,10 +2870,10 @@ function initializeEventListeners() {
       }).observe(modal, { attributes: true, attributeFilter: ['class'] });
     }
 
-    // Initial pass over existing modals
+    // 首次遍历现有模态框
     document.querySelectorAll('.modal').forEach(injectMinimizeButton);
 
-    // Watch for dynamically-created modals
+    // 监听动态创建的模态框
     new MutationObserver((mutations) => {
       for (const m of mutations) {
         for (const n of m.addedNodes) {
@@ -2889,7 +2889,7 @@ function initializeEventListeners() {
     }).observe(document.body, { childList: true, subtree: true });
   })();
 
-  // Preset button (in overflow menu)
+  // 预设按钮（在溢出菜单中）
   const overflowPresetBtn = el('overflow-preset-btn');
   if (overflowPresetBtn) {
     overflowPresetBtn.addEventListener('click', () => {
@@ -2899,7 +2899,7 @@ function initializeEventListeners() {
     });
   }
 
-  // RAG directory
+  // RAG 目录
   const addDirBtn = el('add-directory-btn');
   if (addDirBtn) {
     addDirBtn.addEventListener('click', () => {
@@ -2917,20 +2917,20 @@ function initializeEventListeners() {
 
   }
 
-  // Sidebar layout (extracted to js/sidebar-layout.js)
+  // 侧边栏布局（已提取到 js/sidebar-layout.js）
   initSidebarLayout(Storage, {
     documentModule, _closeCompareIfActive, _deactivateIncognito,
     presetsModule, sessionModule, el, _defaultChat, _syncResearchIndicator
   });
 
-  // Mobile: horizontal swipe on a tabbed window switches tabs. Works for any
-  // tab bar whose buttons are siblings and switch on click (Prompt, Library,
-  // Brain, Theme) — we just click the prev/next tab so the existing switch
-  // logic runs. Swipes that start on interactive controls (sliders, inputs,
-  // the chip dock) are ignored so they don't fight text selection / dragging.
+  // 移动端：在选项卡窗口中横向滑动切换标签。适用于任何具有
+  // 拥有同级按钮并在点击时切换的标签栏（提示词、文档库、
+  // 记忆库、主题）— 只需点击上一个/下一个标签，让现有切换
+  // 逻辑运行。从交互控件（滑块、输入框、
+  // 条目标签停靠栏）开始的滑动将被忽略，避免与文本选择/拖拽冲突。
   (function initTabSwipe() {
     if (window.innerWidth > 768) return;
-    // [tab-bar selector, tab-button selector] for each tabbed window.
+    // 每个选项卡窗口的[标签栏选择器, 标签按钮选择器]。
     const SYSTEMS = [
       ['.preset-tabs', '.preset-tab'],
       ['.lib-tabs', '.lib-tab'],
@@ -2953,11 +2953,11 @@ function initializeEventListeners() {
       const t = e.changedTouches[0];
       if (!t) return;
       const dx = t.clientX - sx, dy = t.clientY - sy;
-      // Require a deliberate, mostly-horizontal swipe.
+      // 需要是明显的、基本水平的滑动
       if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
       for (const [barSel, tabSel] of SYSTEMS) {
         const bar = document.querySelector(barSel);
-        if (!bar || bar.offsetParent === null) continue;  // not the visible window
+        if (!bar || bar.offsetParent === null) continue;  // 不是可见窗口
         // Only act if the swipe happened inside this bar's window (not some
         // other on-screen element).
         const host = bar.closest('.modal, #notes-pane, .preset-modal-content, .admin-card') || bar.parentElement;
@@ -2967,16 +2967,16 @@ function initializeEventListeners() {
         if (tabs.length < 2) continue;
         let idx = tabs.findIndex(tb => tb.classList.contains('active'));
         if (idx < 0) idx = 0;
-        // Swipe left (dx<0) → next tab; swipe right (dx>0) → previous.
+        // 左滑 (dx<0) → 下一个标签页；右滑 (dx>0) → 上一个标签页
         const nextIdx = dx < 0 ? idx + 1 : idx - 1;
-        if (nextIdx < 0 || nextIdx >= tabs.length) return;  // at an edge
+        if (nextIdx < 0 || nextIdx >= tabs.length) return;  // 已到边缘
         tabs[nextIdx].click();
         return;
       }
     }, { passive: true });
   })();
 
-  // Elastic overscroll (rubber-band bounce) — desktop wheel only, on chat-history not container
+  // 弹性过度滚动（橡皮筋回弹）—— 仅桌面端滚轮，作用于 chat-history 而非 container
   (function initElasticScroll() {
     const hist = el('chat-history');
     if (!hist) return;
@@ -3003,20 +3003,20 @@ function initializeEventListeners() {
     }, { passive: true });
   })();
 
-  // New session button on icon rail
+  // 图标栏上的新建会话按钮
   const railNewSession = el('rail-new-session');
   if (railNewSession) {
     railNewSession.addEventListener('click', async () => {
       if (!sessionModule) return;
       if (_closeCompareIfActive()) return;
       _deactivateIncognito();
-      // Clear character on new chat
+      // 新建聊天时清除角色
       if (presetsModule && presetsModule.deactivateCharacter) presetsModule.deactivateCharacter();
-      // Clear research mode if active
+      // 清除研究模式（如已激活）
       const _resChk = el('research-toggle');
       if (_resChk && _resChk.checked) _syncResearchIndicator(false);
       if (await _createDirectChatFromPreferredModel()) return;
-      // No models at all — show welcome screen
+      // 完全没有模型 — 显示欢迎页面
       sessionModule.setCurrentSessionId(null);
       if (documentModule && documentModule.isPanelOpen && documentModule.isPanelOpen()) documentModule.closePanel();
       const docBtn3 = el('overflow-doc-btn');
@@ -3042,15 +3042,15 @@ function initializeEventListeners() {
       _deactivateIncognito();
       _startFreshChat();
       document.querySelectorAll('.session-item.active').forEach(s => s.classList.remove('active'));
-      // Focus the composer synchronously so mobile keyboards pop open.
-      // iOS Safari only honours programmatic focus inside the original click
-      // callback — a setTimeout breaks the user-gesture chain.
+      // 同步聚焦输入框，让移动端键盘弹出。
+      // iOS Safari 只在原始点击回调中响应程序化聚焦 —
+      // setTimeout 会打断用户手势链。
       const _input = el('message-input');
       if (_input) { try { _input.focus(); } catch (_) {} }
     });
   }
 
-  // Logo click → new chat (same logic as rail new-session button)
+  // Logo 点击 → 新建聊天（与图标栏新建会话按钮逻辑相同）
   const brandBtn = el('sidebar-brand-btn');
   if (brandBtn) {
     brandBtn.addEventListener('click', async () => {
@@ -3058,10 +3058,10 @@ function initializeEventListeners() {
       if (_closeCompareIfActive()) return;
       _deactivateIncognito();
       if (presetsModule && presetsModule.deactivateCharacter) presetsModule.deactivateCharacter();
-      // Clear research toggle when starting a fresh chat (not via research button)
+      // 开始新聊天时清除研究切换状态（非通过研究按钮触发）
       _syncResearchIndicator(false);
       if (await _createDirectChatFromPreferredModel()) return;
-      // No models at all — show welcome screen
+      // 完全没有模型 — 显示欢迎页面
       sessionModule.setCurrentSessionId(null);
       if (documentModule && documentModule.isPanelOpen && documentModule.isPanelOpen()) documentModule.closePanel();
       const docBtn2 = el('overflow-doc-btn');
@@ -3081,7 +3081,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Delete session button on icon rail
+  // 图标栏上的删除会话按钮
   const railDelete = el('rail-delete-session');
   if (railDelete) {
     railDelete.addEventListener('click', async () => {
@@ -3091,9 +3091,9 @@ function initializeEventListeners() {
       const sessions = sessionModule.getSessions();
       const current = sessions.find(s => s.id === currentId);
       const name = current ? current.name : 'this session';
-      if (!await uiModule.styledConfirm(`Delete "${name}"?`, { confirmText: 'Delete', danger: true })) return;
+      if (!await uiModule.styledConfirm(`Delete "${name}"?`, { confirmText: i18nModule.t('common.delete'), danger: true })) return;
       try {
-        // Find the next session below the current one before deleting
+        // 删除前找到当前会话下方的下一个会话
         const idx = sessions.findIndex(s => s.id === currentId);
         const nextSession = sessions.filter(s => !s.archived && s.id !== currentId)[Math.max(0, idx)] ||
                             sessions.find(s => !s.archived && s.id !== currentId);
@@ -3103,17 +3103,17 @@ function initializeEventListeners() {
           if (nextSession) {
             await sessionModule.selectSession(nextSession.id);
           }
-          uiModule.showToast('Session deleted');
+          uiModule.showToast(i18nModule.t('notification.session_deleted'));
         } else {
-          uiModule.showError('Failed to delete session');
+          uiModule.showError(i18nModule.t('notification.failed_delete_session'));
         }
       } catch (e) {
-        uiModule.showError('Failed to delete session: ' + e);
+        uiModule.showError(i18nModule.t('notification.failed_delete_session_error', { error: String(e) }));
       }
     });
   }
 
-  // Textarea auto-resize
+  // 文本框自适应高度
   const textarea = el('message');
   if (textarea) {
     uiModule.autoResize(textarea);
@@ -3127,7 +3127,7 @@ function initializeEventListeners() {
       const isMobile = window.innerWidth <= 768
 
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !isMobile) {
-        // If ghost autocomplete is active, accept the suggestion instead of submitting
+        // 如果虚拟文本自动补全激活中，接受建议而不是提交
         if (window._ghostAutocomplete && window._ghostAutocomplete.isActive()) {
           e.preventDefault();
           e.stopPropagation();
@@ -3136,7 +3136,7 @@ function initializeEventListeners() {
         }
         e.preventDefault();
         e.stopPropagation();
-        // Check if already submitting before triggering form submission
+        // 触发表单提交前检查是否已在提交中
         const form = el('chat-form');
         if (form) {
          const submitBtn = form.querySelector('button[type="submit"]');
@@ -3146,17 +3146,17 @@ function initializeEventListeners() {
     });
   }
 
-  // ── Ghost text autocomplete for /new and /create commands ──
+  // ── 虚拟文本自动补全：/new 和 /create 命令 ──
   (function initGhostAutocomplete() {
     const textarea = el('message');
     const ghost = document.getElementById('message-ghost');
     if (!textarea || !ghost) return;
 
     let modelCache = null;     // { models: [{ mid, url, endpointId, displayName }], ts }
-    let filtered = [];         // currently matching models
-    let cycleIdx = 0;          // index into filtered[]
-    let active = false;        // is ghost visible?
-    const CACHE_TTL = 60000;   // re-fetch after 60s
+    let filtered = [];         // 当前匹配的模型
+    let cycleIdx = 0;          // filtered[] 的索引
+    let active = false;        // 虚拟提示是否可见？
+    const CACHE_TTL = 60000;   // 60秒后重新获取
     const CMD_RE = /^\/(new|create)\s/i;
 
     async function fetchModels() {
@@ -3195,11 +3195,11 @@ function initializeEventListeners() {
     function show(typed, suggestion) {
       active = true;
       ghost.innerHTML = '';
-      // Invisible portion matches what user typed (keeps alignment)
+      // 不可见部分匹配用户输入（保持对齐）
       const span1 = document.createElement('span');
       span1.style.visibility = 'hidden';
       span1.textContent = typed;
-      // Visible faded suggestion portion
+      // 可见的淡色建议部分
       const span2 = document.createElement('span');
       span2.className = 'ghost-suggestion';
       span2.textContent = suggestion;
@@ -3209,7 +3209,7 @@ function initializeEventListeners() {
     }
 
     function syncSize() {
-      // Match ghost overlay dimensions to textarea
+      // 匹配虚拟覆盖层尺寸与文本框
       const cs = getComputedStyle(textarea);
       ghost.style.width = cs.width;
       ghost.style.height = cs.height;
@@ -3220,11 +3220,11 @@ function initializeEventListeners() {
       const match = val.match(CMD_RE);
       if (!match) { hide(); return; }
 
-      const prefix = val.slice(match[0].length); // text after "/new " or "/create "
+      const prefix = val.slice(match[0].length); // "/new " 或 "/create " 之后的文本
       const models = await fetchModels();
       if (!models.length) { hide(); return; }
 
-      // Filter models whose mid or displayName starts with the typed prefix (case-insensitive)
+      // 过滤出 displayName 以输入前缀开头的模型（忽略大小写）
       const lp = prefix.toLowerCase();
       filtered = models.filter(m =>
         m.mid.toLowerCase().startsWith(lp) || m.displayName.toLowerCase().startsWith(lp)
@@ -3232,10 +3232,10 @@ function initializeEventListeners() {
 
       if (!filtered.length) { hide(); return; }
 
-      // Clamp cycle index
+      // 限制循环索引
       cycleIdx = cycleIdx % filtered.length;
       const chosen = filtered[cycleIdx];
-      // Determine which name matched for completion
+      // 判断哪个名称匹配用于补全
       const name = chosen.mid.toLowerCase().startsWith(lp) ? chosen.mid : chosen.displayName;
       const remainder = name.slice(prefix.length);
       if (!remainder && filtered.length <= 1) { hide(); return; }
@@ -3244,7 +3244,7 @@ function initializeEventListeners() {
       show(val, remainder);
     }
 
-    // --- Event listeners ---
+    // --- 事件监听器 ---
 
     textarea.addEventListener('input', () => {
       cycleIdx = 0;
@@ -3255,7 +3255,7 @@ function initializeEventListeners() {
       if (!active) return;
 
       if (e.key === 'Tab') {
-        // Tab fills the current suggestion into the textarea
+        // Tab 键将当前建议填入文本框
         e.preventDefault();
         e.stopPropagation();
         const val = textarea.value;
@@ -3296,11 +3296,11 @@ function initializeEventListeners() {
 
     textarea.addEventListener('blur', hide);
 
-    // Observe textarea resize (from autoResize) to keep ghost in sync
+    // 监听文本框尺寸变化（autoResize），使虚拟文本保持同步
     const ro = new ResizeObserver(() => { if (active) syncSize(); });
     ro.observe(textarea);
 
-    // Public API for the Enter handler above
+    // 给上层 Enter 处理器的公开 API
     window._ghostAutocomplete = {
       isActive() { return active && filtered.length > 0; },
       accept() {
@@ -3314,9 +3314,9 @@ function initializeEventListeners() {
         const name = chosen.mid.toLowerCase().startsWith(lp) ? chosen.mid : chosen.displayName;
         textarea.value = match[0] + name;
         hide();
-        // Trigger input event so autoResize fires
+        // 触发 input 事件让 autoResize 生效
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        // Now submit the form (the /new command handler will process it)
+        // 现在提交表单（/new 命令处理器会处理它）
         setTimeout(() => {
           const form = el('chat-form');
           if (form) form.querySelector('button[type="submit"]').click();
@@ -3325,7 +3325,7 @@ function initializeEventListeners() {
     };
   })();
 
-  // Keyboard shortcuts (extracted to js/keyboard-shortcuts.js)
+  // 键盘快捷键（提取到 js/keyboard-shortcuts.js）
   initKeyboardShortcuts({
     el, Storage, sessionModule, uiModule, chatModule,
     adminModule, settingsModule, searchChatModule,
@@ -3335,38 +3335,38 @@ function initializeEventListeners() {
 }
 
 // ============================================
-// INITIALIZATION ON PAGE LOAD
+// 页面加载初始化
 // ============================================
 function startOdysseusApp() {
   if (window.__odysseusAppStarted) return;
   window.__odysseusAppStarted = true;
-  // Set CSS variables
+  // 设置 CSS 变量
   document.documentElement.style.setProperty('--line-height', '20px');
 
-  // Smooth keyboard open/close on mobile — keep chat scrolled to bottom
+  // 平滑处理移动端键盘打开/关闭 — 保持聊天到底部
   if (window.visualViewport && 'ontouchstart' in window) {
     let _prevVPH = visualViewport.height;
     visualViewport.addEventListener('resize', () => {
       const delta = visualViewport.height - _prevVPH;
       _prevVPH = visualViewport.height;
-      // Keyboard opened (viewport shrank significantly)
+      // 键盘已打开（视口显著缩小）
       if (delta < -50) {
         const hist = document.getElementById('chat-history');
         if (hist) {
           hist.style.scrollBehavior = 'smooth';
           hist.scrollTop = hist.scrollHeight;
-          // Reset after animation
+          // 动画后重置
           setTimeout(() => { hist.style.scrollBehavior = ''; }, 300);
         }
       }
     });
   }
 
-  // Initialize all event listeners
+  // 初始化所有事件监听器
   try { initializeEventListeners(); } catch(e) { console.error('Event init error:', e); }
 
-  // Reveal the toolbar now that all toggle/overflow state is resolved
-  // (hidden via inline style="visibility:hidden" in HTML to prevent FOUC)
+  // 显示工具栏，此时所有开关/溢出状态已解析
+  // （HTML 中通过内联 style="visibility:hidden" 隐藏以防止 FOUC）
   const _inputBottom = document.querySelector('.chat-input-bottom');
   if (_inputBottom) _inputBottom.style.visibility = '';
 
@@ -3378,26 +3378,26 @@ function startOdysseusApp() {
   chatModule.init(API_BASE);
   chatModule.initListeners();
   groupModule.init(API_BASE);
-  // Initialize compare module
+  // 初始化 compare 模块
   if (compareModule) {
     compareModule.init(API_BASE);
   }
   researchPanelModule.init(API_BASE, markdownModule, sessionModule);
-  // Initialize document editor module
+  // 初始化文档编辑器模块
   if (documentModule) {
     documentModule.init(API_BASE);
-    // Restore document panel if it was open before refresh
+    // 如果刷新前文档面板已打开则恢复
     const _curSession = sessionModule && sessionModule.getCurrentSessionId();
     if (_curSession && localStorage.getItem('odysseus-doc-open-' + _curSession) === '1') {
       documentModule.loadSessionDocs(_curSession);
     }
   }  
-  // Initialize search chat module
+  // 初始化搜索聊天模块
   if (searchChatModule) {
     searchChatModule.init(API_BASE);
   }
 
-  // Search buttons — icon rail + sidebar
+  // 搜索按钮 — 图标栏 + 侧边栏
   const railSearchBtn = el('rail-search-btn');
   if (railSearchBtn) {
     railSearchBtn.addEventListener('click', () => {
@@ -3405,7 +3405,7 @@ function startOdysseusApp() {
     });
   }
 
-  // Rail tool buttons — delegate to sidebar tool buttons
+  // 图标栏工具按钮 — 委托给侧边栏工具按钮
   const _railToolMap = {
     'rail-compare':   'tool-compare-btn',
     'rail-research':  'tool-research-btn',
@@ -3429,7 +3429,7 @@ function startOdysseusApp() {
     }
   });
 
-  // Rail chats — click to open the completed background session
+  // 图标栏聊天按钮 — 点击打开已完成的后台会话
   const _railChatsBtn = el('rail-chats');
   if (_railChatsBtn) {
     _railChatsBtn.addEventListener('click', () => {
@@ -3437,14 +3437,14 @@ function startOdysseusApp() {
       if (targetSid && window.sessionModule) {
         window.sessionModule.selectSession(targetSid);
       }
-      // Clear notification — session will call clearStreamComplete on load
+      // 清除通知 — 会话加载时会调用 clearStreamComplete
       _railChatsBtn.classList.remove('rail-notify', 'rail-notify-success');
       delete _railChatsBtn.dataset.targetSession;
       _syncRailDynamic();
     });
   }
 
-  // Rail documents — toggle doc panel on/off (not library)
+  // 图标栏文档按钮 — 切换文档面板开关（非资料库）
   const _railDocsBtn = el('rail-documents');
   if (_railDocsBtn) {
     _railDocsBtn.addEventListener('click', () => {
@@ -3453,24 +3453,24 @@ function startOdysseusApp() {
     });
   }
 
-  // Rail: settings button
+  // 图标栏：设置按钮
   const _railSettings = el('rail-settings');
   if (_railSettings) {
     _railSettings.addEventListener('click', () => {
       const sidebar = document.getElementById('sidebar');
       if (sidebar) sidebar.classList.remove('hidden');
       syncRailSide();
-      // Scroll to bottom where settings typically are
+      // 滚动到底部，设置项通常在那里
       const sidebarInner = document.querySelector('.sidebar-inner');
       if (sidebarInner) sidebarInner.scrollTo({ top: sidebarInner.scrollHeight, behavior: 'smooth' });
     });
   }
 
-  // Rail: admin button
+  // 图标栏：管理按钮
   const _railAdmin = el('rail-admin');
   if (_railAdmin) {
     _railAdmin.addEventListener('click', () => {
-      // Try to open admin modal
+      // 尝试打开管理模态框
       const adminBtn = document.querySelector('[data-modal="admin-modal"]') || el('tool-admin-btn');
       if (adminBtn) adminBtn.click();
     });
@@ -3481,7 +3481,7 @@ function startOdysseusApp() {
   // always-visible launchers, so only the doc + background-chat indicators
   // are shown/hidden dynamically here.
   function _syncRailDynamic() {
-    // Show doc icon if panel is open OR session has documents
+    // 如果面板已打开或会话有文档则显示文档图标
     const docPanelOpen = window.documentModule && window.documentModule.isPanelOpen();
     const docIndicator = el('doc-indicator-btn');
     const hasDocs = docIndicator && docIndicator.classList.contains('visible');
@@ -3493,7 +3493,7 @@ function startOdysseusApp() {
     _show('rail-chats', !!hasChatNotif);
   }
   window._syncRailDynamic = _syncRailDynamic;
-  // Sync periodically and on key events
+  // 定期同步并在关键事件时同步
   setInterval(_syncRailDynamic, 1000);
   document.addEventListener('overflow-state-change', _syncRailDynamic);
 
@@ -3503,25 +3503,25 @@ function startOdysseusApp() {
       if (searchChatModule) searchChatModule.openSearch();
     });
   }
-  // Modify form submit to handle special modes
+  // 修改表单提交以处理特殊模式
   const chatForm = document.getElementById('chat-form');
   const originalSubmit = chatModule.handleChatSubmit;
   let _submitting = false;
 
   function handleSubmit(e) {
     if (e) e.preventDefault();
-    // Debounce: prevent double-submit while a request is being initiated
+    // 防抖：防止在请求发起期间重复提交
     if (_submitting) return;
     _submitting = true;
-    // Release after a short delay (stream start sets its own isStreaming guard)
+    // 短暂延迟后释放（流启动时会设置自己的 isStreaming 守卫）
     setTimeout(() => { _submitting = false; }, 300);
 
-    // Compare mode: route submit to compare handler (same message to all panes)
+    // 对比模式：路由提交到对比处理器（相同消息发送到所有窗格）
     if (compareModule && compareModule.isActive()) {
       return compareModule.handleCompareSubmit(e);
     }
 
-    // Group chat: route to group module
+    // 群聊：路由到群组模块
     if (groupModule && groupModule.isActive()) {
       console.log('[group] Submit intercepted');
       const msgInput = document.getElementById('message');
@@ -3540,7 +3540,7 @@ function startOdysseusApp() {
 
   chatForm.onsubmit = handleSubmit;
 
-  // ── Dual-purpose send/mic button ──
+  // ── 双用途发送/麦克风按钮 ──
   const sendBtn = document.querySelector('.send-btn');
   const messageInput = el('message');
   const modelPickerWrap = document.getElementById('model-picker-wrap');
@@ -3550,7 +3550,7 @@ function startOdysseusApp() {
   const _stopIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
   const _newChatIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 
-  // Expose icons globally so chat.js updateSubmitButton can use them
+  // 全局暴露图标，使 chat.js 的 updateSubmitButton 可使用
   window._odysseusBtnIcons = { send: _sendIcon, mic: _micIcon, stop: _stopIcon, newChat: _newChatIcon };
 
   function _isSttEnabled() {
@@ -3563,7 +3563,7 @@ function startOdysseusApp() {
 
   function _updateSendBtnIcon() {
     if (!sendBtn) return;
-    // Don't override if streaming (stop button) or recording
+    // 流式传输中（停止按钮）或录音时不要覆盖
     if (sendBtn.dataset.mode === 'streaming' || sendBtn.dataset.mode === 'recording') return;
     const prevMode = sendBtn.dataset.mode || '';
     const hasText = messageInput && messageInput.value.trim().length > 0;
@@ -3572,71 +3572,71 @@ function startOdysseusApp() {
     if (!hasText && !hasFiles && _isSttEnabled()) {
       clearTimeout(sendBtn._collapseTimer);
       sendBtn.innerHTML = _micIcon;
-      sendBtn.title = 'Record voice';
+      sendBtn.title = i18nModule.t('chat.record_voice');
       newMode = 'mic';
       sendBtn.classList.add('mic-mode');
       sendBtn.classList.remove('newchat-mode', 'newchat-expanded');
     } else if (!hasText && !hasFiles && !_isSttEnabled()) {
       clearTimeout(sendBtn._collapseTimer);
-      // Group chat: always show send button, never newchat mode
+      // 群聊：始终显示发送按钮，不进入新聊天模式
       if (groupModule && groupModule.isActive()) {
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = 'Send to group';
+        sendBtn.title = i18nModule.t('chat.send_to_group');
         newMode = 'idle';
         sendBtn.classList.remove('mic-mode', 'newchat-mode', 'newchat-expanded');
       } else {
-      // Check if we're already on a fresh empty session (welcome screen visible)
+      // 检查是否已处于新的空白会话（欢迎屏幕可见）
       const isEmptySession = document.getElementById('chat-container')?.classList.contains('welcome-active');
       if (isEmptySession) {
-        // Already on new chat — show arrow in muted style (ready to type)
+        // 已是新聊天 — 以静音样式显示箭头（准备输入）
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = 'Send message';
+        sendBtn.title = i18nModule.t('chat.send_button');
         newMode = 'idle';
-        sendBtn.classList.add('newchat-mode'); // muted gray style
+        sendBtn.classList.add('newchat-mode'); // 静音灰色样式
         sendBtn.classList.remove('mic-mode', 'newchat-expanded');
         clearTimeout(sendBtn._expandTimer);
       } else {
-        sendBtn.innerHTML = _newChatIcon + '<span class="send-btn-label">+ New</span>';
-        sendBtn.title = 'New chat';
+        sendBtn.innerHTML = _newChatIcon + '<span class="send-btn-label">+ ' + i18nModule.t('chat.new_chat') + '</span>';
+        sendBtn.title = i18nModule.t('chat.new_chat');
         newMode = 'newchat';
         sendBtn.classList.add('newchat-mode');
         sendBtn.classList.remove('mic-mode');
-        // The button stays a 32px compact icon (no auto-expand to label —
-        // the "+ New" label inside is for screen readers only; sighted users
-        // see the spinning + on hover + the title tooltip).
+        // 按钮保持 32px 紧凑图标（不自动展开为标签 —
+        // 内部的"新建"标签仅供屏幕阅读器使用；可视用户
+        // 在悬停时看到旋转的 + 和标题提示）。
         clearTimeout(sendBtn._expandTimer);
         sendBtn.classList.remove('newchat-expanded');
       }
-      } // close group-else
+      } // 关闭 group-else 分支
     } else {
       newMode = 'send';
       clearTimeout(sendBtn._expandTimer);
       const wasExpanded = sendBtn.classList.contains('newchat-expanded');
       const wasNewchat = prevMode === 'newchat' || prevMode === 'mic';
       if (wasExpanded || wasNewchat) {
-        // Collapse pill if expanded, then spin arrow in (same as + spin-in)
+        // 如果已展开则收起胶囊按钮，然后旋入箭头（与 + 旋入相同）
         if (wasExpanded) sendBtn.classList.remove('newchat-expanded');
         const delay = wasExpanded ? 300 : 0;
         setTimeout(() => {
           if (sendBtn.dataset.mode !== 'send') return;
           sendBtn.innerHTML = _sendIcon;
-          sendBtn.title = 'Send message';
+          sendBtn.title = i18nModule.t('chat.send_button');
           sendBtn.classList.remove('mic-mode', 'newchat-mode', 'anim-spin-swap');
           sendBtn.classList.add('anim-spin');
           sendBtn.addEventListener('animationend', () => sendBtn.classList.remove('anim-spin'), { once: true });
         }, delay);
       } else {
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = 'Send message';
+        sendBtn.title = i18nModule.t('chat.send_button');
         sendBtn.classList.remove('mic-mode', 'newchat-mode', 'newchat-expanded', 'anim-spin', 'anim-launch', 'anim-land');
       }
     }
-    // Animate icon spin — when switching TO newchat or mic (the + or mic
-    // appearing). The previous `prevMode && ...` guard skipped this after
-    // streaming ended (dataset.mode is reset to '' there, an empty falsy
-    // string), which let the lingering anim-land class from the stop icon's
-    // entry replay on the +, making it look like the + comes from below.
-    // Never animate into send mode (arrow) — it should just appear instantly.
+    // 图标旋转动画 — 切换 TO 新聊天或麦克风时
+    // 出现时）。之前的 `prevMode && ...` 守卫在流结束后
+    // 跳过了此动画（dataset.mode 在那里被重置为 ''，空 falsy
+    // 字符串），导致停止图标的残留 anim-land 类
+    // 在 + 上重播，使 + 看起来从下方出现。
+    // 不要对发送模式（箭头）使用动画 — 应直接显示。
     if (newMode !== prevMode && (newMode === 'newchat' || newMode === 'mic')) {
       if (!sendBtn.classList.contains('anim-spin')) {
         sendBtn.classList.remove('anim-launch', 'anim-land');
@@ -3651,7 +3651,7 @@ function startOdysseusApp() {
     sendBtn.addEventListener('click', (e) => {
       e.preventDefault();
 
-      // If recording, stop recording
+      // 如果正在录音，停止录音
       if (sendBtn.dataset.mode === 'recording' || voiceRecorderModule.getIsRecording()) {
         voiceRecorderModule.stopRecording();
         return;
@@ -3660,7 +3660,7 @@ function startOdysseusApp() {
       const hasText = messageInput && messageInput.value.trim().length > 0;
       const hasFiles = _hasAttachments();
 
-      // New chat mode — empty input, no attachments, no STT
+      // 新聊天模式 — 空输入、无附件、无语音
       if (!hasText && !hasFiles && sendBtn.dataset.mode === 'newchat') {
         if (sessionModule) {
           const sessions = sessionModule.getSessions();
@@ -3669,7 +3669,7 @@ function startOdysseusApp() {
           if (current && current.endpoint_url && current.model) {
             sessionModule.createDirectChat(current.endpoint_url, current.model, current.endpoint_id);
           } else {
-            // Fallback to rail button
+            // 回退到图标栏按钮
             const railNew = el('rail-new-session');
             if (railNew) railNew.click();
           }
@@ -3677,10 +3677,10 @@ function startOdysseusApp() {
         return;
       }
 
-      // If input is empty and STT is enabled, start recording
+      // 如果输入为空且语音转文本已启用，开始录音
       if (!hasText && !hasFiles && _isSttEnabled()) {
         sendBtn.innerHTML = _stopIcon;
-        sendBtn.title = 'Stop recording';
+        sendBtn.title = i18nModule.t('chat.stop_recording');
         sendBtn.dataset.mode = 'recording';
         sendBtn.classList.add('recording');
         voiceRecorderModule.startRecording(
@@ -3691,21 +3691,21 @@ function startOdysseusApp() {
         return;
       }
 
-      // Otherwise, send message
+      // 否则，发送消息
       handleSubmit(e);
     });
   }
 
-  // Enter to send (shift+enter for newline), or new chat when empty
+  // Enter 发送（Shift+Enter 换行），或空输入时新建聊天
   if (messageInput) {
     messageInput.addEventListener('keydown', (e) => {
       const isMobile = window.innerWidth <= 768
 
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !isMobile) {
         e.preventDefault();
-        // Flush the debounced icon update so dataset.mode reflects the current
-        // text state. Without this, a fast type-and-Enter would still see the
-        // stale 'newchat' mode and open a new chat instead of sending.
+        // 刷新防抖图标更新，使 dataset.mode 反映当前
+        // 文本状态。没有这个，快速输入并回车仍会看到
+        // 过时的 'newchat' 模式并打开新聊天而非发送。
         try { _updateSendBtnIcon(); } catch {}
         if (sendBtn && sendBtn.dataset.mode === 'newchat') {
           const railNew = el('rail-new-session');
@@ -3717,7 +3717,7 @@ function startOdysseusApp() {
     });
   }
 
-  // Toggle mic/send icon on input change + hide model picker after enough text
+  // 输入变化时切换麦克风/发送图标 + 文本足够后隐藏模型选择器
   if (messageInput) {
     const _debouncedUpdateIcon = uiModule.debounce(_updateSendBtnIcon, 50);
     const _MODEL_PICKER_HIDE_CHARS = 10;
@@ -3735,7 +3735,7 @@ function startOdysseusApp() {
     }, { passive: true });
   }
 
-  // Collapse "New Session" label on scroll
+  // 滚动时折叠"新建会话"标签
   const _chatScroll = document.getElementById('chat-container');
   if (_chatScroll && sendBtn) {
     _chatScroll.addEventListener('scroll', () => {
@@ -3745,21 +3745,21 @@ function startOdysseusApp() {
     }, { passive: true });
   }
 
-  // Expose globally so voiceRecorder can trigger update after async fetch
+  // 全局暴露，使 voiceRecorder 可在异步获取后触发更新
   window._updateSendBtnIcon = _updateSendBtnIcon;
 
-  // Initial icon state
+  // 初始图标状态
   _updateSendBtnIcon();
 
-  // Auto-focus input on load
+  // 页面加载时自动聚焦输入框
   if (messageInput) {
     setTimeout(() => messageInput.focus(), 100);
   }
 
-  // Add drag and drop handlers for the chat container
+  // 为聊天容器添加拖放处理
   const chatContainer = el('chat-container');
 
-  // Prevent default to allow drop
+  // 阻止默认行为以允许放置
   const chatInputBar = chatContainer.querySelector('.chat-input-bar');
   function _showDropHighlight() {
     chatContainer.style.backgroundColor = 'rgba(0, 170, 255, 0.1)';
@@ -3794,7 +3794,7 @@ function startOdysseusApp() {
     if (files.length === 0) return;
     fileHandlerModule.addFiles(files);
     fileHandlerModule.renderAttachStrip();
-    uiModule.showToast(`Added ${files.length} file${files.length > 1 ? 's' : ''} to chat`);
+    uiModule.showToast(i18nModule.t(files.length === 1 ? 'notification.added_file_to_chat' : 'notification.added_files_to_chat', { count: files.length }));
   });
 
   chatContainer.addEventListener('dragleave', (e) => {
@@ -3802,7 +3802,7 @@ function startOdysseusApp() {
     _hideDropHighlight();
   });
   
-  // Make the attachment strip also a drop target
+  // 使附件条也成为一个放置目标
   const attachStrip = el('attach-strip');
   attachStrip.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -3817,7 +3817,7 @@ function startOdysseusApp() {
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
 
-    uiModule.showToast(`Added ${files.length} file${files.length > 1 ? 's' : ''} to chat`);
+    uiModule.showToast(i18nModule.t(files.length === 1 ? 'notification.added_file_to_chat' : 'notification.added_files_to_chat', { count: files.length }));
 
   });
   
@@ -3826,19 +3826,19 @@ function startOdysseusApp() {
     attachStrip.style.backgroundColor = '';
   });
 
-  // ── Compare-mode file drop shield ──────────────────────────────────────────
-  // Compare reuses #chat-container, but each pane renders into a sandboxed
-  // <iframe>. Iframes swallow drag-and-drop events: a file dropped on a pane is
-  // handled by the iframe, not the parent, so the browser loads the file *inside
-  // the pane* ("behind" the app) instead of attaching it. The chatContainer drop
-  // handler above never sees it because the event doesn't bubble out of the frame.
+  // ── 对比模式文件拖放防护层 ──────────────────────────────────────────
+  // 对比模式复用 #chat-container，但每个窗格渲染到独立的
+  // <iframe>。Iframe 会吞掉拖放事件：拖到面板上的文件会被
+  // iframe 处理而非父页面，因此浏览器会在面板内部加载该文件
+  // （在应用"背后"）而不是附加它。chatContainer 的拖放
+  // 处理器看不到它，因为事件不会冒泡出框架。
   //
-  // Fix: while a file drag is active in Compare, raise a single full-window shield
-  // that sits above every pane/iframe and becomes the drop target. The drop then
-  // lands on the parent document and we route the files into the shared composer
-  // (the same pending-files pipeline the picker and paste use). Scoped to Compare
-  // via the .compare-active class, so normal chat and the tool dropzones (gallery,
-  // RAG, document editor, …) are unaffected.
+  // 修复：对比模式下拖拽文件时，升起一个全窗口遮罩层
+  // 坐在每个面板/iframe 上方并成为拖放目标。拖放操作
+  // 落在父文档上，我们将文件路由到共享的输入栏
+  // （与文件选择器和粘贴相同的待处理文件管道）。通过
+  // .compare-active 类限定范围，因此普通聊天和工具拖放区（画廊、
+  // RAG、文档编辑器等）不受影响。
   let _cmpDropShield = null;
   const _isFileDrag = (e) => {
     const types = e.dataTransfer && e.dataTransfer.types;
@@ -3861,25 +3861,25 @@ function startOdysseusApp() {
       _box.style.cssText = 'pointer-events:none;border:2px dashed rgba(255,255,255,0.9);' +
         'border-radius:14px;padding:20px 28px;background:rgba(0,0,0,0.4);' +
         'font:600 16px/1.4 system-ui,sans-serif;color:#fff;';
-      _box.textContent = 'Drop files to attach';
+      _box.textContent = i18nModule.t('export.drop_files');
       _cmpDropShield.appendChild(_box);
       document.body.appendChild(_cmpDropShield);
     }
     _cmpDropShield.style.display = 'flex';
   };
   const _hideCmpShield = () => { if (_cmpDropShield) _cmpDropShield.style.display = 'none'; };
-  // Capture phase so we raise the shield before the pointer reaches an iframe.
+  // 使用捕获阶段，在指针到达 iframe 之前升起遮罩。
   window.addEventListener('dragenter', (e) => {
     if (_isFileDrag(e) && _compareActive()) _showCmpShield();
   }, true);
   window.addEventListener('dragover', (e) => {
     if (!_isFileDrag(e) || !_compareActive()) return;
-    e.preventDefault();                       // mark as a valid drop target
+    e.preventDefault();                       // 标记为有效的放置目标
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     _showCmpShield();
   }, true);
   window.addEventListener('dragleave', (e) => {
-    // Hide only when the drag actually leaves the window (no relatedTarget).
+    // 仅当拖拽真正离开窗口时才隐藏（无 relatedTarget）。
     if (_compareActive() && !e.relatedTarget) _hideCmpShield();
   }, true);
   window.addEventListener('dragend', _hideCmpShield, true);
@@ -3891,10 +3891,10 @@ function startOdysseusApp() {
     if (!files.length) return;
     fileHandlerModule.addFiles(files);
     fileHandlerModule.renderAttachStrip();
-    uiModule.showToast(`Added ${files.length} file${files.length > 1 ? 's' : ''} to attach`);
+    uiModule.showToast(i18nModule.t(files.length === 1 ? 'notification.added_file_to_attach' : 'notification.added_files_to_attach', { count: files.length }));
   }, true);
 
-  // Load initial data
+  // 加载初始数据
   presetsModule.loadPresets(uiModule.showError);
 
   if (sessionModule) {
@@ -3908,14 +3908,14 @@ function startOdysseusApp() {
       scrollHistory: uiModule.scrollHistoryInstant
     });
 
-    // Load sessions first (critical path) — remove loader when done
+    // 首先加载会话（关键路径）— 完成后移除加载器
     sessionModule.loadSessions()
       .catch(e => console.warn('loadSessions error:', e))
       .finally(() => {
         const loader = document.getElementById('app-loader');
         if (loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 300); }
-        // Fire any URL route opener now that sessions + module wiring are
-        // ready. Deferred from up top of init for exactly this reason.
+        // 现在会话和模块接线已就绪，触发 URL 路由开启
+        // 就绪。正是因为这个原因从初始化顶部延迟。
         if (window._odysseusRouteOpener) {
           try { window._odysseusRouteOpener(); } catch (_) {}
           window._odysseusRouteOpener = null;
@@ -3925,37 +3925,37 @@ function startOdysseusApp() {
     console.error('Session module not loaded!');
   }
 
-  // Non-critical: load in parallel, resolve silently
+  // 非关键：并行加载，静默解决
   modelsModule.refreshModels(true).then(() => {
     const modelsBox = document.getElementById('models');
     const hasModels = modelsBox && modelsBox.querySelector('.models-row');
     if (!hasModels) {
       const tip = document.getElementById('welcome-tip');
-      if (tip) tip.textContent = 'Add an AI endpoint from Settings in the sidebar, or paste an endpoint/API key into the chat.';
+      if (tip) tip.textContent = i18nModule.t('chat.no_config_tip');
     }
   }).catch(() => {});
   modelsModule.refreshProviders();
   ragModule.loadPersonalDocs();
-  memoryModule.loadMemories(); // Ensure memories are loaded on page load
+  memoryModule.loadMemories(); // 确保页面加载时加载记忆
   
-  // Ensure the memory list is rendered after loading
+  // 确保记忆列表在加载后渲染
   setTimeout(async () => {
     await memoryModule.loadMemories();
   }, 1000);
   
-  // Ensure proper initial state
+  // 确保正确的初始状态
   voiceRecorderModule.init();
   if (censorModule) censorModule.init();
 
-  // Auto-focus message input on load
+  // 页面加载时自动聚焦消息输入框
   const msgEl = document.getElementById('message');
   if (msgEl) msgEl.focus();
   
-  // Initialize mouse-based drag for sidebar sections
+  // 初始化侧边栏区域的鼠标拖拽
   const sidebar = document.getElementById('sidebar');
   const sidebarInner = sidebar ? sidebar.querySelector('.sidebar-inner') : sidebar;
 
-  // ── Subtle elastic overscroll for sidebar ──
+  // ── 侧边栏的微妙弹性过度滚动 ──
   if (sidebarInner) {
     const MAX_PULL = 8;
     let _overscroll = 0;
@@ -3965,13 +3965,13 @@ function startOdysseusApp() {
       const atTop = el.scrollTop <= 0 && e.deltaY < 0;
       const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1 && e.deltaY > 0;
       if (!atTop && !atBottom) { _overscroll = 0; return; }
-      // Accumulate overscroll with diminishing returns
+      // 累积过度滚动（递减效率）
       _overscroll += Math.abs(e.deltaY) * 0.15;
       const pull = Math.min(_overscroll, MAX_PULL);
       const dir = atTop ? 1 : -1;
       el.style.transition = 'none';
       el.style.transform = `translateY(${dir * pull}px)`;
-      // Reset after scrolling stops
+      // 滚动停止后重置
       clearTimeout(_resetTimer);
       _resetTimer = setTimeout(() => {
         el.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
@@ -3981,9 +3981,9 @@ function startOdysseusApp() {
     }, { passive: true });
   }
 
-  // ── Global touch-scroll guard for sidebar ──
-  // Suppress click events when the user was scrolling (finger moved).
-  // This prevents accidental session/model/setting selection while swiping.
+  // ── 侧边栏的全局触摸滚动守卫 ──
+  // 用户滚动时（手指移动）抑制点击事件。
+  // 防止滑动时意外选择会话/模型/设置。
   if (sidebarInner && 'ontouchstart' in window) {
     let _sidebarTouchMoved = false;
     let _sidebarTouchStartY = 0;
@@ -3992,7 +3992,7 @@ function startOdysseusApp() {
       _sidebarTouchStartY = e.touches[0].clientY;
     }, { passive: true });
     sidebarInner.addEventListener('touchmove', (e) => {
-      // Only flag as scroll if finger moved more than 8px vertically
+      // 仅当手指垂直移动超过 8px 时才标记为滚动
       if (Math.abs(e.touches[0].clientY - _sidebarTouchStartY) > 8) {
         _sidebarTouchMoved = true;
       }
@@ -4003,21 +4003,21 @@ function startOdysseusApp() {
         e.preventDefault();
         _sidebarTouchMoved = false;
       }
-    }, true); // capture phase — intercepts before any child handlers
+    }, true); // 捕获阶段 — 在任何子处理器之前拦截
   }
 
-  // Section collapse/expand + drag reorder (extracted to js/section-management.js)
+  // 区域折叠/展开 + 拖拽排序（提取到 js/section-management.js）
   initSectionCollapse(Storage);
   initSectionDrag(Storage, loadUIVis);
   
-  // Handle drag over and out for individual sections
+  // 处理单个区域的拖入和拖出
   const sections = document.querySelectorAll('.section[draggable="true"]');
   sections.forEach(section => {
     section.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       
-      // Only show visual feedback if we're not dragging over the active element
+      // 仅在未拖到活动元素上时显示视觉反馈
       const activeId = e.dataTransfer.getData('text/plain');
       if (activeId && activeId !== section.id) {
         section.setAttribute('dnd-over', 'true');
@@ -4025,7 +4025,7 @@ function startOdysseusApp() {
     });
     
     section.addEventListener('dragleave', (e) => {
-      // Check if we're actually leaving the element
+      // 检查是否真正离开该元素
       const rect = section.getBoundingClientRect();
       if (e.clientY < rect.top || e.clientY > rect.bottom || 
           e.clientX < rect.left || e.clientX > rect.right) {
@@ -4034,17 +4034,17 @@ function startOdysseusApp() {
     });
   });
   
-  // Restore saved order on load
+  // 页面加载时恢复保存的顺序
   const savedOrder = Storage.get(Storage.KEYS.SECTION_ORDER);
   if (savedOrder) {
     try {
       const order = JSON.parse(savedOrder);
       const innerContainer = sidebarInner || document.getElementById('sidebar');
 
-      // Create a document fragment to minimize reflows
+      // 创建文档片段以最小化重排
       const fragment = document.createDocumentFragment();
 
-      // First, collect all sections in the desired order
+      // 首先，按期望顺序收集所有区域
       for (const id of order) {
         const section = document.getElementById(id);
         if (section) {
@@ -4052,14 +4052,14 @@ function startOdysseusApp() {
         }
       }
 
-      // Append any remaining sections (in case new ones were added)
+      // 追加任何剩余区域（以防新增）
       sections.forEach(section => {
         if (!order.includes(section.id)) {
           fragment.appendChild(section);
         }
       });
 
-      // Finally, add all sections back to the container
+      // 最后，将所有区域添加回容器
       innerContainer.appendChild(fragment);
     } catch (e) {
       console.error('Failed to restore sidebar order:', e);

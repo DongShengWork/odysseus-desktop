@@ -1,5 +1,5 @@
 /**
- * Gallery Editor — canvas-based image editor with layers, brush, eraser, text, crop, inpaint mask.
+ * 画廊编辑器 — 基于画布的图像编辑器，支持图层、画笔、橡皮擦、文字、裁剪、涂修补全蒙版。
  */
 
 import uiModule from './ui.js';
@@ -109,21 +109,21 @@ import { wireTopbarOverflow } from './editor/wire-topbar-overflow.js';
 import { wireTopbarMenus } from './editor/wire-topbar-menus.js';
 
 const API_BASE = window.location.origin;
-// ── State ──
-// Transform-overlay canvas — sits over the main canvas with extra margin
-// so resize / rotation handles render OUTSIDE the image edges. Pointer
-// events disabled; the main canvas still handles all input.
-const _TRANSFORM_OVERLAY_MARGIN = 60; // image-space px of slack on each side
-// Thin wrappers around the transform-handles impls — the refactor
-// imported them under *Impl aliases but several call sites still use
-// the bare names. Without these, _startTransform threw a ReferenceError
-// before opening the popup, so Transform showed no handles / no popup.
+// ── 状态 ──
+// 变换覆盖画布 — 位于主画布之上，带额外边距，
+// 使调整大小 / 旋转手柄渲染在图像边缘之外。禁用了
+// 指针事件；主画布仍处理所有输入。
+const _TRANSFORM_OVERLAY_MARGIN = 60; // 每边松弛像素数（图像空间）
+// transform-handles 实现的薄包装 — 重构时以 *Impl 别名导入，
+// 但多个调用点仍使用裸名称。没有这些包装，
+// _startTransform 会在打开弹出窗口前抛出 ReferenceError，
+// 因此变换无法显示任何手柄 / 弹出窗口。
 function _drawTransformHandles() { _drawTransformHandlesImpl(_TRANSFORM_OVERLAY_MARGIN); }
 function _getTransformHandle(x, y) { return _getTransformHandleImpl(x, y); }
 function _syncTransformOverlay() { _syncTransformOverlayImpl(_TRANSFORM_OVERLAY_MARGIN); }
-// Inpaint uses a much bigger default brush — when the user enters
-// the inpaint tool for the first time in this editor session we bump
-// the slider to this value (without touching other tools).
+// 涂修补全使用大得多得默认画笔 — 当用户在此编辑器会话中
+// 首次进入涂修补全工具时，我们将滑块调整为此值
+// （不影响其他工具）。
 const _INPAINT_DEFAULT_BRUSH = 100;
 
 function _galleryEditMounted() {
@@ -142,49 +142,49 @@ if (!window.__galleryEditEscHardGuardInstalled) {
   }, true);
 }
 
-// Document-level click-away handlers for topbar dropdowns. Each
-// openEditor invocation adds 6 of these (save / edge / image / filter /
-// resize / more), and without removal they accumulated across reopens.
-// Tracked here and removed wholesale in closeEditor.
+// 文档级点击外部处理器，用于顶栏下拉菜单。每次
+// openEditor 调用添加 6 个（保存 / 边缘 / 图像 / 滤镜 /
+// 调整大小 / 更多），不清理的话会在重新打开时累积。
+// 在此跟踪并在 closeEditor 中批量移除。
 function _registerDocClickAway(handler) {
   document.addEventListener('click', handler);
   state.editorDocClickHandlers.push(handler);
 }
 
-// Drawing state
+// 绘制状态
 
-// Move tool state
-// Crop state
-// Persistent mode toggle for wand clicks. 'replace' = a new click
-// replaces the selection (default); 'add' = always union; 'subtract' =
-// always remove from the existing selection. Shift / Alt held during a
-// click still override this transiently.
-// Last seed click so the tolerance slider can re-run the wand live.
-// Stored in canvas coords (same units `_runMagicWand` accepts).
-// Lasso state
+// 移动工具状态
+// 裁剪状态
+// 魔棒点击的持久模式切换。'replace' = 新点击
+// 替换选区（默认）；'add' = 始终合并；'subtract' =
+// 始终从现有选区中移除。点击时按住 Shift / Alt
+// 仍会临时覆盖此设置。
+// 上次种子点击，以便容差滑块可实时重新运行魔棒。
+// 以画布坐标存储（与 `_runMagicWand` 接受的单位相同）。
+// 套索状态
 
-// Transform state
-// Snapshot of the layer's pixels at the moment the transform started.
-// Lets the popup live-preview by re-applying from the original on every
-// input change instead of stacking destructive edits.
-// Current popup-driven values (re-applied on every change).
+// 变换状态
+// 变换开始时图层像素的快照。
+// 允许弹出窗口通过从原始像素重新应用来实时预览每次
+// 输入更改，而不是堆叠破坏性编辑。
+// 当前弹出窗口驱动的值（每次更改时重新应用）。
 
-// Inpaint mask (separate canvas, same dimensions as image)
-// Cached canvas reused each composite() to merge every visible mask
-// sub-layer into a single tinted overlay (avoids re-allocating on each
-// frame). Recreated lazily if dimensions change.
-// Softer default than the original full-saturation red — the user
-// found the previous tint distracting. Tweakable via the color picker
-// under the Paint/Erase row.
-// Persistent paint/erase toggle for the Inpaint brush. False = paint
-// (default), true = erase. Ctrl+Alt held during a stroke flips this
-// transiently for the duration of that one stroke.
-// Resolved per-stroke at pointerdown: state.inpaintEraseMode XOR (Ctrl+Alt).
-// Most-recent inpaint result layer id — the post-generation Feather
-// slider edits this layer's alpha edge live.
+// 涂修补全蒙版（独立画布，与图像尺寸相同）
+// 缓存的画布，每次 composite() 复用以将每个可见蒙版
+// 子图层合并为一个单一着色覆盖层（避免每帧
+// 重新分配）。尺寸变更时延迟重新创建。
+// 比原始全饱和度红色更柔和的默认值 — 用户
+// 觉得之前的着色太分散注意力。可通过 Paint/Erase 行
+// 下的颜色选择器调整。
+// 涂修补全画笔的持久绘制/擦除切换。false = 绘制
+// （默认），true = 擦除。绘制时按住 Ctrl+Alt 临时翻转
+// 此设置，仅影响该次绘制。
+// 在 pointerdown 时按次解析：state.inpaintEraseMode XOR (Ctrl+Alt)。
+// 最近的涂修补全结果图层 ID — 生成后的羽化
+// 滑块实时编辑此图层的 alpha 边缘。
 
-// _dilateMask + _applyInpaintFeather live in editor/mask-utils.js
-// — see import at top of file.
+// _dilateMask + _applyInpaintFeather 位于 editor/mask-utils.js
+// — 参见文件顶部导入。
 
 // Eraser settings
 // Edge softness, 0..100. 0 = hard pixel edge; higher values blur the
@@ -193,30 +193,30 @@ function _registerDocClickAway(handler) {
 // Clone Stamp brush modifiers — independent from the Brush tool's
 // settings so users can dial in cloning without losing their brush
 // preset (and vice-versa).
-// `state.cloneSourceX/Y` is the sample anchor set by Alt-click. While
+// `state.cloneSourceX/Y` 是 Alt+点击设置的采样锚点。绘制时
 // painting, the source point moves in lockstep with the brush so the
 // sampled offset stays constant (Photoshop "aligned" mode).
 // First brush coord of the current stroke — used to compute the
-// running offset (`sample = source + (current - strokeStart)`).
+// 运行时的偏移（`sample = source + (current - strokeStart)`）。
 // Snapshot of the source layer's pixels at stroke-start so we can keep
 // sampling clean pixels even after the brush has painted over them
 // (avoids feedback / smearing).
 // Double-tap detection for the Clone tool on touch devices — sets the
 // sample anchor without a keyboard Alt modifier.
 
-// Undo/Redo
+// 撤销/重做
 const MAX_HISTORY = 20;
 
-/** Get the selected AI endpoint+model. Returns { endpoint, model }.
- * Dropdown values are encoded as "<base_url>::<model_id>" so users can pick
- * a specific model on a multi-model endpoint (e.g. dall-e-2 vs gpt-image-1). */
+/** 获取选定的 AI 端点+模型。返回 { endpoint, model }。
+ * 下拉值编码为 "<base_url>::<model_id>"，以便用户可在多模型
+ * 端点（例如 dall-e-2 vs gpt-image-1）上选择特定模型。 */
 function _getSelectedAIEndpoint(type) {
   let raw = '';
   if (type === 'inpaint') {
     raw = document.getElementById('ge-ai-inpaint')?.value || '';
   } else if (type) {
-    // Per-tool dropdowns (harmonize/upscale/style). Each lives in its
-    // own section's panel and is marked with data-ge-tool-model="<name>".
+    // 各工具独立的下拉菜单（harmonize/upscale/style）。每个位于
+    // 自己的面板部分，标记为 data-ge-tool-model="<name>"。
     const sel = document.querySelector(`select[data-ge-tool-model="${type}"]`);
     raw = sel?.value || '';
   }
@@ -227,11 +227,11 @@ function _getSelectedAIEndpoint(type) {
   return { endpoint: raw.slice(0, idx), model: raw.slice(idx + 2) };
 }
 
-/** Shared helper: flatten layers → POST to API → add result as new layer. */
-// Maps a layer-name (the past-participle returned from each AI tool —
-// "BG Removed", "Sharpened", etc.) into a present-progressive label for
-// the busy button state ("Removing…", "Sharpening…"). Falls back to a
-// neutral "Processing…" when the layer name doesn't match a known verb.
+/** 共享辅助函数：扁平化图层 → POST 到 API → 添加结果为新图层。 */
+// 将图层名称（每个 AI 工具返回的过去分词 —
+// "BG Removed"、"Sharpened" 等）映射为忙按钮状态的
+// 现在进行时标签（"Removing…"、"Sharpening…"）。当图层名称
+// 不匹配已知动词时回退到中性 "Processing…"。
 const _BUSY_LABELS = {
   'bg removed': 'Removing…',
   'sharpened': 'Sharpening…',
@@ -245,12 +245,12 @@ function _deriveBusyLabel(layerName) {
   return _BUSY_LABELS[String(layerName).toLowerCase()] || 'Processing…';
 }
 
-// AI-tool runner — sharpen / harmonize / upscale / style / bg-remove
-// all flatten the doc, POST a PNG to a server endpoint, and drop the
-// result back as a new layer. Full implementation in editor/ai-tool-
-// runner.js; instantiated lazily (so it can reference function decls
-// that haven't hoisted at module load time? — actually all named
-// function decls hoist, so we instantiate at module top).
+// AI 工具运行器 — sharpen / harmonize / upscale / style / bg-remove
+// 全部扁平化文档，POST PNG 到服务器端点，并将
+// 结果作为新图层放回。完整实现在 editor/ai-tool-
+// runner.js；延迟实例化（以便可引用在模块加载时
+// 尚未提升的函数声明？— 实际上所有命名
+// 函数声明都会提升，所以我们在模块顶层实例化）。
 const _applyImageTool = createApplyImageTool({
   flatten: () => flatten(),
   saveState: _saveState,
@@ -265,9 +265,9 @@ const _applyImageTool = createApplyImageTool({
   uiModule,
 });
 
-// Layer offsets for move tool
+// 移动工具的图层偏移量
 
-// ── Layer class ──
+// ── 图层类 ──
 
 
 function createLayer(name, width, height) {
@@ -282,26 +282,26 @@ function createLayer(name, width, height) {
     visible: true,
     opacity: 1,
     locked: false,
-    // Mask sub-layers — same shape as adjLayers, parallel concept.
-    // Each entry: {id, name, canvas, visible}. The "active" mask is the
-    // one that paint / lasso / inpaint operations target; rendered as a
-    // red overlay in composite().
+    // 蒙版子图层 — 与 adjLayers 形状相同，并行概念。
+    // 每个条目：{id, name, canvas, visible}。"活跃"蒙版是
+    // 绘制 / 套索 / 涂修补全操作的目标；在 composite() 中渲染为
+    // 红色覆盖层。
     masks: [],
     activeMaskId: null,
-    // Non-destructive adjustments. B/C/S/H are applied at composite()
-    // via ctx.filter (fast, CSS). Levels + Color Balance need per-pixel
-    // math and are baked into a cached canvas (layer._adjCache) that
-    // gets re-rendered only when those values change.
+    // 非破坏性调整。B/C/S/H 在 composite() 中通过
+    // ctx.filter 应用（快，CSS）。色阶 + 色彩平衡需逐像素
+    // 运算，并烘焙到缓存的画布（layer._adjCache）中，
+    // 仅在这些值变更时才重新渲染。
     adjustments: {
-      brightness: 1, // 0..2 (1 = neutral)
-      contrast: 1,   // 0..2 (1 = neutral)
-      saturation: 1, // 0..2 (0 = grayscale, 1 = neutral)
-      hue: 0,        // degrees, -180..180
-      // Levels — Photoshop-style three-stop adjust applied per channel.
-      // input 0..255, gamma 0.1..9.9. Default is identity.
+      brightness: 1, // 0..2（1 = 中性）
+      contrast: 1,   // 0..2（1 = 中性）
+      saturation: 1, // 0..2（0 = 灰度，1 = 中性）
+      hue: 0,        // 度数，-180..180
+      // 色阶 — Photoshop 风格的三档调整，逐通道应用。
+      // 输入 0..255，gamma 0.1..9.9。默认为恒等变换。
       levels: { inBlack: 0, inWhite: 255, gamma: 1.0, outBlack: 0, outWhite: 255 },
-      // Color Balance — additive per-channel shifts weighted by tone.
-      // Each value is -100..+100 mapping to roughly ±60 in 0..255 space.
+      // 色彩平衡 — 按色调加权的相加性逐通道偏移。
+      // 每个值 -100..+100 映射到 0..255 空间中约 ±60。
       colorBalance: {
         shadows:    { r: 0, g: 0, b: 0 },
         midtones:   { r: 0, g: 0, b: 0 },
@@ -1266,7 +1266,7 @@ function _showCropApply() {
     <input type="number" class="ge-crop-w" min="1" max="20000" value="${Math.round(state.cropRect.w)}" title="Width">
     <span class="ge-crop-x">×</span>
     <input type="number" class="ge-crop-h" min="1" max="20000" value="${Math.round(state.cropRect.h)}" title="Height">
-    <button class="ge-crop-apply-btn">Apply</button>
+    <button class="ge-crop-apply-btn">${t('gallery.apply')}</button>
   `;
   const area = state.container.querySelector('.ge-canvas-area');
   if (!area || !state.cropRect || !state.mainCanvas) return;
@@ -2087,8 +2087,8 @@ function _filterSliderPrompt(title, params, onPreview) {
         <div class="ge-filter-modal-head">${title}</div>
         ${rows}
         <div class="ge-filter-modal-actions">
-          <button type="button" class="ge-btn ge-btn-sm" data-action="cancel">Cancel</button>
-          <button type="button" class="ge-btn ge-btn-sm ge-btn-primary" data-action="apply">Apply</button>
+          <button type="button" class="ge-btn ge-btn-sm" data-action="cancel">${t('common.cancel')}</button>
+          <button type="button" class="ge-btn ge-btn-sm ge-btn-primary" data-action="apply">${t('gallery.apply')}</button>
         </div>
       </div>
     `;
@@ -2746,7 +2746,7 @@ function _buildEditor(container) {
         throw new Error(`HTTP ${resp.status}${detail ? `: ${detail}` : ''}`);
       }
       const totalMs = Math.round(performance.now() - t0);
-      if (uiModule) uiModule.showToast(`Saved over original (${(blob.size / 1024 / 1024).toFixed(1)}MB · ${(totalMs / 1000).toFixed(1)}s)`, 4000);
+      if (uiModule) uiModule.showToast(t('gallery.saved_over_original', { size: (blob.size / 1024 / 1024).toFixed(1), time: (totalMs / 1000).toFixed(1) }), 4000);
       window.dispatchEvent(new CustomEvent('gallery-refresh'));
       savedOk = true;
     } catch (e) {
@@ -3114,7 +3114,7 @@ export async function exportToGallery() {
     }
     const totalMs = Math.round(performance.now() - t0);
     window.dispatchEvent(new CustomEvent('gallery-refresh'));
-    if (uiModule) uiModule.showToast(`Saved copy to gallery (${(blob.size / 1024 / 1024).toFixed(1)}MB · ${(totalMs / 1000).toFixed(1)}s)`, 4000);
+    if (uiModule) uiModule.showToast(t('gallery.saved_copy', { size: (blob.size / 1024 / 1024).toFixed(1), time: (totalMs / 1000).toFixed(1) }), 4000);
     savedOk = true;
     if (state.draftId) {
       _clearDraftServer(state.draftId);
@@ -3153,7 +3153,7 @@ function _openCookbookForDependency(pkgName) {
     // on window for some reason.
     const btn = document.getElementById('tool-cookbook-btn');
     if (btn) btn.click();
-    else if (uiModule) uiModule.showToast(`Open Cookbook to install ${pkgName}`, 6000);
+    else if (uiModule) uiModule.showToast(t('gallery.open_cookbook', { name: pkgName }), 6000);
     return;
   }
   cookbook.open({ tab: 'Dependencies' });
@@ -3700,7 +3700,7 @@ function _setEditTabLabel(name) {
     return;
   }
   const trimmed = name.length > 24 ? name.slice(0, 22) + '…' : name;
-  labelEl.textContent = `Edit: ${trimmed}`;
+  labelEl.textContent = t('gallery.edit_title', { title: trimmed });
   tab.classList.add('has-edit');
 }
 

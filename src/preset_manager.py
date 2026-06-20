@@ -69,7 +69,7 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
         self.presets = self.load()
     
     def load(self) -> Dict[str, Any]:
-        """Load presets from file, creating defaults if needed"""
+        """从文件加载预设，如果需要则创建默认值。"""
         if not os.path.exists(self.presets_file):
             self.save(self.DEFAULT_PRESETS)
             return self.DEFAULT_PRESETS.copy()
@@ -99,7 +99,7 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
             # migration above does: fill in any built-in presets an older or
             # partial presets.json is missing, so they reach existing installs
             # (a missing built-in is otherwise silently absent from the picker
-            # served by GET /api/presets). There is no delete path for the
+            # GET /api/presets 提供的选择器中静默缺失）。
             # built-in keys, so this never clobbers an intentional removal.
             # Defaults first, loaded values win — user edits are preserved.
             if isinstance(presets, dict) and any(
@@ -113,12 +113,12 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
             return self.DEFAULT_PRESETS.copy()
     
     def save(self, presets: Dict[str, Any]) -> bool:
-        """Save presets to file"""
+        """将预设保存到文件。"""
         try:
-            # Atomic write (tmp file + os.replace) so a crash or serialization
-            # error mid-write can't truncate presets.json and lose every saved
-            # preset. Lazy import keeps this module free of the heavy core
-            # package import graph at load time.
+            # 原子写入（临时文件 + os.replace），因此写入过程中的崩溃或序列化
+            # 错误不会截断 presets.json 并丢失所有已保存的
+            # 预设。延迟导入使此模块在加载时免于重型核心
+            # 包导入图。
             from core.atomic_io import atomic_write_json
             atomic_write_json(self.presets_file, presets, indent=2)
             self.presets = presets
@@ -128,7 +128,7 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
             return False
     
     def get(self, preset_id: str) -> Dict[str, Any]:
-        """Get a specific preset"""
+        """获取特定预设。"""
         return self.presets.get(preset_id)
     
     def update_custom(
@@ -141,7 +141,7 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
         inject_prefix: str = "",
         inject_suffix: str = "",
     ) -> bool:
-        """Update the custom preset"""
+        """更新自定义预设。"""
         self.presets["custom"] = {
             "name": name or "Custom",
             "character_name": name,
@@ -155,17 +155,17 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
         return self.save(self.presets)
     
     def get_all(self) -> Dict[str, Any]:
-        """Get all presets"""
+        """获取所有预设。"""
         return self.presets.copy()
 
     def get_user_templates(self) -> list:
-        """Get user-saved character templates."""
+        """获取用户保存的角色模板。"""
         return self.presets.get("user_templates", [])
 
     def save_user_template(self, template: dict) -> bool:
-        """Save a new user template or update existing by id."""
+        """保存新的用户模板或按 ID 更新现有模板。"""
         templates = self.presets.get("user_templates", [])
-        # Update existing if same id
+        # 如果 ID 相同则更新现有
         existing = next((i for i, t in enumerate(templates) if t.get("id") == template.get("id")), None)
         if existing is not None:
             templates[existing] = template
@@ -175,16 +175,16 @@ Use precise language. Show causal relationships explicitly. Quantify uncertainty
         return self.save(self.presets)
 
     def delete_user_template(self, template_id: str) -> bool:
-        """Delete a user template by id."""
+        """按 ID 删除用户模板。"""
         templates = self.presets.get("user_templates", [])
         self.presets["user_templates"] = [t for t in templates if t.get("id") != template_id]
         return self.save(self.presets)
 
     def get_group_presets(self) -> list:
-        """Get saved group chat presets."""
+        """获取已保存的群聊预设。"""
         return self.presets.get("group_presets", [])
 
     def save_group_presets(self, groups: list) -> bool:
-        """Save group chat presets."""
+        """保存群聊预设。"""
         self.presets["group_presets"] = groups
         return self.save(self.presets)

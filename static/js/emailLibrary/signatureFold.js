@@ -1,12 +1,12 @@
 // static/js/emailLibrary/signatureFold.js
 //
-// Heuristics that turn raw HTML email bodies into folded structures —
-// "Earlier reply" details collapsing the quoted history, and "Signature"
-// details collapsing the trailing corporate disclaimer / boilerplate.
+// 将原始 HTML 邮件正文转换为折叠结构的启发式算法 —
+// "Earlier reply" details 折叠引用的历史记录，以及 "Signature"
+// details 折叠尾部的公司免责声明/样板文本。
 //
 // All pure functions of HTML strings (and one DOM-mutating exception:
 // `_harvestAttribution` peels nodes off a container). No module state,
-// no fetch, no globals. The icons (`_SIG_ICON`, `_QUOTE_ICON`) live here
+// 无 fetch、无全局变量。图标（`_SIG_ICON`、`_QUOTE_ICON`）也放在这里，
 // since `_foldSummary` is the only caller and other modules pass them in
 // via that helper.
 
@@ -15,13 +15,13 @@ import {
   _SIG_BLOAT_MIN_CHARS,
 } from './utils.js';
 
-// No leading icon on the signature fold — the user explicitly does not
-// want a star/emoji-style glyph in this header.
+// 签名折叠前不加图标 — 用户明确表示不希望在
+// 此标题中出现星星/表情符号风格的图标。
 export const _SIG_ICON = '';
 export const _QUOTE_ICON = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
 
-// HTML-escape used by `_extractQuoteMeta`. Inlined here (rather than
-// imported from utils) so this module remains free of cross-file links.
+// `_extractQuoteMeta` 使用的 HTML 转义。内联在这里（而非从 utils 导入），
+// 以便此模块保持无跨文件链接。
 function _esc(text) {
   const div = document.createElement('div');
   div.textContent = text || '';
@@ -46,7 +46,7 @@ export function _looksLikeSignature(html) {
     /\b(?:disclaimer|please\s+(?:notify|delete))\b/i,
     /\bunsubscribe\b/i,
     /\bUEN\b\s*\w/i,
-    /\b\+\d[\d\s().-]{6,}\b/, // phone number
+    /\b\+\d[\d\s().-]{6,}\b/, // 电话号码
   ];
   for (const re of SIG_TELLS) if (re.test(txt)) score++;
   const PRIOR_TELLS = [
@@ -60,9 +60,9 @@ export function _looksLikeSignature(html) {
   return score >= 3 && priorScore <= 1;
 }
 
-// Look for an "On <date>, <addr> wrote:" line at the END of a fragment
-// and remove it (returning the captured meta string, or null). Also
-// handles Outlook-style "From: ... Sent: ... Subject: ..." blocks.
+// 在片段的末尾查找 "On <date>, <addr> wrote:" 行并将其删除
+//（返回捕获的元数据字符串，或 null）。同时处理 Outlook 风格的
+// "From: ... Sent: ... Subject: ..." 块。
 export function _harvestAttribution(container) {
   const text = container.textContent || '';
   const wroteLineRe = new RegExp(`${_TALON_WROTE}\\s*:\\s*$|${_TALON_WROTE}\\s*:\\s*<`, 'i');
@@ -94,7 +94,7 @@ export function _extractTurnMetaFromBlockquote(bq) {
   return meta || null;
 }
 
-// "Earlier reply" / "Signature" summary header — caller supplies the
+// "Earlier reply" / "Signature" 摘要头部 — 调用方提供标签字符串 + 图标 SVG。
 // label string + icon SVG. `meta`, when present, is split on " · " to
 // promote the sender's name to the headline.
 export function _foldSummary(label, iconSvg, meta) {
@@ -110,11 +110,11 @@ export function _foldSummary(label, iconSvg, meta) {
       subMeta = '';
     }
   }
-  // `meta` is derived from _extractQuoteMeta, which strips tags but then
-  // un-escapes entities (to recover `<foo@bar.com>` for bubble alignment) —
-  // so it can carry attacker-controlled angle brackets from a quoted block.
-  // This summary is built into innerHTML, so escape both parts to stop a
-  // crafted quote (e.g. `From: <img src=x onerror=...>`) from running script.
+  // `meta` 源自 _extractQuoteMeta，该函数剥离标签但随后还原实体
+  //（以恢复 `<foo@bar.com>` 用于气泡对齐）— 因此它可能包含来自引用块的
+  // 攻击者控制的尖括号。此摘要被构建到 innerHTML 中，因此对两个部分
+  // 都进行转义，以防止精心构造的引用（例如 `From: <img src=x onerror=...>`）
+  // 执行脚本。
   const metaSpan = subMeta
     ? `<span class="email-fold-summary-meta">${_esc(subMeta)}</span>`
     : '';
@@ -128,10 +128,10 @@ export function _foldSummary(label, iconSvg, meta) {
   );
 }
 
-// Extract sender + date from a quoted email block. Tries Outlook-style
-// "From: X · Sent: Y" header first, falls back to Gmail-style
-// "On <date>, <addr> wrote:". Returns a display string like
-// "Jane Doe · Mon, Apr 18, 2026 at 9:31 AM" or `''`.
+// 从引用的邮件块中提取发件人 + 日期。先尝试 Outlook 风格的
+// "From: X · Sent: Y" 头部，回退到 Gmail 风格的
+// "On <date>, <addr> wrote:"。返回类似
+// "Jane Doe · Mon, Apr 18, 2026 at 9:31 AM" 的显示字符串或 ''。
 export function _extractQuoteMeta(html) {
   if (typeof html !== 'string' || !html) return '';
   const txt = html
@@ -154,10 +154,10 @@ export function _extractQuoteMeta(html) {
   let date = sentMatch ? sentMatch[1].trim() : '';
 
   if (!from && !date) {
-    // The date may carry up to three commas before the year: the standard
-    // US Gmail attribution is "On Mon, Apr 18, 2026 at 9:31 AM, Jane wrote:"
-    // (weekday and day-of-month each add one). A single-comma pattern never
-    // reached the year there, so the fold lost its sender/date headline.
+    // 日期可能在年份之前包含最多三个逗号：标准美式 Gmail 归属格式是
+    // "On Mon, Apr 18, 2026 at 9:31 AM, Jane wrote:"
+    //（星期几和日期各增加一个逗号）。之前的单逗号模式从未到达年份，
+    // 因此折叠丢失了其发件人/日期标题。
     const gmail = txt.match(/On\s+((?:[^,]*,){0,3}?[^,]*?\d{4}[^,]*),?\s+(.+?)\s+wrote\s*:/i);
     if (gmail) { date = gmail[1].trim(); from = gmail[2].trim(); }
   }
@@ -167,19 +167,19 @@ export function _extractQuoteMeta(html) {
   if (from.length > 60) from = from.slice(0, 57) + '…';
   if (date.length > 28) date = date.slice(0, 25) + '…';
 
-  // Return the raw sender/date text; `_foldSummary` is the single sink that
-  // builds these into HTML, so it owns escaping. Escaping here too would
-  // double-encode (e.g. "Ben & Jerry" -> "Ben &amp;amp; Jerry").
+  // 返回原始发件人/日期文本；`_foldSummary` 是将其构建为 HTML 的唯一接收者，
+  // 因此它负责转义。如果在这里也转义会导致双重编码
+  //（例如 "Ben & Jerry" -> "Ben &amp;amp; Jerry"）。
   if (from && date) return `${from} · ${date}`;
   if (from) return from;
   if (date) return date;
   return '';
 }
 
-// Peel the first non-empty line off the signature tail. That line is
-// usually the signer's name — keep it inline so "Kind regards, / Bob"
-// reads naturally. Returns `{ preBloat, bloat }` — `bloat` is what
-// should go into the fold; `preBloat` stays visible above it.
+// 从签名尾部剥离第一个非空行。该行通常是签名者的姓名 —
+// 保持内联以便 "Kind regards, / Bob" 自然阅读。
+// 返回 `{ preBloat, bloat }` — `bloat` 是应该放入折叠的内容；
+// `preBloat` 保持可见并显示在其上方。
 export function _peelSigNameLine(htmlAfterClosing) {
   if (!htmlAfterClosing) return { preBloat: '', bloat: '' };
   const breakRe = /<br\s*\/?>|<\/p>|<\/div>|\n/gi;
@@ -224,10 +224,10 @@ export function _isBloatedSig(htmlFragment) {
   return plain.length >= _SIG_BLOAT_MIN_CHARS;
 }
 
-// Try folding using a per-sender cached signature (built by the
-// `learn_sender_signatures` action). When the cached text is found near
-// the end of `html`, slice there and wrap the tail in a details fold.
-// Returns the wrapped HTML or null when the hint doesn't apply.
+// 尝试使用按发件人缓存的签名（由 `learn_sender_signatures` 操作构建）
+// 进行折叠。当缓存的文本在 `html` 末尾附近找到时，在该位置切片
+// 并将尾部包裹在 details 折叠中。
+// 当提示不适用时，返回包裹后的 HTML 或 null。
 export function _tryFoldHintSig(html, hintSig) {
   if (!html || !hintSig || typeof hintSig !== 'string') return null;
   if (hintSig.length < 20) return null;

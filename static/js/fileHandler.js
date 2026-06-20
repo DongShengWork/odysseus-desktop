@@ -1,7 +1,7 @@
 // static/js/fileHandler.js
 
 /**
- * File attachment and upload handling
+ * 文件附件和上传处理
  */
 
 import uiModule from './ui.js';
@@ -9,9 +9,9 @@ import spinnerModule from './spinner.js';
 
 let pendingFiles = [];
 let uploaded = [];
-// Holds the full meta (id/name/mime/size/width/height/…) from the most recent
-// uploadPending() so callers can stamp width/height onto their attachment
-// objects without changing uploadPending()'s return signature.
+// 保存最近一次 uploadPending() 返回的完整元数据（id/name/mime/size/width/height/…），
+// 这样调用方可以将 width/height 附加到他们的 attachment 对象上，
+// 而不需要修改 uploadPending() 的返回签名。
 let _lastUploadedMeta = [];
 let API_BASE = '';
 let _uploadSpinners = [];
@@ -40,23 +40,23 @@ function _revokePreviewUrl(f) {
 }
 
 /**
- * Initialize with dependencies
+ * 初始化依赖
  */
 export function init(apiBase) {
   API_BASE = apiBase;
 }
 
 /**
- * Open file picker dialog
+ * 打开文件选择对话框
  */
 export function openPicker() {
   document.getElementById('file-input').click();
 }
 
 /**
- * Render the attachment strip with pending files.
- * 1-3 files: show individual chips.
- * 4+  files: collapse into a single "N files" badge (click to expand).
+ * 渲染附件条，显示待处理文件。
+ * 1-3 个文件：显示独立标签。
+ * 4 个及以上：折叠为单个"N files"徽章（点击展开）。
  */
 export function renderAttachStrip() {
   const strip = document.getElementById('attach-strip');
@@ -72,14 +72,14 @@ export function renderAttachStrip() {
   const collapsed = total > MAX_VISIBLE && !_expanded;
 
   if (collapsed) {
-    // Single compact badge: "5 files ×"
+    // 单个紧凑徽章："5 files ×"
     const badge = document.createElement('div');
     badge.className = 'thumb thumb-collapsed';
     const label = document.createElement('span');
-    label.textContent = total + ' file' + (total > 1 ? 's' : '');
+    label.textContent = t('file.files_label', { n: total });
     label.className = 'thumb-collapsed-label';
     badge.appendChild(label);
-    badge.title = pendingFiles.map(f => f.name || 'pasted-image').join('\n');
+    badge.title = pendingFiles.map(f => f.name || t('file.pasted_image')).join('\n');
     badge.style.cursor = 'pointer';
     badge.addEventListener('click', (e) => {
       if (e.target.closest('.thumb-collapsed-x')) return;
@@ -89,12 +89,12 @@ export function renderAttachStrip() {
     const x = document.createElement('button');
     x.className = 'thumb-collapsed-x';
     x.textContent = '\u00d7';
-    x.title = 'Remove all';
+    x.title = t('file.remove_all');
     x.addEventListener('click', (e) => { e.stopPropagation(); clearPending(); });
     badge.appendChild(x);
     strip.appendChild(badge);
   } else {
-    // Show individual chips
+    // 显示独立标签
     for (let idx = 0; idx < total; idx++) {
       strip.appendChild(_createChip(pendingFiles[idx], idx));
     }
@@ -107,27 +107,27 @@ function _createChip(f, idx) {
   chip.className = 'thumb';
   const isImage = f.type?.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(f.name || '');
   if (isImage) {
-    chip.classList.add('thumb-image');  // lets CSS overlay the remove-X on the corner (mobile)
+    chip.classList.add('thumb-image');  // 让 CSS 在移动端将删除按钮覆盖到角落
     const img = document.createElement('img');
     img.className = 'thumb-img';
     img.src = _getPreviewUrl(f);
-    img.alt = f.name || 'image';
+    img.alt = f.name || t('file.image_alt');
     chip.appendChild(img);
   } else {
     const span = document.createElement('span');
-    span.textContent = f.name || 'pasted-image';
+    span.textContent = f.name || t('file.pasted_image');
     chip.appendChild(span);
   }
   const x = document.createElement('button');
   x.textContent = '\u00d7';
-  x.setAttribute('aria-label', 'Remove attachment');
+  x.setAttribute('aria-label', t('file.remove_attachment'));
   x.addEventListener('click', (e) => { e.stopPropagation(); removePending(idx); });
   chip.appendChild(x);
   return chip;
 }
 
 /**
- * Remove a pending file by index
+ * 按索引移除待处理文件
  */
 export function removePending(idx) {
   _revokePreviewUrl(pendingFiles[idx]);
@@ -136,19 +136,19 @@ export function removePending(idx) {
 }
 
 /**
- * Upload all pending files to server
+ * 上传所有待处理文件到服务器
  */
 export async function uploadPending() {
   if (pendingFiles.length === 0) return [];
 
-  // The message bubble is shown immediately, but the upload can take a moment —
-  // dim the chips and overlay a whirlpool so it's clear the files are still
-  // being sent (and aren't stuck). Cleared in the finally below.
+  // 消息气泡会立刻显示，但上传可能需要一点时间 —
+  // 将标签变暗并覆盖一个 whirlpool 旋转动画，让用户知道文件还在发送中
+  // （而不是看起来卡住了）。在下面的 finally 中清除。
   const strip = document.getElementById('attach-strip');
   if (strip) {
     strip.classList.add('attach-uploading');
-    // Put a whirlpool ON each attachment chip (image/doc) so the spinner sits on
-    // the thing being uploaded, not floating over the whole strip.
+    // 在每个附件标签（图片/文档）上放置一个 whirlpool 旋转动画，
+    // 让旋转动画直接显示在正在上传的文件上，而不是悬浮在整个条带上方。
     strip.querySelectorAll('.thumb').forEach(chip => {
       try {
         const sp = spinnerModule.create('', 'clean', 'whirlpool');
@@ -158,7 +158,7 @@ export async function uploadPending() {
         chip.appendChild(ov);
         sp.start();
         _uploadSpinners.push(sp);
-      } catch (_) { /* spinner is best-effort */ }
+      } catch (_) { /* spinner 仅尽力而为 */ }
     });
   }
 
@@ -178,34 +178,34 @@ export async function uploadPending() {
       // pendingFiles so the strip re-renders for a retry (see finally below).
       let detail = '';
       try { const e = await res.json(); detail = e.detail || e.error || ''; } catch (_) {}
-      _showToast('Upload failed' + (detail ? ': ' + detail : ` (HTTP ${res.status})`));
+      _showToast(t('file.upload_failed') + (detail ? ': ' + detail : ` (HTTP ${res.status})`));
       return [];
     }
     const data = await res.json();
     uploaded = (data.files || []);
-    pendingFiles = [];          // clear only on success
-    // Stash the full meta (incl. width/height for images) on the module so
-    // callers that want it can grab it via getLastUploadedMeta(). Keep the
-    // returned shape as `ids` for backward-compatibility with existing call sites.
+    pendingFiles = [];          // 仅在成功时清空
+    // 将完整元数据（包括图片的 width/height）存储在模块上，
+    // 让需要的调用方可以通过 getLastUploadedMeta() 获取。
+    // 返回值保持 `ids` 格式以兼容现有的调用点。
     _lastUploadedMeta = uploaded;
     return uploaded.map(x => x.id);
   } finally {
     _uploadSpinners.forEach(sp => { try { sp.stop && sp.stop(); } catch (_) {} });
     _uploadSpinners = [];
     if (strip) strip.classList.remove('attach-uploading');
-    // Re-render: empty on success (chips gone), or restored on error so the
-    // user can retry — and either way the spinners are removed.
+    // 重新渲染：成功时清空（标签消失），或失败时恢复以便用户重试
+    // — 两种情况下旋转动画都会被移除。
     renderAttachStrip();
   }
 }
 
 /**
- * Add files to pending list (capped at MAX_FILES)
+ * 添加文件到待处理列表（最多 MAX_FILES 个）
  */
 export function addFiles(files) {
   for (const f of files) {
     if (pendingFiles.length >= MAX_FILES) {
-      _showToast(`Max ${MAX_FILES} files allowed`);
+      _showToast(t('file.max_files', { n: MAX_FILES }));
       break;
     }
     pendingFiles.push(f);
@@ -215,7 +215,7 @@ export function addFiles(files) {
 
 function _showToast(msg) {
   if (window.showToast) { window.showToast(msg); return; }
-  // Fallback inline toast
+  // 回退内联提示
   let t = document.getElementById('_attach-toast');
   if (!t) {
     t = document.createElement('div');
@@ -230,27 +230,27 @@ function _showToast(msg) {
 }
 
 /**
- * Get pending files count
+ * 获取待处理文件数量
  */
 export function getPendingCount() {
   return pendingFiles.length;
 }
 
 /**
- * Get raw pending File objects (for reading content before upload clears them)
+ * 获取原始待处理 File 对象（在上传清空之前读取内容）
  */
 export function getPendingRaw() {
   return [...pendingFiles];
 }
 
 /**
- * Get pending file metadata (name, size, type) for display
+ * 获取待处理文件元数据（名称、大小、类型）用于显示
  */
 export function getPendingInfo() {
   return pendingFiles.map(f => {
     const isImage = f.type?.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(f.name || '');
     return {
-      name: f.name || 'pasted-image',
+      name: f.name || t('file.pasted_image'),
       size: f.size || 0,
       mime: f.type || '',
       previewUrl: isImage ? _getPreviewUrl(f) : '',
@@ -259,7 +259,7 @@ export function getPendingInfo() {
 }
 
 /**
- * Clear all pending files
+ * 清除所有待处理文件
  */
 export function clearPending() {
   pendingFiles.forEach(_revokePreviewUrl);
@@ -267,7 +267,7 @@ export function clearPending() {
   renderAttachStrip();
 }
 
-/** Full meta (incl. width/height for images) from the most recent uploadPending(). */
+/** 最近一次 uploadPending() 返回的完整元数据（包括图片的 width/height）。 */
 export function getLastUploadedMeta() {
   return _lastUploadedMeta;
 }

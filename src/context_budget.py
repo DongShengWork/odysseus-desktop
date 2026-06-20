@@ -1,18 +1,18 @@
-"""Adaptive input-token budget for the agent loop (#1170).
+"""agent 循环的自适应输入 token 预算（#1170）。
 
-The agent soft-trims its input context to ``agent_input_token_budget`` (default
-6000). The old computation was ``min(context_length or budget, budget)``, which
-made the 6000 default a hard ceiling for *every* model — so a 128K or 1M context
-model was silently capped at 6000 input tokens even though it can hold far more.
+agent 会将其输入上下文软裁剪到 ``agent_input_token_budget``（默认
+6000）。旧的计算是 ``min(context_length or budget, budget)``，这
+使得 6000 的默认值成为*每个*模型的硬上限 — 因此一个 128K 或 1M 上下文的
+模型即使能容纳更多内容，也会被静默限制在 6000 个输入 token。
 
-This derives the effective budget from the model's discovered context window when
-the user has NOT set an explicit budget, while still honouring an explicit setting
-exactly (clamped to the window). Pure and side-effect free so it is unit-testable.
+当用户未设置显式预算时，此函数从模型发现到的上下文窗口中推导有效预
+算，同时仍然精确地遵守显式设置（受窗口限制）。纯函数且无副作用，可进
+行单元测试。
 """
 
-# Generous ceiling so long-context models are unblocked without sending a
-# pathologically large prompt every agent turn. Tunable; chosen to fully cover
-# 128K models and give 1M models a large but bounded budget.
+# 宽容的上限，使长上下文模型不被阻塞，同时不会在每个 agent 轮次中发送
+# 异常庞大的提示。可调整；选定为完全覆盖 128K 模型，并给 1M 模型更大的
+# 但有界限的预算。
 DEFAULT_HARD_MAX = 200_000
 DEFAULT_BUDGET = 6000
 DEFAULT_HEADROOM = 0.85
@@ -27,10 +27,10 @@ def compute_input_token_budget(
     headroom: float = DEFAULT_HEADROOM,
     hard_max: int = DEFAULT_HARD_MAX,
 ) -> int:
-    """Return the effective soft input-token budget.
+    """返回有效的软输入 token 预算。
 
     Args:
-        configured: the value read from settings (may be the default).
+        configured: 从设置中读取的值（可能是默认值）。
         context_length: the model's discovered context window. Pass 0 when the
             window is unknown / only a bare fallback — auto-scaling then stays
             conservative instead of trusting an unproven window (review on #4122).
@@ -40,7 +40,7 @@ def compute_input_token_budget(
             from a materialized default by value, so the default reads as auto.)
 
     Rules:
-        - Explicit user budget is honoured exactly, only clamped to the model's
+        - 显式用户预算被精确遵守，仅当窗口已知时受模型窗口限制
           window when that window is known (the user's deliberate choice wins;
           ``hard_max`` is an auto-budget ceiling only — see #1230).
         - Otherwise (auto), scale to ``headroom`` of the context window, capped at

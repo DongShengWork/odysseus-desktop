@@ -1,5 +1,5 @@
 # routes/mcp_routes.py
-"""MCP (Model Context Protocol) server management routes."""
+"""MCP (Model Context Protocol) 服务器管理路由。"""
 import json
 import os
 import uuid

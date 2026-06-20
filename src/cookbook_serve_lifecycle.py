@@ -1,9 +1,9 @@
 """Cookbook serve lifecycle: kills scheduler-owned serves whose end-of-
 window has passed.
 
-Pairs with action_cookbook_serve in builtin_actions.py — that action
-stamps the task it launches with `_scheduledStopAtMs`, this loop ticks
-every 60s and kills any serve whose stamp is in the past.
+与 builtin_actions.py 中的 action_cookbook_serve 配对 — 该操作
+用 `_scheduledStopAtMs` 标记它启动的任务，此循环每 60 秒检查一次
+并结束任何标记已过期的 serve。
 
 Single small module. Delete this file + the registration line in app.py
 and the feature stops doing anything; scheduler-launched serves just
@@ -31,17 +31,17 @@ def _internal_headers() -> dict:
 
 
 async def _delete_endpoint_for_task(task: dict) -> None:
-    """Drop the auto-registered model endpoint for a scheduled-stop serve.
+    """删除计划停止 serve 的自动注册模型端点。
 
-    Without this, killing the tmux session leaves the endpoint sitting in
-    the picker (probe goes offline; chats still try to route there) and
-    the user has to delete it by hand in Settings -> Endpoints.
+    没有这一步，结束 tmux session 会使端点留在选择器中
+    （探测离线；聊天仍尝试路由到那里），用户必须在
+    设置 -> 端点中手动删除。
     """
     import re as _re
     payload = task.get("payload") or {}
     cmd = str(payload.get("_cmd") or "")
     remote = task.get("remoteHost") or ""
-    # Build host the same way _auto_register_llm_endpoint does so URL match wins.
+    # 与 _auto_register_llm_endpoint 相同的方式构建 host，确保 URL 匹配成功。
     if remote:
         host = remote.split("@")[-1] if "@" in remote else remote
     else:
@@ -87,10 +87,10 @@ async def _delete_endpoint_for_task(task: dict) -> None:
 
 
 async def _stop_serve(session_id: str, remote_host: str = "", ssh_port: str = "") -> bool:
-    """Kill the tmux session that hosts the serve.
+    """结束托管 serve 的 tmux session。
 
-    There's no `/api/model/stop` route — the cookbook UI and the chat
-    agent both kill via `/api/shell/exec` running a `tmux kill-session`
+    没有 `/api/model/stop` 路由 — Cookbook UI 和聊天 agent 都通过
+    `/api/shell/exec` 运行 `tmux kill-session`（远程主机用 ssh
     (wrapped in ssh for remote hosts). Mirror that here so the
     lifecycle loop can actually stop scheduler-launched serves at
     window-end. Without this, the action stamped `_scheduledStopAtMs`
@@ -118,9 +118,9 @@ async def _stop_serve(session_id: str, remote_host: str = "", ssh_port: str = ""
                 return False
             data = r.json() if r.content else {}
             ec = data.get("exit_code")
-            # tmux returns non-zero when the session is already gone
-            # ("can't find session: ..."). That's still "stop succeeded"
-            # from our POV — the goal is no live session at the end.
+            # tmux 在 session 已不存在时返回非零
+            # ("can't find session: ...")。从我们角度看那仍然是
+            # "停止成功" — 目标是最终没有 live session。
             if ec in (None, 0):
                 return True
             stderr = (data.get("stderr") or "").lower()
@@ -158,16 +158,16 @@ async def _tick() -> None:
         to_stop.append((sid, t.get("remoteHost") or "", t.get("sshPort") or ""))
     if not to_stop:
         return
-    # Re-read state once before writing so we capture any updates from
-    # concurrent UI syncs.
+    # 写入前重新读取一次状态，以便捕获来自
+    # 并发 UI 同步的任何更新。
     stopped_any = False
     for sid, host, port in to_stop:
         ok = await _stop_serve(sid, host, port)
         logger.info(f"cookbook_serve_lifecycle: stop {sid} (host={host or 'local'}): {'ok' if ok else 'failed'}")
         if ok:
             stopped_any = True
-            # Drop the auto-registered endpoint so the model picker and
-            # the chat router don't keep pointing at a dead server.
+            # 删除自动注册的端点，避免模型选择器和
+            # 聊天路由器继续指向已死的服务器。
             for t in tasks:
                 if isinstance(t, dict) and (t.get("sessionId") == sid or t.get("id") == sid):
                     if t.get("type") == "serve":
@@ -204,8 +204,8 @@ async def _tick() -> None:
 
 
 async def cookbook_serve_lifecycle_loop() -> None:
-    """Forever-loop. Registered as a startup task in app.py."""
-    await asyncio.sleep(20)  # let the rest of startup settle
+    """永久循环。在 app.py 中注册为启动任务。"""
+    await asyncio.sleep(20)  # 让启动的其他部分先就绪
     while True:
         try:
             await _tick()

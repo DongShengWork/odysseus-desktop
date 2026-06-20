@@ -1,15 +1,15 @@
 /**
- * Edge feather / edge delete via a two-pass chamfer distance transform.
+ * 通过两遍 Chamfer 距离变换进行边缘羽化 / 边缘删除。
  *
- * Operates in-place on the supplied ImageData. For each opaque pixel,
- * compute the (approximate) distance to the nearest transparent pixel
- * OR canvas edge. Pixels within `width` of that boundary either get
- * faded (`hardDelete=false`) or fully cleared (`hardDelete=true`).
+ * 对提供的 ImageData 进行就地操作。对于每个不透明像素，
+ * 计算到最近的透明像素或画布边缘的（近似）距离。
+ * 距离边界 `width` 范围内的像素要么
+ * 被渐变过渡（`hardDelete=false`），要么被完全清除（`hardDelete=true`）。
  *
  * @param {ImageData} imgData
- * @param {number} width        Feather radius in pixels.
- * @param {boolean} hardDelete  If true, clear pixels inside the band
- *                              instead of fading.
+ * @param {number} width        羽化半径，单位像素。
+ * @param {boolean} hardDelete  如果为 true，清除带区内的像素
+ *                              而非渐变过渡。
  */
 export function edgeFeather(imgData, width, hardDelete) {
   const w = imgData.width;
@@ -18,12 +18,12 @@ export function edgeFeather(imgData, width, hardDelete) {
   const dist = new Float32Array(w * h);
   dist.fill(width + 1);
 
-  // Seed: transparent pixels are at distance 0.
+  // 种子：透明像素距离为 0。
   for (let i = 0; i < w * h; i++) {
     if (d[i * 4 + 3] === 0) dist[i] = 0;
   }
 
-  // Two-pass chamfer distance transform.
+  // 两遍 Chamfer 距离变换。
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
@@ -45,7 +45,7 @@ export function edgeFeather(imgData, width, hardDelete) {
     }
   }
 
-  // Treat the canvas border itself as a boundary.
+  // 将画布边框本身视为边界。
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const edgeDist = Math.min(x, y, w - 1 - x, h - 1 - y);
@@ -54,7 +54,7 @@ export function edgeFeather(imgData, width, hardDelete) {
     }
   }
 
-  // Apply.
+  // 应用。
   for (let i = 0; i < w * h; i++) {
     if (d[i * 4 + 3] === 0) continue;
     const edgeDist = dist[i];

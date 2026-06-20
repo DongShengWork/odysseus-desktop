@@ -1,9 +1,9 @@
-"""CalDAV write-back: push local create/update/delete out to the remote (#800).
+"""CalDAV 写回：将本地创建/更新/删除推送到远程（#800）。
 
-``src/caldav_sync.py`` is a one-way pull (remote → local). So events created,
-edited, or deleted in Odysseus on a CalDAV-backed calendar only changed the local
-SQLite copy and never reached the server (iCloud/Nextcloud/Radicale/Fastmail) —
-they'd silently disappear on the next pull and never show on the user's phone.
+``src/caldav_sync.py`` 是单向拉取（远程 → 本地）。因此在 CalDAV 支持的
+日历上，在 Odysseus 中创建、编辑或删除的事件仅更改了本地 SQLite 副本，
+并且永远不会到达服务器（iCloud/Nextcloud/Radicale/Fastmail）——它们会在
+下一次拉取时静默消失，并且永远不会显示在用户的手机上。
 
 This adds the missing write half. The remote calendar URL isn't stored locally
 (the local calendar id is a one-way hash of it), so we re-discover the remote
@@ -11,9 +11,9 @@ calendar by matching that same hash, then PUT/DELETE the VEVENT by its UID via
 the `caldav` lib. Writes are best-effort: the local DB stays the source of truth,
 and a remote failure is reported, never fatal to the local operation.
 
-The pure pieces (``build_event_ical``, ``find_remote_calendar``, ``push_event``)
-take their inputs by argument so they unit-test against a fake client with no
-network.
+纯函数部分（``build_event_ical``、``find_remote_calendar``、
+``push_event``）通过参数接收输入，因此可以用无网络的假客户端进行
+单元测试。
 """
 
 import asyncio
@@ -24,17 +24,17 @@ logger = logging.getLogger(__name__)
 
 
 def _stable_cal_id(remote_url: str, owner: str = "", account_id: str = "") -> str:
-    # Reuse the sync module's hashing so owner+account_id scoping stays consistent.
+    # 复用同步模块的哈希，使 owner+account_id 作用域保持一致。
     from src.caldav_sync import _stable_cal_id as _sync_id
     return _sync_id(remote_url, owner=owner, account_id=account_id)
 
 
 def build_event_ical(ev: dict) -> str:
-    """Serialize a local event dict to a VCALENDAR/VEVENT iCalendar string.
+    """将本地事件字典序列化为 VCALENDAR/VEVENT iCalendar 字符串。
 
-    ``ev`` keys: uid, summary, description, location, dtstart (datetime),
-    dtend (datetime), all_day (bool), is_utc (bool), rrule (str).
-    Mirrors how the pull path interprets is_utc/all_day so a round-trip is stable.
+    ``ev`` 键：uid、summary、description、location、dtstart（datetime）、
+    dtend（datetime）、all_day（bool）、is_utc（bool）、rrule（str）。
+    镜像拉取路径解释 is_utc/all_day 的方式，确保往返稳定。
     """
     from icalendar import Calendar, Event as iEvent
     from icalendar.prop import vRecur
@@ -57,11 +57,11 @@ def build_event_ical(ev: dict) -> str:
         ve.add("dtstart", dtstart.date())
         ve.add("dtend", dtend.date())
     elif ev.get("is_utc"):
-        # Stored as naive-UTC instants — re-attach UTC so the server gets a Z time.
+        # 存储为朴素 UTC 时刻 — 重新附加 UTC 使服务器获得 Z 时间。
         ve.add("dtstart", dtstart.replace(tzinfo=timezone.utc))
         ve.add("dtend", dtend.replace(tzinfo=timezone.utc))
     else:
-        # Legacy naive-local ("floating") time — emit without a TZ.
+        # 旧版朴素本地（"浮动"）时间 — 不带时区发出。
         ve.add("dtstart", dtstart)
         ve.add("dtend", dtend)
 
@@ -76,10 +76,10 @@ def build_event_ical(ev: dict) -> str:
 
 
 def find_remote_calendar(calendars, local_cal_id: str, owner: str = "", account_id: str = ""):
-    """Find the remote calendar whose URL hashes to ``local_cal_id``, or None.
+    """找到 URL 哈希等于 ``local_cal_id`` 的远程日历，或返回 None。
 
-    ``owner`` and ``account_id`` must match what was used when the local calendar
-    id was originally computed in ``_sync_blocking`` so the hash round-trips."""
+    ``owner`` 和 ``account_id`` 必须与 ``_sync_blocking`` 中最初计算
+    本地日历 id 时使用的值匹配，以确保哈希往返正确。"""
     for cal in calendars:
         try:
             if _stable_cal_id(str(cal.url), owner=owner, account_id=account_id) == local_cal_id:
@@ -108,12 +108,12 @@ def _resource_etag(obj) -> str:
 
 def push_event(calendars, local_cal_id: str, ev: dict, *, delete: bool = False,
                owner: str = "", account_id: str = "") -> dict:
-    """Create/update (or delete) ``ev`` on the matching remote calendar.
+    """在匹配的远程日历上创建/更新（或删除）``ev``。
 
-    Returns ``{"ok": bool, ...}``. ``calendars`` is the discovered caldav
-    calendar list (injected so this is unit-testable with fakes).
-    ``owner`` and ``account_id`` are forwarded to ``find_remote_calendar``
-    so the URL hash round-trips correctly (#2765).
+    返回 ``{"ok": bool, ...}``。``calendars`` 是已发现的 caldav
+    日历列表（注入参数以便用假对象进行单元测试）。
+    ``owner`` 和 ``account_id`` 转发给 ``find_remote_calendar``
+    以使 URL 哈希正确往返（#2765）。
     """
     uid = (ev or {}).get("uid") if isinstance(ev, dict) else None
     if not uid:
@@ -179,8 +179,8 @@ def _discover_calendars(client):
 def _writeback_blocking(local_cal_id, ev, delete, url, username, password,
                         owner="", account_id="") -> dict:
     from src.caldav_sync import _build_dav_client
-    # Redirects disabled here too: the write-back path opens its own DAVClient,
-    # so it needs the same SSRF-via-redirect protection as the pull path.
+    # 此处也禁用重定向：写回路径打开自己的 DAVClient，
+    # 因此需要与拉取路径相同的 SSRF-via-redirect 保护。
     client = _build_dav_client(url, username, password)
     calendars = _discover_calendars(client)
     if not calendars:
@@ -239,11 +239,11 @@ def _persist_writeback_result(owner: str, calendar_id: str, uid: str, result: di
 
 async def writeback_event(owner: str, calendar_source: str, calendar_id: str,
                           ev: dict, *, delete: bool = False) -> dict:
-    """Best-effort push of a local change to the remote CalDAV server.
+    """尽力将本地更改推送到远程 CalDAV 服务器。
 
-    No-ops (``{"skipped": ...}``) when the calendar isn't CalDAV-backed or no
-    credentials are configured. Never raises — a remote failure is logged and
-    returned, the local DB remaining the source of truth.
+    当日历不是 CalDAV 支持的或未配置凭据时无操作
+    （``{"skipped": ...}``）。绝不抛出异常 — 远程失败会被记录并返回，
+    本地数据库保持为事实来源。
     """
     if calendar_source != "caldav":
         return {"skipped": "not a caldav calendar"}
@@ -256,7 +256,7 @@ async def writeback_event(owner: str, calendar_source: str, calendar_id: str,
         if not accounts:
             return {"skipped": "caldav not configured"}
 
-        # Find which account owns this calendar.
+        # 查找哪个帐户拥有此日历。
         acc = None
         if len(accounts) > 1:
             db = SessionLocal()
@@ -268,7 +268,7 @@ async def writeback_event(owner: str, calendar_source: str, calendar_id: str,
             if cal_account_id:
                 acc = next((a for a in accounts if a.get("id") == cal_account_id), None)
         # Fall back to first account (covers single-account and legacy rows with
-        # no account_id stamped).
+        # 回退到第一个帐户（覆盖单帐户和没有 account_id 标记的旧数据行）。
         if acc is None:
             acc = accounts[0]
 

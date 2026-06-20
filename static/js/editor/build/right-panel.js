@@ -6,10 +6,10 @@
  * the panel-width drag-resize handle.
  *
  * Owns its own event listeners (touch swipe gestures, mouse resize
- * drag). Returns the `rightPanel` element + the `panelResize` handle
+ * 返回 `rightPanel` 元素 + `panelResize` 手柄 + 内部 `controls`
  * + the inner `controls` element so the caller can wire any post-
  * mount tweaks. Reads state.container (for mobile re-parenting) and
- * state.color / state.brushSize / state.wandTolerance (initial slider
+ * （用于移动端重新挂载）和 state.color / state.brushSize /
  * values).
  *
  * @param {{
@@ -30,19 +30,19 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
   const rightPanel = document.createElement('div');
   rightPanel.className = 'ge-right-panel';
 
-  // Controls section.
+  // 控件区域。
   const controls = document.createElement('div');
   controls.className = 'ge-controls';
-  // Swipe-down to dismiss on mobile. Tap the same tool again to bring
-  // the sheet back. Only the top ~40 px (grab handle area) initiates
-  // the gesture so taps on inputs/sliders inside the panel still work.
+  // 移动端向下滑动以关闭面板。再次点击同一工具可重新显示面板。
+  // 只有顶部约 40px 区域（抓握手柄区域）可触发手势，
+  // 因此面板内输入框/滑块的点击操作仍能正常响应。
   {
     let sy = 0, dragging = false;
     controls.addEventListener('touchstart', (e) => {
       if (window.innerWidth > 700) return;
       const rect = controls.getBoundingClientRect();
       const t = e.touches[0];
-      // Only engage if touch starts in the top grab zone.
+      // 仅当触摸从顶部抓取区域开始时才激活。
       if (t.clientY - rect.top > 40) return;
       sy = t.clientY;
       dragging = true;
@@ -68,9 +68,9 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
     wandTolerance: state.wandTolerance,
   });
   rightPanel.appendChild(controls);
-  // Mobile only (≤ 700 px — matches the .ge-editor-body column-stack
+  // 仅移动端（≤ 700px——与 .ge-editor-body 列堆叠断点
   // breakpoint): the right panel becomes a transformed bottom-sheet,
-  // so any position:fixed descendant gets trapped by the transform
+  // position:fixed 的子元素都会被 transform 捕获并随面板一起
   // and rides along with the panel. Re-parent the controls panel to
   // the editor root so it can truly fix to the viewport bottom
   // regardless of the layers-sheet state. On desktop, controls stay
@@ -91,14 +91,14 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
     }
   });
 
-  // Layer panel.
+  // 图层面板。
   const layerPanel = document.createElement('div');
   layerPanel.className = 'ge-layers';
   layerPanel.innerHTML = layerPanelHTML();
   rightPanel.appendChild(layerPanel);
-  // Mobile: tap the header grab handle or swipe up/down to toggle
-  // the layers sheet between peek and expanded. The peek state
-  // always shows the active layer so users never lose access to it.
+  // 移动端：点击头部抓握手柄或上下滑动，在图层面板的
+  // peek 和 expanded 状态之间切换。peek 状态始终显示
+  // 当前活动图层，确保用户始终能访问到它。
   {
     const header = layerPanel.querySelector('.ge-layers-header');
     if (header) {
@@ -116,9 +116,9 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
         dragging = false;
         const dy = e.changedTouches[0].clientY - sy;
         const dx = Math.abs(e.changedTouches[0].clientX - sx);
-        // Real swipe — three states cycle by direction:
-        //   minimized → peek → expanded   (swipe up)
-        //   expanded → peek → minimized   (swipe down)
+        // 真正的滑动——按方向循环切换三种状态：
+        //   minimized → peek → expanded   （向上滑动）
+        //   expanded → peek → minimized   （向下滑动）
         if (Math.abs(dy) > 20 && Math.abs(dy) > dx) {
           didSwipe = true;
           const isExpanded = rightPanel.classList.contains('expanded');
@@ -143,7 +143,7 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
         if (window.innerWidth > 700) return;
         if (e.target.closest('button')) return;
         if (didSwipe) { didSwipe = false; return; }
-        // Click cycles between peek and expanded; minimized comes
+        // 点击在 peek 和 expanded 之间循环切换；minimized 状态
         // back to peek (so a tap on the handle always reveals at
         // least the active layer row).
         if (rightPanel.classList.contains('minimized')) {
@@ -180,8 +180,8 @@ export function buildRightPanel({ controlsHTML, layerPanelHTML }) {
   });
   document.addEventListener('mousemove', (e) => {
     if (!panelResizing) return;
-    // Dragging left → wider panel (the panel sits on the right of
-    // the editor, so a leftward drag pulls its left edge left).
+    // 向左拖拽 → 面板变宽（面板位于编辑器右侧，
+    // 因此向左拖拽会将其左边缘向左拉）。
     const delta = panelStartX - e.clientX;
     const next = Math.max(160, Math.min(window.innerWidth - 200, panelStartW + delta));
     rightPanel.style.flex = `0 0 ${next}px`;

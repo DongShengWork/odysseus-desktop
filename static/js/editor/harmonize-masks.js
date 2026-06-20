@@ -1,18 +1,18 @@
 /**
- * Mask builders used by the AI Harmonize pipeline.
+ * AI Harmonize 管道使用的遮罩构建器。
  *
- *  - `layerUnionAlpha`  — union of every non-base layer's alpha, as a
- *                         binary (0/255) mask. Used as the substrate
- *                         for both seam and body masks.
- *  - `seamMask`         — feathered band along the alpha edges of all
- *                         non-base layers. White = "blend here",
- *                         black = "leave alone". Returned as base64
- *                         PNG (so it can be POST'd to the diffusion
- *                         endpoint as JSON).
+ *  - `layerUnionAlpha` — 所有非底图图层的 alpha 并集，生成二分（0/255）遮罩。
+ *                         白色 = "在此处融合"，黑色 = "保持不变"。
+ *                         黑色 = "精确保留"。以 base64 格式返回。
+ *  - `seamMask`         — 沿所有非底图图层 alpha 边缘的羽化带。
+ *                         白色 = "在此处融合"，黑色 = "保持不变"。
+ *                         黑色 = "精确保留"。以 base64 格式返回。
+ *                         以 base64 PNG 格式返回（以便作为 JSON POST 到扩散端点）。
+ *                         黑色 = "精确保留"。以 base64 格式返回。
  *  - `layerBodyMask`    — feathered FULL shape of every non-base layer.
- *                         White = "AI may redraw this pixel using the
- *                         existing pixels as a starting point";
- *                         black = "preserve exactly". Returned as base64.
+ *                         黑色 = "精确保留"。以 base64 格式返回。
+ *                         白色 = "在此处融合"，黑色 = "保持不变"。
+ *                         黑色 = "精确保留"。以 base64 格式返回。
  *
  * Each helper takes the visible layer list + the doc dimensions; no
  * module state.
@@ -25,10 +25,10 @@
  * layer's pixels. Returns null when fewer than 2 visible layers exist
  * or when the non-base layers are entirely transparent.
  *
- * @param {number} w / h          Canvas dimensions in pixels.
- * @param {HarmLayer[]} layers    All layers in stack order; the
- *                                first VISIBLE layer is treated as
- *                                the base / background.
+ * @param {number} w / h          画布尺寸（像素）。
+ * @param {HarmLayer[]} layers    按堆叠顺序排列的所有图层；
+ *                                第一个可见图层作为底图/背景。
+ *                                第一个可见图层作为底图/背景。
  * @returns {HTMLCanvasElement|null}
  */
 export function layerUnionAlpha(w, h, layers) {
@@ -80,7 +80,7 @@ export function seamMask(w, h, layers, featherPx = 12) {
   blctx.filter = 'none';
   const blurred = blctx.getImageData(0, 0, w, h);
   const mask = blctx.createImageData(w, h);
-  // Triangular weight peaked at mid-grey — picks out the alpha-edge band.
+  // 三角形权重峰值在中间灰 — 提取 alpha 边缘带。
   for (let i = 0; i < blurred.data.length; i += 4) {
     const v = blurred.data[i];
     const dist = Math.abs(v - 128);
@@ -100,8 +100,8 @@ export function seamMask(w, h, layers, featherPx = 12) {
 
 
 /**
- * Build a feathered FULL-shape mask of every non-base visible layer.
- * Returns base64-encoded PNG, or null if there are no non-base layers.
+ * 构建所有非底图可见图层的羽化完整形状遮罩。
+ * 返回 base64 编码的 PNG，如果没有非底图层则返回 null。
  */
 export function layerBodyMask(w, h, layers, featherPx = 12) {
   const bin = layerUnionAlpha(w, h, layers);

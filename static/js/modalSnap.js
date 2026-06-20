@@ -1,17 +1,17 @@
-// Right-edge snap docking for draggable modals.
+// 可拖动模态框的右边缘吸附停靠功能。
 //
 // Adds a "drag-to-right" gesture that docks a modal as a right-side panel
 // (mirrors the snap-to-top fullscreen pattern used by _makeDraggable in
-// emailLibrary.js / documentLibrary.js / galleryEditor.js). While docked:
-//   - the modal-content lives at `right: 0; top: 0; bottom: 0` with a
+//（镜像 emailLibrary.js / documentLibrary.js / galleryEditor.js 中
+//   - modal-content 位于 `right: 0; top: 0; bottom: 0`，使用视口比例的宽度
 //     viewport-fraction width
-//   - body gets `right-dock-active` + `--right-dock-w` so the workspace
+//   - body 添加 `right-dock-active` + `--right-dock-w`，使下方工作区
 //     underneath reserves room for the fixed side panel
 //   - if the remaining chat width would drop under 380px, the wide
 //     sidebar auto-collapses to the icon rail (mirrors notes-view UX)
 //
-// Drag-away from the right edge un-docks back to a centered window —
-// the same restore values the snap-to-top exit path uses.
+// 从右边缘拖离则取消停靠，恢复为居中窗口 —
+// 使用与吸附到顶部退出路径相同的恢复值。
 
 // Wider snap zone than the top-snap fullscreen (6px) — the right edge
 // is harder to hit precisely since most users drag broadly toward the
@@ -59,7 +59,7 @@ export function clearDockSide(side, owner = null) {
   _positionEdgeDockResizeHandles();
 }
 
-// Default dock width: ~38% of viewport, clamped to a reasonable band.
+// 默认停靠宽度：约视口的 38%，限制在合理范围内。
 function _defaultDockWidth() {
   return Math.min(640, Math.max(420, Math.round(window.innerWidth * 0.38)));
 }
@@ -170,9 +170,9 @@ function _shouldAutoCollapseSidebar(dockW) {
   return remaining < MIN_CHAT_WIDTH;
 }
 
-// Right edge (px) of whatever left navigation is currently showing — the
-// expanded sidebar if visible, otherwise the icon rail. Used to anchor the
-// left dock so it always sits flush to the right of the nav.
+// 当前显示的左侧导航的右边缘（像素）—
+// 如果可见则为展开的侧边栏，否则为图标栏。用于锚定
+// 左侧停靠，使其始终紧贴导航右侧。
 function _leftNavRight() {
   const sidebar = document.getElementById('sidebar');
   const rail = document.getElementById('icon-rail');
@@ -228,7 +228,7 @@ function _applyEmailDocSplitGeometry(left, emailWidth) {
   document.documentElement.style.setProperty('--email-doc-split-email-w', `${emailWidth}px`);
   document.documentElement.style.setProperty('--email-doc-split-right-x', `${x}px`);
 
-  // emailLibrary.js pins the document pane with inline !important styles
+  // emailLibrary.js 在停靠的邮件旁边打开文档后，会使用内联 !important 样式
   // after opening a document beside a snapped email. Update that inline
   // geometry too, otherwise the email resizes but the document stays put.
   const docPane = document.getElementById('doc-editor-pane');
@@ -283,11 +283,11 @@ function _anchorLeftDock(content) {
   content.style.left = left + 'px';
   content.style.width = w + 'px';
   content.style.maxWidth = w + 'px';
-  // If a document is also open, drive the existing email/doc-split CSS rule
-  // (style.css `body.email-doc-split-active.doc-view .doc-editor-pane`) so
-  // the doc-pane becomes position:fixed starting at the email's right edge.
-  // No flex/max-width fighting; the doc just owns the right side from the
-  // email's right edge to the viewport edge — they touch flush, no gap.
+  // 如果文档也是打开的，驱动已有的邮件/文档分屏 CSS 规则
+  //（style.css 中 `body.email-doc-split-active.doc-view .doc-editor-pane`），
+  // 使文档窗格变为 position:fixed，从邮件右边缘开始。
+  // 不使用 flex/max-width 争夺；文档直接从邮件右边缘到视口边缘 —
+  // 它们紧密相邻，无间隙。
   const docOpen = document.body.classList.contains('doc-view') && _isEmailDockOwner(content._dockOwner);
   if (docOpen) {
     if (!document.body.classList.contains('email-doc-split-active')) {
@@ -308,7 +308,7 @@ function _collapseSidebarToRail() {
   const rail = document.getElementById('icon-rail');
   if (!sidebar || !rail) return;
   // Mark the collapse as route/dock-driven so the paired restore in
-  // app.js (window._restoreSidebarIfRouteCollapsed) knows it owns the
+  //（window._restoreSidebarIfRouteCollapsed）知道自己拥有取消折叠的权力。
   // un-collapse. Same marker the /email and /notes openers use — they
   // can't both be active at once so no conflict.
   if (!sidebar.classList.contains('hidden')) {
@@ -331,13 +331,13 @@ function _resolveDockNodes(target) {
   return { modal: target, content };
 }
 
-// Apply edge dock state to a modal/pane. `side` is 'right' (default) or 'left'.
+// 对模态框/面板应用边缘停靠状态。`side` 为 'right'（默认）或 'left'。
 export function applyEdgeDock(modal, side = 'right', dockClass) {
   if (!dockClass) dockClass = side === 'left' ? 'modal-left-docked' : 'modal-right-docked';
   return _applyDockInternal(modal, side, dockClass);
 }
 
-// Backwards-compat: existing callers use applyRightDock for right snaps.
+// 向后兼容：现有调用者使用 applyRightDock 进行右侧吸附。
 export function applyRightDock(modal, dockClass = 'modal-right-docked') {
   return _applyDockInternal(modal, 'right', dockClass);
 }
@@ -360,15 +360,15 @@ function _applyDockInternal(modal, side, dockClass) {
   if (modal.classList.contains(otherClass)) {
     modal.classList.remove(otherClass);
     clearDockSide(otherSide, modal);
-    // Reset the edge anchors so the new side positions from a clean slate
-    // (the right dock pins right:0; the left dock pins left:<nav>).
+    // 重置边缘锚点，使新侧从干净状态开始定位
+    //（右侧停靠固定 right:0；左侧停靠固定 left:<nav>）。
     content.style.left = '';
     content.style.right = '';
   }
-  // Snapshot the actual rendered rect + inline styles so un-dock can
-  // restore the exact same floating window the user had before. Without
-  // this, a window the user had carefully resized would snap back to
-  // some 720×85vh default — feels like the dock ate their layout.
+  // 捕获实际渲染的矩形 + 内联样式，以便取消停靠时可以
+  // 恢复用户之前完全相同的浮动窗口。没有这个，
+  // 用户精心调整大小的窗口将弹回某个 720×85vh 的默认值 —
+  // 感觉像停靠吃掉了他们的布局。
   if (!content._preDockSnapshot) {
     const r = content.getBoundingClientRect();
     content._preDockSnapshot = {
@@ -387,8 +387,8 @@ function _applyDockInternal(modal, side, dockClass) {
         transform: content.style.transform,
         margin: content.style.margin,
       },
-      // Track whether we collapsed the wide sidebar — only restore it
-      // on un-dock if the dock was responsible for the collapse.
+      // 跟踪是否是我们折叠了宽侧边栏 — 仅当停靠是折叠原因时
+      // 才在取消停靠时恢复它。
       collapsedSidebar: false,
     };
   }
@@ -403,9 +403,9 @@ function _applyDockInternal(modal, side, dockClass) {
   content.style.margin = '0';
   let w;
   if (side === 'left') {
-    // Left dock: collapse the sidebar to the icon rail, then pin the window
-    // beside the rail. Normal left docks reserve their width so chat shrinks;
-    // the email+document split keeps its existing overlay geometry.
+    // 左侧停靠：将侧边栏折叠为图标栏，然后将窗口固定在
+    // 图标栏旁边。普通左侧停靠保留其宽度以便聊天区域收缩；
+    // 邮件+文档分屏保留其现有的覆盖几何。
     _collapseSidebarToRail();
     content._preDockSnapshot.collapsedSidebar = true;
     content.style.right = 'auto';
@@ -443,16 +443,16 @@ function _applyDockInternal(modal, side, dockClass) {
       };
       const navObs = new MutationObserver(reanchor);
       if (sidebar) navObs.observe(sidebar, { attributes: true, attributeFilter: ['class', 'style'] });
-      // Only react to doc-view toggling — NOT to every body attribute mutation.
-      // Listening broadly caused thrashing last time and crashed the tab.
+      // 仅响应 doc-view 的切换 — 不响应每个 body 属性变更。
+      // 之前广泛监听导致抖动并崩溃了标签页。
       let _lastDocView = document.body.classList.contains('doc-view');
       const bodyObs = new MutationObserver(() => {
         const cur = document.body.classList.contains('doc-view');
         if (cur !== _lastDocView) {
           _lastDocView = cur;
           reanchor();
-          // Rebind the resize observer — the doc pane gets created/destroyed
-          // when doc-view flips, so the previous target may be stale.
+          // 重新绑定 ResizeObserver — 文档窗格在 doc-view 翻转时
+          // 被创建/销毁，因此之前的目标可能已过时。
           _bindDocResizeObs();
         }
       });
@@ -517,18 +517,18 @@ function _applyDockInternal(modal, side, dockClass) {
   // its padding-right.
   if (!modal._dockCloseWatcher && typeof MutationObserver !== 'undefined') {
     const onGone = () => _onDockedModalGone(modal, dockClass);
-    // Watch the modal for: the `.hidden` class flip, an inline
-    // `display:none` (how the draggable modals — calendar, plan, workspace,
-    // etc. — actually close), and parent removal. Without the `style` filter
-    // a display:none close left the body's dock padding on, so the chat
-    // stayed shifted after the docked modal was closed.
+    // 监视模态框的：`.hidden` 类翻转、内联
+    // `display:none`（可拖动模态框 — 日历、计划、工作区等
+    // 实际关闭的方式）以及父元素移除。没有 `style` 过滤器时，
+    // display:none 关闭会残留 body 的停靠填充，导致
+    // 停靠模态框关闭后聊天区域保持偏移。
     const _isGone = () => !modal.isConnected
       || modal.classList.contains('hidden')
       || modal.style.display === 'none';
     const obs = new MutationObserver(() => { if (_isGone()) onGone(); });
     obs.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
-    // A second observer catches DOM removal — childList on the parent
-    // is the reliable signal for `.remove()` / `.removeChild()` calls.
+    // 第二个观察器捕获 DOM 移除 — 父元素的 childList
+    // 是 `.remove()` / `.removeChild()` 调用的可靠信号。
     if (modal.parentNode) {
       const parentObs = new MutationObserver(() => {
         if (!modal.isConnected) onGone();
@@ -557,12 +557,12 @@ function _onDockedModalGone(modal, dockClass) {
   _disconnectLeftDockObservers(_c);
   const hadRight = modal.classList.contains('modal-right-docked');
   const hadLeft = modal.classList.contains('modal-left-docked');
-  // Clear body-level dock state only for the side this modal owned, and only
-  // when another docked window is not still using that side.
+  // 仅为此模态框拥有的那一侧清除 body 级别的停靠状态，
+  // 且仅当没有其他停靠窗口仍在使用该侧时才清除。
   if (hadRight) clearDockSide('right', modal);
   if (hadLeft) clearDockSide('left', modal);
-  // Tear down the email/doc split CSS vars we set in _anchorLeftDock so the
-  // doc-pane returns to its natural flex layout when the email is closed.
+  // 拆除我们在 _anchorLeftDock 中设置的邮件/文档分屏 CSS 变量，
+  // 以便在邮件关闭时文档窗格恢复到其自然的 flex 布局。
   if (hadLeft && !_hasOtherDockedWindow('left', modal)) {
     _clearEmailDocSplitGeometry();
   }
@@ -609,7 +609,7 @@ export function clearRightDock(modal, cx, cy, dockClass) {
   if (!nodes) return;
   const content = nodes.content;
   if (!content) return;
-  // Figure out which side was docked — fall back to right for legacy callers.
+  // 确定停靠在哪一侧 — 对旧调用者默认为右侧。
   const side = content._dockSide || (modal.classList.contains('modal-left-docked') ? 'left' : 'right');
   if (!dockClass) dockClass = side === 'left' ? 'modal-left-docked' : 'modal-right-docked';
   if (!modal.classList.contains(dockClass)) return;
@@ -626,10 +626,10 @@ export function clearRightDock(modal, cx, cy, dockClass) {
   // user didn't manually toggle it during the dock (we don't want to
   // override their explicit choice).
   if (snap && snap.collapsedSidebar && !_hasAnyOtherDockedWindow(modal)) _expandSidebarFromRail();
-  // Restore the exact inline style values the modal had before docking
-  // (width: min(720px, 92vw), max-height: 85vh, etc. — whatever the
-  // mount path set). Setting an empty string here removes the property
-  // from the inline style attribute, letting CSS rules take back over.
+  // 恢复模态框停靠前确切的內联样式值
+  //（width: min(720px, 92vw), max-height: 85vh 等 —
+  // 不论挂载路径设置了什么）。在此处设空字符串会从
+  // 内联样式属性中移除该属性，让 CSS 规则重新接管。
   const r = snap && snap.rect;
   const sty = (snap && snap.style) || {};
   content.style.position = sty.position || 'fixed';
@@ -638,7 +638,7 @@ export function clearRightDock(modal, cx, cy, dockClass) {
   // Inline width/height may have been empty on the original (CSS-driven)
   // modal — but we're now forcing position:fixed, which kills the
   // CSS-flex-centered layout that produced the original size. Without a
-  // fallback, position:fixed + width:auto collapses the window to its
+  // CSS-flex 居中布局。没有后备值的话，position:fixed + width:auto
   // content's min-width and the user sees a tiny pane after undock.
   // Use the captured rendered rect as a backup so the floating window
   // returns at roughly the same dimensions it had before docking.
@@ -649,10 +649,10 @@ export function clearRightDock(modal, cx, cy, dockClass) {
   content.style.borderRadius = sty.borderRadius || '';
   content.style.transform = sty.transform || '';
   content.style.margin = sty.margin || '';
-  // Re-anchor near the cursor so the panel feels peeled-off the edge.
-  // Use the captured rect width as the centering reference (CSS may not
-  // have resolved the inline width yet on this microtask). Fall back to
-  // the original captured left/top when no cursor coords are passed.
+  // 在光标附近重新锚定，使面板感觉像从边缘剥离。
+  // 用捕获的矩形宽度作为居中参考（CSS 在这个微任务中
+  // 可能还没有解析内联宽度）。没有光标坐标时回退到
+  // 原始捕获的 left/top。
   const refW = (r && r.width) || content.offsetWidth || 720;
   const refH = (r && r.height) || content.offsetHeight || (window.innerHeight * 0.7);
   const targetLeft = (typeof cx === 'number')
@@ -683,14 +683,14 @@ export function suspendDock(modal) {
         : modal.classList.contains('email-snap-left') ? 'left'
         : modal.classList.contains('modal-right-docked') ? 'right' : null);
   if (!side) return null;
-  // Stop the close-watcher from tearing the dock fully down when `.hidden`
-  // is added by minimize — we want to keep the dock, just release the push.
+  // 阻止关闭观察器在最小化添加 `.hidden` 时完全拆除停靠 —
+  // 我们想保留停靠，只释放偏移。
   if (modal._dockCloseWatcher) {
     try { modal._dockCloseWatcher.obs && modal._dockCloseWatcher.obs.disconnect(); } catch (_) {}
     try { modal._dockCloseWatcher.parentObs && modal._dockCloseWatcher.parentObs.disconnect(); } catch (_) {}
     delete modal._dockCloseWatcher;
   }
-  // Release the body push + restore the sidebar so the chat fills the width.
+  // 释放 body 偏移 + 恢复侧边栏，使聊天区域填满宽度。
   clearDockSide(side, modal);
   if (side === 'left') {
     _disconnectLeftDockObservers(content);
@@ -729,25 +729,25 @@ export function resumeDock(modal) {
   return true;
 }
 
-// Wire right-edge snap detection into a drag session. Call this once per
-// modal that should support docking. Returns an object the caller's drag
-// handler can poll: { hovering(): boolean, commit(): void, release(): void }.
-// The drag handler is responsible for calling onMove(clientX, clientY)
-// during mousemove and commit() at mouseup if hovering().
+// 将右边缘吸附检测接入拖动会话。为每个应支持停靠的模态框
+// 调用一次。返回调用者的拖动处理程序可以轮询的对象：
+// { hovering(): boolean, commit(): void, release(): void }。
+// 拖动处理程序负责在 mousemove 期间调用 onMove(clientX, clientY)，
+// 并在 mouseup 时如果 hovering() 则调用 commit()。
 export function makeRightDockController(modal, dockClass = 'modal-right-docked') {
   return makeEdgeDockController(modal, 'right', dockClass);
 }
 
-// Read the current visible left-nav edge for snap detection. Use measured
-// geometry instead of CSS vars because the sidebar can auto-collapse during a
-// dock operation while --sidebar-w is still settling.
+// 读取当前可见的左侧导航边缘用于吸附检测。使用测量的
+// 几何值而不是 CSS 变量，因为在停靠操作期间侧边栏可能自动折叠
+// 而 --sidebar-w 仍在稳定中。
 function _leftNavWidth() {
   return _leftNavRight();
 }
 
-// Generic edge-snap controller. `side` is 'left' or 'right'. Same pattern
-// as the original right-only controller: caller drives onMove during
-// mousemove, then calls commit()/release() at mouseup based on hovering().
+// 通用边缘吸附控制器。`side` 为 'left' 或 'right'。与原始
+// 仅右侧控制器模式相同：调用者在 mousemove 期间驱动 onMove，
+// 然后根据 hovering() 在 mouseup 时调用 commit()/release()。
 export function makeEdgeDockController(modal, side = 'right', dockClass) {
   if (!dockClass) dockClass = side === 'left' ? 'modal-left-docked' : 'modal-right-docked';
   let _hoveringSnap = false;
@@ -816,7 +816,7 @@ export function makeEdgeDockController(modal, side = 'right', dockClass) {
     handle.style.pointerEvents = 'auto';
     handle.style.touchAction = 'none';
     handle.style.display = 'none';
-    handle.title = 'Drag to resize docked window';
+    handle.title = t('modal.drag_to_resize_window');
     document.body.appendChild(handle);
   }
 
@@ -1003,7 +1003,7 @@ export function makeEdgeDockController(modal, side = 'right', dockClass) {
   stripe.style.pointerEvents = 'auto';
   stripe.style.touchAction = 'none';
   stripe.style.display = 'none';
-  stripe.title = 'Drag to resize email and draft';
+  stripe.title = t('modal.drag_to_resize_email');
 
   const _activeLeftDockContent = () => {
     const modal = document.querySelector(

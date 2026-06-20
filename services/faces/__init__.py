@@ -1,1 +1,1 @@
-"""Face detection + embedding service (standalone worker + helpers)."""
+"""人脸检测 + 嵌入服务（独立 worker + 辅助工具）。"""

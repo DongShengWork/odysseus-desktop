@@ -1,5 +1,5 @@
 /**
- * Slider-UX wiring shared across the editor:
+ * 编辑器内共享的滑块 UX 接线：
  *
  *   1. `is-using` class while a slider is being dragged (eraser-rows
  *      expand to a wider track when in use). Cleared 0.5s after
@@ -24,21 +24,21 @@ export function wireSliderUx({ registerDocClickAway }) {
   const container = state.container;
   if (!container) return;
 
-  // ── Floating bubble ──
+  // ── 浮动气泡 ──
   const sliderBubble = document.createElement('div');
   sliderBubble.className = 'ge-slider-bubble';
   sliderBubble.hidden = true;
   let sliderBubbleSlider = null;
 
-  // Find the container row for any slider — works for ge-eraser-row
-  // sliders AND the layer-opacity slider on each layer item.
+  // 查找任何滑块的容器行 — 适用于 ge-eraser-row 滑块
+  // 以及每个图层项上的图层不透明度滑块。
   function bubbleRowFor(slider) {
     return slider.closest('.ge-eraser-row, .ge-layer-item, .ge-control-row, .ge-adj-row');
   }
   function bubbleText(slider) {
     const row = bubbleRowFor(slider);
-    // Pulled-out value chip (after the slider) wins; fall back to
-    // the various `<label> <span>` styles used across the editor.
+    // 拉出的数值芯片（滑块之后）优先；回退到
+    // 编辑器使用的各种 `<label> <span>` 样式。
     const chip = row?.querySelector('.ge-slider-value')
       || row?.querySelector('label > span[id$="-label"]')
       || row?.querySelector('label > .ge-size-label')
@@ -51,7 +51,7 @@ export function wireSliderUx({ registerDocClickAway }) {
   }
   function bubblePos(slider, cursorX) {
     // Bubble is fixed-positioned on document.body so it escapes any
-    // overflow:hidden / overflow:auto on the row's ancestors. The
+    // 任何 overflow:hidden / overflow:auto。气泡的 X 坐标限制在
     // bubble's X is CLAMPED to the slider's track so it can't follow
     // a finger that drags way past either end.
     const sliderRect = slider.getBoundingClientRect();
@@ -76,8 +76,8 @@ export function wireSliderUx({ registerDocClickAway }) {
   }
 
   const slidingTimers = new WeakMap();
-  // Desktop: only the layer-opacity slider gets the bubble (eraser-
-  // rows have their own chip). Mobile: every slider gets one.
+  // 桌面端：仅图层不透明度滑块显示气泡（橡皮擦行有自己的芯片）。
+  // 移动端：每个滑块都显示一个。
   const isMobileSliders = window.matchMedia('(max-width: 820px)').matches;
   const SLIDER_SEL = isMobileSliders
     ? '.ge-layer-opacity, .ge-eraser-row input[type="range"], .ge-control-row input[type="range"], .ge-adj-row input[type="range"]'
@@ -159,7 +159,7 @@ export function wireSliderUx({ registerDocClickAway }) {
     inp.className = 'ge-slider-edit';
     chip.style.visibility = 'hidden';
     row.appendChild(inp);
-    // Position the input over where the chip sits.
+    // 将输入框定位在芯片所在位置。
     const crect = chip.getBoundingClientRect();
     const rrect = row.getBoundingClientRect();
     inp.style.left = (crect.left - rrect.left) + 'px';

@@ -1,5 +1,5 @@
 // static/js/chatRenderer.js
-// Extracted from chat.js — message rendering, sources, images, metrics
+// 从 chat.js 提取 — 消息渲染、引用来源、图片、性能指标
 
 import uiModule from './ui.js';
 import markdownModule from './markdown.js';
@@ -16,13 +16,13 @@ const CHAT_ABOUT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="n
 const COPY_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 const CHECK_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
-/** Sanitize a URL for use in href — only allow http(s) and protocol-relative. */
+/** 对用于 href 的 URL 进行安全过滤 — 仅允许 http(s) 和协议相对路径。 */
 function _safeHref(url) {
   if (!url) return '#';
   try {
     var parsed = new URL(url, window.location.origin);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return uiModule.esc(url);
-  } catch(e) { /* invalid URL */ }
+  } catch(e) { /* 无效的 URL */ }
   return '#';
 }
 
@@ -59,7 +59,7 @@ function _makeActionBtn(className, title, text, handler) {
   return btn;
 }
 
-// Attachment card helpers
+// 附件卡片辅助函数
 function _attachIcon(mimeOrName) {
   const s = (mimeOrName || '').toLowerCase();
   if (s.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(s))
@@ -68,7 +68,7 @@ function _attachIcon(mimeOrName) {
     return '<svg class="attach-card-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
   if (s === 'application/pdf' || /\.pdf$/i.test(s))
     return '<svg class="attach-card-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
-  // Default: generic document
+  // 默认：通用文档图标
   return '<svg class="attach-card-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
 }
 function _formatSize(bytes) {
@@ -77,26 +77,26 @@ function _formatSize(bytes) {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-// Build the `.attach-cards` element for a message's attachment list. Shared by
-// addMessage and updateMessageAttachments so a live (optimistic) user bubble
-// can be re-rendered with real upload ids once the upload resolves.
+// 构建消息附件列表的 `.attach-cards` 元素。由 addMessage 和
+// updateMessageAttachments 共享，使实时（乐观）用户气泡在
+// 上传完成后可以用真实上传 ID 重新渲染。
 function buildAttachCards(attachments) {
   const attachWrap = document.createElement('div');
   attachWrap.className = 'attach-cards';
   for (const att of attachments) {
     const isImage = (att.mime || '').startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(att.name || '');
     if (isImage) {
-      // Image preview. Shown for both uploaded (att.id present) and still-
-      // uploading attachments. A shimmering skeleton + whirlpool fills the
-      // space until either the upload resolves (no id yet) or the thumbnail
-      // image finishes loading, so the photo doesn't pop in abruptly.
+      // 图片预览。对已上传（有 att.id）和仍在
+      // 上传中的附件都显示。闪烁骨架 + 漩涡填充
+      // 空间，直到上传解析完成（尚无 id）或缩略图
+      // 图片加载完成，避免照片突然弹出。
       const imgWrap = document.createElement('div');
       imgWrap.className = 'attach-image-preview';
       imgWrap.style.cursor = att.id ? 'zoom-in' : 'default';
       if (att.id) imgWrap.dataset.fileId = att.id;
       if (att.id) {
         imgWrap.addEventListener('click', (e) => {
-          // Tapping the corner OCR button shouldn't also open the lightbox.
+          // 点击角落 OCR 按钮不应同时打开灯箱。
           if (e.target.closest('.attach-ocr-btn')) return;
           _openImageLightbox(att);
         });
@@ -105,12 +105,12 @@ function buildAttachCards(attachments) {
       let skel = null;
       let sp = null;
       if (!att.previewUrl) {
-        // Skeleton placeholder with a centered whirlpool. Self-stops when removed.
+        // 骨架占位符，带居中漩涡。被移除时自动停止。
         skel = document.createElement('div');
         skel.className = 'attach-image-skeleton';
-        // Match the photo's aspect ratio when the backend knew it at upload
-        // time, so the skeleton doesn't sit at a 4:3 default and then snap to
-        // a portrait shape when the image arrives.
+        // 在上传时后端已知宽高比时，匹配照片的宽高比，
+        // 避免骨架以 4:3 默认比例显示，然后在图片到达时
+        // 突然变为竖版形状。
         if (att.width && att.height) {
           skel.style.aspectRatio = att.width + ' / ' + att.height;
           skel.style.width = 'auto';
@@ -126,8 +126,8 @@ function buildAttachCards(attachments) {
 
       if (att.id || att.previewUrl) {
         const img = document.createElement('img');
-        // Small cached thumbnail — the preview is tiny, no need to pull the
-        // full-resolution photo. Click still opens the full image.
+        // 小缩略图缓存 — 预览很小，无需拉取
+        // 全分辨率照片。点击仍会打开完整图片。
         img.alt = att.name || 'Image';
         img.loading = 'lazy';
         img.style.cssText = 'max-width:300px;max-height:200px;border-radius:6px;display:' + (att.previewUrl ? 'block' : 'none') + ';';
@@ -144,20 +144,20 @@ function buildAttachCards(attachments) {
         img.addEventListener('load', _reveal);
         img.addEventListener('error', _reveal);
         img.src = att.previewUrl || `/api/upload/${att.id}?thumb=1`;
-        // Cached images can be complete before the load listener attaches.
+        // 缓存的图片可能在 load 监听器附加之前就已加载完成。
         if (img.complete && img.naturalWidth) _reveal();
-        // Failsafe: if neither load nor error fires within 8s, reveal anyway.
-        // The timer is cleared on reveal AND when updateMessageAttachments
-        // replaces the card (which scrubs the img / skel from the DOM), so
-        // repeated re-renders don't accumulate stranded timers.
+        // 保底：如果 8 秒内 load 和 error 都没触发，仍然显示。
+        // 显示时清除计时器，updateMessageAttachments 替换卡片时
+        // （会从 DOM 中移除 img / skel 元素）也清除，因此
+        // 重复重新渲染不会累积孤立的计时器。
         if (!att.previewUrl) _revealTimer = setTimeout(_reveal, 8000);
         imgWrap.appendChild(img);
 
         if (att.id) {
-          // Small corner button → opens the vision/OCR editor so the user can
-          // correct what the vision model extracted. The edit is cached on the
-          // server keyed by file id, so any later message referencing this same
-          // image picks up the corrected text instead of re-running the model.
+          // 小角落按钮 → 打开视觉/OCR 编辑器，使用户可以
+          // 更正视觉模型提取的内容。编辑缓存于
+          // 服务器，以文件 ID 为键，因此此后引用同一
+          // 图片的消息会获取更正后的文本，而无需重新运行模型。
           const ocrBtn = document.createElement('button');
           ocrBtn.type = 'button';
           ocrBtn.className = 'attach-ocr-btn';
@@ -185,7 +185,7 @@ function buildAttachCards(attachments) {
       }
       attachWrap.appendChild(imgWrap);
     } else {
-      // Non-image file card
+      // 非图片文件卡片
       const card = document.createElement('div');
       card.className = 'attach-card';
       card.dataset.name = att.name;
@@ -193,8 +193,8 @@ function buildAttachCards(attachments) {
         card.dataset.fileId = att.id;
         card.style.cursor = 'pointer';
         card.addEventListener('click', () => {
-          // PDFs & text/code/markdown → open in the Documents viewer
-          // (others fall back to the raw file).
+          // PDF 和文本/代码/markdown → 在文档查看器中打开
+          // （其他文件回退到原始文件）。
           if (window.chatModule?.openAttachment) window.chatModule.openAttachment(att, false);
           else window.open(`/api/upload/${att.id}`, '_blank');
         });
@@ -217,10 +217,10 @@ function buildAttachCards(attachments) {
   return attachWrap;
 }
 
-// Re-render the attachment cards of an already-rendered message. Used to swap
-// in real upload ids (and image thumbnails) on the optimistic user bubble once
-// uploadPending() resolves — otherwise image previews only appear after a
-// refresh, because the bubble is rendered before the upload assigns ids.
+// 重新渲染已渲染消息的附件卡片。用于将
+// 真实上传 ID（和图片缩略图）换入乐观用户气泡，
+// 在 uploadPending() 解析后 — 否则图片预览仅在
+// 刷新后出现，因为气泡在上传分配 ID 之前渲染。
 export function updateMessageAttachments(msgWrap, attachments) {
   if (!msgWrap || !attachments?.length) return;
   const body = msgWrap.querySelector('.body') || msgWrap;
@@ -230,16 +230,16 @@ export function updateMessageAttachments(msgWrap, attachments) {
   else body.appendChild(fresh);
 }
 
-// Quick full-size preview when the user taps a chat photo thumbnail. Just an
-// overlay with the original image centered — no Gallery panel, no editor.
+// 用户点击聊天照片缩略图时的快速全尺寸预览。
+// 居中显示原始图片的覆盖层 — 无 Gallery 面板，无编辑器。
 function _openImageLightbox(att) {
   if (!att?.id) return;
   const overlay = document.createElement('div');
   overlay.className = 'attach-lightbox';
-  // Show the cached thumb immediately so the overlay doesn't sit blank
-  // while a 25MB original streams in. The full image swaps in once loaded;
-  // if the full load fails (404 / network), we keep the thumb + show an
-  // error label rather than a blank overlay forever.
+  // 立即显示缓存的缩略图，避免覆盖层在 25MB 原始图片
+  // 流式加载时显示空白。完整图片加载后替换；
+  // 如果完整加载失败（404 / 网络），保留缩略图 + 显示
+  // 错误标签，而非永远显示空白覆盖层。
   const img = document.createElement('img');
   img.alt = att.name || '';
   img.src = `/api/upload/${att.id}?thumb=1`;
@@ -260,9 +260,9 @@ function _openImageLightbox(att) {
     if (_overlayObs) { try { _overlayObs.disconnect(); } catch {} }
     overlay.remove();
   };
-  // If the overlay is removed via any path other than our close handler
-  // (session switch, parent re-render, external cleanup), still drop the
-  // document-level keydown listener so it doesn't leak.
+  // 如果覆盖层通过非关闭处理程序的路径被移除
+  // （会话切换、父元素重新渲染、外部清理），仍然移除
+  // 文档级 keydown 监听器，防止泄漏。
   let _overlayObs = null;
   try {
     _overlayObs = new MutationObserver(() => {
@@ -278,11 +278,11 @@ function _openImageLightbox(att) {
   document.body.appendChild(overlay);
 }
 
-// Vision/OCR editor modal — opened from the corner "Aa" button on a chat photo
-// thumbnail. Lets the user view and correct the text the vision model fed to
-// the LLM (e.g. when OCR misreads a word). Persists to the server's vision
-// cache (PUT /api/upload/{id}/vision), so any subsequent message that
-// references the same file picks up the corrected text.
+// 视觉/OCR 编辑器模态框 — 从聊天照片缩略图的角落 "Aa" 按钮打开。
+// 让用户查看和更正视觉模型提供给 LLM 的文本
+// （例如 OCR 误读单词时）。持久化到服务器的视觉
+// 缓存（PUT /api/upload/{id}/vision），因此任何后续
+// 引用同一文件的消息都会获取更正后的文本。
 let _visionEditorEl = null;
 let _visionEditorEsc = null;
 function _closeVisionEditor() {
@@ -299,8 +299,8 @@ function _openVisionEditor(att, userMsgEl) {
   panel.className = 'vision-editor-panel';
   const title = document.createElement('div');
   title.className = 'vision-editor-title';
-  // Eye icon matches the one in Settings → Vision so users recognise where
-  // this text originates.
+  // 眼睛图标与设置 → 视觉中的图标匹配，让用户识别此文本来源。
+  //
   title.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Vision text</span>';
   panel.appendChild(title);
   const desc = document.createElement('div');
@@ -347,8 +347,8 @@ function _openVisionEditor(att, userMsgEl) {
       if (uiModule?.showError) uiModule.showError('Failed to save OCR text');
     }
   });
-  // Regenerate-message: save the edited text, close, then trigger a resend of
-  // the user message so the new AI reply uses the edit immediately.
+  // 重新生成消息：保存编辑后的文本，关闭，然后触发重新发送
+  // 用户消息，使新的 AI 回复立即使用编辑结果。
   const regenBtn = document.createElement('button');
   regenBtn.type = 'button';
   regenBtn.className = 'vision-editor-btn vision-editor-btn-primary';
@@ -380,8 +380,8 @@ function _openVisionEditor(att, userMsgEl) {
   document.body.appendChild(overlay);
   _visionEditorEl = overlay;
 
-  // ESC closes the popup. Registered on document so it works regardless of
-  // focus (the textarea swallows the event otherwise).
+  // ESC 关闭弹出窗口。注册在 document 上，使其无论焦点在哪里都能工作
+  // （否则 textarea 会吞掉该事件）。
   _visionEditorEsc = (e) => { if (e.key === 'Escape') _closeVisionEditor(); };
   document.addEventListener('keydown', _visionEditorEsc);
 
@@ -404,25 +404,25 @@ function _openVisionEditor(att, userMsgEl) {
     });
 }
 
-// Tool call syntax patterns to strip from displayed text
+// 从显示文本中剥离的工具调用语法模式
 const TOOL_CALL_RE = /\[TOOL_CALL\][\s\S]*?\[\/TOOL_CALL\]/gi;
-// Only strip fenced tool-call blocks that look like structured invocations, not regular code examples
+// 仅剥离看起来像结构化调用的围栏工具调用块，而非普通代码示例
 const EXEC_FENCE_RE = /```(?:web_search|read_file|write_file|create_document|edit_document|update_document)\s*\n[\s\S]*?```/gi;
-// XML-style tool calls: <minimax:tool_call>, <tool_call>, <function_call>, bare <invoke>
+// XML 风格的工具调用：<minimax:tool_call>、<tool_call>、<function_call>、裸 <invoke>
 const XML_TOOL_CALL_RE = /<(?:[\w]+:)?(?:tool_call|function_call)>[\s\S]*?<\/(?:[\w]+:)?(?:tool_call|function_call)>/gi;
 const XML_INVOKE_RE = /<invoke\s+name=['"][^'"]*['"]>[\s\S]*?<\/invoke>/gi;
-// DeepSeek "DSML" tool-call markup (fullwidth-pipe ｜ or ascii | delimited) that
-// leaks into content when the model emits a text tool call instead of a native
-// one. Strip the whole block; the second pattern catches stray/partial tags
-// (e.g. mid-stream before the closing tag arrives).
+// DeepSeek "DSML" 工具调用标记（全角竖线 ｜ 或 ascii | 分隔），
+// 当模型发出文本工具调用而非原生调用时泄漏到内容中。
+// 剥离整个块；第二个模式捕获杂散/部分标签
+// （例如流传输中在闭合标签到达之前）。
 const DSML_TOOL_RE = /<\s*[｜|]+\s*DSML\s*[｜|]+\s*tool_calls\s*>[\s\S]*?(?:<\s*\/\s*[｜|]+\s*DSML\s*[｜|]+\s*tool_calls\s*>|$)/gi;
 const DSML_STRAY_RE = /<\s*\/?\s*[｜|]+\s*DSML\s*[｜|]+[^>]*>/gi;
-// Self-narration about tool results (model echoing stdout/exit_code)
+// 关于工具结果的自述（模型回显 stdout/exit_code）
 const TOOL_NARRATION_RE = /(?:The (?:result|output) shows?:?\s*)?-?\s*(?:stdout|stderr|exit_code):\s*.+/gi;
 
 
-// Model pricing table — per million tokens
-// Model info: pricing (per 1M tokens) + context window length
+// 模型定价表 — 每百万 token
+// 模型信息：定价（每 1M token）+ 上下文窗口长度
 const MODEL_INFO = {
   // --- Anthropic ---
   'claude-sonnet-4-5':    { input: 3.00,  output: 15.00, ctx: 200000 },
@@ -508,10 +508,10 @@ const MODEL_INFO = {
   'hermes':               { input: 0.20,  output: 0.20,  ctx: 131072 },
 };
 
-// Compat alias
+// 兼容别名
 const MODEL_PRICING = MODEL_INFO;
 
-// Image generation cost lookup (per-image, by model × quality × size)
+// 图像生成成本查询（每张图片，按模型 × 质量 × 尺寸）
 const IMAGE_PRICING = {
   'gpt-image-1.5': { 'low': { '1024x1024': 0.009, '1024x1536': 0.013, '1536x1024': 0.013 }, 'medium': { '1024x1024': 0.034, '1024x1536': 0.05, '1536x1024': 0.05 }, 'high': { '1024x1024': 0.133, '1024x1536': 0.2, '1536x1024': 0.2 } },
   'gpt-image-1':   { 'low': { '1024x1024': 0.011, '1024x1536': 0.016, '1536x1024': 0.016 }, 'medium': { '1024x1024': 0.042, '1024x1536': 0.063, '1536x1024': 0.063 }, 'high': { '1024x1024': 0.167, '1024x1536': 0.25, '1536x1024': 0.25 } },
@@ -522,14 +522,14 @@ export function shortModel(name) {
   if (!name) return '...';
   if (typeof name !== 'string') name = String(name);
   let short = name.split('/').pop();
-  // Strip .gguf extension
+  // 剥离 .gguf 扩展名
   short = short.replace(/\.gguf$/i, '');
-  // Strip quantization suffixes (Q4_K_M, Q8_0, etc.) and shard numbers
+  // 剥离量化后缀（Q4_K_M、Q8_0 等）和分片编号
   short = short.replace(/-0000\d-of-\d+$/, '');
   short = short.replace(/[-_](Q\d[_A-Z\d]*|F16|F32|BF16|fp16|fp32)$/i, '');
-  // Truncate if still too long (keep first meaningful part)
+  // 如果仍然太长则截断（保留第一个有意义的部分）
   if (short.length > 25) {
-    // Try to find a natural break point (dash after model size like -35B or -7B)
+    // 尝试找到自然断点（模型大小后的破折号，如 -35B 或 -7B）
     const sizeMatch = short.match(/^(.+?-\d+[BbMm])/);
     if (sizeMatch) short = sizeMatch[1];
     else short = short.substring(0, 22) + '…';

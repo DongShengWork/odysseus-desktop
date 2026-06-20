@@ -1,14 +1,14 @@
-"""scripts/_lib/cli.py — shared scaffolding for the `odysseus-*` CLIs.
+"""scripts/_lib/cli.py — `odysseus-*` CLI 的共享脚手架。
 
-Each top-level CLI imports a few helpers from here so they don't
-have to redefine the same `_quiet_logs` / `_emit` / `_fail` /
-parents-parser pattern. Usage:
+每个顶级 CLI 从这里导入一些辅助函数，这样它们就不必
+重复定义相同的 `_quiet_logs` / `_emit` / `_fail` /
+parents-parser 模式。用法：
 
     from scripts._lib.cli import quiet_logs, emit, fail, common_parser, run
 
     quiet_logs()
     try:
-        from core.database import SessionLocal, Note  # or whatever
+        from core.database import SessionLocal, Note  # 或其他
         quiet_logs()
     except ModuleNotFoundError as e:
         fail(f"{e}\\nhint: run from repo root with venv active.", code=2)
@@ -26,8 +26,8 @@ parents-parser pattern. Usage:
     if __name__ == "__main__":
         sys.exit(run(build_parser()))
 
-The `--pretty` flag, repo-root-on-sys.path, and clean exit on
-KeyboardInterrupt / unexpected exception are all handled centrally.
+`--pretty` 标志、repo-root-on-sys.path 以及 KeyboardInterrupt /
+意外异常的干净退出均由中央统一处理。
 """
 from __future__ import annotations
 
@@ -38,18 +38,18 @@ import os
 import sys
 from pathlib import Path
 
-# Make repo root importable. Tools are invoked as `scripts/odysseus-foo`
-# from any cwd; we want `from core.database import ...` to work.
+# 使仓库根目录可导入。工具以 `scripts/odysseus-foo` 形式从任意
+# cwd 调用；我们希望 `from core.database import ...` 能正常工作。
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
 def quiet_logs() -> None:
-    """Force the root logger down to WARNING (overridable via
-    LOG_LEVEL=...). Call once before importing app modules and again
-    *after* — some submodules call `logging.basicConfig` during their
-    own import and re-raise the level to INFO."""
+    """将根日志记录器强制降级到 WARNING（可通过 LOG_LEVEL=... 覆盖）。
+    在导入应用模块之前调用一次，并在 *之后* 再调用一次 —
+    某些子模块在其自身导入期间调用 `logging.basicConfig` 并将级别
+    重新提升到 INFO。"""
     level_name = os.environ.get("LOG_LEVEL", "WARNING").upper()
     level = getattr(logging, level_name, logging.WARNING)
     root = logging.getLogger()
@@ -59,9 +59,9 @@ def quiet_logs() -> None:
 
 
 def emit(obj, args) -> None:
-    """Write JSON to stdout. Pretty-print if `--pretty` was passed or
-    stdout is a TTY. Uses `default=str` so SQLAlchemy datetimes etc.
-    serialize cleanly."""
+    """将 JSON 写入 stdout。如果传入了 `--pretty` 或 stdout 是 TTY，
+    则进行美化打印。使用 `default=str` 使 SQLAlchemy 日期时间等
+    能干净序列化。"""
     pretty = getattr(args, "pretty", False) or sys.stdout.isatty()
     json.dump(
         obj, sys.stdout,
@@ -73,36 +73,36 @@ def emit(obj, args) -> None:
 
 
 def fail(msg: str, code: int = 1) -> "None":
-    """Print an error to stderr and exit non-zero. Doesn't return."""
+    """向 stderr 打印错误并以非零状态退出。不返回。"""
     sys.stderr.write(f"error: {msg}\n")
     sys.exit(code)
 
 
-VERSION = "0.1.0"  # bumped centrally; every odysseus-* CLI reports this
+VERSION = "0.1.0"  # 集中更新；每个 odysseus-* CLI 都报告此版本
 
 
 def common_parser(prog: str, description: str = "") -> argparse.ArgumentParser:
-    """Return a top-level parser with `--pretty` and `--version` already
-    wired up, and a stashed `_common_parents` list each subcommand should
-    reuse via `parents=[...]` so the same flag works before AND after
-    the subcommand name."""
+    """返回一个已配置好 `--pretty` 和 `--version` 的顶级解析器，
+    并存储一个 `_common_parents` 列表，每个子命令应通过
+    `parents=[...]` 复用它，以便相同的标志在子命令名称之前和之后
+    都能使用。"""
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--pretty", action="store_true",
                         help="Pretty-print JSON output")
 
     p = argparse.ArgumentParser(prog=prog, description=description, parents=[common])
     p.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
-    p._common_parents = [common]  # consumed by callers when building sub-parsers
+    p._common_parents = [common]  # 由调用方在构建子解析器时使用
     return p
 
 
 def run(parser: argparse.ArgumentParser, argv=None) -> int:
-    """Parse args, dispatch to `args.func(args)`, return an exit code.
-    Catches KeyboardInterrupt (→ 130) and uncaught exceptions (→ 1)
-    with a friendly stderr message.
+    """解析参数，分发到 `args.func(args)`，返回退出码。
+    捕获 KeyboardInterrupt (→ 130) 和未捕获异常 (→ 1)，
+    并输出友好的 stderr 消息。
 
     Intercepts `--version` / `-V` before argparse can complain about the
-    missing required subcommand — `argparse.required=True` on the
+    否则子解析器上的 `argparse.required=True` 会先触发。"""
     subparsers fires first otherwise."""
     raw_argv = sys.argv[1:] if argv is None else list(argv)
     if any(a in ("--version", "-V") for a in raw_argv):

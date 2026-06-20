@@ -13,21 +13,21 @@ from core.platform_compat import (
     run_ssh_command,
 )
 
-CACHE_TTL = 24 * 3600  # 24 h — hardware probes are user-initiated via the Rescan button; bumped
+CACHE_TTL = 24 * 3600  # 24 小时 — 硬件探测由用户通过重新扫描按钮手动触发；从 30 分钟
                        # from 30 min so changing filters doesn't keep re-probing the rig every
                        # half-hour during a long session.
 
 
-_remote_host = None  # set by detect_system(host=...)
-_remote_port = None  # set by detect_system(ssh_port=...)
-_remote_platform = None  # set by detect_system(platform=...): "windows", "linux", "termux"
-_last_gpu_error = None  # set by _detect_nvidia() when nvidia-smi errors (driver mismatch, etc.)
+_remote_host = None  # 由 detect_system(host=...) 设置
+_remote_port = None  # 由 detect_system(ssh_port=...) 设置
+_remote_platform = None  # 由 detect_system(platform=...) 设置："windows", "linux", "termux"
+_last_gpu_error = None  # 由 _detect_nvidia() 在 nvidia-smi 报错时设置（驱动不匹配等）
 
 
 def _run(cmd):
     try:
         if _remote_host:
-            # Run command on remote host via SSH
+            # 通过 SSH 在远程主机上运行命令
             if isinstance(cmd, list):
                 cmd_str = shlex.join(str(c) for c in cmd)
             else:
@@ -51,12 +51,12 @@ def _run(cmd):
 
 
 def _group_gpus(gpus):
-    """Group identical GPUs by (name, rounded VRAM).
+    """将相同 GPU 按 (名称, 四舍五入后的 VRAM) 分组。
 
-    vLLM tensor-parallel only works across IDENTICAL GPUs, so a mixed box must
-    be split into homogeneous pools. Each group carries the device indices so a
-    serve command can pin CUDA_VISIBLE_DEVICES to exactly one pool. Biggest pool
-    (by total VRAM) first — that's the sensible auto-default serving target.
+    vLLM 的 tensor-parallel 仅在同款 GPU 之间工作，因此混合配置必须
+    拆分为同构池。每个分组携带设备索引，以便服务命令可以通过
+    CUDA_VISIBLE_DEVICES 精确绑定到某个池。按总 VRAM 最大的池优先 — 
+    这是合理的自动默认推理目标。
     """
     groups = {}
     order = []
@@ -85,25 +85,25 @@ def _detect_nvidia():
     global _last_gpu_error
     _last_gpu_error = None
     out = _run(["nvidia-smi", "--query-gpu=memory.total,name", "--format=csv,noheader,nounits"])
-    # Fallback: a non-interactive shell (or WSL) often has a minimal PATH
-    # that omits where nvidia-smi lives (/usr/bin, /usr/local/cuda/bin,
-    # /usr/lib/wsl/lib), so the first call silently returns nothing →
-    # "No GPU" on machines that DO have GPUs.
-    # Retry through a login shell with the common CUDA bin dirs on PATH.
+    # 兜底：非交互式 shell（或 WSL）通常只有最小化 PATH，
+    # 缺少 nvidia-smi 所在路径（/usr/bin、/usr/local/cuda/bin、
+    # /usr/lib/wsl/lib），所以首次调用静默返回空 → 本有
+    # GPU 的机器却显示 "No GPU"。
+    # 通过登录 shell 重试，并预置常见 CUDA bin 目录到 PATH。
     if not out and _remote_host:
         out = _run(
             f"bash -lc '{SSH_PATH_OVERRIDE}"
             "nvidia-smi --query-gpu=memory.total,name --format=csv,noheader,nounits'"
         )
-    # Last resort: call nvidia-smi by absolute path. Some hosts have a login
-    # shell that isn't bash (or a profile that errors), so the bash -lc retry
-    # above still comes back empty even though the binary is right there.
-    # Also handles WSL where nvidia-smi lives at /usr/lib/wsl/lib/ — a path
-    # that may not be in the server process's PATH.
+    # 最后尝试：通过绝对路径调用 nvidia-smi。某些主机的登录 shell
+    # 不是 bash（或 profile 报错），因此上面 bash -lc 的重试
+    # 仍然返回空，但二进制文件确实存在。
+    # 也处理 WSL 的情况，其中 nvidia-smi 位于 /usr/lib/wsl/lib/ —
+    # 该路径可能不在服务进程的 PATH 中。
     if not out:
         for _p in NVIDIA_PATH_CANDIDATES:
-            # Use list form so subprocess.run (local) resolves the absolute path
-            # correctly instead of treating the whole string as an executable name.
+            # 使用列表形式，让 subprocess.run（本地）正确解析绝对路径，
+            # 而不是将整段字符串当作可执行文件名称。
             if _remote_host:
                 out = _run(f"{_p} --query-gpu=memory.total,name --format=csv,noheader,nounits")
             else:
@@ -113,9 +113,9 @@ def _detect_nvidia():
     if not out:
         return None
 
-    # nvidia-smi present but unable to talk to the driver (e.g. it was updated
-    # without a reboot). It prints an error and no GPU rows — surface that as a
-    # driver error rather than the misleading "No GPU".
+    # nvidia-smi 存在但无法与驱动通信（例如更新了驱动但未重启）。
+    # 它会打印错误且不输出 GPU 列 — 将此作为驱动错误上报，
+    # 而不是误导性地显示 "No GPU"。
     _low = out.lower()
     if ("nvml" in _low or "driver/library version mismatch" in _low
             or "couldn't communicate" in _low or "no devices were found" in _low
@@ -124,10 +124,10 @@ def _detect_nvidia():
         return None
 
     gpus = []
-    # Devices nvidia-smi lists with a real name but a non-numeric memory.total.
+    # nvidia-smi 列出的设备，名称正常但 memory.total 非数字。
     unified = []
-    # nvidia-smi lists GPUs in index order (0,1,2,...), so the row position is
-    # the CUDA device index we'd pass to CUDA_VISIBLE_DEVICES.
+    # nvidia-smi 按索引顺序列出 GPU（0,1,2,...），因此行位置
+    # 就是传递给 CUDA_VISIBLE_DEVICES 的 CUDA 设备索引。
     for idx, line in enumerate(out.strip().split("\n")):
         parts = [p.strip() for p in line.split(",")]
         if len(parts) >= 2:
@@ -135,20 +135,20 @@ def _detect_nvidia():
                 vram_mb = float(parts[0])
                 gpus.append({"index": idx, "name": parts[1], "vram_gb": vram_mb / 1024.0})
             except ValueError:
-                # Grace Blackwell GB10 / DGX Spark and other unified-memory
-                # NVIDIA parts report memory.total as "[N/A]"/"Not Supported"
-                # because the GPU shares the system LPDDR pool instead of
-                # carrying discrete VRAM. Don't drop the device — remember it so
-                # we report a unified-memory GPU below rather than "No GPU" (#1340).
+                # Grace Blackwell GB10 / DGX Spark 以及其他统一内存架构的
+                # NVIDIA 设备上报 memory.total 为 "[N/A]"/"Not Supported"，
+                # 因为 GPU 共享系统 LPDDR 内存池，而非
+                # 搭载独立的显存。不要丢弃该设备 — 记下它以便
+                # 后续报告统一内存 GPU，而不是显示 "No GPU"（#1340）。
                 if parts[1]:
                     unified.append({"index": idx, "name": parts[1]})
                 continue
 
     if not gpus:
         if unified:
-            # Unified-memory CUDA box: report the GPU backed by system RAM so the
-            # Cookbook recommends models and serving works. The pool is shared
-            # (not per-GPU discrete VRAM), so report the RAM total once.
+            # 统一内存 CUDA 机器：上报由系统 RAM 支持的 GPU，以便
+            # Cookbook 推荐模型并且推理可以工作。内存池是共享的
+            # （不是每 GPU 独立的显存），因此一次性上报总 RAM。
             ram_gb = round(_get_ram_gb(), 1)
             gpus = [{"index": g["index"], "name": g["name"], "vram_gb": ram_gb} for g in unified]
             return {
@@ -176,17 +176,17 @@ def _detect_nvidia():
 
 
 def classify_amd_gfx(gfx):
-    """Map an AMD ISA target (e.g. "gfx1200") to (gfx, family).
+    """将 AMD ISA 目标（例如 "gfx1200"）映射为 (gfx, family)。
 
-    family is one of:
-      "rdna"    — consumer Radeon RX (gfx10xx RDNA1/2, gfx11xx RDNA3, gfx12xx RDNA4)
-      "cdna"    — datacenter Instinct (gfx908 MI100, gfx90a MI200, gfx94x/95x MI300+)
-      "gcn"     — older GCN/Vega (gfx900/906)
-      "unknown" — empty/unrecognized; callers must treat conservatively
+    family 取值：
+      "rdna"    — 消费级 Radeon RX（gfx10xx RDNA1/2, gfx11xx RDNA3, gfx12xx RDNA4）
+      "cdna"    — 数据中心 Instinct（gfx908 MI100, gfx90a MI200, gfx94x/95x MI300+）
+      "gcn"     — 旧版 GCN/Vega（gfx900/906）
+      "unknown" — 空值/无法识别；调用方必须保守处理
 
-    This drives the serving decision: vLLM/SGLang on ROCm are validated on CDNA
-    but fragile on consumer RDNA (AWQ kernels largely unsupported, FP8 needs
-    out-of-tree patches), so RDNA is steered to GGUF/llama.cpp.
+    这决定了服务策略：ROCm 上的 vLLM/SGLang 在 CDNA 上经过验证，
+    但在消费级 RDNA 上不稳定（AWQ kernel 大多不支持，FP8 需要补丁），
+    因此 RDNA 被引导至 GGUF/llama.cpp。
     """
     gfx = (gfx or "").lower().strip()
     m = re.fullmatch(r"gfx(\d+[a-f]?)", gfx)
@@ -203,9 +203,9 @@ def classify_amd_gfx(gfx):
 
 
 def _detect_amd():
-    """Detect AMD GPUs. Handles both discrete cards (with mem_info_vram_total)
-    and APUs / unified-memory SoCs like Strix Halo (which expose
-    mem_info_vis_vram_total instead, or only mem_info_gtt_total)."""
+    """检测 AMD GPU。同时支持独立显卡（有 mem_info_vram_total）
+    和 APU / 统一内存 SoC（如 Strix Halo，后者暴露
+    mem_info_vis_vram_total，或仅有 mem_info_gtt_total）。"""
     def _read(path):
         if _remote_host:
             val = _run(["cat", path])
@@ -228,11 +228,11 @@ def _detect_amd():
             return []
 
     def _amd_arch():
-        """Best-effort AMD GPU ISA + family from rocminfo.
+        """尽力从 rocminfo 获取 AMD GPU ISA + family。
 
-        rocminfo is the source of truth; its GPU agents report a `Name: gfxNNNN`
-        line (CPU agents report a brand string, not a gfx target), so the first
-        gfx match is the GPU ISA. Returns (gfx, family) — see classify_amd_gfx.
+        rocminfo 是权威来源；其 GPU agent 报告 `Name: gfxNNNN`
+        行（CPU agent 报告品牌字符串而非 gfx 目标），因此第一个
+        gfx 匹配就是 GPU ISA。返回 (gfx, family) — 参见 classify_amd_gfx。
         """
         info = _run(["rocminfo"]) or _run(["/opt/rocm/bin/rocminfo"]) or ""
         m = re.search(r"gfx\d+[a-f]?", info)
@@ -246,10 +246,10 @@ def _detect_amd():
             vendor = _read(f"{base}/vendor")
             if vendor != "0x1002":
                 continue
-            # Discrete cards usually report real VRAM in mem_info_vram_total,
-            # while some AMD APUs / Docker views expose a tiny vram_total and
-            # the usable pool in vis_vram_total. Use the larger of those two;
-            # only fall back to GTT if neither VRAM field is available.
+            # 独立显卡通常在 mem_info_vram_total 中报告真实 VRAM，
+            # 而某些 AMD APU / Docker 视图暴露一个很小的 vram_total 和
+            # vis_vram_total 中的可用池。取两者中较大的值；
+            # 仅在两个 VRAM 字段都不可用时才回退到 GTT。
             vram_raw = _read(f"{base}/mem_info_vram_total")
             vis_raw = _read(f"{base}/mem_info_vis_vram_total")
             gtt_raw = _read(f"{base}/mem_info_gtt_total")
@@ -271,10 +271,10 @@ def _detect_amd():
         total_vram = sum(c["vram_gb"] for c in cards)
         groups = _group_gpus(cards)
         gfx, family = _amd_arch()
-        # NOTE: for APUs with BIOS UMA carveout (e.g. Strix Halo), vis_vram_total
-        # is the real usable GPU memory — it's physically backed but reserved
-        # by BIOS so it doesn't appear in /proc/meminfo. Don't cap it at system
-        # RAM: the two pools are separate from the OS's perspective.
+        # 注意：对于有 BIOS UMA 分配区的 APU（例如 Strix Halo），vis_vram_total
+        # 是真实可用的 GPU 内存 — 它由物理内存支持但被 BIOS
+        # 预留，因此不会出现在 /proc/meminfo 中。不要将其限制在系统 RAM
+        # 范围内：从操作系统视角来看这两个池是分开的。
         return {
             "gpu_name": cards[0]["name"],
             "gpu_vram_gb": round(total_vram, 1),
@@ -284,11 +284,11 @@ def _detect_amd():
             "homogeneous": len(groups) <= 1,
             "backend": "rocm",
             "unified_memory": is_apu,
-            # AMD ISA/family so downstream can tell datacenter Instinct (CDNA,
-            # where vLLM/SGLang run AWQ/GPTQ reliably) from consumer Radeon
-            # (RDNA, where the practical path is GGUF via llama.cpp). Empty/
-            # "unknown" when rocminfo isn't available — callers must treat
-            # unknown conservatively, not assume vLLM works.
+            # AMD ISA/family，下游可据此区分数据中心 Instinct（CDNA，
+            # 可运行 vLLM/SGLang/AWQ/GPTQ）与消费级 Radeon
+            # （RDNA，实际路径为 GGUF via llama.cpp）。空值 /
+            # "unknown" 表示 rocminfo 不可用 — 调用方必须
+            # 保守处理，不要假设 vLLM 可用。
             "gpu_arch": gfx,
             "gpu_family": family,
         }
@@ -297,18 +297,18 @@ def _detect_amd():
 
 
 def _detect_apple_silicon():
-    """Detect Apple Silicon (M-series) GPUs.
+    """检测 Apple Silicon（M 系列）GPU。
 
-    Macs have no discrete VRAM — the GPU shares the system's unified memory.
-    We report a fraction of total RAM as the usable GPU budget (matching macOS's
-    default Metal working-set limit) so the Cookbook recommends models that
-    actually run on the GPU instead of classifying the machine as CPU-only.
+    Mac 没有独立显存 — GPU 共享系统的统一内存。
+    我们上报总 RAM 的一部分作为可用 GPU 预算（匹配 macOS 的
+    默认 Metal 工作集限制），这样 Cookbook 会推荐实际
+    能在 GPU 上运行的模型，而不是将该机器归类为纯 CPU。
 
-    backend="metal" is what services.hwfit.fit and the serve-command generation
-    key off of (they already understand MLX / llama.cpp-Metal). Works locally
-    (platform.system()=="Darwin") and over SSH (uname -s == Darwin).
+    backend="metal" 是 services.hwfit.fit 和服务命令生成
+    所依赖的标识（它们已理解 MLX / llama.cpp-Metal）。适用于本地
+    （platform.system()=="Darwin"）和 SSH（uname -s == Darwin）。
     """
-    # Gate to macOS — locally via platform, remotely via uname.
+    # 限制到 macOS — 本地通过 platform，远程通过 uname。
     if _remote_host:
         if "darwin" not in (_run(["uname", "-s"]) or "").lower():
             return None
@@ -318,16 +318,16 @@ def _detect_apple_silicon():
             return None
         arch = platform.machine().lower()
 
-    # Only Apple Silicon (arm64) has a Metal GPU worth serving LLMs on; Intel
-    # Macs fall through to the CPU path.
+    # 仅 Apple Silicon（arm64）才有值得推理 LLM 的 Metal GPU；Intel
+    # Mac 回退到 CPU 路径。
     if "arm" not in arch and "aarch64" not in arch:
         return None
 
-    # Chip name, e.g. "Apple M4 Max" — carries the Pro/Max/Ultra variant that
-    # the fit bandwidth table keys off of.
+    # 芯片名称，例如 "Apple M4 Max" — 携带 Pro/Max/Ultra 变体，
+    # 用于 fit 带宽表的匹配。
     brand = (_run(["sysctl", "-n", "machdep.cpu.brand_string"]) or "Apple Silicon").strip()
 
-    # Total unified memory in bytes.
+    # 统一内存总大小（字节）。
     memsize = _run(["sysctl", "-n", "hw.memsize"])
     try:
         total_gb = int(memsize) / (1024**3) if memsize else 0.0
@@ -370,9 +370,9 @@ def _detect_apple_silicon():
     # Usable GPU budget. macOS lets Metal use most of unified memory, but the
     # default working-set limit scales with RAM: small machines have to keep
     # more back for the OS + app. These fractions track Apple's
-    # recommendedMaxWorkingSetSize defaults across the lineup. Honour an
+    # recommendedMaxWorkingSetSize 的默认值。如果用户通过
     # explicit override if the user raised it with
-    # `sudo sysctl iogpu.wired_limit_mb=…`.
+    # `sudo sysctl iogpu.wired_limit_mb=…` 提升了该值，则优先使用显式的覆盖值。
     if total_gb <= 16:
         frac = 0.67
     elif total_gb <= 64:
@@ -397,8 +397,8 @@ def _detect_apple_silicon():
         "gpu_groups": _group_gpus([gpu]),
         "homogeneous": True,
         "backend": "metal",
-        # Unified memory: the "VRAM" above is carved out of system RAM, not a
-        # separate pool — downstream fit logic uses this to avoid double-budgeting.
+        # 统一内存：上面的 "VRAM" 是从系统 RAM 中划出的，并非
+        # 独立池 — 下游 fit 逻辑据此避免重复计入预算。
         "unified_memory": True,
     }
     if gpu_cores is not None:
@@ -407,7 +407,7 @@ def _detect_apple_silicon():
 
 
 def _read_file(path):
-    """Read a file, locally or via SSH."""
+    """本地或通过 SSH 读取文件。"""
     if _remote_host:
         return _run(["cat", path])
     try:
@@ -418,7 +418,7 @@ def _read_file(path):
 
 
 def _parse_meminfo():
-    """Parse /proc/meminfo into a dict of key -> KB values."""
+    """将 /proc/meminfo 解析为 key -> KB 值的字典。"""
     text = _read_file("/proc/meminfo")
     if not text:
         return {}
@@ -440,8 +440,8 @@ def _get_ram_gb():
     if "MemTotal" in meminfo:
         return meminfo["MemTotal"] / (1024**2)
 
-    # os.sysconf only exists on Unix; on Windows it's absent (AttributeError)
-    # and these constants aren't defined — guard so this never raises there.
+    # os.sysconf 仅在 Unix 上存在；Windows 上不存在（AttributeError），
+    # 这些常量也未定义 — 添加保护确保此处永远不会抛出异常。
     if not _remote_host and hasattr(os, "sysconf") and "SC_PHYS_PAGES" in getattr(os, "sysconf_names", {}):
         try:
             pages = os.sysconf("SC_PHYS_PAGES")
@@ -451,8 +451,8 @@ def _get_ram_gb():
         except Exception:
             pass
 
-    # macOS has no /proc/meminfo — fall back to sysctl (works locally and over
-    # SSH to a remote Mac, where the sysconf path above isn't taken).
+    # macOS 没有 /proc/meminfo — 回退到 sysctl（适用于本地和
+    # SSH 连接远程 Mac，此时不会执行上面的 sysconf 路径）。
     memsize = _run(["sysctl", "-n", "hw.memsize"])
     if memsize:
         try:
@@ -476,8 +476,8 @@ def _get_cpu_name():
             if line.startswith("model name"):
                 return line.split(":", 1)[1].strip()
 
-    # macOS has no /proc/cpuinfo — sysctl gives the chip name (e.g. "Apple M4").
-    # Harmlessly returns nothing on Linux, so it's safe to try unconditionally.
+    # macOS 没有 /proc/cpuinfo — sysctl 返回芯片名称（例如 "Apple M4"）。
+    # 在 Linux 上无害地返回空，因此可以无条件安全尝试。
     brand = _run(["sysctl", "-n", "machdep.cpu.brand_string"])
     if brand and brand.strip():
         return brand.strip()
@@ -489,14 +489,14 @@ def _get_cpu_name():
 
 def _get_cpu_count():
     if _remote_host:
-        # nproc on Linux; hw.ncpu via sysctl on a remote Mac (no nproc there).
+        # Linux 上使用 nproc；远程 Mac 上使用 sysctl hw.ncpu（无 nproc 命令）。
         out = _run(["nproc"]) or _run(["sysctl", "-n", "hw.ncpu"])
         if out:
             try:
                 return int(out.strip())
             except ValueError:
                 pass
-        # fallback: count "processor" lines in /proc/cpuinfo
+        # 兜底：在 /proc/cpuinfo 中统计 "processor" 行数
         text = _read_file("/proc/cpuinfo")
         if text:
             return sum(1 for line in text.split("\n") if line.startswith("processor"))
@@ -504,20 +504,20 @@ def _get_cpu_count():
 
 
 def _powershell_exe():
-    """Pick the best PowerShell executable for LOCAL execution: prefer pwsh
-    (PowerShell 7+), fall back to Windows PowerShell 5.1. Returns an absolute
-    path so we don't depend on a particular PATH ordering."""
+    """为本地执行选择最佳 PowerShell 可执行文件：优先 pwsh
+    （PowerShell 7+），回退到 Windows PowerShell 5.1。返回绝对
+    路径，不依赖特定的 PATH 顺序。"""
     return shutil.which("pwsh") or shutil.which("powershell") or "powershell"
 
 
 def _detect_windows():
-    """Detect Windows hardware via PowerShell/WMI.
+    """通过 PowerShell/WMI 检测 Windows 硬件。
 
-    Works for BOTH local (host="") and remote (SSH) detection:
-      * remote  -> `_run` ships the string to the host over SSH.
-      * local   -> `_run` executes a list argv directly (no shell quoting hell).
+    同时适用于本地（host=""）和远程（SSH）检测：
+      * 远程 -> `_run` 将命令字符串通过 SSH 发送到远程主机。
+      * 本地 -> `_run` 直接执行列表形式的 argv（无 shell 引号转义问题）。
     """
-    # Single PowerShell command that gathers all hardware info at once
+    # 用单个 PowerShell 命令一次性收集所有硬件信息
     ps_cmd = (
         """
         $r = @{}
@@ -528,7 +528,7 @@ def _detect_windows():
         $r.cpu_name = $cpu.Name
         $r.cpu_cores = (Get-CimInstance Win32_Processor | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
         $r.arch = $cpu.AddressWidth
-        # GPU detection via nvidia-smi (fastest) or WMI fallback
+        # GPU 检测通过 nvidia-smi（最快）或 WMI 兜底
         try { 
             $nv = nvidia-smi --query-gpu=memory.total,name --format=csv,noheader,nounits 2>$null
             if ($LASTEXITCODE -eq 0 -and $nv) { 
@@ -550,11 +550,11 @@ def _detect_windows():
             $GPUDeviceID = $wmiGpu.PNPDeviceID.Split('&')[0..1] -join '&'
             $VRAMfromRegistry = Get-ItemProperty -Path $GPUDriverKey |
             Where-Object { $_.MatchingDeviceId -like "${GPUDeviceID}*" } |
-            # Sometimes there happen to be multiple driver classes for the same gpu.
+            # 同一 GPU 有时会匹配到多个驱动类。
             Select-Object -ExpandProperty HardwareInformation.qwMemorySize -ErrorAction SilentlyContinue -First 1
             if ($wmiGpu) { 
                 $r.gpu_name = $wmiGpu.Name
-                # Edge case: driver is broken, otherwise $wmiGpu.AdapterRAM is redundant
+                # 边缘情况：驱动损坏，否则 $wmiGpu.AdapterRAM 是冗余的
                 if ($VRAMfromRegistry -ge $wmiGpu.AdapterRAM) {
                     $r.gpu_vram_gb = [math]::Round($VRAMfromRegistry / 1073741824, 1)
                 }
@@ -562,7 +562,7 @@ def _detect_windows():
                     $r.gpu_vram_gb = [math]::Round($wmiGpu.AdapterRAM / 1073741824, 1)
                 }
                 $r.gpu_count = 1
-                # WMI doesn't tell us CUDA/ROCm
+                # WMI 无法告诉我们是 CUDA 还是 ROCm
                 $r.gpu_backend = 'cpu_x86';
             } 
         }
@@ -570,22 +570,22 @@ def _detect_windows():
     """
     )
     if _remote_host:
-        # Remote: ship a single command string over SSH. The remote shell parses
-        # the quoting; PowerShell on the far side runs the -Command payload.
+        # 远程：通过 SSH 发送单个命令字符串。远程 shell 解析
+        # 引号；远端的 PowerShell 执行 -Command 载荷。
         out = _run(f'powershell -Command "{ps_cmd}"')
     else:
-        # Local: pass a LIST argv straight to subprocess so the OS hands ps_cmd
-        # to PowerShell verbatim — no fragile string-level quote escaping. Prefer
-        # pwsh (PS7), else Windows PowerShell 5.1.
+        # 本地：将列表型 argv 直接传给 subprocess，让操作系统将 ps_cmd
+        # 原样递给 PowerShell — 无需脆弱的字符串级引号转义。优先
+        # pwsh（PS7），否则回退到 Windows PowerShell 5.1。
         out = _run([_powershell_exe(), "-NoProfile", "-NonInteractive", "-Command", ps_cmd])
     if not out:
         return None
     import json as _json
     try:
         d = _json.loads(out)
-        # PowerShell's Measure-Object .Sum / .Count come back as JSON numbers and
-        # decode to float; the Linux path returns plain ints for these — coerce
-        # so the dict shape (and downstream int math) matches across platforms.
+        # PowerShell 的 Measure-Object .Sum / .Count 返回 JSON 数字时
+        # 解码为 float；Linux 路径对这些值返回普通 int — 强制转换
+        # 以确保字典结构（及下游整数运算）跨平台一致。
         def _as_int(v, default):
             try:
                 return int(v)
@@ -608,9 +608,9 @@ def _detect_windows():
             "gpu_error": None,
             "platform": "windows",
         }
-        # PowerShell only reports aggregate GPU info, not per-card detail, so we
-        # can't tell a mixed box from a uniform one here — assume one homogeneous
-        # pool spanning all reported GPUs (the common Windows case).
+        # PowerShell 仅上报聚合 GPU 信息，没有每卡详情，因此我们
+        # 无法在此区分混合框和统一框 — 假设一个同构
+        # 池涵盖所有上报的 GPU（Windows 的常见情况）。
         _n = result["gpu_count"] or 0
         if result["has_gpu"] and _n > 0:
             _each = round((result["gpu_vram_gb"] or 0) / _n, 1)
@@ -630,14 +630,14 @@ def _detect_windows():
         return None
 
 
-_cache_by_host = {}  # host -> (timestamp, result)
+_cache_by_host = {}  # host -> (时间戳, 结果)
 
 
 def _cache_key(host: str, ssh_port: str, platform_name: str):
-    """Build a stable cache key that isolates remote SSH context.
+    """构建稳定的缓存键以隔离远程 SSH 上下文。
 
-    Same host aliases can have different hardware due to visibility, forwarding etc.
-    To avoid using the wrong cached hardware info, include the SSH port and platform in the cache key.
+    同一 host 别名可能因可见性和转发等原因具有不同硬件。
+    为避免使用错误的缓存硬件信息，在缓存键中包含 SSH 端口和平台。
     """
     return (
         host or "_local",
@@ -734,11 +734,11 @@ def _attach_probe_context(result, host=""):
 
 
 def detect_system(host="", ssh_port="", platform="", fresh=False):
-    """Detect system hardware: RAM, CPU, GPU. Cached per host (hardware rarely
-    changes, and probing a remote host over SSH is slow). Pass fresh=True to
-    bypass the cache and re-probe (the "Rescan" button).
-    If host is set (e.g. 'user@server'), runs detection commands over SSH.
-    platform: "windows", "linux", "termux", or "" (auto-detect).
+    """检测系统硬件：RAM、CPU、GPU。按 host 缓存（硬件极少
+    变化，且通过 SSH 探测远程主机很慢）。传入 fresh=True 可
+    绕过缓存并重新探测（"重新扫描"按钮）。
+    如果设置了 host（例如 'user@server'），通过 SSH 运行检测命令。
+    platform: "windows"、"linux"、"termux"，或 ""（自动检测）。
     """
     global _remote_host, _remote_port, _remote_platform
 
@@ -753,7 +753,7 @@ def detect_system(host="", ssh_port="", platform="", fresh=False):
     _remote_port = ssh_port or None
     _remote_platform = platform or None
 
-    # Windows: single PowerShell command for all hardware info
+    # Windows：使用单个 PowerShell 命令获取所有硬件信息
     if _remote_platform == "windows" and _remote_host:
         result = _detect_windows()
         if result:
@@ -762,29 +762,29 @@ def detect_system(host="", ssh_port="", platform="", fresh=False):
             _remote_platform = None
             _cache_by_host[cache_key] = (now, result)
             return result
-        # If Windows detection failed, return error
+        # 如果 Windows 检测失败，返回错误
         result = {"error": f"Cannot connect to {host}", "host": host}
         _remote_host = None
         _remote_platform = None
         _cache_by_host[cache_key] = (now, result)
         return result
 
-    # Local Windows: the Linux /proc + /sys + os.sysconf path returns 0 GB RAM,
-    # "unknown" CPU and no GPU on Windows (and os.sysconf doesn't even exist),
-    # so detect locally via PowerShell/WMI instead. _detect_windows() runs the
-    # same probe used for remote Windows, but _run() executes it locally.
+    # 本地 Windows：Linux 的 /proc + /sys + os.sysconf 路径在 Windows 上
+    # 返回 0 GB RAM、"unknown" CPU 且无 GPU（os.sysconf 甚至不存在），
+    # 因此改为本地通过 PowerShell/WMI 检测。_detect_windows() 运行
+    # 与远程 Windows 相同的探测，但 _run() 在本地执行。
     if not _remote_host and os.name == "nt":
         result = _detect_windows()
         if result:
             result = _attach_probe_context(result, host=host)
             _cache_by_host[cache_key] = (now, result)
             return result
-        # PowerShell probe failed entirely — fall through to the generic path
-        # below so we at least return a well-shaped dict rather than crashing.
+        # PowerShell 探测完全失败 — 回退到下面的通用路径，
+        # 至少返回一个结构良好的 dict 而不是崩溃。
 
-    # Linux/Termux: existing multi-command detection
+    # Linux/Termux：现有的多命令检测
     total_ram = round(_get_ram_gb(), 1)
-    # If remote host returns 0 RAM, connection likely failed
+    # 如果远程主机返回 0 RAM，连接可能已失败
     if _remote_host and total_ram <= 0:
         result = {"error": f"Cannot connect to {host}", "host": host}
         _cache_by_host[cache_key] = (now, result)
@@ -812,8 +812,8 @@ def detect_system(host="", ssh_port="", platform="", fresh=False):
             "gpu_groups": gpu_info.get("gpu_groups", []),
             "homogeneous": gpu_info.get("homogeneous", True),
             "backend": gpu_info["backend"],
-            # Apple Silicon / AMD APUs share system RAM with the GPU — carry the
-            # flag through so callers can tell unified from discrete VRAM.
+            # Apple Silicon / AMD APU 与 GPU 共享系统 RAM — 传递该
+            # 标志以便调用方区分统一内存和独立显存。
             "unified_memory": gpu_info.get("unified_memory", False),
         }
     else:
@@ -835,7 +835,7 @@ def detect_system(host="", ssh_port="", platform="", fresh=False):
             "backend": backend,
             # Set when nvidia-smi exists but failed (e.g. driver/library
             # version mismatch) — lets the UI say "GPU driver error" instead
-            # of the misleading "No GPU".
+            # — 让 UI 可以显示 "GPU 驱动错误" 而非误导性的 "No GPU"。
             "gpu_error": _last_gpu_error,
         }
 

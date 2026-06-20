@@ -1,4 +1,4 @@
-"""Research background task routes — /api/research/*."""
+"""研究后台任务路由 — /api/research/*。"""
 
 import asyncio
 import json

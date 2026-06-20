@@ -1,4 +1,4 @@
-"""CalDAV → local SQLite sync.
+"""CalDAV → 本地 SQLite 同步。
 
 The Settings UI lets users save CalDAV credentials, but the original
 sync path was removed when calendar storage was migrated to SQLite.
@@ -6,13 +6,13 @@ This module re-wires that gap as a one-way pull (remote → local),
 called on calendar open and from a periodic scheduler loop.
 
 Design notes:
-- We use the `caldav` lib so PROPFIND discovery + REPORT XML work
-  across Radicale / Nextcloud / Apple / Fastmail without us
+- 我们使用 `caldav` 库，这样 PROPFIND 发现 + REPORT XML 可在
+  Radicale / Nextcloud / Apple / Fastmail 上工作，无需我们
   reinventing the protocol. It's pure Python.
 - The lib is synchronous; we run it in a threadpool via
   `asyncio.to_thread` so the FastAPI event loop stays free.
 - Each remote calendar maps to one local `CalendarCal` row with
-  `source="caldav"` and `id` = a stable hash of the remote URL so
+  `source="caldav"` 且 `id` = 远程 URL 的稳定哈希值，
   re-syncs idempotently target the same row.
 - Events upsert by VEVENT UID (kept as the local `uid`). Local
   CalDAV-sourced events not seen in the latest pull are deleted so
@@ -103,7 +103,7 @@ def _validate_caldav_hostname(host: str) -> None:
 
 
 def validate_caldav_url(raw_url: str) -> str:
-    """Validate and normalize a user-provided CalDAV URL before server-side use."""
+    """在服务端使用前验证并规范化用户提供的 CalDAV URL。"""
     url = (raw_url if isinstance(raw_url, str) else "").strip()
     if not url:
         raise ValueError("CalDAV URL is required")

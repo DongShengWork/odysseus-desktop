@@ -1,7 +1,7 @@
 // static/js/models.js
 
 /**
- * Model and provider management
+ * 模型和提供商管理
  */
 
 import Storage from './storage.js';
@@ -14,10 +14,10 @@ import { providerLogo } from './providers.js';
 import { sortModelIds } from './modelSort.js';
 
 let API_BASE = '';
-let _cachedItems = []; // cached /api/models items for model-switch dropdown
+let _cachedItems = []; // 缓存的 /api/models 数据，供模型切换下拉菜单使用
 let _lastFetchTime = 0;
 let _fetchInflight = null;
-const _FETCH_CACHE_TTL = 30000; // 30s client-side cache for /api/models
+const _FETCH_CACHE_TTL = 30000; // /api/models 的 30 秒客户端缓存
 const COLLAPSE_KEY = 'odysseus-models-collapsed';
 const FAVORITES_KEY = 'odysseus-model-favorites';
 const USAGE_KEY = 'odysseus-model-usage';
@@ -27,7 +27,7 @@ export function init(apiBase) {
   API_BASE = apiBase;
 }
 
-// ── Collapse state persistence ──
+// ── 折叠状态持久化 ──
 function _loadCollapsed() {
   return Storage.getJSON(COLLAPSE_KEY, {});
 }
@@ -35,7 +35,7 @@ function _saveCollapsed(state) {
   Storage.setJSON(COLLAPSE_KEY, state);
 }
 
-// ── Favorites persistence ──
+// ── 收藏持久化 ──
 function _loadFavorites() {
   return Storage.getJSON(FAVORITES_KEY, []);
 }
@@ -51,10 +51,10 @@ function _toggleFavorite(mid) {
   if (idx >= 0) favs.splice(idx, 1);
   else favs.push(mid);
   _saveFavorites(favs);
-  return idx < 0; // returns true if now favorited
+  return idx < 0; // 返回 true 表示当前已被收藏
 }
 
-// ── Usage tracking ──
+// ── 使用统计追踪 ──
 function _loadUsage() {
   return Storage.getJSON(USAGE_KEY, {});
 }
@@ -73,16 +73,16 @@ function _setSortMode(mode) {
 }
 
 /**
- * Build a single model row element.
+ * 构建单个模型行元素。
  */
 function _startChat(url, mid, endpointId) {
-  // Block model switching while compare mode is active
+  // 在对比模式激活时阻止模型切换
   if (window.compareModule && window.compareModule.isActive()) return;
   _trackUsage(mid);
   if (sessionModule) {
     sessionModule.createDirectChat(url, mid, endpointId);
   } else if (uiModule) {
-    uiModule.showError('Session module not loaded');
+    uiModule.showError(t('models.session_module_not_loaded'));
   }
 }
 
@@ -95,10 +95,10 @@ function _buildModelRow(mid, url, displayName, endpointId, offline, modelType) {
   const handle = document.createElement('span');
   handle.className = 'item-drag-handle';
   handle.textContent = '\u22EE\u22EE';
-  handle.title = 'Drag to reorder';
+  handle.title = '拖动排序';
   row.appendChild(handle);
 
-  // Favorite indicator — provider logo or colored dot
+  // 收藏指示器 — 提供商 logo 或彩色圆点
   const fav = document.createElement('span');
   const _favColor = modelColor(mid);
   const _logo = providerLogo(mid);
@@ -109,12 +109,12 @@ function _buildModelRow(mid, url, displayName, endpointId, offline, modelType) {
   } else {
     fav.className = 'model-fav-btn' + (_isFavorite(mid) ? ' active' : '');
   }
-  fav.title = 'Toggle favorite';
+  fav.title = '切换收藏';
   fav.addEventListener('click', (e) => {
     e.stopPropagation();
     const nowFav = _toggleFavorite(mid);
     fav.classList.toggle('active', nowFav);
-    uiModule.showToast(nowFav ? 'Favorited' : 'Unfavorited');
+    uiModule.showToast(nowFav ? t('models.favorited') : t('models.unfavorited'));
     refreshModels();
   });
   const span = document.createElement('span');
@@ -124,14 +124,14 @@ function _buildModelRow(mid, url, displayName, endpointId, offline, modelType) {
     const badge = document.createElement('span');
     badge.className = 'model-type-badge';
     badge.textContent = 'IMG';
-    badge.title = 'Image generation model';
+    badge.title = '图像生成模型';
     badge.style.cssText = 'font-size:0.65em;padding:1px 4px;border-radius:3px;background:var(--accent,#7c3aed);color:#fff;margin-left:6px;vertical-align:middle;';
     span.appendChild(badge);
   }
 
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.textContent = offline ? 'Offline' : (modelType === 'image' ? '+ Image' : '+ Chat');
+  btn.textContent = offline ? t('models.offline') : (modelType === 'image' ? t('models.add_image') : t('models.add_chat'));
   btn.className = 'model-chat-btn';
   btn.style.transition = 'all 0.2s ease';
   if (offline) {
@@ -145,7 +145,7 @@ function _buildModelRow(mid, url, displayName, endpointId, offline, modelType) {
     });
   }
 
-  // Clicking anywhere on the row (except drag handle and fav) starts a chat
+  // 点击行中的任意位置（拖拽手柄和收藏按钮除外）即可开始对话
   if (!offline) {
     let _touchMoved = false;
     row.addEventListener('touchstart', () => { _touchMoved = false; }, { passive: true });
@@ -167,7 +167,7 @@ export async function refreshModels(force = false) {
   const box = document.getElementById('models');
   if (!box) return;
 
-  // Skip network fetch if cache is fresh and not forced — still re-render UI
+  // 如果缓存未过期且不是强制刷新，跳过网络请求 — 但仍重新渲染 UI
   const now = Date.now();
   const needsFetch = force || _cachedItems.length === 0 || (now - _lastFetchTime) >= _FETCH_CACHE_TTL;
 
@@ -178,12 +178,12 @@ export async function refreshModels(force = false) {
     _loadingSpinner.start();
     try {
       if (!_fetchInflight) {
-        // Pass ?refresh=true on forced refreshes so the BACKEND's 30s
-        // per-user cache also gets bypassed. Without this, `force=true`
-        // only clears the frontend cache and the same stale list comes
-        // back — newly-served endpoints don't appear until the cache
-        // ages out. (Bug repro: serve a model, picker is empty for ~30s
-        // even though the endpoint is in the DB and online.)
+        // 在强制刷新时传递 ?refresh=true，这样后端的 30 秒
+        // 每用户缓存也会被绕过。否则 `force=true`
+        // 只清除前端缓存，同样的过期列表还是会返回
+        // — 新服务的端点不会出现，直到缓存本身过期。
+        // （Bug 复现场景：启动一个模型，选择器在约 30 秒内都是空的，
+        // 即使端点已在数据库中并且在线。）
         const _url = `${API_BASE}/api/models` + (force ? '?refresh=true' : '');
         _fetchInflight = fetch(_url, { credentials: 'same-origin' })
           .then(async (res) => {
@@ -197,7 +197,7 @@ export async function refreshModels(force = false) {
       _cachedItems = data.items || [];
     } catch (e) {
       console.error(e);
-      box.textContent = '(scan failed)';
+      box.textContent = '(' + t('models.scan_failed') + ')';
       return;
     } finally {
       box.innerHTML = '';
@@ -206,16 +206,16 @@ export async function refreshModels(force = false) {
   try {
 
     const collapseState = _loadCollapsed();
-    let groupIdx = 0; // unique ID counter for drag-sort containers
+    let groupIdx = 0; // 拖拽排序容器的唯一 ID 计数器
 
-    // Collect models grouped by category → endpoint
+    // 按类别 → 端点分组收集模型
     const groups = { local: {}, api: {} };
-    // Also track extra (non-curated) models per endpoint
+    // 同时追踪每个端点的额外（非精选）模型
     const extraGroups = { local: {}, api: {} };
     if (_cachedItems && _cachedItems.length > 0) {
       _cachedItems.forEach(item => {
         const cat = item.category === 'local' ? 'local' : 'api';
-        const epName = item.endpoint_name || 'Unknown';
+        const epName = item.endpoint_name || t('models.unknown');
         const isOffline = !!item.offline;
         if (!groups[cat][epName]) groups[cat][epName] = [];
         if (!extraGroups[cat][epName]) extraGroups[cat][epName] = [];
@@ -230,7 +230,7 @@ export async function refreshModels(force = false) {
             modelType: epModelType,
           });
         });
-        // Extra (non-curated) models from server
+        // 服务器返回的额外（非精选）模型
         const extraDisplayNames = item.models_extra_display || item.models_extra || [];
         (item.models_extra || []).forEach((mid, i) => {
           extraGroups[cat][epName].push({
@@ -244,11 +244,11 @@ export async function refreshModels(force = false) {
       });
     }
 
-    // ── Render Favorites section on top ──
+    // ── 在顶部渲染收藏区域 ──
     const favs = _loadFavorites();
     if (favs.length > 0) {
       const favModels = [];
-      // Collect favorited models from all groups (keep them in originals too)
+      // 从所有分组中收集已收藏的模型（同时在原始分组中保留）
       for (const cat of ['local', 'api']) {
         for (const [epName, epModels] of Object.entries(groups[cat])) {
           for (const m of epModels) {
@@ -258,7 +258,7 @@ export async function refreshModels(force = false) {
           }
         }
       }
-      // Sort favorites by active sort mode, or by favorited order as default
+      // 按当前排序模式排列收藏，默认按收藏顺序
       const favSort = _getSortMode();
       if (favSort === 'alpha') {
         favModels.sort((a, b) => a.displayName.split('/').pop().localeCompare(b.displayName.split('/').pop()));
@@ -281,7 +281,7 @@ export async function refreshModels(force = false) {
         favToggle.textContent = favCollapsed ? '\u25B6' : '\u25BC';
         favHeader.appendChild(favToggle);
         const favLabel = document.createElement('span');
-        favLabel.textContent = 'Favorites';
+        favLabel.textContent = t('models.favorites');
         favHeader.appendChild(favLabel);
         const favCount = document.createElement('span');
         favCount.className = 'folder-count';
@@ -325,7 +325,7 @@ export async function refreshModels(force = false) {
 
       const multiEndpoints = Object.keys(endpoints).length > 1;
 
-      // --- Category-level collapsible group ---
+      // --- 类别级可折叠分组 ---
       if (hasMultipleCategories) {
         const catCollapsed = collapseState['cat:' + key] === true;
 
@@ -358,7 +358,7 @@ export async function refreshModels(force = false) {
         if (catCollapsed) return;
       }
 
-      // --- Endpoint sub-groups ---
+      // --- 端点子分组 ---
       const extraEndpoints = extraGroups[key];
       Object.entries(endpoints).forEach(([epName, epModels]) => {
         const epExtra = extraEndpoints[epName] || [];
@@ -384,7 +384,7 @@ export async function refreshModels(force = false) {
           if (isOfflineEndpoint) {
             const badge = document.createElement('span');
             badge.className = 'endpoint-offline-badge';
-            badge.textContent = '(offline)';
+            badge.textContent = '(' + t('models.offline') + ')';
             sub.appendChild(badge);
           }
 
@@ -405,7 +405,7 @@ export async function refreshModels(force = false) {
           if (epCollapsed) return;
         }
 
-        // Render model rows into a container
+        // 将模型行渲染到容器中
         let target;
         if (needsGrouping) {
           target = document.createElement('div');
@@ -416,7 +416,7 @@ export async function refreshModels(force = false) {
           target = box;
         }
 
-        // Apply sort mode
+        // 应用排序模式
         const sortMode = _getSortMode();
         if (sortMode === 'alpha') {
           epModels.sort((a, b) => a.displayName.split('/').pop().localeCompare(b.displayName.split('/').pop()));
@@ -428,7 +428,7 @@ export async function refreshModels(force = false) {
           epModels.sort((a, b) => ((usage[b.mid] || {}).count || 0) - ((usage[a.mid] || {}).count || 0));
         }
 
-        // Show up to MAX_VISIBLE models, rest behind "show more"
+        // 显示最多 MAX_VISIBLE 个模型，其余的通过"显示更多"折叠
         const MAX_VISIBLE = 5;
         const visible = epModels.slice(0, MAX_VISIBLE);
         const overflow = epModels.slice(MAX_VISIBLE);
@@ -442,7 +442,7 @@ export async function refreshModels(force = false) {
           const showMoreBtn = document.createElement('div');
           showMoreBtn.className = 'models-show-all-btn';
           showMoreBtn.style.cssText = 'text-align:center;padding:6px;opacity:0.5;cursor:pointer;font-size:0.82em;';
-          showMoreBtn.textContent = `Show ${allHidden.length} more model${allHidden.length === 1 ? '' : 's'}`;
+          showMoreBtn.textContent = t('models.show_more', { count: allHidden.length });
           showMoreBtn._target = target;
           showMoreBtn.addEventListener('click', () => {
             showMoreBtn.remove();
@@ -457,7 +457,7 @@ export async function refreshModels(force = false) {
       });
     });
 
-    // Restore saved drag order for flat list before enabling drag-sort
+    // 在启用拖拽排序之前，恢复扁平列表的保存排序
     if (!needsGrouping) {
       const savedModelOrder = Storage.getJSON('models-order', []);
       if (savedModelOrder.length) {
@@ -473,22 +473,22 @@ export async function refreshModels(force = false) {
             rowMap.delete(mid);
           }
         });
-        // Append remaining rows not in saved order
+        // 将未在保存顺序中的剩余行追加到最后
         rowMap.forEach(r => ordered.push(r));
         ordered.forEach(r => box.appendChild(r));
       }
     }
 
-    // Enable drag sorting
+    // 启用拖拽排序
     if (dragSortModule) {
       if (!needsGrouping) {
-        // Flat list — sort the whole #models container
+        // 扁平列表 — 对整个 #models 容器排序
         dragSortModule.enable('models', '.models-row', {
           handleSelector: '.item-drag-handle',
           storageKey: 'models-order',
         });
       } else {
-        // Grouped — enable sort within each group container
+        // 分组模式 — 在每个分组容器内启用排序
         box.querySelectorAll('.models-group-content').forEach(gc => {
           dragSortModule.enable(gc.id, '.models-row', {
             handleSelector: '.item-drag-handle',
@@ -497,7 +497,7 @@ export async function refreshModels(force = false) {
       }
     }
 
-    // ── Search box (shown when >= 5 total models, including hidden overflow) ──
+    // ── 搜索框（当总模型数 >= 5 时显示，包括隐藏的溢出模型）──
     const totalModelCount = (_cachedItems || []).reduce((n, item) => {
       if (item.offline) return n;
       return n + (item.models || []).length + (item.models_extra || []).length;
@@ -505,11 +505,11 @@ export async function refreshModels(force = false) {
     if (totalModelCount >= 10) {
       const searchBox = document.createElement('input');
       searchBox.type = 'text';
-      searchBox.placeholder = 'Search models...';
+      searchBox.placeholder = '搜索模型…';
       searchBox.className = 'model-search-input';
       searchBox.addEventListener('click', (e) => e.stopPropagation());
       searchBox.addEventListener('touchstart', (e) => e.stopPropagation());
-      // Container for flat search results (rendered from _cachedItems, ignores collapse)
+      // 扁平搜索结果容器（从 _cachedItems 渲染，忽略折叠状态）
       const searchResults = document.createElement('div');
       searchResults.className = 'models-search-results';
       searchResults.style.display = 'none';
@@ -518,7 +518,7 @@ export async function refreshModels(force = false) {
       searchBox.addEventListener('input', () => {
         const q = searchBox.value.toLowerCase().trim();
         if (!q) {
-          // Clear search: hide results, restore normal groups
+          // 清除搜索：隐藏搜索结果，恢复正常分组
           searchResults.style.display = 'none';
           searchResults.innerHTML = '';
           for (const ch of box.children) {
@@ -526,13 +526,13 @@ export async function refreshModels(force = false) {
           }
           return;
         }
-        // Hide all normal groups/headers, show flat search results
+        // 隐藏所有正常分组/标题，显示扁平搜索结果
         for (const ch of box.children) {
           if (ch !== searchBox && ch !== searchResults) ch.style.display = 'none';
         }
         searchResults.innerHTML = '';
         searchResults.style.display = '';
-        // Build flat results from all cached models
+        // 从所有缓存模型构建扁平结果
         (_cachedItems || []).forEach(item => {
           if (item.offline) return;
           const allModels = (item.models || []).concat(item.models_extra || []);
@@ -548,7 +548,7 @@ export async function refreshModels(force = false) {
         if (searchResults.children.length === 0) {
           const empty = document.createElement('div');
           empty.style.cssText = 'text-align:center;padding:12px;opacity:0.4;';
-          empty.textContent = 'No models match "' + searchBox.value.trim() + '"';
+          empty.textContent = t('models.no_models_match', { query: searchBox.value.trim() });
           searchResults.appendChild(empty);
         }
       });
@@ -559,56 +559,56 @@ export async function refreshModels(force = false) {
       const noModels = document.createElement('div');
       noModels.className = 'models-empty-state';
       if (window._isAdmin) {
-        noModels.innerHTML = '<span class="muted">No models found</span><br>'
-          + '<a href="#" onclick="document.getElementById(\'user-bar-admin\')?.click();return false;" class="accent-link">Open Admin to add endpoints</a>'
-          + '<br><span class="muted-sm">Type /setup for Local models or API setup.</span>';
+        noModels.innerHTML = '<span class="muted">' + t('models.no_models_found') + '</span><br>'
+          + '<a href="#" onclick="document.getElementById(\'user-bar-admin\')?.click();return false;" class="accent-link">' + t('models.open_admin_add_endpoints') + '</a>'
+          + '<br><span class="muted-sm">' + t('models.type_setup_hint') + '</span>';
       } else {
-        noModels.innerHTML = '<span class="muted">No models available</span><br>'
-          + '<span class="muted-sm">Ask an admin to configure model endpoints</span>';
+        noModels.innerHTML = '<span class="muted">' + t('models.no_models_available') + '</span><br>'
+          + '<span class="muted-sm">' + t('models.ask_admin_configure') + '</span>';
       }
       box.appendChild(noModels);
-      // No endpoints yet: keep the welcome screen focused on first setup.
+      // 还没有端点：让欢迎界面聚焦于首次设置。
       const welcomeSub = document.getElementById('welcome-sub');
-      if (welcomeSub) welcomeSub.innerHTML = 'Type <span class="setup-trigger-link" style="color:var(--accent,var(--red));font-weight:600;cursor:pointer;text-decoration:underline;" title="Click to launch setup">/setup</span> to get started.';
+      if (welcomeSub) welcomeSub.innerHTML = t('models.welcome_setup_html');
       const welcomeTip = document.getElementById('welcome-tip');
-      if (welcomeTip) welcomeTip.textContent = 'Type /setup, then choose Local models or API.';
+      if (welcomeTip) welcomeTip.textContent = t('models.welcome_tip_setup');
     } else {
-      // Configured installs should feel ready, not stuck in onboarding.
+      // 已配置的安装应该感觉就绪，而不是卡在入门引导中。
       const welcomeSub = document.getElementById('welcome-sub');
-      if (welcomeSub) welcomeSub.textContent = 'Yours for the voyage.';
+      if (welcomeSub) welcomeSub.textContent = t('models.welcome_voyage');
       const welcomeTip = document.getElementById('welcome-tip');
       if (welcomeTip) {
         const tips = window.innerWidth <= 768
           ? [
-              'Tip: Long-press a session for rename, delete, and memory options.',
-              'Tip: Tap the eye icon for Nobody mode - no history saved.',
-              'Tip: Switch to Agent mode when you want tools.',
-              'Tip: Attach images or files using the + button next to the input.',
+              t('models.tip_long_press_session'),
+              t('models.tip_nobody_mode'),
+              t('models.tip_agent_mode'),
+              t('models.tip_attach_button'),
             ]
           : [
-              'Tip: Press Ctrl+K to search across all your conversations.',
-              'Tip: Press Ctrl+B to quickly toggle the sidebar.',
-              'Tip: Shift-click the sidebar toggle to swap it to the other side.',
-              'Tip: Drag and drop files onto the chat to attach them.',
-              'Tip: Right-click a session for rename, delete, and memory options.',
+              t('models.tip_ctrl_k_search'),
+              t('models.tip_ctrl_b_sidebar'),
+              t('models.tip_shift_click_sidebar'),
+              t('models.tip_drag_drop_files'),
+              t('models.tip_right_click_session'),
             ];
         welcomeTip.textContent = tips[Math.floor(Math.random() * tips.length)];
       }
     }
   } catch (e) {
     console.error(e);
-    box.textContent = '(render failed: ' + e.message + ')';
+    box.textContent = '(' + t('models.render_failed') + ': ' + e.message + ')';
   }
 }
 
 /**
- * Refresh and display OpenAI providers
+ * 刷新并显示 OpenAI 提供商
  */
 export async function refreshProviders() {
   const sel = document.getElementById('openai-model');
-  if (!sel) return; // Exit if element doesn't exist
+  if (!sel) return; // 如果元素不存在则退出
 
-  sel.innerHTML = '<option disabled>Loading providers…</option>';
+  sel.innerHTML = '<option disabled>' + t('models.loading_providers') + '</option>';
 
   try {
     const res = await fetch(`${API_BASE}/api/providers`);
@@ -628,7 +628,7 @@ export async function refreshProviders() {
     } else {
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = '(OPENAI_API_KEY not set on server)';
+      opt.textContent = '(' + t('models.openai_key_not_set') + ')';
       sel.appendChild(opt);
     }
   } catch (e) {

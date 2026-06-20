@@ -1,5 +1,5 @@
 # routes/personal_routes.py
-"""Routes for personal documents management."""
+"""个人文档管理路由。"""
 import os
 import logging
 import uuid

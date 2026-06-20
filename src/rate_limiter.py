@@ -1,5 +1,5 @@
 # src/rate_limiter.py
-"""Generic in-memory rate limiter — sliding window, keyed by IP."""
+"""泛型内存限流器 — 滑动窗口，按 IP 键控。"""
 
 import threading
 import time
@@ -7,7 +7,7 @@ from typing import Dict, List
 
 
 class RateLimiter:
-    """Sliding-window rate limiter.
+    """滑动窗口限流器。
 
     Usage:
         limiter = RateLimiter(max_requests=5, window_seconds=60)
@@ -24,7 +24,7 @@ class RateLimiter:
         self._cleanup_interval = max(window_seconds * 2, 120)
 
     def check(self, key: str) -> bool:
-        """Return True if the request is allowed, False if rate-limited."""
+        """请求允许返回 True，被限流返回 False。"""
         now = time.monotonic()
         with self._lock:
             self._maybe_cleanup(now)
@@ -39,7 +39,7 @@ class RateLimiter:
             return True
 
     def _maybe_cleanup(self, now: float) -> None:
-        """Periodically purge stale entries."""
+        """定期清理过期的条目。"""
         if now - self._last_cleanup < self._cleanup_interval:
             return
         self._last_cleanup = now

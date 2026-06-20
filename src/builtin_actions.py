@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 class TaskNoop(BaseException):
-    """Raised by an action when it determined there's nothing to do.
+    """由 action 在确定无事可做时抛出。
 
-    Inherits from BaseException (not Exception) so the standard
+    继承自 BaseException（而非 Exception），这样每个 action 用于
     `except Exception` wrappers each action uses for real error handling
     don't accidentally catch it. The scheduler explicitly catches TaskNoop,
     drops the queued TaskRun row, advances last_run / next_run, and exits
@@ -31,7 +31,7 @@ class TaskNoop(BaseException):
 
 
 class TaskDeferred(BaseException):
-    """Raised when a task should run later without recording a skipped run."""
+    """当任务应稍后运行而不记录跳过的运行时抛出。"""
 
     def __init__(self, reason: str, delay_seconds: int = 20 * 60):
         super().__init__(reason)
@@ -40,9 +40,9 @@ class TaskDeferred(BaseException):
 
 
 async def action_tidy_sessions(owner: str, **kwargs) -> Tuple[str, bool]:
-    """Delete empty sessions for the owner. Pure heuristic —
-    the LLM folder-sort phase is skipped (user opted to keep this task
-    LLM-free; sorting can be triggered manually via the Chats UI)."""
+    """删除所有者的空会话。纯启发式方法 —
+    跳过 LLM 文件夹排序阶段（用户选择保持此任务
+    不依赖 LLM；可通过 Chats UI 手动触发排序）。"""
     try:
         import asyncio
         from src.session_actions import run_auto_sort
@@ -60,7 +60,7 @@ async def action_tidy_sessions(owner: str, **kwargs) -> Tuple[str, bool]:
 
 
 async def action_tidy_documents(owner: str, **kwargs) -> Tuple[str, bool]:
-    """Run tidy on documents for the owner."""
+    """为所有者运行文档整理。"""
     try:
         from src.document_actions import run_document_tidy
         result = await run_document_tidy(owner)
@@ -71,7 +71,7 @@ async def action_tidy_documents(owner: str, **kwargs) -> Tuple[str, bool]:
 
 
 async def action_consolidate_memory(owner: str, **kwargs) -> Tuple[str, bool]:
-    """Consolidate/deduplicate memories for the owner."""
+    """合并/去重所有者的记忆。"""
     try:
         import json
         import re
@@ -289,12 +289,12 @@ async def action_consolidate_memory(owner: str, **kwargs) -> Tuple[str, bool]:
         return str(e), False
 
 
-# Registry: action name -> async function(owner, **kwargs) -> (result_str, success_bool)
+# 注册表：action 名称 -> async function(owner, **kwargs) -> (result_str, success_bool)
 
 
 async def _run_subprocess(argv, *, shell: bool = False, timeout: int = 120, label: str = "Command") -> Tuple[str, bool]:
-    """Shared subprocess runner. Wraps the blocking subprocess.run in
-    asyncio.to_thread so the event loop stays responsive."""
+    """共享子进程运行器。将阻塞的 subprocess.run 包装在
+    asyncio.to_thread 中，使事件循环保持响应。"""
     import asyncio
     import subprocess
     try:

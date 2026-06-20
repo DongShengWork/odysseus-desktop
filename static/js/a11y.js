@@ -1,36 +1,36 @@
-// Accessibility enhancements for keyboard + screen-reader users.
+// 为键盘和屏幕阅读器用户提供无障碍增强。
 //
-// Several primary controls in Odysseus are authored as click-only <div>s
-// (most notably the whole sidebar navigation: New Chat, Search, Brain,
-// Calendar, Compare, Cookbook, Deep Research, Gallery, Library, Notes,
-// Tasks, Theme, plus the account row). <div>s are not in the tab order and
-// are not announced as buttons, so keyboard and screen-reader users cannot
-// reach or operate them.
+// Odysseus 中的几个主要控件被编写为仅点击的 <div>
+// （最显著的是整个侧边栏导航：New Chat、Search、Brain、
+// Calendar、Compare、Cookbook、Deep Research、Gallery、Library、Notes、
+// Tasks、Theme，以及账户行）。<div> 不在 Tab 键顺序中且
+// 不被宣布为按钮，因此键盘和屏幕阅读器用户无法
+// 到达或操作它们。
 //
-// This module enhances those rows in place — making them focusable
-// (tabindex=0), announcing them as buttons when it's safe to do so, and
-// activating them with Enter / Space — without changing how they look or
-// how they behave for mouse users. The visible focus ring already exists in
-// style.css (`.list-item:focus-visible`); it simply never fired because the
-// rows were never focusable.
+// 本模块就地增强这些行 —— 使其可聚焦
+// （tabindex=0），在安全时将其宣布为按钮，并
+// 通过 Enter / Space 激活它们 —— 而不改变它们的外观或
+// 鼠标用户的行为方式。可见的焦点环已存在于
+// style.css 中（`.list-item:focus-visible`）；它只是从未触发，因为
+// 这些行从未可聚焦。
 
 (function () {
   'use strict';
 
-  // Click-as-button rows we want reachable by keyboard.
+  // 我们希望通过键盘可达的作为按钮点击的行。
   var ROW_SELECTOR = ['#sidebar .list-item', '#user-bar-profile'].join(',');
 
-  // Native interactive descendants. If a row contains one of these we must
-  // NOT give the row role="button" — a button inside a button is invalid
-  // (axe "nested-interactive") and confuses screen readers. Such rows still
-  // become focusable + Enter/Space-activatable, just without the role.
+  // 原生交互后代元素。如果行中包含其中之一，我们
+  // 绝不能给该行 role="button" —— 按钮内嵌套按钮是无效的
+  // （axe "nested-interactive"）并会混淆屏幕阅读器。此类行仍然
+  // 变得可聚焦 + 可 Enter/Space 激活，只是没有该角色。
   var NESTED_INTERACTIVE =
     'a[href],button,input,select,textarea,[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
 
   function enhanceRow(el) {
     if (!el || el.nodeType !== 1 || el.dataset.a11yEnhanced === '1') return;
     var tag = el.tagName;
-    // Leave genuine native controls alone.
+    // 保持真正的原生控件不变。
     if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' ||
         tag === 'SELECT' || tag === 'TEXTAREA') return;
 
@@ -42,8 +42,8 @@
       el.setAttribute('role', 'button');
     }
 
-    // Guarantee an accessible name. Visible text normally supplies it; fall
-    // back to the title attribute for icon-only rows.
+    // 保证accessible name。可见文本通常提供它；对于纯图标行
+    // 回退到 title 属性。
     if (!el.getAttribute('aria-label') &&
         !(el.textContent || '').trim() &&
         el.getAttribute('title')) {
@@ -55,16 +55,16 @@
     (root || document).querySelectorAll(ROW_SELECTOR).forEach(enhanceRow);
   }
 
-  // ---- Modal dialogs -----------------------------------------------------
-  // Odysseus modals are plain <div class="modal-content"> boxes. Marking
-  // them as ARIA dialogs lets screen readers announce them as dialogs and
-  // exempts their content from the "all content in landmarks" rule. We also
-  // normalize the modal title to heading level 2 (one below the page <h1>)
-  // so heading order stays valid no matter which tag the markup uses.
+  // ---- 模态对话框 -----------------------------------------------------
+  // Odysseus 模态框是普通的 <div class="modal-content"> 框。将它们
+  // 标记为 ARIA dialogs 使屏幕阅读器将其宣布为对话框，并
+  // 豁免其内容免受"所有内容均在地标内"规则。我们还将
+  // 模态框标题规范化为标题级别 2（低于页面 <h1> 一级），
+  // 这样无论标记使用什么标签，标题顺序都保持有效。
   var titleSeq = 0;
-  // Each modal "kind" is a container selector plus where to find its title
-  // heading. Standard modals use .modal-content/.modal-header; the docked
-  // Notes pane uses its own markup.
+  // 每个模态框"种类"是一个容器选择器加上在哪里找到其标题
+  // 标题。标准模态框使用 .modal-content/.modal-header；停靠的
+  // Notes 面板使用其自己的标记。
   var MODAL_KINDS = [
     {
       sel: '.modal-content',
@@ -87,8 +87,8 @@
       if (!mc.hasAttribute('aria-labelledby')) {
         mc.setAttribute('aria-labelledby', heading.id);
       }
-      // Modal titles sit one level below the page <h1>; normalize so heading
-      // order stays valid regardless of the tag the markup happens to use.
+      // 模态框标题位于页面 <h1> 下一级；规范化使标题
+      // 顺序保持有效，无论标记恰好使用什么标签。
       if (!heading.hasAttribute('aria-level')) heading.setAttribute('aria-level', '2');
     }
   }
@@ -107,14 +107,14 @@
     return null;
   }
 
-  // Delegated keyboard activation. We only act when the focused element is
-  // itself an enhanced row (keydown targets the focused element), so a press
-  // on a nested native button is left to the browser's own handling.
+  // 委托键盘激活。我们仅在聚焦的元素本身
+  // 是增强行时才行动（keydown 以聚焦的元素为目标），因此对
+  // 嵌套原生按钮的按键留给浏览器自己的处理。
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
     var el = e.target;
     if (!el || !el.matches || !el.matches('[data-a11y-activatable]')) return;
-    e.preventDefault(); // Space would otherwise scroll the page
+    e.preventDefault(); // Space 否则会滚动页面
     el.click();
   });
 
@@ -122,8 +122,8 @@
     enhanceAll(document);
     enhanceModals(document);
 
-    // Sidebar content is re-rendered as the user navigates (session lists,
-    // tool sub-rows, etc.). Watch for new rows and enhance them too.
+    // 侧边栏内容在用户导航时重新渲染（会话列表、
+    // 工具子行等）。观察新行并同样增强它们。
     var sidebar = document.getElementById('sidebar');
     if (sidebar && 'MutationObserver' in window) {
       new MutationObserver(function (muts) {
@@ -139,9 +139,9 @@
       }).observe(sidebar, { childList: true, subtree: true });
     }
 
-    // Some modals (Notes, Tasks, …) are injected at runtime, usually as
-    // direct children of <body>. Catch those without paying for a deep
-    // subtree observer over the whole document.
+    // 某些模态框（Notes、Tasks 等）在运行时注入，通常作为
+    // <body> 的直接子元素。捕获这些而不必对整个文档
+    // 进行深度的子树观察。
     if ('MutationObserver' in window) {
       new MutationObserver(function (muts) {
         for (var i = 0; i < muts.length; i++) {

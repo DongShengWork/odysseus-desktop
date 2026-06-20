@@ -1,19 +1,19 @@
 /**
- * Snap-while-dragging: when the move tool drags a layer near another
- * layer's edge or the canvas centre/edges, gently lock the proposed
- * (nx, ny) to the nearest target within SNAP_PX.
+ * 拖拽时吸附：当移动工具将图层拖拽到另一个图层的边缘
+ * 或画布中心/边缘附近时，将建议的 (nx, ny) 轻柔锁定到
+ * SNAP_PX 范围内最近的目标。
  *
- * The implementation is pure — it takes the layer being moved + the
- * trial offset + a context describing zoom + the other layers, and
- * returns the snapped position plus any guides to draw.
+ * 实现是纯函数 — 接受正在移动的图层 +
+ * 试验性偏移 + 描述缩放和其他图层的上下文，
+ * 返回吸附后的位置以及需要绘制的辅助线。
  *
- * The legacy gallery editor's `_computeSnap` is a one-line wrapper
- * that builds the context from module state.
+ * 旧版图片编辑器的 `_computeSnap` 是一个单行包装器，
+ * 从模块状态构建上下文。
  *
  * @param {{canvas: HTMLCanvasElement, id: string}} layer
- *   The layer currently being moved.
+ *   当前正在移动的图层。
  * @param {number} nx / ny
- *   Trial offset (top-left) in canvas pixels, before snapping.
+ *   吸附前的试验性偏移（左上角），单位为画布像素。
  * @param {{
  *   zoom:        number,
  *   canvasW:     number,
@@ -92,7 +92,7 @@ export function computeSnap(layer, nx, ny, ctx) {
 
 
 /**
- * CSS cursor name for each transform-tool handle.
+ * 每个变换工具手柄对应的 CSS 光标名称。
  *
  * @param {'tl'|'tr'|'bl'|'br'|'rot'|string} id
  * @returns {string}

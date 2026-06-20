@@ -1,4 +1,4 @@
-"""CRUD routes for scheduled tasks."""
+"""定时任务的 CRUD 路由。"""
 
 import json
 import logging

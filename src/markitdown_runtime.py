@@ -1,11 +1,11 @@
-"""Helpers for the optional markitdown document-extraction dependency.
+"""可选的 markitdown 文档提取依赖的辅助函数。
 
-markitdown (MIT, Microsoft) converts Office/EPUB documents to Markdown, which is
+markitdown (MIT, Microsoft) 可将 Office/EPUB 文档转换为 Markdown，比原始文本
 more token-efficient and model-legible than a raw text dump. It is **optional**:
-install with `pip install -r requirements-optional.txt`. When absent, callers
+通过 `pip install -r requirements-optional.txt` 安装。当依赖缺失时，调用方
 degrade gracefully (chat shows a hint; the RAG indexer skips the file) — the MIT
 core never hard-depends on it. Mirrors the optional-dependency pattern in
-`src/pdf_runtime.py`.
+镜像了 `src/pdf_runtime.py` 中的可选依赖模式。
 """
 
 import logging
@@ -18,23 +18,23 @@ MARKITDOWN_MISSING = (
     "dependencies with `pip install -r requirements-optional.txt`."
 )
 
-# Formats routed through markitdown. PDFs stay on pypdf (src/document_processor
-# and src/personal_docs); plain text/code/csv/json/markdown/html stay on the
-# cheaper built-in text path. These are the formats currently dropped entirely.
+# 通过 markitdown 处理的格式。PDF 仍走 pypdf（src/document_processor
+# 和 src/personal_docs）；纯文本/code/csv/json/markdown/html 走更经济的
+# 内置文本路径。以下是当前完全丢弃的格式。
 MARKITDOWN_EXTS = frozenset({".docx", ".pptx", ".xlsx", ".xls", ".epub"})
 
 
 def is_markitdown_format(path: str) -> bool:
-    """True if the file extension is one we route through markitdown."""
+    """如果文件扩展名属于通过 markitdown 处理的格式则返回 True。"""
     if not isinstance(path, str):
         return False
     return os.path.splitext(path)[1].lower() in MARKITDOWN_EXTS
 
 
 def load_markitdown():
-    """Return the MarkItDown class, or raise a user-facing setup hint."""
+    """返回 MarkItDown 类，或抛出面向用户的安装提示。"""
     try:
-        from markitdown import MarkItDown  # optional dependency
+        from markitdown import MarkItDown  # 可选依赖
     except ImportError as exc:
         raise RuntimeError(MARKITDOWN_MISSING) from exc
     return MarkItDown
@@ -73,10 +73,10 @@ def _extract_docx_native(path: str) -> str | None:
 
 
 def convert_to_markdown(path: str) -> str | None:
-    """Convert a document to Markdown text via markitdown.
+    """通过 markitdown 将文档转换为 Markdown 文本。
 
-    Returns the extracted Markdown, or ``None`` if markitdown is unavailable or
-    the conversion fails — callers degrade gracefully rather than erroring.
+    返回提取的 Markdown，如果 markitdown 不可用或转换失败则返回 ``None`` —
+    调用方优雅降级而不是报错。
 
     Fallback: when markitdown isn't installed and the file is a .docx, run
     the bundled pure-Python extractor so the most common case (Word docs)

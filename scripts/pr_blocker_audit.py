@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only pull request overlap audit helper.
+"""只读的拉取请求重叠审计辅助工具。
 
-This script intentionally does not import the Odysseus application package.
-It only reads local JSON input or invokes read-only `gh` list/API commands.
+此脚本故意不导入 Odysseus 应用程序包。
+它只读取本地 JSON 输入或调用只读的 `gh` list/API 命令。
 """
 from __future__ import annotations
 

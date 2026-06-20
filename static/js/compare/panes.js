@@ -1,4 +1,4 @@
-// compare/panes.js — pane lifecycle, actions, layout
+// compare/panes.js — 窗格生命周期、操作、布局
 import state from './state.js';
 import { _persistSelections } from './models.js';
 import { buildVoteBar } from './vote.js';
@@ -14,14 +14,14 @@ import { bindMenuDismiss } from '../escMenuStack.js';
 
 var escapeHtml = uiModule.esc;
 
-// ── Lazy-registered functions from compare.js (avoids circular imports) ──
+// ── 从 compare.js 懒加载注册的函数（避免循环导入） ──
 let _setSendBtn = null;
 let _deactivate = null;
 let _streamToPane = null;
 let _renderSearchResults = null;
 let _fetchModels = null;
 
-/** Register external functions that live in compare.js or sibling modules. */
+/** 注册在 compare.js 或兄弟模块中定义的外部函数。 */
 function registerPaneActions({ setSendBtn, deactivate, streamToPane, renderSearchResults, fetchModels }) {
   if (setSendBtn) _setSendBtn = setSendBtn;
   if (deactivate) _deactivate = deactivate;
@@ -30,17 +30,17 @@ function registerPaneActions({ setSendBtn, deactivate, streamToPane, renderSearc
   if (fetchModels) _fetchModels = fetchModels;
 }
 
-/** Slot label: A/B/C in parallel mode, 1/2/3 in sequential. */
+/** 槽位标签：并行模式用 A/B/C，顺序模式用 1/2/3。 */
 function _slotChar(i) { return state._parallel ? String.fromCharCode(65 + i) : String(i + 1); }
 
-// ── Stop / reroll ──
+// ── 停止 / 重新运行 ──
 
 function stopAll() {
   state._abortControllers.forEach(ac => { if (ac) ac.abort(); });
   state._abortControllers = [];
   state._streaming = false;
   if (_setSendBtn) _setSendBtn('send');
-  // Re-enable header buttons
+  // 重新启用标题栏按钮
   document.querySelectorAll('#compare-shuffle-btn, #compare-check-btn, #compare-add-btn').forEach(b => {
     b.disabled = false; b.style.opacity = '0.7'; b.style.pointerEvents = '';
   });
@@ -52,14 +52,14 @@ function stopPane(paneIdx) {
     ac.abort();
     state._abortControllers[paneIdx] = null;
   }
-  // Hide stop button, show reroll
+  // 隐藏停止按钮，显示重新运行按钮
   const pane = document.querySelector(`.compare-pane[data-pane="${paneIdx}"]`);
   if (pane) {
     const stopBtn = pane.querySelector('.pane-stop-btn');
     if (stopBtn) stopBtn.style.display = 'none';
     pane.querySelectorAll('.pane-needs-response').forEach(b => b.style.display = '');
   }
-  // Remove spinner if present
+  // 移除 Spinner（如果存在）
   const hist = document.getElementById('cmp-history-' + paneIdx);
   if (hist) {
     const lastAi = hist.querySelector('.msg-ai:last-child');
@@ -72,10 +72,10 @@ function stopPane(paneIdx) {
 }
 
 async function rerollPane(paneIdx, overrideTimeout) {
-  // Allow reroll even while other panes stream — just stop this pane first
+  // 即使其他窗格正在流式传输也允许重新运行 — 只需先停止此窗格
   if (state._abortControllers[paneIdx]) stopPane(paneIdx);
   const hist = document.getElementById('cmp-history-' + paneIdx);
-  // Reset preview state
+  // 重置预览状态
   const _ri = document.getElementById('cmp-iframe-' + paneIdx);
   if (_ri) { _ri.srcdoc = ''; _ri.style.display = 'none'; _ri._htmlCode = null; }
   const _rp = document.getElementById('cmp-preview-' + paneIdx);
@@ -86,20 +86,20 @@ async function rerollPane(paneIdx, overrideTimeout) {
   const firstUserText = userBodies.length > 0 ? userBodies[0].textContent : '';
   if (!firstUserText) return;
 
-  // Clear all messages and start fresh
+  // 清除所有消息并重新开始
   hist.innerHTML = '';
   const userMsg = document.createElement('div');
   userMsg.className = 'msg msg-user';
   userMsg.innerHTML = '<div class="role">You</div><div class="body">' + escapeHtml(firstUserText) + '</div>';
   hist.appendChild(userMsg);
 
-  // Reset badge and timer
+  // 重置徽章和计时器
   const badge = document.getElementById('cmp-badge-' + paneIdx);
   if (badge) { badge.textContent = ''; badge.style.color = ''; }
   const timer = document.getElementById('cmp-timer-' + paneIdx);
   if (timer) timer.textContent = '';
 
-  // Search mode: re-query the search provider
+  // 搜索模式：重新查询搜索提供商
   if (state._compareMode === 'search') {
     const aiMsg = document.createElement('div');
     aiMsg.className = 'msg msg-ai';
@@ -151,7 +151,7 @@ async function rerollPane(paneIdx, overrideTimeout) {
     return;
   }
 
-  // Chat/agent mode: stream via session
+  // 聊天/Agent 模式：通过 session 流式传输
   const aiMsg = document.createElement('div');
   aiMsg.className = 'msg msg-ai';
   aiMsg.innerHTML = '<div class="role">AI</div><div class="body"></div>';
@@ -171,7 +171,7 @@ async function rerollPane(paneIdx, overrideTimeout) {
   await _streamToPane(paneIdx, state._paneSessionIds[paneIdx], firstUserText, aiMsg, opts);
 }
 
-// ── Expand / preview / copy ──
+// ── 展开 / 预览 / 复制 ──
 
 function toggleExpandPane(paneIdx, btn) {
   const grid = document.querySelector('.compare-grid');
@@ -192,8 +192,8 @@ function toggleExpandPane(paneIdx, btn) {
 }
 
 /**
- * After streaming finishes, check for HTML code in the response.
- * If found, show the play button in the header. User clicks to run.
+ * 流式传输完成后，检查响应中是否包含 HTML 代码。
+ * 如果找到，在标题栏中显示播放按钮。用户点击即可运行。
  */
 function _autoPreviewHtml(paneIdx, accumulated) {
   if (!accumulated) return;
@@ -204,16 +204,16 @@ function _autoPreviewHtml(paneIdx, accumulated) {
   const previewBtn = document.getElementById('cmp-preview-' + paneIdx);
   if (!iframe || !previewBtn) return;
 
-  // Store the HTML on the iframe for when user clicks play
+  // 将 HTML 存储在 iframe 上，等待用户点击播放
   iframe._htmlCode = htmlCode;
 
-  // Show the play button
+  // 显示播放按钮
   previewBtn.style.display = '';
   previewBtn.innerHTML = ICON_PLAY;
-  previewBtn.title = 'Run preview';
+  previewBtn.title = t('compare.run_preview');
 }
 
-/** Toggle between iframe preview and code view for a pane. */
+/** 切换窗格的 iframe 预览和代码视图。 */
 function togglePanePreview(paneIdx) {
   const iframe = document.getElementById('cmp-iframe-' + paneIdx);
   const hist = document.getElementById('cmp-history-' + paneIdx);
@@ -222,33 +222,33 @@ function togglePanePreview(paneIdx) {
 
   const showingPreview = iframe.style.display !== 'none';
   if (showingPreview) {
-    // Switch to code view
+    // 切换到代码视图
     iframe.style.display = 'none';
     hist.style.display = '';
     btn.innerHTML = ICON_PLAY;
     btn.title = 'Run preview';
     btn.classList.remove('active');
   } else {
-    // Switch to preview — load on first click
+    // 切换到预览 — 首次点击时加载
     if (iframe._htmlCode) iframe.srcdoc = iframe._htmlCode;
     iframe.style.display = '';
     hist.style.display = 'none';
     btn.innerHTML = ICON_CODE;
-    btn.title = 'Show code';
+    btn.title = t('compare.show_code');
     btn.classList.add('active');
   }
 }
 
-/** Extract full HTML document from raw accumulated text. */
+/** 从原始累积文本中提取完整的 HTML 文档。 */
 function _extractHtmlFromText(text) {
-  // 1. Try markdown code fences
+  // 1. 尝试 Markdown 代码围栏
   const fenceRe = /`{3,}(?:html)?\s*\r?\n([\s\S]*?)`{3,}/gi;
   let match;
   while ((match = fenceRe.exec(text)) !== null) {
     const code = match[1].trim();
     if (/<!doctype\s+html|<html[\s>]/i.test(code)) return code;
   }
-  // 2. Bare HTML
+  // 2. 裸 HTML
   const bare = text.match(/(<!doctype\s+html[\s\S]*<\/html>)/i)
     || text.match(/(<html[\s>][\s\S]*<\/html>)/i);
   if (bare) return bare[1].trim();
@@ -261,7 +261,7 @@ async function copyPaneResponse(paneIdx) {
   const aiMsgs = hist.querySelectorAll('.msg-ai');
   if (aiMsgs.length === 0) return;
   const lastAi = aiMsgs[aiMsgs.length - 1];
-  // For image panes, copy the prompt text
+  // 对于图像窗格，复制提示文本
   const text = lastAi._imageData ? (lastAi._imageData.prompt || '') : (lastAi.querySelector('.body')?.textContent || '');
   try { await navigator.clipboard.writeText(text); }
   catch (e) {
@@ -272,16 +272,16 @@ async function copyPaneResponse(paneIdx) {
   if (uiModule) uiModule.showToast(lastAi._imageData ? 'Prompt copied!' : 'Copied!');
 }
 
-// ── Add / create / remove panes ──
+// ── 添加 / 创建 / 移除窗格 ──
 
-/** Show a model picker dropdown anchored to the "+" button in the pane header. */
+/** 显示锚定到窗格标题栏中 "+" 按钮的模型选择器下拉菜单。 */
 async function _addPane(anchorBtn) {
   if (state._streaming) return;
   const _effectiveType = (state._compareMode === 'agent' || state._compareMode === 'research') ? 'chat' : state._compareMode;
   const filtered = state._cachedModels.filter(m => m.type === _effectiveType);
   if (!filtered.length) return;
 
-  // Toggle existing dropdown
+  // 切换现有下拉菜单
   const existing = document.querySelector('.add-pane-dropdown');
   if (existing) { if (typeof existing._dismiss === 'function') existing._dismiss(); else existing.remove(); return; }
 
@@ -289,7 +289,7 @@ async function _addPane(anchorBtn) {
   dropdown.className = 'add-pane-dropdown';
   let closeMenu = () => dropdown.remove();
 
-  // Search input for large model lists
+  // 大型模型列表的搜索输入框
   if (filtered.length >= 5) {
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
@@ -342,9 +342,9 @@ async function _addPane(anchorBtn) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const margin = 8;
-  // Render off-screen first so we can measure the dropdown's actual size.
-  // Clamp the width to the viewport up front so long model names can't push
-  // the dropdown off the screen edge, and lift z-index above the panes.
+  // 先渲染到屏幕外来测量下拉菜单的实际大小。
+  // 提前将宽度限制在视口范围内，避免长模型名将下拉菜单推到屏幕边缘之外，
+  // 并将 z-index 提升到窗格之上。
   dropdown.style.left = '-9999px';
   dropdown.style.top = '0';
   dropdown.style.maxWidth = (vw - margin * 2) + 'px';
@@ -353,12 +353,12 @@ async function _addPane(anchorBtn) {
   const ddRect = dropdown.getBoundingClientRect();
   const ddW = ddRect.width;
   const ddH = ddRect.height;
-  // Horizontal: align dropdown's right edge with the button's, then
-  // clamp so the dropdown stays within [margin, vw - margin].
+  // 水平：将下拉菜单的右边缘与按钮对齐，
+  // 然后约束使其保持在 [margin, vw - margin] 范围内。
   let left = btnRect.right - ddW;
   if (left + ddW > vw - margin) left = vw - margin - ddW;
   if (left < margin) left = margin;
-  // Vertical: drop below the button if there's room, otherwise above.
+  // 垂直：如果有空间则放在按钮下方，否则放在上方。
   const spaceBelow = vh - btnRect.bottom;
   const spaceAbove = btnRect.top;
   let top;
@@ -373,16 +373,16 @@ async function _addPane(anchorBtn) {
   dropdown.style.bottom = 'auto';
   dropdown.style.maxHeight = Math.min(ddH, vh - margin * 2) + 'px';
 
-  // Close on outside click or Escape (the latter via the registry).
+  // 通过外部点击或 Escape（后者通过注册表）关闭。
   closeMenu = bindMenuDismiss(dropdown, () => dropdown.remove(), (e) => !dropdown.contains(e.target) && e.target !== anchorBtn);}
 
-/** Create a new pane for the given model and append it to the compare grid. */
+/** 为给定模型创建新窗格并追加到对比网格中。 */
 async function _createAndAppendPane(m) {
-  const i = state._selectedModels.length;  // New index
+  const i = state._selectedModels.length;  // 新索引
 
-  // Create session
+  // 创建会话
   const fd = new FormData();
-  // Blind mode: neutral slot name only — never leak the model (issue #1285).
+  // 盲评模式：仅使用中立槽位名称 — 绝不泄露模型（问题 #1285）。
   fd.append('name', '[CMP] ' + (state._blindMode ? 'Model ' + _slotChar(i) : m.name));
   fd.append('endpoint_url', m.url || '');
   fd.append('model', m.id || '');
@@ -394,7 +394,7 @@ async function _createAndAppendPane(m) {
   if (!res.ok) return;
   const data = await res.json();
 
-  // Update arrays
+  // 更新数组
   state._selectedModels.push({ model: m.id, endpoint: m.url, endpointId: m.endpointId, name: m.name, endpointName: m.endpointName || '' });
   state._paneSessionIds.push(data.id);
   state._paneMetrics.push(null);
@@ -402,7 +402,7 @@ async function _createAndAppendPane(m) {
   _persistSelections();
   if (window._updateCheckBtnState) window._updateCheckBtnState();
 
-  // Build pane DOM
+  // 构建窗格 DOM
   const label = state._blindMode ? 'Model ' + _slotChar(i) : m.name;
   const pane = document.createElement('div');
   pane.className = 'compare-pane';
@@ -413,7 +413,7 @@ async function _createAndAppendPane(m) {
       '<span class="pane-timer" id="cmp-timer-' + i + '"></span>' +
         '<span class="pane-finish-badge" id="cmp-badge-' + i + '"></span>' +
       '<div class="pane-actions">' +
-        '<button class="pane-action-btn pane-preview-btn" data-action="preview" data-pane="' + i + '" id="cmp-preview-' + i + '" title="Run preview" style="display:none;">' + ICON_PLAY + '</button>' +
+        '<button class="pane-action-btn pane-preview-btn" data-action="preview" data-pane="' + i + '" id="cmp-preview-' + i + '" title="' + t('compare.run_preview') + '" style="display:none;">' + ICON_PLAY + '</button>' +
         '<button class="pane-action-btn" data-action="reroll" data-pane="' + i + '" title="Re-roll">' + ICON_REROLL + '</button>' +
         '<button class="pane-action-btn" data-action="copy" data-pane="' + i + '" title="Copy">' + ICON_COPY + '</button>' +
         '<button class="pane-action-btn" data-action="expand" data-pane="' + i + '" title="Expand">' + ICON_EXPAND + '</button>' +
@@ -429,32 +429,32 @@ async function _createAndAppendPane(m) {
       '</button>' +
     '</div>';
 
-  // Append to grid
+  // 追加到网格
   const grid = document.querySelector('.compare-grid');
   grid.appendChild(pane);
 
-  // Update grid columns
+  // 更新网格列数
   const n = state._selectedModels.length;
   grid.dataset.cols = String(Math.min(n, 4));
 
-  // Update header label
+  // 更新标题栏标签
   const headerSpan = document.querySelector('.compare-active > div:first-child span');
   if (headerSpan) {
     const modeLabel = ({ search: ' search providers', agent: ' agents', research: ' research models' }[state._compareMode] || ' models');
-    headerSpan.textContent = 'Comparing' + modeLabel +
+    headerSpan.textContent = t('compare.comparing') + modeLabel +
       (state._blindMode ? ' (blind)' : '') + ' \u00b7 ' + state._timeout + 's timeout';
   }
 
-  // Rebuild vote bar
+  // 重建投票栏
   buildVoteBar(n);
 
-  // Prompt to shuffle in blind mode — tooltip bubble next to Shuffle button
+  // 盲评模式下提示随机排列 — 在 Shuffle 按钮旁边显示工具提示气泡
   if (state._blindMode && n > 2) {
     const shuffleBtn = document.getElementById('compare-shuffle-btn');
     if (shuffleBtn) {
       const bubble = document.createElement('div');
       bubble.style.cssText = 'position:absolute;top:100%;right:0;margin-top:6px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;white-space:nowrap;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.25);pointer-events:none;opacity:0;transition:opacity 0.2s;';
-      bubble.textContent = 'Shuffle models?';
+      bubble.textContent = t('compare.shuffle_models_question');
       shuffleBtn.style.position = 'relative';
       shuffleBtn.appendChild(bubble);
       requestAnimationFrame(() => { bubble.style.opacity = '1'; });
@@ -463,20 +463,20 @@ async function _createAndAppendPane(m) {
   }
 }
 
-/** Remove a pane from the compare grid. If only 1 remains, exit compare mode. */
+/** 从对比网格中移除窗格。如果只剩 1 个，则退出对比模式。 */
 function _removePane(paneIdx) {
   if (state._streaming) return;
 
-  // Abort if streaming
+  // 如果正在流式传输则中止
   if (state._abortControllers[paneIdx]) state._abortControllers[paneIdx].abort();
 
-  // Delete the session
+  // 删除会话
   const sid = state._paneSessionIds[paneIdx];
   if (sid) {
     fetch(`${state.API_BASE}/api/session/${sid}`, { method: 'DELETE' }).catch(() => {});
   }
 
-  // Remove from arrays
+  // 从数组中移除
   state._selectedModels.splice(paneIdx, 1);
   state._paneSessionIds.splice(paneIdx, 1);
   state._paneMetrics.splice(paneIdx, 1);
@@ -484,13 +484,13 @@ function _removePane(paneIdx) {
   _persistSelections();
   if (window._updateCheckBtnState) window._updateCheckBtnState();
 
-  // If no panes left, exit compare mode
+  // 如果没有窗格剩余，退出对比模式
   if (state._selectedModels.length === 0) {
     if (_deactivate) _deactivate(true);
     return;
   }
 
-  // Rebuild pane DOM — re-index all panes so IDs stay consistent
+  // 重建窗格 DOM — 重新索引所有窗格，使 ID 保持一致
   const grid = document.querySelector('.compare-grid');
   grid.querySelectorAll('.compare-pane').forEach(p => p.remove());
 
@@ -507,7 +507,7 @@ function _removePane(paneIdx) {
         '<span class="pane-finish-badge" id="cmp-badge-' + i + '"></span>' +
         '<div class="pane-actions">' +
           '<button class="pane-action-btn pane-stop-btn" data-action="stop" data-pane="' + i + '" title="Stop" style="display:none;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>' +
-          '<button class="pane-action-btn pane-preview-btn" data-action="preview" data-pane="' + i + '" id="cmp-preview-' + i + '" title="Run preview" style="display:none;">' + ICON_PLAY + '</button>' +
+          '<button class="pane-action-btn pane-preview-btn" data-action="preview" data-pane="' + i + '" id="cmp-preview-' + i + '" title="' + t('compare.run_preview') + '" style="display:none;">' + ICON_PLAY + '</button>' +
           '<button class="pane-action-btn pane-needs-response" data-action="reroll" data-pane="' + i + '" title="Re-roll" style="display:none;">' + ICON_REROLL + '</button>' +
           '<button class="pane-action-btn pane-needs-response" data-action="copy" data-pane="' + i + '" title="Copy" style="display:none;">' + ICON_COPY + '</button>' +
           '<button class="pane-action-btn" data-action="expand" data-pane="' + i + '" title="Expand">' + ICON_EXPAND + '</button>' +
@@ -525,27 +525,27 @@ function _removePane(paneIdx) {
     grid.appendChild(pane);
   }
 
-  // Update grid columns
+  // 更新网格列数
   grid.dataset.cols = String(Math.min(n, 4));
 
-  // Update header label
+  // 更新标题栏标签
   const headerSpan = document.querySelector('.compare-active > div:first-child span');
   if (headerSpan) {
     const modeLabel = ({ search: ' search providers', agent: ' agents', research: ' research models' }[state._compareMode] || ' models');
-    headerSpan.textContent = 'Comparing' + modeLabel +
+    headerSpan.textContent = t('compare.comparing') + modeLabel +
       (state._blindMode ? ' (blind)' : '') + ' \u00b7 ' + state._timeout + 's timeout';
   }
 
-  // Rebuild vote bar
+  // 重建投票栏
   buildVoteBar(n);
 }
 
-/** Show a dropdown under the pane title to swap the model for that pane. */
+/** 在窗格标题下方显示下拉菜单以替换该窗格的模型。 */
 function _showModelSwapDropdown(paneIdx, titleBtn) {
-  // Don't allow swaps while streaming
+  // 流式传输期间不允许替换
   if (state._streaming) return;
 
-  // Remove any existing dropdown
+  // 移除任何现有下拉菜单
   const existing = document.querySelector('.pane-model-dropdown');
   if (existing) { if (typeof existing._dismiss === 'function') existing._dismiss(); else existing.remove(); return; }
 
@@ -563,7 +563,7 @@ function _showModelSwapDropdown(paneIdx, titleBtn) {
     item.className = 'pane-model-item';
     const label = m.endpointName ? m.name + ' (' + m.endpointName + ')' : m.name;
     item.textContent = label;
-    // Highlight current model
+    // 高亮当前模型
     if (state._selectedModels[paneIdx] && state._selectedModels[paneIdx].model === m.id
         && state._selectedModels[paneIdx].endpointId === m.endpointId) {
       item.classList.add('current');
@@ -572,20 +572,20 @@ function _showModelSwapDropdown(paneIdx, titleBtn) {
       e.stopPropagation();
       closeMenu();
 
-      // Update the model for this pane and persist
+      // 更新此窗格的模型并持久化
       state._selectedModels[paneIdx] = {
         model: m.id, endpoint: m.url, endpointId: m.endpointId, name: m.name,
       };
       _persistSelections();
       if (window._updateCheckBtnState) window._updateCheckBtnState();
 
-      // Delete old session, create new one
+      // 删除旧会话，创建新会话
       const oldSid = state._paneSessionIds[paneIdx];
       if (oldSid) {
         fetch(`${state.API_BASE}/api/session/${oldSid}`, { method: 'DELETE' }).catch(() => {});
       }
       const fd = new FormData();
-      // Blind mode: neutral slot name only — never leak the model (issue #1285).
+      // 盲评模式：仅使用中立槽位名称 — 绝不泄露模型（问题 #1285）。
       fd.append('name', '[CMP] ' + (state._blindMode ? 'Model ' + _slotChar(paneIdx) : m.name));
       fd.append('endpoint_url', m.url || '');
       fd.append('model', m.id || '');
@@ -601,7 +601,7 @@ function _showModelSwapDropdown(paneIdx, titleBtn) {
         console.error('Failed to create session for swapped model:', err);
       }
 
-      // Update title display
+      // 更新标题显示
       const titleEl = document.getElementById('cmp-title-' + paneIdx);
       if (titleEl) {
         const displayName = state._blindMode
@@ -610,7 +610,7 @@ function _showModelSwapDropdown(paneIdx, titleBtn) {
         titleEl.innerHTML = escapeHtml(displayName) + ' <span class="pane-title-caret">&#x25BE;</span>';
       }
 
-      // Clear pane history for fresh start
+      // 清空窗格历史记录以重新开始
       const hist = document.getElementById('cmp-history-' + paneIdx);
       if (hist) { hist.innerHTML = ''; hist.style.display = ''; }
       const iframe = document.getElementById('cmp-iframe-' + paneIdx);
@@ -623,9 +623,9 @@ function _showModelSwapDropdown(paneIdx, titleBtn) {
     dropdown.appendChild(item);
   });
 
-  // Position relative to the viewport (fixed) and append to document.body so
-  // the dropdown can't be clipped by the narrow pane's overflow or run off the
-  // screen edge on mobile (matches the "+" add-pane picker behaviour).
+  // 相对于视口定位（fixed）并追加到 document.body，这样下拉菜单
+  // 不会被窄窗格的 overflow 裁剪，也不会在移动端超出屏幕边缘
+  // （与 "+" 添加窗格选择器的行为一致）。
   const rect = titleBtn.getBoundingClientRect();
   const vw = window.innerWidth, vh = window.innerHeight, margin = 8;
   dropdown.style.position = 'fixed';
@@ -651,32 +651,32 @@ function _showModelSwapDropdown(paneIdx, titleBtn) {
   dropdown.style.top = top + 'px';
   dropdown.style.maxHeight = Math.min(ddH, vh - margin * 2) + 'px';
 
-  // Close on outside click or Escape (the latter via the registry).
+  // 通过外部点击或 Escape（后者通过注册表）关闭。
   closeMenu = bindMenuDismiss(dropdown, () => dropdown.remove(), (e) => !dropdown.contains(e.target) && e.target !== titleBtn);}
 
-// ── Shuffle / reset ──
+// ── 随机排列 / 重置 ──
 
 function shufflePanePositions() {
   if (state._streaming) return;
-  // Remove shuffle prompt bubble if present
+  // 移除随机排列提示气泡（如果存在）
   const shuffleBtn = document.getElementById('compare-shuffle-btn');
   if (shuffleBtn) { const b = shuffleBtn.querySelector('div'); if (b) b.remove(); }
   const n = state._selectedModels.length;
   if (n < 2) return;
 
-  // Fisher-Yates shuffle to get new order
+  // Fisher-Yates 洗牌获取新顺序
   const indices = Array.from({ length: n }, (_, i) => i);
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [indices[i], indices[j]] = [indices[j], indices[i]];
   }
 
-  // Reorder internal state
+  // 重新排序内部状态
   const newModels = indices.map(i => state._selectedModels[i]);
   const newSessionIds = indices.map(i => state._paneSessionIds[i]);
   const newMetrics = indices.map(i => state._paneMetrics[i]);
 
-  // Collect pane contents (HTML) before swapping
+  // 在交换前收集窗格内容（HTML）
   const paneContents = [];
   const paneClasses = [];
   for (let i = 0; i < n; i++) {
@@ -686,12 +686,12 @@ function shufflePanePositions() {
     paneClasses.push(pane ? { winner: pane.classList.contains('winner'), loser: pane.classList.contains('loser') } : {});
   }
 
-  // Apply shuffled state
+  // 应用随机排列后的状态
   state._selectedModels = newModels;
   state._paneSessionIds = newSessionIds;
   state._paneMetrics = newMetrics;
 
-  // Spin the shuffle button dice icon
+  // 旋转 Shuffle 按钮的骰子图标
   const shuffleBtn2 = document.getElementById('compare-shuffle-btn');
   if (shuffleBtn2) {
     const diceSvg = shuffleBtn2.querySelector('svg');
@@ -702,7 +702,7 @@ function shufflePanePositions() {
     }
   }
 
-  // Shake panes and flash titles
+  // 抖动窗格并闪烁标题
   for (let i = 0; i < n; i++) {
     const pane = document.querySelector(`.compare-pane[data-pane="${i}"]`);
     if (pane) {
@@ -751,10 +751,10 @@ function shufflePanePositions() {
     }
   }, 200);
 
-  // Re-enable blind mode after shuffle
+  // 随机排列后重新启用盲评模式
   state._blindMode = true;
 
-  // Rebuild vote bar with new labels
+  // 用新标签重建投票栏
   setTimeout(() => buildVoteBar(n), 250);
 }
 
@@ -762,10 +762,10 @@ function resetCompare() {
   if (state._streaming) stopAll();
   const n = state._selectedModels.length;
 
-  // Clear last prompt so vote buttons are disabled until next prompt
+  // 清除上次提示，使投票按钮在下次提示前禁用
   state._lastPrompt = '';
 
-  // Reset finish badges, titles, winner/loser state
+  // 重置完成徽章、标题、胜者/失败者状态
   state._finishOrder = 0;
   state._paneMetrics = new Array(n).fill(null);
   const panes = document.querySelectorAll('.compare-pane');
@@ -779,21 +779,21 @@ function resetCompare() {
     }
     if (panes[i]) { panes[i].classList.remove('winner', 'loser'); }
 
-    // Clear all messages from pane history
+    // 清除窗格历史中的所有消息
     const hist = document.getElementById('cmp-history-' + i);
     if (hist) { hist.innerHTML = ''; hist.style.display = ''; }
 
-    // Reset iframe preview
+    // 重置 iframe 预览
     const iframe = document.getElementById('cmp-iframe-' + i);
     if (iframe) { iframe.srcdoc = ''; iframe.style.display = 'none'; iframe._htmlCode = null; }
     const previewBtn = document.getElementById('cmp-preview-' + i);
     if (previewBtn) { previewBtn.style.display = 'none'; previewBtn.classList.remove('active'); }
   }
 
-  // Re-enable vote bar
+  // 重新启用投票栏
   buildVoteBar(n);
 
-  // Focus input for next prompt
+  // 聚焦输入框准备下一轮提示
   const ta = document.getElementById('message');
   if (ta) ta.focus();
 }

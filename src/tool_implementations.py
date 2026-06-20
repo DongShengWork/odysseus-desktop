@@ -1,8 +1,8 @@
 """
 tool_implementations.py
 
-Extracted tool implementation functions (do_* and helpers) from agent_tools.py.
-These handle the actual execution logic for each tool type.
+从 agent_tools.py 提取的工具实现函数（do_* 和辅助函数）。
+这些处理每种工具类型的实际执行逻辑。
 """
 
 import asyncio

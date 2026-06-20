@@ -1,5 +1,5 @@
-"""cookbook_helpers.py — validators + small helpers shared by the cookbook routes.
-Extracted from cookbook_routes.py; the routes module imports the symbols it needs."""
+"""cookbook_helpers.py — cookbook 路由共享的验证器和小型辅助函数。
+从 cookbook_routes.py 中提取；路由模块导入其所需的符号。"""
 
 import json
 import logging
@@ -19,28 +19,28 @@ from core.platform_compat import _ssh_exec_argv
 logger = logging.getLogger(__name__)
 
 
-# HuggingFace repo IDs are <org>/<name>, both alphanumerics plus ._-
-# Rejecting anything else up front closes off shell-interpolation vectors.
+# HuggingFace repo ID 格式为 <org>/<name>，均为字母数字加 ._-
+# 预先拒绝其他内容可关闭 shell 插值攻击向量。
 _REPO_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
-# Cached models scanned from a custom/local model dir are keyed by their leaf
-# folder name (no slash), e.g. `DeepSeek-R1-UD-IQ4_XS`. The serve command uses
-# the real on-disk path separately; this identifier is only for UI/task
-# bookkeeping, so serving should accept the same safe glyph set as repo IDs.
+# 从自定义/本地模型目录扫描的缓存模型以其叶子
+# 文件夹名（无斜杠）为键，如 `DeepSeek-R1-UD-IQ4_XS`。serve 命令使用
+# 真实的磁盘路径；此标识符仅用于 UI/任务
+# 簿记，因此服务应接受与 repo ID 相同安全字符集。
 _LOCAL_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-# Ollama model names include tags, e.g. `qwen2.5:0.5b` or `llama3.2:latest`.
-# Some registries also use a namespace path. Keep this shell-safe: no spaces,
-# quotes, `$`, `;`, `&`, pipes, or redirects.
+# Ollama 模型名称包含标签，如 `qwen2.5:0.5b` 或 `llama3.2:latest`。
+# 某些注册表也使用命名空间路径。保持 shell 安全：无空格、
+# 引号、`$`、`;`、`&`、管道或重定向。
 _OLLAMA_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,200}$")
-# Include pattern is a glob: allow typical safe glyphs only.
+# Include 模式是 glob：仅允许典型安全字符。
 _INCLUDE_RE = re.compile(r"^[A-Za-z0-9._\-*?/\[\]]+$")
-# HF tokens and API tokens are url-safe base64-like.
+# HF token 和 API token 是 URL 安全的 base64 风格。
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]+$")
-# Session IDs we mint look like "cookbook-deadbeef" or "serve-deadbeef".
-# Anything beyond plain alphanumerics + dash + underscore could break out
-# of the shell/PowerShell contexts the value lands in.
+# 我们生成的 Session ID 形如 "cookbook-deadbeef" 或 "serve-deadbeef"。
+# 超出纯字母数字 + 连字符 + 下划线的内容可能逃逸
+# 该值所处的 shell/PowerShell 上下文。
 _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _GPU_LIST_RE = re.compile(r"^\d+(?:,\d+)*$")
-# A download target directory. Absolute or ~-relative path; safe path glyphs
+# 下载目标目录。绝对路径或 ~ 相对路径；仅安全路径字符
 # only (no quotes or shell metacharacters). Spaces are allowed because command
 # builders pass the value through quoted shell/Python contexts. The character
 # class uses ``\w`` — Unicode word characters under Python 3's default str
@@ -149,14 +149,14 @@ def _shell_path(p: str) -> str:
 
 
 def _local_tooling_path_export(executable: str) -> str:
-    """Bash line prepending the running interpreter's bin dir to PATH.
+    """Bash 行，将运行中解释器的 bin 目录前置到 PATH。
 
-    When Odysseus runs from a virtualenv, that bin dir holds the tools the
-    cookbook runners shell out to (`hf`, `python`). tmux runners start from a
-    fresh login shell with the venv NOT activated, so without this they can't
-    find `hf` and downloads fail with "hf: command not found" — notably on
-    macOS, where the `pip --user` self-heal also misses (`pip` isn't a command,
-    only `pip3`/`python3 -m pip`). Local runs only; meaningless over SSH.
+    当 Odysseus 从虚拟环境运行时，该 bin 目录包含 cookbook 运行器
+    调用的工具（`hf`、`python`）。tmux 运行器从新的登录 shell 启动，
+    虚拟环境未激活，因此没有此操作就找不到 `hf`，下载失败提示
+    "hf: command not found" — 特别是在 macOS 上，`pip --user` 自修复也
+    会失败（不是 `pip` 命令，只有 `pip3`/`python3 -m pip`）。
+    仅本地运行；SSH 下无意义。
     """
     # This builds a bash snippet, so an explicit POSIX absolute path should keep
     # POSIX semantics even when the app/tests run on Windows. Otherwise
@@ -180,25 +180,25 @@ def _local_tooling_path_export(executable: str) -> str:
 
 
 def _pip_install_no_cache(cmd: str) -> str:
-    """Add ``--no-cache-dir`` to a pip install command.
+    """为 pip install 命令添加 ``--no-cache-dir``。
 
-    Cookbook dependency installs (vLLM, llama-cpp-python, …) build large wheels;
-    pip's default cache lives under ``$HOME/.cache/pip`` and these builds can fill
-    a small home filesystem with ``[Errno 28] No space left on device`` mid-build
-    (issue #1219), leaving the dependency "installed" but unusable (#1459).
-    Disabling the cache for these one-off installs keeps them off the home disk
-    (the maintainer's suggested ``PIP_CACHE_DIR=`` workaround, made the default).
-    Idempotent; leaves non-pip-install commands untouched."""
+    Cookbook 依赖安装（vLLM、llama-cpp-python 等）构建大型 wheel；
+    pip 的默认缓存位于 ``$HOME/.cache/pip``，这些构建可能在中途
+    填满小型主文件系统，出现 ``[Errno 28] No space left on device``
+    （issue #1219），导致依赖"已安装"但不可用（#1459）。
+    为这些一次性安装禁用缓存，避免占用主磁盘
+    （维护者建议的 ``PIP_CACHE_DIR=`` 变通方案，已设为默认）。
+    幂等；对非 pip install 命令不做任何修改。"""
     if not cmd or "pip install" not in cmd or "--no-cache-dir" in cmd:
         return cmd
     return cmd.replace("pip install", "pip install --no-cache-dir", 1)
 
 
 def _pip_install_attempt(pip_cmd: str) -> str:
-    """Wrap a single pip install command so its exit status survives the
-    fallback chain and its stderr is visible in the tmux log on failure.
+    """包装单个 pip install 命令，使其退出状态在回退链中存活，
+    失败时其 stderr 在 tmux 日志中可见。
 
-    Without this wrapper, `pip … 2>&1 | tail -5` returns ``tail``'s exit
+    没有此包装器，`pip ... 2>&1 | tail -5` 返回 ``tail`` 的
     code (0), masking pip's real failure and preventing the next fallback
     from running.  The generated snippet captures all output to a temp
     file, prints the last 5 lines on failure (so the Cookbook log panel
@@ -214,7 +214,7 @@ def _pip_install_attempt(pip_cmd: str) -> str:
 
 
 def _pip_command(python_cmd: str) -> str:
-    """Return a pip command for either a pip executable or a Python executable."""
+    """返回 pip 可执行文件或 Python 可执行文件的 pip 命令。"""
     cmd = python_cmd.strip()
     if " -m pip" in cmd or cmd in {"pip", "pip3"}:
         return python_cmd
@@ -228,15 +228,15 @@ def _pip_break_system_packages_check(pip_cmd: str) -> str:
 
 
 def _pip_install_fallback_chain(package: str, *, python_cmd: str = "python3 -m pip", upgrade: bool = False) -> str:
-    """Build a bash pip install fallback chain that surfaces errors.
+    """构建一个暴露错误的 bash pip install 回退链。
 
     Try the active interpreter/environment first. ``--user`` is invalid
     inside many venvs, so only attempt the ``--user`` fallback when NOT
     inside a venv.
 
-    Each attempt is wrapped via :func:`_pip_install_attempt` so pip's real
-    exit code is preserved (no ``| tail`` masking) and the last 5 lines of
-    pip output appear in the Cookbook log on failure.
+    每次尝试都通过 :func:`_pip_install_attempt` 包装，保留 pip
+    的真实退出码（无 ``| tail`` 掩盖），失败时 pip 输出的最后 5 行
+    显示在 Cookbook 日志中。
     """
     from core.platform_compat import IS_WINDOWS
     upgrade_flag = " -U" if upgrade else ""

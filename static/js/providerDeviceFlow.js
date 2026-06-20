@@ -1,4 +1,4 @@
-// Shared DOM-free provider device-flow runner.
+// 共享的、与 DOM 无关的 provider device-flow 运行器。
 
 export const PROVIDER_DEVICE_FLOWS = {
   copilot: {

@@ -1,5 +1,5 @@
 /**
- * Build the editor's right-panel controls innerHTML.
+ * 构建编辑器右侧面板控件的 innerHTML。
  *
  * Returns the string — caller creates the wrapper element, attaches its
  * own touch / swipe-to-dismiss listeners, then sets innerHTML. Per-tool
@@ -146,7 +146,7 @@ export function controlsHTML({ color, brushSize, wandTolerance }) {
       </div>
       <hr class="ge-section-divider" />
       <div class="ge-section-title" style="margin-top:8px;"><span>PROMPT</span></div>
-      <input type="text" class="ge-inpaint-prompt" id="ge-inpaint-prompt" placeholder="What to fill the masked area with..." />
+      <input type="text" class="ge-inpaint-prompt" id="ge-inpaint-prompt" placeholder=t('editor.fill_prompt') />
       <div class="ge-control-row ge-inpaint-model-row" style="margin-top:6px;">
         <label for="ge-ai-inpaint">Model</label>
         <select id="ge-ai-inpaint" class="ge-ai-model" title="Model for inpainting">
@@ -305,7 +305,7 @@ export function controlsHTML({ color, brushSize, wandTolerance }) {
       <div class="ge-control-row">
         <label style="font-size:11px;opacity:0.6;">Prompt (only used if Seam fix &gt; 0)</label>
       </div>
-      <input type="text" class="ge-inpaint-prompt" id="ge-harmonize-prompt" placeholder="photorealistic, natural lighting, seamless blend..." />
+      <input type="text" class="ge-inpaint-prompt" id="ge-harmonize-prompt" placeholder=t('editor.photorealistic_placeholder') />
       <div class="ge-control-row ge-eraser-row">
         <span class="ge-eraser-preview" id="ge-harmonize-color-preview" aria-hidden="true"></span>
         <label>Color match <span id="ge-harmonize-color-label">0.65</span></label>
@@ -331,7 +331,7 @@ export function controlsHTML({ color, brushSize, wandTolerance }) {
       <div class="ge-control-row">
         <label style="font-size:11px;opacity:0.6;">Style prompt</label>
       </div>
-      <input type="text" class="ge-inpaint-prompt" id="ge-style-prompt" placeholder="oil painting, impressionist, Van Gogh..." />
+      <input type="text" class="ge-inpaint-prompt" id="ge-style-prompt" placeholder=t('editor.style_transfer_placeholder') />
       <div class="ge-control-row">
         <label style="font-size:11px;opacity:0.6;">Strength <span id="ge-style-strength-label">0.55</span></label>
         <input type="range" id="ge-style-strength" min="10" max="90" value="55" style="flex:1;" />
@@ -345,7 +345,7 @@ export function controlsHTML({ color, brushSize, wandTolerance }) {
 
 
 /**
- * Layer-panel header markup. Static; static IDs are wired by the caller.
+ * 图层面板头部标记。静态内容；静态 ID 由调用者绑定。
  * @returns {string}
  */
 export function layerPanelHTML() {

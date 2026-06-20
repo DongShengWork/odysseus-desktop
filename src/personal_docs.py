@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_pdf_text(file_path: str) -> str:
-    """Extract text from a PDF file using pypdf (permissive, BSD)."""
+    """使用 pypdf（宽松许可，BSD）从 PDF 文件中提取文本。"""
     try:
         from pypdf import PdfReader
         reader = PdfReader(file_path)
@@ -27,10 +27,10 @@ def extract_pdf_text(file_path: str) -> str:
 
 
 def extract_office_text(file_path: str) -> str:
-    """Extract text from an Office/EPUB doc via the optional markitdown dep.
+    """通过可选的 markitdown 依赖从 Office/EPUB 文档中提取文本。
 
-    Returns "" when markitdown is missing or extraction fails, mirroring
-    extract_pdf_text — the indexer then simply skips the file's content.
+    当 markitdown 缺失或提取失败时返回 ""，镜像
+    extract_pdf_text — 索引器随后简单地跳过该文件的内容。
     """
     from src.markitdown_runtime import convert_to_markdown
     return convert_to_markdown(file_path) or ""
@@ -38,7 +38,7 @@ def extract_office_text(file_path: str) -> str:
 
 @dataclass
 class PersonalDocsConfig:
-    """Configuration for personal documents management."""
+    """个人文档管理的配置。"""
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
     DEFAULT_EXTENSIONS: Tuple[str, ...] = (
@@ -55,11 +55,11 @@ class PersonalDocsConfig:
             we they my your our their me him her us them
             """.split())
 
-# Initialize configuration
+# 初始化配置
 config = PersonalDocsConfig()
 
 def read_text_file(path: str) -> str:
-    """Read a text file with error handling."""
+    """带错误处理地读取文本文件。"""
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
@@ -67,7 +67,7 @@ def read_text_file(path: str) -> str:
         return ""
 
 def split_chunks(text: str, size: int = config.CHUNK_SIZE, overlap: int = config.CHUNK_OVERLAP) -> List[str]:
-    """Split text into overlapping chunks."""
+    """将文本分割为重叠的块。"""
     text = text.strip()
     if not text:
         return []
@@ -78,15 +78,15 @@ def split_chunks(text: str, size: int = config.CHUNK_SIZE, overlap: int = config
         j = min(i + size, n)
         chunks.append(text[i:j])
         if j >= n:
-            # Reached the end. Without this, the next start (j - overlap) is
-            # still > i, so the loop appended one extra chunk duplicating the
-            # last `overlap` chars of the text.
+            # 已到达末尾。如果不这样，下一次起始位置（j - overlap）仍然
+            # 大于 i，导致循环追加一个重复的块，该块重复
+            # 文本的最后 `overlap` 个字符。
             break
         i = j - overlap if j - overlap > i else j
     return chunks
 
 def tokenize(s: str) -> Set[str]:
-    """Tokenize string into words, excluding stop words."""
+    """将字符串分词为单词，不包括停用词。"""
     tokens = re.findall(r"[A-Za-z0-9_\-]+", (s or "").lower())
     return set(t for t in tokens if t not in config.STOP_WORDS and len(t) > 1)
 
@@ -94,7 +94,7 @@ def load_personal_index(
     personal_dir: str, 
     extensions: Tuple[str, ...] = config.DEFAULT_EXTENSIONS
 ) -> List[Dict[str, Any]]:
-    """Load and index personal documents."""
+    """加载和索引个人文档。"""
     files = []
     for root, _, names in os.walk(personal_dir):
         for name in sorted(names):
@@ -118,15 +118,15 @@ def load_personal_index(
 
 def retrieve_personal_keyword(personal_index: List[Dict], query: str, k: int = 5) -> List[str]:
     """
-    Retrieve relevant documents using keyword search.
+    使用关键词搜索检索相关文档。
 
     Args:
-        personal_index: The loaded document index
-        query: Search query
-        k: Number of results to return
+        personal_index: 已加载的文档索引
+        query: 搜索查询
+        k: 要返回的结果数
 
     Returns:
-        List of formatted search results
+        格式化的搜索结果列表
     """
     q = tokenize(query)
     if not q:
@@ -150,40 +150,40 @@ def retrieve_personal_keyword(personal_index: List[Dict], query: str, k: int = 5
 def retrieve_personal(personal_index: List[Dict], query: str, k: int = 5,
                      rag_manager=None) -> List[str]:
     """
-    Retrieve relevant personal documents using vector search first, falling back to keyword search.
+    首先使用向量搜索检索相关个人文档，回退到关键词搜索。
 
     Args:
-        personal_index: The loaded document index
-        query: The search query
-        k: Number of results to return
-        rag_manager: Optional RAGManager instance for vector search
+        personal_index: 已加载的文档索引
+        query: 搜索查询
+        k: 要返回的结果数
+        rag_manager: 可选的 RAGManager 实例，用于向量搜索
 
     Returns:
-        List of formatted search results
+        格式化的搜索结果列表
     """
     if not query:
         return []
 
-    # First try vector search if RAGManager is available
+    # 如果 RAGManager 可用，先尝试向量搜索
     if rag_manager:
         try:
             vector_results = rag_manager.search(query, k)
             if vector_results:
-                # Format vector results
+                # 格式化向量搜索结果
                 out = []
                 for result in vector_results:
-                    # Extract filename from path
+                    # 从路径中提取文件名
                     source = result["metadata"].get("source", "")
                     filename = os.path.basename(source)
 
-                    # Format the result
+                    # 格式化结果
                     formatted = f"[{filename} :: vector search]\n{result['document']}"
                     out.append(formatted)
                 return out
         except Exception as e:
             logger.warning(f"Vector search failed, falling back to keyword search: {e}")
 
-    # Fall back to keyword search
+    # 回退到关键词搜索
     return retrieve_personal_keyword(personal_index, query, k)
 
 
@@ -192,14 +192,14 @@ def _string_list(values) -> list[str]:
 
 
 class PersonalDocsManager:
-    """Manager class for personal document indexing and retrieval."""
+    """个人文档索引和检索的管理器类。"""
 
     def __init__(self, personal_dir: str, rag_manager=None):
         self.personal_dir = personal_dir
         self.rag_manager = rag_manager
         self.index = []
-        self.indexed_directories = []  # Track additional directories
-        self.excluded_files: Set[str] = set()  # Files removed from RAG listing
+        self.indexed_directories = []  # 跟踪附加目录
+        self.excluded_files: Set[str] = set()  # 从 RAG 列表中移除的文件
         self.directories_file = os.path.join(personal_dir, "indexed_directories.json")
         self._excluded_file = os.path.join(personal_dir, "excluded_files.json")
         self.load_directories()
@@ -207,7 +207,7 @@ class PersonalDocsManager:
         self.refresh_index()
 
     def load_directories(self):
-        """Load the list of indexed directories from persistent storage."""
+        """从持久化存储中加载已索引目录列表。"""
         try:
             if os.path.exists(self.directories_file):
                 with open(self.directories_file, 'r', encoding="utf-8") as f:
@@ -223,7 +223,7 @@ class PersonalDocsManager:
             self.indexed_directories = []
 
     def save_directories(self):
-        """Save the list of indexed directories to persistent storage."""
+        """将已索引目录列表保存到持久化存储。"""
         try:
             with open(self.directories_file, 'w', encoding="utf-8") as f:
                 json.dump(_string_list(self.indexed_directories), f, indent=2)
@@ -232,7 +232,7 @@ class PersonalDocsManager:
             logger.error(f"Error saving directories: {e}")
 
     def _load_excluded(self):
-        """Load the set of excluded file paths from persistent storage."""
+        """从持久化存储中加载已排除文件路径集合。"""
         try:
             if os.path.exists(self._excluded_file):
                 with open(self._excluded_file, 'r', encoding="utf-8") as f:
@@ -254,21 +254,21 @@ class PersonalDocsManager:
             logger.error(f"Error saving excluded files: {e}")
 
     def exclude_file(self, filepath: str):
-        """Exclude a file from the listing. Persists across restarts."""
+        """从列表中排除文件。重启后持久化保留。"""
         self.excluded_files.add(os.path.abspath(filepath))
         self._save_excluded()
         self.index = [f for f in self.index if os.path.abspath(f.get("path", "")) != os.path.abspath(filepath)]
 
     def add_directory(self, directory: str, *, index: bool = True, owner: str = None):
-        """Add a directory to the tracking list and optionally index it."""
-        # Normalize the path
+        """将目录添加到跟踪列表并可选择索引它。"""
+        # 规范化路径
         directory = os.path.abspath(directory)
 
-        # Clear any exclusions for files in this directory. Match on a path
-        # boundary (the directory itself or paths under it) rather than a raw
-        # string prefix: a bare ``startswith(directory)`` also matches sibling
-        # directories that merely share a name prefix (e.g. adding ``/docs``
-        # would wrongly un-exclude files under ``/docs2``).
+        # 清除此目录中文件的任何排除项。在路径边界匹配
+        # （目录本身或其下的路径）而非原始字符串前缀：
+        # 裸的 ``startswith(directory)`` 也会匹配仅仅是共享
+        # 名称前缀的同级目录（例如添加 ``/docs`` 会错误地
+        # 取消排除 ``/docs2`` 下的文件）。
         self.excluded_files = {
             p for p in self.excluded_files
             if not (p == directory or p.startswith(directory + os.sep))
@@ -280,9 +280,9 @@ class PersonalDocsManager:
             self.save_directories()
             logger.info(f"Added directory to tracking: {directory}")
             
-            # If RAG manager is available, index the directory immediately.
-            # Callers that already indexed with owner metadata can pass
-            # index=False so we do not create a second ownerless copy.
+            # 如果 RAG 管理器可用，立即索引该目录。
+            # 已在 owner 元数据下索引的调用方可传递
+            # index=False，这样不会创建第二个无所有者的副本。
             if index and self.rag_manager:
                 try:
                     result = self.rag_manager.index_personal_documents(directory, owner=owner)
@@ -290,14 +290,14 @@ class PersonalDocsManager:
                 except Exception as e:
                     logger.error(f"Failed to index directory {directory}: {e}")
             
-            # Refresh the local index to include the new directory
+            # 刷新本地索引以包含新目录
             self.refresh_index()
         else:
             logger.info(f"Directory already indexed: {directory}")
 
     def remove_directory(self, directory: str):
-        """Remove a directory from the tracking list."""
-        # Normalize the path
+        """从跟踪列表中移除目录。"""
+        # 规范化路径
         directory = os.path.abspath(directory)
         
         if directory in self.indexed_directories:
@@ -305,15 +305,15 @@ class PersonalDocsManager:
             self.save_directories()
             logger.info(f"Removed directory from tracking: {directory}")
             
-            # Refresh the index to exclude the removed directory
+            # 刷新索引以排除已移除的目录
             self.refresh_index()
             
-            # Targeted delete of just this directory's chunks. This previously
-            # called rag_manager.rebuild_index(), which delete+recreates the
-            # entire shared collection (every owner + the base index) and then
-            # re-indexed only the remaining tracked dirs — ownerless and never
-            # personal_dir — a catastrophic wipe (#1660). remove_directory now
-            # removes exactly this directory's chunks and leaves the rest intact.
+            # 仅删除此目录的块的针对性删除。之前的实现
+            # 调用 rag_manager.rebuild_index()，会删除+重新创建
+            # 整个共享集合（每个所有者 + 基础索引），然后
+            # 仅重新索引剩余的跟踪目录 — 无所有者也从不包括
+            # personal_dir — 造成灾难性的擦除（#1660）。remove_directory 现在
+            # 只删除该目录的块，其余保持不变。
             if self.rag_manager:
                 try:
                     self.rag_manager.remove_directory(directory)
@@ -323,14 +323,14 @@ class PersonalDocsManager:
             logger.info(f"Directory not in index: {directory}")
 
     def get_indexed_directories(self):
-        """Get the list of all indexed directories."""
+        """获取所有已索引目录的列表。"""
         return self.indexed_directories.copy()
 
     def refresh_index(self):
-        """Refresh the document index including all tracked directories."""
+        """刷新文档索引，包括所有跟踪的目录。"""
         self.index = []
 
-        # Index the base personal directory
+        # 索引基础个人目录
         base_files = load_personal_index(self.personal_dir)
         for f in base_files:
             if os.path.abspath(f.get("path", "")) in self.excluded_files:
@@ -338,7 +338,7 @@ class PersonalDocsManager:
             f['source_dir'] = self.personal_dir
             self.index.append(f)
 
-        # Index additional directories
+        # 索引附加目录
         for directory in self.indexed_directories:
             if not os.path.exists(directory):
                 logger.warning(f"Directory no longer exists: {directory}")
@@ -348,12 +348,12 @@ class PersonalDocsManager:
                 logger.warning(f"Path is not a directory: {directory}")
                 continue
 
-            # Load files from this directory
+            # 从此目录加载文件
             dir_files = load_personal_index(directory)
             for f in dir_files:
                 if os.path.abspath(f.get("path", "")) in self.excluded_files:
                     continue
-                # Update the name to include the directory for clarity
+                # 更新名称以包含目录信息，更清晰
                 f['source_dir'] = directory
                 f['name'] = f"{os.path.basename(directory)}/{f['name']}"
                 self.index.append(f)
@@ -361,15 +361,15 @@ class PersonalDocsManager:
         logger.info(f"Refreshed index: {len(self.index)} documents from {len(self.indexed_directories) + 1} directories")
 
     def retrieve(self, query: str, k: int = 5) -> List[str]:
-        """Retrieve relevant documents for a query."""
+        """检索与查询相关的文档。"""
         return retrieve_personal(self.index, query, k, self.rag_manager)
 
     def get_file_list(self) -> List[Dict[str, Any]]:
-        """Get list of indexed files with metadata."""
+        """获取带元数据的已索引文件列表。"""
         return [{"name": f["name"], "size": f["size"]} for f in self.index]
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get statistics about indexed documents."""
+        """获取已索引文档的统计信息。"""
         total_docs = len(self.index)
         total_chunks = sum(len(doc.get('chunks', [])) for doc in self.index)
         total_size = sum(doc.get('size', 0) for doc in self.index)
@@ -391,7 +391,7 @@ class PersonalDocsManager:
         }
         
     def index_all_directories(self):
-        """Re-index all tracked directories in the RAG system."""
+        """在 RAG 系统中重新索引所有跟踪的目录。"""
         if not self.rag_manager:
             logger.warning("No RAG manager available for indexing")
             return
@@ -399,7 +399,7 @@ class PersonalDocsManager:
         success_count = 0
         failure_count = 0
         
-        # Index the base personal directory
+        # 索引基础个人目录
         try:
             result = self.rag_manager.index_personal_documents(self.personal_dir)
             if result.get('success'):
@@ -409,7 +409,7 @@ class PersonalDocsManager:
             failure_count += 1
             logger.error(f"Failed to index base directory {self.personal_dir}: {e}")
         
-        # Index additional directories
+        # 索引附加目录
         for directory in self.indexed_directories:
             if not os.path.exists(directory):
                 logger.warning(f"Skipping non-existent directory: {directory}")

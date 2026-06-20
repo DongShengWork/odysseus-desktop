@@ -1,5 +1,5 @@
 /**
- * Deep Research side panel — open/close, form, job rendering, library.
+ * 深度研究侧边面板 — 打开/关闭、表单、任务渲染、资料库。
  */
 import * as jobs from './jobs.js';
 import themeModule from '../theme.js';
@@ -27,11 +27,11 @@ function _pickResearchHint() {
   return _RESEARCH_HINTS[i].replace(/"/g, '&quot;');
 }
 
-// jobId -> { synapse, status } — survives across _renderJobs() rebuilds so
-// the SVG keeps its accumulated nodes/edges between progress events.
+// jobId -> { synapse, status } — 在 _renderJobs() 重建之间保持活跃，
+// 使 SVG 在进度事件之间保留其累积的节点/边。
 const _jobSynapses = new Map();
-// Which foldable job sections ('active' / 'past') the user has collapsed — kept
-// across re-renders so the panel doesn't re-expand on every job-state change.
+// 用户已折叠的可折叠任务分组（'active' / 'past'）— 在重新渲染之间保持，
+// 使面板不会在每次任务状态变化时重新展开。
 const _collapsedSections = new Set();
 
 // Persisted preference to minimize (hide) the per-job synapse "tree" visual.
@@ -44,7 +44,7 @@ const _vizExpandIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="no
 function _toggleSynapseMinimized() {
   _synapseMinimized = !_synapseMinimized;
   try { localStorage.setItem(_SYNAPSE_MIN_KEY, _synapseMinimized ? '1' : '0'); } catch {}
-  // Apply live to all rendered cards without forcing a full rebuild.
+  // 实时应用到所有已渲染的卡片，无需强制完整重建。
   document.querySelectorAll('.research-job-synapse-host')
     .forEach(h => h.classList.toggle('synapse-collapsed', _synapseMinimized));
   document.querySelectorAll('.research-synapse-toggle').forEach(b => {
@@ -116,7 +116,7 @@ function _syncResearchRail() {
   const railBtn = document.getElementById('rail-research');
   const toolBtn = document.getElementById('tool-research-btn');
   const active = running > 0 || errored > 0;
-  // Shared flag so sessions.js:_updateRailNotifs (which lights the same
+  // 共享标志，使 sessions.js:_updateRailNotifs（它也为内联研究模式点亮相同的
   // rail button for INLINE research mode) ORs with us instead of
   // clobbering — otherwise a session re-render would clear our dot.
   window._researchJobsActive = active;
@@ -140,37 +140,37 @@ function _syncResearchRail() {
         toolBtn.appendChild(wrap);
       }
       const round = runningJob && runningJob.progress && runningJob.progress.round;
-      // Just the round as "R1", "R2", … (empty until the first round lands).
-      // Only update when we actually have a round — don't blank it out on
-      // progress ticks that lack one, or it flickers on/off between rounds.
+      // 仅显示轮次为"R1"、"R2"……（在第一个轮次落地前为空）。
+      // 仅在有实际轮次时更新 — 不要在缺少轮次的进度 ticks 上清空它，
+      // 否则它会在轮次之间闪灭。
       if (round) wrap.querySelector('.research-sb-status').textContent = `R${round}`;
     } else if (wrap) {
       wrap.remove();
     }
   }
-  // Orbiting edge animation: faster when a job is running, slower while idle
-  // (ambient). The rAF loop in _ensureOrbit drives --research-orbit-angle on
-  // the pane element — CSS-only @property animation silently no-op'd in some
-  // browsers, so JS drives it for universal compatibility.
-  _orbitSpeedDegPerSec = running > 0 ? 60 : 22;  // 6s/rev vs ~16s/rev
+  // 轨道边缘动画：任务运行时更快，空闲时更慢（环绕动画）。
+  // _ensureOrbit 中的 rAF 循环驱动 --research-orbit-angle 作用于
+  // 面板元素上 — 某些浏览器中仅 CSS 的 @property 动画静默失效，
+  // 因此 JS 驱动以实现通用兼容性。
+  _orbitSpeedDegPerSec = running > 0 ? 60 : 22;  // 6 秒/转 vs ~16 秒/转
   _ensureOrbit();
   if (window._syncRailDynamic) window._syncRailDynamic();
 }
 
-// ── Orbit-angle rAF driver ─────────────────────────────────────
-// Universally-supported alternative to a CSS @property angle animation.
-// Walks --research-orbit-angle on the #research-pane element every frame
-// while the panel is open. Stops itself when the pane is gone.
+// ── 轨道角度 rAF 驱动器 ─────────────────────────────────────
+// CSS @property 角度动画的通用替代方案。
+// 当面板打开时每一帧驱动 #research-pane 元素上的 --research-orbit-angle。
+// 当面板消失时自动停止。
 let _orbitRAF = null;
 let _orbitAngle = 0;
 let _orbitLastTs = 0;
-let _orbitSpeedDegPerSec = 22;  // idle ambient default
+let _orbitSpeedDegPerSec = 22;  // 空闲环境默认值
 function _ensureOrbit() {
   if (_orbitRAF) return;
   _orbitLastTs = 0;
   const tick = (ts) => {
     const pane = document.getElementById('research-pane');
-    if (!pane) { _orbitRAF = null; return; }  // panel closed → stop loop
+    if (!pane) { _orbitRAF = null; return; }  // 面板已关闭 → 停止循环
     if (_orbitLastTs) {
       const dt = (ts - _orbitLastTs) / 1000;
       _orbitAngle = (_orbitAngle + _orbitSpeedDegPerSec * dt) % 360;
@@ -182,7 +182,7 @@ function _ensureOrbit() {
   _orbitRAF = requestAnimationFrame(tick);
 }
 
-/** Fetch the count of saved research items and populate the header chip. */
+/** 获取已保存的研究数量并填充标题栏芯片。 */
 async function _updateResearchCount() {
   const el = document.getElementById('research-stats');
   if (!el) return;
@@ -219,7 +219,7 @@ export function init(apiBase, markdownMod, sessionMod) {
 export function isOpen() { return _open; }
 export function toggle() {
   if (_open) {
-    // If minimized, restore instead of closing
+    // 如果已最小化，则恢复而非关闭
     const overlay = document.getElementById('research-overlay');
     if (overlay && overlay.style.display === 'none') {
       overlay.style.display = '';
@@ -258,13 +258,13 @@ export function openPanel(focusJobId) {
   overlay.id = 'research-overlay';
   overlay.className = 'modal research-overlay';
 
-  // Match doclib/gallery/calendar modal sizing exactly so research feels like
-  // the rest of the modal family (centered, ~640px, 85vh).
+  // 精确匹配 doclib/gallery/calendar 的弹窗尺寸，使研究面板看起来与
+  // 弹窗家族中的其他成员一致（居中，~640px，85vh）。
   const pane = document.createElement('div');
   pane.id = 'research-pane';
   pane.className = 'modal-content doclib-modal-content research-pane';
-  // Mobile: full-screen so the content has room and the jobs list can scroll
-  // inside it. Desktop: centered ~640px / 85vh modal like the rest.
+  // 移动端：全屏，使内容有空间且任务列表可以在内部滚动。
+  // 桌面端：居中 ~640px / 85vh 弹窗，与其他弹窗一致。
   pane.style.cssText = (window.innerWidth <= 768)
     ? 'width:100vw;max-width:100vw;height:90dvh;max-height:90dvh;border-radius:14px 14px 0 0;background:var(--bg);'
     : 'width:min(640px, 92vw);max-height:85vh;background:var(--bg);';
@@ -277,8 +277,8 @@ export function openPanel(focusJobId) {
     if (e.target === overlay) closePanel();
   });
 
-  // Document-level ESC handler — overlay-only listener never fired because
-  // overlay isn't focused. Tracked in module scope so closePanel can detach.
+  // 文档级 ESC 处理器 — 仅覆盖层的监听器永远不会触发，因为覆盖层未聚焦。
+  // 在模块作用域中跟踪，使 closePanel 可以分离。
   _onDocKeydown = (e) => {
     if (e.key === 'Escape' && _open) {
       e.preventDefault();
@@ -287,7 +287,7 @@ export function openPanel(focusJobId) {
   };
   document.addEventListener('keydown', _onDocKeydown);
 
-  // Make the pane draggable by its header — same pattern as Library/Calendar.
+  // 使面板可通过其标题栏拖拽 — 与 Library/Calendar 相同的模式。
   const paneHeader = pane.querySelector('.research-pane-header');
   if (themeModule && themeModule.makeDraggable && paneHeader) {
     themeModule.makeDraggable(pane, paneHeader);
@@ -305,11 +305,11 @@ export function openPanel(focusJobId) {
   if (focusJobId) _focusJob(focusJobId);
 }
 
-// Scroll to + highlight a research job card by session id. Used by the
-// chat anchor-link delegate ([Topic](#research-<session_id>)).
+// 滚动到并高亮显示指定会话 ID 的研究任务卡片。由聊天锚链接委托
+// （[Topic](#research-<session_id>)）使用。
 function _focusJob(jobId) {
   if (!jobId) return;
-  // jobs may still be loading from /api/research/active — retry a few times.
+  // 任务可能仍在从 /api/research/active 加载 — 重试几次。
   let tries = 0;
   const tryFocus = () => {
     const card = document.querySelector(`[data-job-id="${jobId}"]`);
@@ -421,7 +421,7 @@ function _buildPanelHTML() {
   `;
 }
 
-/** Fade/slide a card out, then run the removal — matches cookbook's smooth exit. */
+/** 淡入/滑出卡片，然后执行移除操作 — 匹配 cookbook 的平滑退出效果。 */
 function _animateOutThenRemove(el, removeFn) {
   if (!el || !el.style) { removeFn(); return; }
   el.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
@@ -430,8 +430,8 @@ function _animateOutThenRemove(el, removeFn) {
   setTimeout(removeFn, 320);
 }
 
-/** Dismiss the mobile keyboard by stealing focus into a throwaway readonly
- *  input (blur() alone is often ignored on Firefox mobile). */
+/** 通过将焦点转移到丢弃的 readonly 输入来关闭移动端键盘
+ *  （仅 blur() 在 Firefox 移动端上经常被忽略）。 */
 function _dismissKeyboard(input) {
   try {
     if (input) input.blur();
@@ -444,7 +444,7 @@ function _dismissKeyboard(input) {
   } catch {}
 }
 
-/** Reset the category selector back to "Auto" (called after each start). */
+/** 每次启动后将类别选择器重置为"Auto"（自动）。 */
 function _resetCategoryToAuto() {
   const sel = document.getElementById('research-category');
   if (sel) sel.value = '';
@@ -515,7 +515,7 @@ function _handleAdd() {
   queryEl.focus();
 }
 
-// Move a job's data back into the compose form so user can edit and re-queue
+// 将任务数据移回编辑表单，以便用户可以编辑并重新排队
 function _editJob(job) {
   const queryEl = document.getElementById('research-query');
   if (queryEl) {
@@ -523,11 +523,11 @@ function _editJob(job) {
     queryEl.focus();
     queryEl.setSelectionRange(queryEl.value.length, queryEl.value.length);
   }
-  // Restore category
+  // 恢复类别
   const cat = job.category || '';
   const catSel = document.getElementById('research-category');
   if (catSel) catSel.value = cat;
-  // Restore settings
+  // 恢复设置
   const s = job.settings || {};
   const roundsEl = document.getElementById('research-rounds');
   if (roundsEl && s.max_rounds) roundsEl.value = s.max_rounds;
@@ -537,9 +537,9 @@ function _editJob(job) {
   if (epEl && s.endpoint_id) epEl.value = s.endpoint_id;
   const mEl = document.getElementById('research-model');
   if (mEl && s.model) mEl.value = s.model;
-  // Remove the old job so clicking Start/Queue makes a fresh one
+  // 移除旧任务以便点击 Start/Queue 创建新任务
   jobs.removeJob(job.id);
-  // Scroll the form into view
+  // 将表单滚动到视野中
   queryEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -561,7 +561,7 @@ async function _handleStart() {
     return;
   }
 
-  // Visual + spinner feedback while the launch request is in flight
+  // 启动请求飞行中时的视觉反馈 + Spinner
   const _setBusy = (busy) => {
     if (!startBtn) return;
     if (busy) {
@@ -600,12 +600,12 @@ async function _handleStart() {
   _saveSettingsToStorage();
   const settings = _readSettings();
   queryEl.value = '';
-  // Mobile: drop the keyboard after sending; desktop: keep focus for fast follow-ups.
+  // 移动端：发送后关闭键盘；桌面端：保持焦点以便快速跟进。
   if (_mobile) _dismissKeyboard(queryEl); else queryEl.focus();
   _resetCategoryToAuto();
   jobs.startJob(query, settings).catch((e) => {
     if (typeof uiModule !== 'undefined' && uiModule?.showError) uiModule.showError('Failed to start research');
-    queryEl.value = query; // restore so user can retry
+    queryEl.value = query; // 恢复以使用户可以重试
   });
 }
 
@@ -616,8 +616,8 @@ function _restoreSavedSettings() {
     const catSel = document.getElementById('research-category');
     if (catSel) catSel.value = saved.category;
   }
-  // Rounds intentionally defaults to "Auto" on every open — don't restore.
-  // Users can pick a specific cap each time if needed.
+  // 每次打开时轮次有意默认为"Auto" — 不恢复。
+  // 用户可以在每次需要时选择特定的上限。
   const search = document.getElementById('research-search-provider');
   if (search && saved.search_provider !== undefined) search.value = saved.search_provider;
   const ep = document.getElementById('research-endpoint');
@@ -664,11 +664,11 @@ function _populateModels(endpointId) {
   });
 }
 
-// ── Job rendering ──
+// ── 任务渲染 ──
 
 function _renderJobs() {
-  // Keep the rail/sidebar indicator in sync on every job-state change,
-  // even when the panel is closed (no container yet).
+  // 在每次任务状态变化时保持导轨/侧边栏指示器同步，
+  // 即使面板已关闭（无容器）时也工作。
   _syncResearchRail();
   const container = document.getElementById('research-jobs-list');
   if (!container) return;
@@ -703,9 +703,9 @@ function _renderJobs() {
   const past = allJobs.filter(j => j.status === 'done' && j._fromLibrary);
   const recentDone = allJobs.filter(j => j.status === 'done' && !j._fromLibrary).reverse();
 
-  // Keep the header "(N research)" chip in sync with the Past-section count.
-  // _updateResearchCount fetches the library total only, which under-counts
-  // when there's a session-completed job not yet persisted to the library.
+  // 保持标题栏"(N research)"芯片与 Past 区域的数量同步。
+  // _updateResearchCount 仅获取资料库总数，当有已会话完成但尚未
+  // 持久化到资料库的任务时会少计。
   const statsEl = document.getElementById('research-stats');
   if (statsEl) {
     const n = recentDone.length + past.length;
@@ -725,7 +725,7 @@ function _renderJobs() {
   }
 
   // Dynamic Past hint: when the Past section won't render (no past items),
-  // surface the "All past research found in Library, Research" line under
+  // 动态 Past 提示：当 Past 区域不渲染（无过去任务）时，将"All past research found in
   // the main Research title instead, so the link is always discoverable.
   const noPastHint = document.getElementById('research-no-past-hint');
   if (noPastHint) {
@@ -743,8 +743,8 @@ function _renderJobs() {
     }
   }
 
-  // Clean up synapses for jobs that finished or disappeared. complete()
-  // marks the SVG green for ~800ms before destroy removes it.
+  // 清理已完成或已消失的任务的 synapses。complete() 在 destroy 移除前
+  // 将 SVG 标记为绿色约 800ms。
   const liveIds = new Set(allJobs.filter(j => j.status === 'running').map(j => j.id));
   for (const [jobId, entry] of _jobSynapses) {
     if (liveIds.has(jobId)) continue;
@@ -756,7 +756,7 @@ function _renderJobs() {
   // Group into foldable sections: "Active" (in-progress) and "Past research"
   // (everything done — this session + library). Each has a clickable title
   // that collapses its body. Collapsed state persists across re-renders via
-  // the module-level _collapsedSections set.
+  // 用于折叠正文。折叠状态通过模块级 _collapsedSections 集合在重新渲染之间保持。
   const _addSection = (key, title, arr) => {
     if (!arr.length) return;
     const collapsed = _collapsedSections.has(key);
@@ -764,10 +764,10 @@ function _renderJobs() {
     sec.className = 'research-section' + (collapsed ? ' collapsed' : '');
     const header = document.createElement('div');
     header.className = 'research-section-header';
-    // Status dot on the right (visible even when folded):
-    //  • Active = pulsing accent glow (work in progress)
-    //  • any failed/cancelled job in Active = solid red
-    //  • Past (done) = solid green (success)
+    // 右侧的状态点（即使在折叠时也可见）：
+    //  • Active = 脉冲强调色发光（工作进行中）
+    //  • Active 中的任何失败/已取消任务 = 实心红色
+    //  • Past（已完成）= 实心绿色（成功）
     let dotColor, dotPulse = false;
     if (key === 'active') {
       const failed = arr.some(j => j.status === 'error' || j.status === 'cancelled');
@@ -776,8 +776,8 @@ function _renderJobs() {
     } else {
       dotColor = 'var(--color-success)';
     }
-    // Both sections carry a "Clear all" button in the header (cookbook-running
-    // section style); it clears all research and must not toggle the fold.
+    // 两个区域都在标题栏中带有"Clear all"按钮（cookbook-running 区域样式）；
+    // 它清除所有研究且不得切换折叠。
     const clearAllHtml = '<button class="research-section-clear" title="Clear all research">' + _cancelIcon + ' Clear all</button>';
     header.innerHTML =
       '<span class="research-section-title">' + title + '</span>'
@@ -793,7 +793,7 @@ function _renderJobs() {
     });
     header.querySelector('.research-section-clear')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      // Gracefully fade + collapse the whole section block(s) out, then clear.
+      // 优雅地淡出 + 折叠整个区域块，然后清除。
       container.querySelectorAll('.research-section').forEach(s => {
         s.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
         s.style.opacity = '0';
@@ -830,17 +830,17 @@ function _renderJobs() {
     container.appendChild(sec);
   };
 
-  // ("Clear all" lives inside the Past research section header — see _addSection.)
+  // （"Clear all" 位于 Past research 区域标题栏中 — 见 _addSection。）
 
   _addSection('active', 'Active', active);
   _addSection('past', 'Past research', recentDone.concat(past));
 }
 
-/** Pick parallel vs sequential as a small popover anchored to the
- *  Start-All button. Drops down by default; flips to drop-up if there
- *  isn't enough room below the button. Outside-click / Esc dismiss. */
+/** 作为锚定到 Start-All 按钮的小弹窗选择并行还是顺序。
+ *  默认向下弹出；如果按钮下方空间不足则切换为向上弹出。
+ *  外部点击 / Esc 关闭。 */
 function _promptParallelOrSequential(count, anchorBtn) {
-  // Strip any prior instance so a second click closes-then-reopens cleanly.
+  // 移除任何先前的实例，使第二次点击干净地关闭后再重新打开。
   const existing = document.getElementById('research-run-mode-popover');
   if (existing) { existing.remove(); return; }
   if (!anchorBtn) return;
@@ -849,7 +849,7 @@ function _promptParallelOrSequential(count, anchorBtn) {
   const pop = document.createElement('div');
   pop.id = 'research-run-mode-popover';
   pop.className = 'research-run-mode-popover';
-  // Same parallel / sequential glyphs the model-comparison picker uses.
+  // 模型对比选择器使用的相同并行/顺序字形。
   const ICON_PARALLEL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
   const ICON_SEQUENTIAL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>';
   pop.innerHTML =
@@ -857,14 +857,14 @@ function _promptParallelOrSequential(count, anchorBtn) {
     + '<button class="research-run-mode-row" data-mode="sequential">' + ICON_SEQUENTIAL + '<span class="rrm-title">Sequential</span></button>';
   document.body.appendChild(pop);
 
-  // Position: prefer dropping down from the button's bottom-right corner.
-  // If there isn't enough room below the viewport, flip to drop-up above.
+  // 定位：默认从按钮的右下角向下弹出。
+  // 如果视口下方空间不足，则翻转为向上弹出。
   const popHeight = pop.offsetHeight;
   const margin = 6;
   const spaceBelow = window.innerHeight - rect.bottom;
   const goUp = spaceBelow < popHeight + margin && rect.top > popHeight + margin;
   const top = goUp ? (rect.top - popHeight - margin) : (rect.bottom + margin);
-  // Right-align to the button so the menu doesn't extend off-screen on the right
+  // 右对齐按钮，使菜单不会在右侧超出屏幕
   const right = Math.max(8, window.innerWidth - rect.right);
   pop.style.top = `${Math.round(top)}px`;
   pop.style.right = `${Math.round(right)}px`;
@@ -936,10 +936,10 @@ function _buildJobCard(job) {
     });
 
   } else if (job.status === 'running') {
-    // Auto mode (max_rounds=0/undefined) — show round number without total,
-    // and base the progress bar on a heuristic cap of 8 rounds.
+    // 自动模式（max_rounds=0/undefined）— 显示轮次编号不含总数，
+    // 并以 8 轮为启发式上限来计算进度条。
     const userMaxR = job.settings?.max_rounds || 0;
-    const phaseMaxR = userMaxR || 0;  // 0 = formatPhase shows "Round X" without total
+    const phaseMaxR = userMaxR || 0;  // 0 = formatPhase 显示"Round X"不含总数
     const phase = jobs.formatPhase(job.progress, phaseMaxR);
     const round = job.progress?.round || 0;
     const barCap = userMaxR || 8;
@@ -962,8 +962,8 @@ function _buildJobCard(job) {
     card.querySelector('.research-synapse-toggle')?.addEventListener('click', (e) => {
       e.stopPropagation(); _toggleSynapseMinimized();
     });
-    // Click anywhere on the header (title/model/time) toggles the visualization
-    // too — the cancel/synapse buttons stopPropagation so they keep their own.
+    // 点击标题栏任意位置（标题/模型/时间）也可切换可视化 —
+    // cancel/synapse 按钮使用 stopPropagation 以保留自己的行为。
     const _runHdr = card.querySelector('.research-job-header');
     if (_runHdr) {
       _runHdr.style.cursor = 'pointer';
@@ -983,10 +983,10 @@ function _buildJobCard(job) {
       entry = { synapse, status: 'running' };
       _jobSynapses.set(job.id, entry);
     } else {
-      // Move the existing element into the freshly-rendered host
+      // 将现有元素移动到新渲染的容器中
       host.appendChild(entry.synapse.element);
     }
-    // Push the current progress state
+    // 推送当前进度状态
     if (job.progress) {
       entry.synapse.setPhase(job.progress.phase, job.progress);
       if (typeof job.progress.round === 'number') entry.synapse.setRound(job.progress.round);
@@ -994,10 +994,10 @@ function _buildJobCard(job) {
     }
 
   } else if (job.status === 'done') {
-    // Library-loaded jobs have sources=null but pre-set sourceCount; fresh jobs
-    // populate sources directly. Prefer the pre-set count if present.
+    // 从资料库加载的任务 sources=null 但预先设置了 sourceCount；新任务直接填充 sources。
+    // 优先使用预先设置的数量。
     const srcCount = job.sources?.length ?? job.sourceCount ?? 0;
-    // 0 sources = the research couldn't gather/extract anything — flag it.
+    // 0 个源 = 研究无法收集/提取任何内容 — 标记它。
     const failed = srcCount === 0;
     if (failed) card.classList.add('research-job-failed');
     const doneBadge = failed
@@ -1022,15 +1022,15 @@ function _buildJobCard(job) {
       </div>
       ${isExpanded ? `<div class="research-job-result">${_renderResult(job)}</div>` : ''}
     `;
-    // Clicking anywhere on the card (except the action buttons, which
-    // stopPropagation) opens the visual report — same as the Visual Report btn.
+    // 点击卡片上的任何位置（除了通过 stopPropagation 阻止的操作按钮）
+    // 打开可视化报告 — 与 Visual Report 按钮相同。
     card.style.cursor = 'pointer';
     card.addEventListener('click', () => {
       window.open(`${_apiBase}/api/research/report/${job.id}`, '_blank');
     });
     card.querySelector('[data-action="copy"]').addEventListener('click', async (e) => {
       e.stopPropagation();
-      const btn = e.currentTarget; // capture before await — currentTarget becomes null after
+      const btn = e.currentTarget; // 在 await 之前捕获 — currentTarget 之后会变为 null
       if (!job.result) await _ensureResult(job);
       _copyResult(job, btn);
     });
@@ -1108,7 +1108,7 @@ function _renderResult(job) {
 
   let html = '';
 
-  // Category hero banner — only for completed, known-category results
+  // 类别英雄横幅 — 仅用于已完成、已知类别的结果
   if (cat && catIcon) {
     html += `
       <div class="research-hero research-hero-${cat}">
@@ -1178,9 +1178,9 @@ async function _copyResult(job, btn) {
     }
   } catch {}
   if (!ok) {
-    // Fallback for non-secure contexts (HTTP self-host) where navigator.clipboard
-    // is unavailable. The textarea must be in-viewport and focusable for Firefox
-    // Android / iOS Safari to allow execCommand('copy').
+    // 非安全上下文（HTTP 自托管）的回退方案，其中 navigator.clipboard 不可用。
+    // textarea 必须在 Firefox Android / iOS Safari 中位于视口内且可聚焦，
+    // 才能允许 execCommand('copy')。
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.readOnly = false;
@@ -1216,7 +1216,7 @@ async function _copyResult(job, btn) {
   }
 }
 
-// ── Chat about this research (server-side spinoff) ──
+// ── 讨论此研究内容（服务器端衍生） ──
 
 async function _chatAboutResearch(researchId, btn) {
   if (!researchId) return;
@@ -1240,8 +1240,8 @@ async function _chatAboutResearch(researchId, btn) {
       window.location.hash = '#' + payload.session_id;
       window.location.reload();
     } else {
-      // 200 OK but no session_id — server contract violation. Don't leave
-      // the button stuck on 'Creating…'; surface the failure instead.
+      // 200 OK 但没有 session_id — 服务器约定违反。不要让按钮
+      // 卡在"Creating…"状态；显示失败状态。
       throw new Error('Server returned no session id');
     }
   } catch (e) {

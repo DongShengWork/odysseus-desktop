@@ -1,9 +1,9 @@
-"""mcp_oauth.py — generic OAuth for remote (Streamable HTTP) MCP servers.
+"""mcp_oauth.py — 远程（Streamable HTTP）MCP 服务器的通用 OAuth。
 
-Bridges the mcp SDK's OAuthClientProvider (RFC 9728 discovery, Dynamic Client
-Registration, authorization-code + PKCE, token refresh) to Odysseus's web
-callback route. Tokens and the dynamic registration persist per-server,
-encrypted, so the interactive flow runs only once.
+将 mcp SDK 的 OAuthClientProvider（RFC 9728 discovery、Dynamic Client
+Registration、authorization-code + PKCE、token refresh）桥接到 Odysseus 的
+web 回调路由。Token 和动态注册信息按服务器持久化加密存储，
+因此交互式流程只需执行一次。
 """
 import asyncio
 import json
@@ -15,13 +15,13 @@ from urllib.parse import urlparse, parse_qs
 
 logger = logging.getLogger(__name__)
 
-# OAuth redirect URI registered with every authorization server via DCR. Loopback
-# is allowed for native/desktop clients (RFC 8252); remote users finish via the
-# paste-back flow. Deployments not reachable at http://localhost:7000 (custom
-# port, reverse proxy, or public domain) must set OAUTH_REDIRECT_BASE_URL (or
-# APP_PUBLIC_URL) to their externally reachable origin so the redirect lands back
-# on Odysseus. APP_PORT is intentionally not used: it is only the Docker host
-# port-map; the app always listens on 7000 inside the container.
+# OAuth 重定向 URI，通过 DCR 在每个授权服务器注册。Loopback
+# 对于原生/桌面客户端是允许的（RFC 8252）；远程用户通过粘贴回流
+# 完成授权。无法在 http://localhost:7000 访问的部署（自定义
+# 端口、反向代理或公网域名）必须设置 OAUTH_REDIRECT_BASE_URL（或
+# APP_PUBLIC_URL）为外部可访问的地址，以便重定向回到
+# Odysseus。APP_PORT 故意不使用：它只是 Docker 主机的
+# 端口映射；应用在容器内始终监听 7000。
 _REDIRECT_BASE = (
     os.environ.get("OAUTH_REDIRECT_BASE_URL")
     or os.environ.get("APP_PUBLIC_URL")
@@ -29,12 +29,12 @@ _REDIRECT_BASE = (
 ).rstrip("/")
 REDIRECT_URI = f"{_REDIRECT_BASE}/api/mcp/oauth/callback"
 
-# How long the background connect waits for the user to authorize before giving up.
+# 后台连接等待用户授权的最大秒数。
 AUTH_WAIT_SECONDS = 300
 
 _pending: Dict[str, asyncio.Future] = {}   # state -> Future[(code, state)]
-_pending_ts: Dict[str, float] = {}         # state -> monotonic timestamp, for pruning
-_auth_urls: Dict[str, str] = {}            # server_id -> authorization URL
+_pending_ts: Dict[str, float] = {}         # state -> monotonic 时间戳，用于清理
+_auth_urls: Dict[str, str] = {}            # server_id -> 授权 URL
 
 
 def _prune_stale() -> None:
@@ -81,7 +81,7 @@ def clear_auth_url(server_id: str) -> None:
 
 
 class DbTokenStorage:
-    """SDK TokenStorage backed by the encrypted McpServer.oauth_tokens column."""
+    """基于加密的 McpServer.oauth_tokens 列的 SDK TokenStorage 实现。"""
 
     def __init__(self, server_id: str, session_factory=None):
         self.server_id = server_id
@@ -102,8 +102,8 @@ class DbTokenStorage:
         return {}
 
     def _update(self, key: str, value: dict) -> None:
-        """Load, set one key, and persist the oauth_tokens JSON in a single
-        session/commit (avoids the load+save double round-trip per write)."""
+        """在单个 session/commit 中加载、设置一个键并持久化 oauth_tokens JSON
+        （避免每次写的 load+save 双重往返）。"""
         from core.database import McpServer
         db = self._sf()
         try:
@@ -138,10 +138,10 @@ def build_provider(server_id: str, url: str, on_redirect=None):
     """Construct an OAuthClientProvider that drives the browser flow via the
     Odysseus callback route.
 
-    on_redirect(authorization_url): optional sync callback invoked the moment
+    on_redirect(authorization_url): 可选同步回调，在授权 URL 已知时
     the authorization URL is known (after discovery + DCR). The manager uses it
     to publish 'needs_auth' + auth_url to connection state regardless of how
-    long discovery/DCR took.
+    + auth_url 到连接状态，无论 discovery/DCR 耗时多久。
     """
     from mcp.client.auth import OAuthClientProvider
     from mcp.shared.auth import OAuthClientMetadata
@@ -151,10 +151,10 @@ def build_provider(server_id: str, url: str, on_redirect=None):
         redirect_uris=[REDIRECT_URI],
         grant_types=["authorization_code", "refresh_token"],
         response_types=["code"],
-        # Leave scope unset: the SDK applies the MCP scope-selection strategy and
-        # overwrites this from the server's WWW-Authenticate / protected-resource
-        # metadata before building the auth URL. Hardcoding an OIDC scope here
-        # would break the many MCP servers that are not OpenID providers.
+        # 不设置 scope：SDK 应用 MCP scope 选择策略，并在构建
+        # auth URL 之前从服务器的 WWW-Authenticate / protected-resource
+        # 元数据中覆盖此值。在这里硬编码 OIDC scope 会破坏许多
+        # 非 OpenID provider 的 MCP 服务器。
         scope=None,
         token_endpoint_auth_method="none",
     )

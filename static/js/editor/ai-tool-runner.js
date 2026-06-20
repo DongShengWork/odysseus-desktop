@@ -1,10 +1,10 @@
 /**
- * Shared AI-tool runner. Used by Sharpen / Harmonize / Upscale / Style /
+ * 共享 AI 工具运行器。用于 Sharpen / Harmonize / Upscale / Style /
  * Bg-Remove / etc. — every tool that flattens the document, POSTs the
  * PNG to a server-side image endpoint, and drops the result back in
  * as a new layer.
  *
- * Handles all the orchestration around the request:
+ * 处理请求的所有编排：
  *
  *  - Button busy state: swap label for "<verbing>…" + whirlpool
  *    spinner, lock width so the button doesn't visually jump.
@@ -44,7 +44,7 @@ export function createApplyImageTool({
 }) {
   return async function applyImageTool(endpoint, extraPayload, layerName, btn, opts) {
     const origHTML = btn.innerHTML;
-    const origWidth = btn.offsetWidth;  // lock width so the button doesn't jump
+    const origWidth = btn.offsetWidth;  // 锁定宽度以免按钮跳动
     btn.disabled = true;
     btn.classList.add('ge-btn-processing');
     btn.style.minWidth = origWidth + 'px';
@@ -90,10 +90,10 @@ export function createApplyImageTool({
       }
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      if (!data.image) throw new Error('No image returned');
+      if (!data.image) throw new Error('未返回图像');
       const img = new Image();
       img.onload = () => {
-        if (!state.editorOpen) return; // user closed mid-decode (v2 review HIGH-4)
+        if (!state.editorOpen) return; // 用户在中途解码时关闭（v2 review HIGH-4）
         saveState();
         const layer = createLayer(layerName, state.imgWidth, state.imgHeight);
         layer.ctx.drawImage(img, 0, 0);
@@ -101,12 +101,12 @@ export function createApplyImageTool({
         state.activeLayerId = layer.id;
         composite();
         renderLayerPanel();
-        if (uiModule) uiModule.showToast(layerName + ' complete', 4500);
+        if (uiModule) uiModule.showToast(layerName + ' 完成', 4500);
       };
-      img.onerror = () => { if (uiModule) uiModule.showToast('Failed to load result', 6000); };
+      img.onerror = () => { if (uiModule) uiModule.showToast('加载结果失败', 6000); };
       img.src = 'data:image/png;base64,' + data.image;
     } catch (e) {
-      // Detect known failure modes and surface an action-toast.
+      // 检测已知的失败模式并弹出操作 toast。
       const msg = (e?.message || '').toLowerCase();
       const needsImg2Img = (
         msg.includes('img2img') ||
@@ -121,19 +121,19 @@ export function createApplyImageTool({
       }
       if (uiModule) {
         if (depMatch && uiModule.showToast.length >= 2) {
-          uiModule.showToast(layerName + ' failed: ' + depMatch + ' is not installed on the server.', {
+          uiModule.showToast(layerName + ' 失败: ' + depMatch + ' 未在服务器上安装。', {
             duration: 9000,
-            action: `Install ${depMatch}`,
+            action: `安装 ${depMatch}`,
             onAction: () => openCookbookForDependency(depMatch),
           });
         } else if (needsImg2Img && uiModule.showToast.length >= 2) {
-          uiModule.showToast(layerName + ' failed: ' + e.message, {
+          uiModule.showToast(layerName + ' 失败: ' + e.message, {
             duration: 9000,
-            action: 'Open Cookbook',
+            action: '打开 Cookbook',
             onAction: () => openCookbookForImg2img(),
           });
         } else {
-          uiModule.showToast(layerName + ' failed: ' + e.message, 6000);
+          uiModule.showToast(layerName + ' 失败: ' + e.message, 6000);
         }
       }
     } finally {

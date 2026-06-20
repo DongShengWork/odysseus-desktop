@@ -1,5 +1,5 @@
-// static/js/settings.js — Settings panel module (ES6)
-// User-facing preferences: AI models, search, appearance
+// static/js/settings.js — 设置面板模块 (ES6)
+// 用户偏好设置：AI 模型、搜索、外观
 
 import uiModule from './ui.js';
 import searchModule from './search.js';
@@ -19,23 +19,23 @@ function safeRasterDataUrl(raw) {
   return /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(value) ? value : '';
 }
 
-/* ── Tab switching ── */
+/* ── 标签切换 ── */
 const ADMIN_TABS = new Set(['services', 'integrations', 'tools', 'users', 'system']);
 
 function initTabs() {
   modalEl.querySelectorAll('[data-settings-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
       const tab = btn.dataset.settingsTab;
-      // Lazy-init admin when first clicking an admin tab
+      // 首次点击管理标签时延迟初始化管理模块
       if (ADMIN_TABS.has(tab) && window.adminModule && typeof window.adminModule.open === 'function') {
         window.adminModule.open(tab);
         return;
       }
       modalEl.querySelectorAll('[data-settings-tab]').forEach(b => b.classList.toggle('active', b.dataset.settingsTab === tab));
       modalEl.querySelectorAll('[data-settings-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.settingsPanel !== tab));
-      // Mark when the Appearance tab is open so the modal can go
-      // semi-transparent — lets the user see the rest of the UI react as
-      // they flip toggles instead of having to close + reopen the modal.
+      // 标记外观标签页已打开，让模态框变为半透明——
+      // 这样用户可以在切换开关时看到 UI 其余部分的反应，
+      // 而不必关闭再重新打开模态框。
       document.body.classList.toggle('settings-appearance-open', tab === 'appearance');
       syncAppearanceOpacity(tab === 'appearance');
       if (tab === 'ai') refreshAiModelEndpoints();
@@ -43,13 +43,13 @@ function initTabs() {
   });
 }
 
-/* ── Dragging ── */
+/* ── 拖拽 ── */
 function initDrag() {
   const header = modalEl.querySelector('.modal-header');
   const content = modalEl.querySelector('.settings-modal-content');
   if (!header || !content) return;
-  // Skip interactive controls in the header (e.g. the opacity slider) so
-  // grabbing them doesn't start a window-drag.
+  // 跳过标题栏中的交互控件（例如不透明度滑块），
+  // 以免拖拽它们时触发窗口拖拽。
   makeWindowDraggable(modalEl, {
     content,
     header,
@@ -105,7 +105,7 @@ function initOpenPromptModalLink() {
   });
 }
 
-/* ── Close on backdrop / X ── */
+/* ── 点击背景或 X 关闭 ── */
 function initClose() {
   modalEl.querySelector('.close-btn').addEventListener('click', close);
   modalEl.addEventListener('mousedown', e => {
@@ -124,9 +124,9 @@ function initClose() {
     if (popoverOpen && popoverOpen.style.display !== 'none' && !popoverOpen.classList.contains('hidden')) {
       return;
     }
-    // If an integration edit/add form is open inside the modal, close
-    // just that — don't dismiss the whole settings modal. (Pressing
-    // ESC mid-edit and losing the modal was a fast-typing footgun.)
+    // 如果模态框内有集成编辑/添加表单打开，只关闭那个表单——
+    // 不要关闭整个设置模态框。（在编辑中按 ESC 却丢失整个模态框
+    // 是快速打字时的误操作陷阱。）
     const innerForm = modalEl.querySelector('#unified-intg-form, #set-email-accounts-form');
     if (innerForm && innerForm.style.display !== 'none' && innerForm.children.length > 0) {
       e.preventDefault();
@@ -146,7 +146,7 @@ function initClose() {
    background (and inner cards) via color-mix so the user can watch the
    rest of the UI react to toggles, while keeping text/controls crisp
    (no element opacity). Only shown/active on the Appearance tab. */
-const _SETTINGS_PEEK = 55; // % opacity when the Peek toggle is on
+const _SETTINGS_PEEK = 55; // Peek 开关打开时的不透明度百分比
 function _applySettingsOpacity(on) {
   const content = modalEl && modalEl.querySelector('.settings-modal-content, .modal-content');
   if (!content) return;
@@ -174,14 +174,14 @@ function _applySettingsOpacity(on) {
   }
 }
 
-// Show/hide the Peek toggle for the Appearance tab and apply or clear the fade.
+// 显示/隐藏外观标签页的 Peek 开关，并应用或清除淡化效果。
 function syncAppearanceOpacity(active) {
   const toggle = el('settings-opacity-wrap');
   if (toggle) toggle.classList.toggle('hidden', !active);
   if (active) {
     _applySettingsOpacity(toggle ? toggle.classList.contains('active') : false);
   } else {
-    _applySettingsOpacity(false); // clear the fade off the Appearance tab
+    _applySettingsOpacity(false); // 离开外观标签页时清除淡化效果
   }
 }
 
@@ -198,7 +198,7 @@ function initOpacityToggle() {
 }
 
 /* ═══════════════════════════════════════════
-   AI TAB
+   AI 标签页
    ═══════════════════════════════════════════ */
 
 const _aiEndpointRefreshers = new Set();
@@ -211,7 +211,7 @@ async function _fetchModelEndpoints() {
 }
 
 function _endpointLabel(ep) {
-  return ep.name + (ep.online ? '' : ' (offline)');
+  return ep.name + (ep.online ? '' : ' (' + t('settings.offline') + ')');
 }
 
 function _fillEndpointSelect(selectEl, endpoints, selected, keepBlank) {
@@ -324,18 +324,18 @@ export async function refreshAiModelEndpoints() {
   return _aiEndpointRefreshInFlight;
 }
 
-/* Shared fallback-chain widget — mirrors the Default Chat Model fallback UI
- * for other model cards (Utility, Vision, …). Pass in the container/button
- * IDs, the endpoints list, the settings key to persist under, and the
- * model-filter (for Vision we exclude non-chat-capable models).
+/* 共享的回退链组件 — 镜像了默认聊天模型的回退 UI，
+ * 用于其他模型卡片（工具模型、视觉模型等）。传入容器/按钮
+ * ID、端点列表、要持久化的设置键，以及模型过滤器
+ *（对于视觉模型，我们排除非聊天能力的模型）。
  */
 function _bindFallbackWidget(opts) {
   var fbContainer = el(opts.containerId);
   var addBtn = el(opts.addBtnId);
-  var endpointsRef = opts.endpoints;       // mutable list reference
+  var endpointsRef = opts.endpoints;       // 可变列表引用
   var modelsFilter = opts.modelsFilter || function() { return true; };
   var settingKey = opts.settingKey;
-  var current = opts.initial || [];        // [{endpoint_id, model}]
+  var current = opts.initial || [];        // [{endpoint_id, model}] 格式的回退列表
 
   if (!fbContainer || !addBtn) return { setEndpoints: function() {}, setInitial: function() {} };
 
@@ -407,7 +407,7 @@ function _bindFallbackWidget(opts) {
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'settings-fallback-remove';
-      rm.title = 'Remove fallback';
+      rm.title = t('settings.remove_fallback');;
       rm.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
       rm.addEventListener('click', function() {
         current.splice(idx, 1);
@@ -438,7 +438,7 @@ function _bindFallbackWidget(opts) {
   };
 }
 
-/* ── Default Chat Model ── */
+/* ── 默认聊天模型 ── */
 async function initDefaultChat() {
   var epSel = el('set-defaultEpSelect');
   var modelSel = el('set-defaultModelSelect');
@@ -446,13 +446,13 @@ async function initDefaultChat() {
   var fbContainer = el('set-defaultFallbacks');
   var addFbBtn = el('set-defaultAddFallback');
   var _endpoints = [];
-  var _fallbacks = []; // [{endpoint_id, model}] — tried in order if primary fails
+  var _fallbacks = []; // [{endpoint_id, model}] — 主模型失败时按此顺序尝试
 
   function enabledEndpoints() {
     return _endpoints.filter(function(e) { return e.is_enabled; });
   }
 
-  // Fill any <select> with the models for a given endpoint id.
+  // 为给定的端点 ID 用对应模型填充任何 <select>。
   function fillModels(selectEl, epId, selected) {
     var ep = _endpoints.find(function(e) { return e.id === epId; });
     _fillModelSelect(selectEl, ep ? ep.models : [], selected, false);
@@ -470,7 +470,7 @@ async function initDefaultChat() {
     renderFallbacks();
   }
 
-  // Render the fallback chain. Each row is endpoint + model + remove.
+  // 渲染回退链。每行包含端点 + 模型 + 删除按钮。
   function renderFallbacks() {
     fbContainer.innerHTML = '';
     _fallbacks.forEach(function(fb, idx) {
@@ -496,7 +496,7 @@ async function initDefaultChat() {
       mS.className = 'settings-select';
       fillModels(mS, epS.value, fb.model);
 
-      // Keep the model in sync with the values actually shown.
+      // 保持模型与实际显示值同步。
       fb.endpoint_id = epS.value;
       fb.model = mS.value;
 
@@ -511,7 +511,7 @@ async function initDefaultChat() {
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'settings-fallback-remove';
-      rm.title = 'Remove fallback';
+      rm.title = t('settings.remove_fallback');;
       rm.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
       rm.addEventListener('click', function() {
         _fallbacks.splice(idx, 1);
@@ -551,9 +551,9 @@ async function initDefaultChat() {
           default_model_fallbacks: clean
         })
       });
-      msg.textContent = 'Saved'; msg.style.color = 'var(--fg)';
+      msg.textContent = t('settings.saved'); msg.style.color = 'var(--fg)';
       setTimeout(function() { msg.textContent = ''; }, 2000);
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
 
   epSel.addEventListener('change', function() { refreshModels(''); saveDefault(); });
@@ -571,15 +571,15 @@ async function initDefaultChat() {
   });
 }
 
-/* ── Utility Model ── */
+/* ── 工具模型 ── */
 async function initUtilityModel() {
   var epSel = el('set-utilityEpSelect');
   var modelSel = el('set-utilityModelSelect');
   var msg = el('set-utilityChatMsg');
   var _endpoints = [];
   var fallbackWidget = null;
-  if (epSel && epSel.options[0]) epSel.options[0].textContent = 'Same as chat';
-  if (modelSel && modelSel.options[0]) modelSel.options[0].textContent = 'Same as chat';
+  if (epSel && epSel.options[0]) epSel.options[0].textContent = t('settings.same_as_chat');
+  if (modelSel && modelSel.options[0]) modelSel.options[0].textContent = t('settings.same_as_chat');
 
   try {
     _endpoints = await _fetchModelEndpoints();
@@ -608,9 +608,9 @@ async function initUtilityModel() {
     });
   } catch (e) { console.warn('Failed to load utility model settings', e); }
 
-  // Persist whatever's currently selected. Empty endpoint or model → backend
-  // transparently falls back to the chat model (mirrors the teacher panel:
-  // no toggle, "—" means "unset, use chat").
+  // 持久化当前选定的选项。端点为空或模型为空时 → 后端
+  // 自动回退到聊天模型（镜像了教师面板：
+  // 无开关，"—" 表示"未设置，使用聊天"）。
   async function saveUtility() {
     try {
       await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin',
@@ -620,9 +620,9 @@ async function initUtilityModel() {
           utility_model: modelSel.value || ''
         })
       });
-      msg.textContent = 'Saved'; msg.style.color = 'var(--fg)';
+      msg.textContent = t('settings.saved'); msg.style.color = 'var(--fg)';
       setTimeout(function() { msg.textContent = ''; }, 1500);
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
 
   epSel.addEventListener('change', function() { refreshModels(''); saveUtility(); });
@@ -636,10 +636,10 @@ async function initUtilityModel() {
   });
 }
 
-/* ── Teacher Model ── */
+/* ── 教师模型 ── */
 // SOTA model called automatically when a self-hosted student model
 // fails an agent-mode task. Stored as a single `teacher_model` string
-// in the form `model@endpoint_name` so the backend's _resolve_model
+// `model@endpoint_name`，让后端的 _resolve_model
 // can dispatch directly. Master toggle is the separate
 // `teacher_enabled` flag so the user can pause the feature without
 // losing their endpoint+model selection.
@@ -683,8 +683,8 @@ async function initTeacherModel() {
     var res = await fetch('/api/auth/settings', { credentials: 'same-origin' });
     var settings = await res.json();
     if (enabledToggle) enabledToggle.checked = !!settings.teacher_enabled;
-    // teacher_model is stored as "model@endpoint_name". Split on the
-    // LAST `@` so model ids that contain @ aren't mangled.
+    // teacher_model 存储为 "model@endpoint_name"。在最后一个
+    // `@` 处分割，以免包含 @ 的模型 ID 被破坏。
     var spec = settings.teacher_model || '';
     var savedModel = spec;
     var savedEpName = '';
@@ -715,10 +715,10 @@ async function initTeacherModel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teacher_enabled: enabled, teacher_model: spec })
       });
-      msg.textContent = enabled ? (spec ? 'Saved' : 'Pick an endpoint + model') : 'Disabled';
+      msg.textContent = enabled ? (spec ? t('settings.saved') : t('settings.pick_endpoint_and_model')) : t('settings.disabled_status');
       msg.style.color = enabled && !spec ? 'var(--red)' : 'var(--fg)';
       setTimeout(function() { msg.textContent = ''; }, 2000);
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
 
   if (enabledToggle) {
@@ -737,7 +737,7 @@ async function initTeacherModel() {
   });
 }
 
-/* ── Image Generation ── */
+/* ── 图像生成 ── */
 async function initImageSettings() {
   const modelSel = el('set-imgModelSelect');
   const qualSel = el('set-imgQualitySelect');
@@ -747,10 +747,10 @@ async function initImageSettings() {
   try {
     const modelsRes = await fetch('/api/models', { credentials: 'same-origin' });
     const modelsData = await modelsRes.json();
-    // Inpaint-compat allowlist — image gen here is scoped to inpainting only,
-    // so DALL-E / GPT-Image-1 (no inpaint API) are excluded. Currently:
-    //   - any model with 'inpaint' in the id
-    //   - Stable Diffusion 3.5 Medium (inpaint via diffusers pipeline)
+    // Inpaint 兼容白名单——此处的图像生成仅限 inpainting，
+    // 因此 DALL-E / GPT-Image-1（无 inpaint API）被排除。目前包括：
+    //   - ID 中包含 'inpaint' 的任何模型
+    //   - Stable Diffusion 3.5 Medium（通过 diffusers pipeline 进行 inpaint）
     const _isInpaintModel = (mid) => {
       const lower = String(mid || '').toLowerCase();
       return lower.includes('inpaint')
@@ -768,7 +768,7 @@ async function initImageSettings() {
     // Hardcoded fallbacks shown as "(not detected)" so users know what to
     // download/serve to enable inpaint here.
     ['stable-diffusion-3.5-medium', 'stable-diffusion-inpainting'].forEach(mid => {
-      if (!imageModels.includes(mid)) { const opt = document.createElement('option'); opt.value = mid; opt.textContent = mid + ' (not detected)'; modelSel.appendChild(opt); }
+      if (!imageModels.includes(mid)) { const opt = document.createElement('option'); opt.value = mid; opt.textContent = mid + ' (' + t('settings.not_detected') + ')'; modelSel.appendChild(opt); }
     });
   } catch (e) { console.warn('Failed to load models for image settings', e); }
   try {
@@ -791,15 +791,15 @@ async function initImageSettings() {
     try {
       await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_gen_enabled: enabledToggle ? enabledToggle.checked : false, image_model: modelSel.value, image_quality: qualSel.value }) });
-      msg.textContent = 'Saved'; msg.style.color = 'var(--fg)'; setTimeout(() => { msg.textContent = ''; }, 2000);
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+      msg.textContent = t('settings.saved'); msg.style.color = 'var(--fg)'; setTimeout(() => { msg.textContent = ''; }, 2000);
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
   modelSel.addEventListener('change', saveSettings);
   qualSel.addEventListener('change', saveSettings);
   if (enabledToggle) enabledToggle.addEventListener('change', function() { syncImgDisabled(); saveSettings(); });
 }
 
-/* ── Vision ── */
+/* ── 视觉模型 ── */
 async function initVisionSettings() {
   const vlSel = el('set-vlModelSelect');
   const msg = el('set-visionSettingsMsg');
@@ -828,8 +828,8 @@ async function initVisionSettings() {
       var opt = document.createElement('option'); opt.value = mid; opt.textContent = mid; vlSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load models for vision settings', e); }
-  // Also pull the raw endpoint list so the fallback widget can resolve
-  // endpoint-id → models the same way the other cards do.
+  // 也拉取原始端点列表，让回退组件可以像其他卡片一样
+  // 解析 endpoint-id → models。
   try {
     _visionEndpoints = await _fetchModelEndpoints();
   } catch (e) { console.warn('Failed to load endpoints for vision fallback', e); }
@@ -843,8 +843,8 @@ async function initVisionSettings() {
       containerId: 'set-visionFallbacks',
       addBtnId: 'set-visionAddFallback',
       endpoints: function() { return _visionEndpoints; },
-      // Vision fallback list filters to vision-capable models (same heuristic
-      // as the primary select above — exclude audio/tts/embedding/etc.).
+      // 视觉回退列表过滤为视觉能力的模型（与上方的主选择器
+      // 使用相同的启发式规则——排除 audio/tts/embedding 等）。
       modelsFilter: function(mid) { return _isVisionModel(mid); },
       settingKey: 'vision_model_fallbacks',
       initial: Array.isArray(settings.vision_model_fallbacks)
@@ -865,8 +865,8 @@ async function initVisionSettings() {
     try {
       await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ vision_enabled: enabledToggle ? enabledToggle.checked : true, vision_model: vlSel.value }) });
-      msg.textContent = 'Saved'; msg.style.color = 'var(--fg)'; setTimeout(() => { msg.textContent = ''; }, 2000);
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+      msg.textContent = t('settings.saved'); msg.style.color = 'var(--fg)'; setTimeout(() => { msg.textContent = ''; }, 2000);
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
   vlSel.addEventListener('change', saveSettings);
   if (enabledToggle) enabledToggle.addEventListener('change', function() { syncVisionDisabled(); saveSettings(); });
@@ -877,9 +877,9 @@ async function initVisionSettings() {
   });
 }
 
-/* ── Face Recognition ── */
+/* ── 人脸识别 ── */
 
-/* ── Text to Speech ── */
+/* ── 文本转语音 ── */
 async function initTtsSettings() {
   var provSel = el('set-ttsProviderSelect');
   var modelSelect = el('set-ttsModelSelect');
@@ -920,7 +920,7 @@ async function initTtsSettings() {
       if (!ep.is_enabled) return;
       var hasTTS = (ep.models || []).some(m => ttsKeywords.some(kw => m.toLowerCase().includes(kw)));
       if (!hasTTS) return;
-      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + ' (API)'; provSel.appendChild(opt);
+      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + ' (' + t('settings.api_suffix') + ')'; provSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load endpoints for TTS', e); }
 
@@ -972,12 +972,12 @@ async function initTtsSettings() {
   speedSelect.addEventListener('change', saveAndClearCache);
   if (ttsEnabledToggle) ttsEnabledToggle.addEventListener('change', function() { syncTtsDisabled(); saveTTS(); });
 
-  // Preview / test button
+  // 预览/测试按钮
   var previewBtn = el('set-ttsPreviewBtn');
   if (previewBtn) {
     var previewAudio = null;
     var previewPlaying = false;
-    function resetPreview() { previewPlaying = false; previewBtn.textContent = 'Preview'; previewBtn.style.borderColor = ''; }
+    function resetPreview() { previewPlaying = false; previewBtn.textContent = t('settings.preview'); previewBtn.style.borderColor = ''; }
 
     previewBtn.addEventListener('click', async function() {
       if (previewPlaying) {
@@ -987,11 +987,11 @@ async function initTtsSettings() {
       }
       var prov = provSel.value;
       if (prov === 'disabled') {
-        ttsMsg.textContent = 'Select a provider first'; ttsMsg.style.color = 'var(--red, #e55)';
+        ttsMsg.textContent = t('settings.select_provider_first'); ttsMsg.style.color = 'var(--red, #e55)';
         setTimeout(function() { ttsMsg.textContent = ''; }, 2000); return;
       }
-      var testText = 'Hello, this is a test of text to speech.';
-      previewPlaying = true; previewBtn.textContent = 'Loading...';
+      var testText = t('settings.test_tts_text');
+      previewPlaying = true; previewBtn.textContent = t('common.loading_dots');
       try {
         if (prov === 'browser') {
           if (!('speechSynthesis' in window)) throw new Error('Browser TTS not supported');
@@ -1005,7 +1005,7 @@ async function initTtsSettings() {
             if (match) utt.voice = match;
           }
           utt.rate = parseFloat(speedSelect.value) || 1;
-          previewBtn.textContent = 'Stop'; previewBtn.style.borderColor = 'var(--red, #e55)';
+          previewBtn.textContent = t('settings.stop'); previewBtn.style.borderColor = 'var(--red, #e55)';
           await new Promise(function(resolve, reject) {
             utt.onend = resolve;
             utt.onerror = function(e) { reject(new Error('Browser TTS: ' + e.error)); };
@@ -1021,7 +1021,7 @@ async function initTtsSettings() {
           var blob = await res.blob();
           var url = URL.createObjectURL(blob);
           previewAudio = new Audio(url);
-          previewBtn.textContent = 'Stop'; previewBtn.style.borderColor = 'var(--red, #e55)';
+          previewBtn.textContent = t('settings.stop'); previewBtn.style.borderColor = 'var(--red, #e55)';
           await new Promise(function(resolve, reject) {
             previewAudio.onended = function() { URL.revokeObjectURL(url); previewAudio = null; resolve(); };
             previewAudio.onerror = function() { URL.revokeObjectURL(url); previewAudio = null; reject(new Error('Playback failed')); };
@@ -1029,7 +1029,7 @@ async function initTtsSettings() {
           });
         }
       } catch (e) {
-        ttsMsg.textContent = 'Preview failed: ' + e.message; ttsMsg.style.color = 'var(--red, #e55)';
+        ttsMsg.textContent = t('settings.preview_failed') + e.message; ttsMsg.style.color = 'var(--red, #e55)';
         setTimeout(function() { ttsMsg.textContent = ''; }, 3000);
       } finally {
         resetPreview();
@@ -1038,7 +1038,7 @@ async function initTtsSettings() {
   }
 }
 
-/* ── Speech to Text ── */
+/* ── 语音转文本 ── */
 async function initSttSettings() {
   var provSel = el('set-sttProviderSelect');
   var modelSelect = el('set-sttModelSelect');
@@ -1049,7 +1049,7 @@ async function initSttSettings() {
   var sttMsg = el('set-sttSettingsMsg');
   var sttEnabledToggle = el('set-sttEnabledToggle');
   var sttConfigWrap = el('set-sttConfigWrap');
-  // STT was removed from AI Defaults — bail if the UI isn't present.
+  // STT 已从 AI 默认设置中移除——如果 UI 不存在则退出。
   if (!provSel) return;
 
   function isEndpoint() { return provSel.value.startsWith('endpoint:'); }
@@ -1075,23 +1075,23 @@ async function initSttSettings() {
     if (sttConfigWrap) sttConfigWrap.style.pointerEvents = off ? 'none' : '';
   }
 
-  // Effective provider: if toggle is off, treat as disabled regardless of provider select
+  // 有效提供者：如果开关关闭，无论提供者选择如何都视为禁用
   function effectiveProvider() {
     if (sttEnabledToggle && !sttEnabledToggle.checked) return 'disabled';
     return provSel.value;
   }
 
-  // Add API endpoints that might support STT
+  // 添加可能支持 STT 的 API 端点
   try {
     var epRes = await fetch('/api/model-endpoints', { credentials: 'same-origin' });
     var endpoints = await epRes.json();
     endpoints.forEach(function(ep) {
       if (!ep.is_enabled) return;
-      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + ' (API)'; provSel.appendChild(opt);
+      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + ' (' + t('settings.api_suffix') + ')'; provSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load endpoints for STT', e); }
 
-  // Load saved settings
+  // 加载已保存的设置
   try {
     var settingsRes = await fetch('/api/auth/settings', { credentials: 'same-origin' });
     var settings = await settingsRes.json();
@@ -1111,7 +1111,7 @@ async function initSttSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stt_enabled: enabled, stt_provider: provSel.value, stt_model: getModel() || 'base', stt_language: langInput.value.trim() }) });
       sttMsg.textContent = 'Saved'; sttMsg.style.color = 'var(--fg)'; setTimeout(() => { sttMsg.textContent = ''; }, 2000);
-      // Notify voiceRecorder of effective provider and update send button icon
+      // 通知 voiceRecorder 有效提供者并更新发送按钮图标
       if (window.voiceRecorderModule) window.voiceRecorderModule._sttProvider = effectiveProvider();
       if (window._updateSendBtnIcon) window._updateSendBtnIcon();
     } catch (e) { sttMsg.textContent = 'Failed to save'; sttMsg.style.color = 'var(--red)'; }
@@ -1125,7 +1125,7 @@ async function initSttSettings() {
 }
 
 /* ═══════════════════════════════════════════
-   SEARCH TAB
+   搜索标签页
    ═══════════════════════════════════════════ */
 
 var _LINK = function(href, text) {
@@ -1229,14 +1229,14 @@ async function initSearchSettings() {
       var kf = keyFieldFor(active);
       var hasKey = kf ? ((s[kf] || '').trim() || (s.search_api_key || '').trim()) : false;
       if (_searchNeedsKey[active]) {
-        extra = hasKey ? ' (key set)' : ' (no key)';
+        extra = hasKey ? t('settings.key_set') : t('settings.no_key');
       } else if (active === 'searxng' && (s.search_url || '').trim()) {
         extra = ' (' + s.search_url + ')';
       }
       var count = s.search_result_count || 5;
-      msg.textContent = 'Active: ' + label + extra + ' \u00b7 ' + count + ' results';
+      msg.textContent = t('settings.active_prefix') + label + extra + ' \u00b7 ' + count + t('settings.results_suffix');
       msg.style.color = active === 'disabled' ? 'var(--red)' : (_searchNeedsKey[active] && !hasKey) ? 'var(--red)' : 'var(--fg)';
-    } catch (e) { /* ignore */ }
+    } catch (e) { /* 忽略 */ }
   }
   refreshStatus();
 
@@ -1269,10 +1269,10 @@ async function initSearchSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      msg.textContent = 'Saved'; msg.style.color = 'var(--fg)';
+      msg.textContent = t('settings.saved'); msg.style.color = 'var(--fg)';
       setTimeout(refreshStatus, 2000);
       if (searchModule && searchModule.refresh) searchModule.refresh();
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
 
   provSel.addEventListener('change', function() { updateVisibility(); saveSearch(); _syncSearchPicker(); });
@@ -1281,7 +1281,7 @@ async function initSearchSettings() {
   keyInput.addEventListener('change', saveSearch);
   cxInput.addEventListener('change', saveSearch);
 
-  // ── Provider picker with logos (mirrors the hidden <select>) ──
+  // ── 带 Logo 的提供者选择器（镜像隐藏的 <select>）──
   var picker = el('search-provider-picker');
   var pickerBtn = el('search-provider-btn');
   var pickerMenu = el('search-provider-menu');
@@ -1327,7 +1327,7 @@ async function initSearchSettings() {
     });
   }
 
-  // ── Fallback chain ──
+  // ── 回退链 ──
   // Stored as an ordered array of provider IDs (primary not included).
   // When the primary fails or hits rate-limit, the backend walks this
   // list in order trying each one.
@@ -1391,7 +1391,7 @@ async function initSearchSettings() {
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'settings-fallback-remove';
-      rm.title = 'Remove fallback';
+      rm.title = t('settings.remove_fallback');;
       rm.innerHTML = TRASH_SVG;
       rm.addEventListener('click', function() {
         var next = (_settings.search_fallback_chain || []).filter(function(x, i) { return i !== idx; });
@@ -1425,26 +1425,26 @@ async function initSearchSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ search_fallback_chain: chain }),
       });
-      msg.textContent = 'Saved'; msg.style.color = 'var(--fg)';
+      msg.textContent = t('settings.saved'); msg.style.color = 'var(--fg)';
       setTimeout(refreshStatus, 2000);
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
     _renderFallbackChain();
   }
   _renderFallbackChain();
-  // Re-render whenever the primary changes (it gets filtered out of "Add").
+  // 主提供者变更时重新渲染（它会从"添加"列表中过滤掉）。
   provSel.addEventListener('change', _renderFallbackChain);
 
-  // ── Test button ── runs a one-off query against the configured provider.
+  // ── 测试按钮 ── 对配置的提供者运行一次性查询。
   var testBtn = el('set-searchTestBtn');
   if (testBtn) {
     testBtn.addEventListener('click', async function() {
       var prov = provSel.value;
       if (!prov || prov === 'disabled') {
-        msg.textContent = 'Pick a provider first';
+        msg.textContent = t('settings.pick_provider_first');
         msg.style.color = 'var(--red)';
         return;
       }
-      // Persist current form values first so the test uses what's on screen.
+      // 先持久化当前表单值，让测试使用屏幕上显示的内容。
       await saveSearch();
       testBtn.disabled = true;
       var origHtml = testBtn.innerHTML;
@@ -1473,7 +1473,7 @@ async function initSearchSettings() {
           msg.textContent = '✗ ' + d.error + ' (' + ms + 'ms)';
           msg.style.color = 'var(--red)';
         } else if (!d.results || !d.results.length) {
-          msg.textContent = '⚠ No results returned (' + ms + 'ms)';
+          msg.textContent = '⚠ ' + t('settings.no_results_returned').replace('{ms}', ms);
           msg.style.color = 'var(--red)';
         } else {
           var topTitle = (d.results[0].title || d.results[0].url || '').slice(0, 60);
@@ -1481,7 +1481,7 @@ async function initSearchSettings() {
           msg.style.color = 'var(--fg)';
         }
       } catch (e) {
-        msg.textContent = '✗ Test failed: ' + (e && e.message ? e.message : e);
+        msg.textContent = '✗ ' + t('settings.test_failed') + (e && e.message ? e.message : e);
         msg.style.color = 'var(--red)';
       } finally {
         if (wp) { try { wp.destroy(); } catch (_) {} }
@@ -1491,7 +1491,7 @@ async function initSearchSettings() {
   }
 }
 
-// SVG logos for each search provider (16×16 viewBox normalised to 24×24).
+// 每个搜索提供者的 SVG Logo（16×16 viewBox 归一化为 24×24）。
 var _SEARCH_PROVIDER_LOGOS = {
   searxng:   '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0-2a8 8 0 1 1-4.93 14.32l-3.4 3.4a1 1 0 1 1-1.4-1.4l3.4-3.4A8 8 0 0 1 10 2zM13 8.5L11.5 10 13 11.5l-1 1L10.5 11 9 12.5l-1-1L9.5 10 8 8.5l1-1L10.5 9 12 7.5z"/></svg>',
   duckduckgo:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.5 5.5a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zm5 0a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM12 13c-1.5 0-3.6.8-3.6 2.5C8.4 17.2 10.4 18 12 18s3.6-.8 3.6-2.5C15.6 13.8 13.5 13 12 13z"/></svg>',
@@ -1502,7 +1502,7 @@ var _SEARCH_PROVIDER_LOGOS = {
   disabled:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
 };
 
-/* ── Deep Research Model (AI tab) ── */
+/* ── 深度研究模型（AI 标签页）── */
 async function initResearchSettings() {
   var epSel = el('set-researchEndpoint');
   var modelSel = el('set-researchModel');
@@ -1582,7 +1582,7 @@ async function initResearchSettings() {
     if (ec && ec >= 1 && ec <= 12) payload.research_extraction_concurrency = ec;
     if (runTimeoutInput.value !== '') {
       var rt = parseInt(runTimeoutInput.value, 10);
-      // 0 = no limit (disables the hard timeout); otherwise 60s..86400s (24h)
+      // 0 = 无限制（禁用硬超时）；否则 60s..86400s（24 小时）
       if (!isNaN(rt) && (rt === 0 || (rt >= 60 && rt <= 86400))) {
         payload.research_run_timeout_seconds = rt;
       }
@@ -1592,9 +1592,9 @@ async function initResearchSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      msg.textContent = 'Saved'; msg.style.color = 'var(--fg)';
+      msg.textContent = t('settings.saved'); msg.style.color = 'var(--fg)';
       setTimeout(showStatus, 2000);
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
 
   epSel.addEventListener('change', async function() {
@@ -1614,7 +1614,7 @@ async function initResearchSettings() {
   });
 }
 
-/* ── Deep Research Search (Search tab) ── */
+/* ── 深度研究搜索（搜索标签页）── */
 async function initResearchSearchSettings() {
   var searchSel = el('set-researchSearch');
   var msg = el('set-researchSearchMsg');
@@ -1659,15 +1659,15 @@ async function initResearchSearchSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ research_search_provider: searchSel.value })
       });
-      msg.textContent = 'Saved'; msg.style.color = 'var(--fg)';
+      msg.textContent = t('settings.saved'); msg.style.color = 'var(--fg)';
       setTimeout(function() { msg.textContent = ''; }, 2000);
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
 
   searchSel.addEventListener('change', function() { updateSearchLogo(); saveResearchSearch(); });
 }
 
-/* ── Agent Settings (AI tab) ── */
+/* ── 代理设置（AI 标签页）── */
 async function initAgentSettings() {
   var toolsInput = el('set-agentMaxTools');
   var roundsInput = el('set-agentMaxRounds');
@@ -1683,8 +1683,8 @@ async function initAgentSettings() {
     if (supInput) supInput.checked = !!settings.agent_supervisor_ladder;
   } catch (e) {}
 
-  // Clamp + coerce a raw input to an int in [lo, hi]; falls back to `dflt`
-  // when blank/non-numeric. Mirrors the server-side validation.
+  // 将原始输入限制并转换为 [lo, hi] 范围内的整数；
+  // 空白/非数字时回退到 `dflt`。镜像服务器端验证。
   function clampInt(raw, lo, hi, dflt) {
     var n = parseInt(raw, 10);
     if (isNaN(n)) return dflt;
@@ -1694,7 +1694,7 @@ async function initAgentSettings() {
   async function save() {
     var tools = clampInt(toolsInput.value, 0, 1000, 0);
     var rounds = roundsInput ? clampInt(roundsInput.value, 1, 200, 20) : null;
-    toolsInput.value = tools;                       // reflect the clamped value
+    toolsInput.value = tools;                       // 反映限制后的值
     if (roundsInput) roundsInput.value = rounds;
     var payload = { agent_max_tool_calls: tools };
     if (rounds != null) payload.agent_max_rounds = rounds;
@@ -1708,7 +1708,7 @@ async function initAgentSettings() {
         (rounds != null ? ' · ' + rounds + ' steps/message' : '') +
         (supInput && supInput.checked ? ' · supervisor on' : '');
       msg.style.color = 'var(--fg)';
-    } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
+    } catch (e) { msg.textContent = t('settings.failed_to_save'); msg.style.color = 'var(--red)'; }
   }
 
   toolsInput.addEventListener('change', save);
@@ -1741,7 +1741,7 @@ async function initAgentSettings() {
 }
 
 /* ═══════════════════════════════════════════
-   APPEARANCE TAB
+   外观标签页
    ═══════════════════════════════════════════ */
 function initAppearance() {
   syncAppearanceCheckboxes();
@@ -1835,7 +1835,7 @@ function syncPrivacyCheckboxes() {
 }
 
 /* ═══════════════════════════════════════════
-   SHORTCUTS TAB
+   快捷键标签页
    ═══════════════════════════════════════════ */
 
 const SHORTCUT_DEFAULTS = {
@@ -1933,9 +1933,9 @@ function _formatKeyCaps(combo) {
 }
 
 function _comboFromEvent(e) {
-  // Drop a stray AltGr keystroke (e.g. AltGr+E to type €) so it isn't recorded
-  // as a bogus ctrl+alt+<char> binding — onKey ignores empty combos. See
-  // platform.js for the macOS carve-out and Windows trade-off.
+  // 丢弃无关的 AltGr 按键（如 AltGr+E 输入 €），以免记录为
+  // 虚假的 ctrl+alt+<char> 绑定——onKey 忽略空组合。参见
+  // platform.js 了解 macOS 特例和 Windows 权衡。
   if (isAltGrEvent(e)) return '';
   const parts = [];
   if (e.ctrlKey || e.metaKey) parts.push('ctrl');
@@ -1953,7 +1953,7 @@ async function initShortcuts() {
   const resetBtn = el('shortcuts-reset-btn');
   if (!listEl) return;
 
-  // Load saved keybinds
+  // 加载已保存的快捷键
   let keybinds = { ...SHORTCUT_DEFAULTS };
   try {
     const res = await fetch('/api/auth/settings', { credentials: 'same-origin' });
@@ -1987,8 +1987,8 @@ async function initShortcuts() {
       for (const action of cat.keys) {
         if (!(action in keybinds)) continue;
         const combo = keybinds[action];
-        // Unbound shortcuts (empty combo) still render so the user can
-        // assign one \u2014 they show a "Set" affordance instead of keycaps.
+        // 未绑定的快捷键（空组合）仍然渲染，让用户
+        // 可以分配——显示"设置"提示而不是键帽。
         const label = SHORTCUT_LABELS[action] || action;
         const icon = SHORTCUT_ICONS[action] || '';
         const isCustom = combo !== (SHORTCUT_DEFAULTS[action] || '');
@@ -2033,7 +2033,7 @@ async function initShortcuts() {
     const actionBtn = row.querySelector('.shortcut-action-btn');
     const hintEl = row.querySelector('.shortcut-hint');
 
-    // Remove any other active rebind
+    // 移除任何其他活动中的重新绑定
     listEl.querySelectorAll('.shortcut-key.listening').forEach(b => {
       b.classList.remove('listening');
       b.innerHTML = _formatKeyCaps(keybinds[b.dataset.action]);
@@ -2044,12 +2044,12 @@ async function initShortcuts() {
 
     btn.classList.add('listening');
     btn.textContent = 'Press keys...';
-    // Show confirm button
+    // 显示确认按钮
     actionBtn.textContent = '\u2713';
     actionBtn.classList.remove('is-reset');
     actionBtn.style.visibility = 'visible';
     actionBtn.title = 'Confirm';
-    // Hint: tell the user how to commit / cancel the rebind.
+    // 提示：告诉用户如何提交/取消重新绑定。
     if (hintEl) {
       hintEl.hidden = false;
       hintEl.textContent = 'press a key';
@@ -2057,7 +2057,7 @@ async function initShortcuts() {
 
     let pendingCombo = null;
 
-    // Wire confirm button
+    // 绑定确认按钮
     const confirmHandler = () => {
       if (pendingCombo) {
         keybinds[action] = pendingCombo;
@@ -2097,10 +2097,10 @@ async function initShortcuts() {
       const combo = _comboFromEvent(e);
       if (!combo || combo === 'ctrl' || combo === 'alt' || combo === 'shift' || combo === 'ctrl+alt' || combo === 'ctrl+shift' || combo === 'alt+shift' || combo === 'ctrl+alt+shift') return;
 
-      // Preview the combo, wait for confirm
+      // 预览组合键，等待确认
       pendingCombo = combo;
       btn.innerHTML = _formatKeyCaps(combo);
-      // Now that a combo is captured, prompt to commit with Enter.
+      // 组合键已捕获，提示按 Enter 提交。
       if (hintEl) hintEl.textContent = '\u21B5 Enter to save';
     }
 
@@ -2121,7 +2121,7 @@ async function initShortcuts() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keybinds }),
       });
-      // Update global keybinds so they take effect immediately
+      // 更新全局快捷键使其立即生效
       window._odysseusKeybinds = keybinds;
       if (uiModule && uiModule.showToast) uiModule.showToast('Shortcut saved');
     } catch (e) {
@@ -2142,25 +2142,25 @@ async function initShortcuts() {
 }
 
 /* ═══════════════════════════════════════════
-   INIT & REFRESH
+   初始化与刷新
    ═══════════════════════════════════════════ */
 function initAccount() {
-  // Populate user info
+  // 填充用户信息
   fetch('/api/auth/status', { credentials: 'same-origin' })
     .then(r => r.json())
     .then(d => {
       const nameEl = el('settings-account-username');
       const roleEl = el('settings-account-role');
       const avatarEl = el('settings-account-avatar');
-      if (nameEl) nameEl.textContent = d.username || 'Unknown';
-      if (roleEl) roleEl.textContent = d.is_admin ? 'Admin' : 'User';
+      if (nameEl) nameEl.textContent = d.username || t('settings.username_unknown');
+      if (roleEl) roleEl.textContent = d.is_admin ? t('settings.admin_role') : t('settings.user_role');
       if (avatarEl) {
         const initial = (d.username || '?')[0].toUpperCase();
         avatarEl.textContent = initial;
       }
     }).catch(() => {});
 
-  // Change password
+  // 更改密码
   const saveBtn = el('settings-pw-save');
   const msgEl = el('settings-pw-msg');
   if (saveBtn) {
@@ -2169,9 +2169,9 @@ function initAccount() {
       const nw = el('settings-pw-new').value;
       const conf = el('settings-pw-confirm').value;
       msgEl.style.color = '';
-      if (!cur || !nw) { msgEl.textContent = 'Fill in all fields'; msgEl.style.color = 'var(--red)'; return; }
-      if (nw.length < 8) { msgEl.textContent = 'Min 8 characters'; msgEl.style.color = 'var(--red)'; return; }
-      if (nw !== conf) { msgEl.textContent = 'Passwords don\'t match'; msgEl.style.color = 'var(--red)'; return; }
+      if (!cur || !nw) { msgEl.textContent = t('settings.fill_all_fields'); msgEl.style.color = 'var(--red)'; return; }
+      if (nw.length < 8) { msgEl.textContent = t('settings.min_8_chars'); msgEl.style.color = 'var(--red)'; return; }
+      if (nw !== conf) { msgEl.textContent = t('settings.passwords_mismatch'); msgEl.style.color = 'var(--red)'; return; }
       saveBtn.disabled = true;
       try {
         const res = await fetch('/api/auth/change-password', {
@@ -2181,7 +2181,7 @@ function initAccount() {
         });
         if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed'); }
         msgEl.style.color = 'var(--green)';
-        msgEl.textContent = 'Password updated';
+        msgEl.textContent = t('settings.password_updated');
         el('settings-pw-current').value = '';
         el('settings-pw-new').value = '';
         el('settings-pw-confirm').value = '';
@@ -2194,7 +2194,7 @@ function initAccount() {
     });
   }
 
-  // ── Two-Factor Authentication ──
+  // ── 双因素认证 ──
   const tfaContent = el('settings-2fa-content');
   if (tfaContent) {
     async function render2FA() {
@@ -2202,7 +2202,7 @@ function initAccount() {
         const res = await fetch('/api/auth/2fa/status', { credentials: 'same-origin' });
         const data = await res.json();
         if (data.enabled) {
-          // 2FA is ON — show disable option
+          // 2FA 已开启 — 显示禁用选项
           tfaContent.innerHTML = `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
               <span style="color:var(--color-save-green, #4caf50);font-size:12px;font-weight:600;">&#x2713; Enabled</span>
@@ -2228,7 +2228,7 @@ function initAccount() {
             } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--red)'; }
           });
         } else {
-          // 2FA is OFF — show setup button
+          // 2FA 已关闭 — 显示设置按钮
           tfaContent.innerHTML = `
             <div style="font-size:12px;opacity:0.6;margin-bottom:8px;">Add an extra layer of security with an authenticator app (Aegis, Google Authenticator, etc.)</div>
             <div class="settings-row" style="justify-content:flex-end;">
@@ -2242,7 +2242,7 @@ function initAccount() {
               if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed'); }
               const setup = await r.json();
               const qrCode = safeRasterDataUrl(setup.qr_code);
-              // Show QR code + manual secret + verify input
+              // 显示二维码 + 手动密钥 + 验证输入
               tfaContent.innerHTML = `
                 <div style="text-align:center;margin-bottom:12px;">
                   ${qrCode ? `<img src="${esc(qrCode)}" alt="QR Code" style="border-radius:8px;max-width:200px;">` : ''}
@@ -2271,7 +2271,7 @@ function initAccount() {
                   });
                   if (!vr.ok) { const d = await vr.json(); throw new Error(d.detail || 'Invalid code'); }
                   const result = await vr.json();
-                  // Show backup codes
+                  // 显示备用码
                   const codes = result.backup_codes || [];
                   tfaContent.innerHTML = `
                     <div style="color:var(--color-save-green, #4caf50);font-size:13px;font-weight:600;margin-bottom:8px;">&#x2713; 2FA Enabled!</div>
@@ -2291,7 +2291,7 @@ function initAccount() {
     render2FA();
   }
 
-  // Logout
+  // 退出登录
   const logoutBtn = el('settings-logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('mouseenter', () => { logoutBtn.style.opacity = '1'; logoutBtn.style.borderColor = 'var(--red)'; logoutBtn.style.color = 'var(--red)'; });
@@ -2359,7 +2359,7 @@ async function initReminderSettings() {
   const root = el('settings-modal');
   if (!root || !root.querySelector('[data-settings-panel="reminders"]')) return;
 
-  // Public URL field (used for deep-links in outgoing alert emails)
+  // 公共 URL 字段（用于外发提醒邮件中的深度链接）
   const pubUrlIn = el('set-app-public-url');
   const pubUrlMsg = el('set-app-public-url-msg');
   if (pubUrlIn) {
@@ -2380,7 +2380,7 @@ async function initReminderSettings() {
             body: JSON.stringify({ app_public_url: val }),
           });
           if (pubUrlMsg) {
-            pubUrlMsg.textContent = val ? 'Saved' : 'Cleared (deep-links disabled)';
+            pubUrlMsg.textContent = val ? t('settings.saved') : t('settings.cleared_deeplinks_disabled');
             pubUrlMsg.style.color = 'var(--green,#50fa7b)';
             setTimeout(() => { pubUrlMsg.textContent = ''; }, 2000);
           }
@@ -2431,8 +2431,8 @@ async function initReminderSettings() {
     emailOpt.textContent = 'Email (add an account in Integrations)';
   }
 
-  // Detect whether ntfy integration exists — try admin endpoint, fall back to
-  // checking if an ntfy integration was saved in settings (non-admin users).
+  // 检测 ntfy 集成是否存在——尝试管理端点，回退到
+  // 检查设置中是否保存了 ntfy 集成（非管理员用户）。
   let ntfyConfigured = false;
   try {
     const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
@@ -2443,7 +2443,7 @@ async function initReminderSettings() {
       );
     }
   } catch (_) {}
-  // If admin check failed, check if ntfy was previously selected (trust the saved setting)
+  // 如果管理检查失败，检查 ntfy 是否曾被选中（信任已保存的设置）
   if (!ntfyConfigured) {
     try {
       const res = await fetch('/api/auth/settings', { credentials: 'same-origin' });
@@ -2457,8 +2457,8 @@ async function initReminderSettings() {
     ntfyOpt.textContent = 'ntfy (add in Integrations first)';
   }
 
-  // Webhook: available whenever at least one integration with a base_url exists.
-  // The user picks which integration to target and supplies a payload template.
+  // Webhook：只要有至少一个带 base_url 的集成存在就可用。
+  // 用户选择目标集成并提供负载模板。
   let allIntegrations = [];
   let webhookConfigured = false;
   try {
@@ -2561,7 +2561,7 @@ async function initReminderSettings() {
     syncChannelRows();
   }
 
-  // Populate the "Send from" picker with all configured email accounts.
+  // 用所有已配置的邮件账户填充"发送自"选择器。
   populateReminderEmailAccounts();
 
   function syncChannelRows() {
@@ -2574,10 +2574,10 @@ async function initReminderSettings() {
     if (webhookTemplateRow) webhookTemplateRow.style.display = isWebhook ? 'flex' : 'none';
   }
 
-  // Browser notifications fire on EVERY reminder (see
-  // routes/note_routes.py — the in-app notif is always queued
-  // regardless of channel). The hint should make that clear so
-  // users don't think they have to choose between channels.
+  // 浏览器通知在每次提醒时都会触发（参见
+  // routes/note_routes.py——应用内通知无论如何都会排队，
+  // 无论选择哪个频道）。提示应该清楚说明这一点，
+  // 以免用户认为必须在频道之间做选择。
   const CHANNEL_HINTS = {
     browser: 'Reminders appear as browser notifications inside Odysseus.',
     email: 'Reminders are emailed and shown as a browser notification.',
@@ -2647,17 +2647,17 @@ async function initReminderSettings() {
     populateWebhookIntegrations(s.reminder_webhook_integration_id || '');
     if (webhookTemplateIn) {
       webhookTemplateIn.value = s.reminder_webhook_payload_template || '';
-      // If an integration is already selected but no template was ever saved,
-      // auto-fill with the preset default so the first test works out of the box.
+      // 如果已经选择了集成但从未保存模板，
+      // 用预设默认值自动填充，让首次测试开箱即用。
       if (!webhookTemplateIn.value && webhookIntgSel?.value) {
         const intg = allIntegrations.find(i => i.id === webhookIntgSel.value);
         const tpl = WEBHOOK_PRESET_TEMPLATES[intg?.preset] || '';
         if (tpl) { webhookTemplateIn.value = tpl; save({ reminder_webhook_payload_template: tpl }); }
       }
     }
-    // Restore the previously-picked email account (if any), otherwise
-    // default to the account flagged is_default in the integrations
-    // list. Falls through to the first option if neither exists.
+    // 恢复之前选择的邮件账户（如有），否则默认使用
+    // 集成列表中标记为 is_default 的账户。如果都不存在
+    // 则回退到第一个选项。
     if (emailAcctSel) {
       const savedId = s.reminder_email_account_id;
       populateReminderEmailAccounts(savedId || '');
@@ -2710,8 +2710,8 @@ async function initReminderSettings() {
   if (webhookIntgSel) {
     webhookIntgSel.addEventListener('change', () => {
       save({ reminder_webhook_integration_id: webhookIntgSel.value || '' });
-      // If the template is empty and we recognise the integration's preset,
-      // pre-fill with a sensible default so users can test immediately.
+      // 如果模板为空且我们识别了集成的预设，
+      // 用合理的默认值预填充，让用户可以立即测试。
       if (webhookTemplateIn && !webhookTemplateIn.value.trim()) {
         const intg = allIntegrations.find(i => i.id === webhookIntgSel.value);
         const tpl = WEBHOOK_PRESET_TEMPLATES[intg?.preset] || '';
@@ -2729,7 +2729,7 @@ async function initReminderSettings() {
       templateDebounce = setTimeout(() => save({ reminder_webhook_payload_template: webhookTemplateIn.value.trim() }), 600);
     });
   }
-  // Dim the whole AI Synthesis card when off (matches Vision/Utility/etc.).
+  // 关闭时将整个 AI 合成卡片变暗（与视觉/工具模型等一致）。
   function syncSynthesisDim() {
     const card = llmToggle.closest('.admin-card');
     if (card) card.style.opacity = llmToggle.checked ? '' : '0.45';
@@ -2740,7 +2740,7 @@ async function initReminderSettings() {
     save({ reminder_llm_synthesis: llmToggle.checked });
   });
 
-  // Test button
+  // 测试按钮
   const testBtn = el('set-reminder-test-btn');
   const testMsg = el('set-reminder-test-msg');
   if (testBtn) {
@@ -2798,7 +2798,7 @@ async function initReminderSettings() {
         if (data.ntfy_sent) status += ' — ntfy sent';
         if (data.webhook_sent) status += ' — webhook sent';
         if (testMsg) { testMsg.textContent = status; testMsg.style.color = 'var(--green, #50fa7b)'; }
-        // Also fire a browser notification so user can see it
+        // 同时触发浏览器通知，让用户可以看到
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
             new Notification('Test Reminder', {
@@ -2855,25 +2855,25 @@ async function initEmailAccountsSettings() {
   }
 
   function renderRow(a) {
-    const imap = a.imap_host ? `${a.imap_host}:${a.imap_port}` : '<no IMAP>';
+    const imap = a.imap_host ? `${a.imap_host}:${a.imap_port}` : '<' + t('settings.email_no_imap') + '>';
     const badge = a.is_default
-      ? '<span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px;background:color-mix(in srgb, var(--accent,#50fa7b) 15%, transparent);color:var(--accent,#50fa7b)">Default</span>'
-      : (a.enabled ? '' : '<span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px;opacity:0.4">Disabled</span>');
+      ? '<span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px;background:color-mix(in srgb, var(--accent,#50fa7b) 15%, transparent);color:var(--accent,#50fa7b)">' + t('common.default') + '</span>'
+      : (a.enabled ? '' : '<span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px;opacity:0.4">' + t('common.disabled') + '</span>');
     return `<div class="email-account-row" data-acc-id="${esc(a.id)}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">${esc(a.name)} ${badge}</div>
         <div style="font-size:11px;opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.imap_user || a.from_address || '')} — ${esc(imap)}</div>
       </div>
       ${a.is_default ? '' : `<button class="admin-btn-sm email-acc-default-btn" style="font-size:10px">Make Default</button>`}
-      <button class="admin-btn-sm email-acc-edit-btn" style="font-size:10px">Edit</button>
-      <button class="admin-btn-sm email-acc-del-btn" style="font-size:10px;opacity:0.6">Delete</button>
+      <button class="admin-btn-sm email-acc-edit-btn" style="font-size:10px">${t('common.edit')}</button>
+      <button class="admin-btn-sm email-acc-del-btn" style="font-size:10px;opacity:0.6">${t('common.delete')}</button>
     </div>`;
   }
 
   async function renderList() {
     const accs = await fetchAccounts();
     if (!accs.length) {
-      listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">No email accounts configured</div>';
+      listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">' + t('settings.email_no_accounts') + '</div>';
       return;
     }
     listEl.innerHTML = accs.map(renderRow).join('');
@@ -2909,9 +2909,9 @@ async function initEmailAccountsSettings() {
       + `style="display:inline-block;width:13px;height:13px;border-radius:50%;`
       + `border:1px solid currentColor;font-size:9px;line-height:11px;text-align:center;`
       + `opacity:0.45;margin-left:5px;cursor:help;vertical-align:1px;font-weight:600;">?</span>`;
-    // Provider presets — picking one fills host/port/STARTTLS for both
-    // IMAP and SMTP. Dovecot is IMAP-only here; the host is intentionally
-    // blank because it may live on another machine (DNS, LAN, Tailscale).
+    // 提供者预设——选择一个即可自动填充 IMAP 和 SMTP
+    // 的主机/端口/STARTTLS。Dovecot 此处仅 IMAP；主机有意留空，
+    // 因为它可能在另一台机器上（DNS、LAN、Tailscale）。
     const PROVIDERS = {
       gmail:    { label: 'Gmail',                  imap: { host: 'imap.gmail.com',           port: 993, starttls: false }, smtp: { host: 'smtp.gmail.com',            port: 465 } },
       migadu:   { label: 'Migadu',                 imap: { host: 'imap.migadu.com',          port: 993, starttls: false }, smtp: { host: 'smtp.migadu.com',           port: 465 } },
@@ -2979,7 +2979,7 @@ async function initEmailAccountsSettings() {
       eafNoteEl.innerHTML = `<div style="font-weight:600;margin-bottom:3px;">${esc(n.title)}</div><div style="opacity:0.8;">${esc(n.body)}</div>`;
     };
 
-    // Provider preset → autofill host/port/STARTTLS for both halves.
+    // 提供者预设 → 自动填充两半的主机/端口/STARTTLS。
     el('eaf-provider').addEventListener('change', (e) => {
       _renderEafProviderNote(e.target.value);
       const p = PROVIDERS[e.target.value];
@@ -2993,8 +2993,8 @@ async function initEmailAccountsSettings() {
     });
     el('eaf-smtp-security').value = _smtpSecurity(a);
 
-    // "Same as IMAP" toggle — hide the SMTP creds rows when on. The save
-    // handler copies the IMAP user/password into SMTP at submit time.
+    // "与 IMAP 相同"开关——开启时隐藏 SMTP 凭据行。保存
+    // 处理器在提交时将 IMAP 用户名/密码复制到 SMTP。
     const _syncSmtpSame = () => {
       const same = el('eaf-smtp-same').checked;
       formEl.querySelectorAll('.eaf-smtp-creds').forEach(r => {
@@ -3028,8 +3028,8 @@ async function initEmailAccountsSettings() {
         body.smtp_user = body.imap_user;
         if (body.imap_password) body.smtp_password = body.imap_password;
       }
-      // Name is optional — fall back to the From address so the list view
-      // still has a label to render. Only refuse if both are blank.
+      // 名称可选——回退到发件地址，让列表视图仍有标签可渲染。
+      // 仅当两者都为空时才拒绝。
       if (!body.name) body.name = body.from_address;
       if (!body.name) { el('eaf-msg').textContent = 'Need at least a Name or Email'; el('eaf-msg').style.color = 'var(--red)'; return; }
 
@@ -3047,7 +3047,7 @@ async function initEmailAccountsSettings() {
           el('eaf-msg').style.color = 'var(--green,#50fa7b)';
           setTimeout(() => { formEl.style.display = 'none'; renderList(); }, 400);
         } else {
-          el('eaf-msg').textContent = d.error || 'Save failed';
+          el('eaf-msg').textContent = d.error || t('settings.save_failed');
           el('eaf-msg').style.color = 'var(--red)';
         }
       } catch (e) {
@@ -3065,14 +3065,14 @@ async function initEmailSettings() {
   const root = el('settings-modal');
   if (!root || !root.querySelector('[data-settings-panel="email"]')) return;
 
-  // Load current email config
+  // 加载当前邮件配置
   try {
     const res = await fetch('/api/email/config');
     const cfg = await res.json();
     if (el('set-email-imap-host')) el('set-email-imap-host').value = cfg.imap_host || '';
     if (el('set-email-imap-port')) el('set-email-imap-port').value = cfg.imap_port || '';
     if (el('set-email-imap-user')) el('set-email-imap-user').value = cfg.imap_user || '';
-    if (el('set-email-imap-pass')) el('set-email-imap-pass').value = ''; // never prefill
+    if (el('set-email-imap-pass')) el('set-email-imap-pass').value = ''; // 从不预填充
     if (el('set-email-smtp-host')) el('set-email-smtp-host').value = cfg.smtp_host || '';
     if (el('set-email-smtp-port')) el('set-email-smtp-port').value = cfg.smtp_port || '';
     if (el('set-email-smtp-user')) el('set-email-smtp-user').value = cfg.smtp_user || '';
@@ -3080,7 +3080,7 @@ async function initEmailSettings() {
     if (el('set-email-from')) el('set-email-from').value = cfg.from_address || '';
   } catch (_) {}
 
-  // Load contacts config
+  // 加载联系人配置
   try {
     const res = await fetch('/api/contacts/config');
     const cfg = await res.json();
@@ -3089,17 +3089,17 @@ async function initEmailSettings() {
     if (el('set-carddav-pass')) el('set-carddav-pass').value = '';
   } catch (_) {}
 
-  // Load writing style
+  // 加载写作风格
   try {
     const res = await fetch('/api/email/style');
     const data = await res.json();
     if (el('set-email-style')) el('set-email-style').value = data.style || '';
   } catch (_) {}
 
-  // Save email config
+  // 保存邮件配置
   el('set-email-save')?.addEventListener('click', async () => {
     const msg = el('set-email-msg');
-    if (msg) msg.textContent = 'Saving...';
+    if (msg) msg.textContent = t('common.saving');
     const data = {
       imap_host: el('set-email-imap-host').value,
       imap_port: parseInt(el('set-email-imap-port').value) || 0,
@@ -3120,17 +3120,17 @@ async function initEmailSettings() {
         body: JSON.stringify(data),
       });
       const result = await res.json();
-      if (msg) msg.textContent = result.success ? '✓ Saved' : (result.error || 'Failed');
+      if (msg) msg.textContent = result.success ? '\u2713 ' + t('settings.saved') : (result.error || t('settings.failed'));
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
     } catch (e) {
-      if (msg) msg.textContent = 'Failed';
+      if (msg) msg.textContent = t('settings.failed');
     }
   });
 
-  // Save CardDAV config
+  // 保存 CardDAV 配置
   el('set-carddav-save')?.addEventListener('click', async () => {
     const msg = el('set-carddav-msg');
-    if (msg) msg.textContent = 'Saving...';
+    if (msg) msg.textContent = t('common.saving');
     const data = {
       carddav_url: el('set-carddav-url').value,
       carddav_username: el('set-carddav-user').value,
@@ -3144,20 +3144,20 @@ async function initEmailSettings() {
         body: JSON.stringify(data),
       });
       const result = await res.json();
-      if (msg) msg.textContent = result.success ? '✓ Saved' : (result.error || 'Failed');
+      if (msg) msg.textContent = result.success ? '\u2713 ' + t('settings.saved') : (result.error || t('settings.failed'));
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
     } catch (e) {
-      if (msg) msg.textContent = 'Failed';
+      if (msg) msg.textContent = t('settings.failed');
     }
   });
 
-  // Extract writing style
+  // 提取写作风格
   el('set-email-style-extract')?.addEventListener('click', async () => {
     const btn = el('set-email-style-extract');
     const msg = el('set-email-style-msg');
     btn.disabled = true;
-    // Render whirlpool + label inside the status area (same pattern as
-    // the "Find" / network-discover button in Add Models).
+    // 在状态区域渲染旋涡 + 标签（与"查找"/网络发现按钮相同的模式，
+    // 如添加模型中的那样）。
     let wp = null;
     if (msg) {
       msg.className = '';
@@ -3170,12 +3170,12 @@ async function initEmailSettings() {
         wrap.style.cssText = 'display:inline-flex;align-items:center;';
         wrap.appendChild(wp.element);
         const txt = document.createElement('span');
-        txt.textContent = 'Analyzing your sent emails…';
+        txt.textContent = t('settings.analyzing_sent_emails');
         txt.style.cssText = 'font-size:12px;opacity:0.7;';
         wrap.appendChild(txt);
         msg.appendChild(wrap);
       } catch (_) {
-        msg.textContent = 'Analyzing your sent emails…';
+        msg.textContent = t('settings.analyzing_sent_emails');
       }
     }
     try {
@@ -3187,12 +3187,12 @@ async function initEmailSettings() {
       const data = await res.json();
       if (data.success && data.style) {
         if (el('set-email-style')) el('set-email-style').value = data.style;
-        if (msg) msg.textContent = '✓ Style extracted';
+        if (msg) msg.textContent = '\u2713 ' + t('settings.style_extracted');
       } else {
         if (msg) msg.textContent = data.error || 'Failed';
       }
     } catch (e) {
-      if (msg) msg.textContent = 'Failed to extract';
+      if (msg) msg.textContent = t('settings.style_extract_failed');
     } finally {
       if (wp && wp.destroy) { try { wp.destroy(); } catch (_) {} }
       btn.disabled = false;
@@ -3200,10 +3200,10 @@ async function initEmailSettings() {
     }
   });
 
-  // Save writing style manually
+  // 手动保存写作风格
   el('set-email-style-save')?.addEventListener('click', async () => {
     const msg = el('set-email-style-msg');
-    if (msg) msg.textContent = 'Saving...';
+    if (msg) msg.textContent = t('common.saving');
     try {
       const res = await fetch('/api/email/style', {
         method: 'PUT',
@@ -3214,7 +3214,7 @@ async function initEmailSettings() {
       if (msg) msg.textContent = result.success ? '✓ Saved' : 'Failed';
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
     } catch (e) {
-      if (msg) msg.textContent = 'Failed';
+      if (msg) msg.textContent = t('settings.failed');
     }
   });
 }
@@ -3242,11 +3242,11 @@ async function initIntegrations() {
   let editingId = null;
   let presets = {};
 
-  // Presets where the secret is embedded in the URL — no separate key or
-  // auth header is used, so hiding those fields avoids confusion.
+  // 密钥嵌入 URL 的预设——不使用单独的密钥或认证头，
+  // 隐藏这些字段避免混淆。
   const URL_AUTH_PRESETS = ['discord_webhook'];
 
-  // Toggle auth header + key row visibility based on auth type and preset.
+  // 根据认证类型和预设切换认证头+密钥行的可见性。
   function syncAuthRow() {
     const v = authTypeSel.value;
     authHeaderRow.style.display = (v === 'header' || v === 'query') ? 'flex' : 'none';
@@ -3257,7 +3257,7 @@ async function initIntegrations() {
   }
   authTypeSel.addEventListener('change', syncAuthRow);
 
-  // Load presets
+  // 加载预设
   try {
     const res = await fetch('/api/auth/integrations/presets', { credentials: 'same-origin' });
     if (res.ok) {
@@ -3272,7 +3272,7 @@ async function initIntegrations() {
     }
   } catch (e) {}
 
-  // Preset auto-fill
+  // 预设自动填充
   presetSel.addEventListener('change', () => {
     const p = presets[presetSel.value];
     if (!p) return;
@@ -3283,15 +3283,15 @@ async function initIntegrations() {
     syncAuthRow();
   });
 
-  // Render list
+  // 渲染列表
   async function renderList() {
     try {
       const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
-      if (!res.ok) { listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;">Admin access required</div>'; return; }
+      if (!res.ok) { listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;">' + t('settings.admin_access_required') + '</div>'; return; }
       const data = await res.json();
       const items = data.integrations || [];
       if (!items.length) {
-        listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center;">No integrations configured</div>';
+        listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center;">' + t('settings.no_integrations') + '</div>';
         return;
       }
       listEl.innerHTML = items.map(i => `
@@ -3308,16 +3308,16 @@ async function initIntegrations() {
       `).join('');
       listEl.querySelectorAll('.intg-edit-btn').forEach(b => b.addEventListener('click', () => startEdit(b.dataset.id)));
       listEl.querySelectorAll('.intg-del-btn').forEach(b => b.addEventListener('click', () => doDelete(b.dataset.id)));
-    } catch (e) { listEl.innerHTML = '<div style="padding:12px;color:var(--red);font-size:12px;">Failed to load</div>'; }
+    } catch (e) { listEl.innerHTML = '<div style="padding:12px;color:var(--red);font-size:12px;">' + t('settings.failed_to_load') + '</div>'; }
   }
 
   function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-  // Start editing
+  // 开始编辑
   async function startEdit(id) {
     editingId = id;
     formTitle.textContent = 'Edit Integration';
-    // Fetch full data (with unmasked key from a dedicated edit fetch — we'll just load what we have)
+    // 获取完整数据（通过专门的编辑获取来获得未遮蔽的密钥——我们加载现有的就行）
     try {
       const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
       const data = await res.json();
@@ -3328,7 +3328,7 @@ async function initIntegrations() {
       urlIn.value = item.base_url || '';
       authTypeSel.value = item.auth_type || 'none';
       authHeaderIn.value = item.auth_header || '';
-      keyIn.value = ''; // masked — user re-enters if changing
+      keyIn.value = ''; // 已遮蔽——用户如需更改需重新输入
       keyIn.placeholder = item.api_key ? 'Leave blank to keep current' : 'API key or token';
       descIn.value = item.description || '';
       syncAuthRow();
@@ -3336,7 +3336,7 @@ async function initIntegrations() {
     } catch (e) {}
   }
 
-  // Show add form
+  // 显示添加表单
   addBtn.addEventListener('click', () => {
     editingId = null;
     formTitle.textContent = 'Add Integration';
@@ -3358,7 +3358,7 @@ async function initIntegrations() {
     statusEl.textContent = '';
   });
 
-  // Save
+  // 保存
   saveBtn.addEventListener('click', async () => {
     const payload = {
       name: nameIn.value.trim(),
@@ -3369,8 +3369,8 @@ async function initIntegrations() {
     };
     if (presetSel.value) payload.preset = presetSel.value;
     if (keyIn.value.trim()) payload.api_key = keyIn.value.trim();
-    if (!payload.name) { statusEl.textContent = 'Name required'; statusEl.style.color = 'var(--red)'; return; }
-    if (!payload.base_url) { statusEl.textContent = 'URL required'; statusEl.style.color = 'var(--red)'; return; }
+    if (!payload.name) { statusEl.textContent = t('settings.name_required'); statusEl.style.color = 'var(--red)'; return; }
+    if (!payload.base_url) { statusEl.textContent = t('settings.url_required'); statusEl.style.color = 'var(--red)'; return; }
 
     try {
       const url = editingId ? `/api/auth/integrations/${editingId}` : '/api/auth/integrations';
@@ -3384,19 +3384,19 @@ async function initIntegrations() {
         notifyIntegrationsChanged();
       } else {
         const err = await res.json().catch(() => ({}));
-        statusEl.textContent = err.detail || 'Save failed';
+        statusEl.textContent = err.detail || t('settings.save_failed');
         statusEl.style.color = 'var(--red)';
       }
     } catch (e) {
-      statusEl.textContent = 'Error saving';
+      statusEl.textContent = t('settings.error_saving');
       statusEl.style.color = 'var(--red)';
     }
   });
 
-  // Test
+  // 测试
   testBtn.addEventListener('click', async () => {
-    if (!editingId) { statusEl.textContent = 'Save first, then test'; statusEl.style.color = 'var(--fg)'; return; }
-    statusEl.textContent = 'Testing...';
+    if (!editingId) { statusEl.textContent = t('settings.save_first_then_test'); statusEl.style.color = 'var(--fg)'; return; }
+    statusEl.textContent = t('settings.testing_dots');
     statusEl.style.color = 'var(--fg)';
     try {
       const res = await fetch(`/api/auth/integrations/${editingId}/test`, { method: 'POST', credentials: 'same-origin' });
@@ -3404,14 +3404,14 @@ async function initIntegrations() {
       statusEl.textContent = data.message || (data.ok ? 'OK' : 'Failed');
       statusEl.style.color = data.ok ? 'var(--green, #98c379)' : 'var(--red)';
     } catch (e) {
-      statusEl.textContent = 'Connection failed';
+      statusEl.textContent = t('settings.connection_failed');
       statusEl.style.color = 'var(--red)';
     }
   });
 
-  // Delete
+  // 删除
   async function doDelete(id) {
-    if (!await window.styledConfirm('Delete this integration?', { confirmText: 'Delete', danger: true })) return;
+    if (!await window.styledConfirm(t('common.confirm_delete_integration'), { confirmText: t('common.delete'), danger: true })) return;
     try {
       await fetch(`/api/auth/integrations/${id}`, { method: 'DELETE', credentials: 'same-origin' });
       if (editingId === id) { formCard.style.display = 'none'; editingId = null; }
@@ -3424,7 +3424,7 @@ async function initIntegrations() {
   renderList();
 }
 
-/* ══ Unified Integrations ══ */
+/* ══ 统一集成 ══ */
 
 const INTG_TYPES = {
   api:     { label: 'API',     icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' },
@@ -3438,9 +3438,9 @@ const INTG_TYPES = {
   vault:   { label: 'Vault',   icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' },
 };
 
-// Config shared by the Codex Agent and Claude Agent forms. Both use the same
-// scope-gated /api/codex/* backend; this just parameterizes the UI label,
-// default token name, and the per-agent install commands.
+// Codex Agent 和 Claude Agent 表单共享的配置。两者使用相同的
+// 基于作用域的 /api/codex/* 后端；这里只参数化 UI 标签、
+// 默认令牌名称和每个代理的安装命令。
 const AGENT_CONFIGS = {
   codex: {
     label: 'Codex Agent',
@@ -3540,15 +3540,15 @@ async function initUnifiedIntegrations() {
       fetch('/api/calendar/calendars', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { calendars: [] }).catch(() => ({ calendars: [] })),
     ]);
     const items = [];
-    // API integrations
+    // API 集成
     for (const intg of (apiRes.integrations || [])) {
       items.push({ type: 'api', id: intg.id, name: intg.name || 'Unnamed', detail: intg.base_url || '', enabled: intg.enabled !== false, data: intg });
     }
-    // CalDAV — one card per account
+    // CalDAV — 每个账户一张卡片
     for (const acc of (calRes.accounts || [])) {
       items.push({ type: 'caldav', id: acc.id, name: acc.label || 'Calendar (CalDAV)', detail: acc.url, enabled: true, data: acc });
     }
-    // Contacts import first, then the optional CardDAV sync account.
+    // 先导入联系人，然后是可选的 CardDAV 同步账户。
     const contactCount = Number(contactsRes.count || (contactsRes.contacts || []).length || 0);
     if (contactCount > 0) {
       items.push({
@@ -3570,13 +3570,13 @@ async function initUnifiedIntegrations() {
         data: cardRes,
       });
     }
-    // Email — one entry per EmailAccount row
+    // 邮件 — 每个 EmailAccount 行一个条目
     for (const acc of (emailAccountsRes.accounts || [])) {
       const label = acc.name + (acc.is_default ? ' (default)' : '');
       const detail = [acc.from_address || acc.imap_user, acc.imap_host].filter(Boolean).join(' — ');
       items.push({ type: 'email', id: acc.id, name: label, detail, enabled: acc.enabled !== false, data: acc });
     }
-    // MCP servers
+    // MCP 服务器
     const mcpList = Array.isArray(mcpRes) ? mcpRes : (mcpRes.servers || []);
     for (const srv of mcpList) {
       const statusText = srv.needs_oauth ? 'needs auth' : srv.status === 'connected' ? `${srv.enabled_tool_count}/${srv.tool_count} tools` : srv.status === 'error' ? 'error' : 'disconnected';
@@ -3589,22 +3589,22 @@ async function initUnifiedIntegrations() {
       if (lowerName.startsWith('claude agent')) agentType = 'claude';
       else if (lowerName.startsWith('codex agent')) agentType = 'codex';
       else if (scopes.some(s => String(s || '').startsWith('todos:') || String(s || '').startsWith('email:') || String(s || '').startsWith('documents:'))) {
-        // Legacy / un-prefixed scoped tokens fall back to Codex for backwards compat.
+        // 旧版/无前缀的作用域令牌回退到 Codex 以保持向后兼容。
         agentType = 'codex';
       }
       if (!agentType) continue;
       const detail = `${tok.token_prefix || 'token'}... - ${scopes.join(', ') || 'chat'}`;
       items.push({ type: agentType, id: tok.id, name: tok.name || (agentType === 'claude' ? 'Claude Agent' : 'Codex Agent'), detail, enabled: true, data: tok });
     }
-    // Vaultwarden removed as an integration option.
+    // Vaultwarden 已移除为集成选项。
     return items;
   }
 
   function renderCard(item) {
     const t = INTG_TYPES[item.type] || INTG_TYPES.api;
-    // Static enabled/disabled indicator — same dot every integration
-    // type gets. (The clickable glow-on-test variant for email was
-    // removed earlier; this matches the API/CalDAV/MCP pattern.)
+    // 静态启用/禁用指示器——每种集成类型都获得相同的圆点。
+    //（email 的可点击测试发光变体已提前移除；
+    // 这与 API/CalDAV/MCP 模式一致。）
     const statusDot = item.enabled
       ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--color-success,#50fa7b);flex-shrink:0;--notif-glow:var(--color-success,#50fa7b);animation:cookbook-notif-pulse 2s ease-in-out infinite;" title="Active"></span>'
       : '<span style="width:8px;height:8px;border-radius:50%;background:var(--fg);opacity:0.3;flex-shrink:0" title="Disabled"></span>';
@@ -3629,7 +3629,7 @@ async function initUnifiedIntegrations() {
         <button type="button" class="admin-btn-sm intg-open-email-settings" style="white-space:nowrap;">Email settings</button>
       </div>` : '';
     if (items.length === 0) {
-      listEl.innerHTML = noticeHtml + '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">No integrations configured</div>';
+      listEl.innerHTML = noticeHtml + '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">' + t('settings.no_integrations') + '</div>';
     } else {
       listEl.innerHTML = noticeHtml + items.map(renderCard).join('');
     }
@@ -3637,7 +3637,7 @@ async function initUnifiedIntegrations() {
       e.stopPropagation();
       _openEmailSettings();
     });
-    // Wire edit clicks
+    // 绑定编辑点击
     listEl.querySelectorAll('.intg-card').forEach(card => {
       card.addEventListener('click', (e) => {
         if (e.target.closest('.intg-del-btn')) return;
@@ -3651,12 +3651,12 @@ async function initUnifiedIntegrations() {
         showForm(type, id);
       });
     });
-    // Wire delete
+    // 绑定删除
     listEl.querySelectorAll('.intg-del-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const intgName = btn.dataset.intgName || 'this integration';
-        if (!await window.styledConfirm(`Remove "${intgName}"?`, { confirmText: 'Remove', danger: true })) return;
+        if (!await window.styledConfirm(`Remove "${intgName}"?`, { confirmText: t('common.remove'), danger: true })) return;
         const type = btn.dataset.intgType;
         const id = btn.dataset.intgId;
         try {
@@ -3692,7 +3692,7 @@ async function initUnifiedIntegrations() {
     else if (type === 'vault') showVaultForm();
   }
 
-  // ── API form ──
+  // ── API 表单 ──
   async function showApiForm(editId) {
     let presets = {};
     try {
@@ -3708,7 +3708,7 @@ async function initUnifiedIntegrations() {
       + `style="display:inline-block;width:13px;height:13px;border-radius:50%;`
       + `border:1px solid currentColor;font-size:9px;line-height:11px;text-align:center;`
       + `opacity:0.45;margin-left:5px;cursor:help;vertical-align:1px;font-weight:600;">?</span>`;
-    // Real <select> instead of <datalist>: datalists are silently
+    // 使用真正的 <select> 而非 <datalist>：datalist 在 Firefox 中
     // suppressed in Firefox when autocomplete="off" is on the input,
     // and they're patchy on mobile browsers. A native select renders
     // the same everywhere and makes the available options visible
@@ -3717,8 +3717,8 @@ async function initUnifiedIntegrations() {
     const selectOpts = sortedPresets
       .map(([k, p]) => `<option value="${k}">${esc(p.name || k)}</option>`)
       .join('');
-    // Letter-in-brand-color logo for each API preset; outline plug icon for
-    // "Custom (no preset)". Matches the email-provider dropdown pattern.
+    // 每个 API 预设的品牌色字母 Logo；"自定义（无预设）"
+    // 使用轮廓插头图标。与邮件提供者下拉框模式一致。
     const _apiLetter = (letter, bg) => `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0"><circle cx="12" cy="12" r="11" fill="${bg}"/><text x="12" y="16.5" font-size="13" font-weight="700" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif">${letter}</text></svg>`;
     const _apiCustomIco = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;opacity:0.7"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
     const API_PRESET_LOGO = {
@@ -3767,7 +3767,7 @@ async function initUnifiedIntegrations() {
           </div>
         </div>
       </div>`;
-    // Custom preset dropdown wire-up (hidden select stays as data source).
+    // 自定义预设下拉框接线（隐藏的 select 保持作为数据源）。
     (() => {
       const trig = el('uf-api-preset-trigger');
       const menu = el('uf-api-preset-menu');
@@ -3811,7 +3811,7 @@ async function initUnifiedIntegrations() {
 
     const preset = el('uf-api-preset'), name = el('uf-api-name'), url = el('uf-api-url'), auth = el('uf-api-auth'), header = el('uf-api-header'), key = el('uf-api-key'), ntfyHint = el('uf-api-ntfy-hint');
     let _editId = editId && editId !== 'new' ? editId : null;
-    // Load existing
+    // 加载现有数据
     if (_editId) {
       try {
         const r = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
@@ -3820,23 +3820,23 @@ async function initUnifiedIntegrations() {
         if (item) { name.value = item.name || ''; url.value = item.base_url || ''; auth.value = item.auth_type || 'none'; header.value = item.auth_header || ''; }
       } catch (_) {}
     }
-    // Native <select>: the option `value` is the preset key directly, so
-    // no typed-name → key lookup is needed (datalist-era leftover).
+    // 原生 <select>：选项 `value` 直接是预设键，因此
+    // 不需要键入名称→键查找（datalist 时代的遗留）。
     const _applyPreset = () => {
       const p = presets[preset.value];
       const isNtfy = preset.value === 'ntfy' || (p && (p.name || '').toLowerCase() === 'ntfy');
-      const isUrlAuth = preset.value === 'discord_webhook'; // secret embedded in URL — no key/auth fields needed
+      const isUrlAuth = preset.value === 'discord_webhook'; // 密钥嵌入 URL — 不需要密钥/认证字段
       if (ntfyHint) {
         ntfyHint.style.display = isNtfy ? 'block' : 'none';
         if (isNtfy) {
-          ntfyHint.innerHTML = 'Enter the ntfy server URL Odysseus can reach. Examples: <code>http://127.0.0.1:8091</code>, <code>http://100.x.y.z:8091</code>, or <code>https://ntfy.example.com</code>.';
+          ntfyHint.innerHTML = '输入 Odysseus 可访问的 ntfy 服务器 URL。示例：<code>http://127.0.0.1:8091</code>、<code>http://100.x.y.z:8091</code> 或 <code>https://ntfy.example.com</code>。';
         }
       }
       if (url) {
         url.placeholder = isNtfy ? 'http://127.0.0.1:8091' : isUrlAuth ? 'https://discord.com/api/webhooks/...' : 'http://localhost:8080';
       }
-      // For presets that embed the secret in the URL, hide auth/key/header rows
-      // so users aren't confused into thinking they need to fill them in.
+      // 对于将密钥嵌入 URL 的预设，隐藏 auth/key/header 行，
+      // 以免用户混淆，以为需要填写它们。
       const keyRow = key?.closest('.settings-row');
       const authRow = auth?.closest('.settings-row');
       const headerRow = el('uf-api-header-row');
@@ -3865,11 +3865,11 @@ async function initUnifiedIntegrations() {
         const r = await fetch(u, { method: m, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!r.ok) throw new Error();
         const saved = await r.json().catch(() => null);
-        // If this was a create, capture the new ID so Test works
-        // immediately without needing a form reopen. The POST response
-        // shape is {ok, integration: {id, ...}} — saved.id at the top
-        // level would silently miss, leaving Test perpetually stuck on
-        // "Save first" until the form was reopened.
+        // 如果这是创建操作，捕获新 ID 以便测试
+        // 立即生效，无需重新打开表单。POST 响应
+        // 格式是 {ok, integration: {id, ...}}——顶层 saved.id
+        // 会静默丢失，导致测试一直卡在
+        // "先保存"直到重新打开表单。
         if (!_editId && saved) _editId = saved.integration?.id || saved.id;
         el('uf-api-msg').textContent = 'Saved'; el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
         await renderList();
@@ -3881,7 +3881,7 @@ async function initUnifiedIntegrations() {
       try {
         const r = await fetch(`/api/auth/integrations/${_editId}/test`, { method: 'POST', credentials: 'same-origin' });
         const d = await r.json();
-        // Backend returns {ok: bool, message: str}
+        // 后端返回 {ok: bool, message: str}
         if (d.ok) {
           el('uf-api-msg').textContent = d.message || 'Connected';
           el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
@@ -3893,7 +3893,7 @@ async function initUnifiedIntegrations() {
     });
   }
 
-  // ── CalDAV form (supports add + edit per account) ──
+  // ── CalDAV 表单（支持按账户添加 + 编辑）──
   async function showCalDavForm(editId) {
     const isNew = !editId || editId === 'new';
     formEl.innerHTML = `
@@ -4004,7 +4004,7 @@ async function initUnifiedIntegrations() {
     });
   }
 
-  // ── CardDAV form + contacts manager ──
+  // ── CardDAV 表单 + 联系人管理器 ──
   async function showCardDavForm() {
     formEl.innerHTML = `
       <div class="admin-card" style="margin-top:8px">
@@ -4043,7 +4043,7 @@ async function initUnifiedIntegrations() {
           <div style="display:flex;gap:6px;justify-content:flex-end;"><button class="admin-btn-sm" id="cm-add-save">Save</button></div>
         </div>
         <input type="text" id="cm-search" class="settings-input" placeholder="Search contacts (name, email, phone, address)" style="margin-top:6px;">
-        <div id="cm-list" class="contacts-list"><div style="opacity:0.4;font-size:11px;padding:8px 2px;">Loading…</div></div>
+        <div id="cm-list" class="contacts-list"><div style="opacity:0.4;font-size:11px;padding:8px 2px;">${t('common.loading')}</div></div>
       </div>`;
     try {
       const r = await fetch('/api/contacts/config', { credentials: 'same-origin' }); const d = await r.json();
@@ -4062,9 +4062,9 @@ async function initUnifiedIntegrations() {
         await fetch('/api/contacts/config', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         el('uf-carddav-msg').textContent = 'Saved';
         el('uf-carddav-msg').style.color = 'var(--green, #50fa7b)';
-        // Refresh both the sub-panel (contacts manager) AND the
-        // outer integrations list so the CardDAV row appears
-        // immediately instead of waiting for a page reload.
+        // 同时刷新子面板（联系人管理器）和外部集成列表，
+        // 让 CardDAV 行立即显示，
+        // 无需等待页面重新加载。
         await _renderContactsManager();
         await renderList();
         notifyIntegrationsChanged();
@@ -4073,7 +4073,7 @@ async function initUnifiedIntegrations() {
         el('uf-carddav-msg').style.color = 'var(--red)';
       }
     });
-    // Add-row toggle + save
+    // 添加行切换 + 保存
     el('cm-add-toggle')?.addEventListener('click', () => {
       const row = el('cm-add-row');
       const open = row.style.display !== 'none';
@@ -4101,7 +4101,7 @@ async function initUnifiedIntegrations() {
     const _downloadContacts = async (format) => {
       const btn = el(format === 'csv' ? 'cm-export-csv-btn' : 'cm-export-vcf-btn');
       const orig = btn ? btn.textContent : '';
-      if (btn) { btn.textContent = 'Exporting...'; btn.disabled = true; }
+      if (btn) { btn.textContent = t('common.exporting'); btn.disabled = true; }
       try {
         const res = await fetch(`/api/contacts/export?format=${encodeURIComponent(format)}`, { credentials: 'same-origin' });
         if (!res.ok) throw new Error('Export failed');
@@ -4123,9 +4123,9 @@ async function initUnifiedIntegrations() {
     el('cm-export-vcf-btn')?.addEventListener('click', () => _downloadContacts('vcf'));
     el('cm-export-csv-btn')?.addEventListener('click', () => _downloadContacts('csv'));
 
-    // Import .vcf/.csv — read each selected file as text, concatenate by type,
-    // then POST. Imported CardDAV contacts immediately feed email autocomplete
-    // because compose searches /api/contacts/search.
+    // 导入 .vcf/.csv——将每个选中文件读取为文本，按类型拼接，
+    // 然后 POST。导入的 CardDAV 联系人立即提供给邮件自动补全，
+    // 因为撰写时会搜索 /api/contacts/search。
     el('cm-import-btn')?.addEventListener('click', () => el('cm-import-file')?.click());
     el('cm-import-file')?.addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);
@@ -4171,8 +4171,8 @@ async function initUnifiedIntegrations() {
     await _renderContactsManager();
   }
 
-  // Render the contacts list inside the manager card with inline edit +
-  // delete. Each row: name + emails; pencil flips to editable inputs.
+  // 在管理器卡片中渲染联系人列表，支持内联编辑 +
+  // 删除。每行：姓名 + 邮箱；铅笔图标切换为可编辑输入。
   async function _renderContactsManager() {
     const list = el('cm-list');
     if (!list) return;
@@ -4188,10 +4188,10 @@ async function initUnifiedIntegrations() {
     const cnt = el('cm-count');
     if (cnt) cnt.textContent = contacts.length ? `(${contacts.length})` : '';
     if (!contacts.length) {
-      list.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 2px;">No contacts yet.</div>';
+      list.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 2px;">' + t('settings.no_contacts_yet') + '</div>';
       return;
     }
-    // Sort by name for a stable list.
+    // 按名称排序以获得稳定列表。
     contacts.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     // Live filter — search across name/emails/phones/address.
@@ -4253,7 +4253,7 @@ async function initUnifiedIntegrations() {
     }
     // Stash latest contacts so the search input doesn't have to refetch.
     list._lastContacts = contacts;
-    // Wire each row's edit / delete / save / cancel.
+    // 绑定每行的编辑/删除/保存/取消操作。
     list.querySelectorAll('.contact-row').forEach(row => {
       const uid = row.dataset.uid;
       const view = row.querySelector('.contact-row-view');
@@ -4280,8 +4280,8 @@ async function initUnifiedIntegrations() {
       });
       row.querySelector('.contact-del')?.addEventListener('click', async () => {
         const ok = uiModule.styledConfirm
-          ? await uiModule.styledConfirm('Delete this contact?', { confirmText: 'Delete', danger: true })
-          : window.confirm('Delete this contact?');
+          ? await uiModule.styledConfirm(t('common.confirm_delete_contact'), { confirmText: t('common.delete'), danger: true })
+          : window.confirm(t('common.confirm_delete_contact'));
         if (!ok) return;
         try {
           await fetch('/api/contacts/' + encodeURIComponent(uid), { method: 'DELETE', credentials: 'same-origin' });
@@ -4291,10 +4291,10 @@ async function initUnifiedIntegrations() {
     });
   }
 
-  // ── Email form (multi-account) ──
-  // When editId is a real account id, edit that row. When editId is falsy or 'new',
-  // create a fresh account. Posts to /api/email/accounts, never to the legacy
-  // /api/email/config which would overwrite the default.
+  // ── 邮件表单（多账户）──
+  // 当 editId 是真实账户 ID 时，编辑该行。当 editId 为假或 'new' 时，
+  // 创建新账户。POST 到 /api/email/accounts，绝不会到旧版
+  // /api/email/config（后者会覆盖默认值）。
   async function showEmailForm(editId) {
     const isEdit = editId && editId !== 'new' && editId !== '__email__';
     let existing = null;
@@ -4306,15 +4306,15 @@ async function initUnifiedIntegrations() {
       } catch (_) {}
     }
     const placeholderPass = (isEdit && existing) ? '(leave blank to keep current)' : '';
-    // Small `?` indicator next to each label (native title tooltip).
+    // 每个标签旁的小 `?` 指示器（原生 title 提示）。
     const _hint = (tip) =>
       `<span class="uf-hint" title="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0" `
       + `style="display:inline-block;width:13px;height:13px;border-radius:50%;`
       + `border:1px solid currentColor;font-size:9px;line-height:11px;text-align:center;`
       + `opacity:0.45;margin-left:5px;cursor:help;vertical-align:1px;font-weight:600;">?</span>`;
-    // Provider presets — picking one auto-fills IMAP + SMTP host/port.
-    // Dovecot is IMAP-only here; the host is intentionally blank because
-    // it may be remote (DNS, LAN, Tailscale), not localhost.
+    // 提供者预设——选择一个即可自动填充 IMAP + SMTP 主机/端口。
+    // Dovecot 此处仅 IMAP；主机有意留空，因为
+    // 它可能是远程的（DNS、LAN、Tailscale），而非本地。
     const PROVIDERS = {
       gmail:    { label: 'Gmail',                   emailEx: 'you@gmail.com',     imap: { host: 'imap.gmail.com',           port: 993, starttls: false }, smtp: { host: 'smtp.gmail.com',     port: 465 } },
       migadu:   { label: 'Migadu',                  emailEx: 'you@yourdomain.com', imap: { host: 'imap.migadu.com',          port: 993, starttls: false }, smtp: { host: 'smtp.migadu.com',    port: 465 } },
@@ -4326,9 +4326,9 @@ async function initUnifiedIntegrations() {
     };
     const _providerOptions = Object.entries(PROVIDERS)
       .map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('');
-    // Provider logos — small SVGs the custom dropdown renders next to each
-    // option. Letter-in-brand-color circle for known providers; outline
-    // envelope for "Custom…". Inline SVG (no external assets, no emoji).
+    // 提供者 Logo——自定义下拉框在每个选项旁渲染的小 SVG。
+    // 已知提供者使用品牌色字母圆圈；"自定义…"使用
+    // 轮廓信封图标。内联 SVG（无外部资源、无 emoji）。
     const _letterLogo = (letter, bg) => `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0"><circle cx="12" cy="12" r="11" fill="${bg}"/><text x="12" y="16.5" font-size="13" font-weight="700" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif">${letter}</text></svg>`;
     const _customLogo = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;opacity:0.7"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>';
     const PROV_LOGO = {
@@ -4398,11 +4398,11 @@ async function initUnifiedIntegrations() {
         </div>
       </div>`;
 
-    // Provider-specific helper notes — surfaces for providers that
-    // require an app-specific password (Gmail killed basic IMAP auth
-    // in 2022; iCloud + Yahoo follow the same model). The Generate
-    // button opens the right page in a new tab and copies the URL for
-    // mobile / cross-device flows.
+    // 提供者特定的帮助说明——针对需要应用专用密码的提供者
+    //（Gmail 在 2022 年终止了基本 IMAP 认证；
+    // iCloud + Yahoo 遵循相同的模式）。生成
+    // 按钮在新标签页中打开正确的页面，并复制 URL 供
+    // 移动端/跨设备流程使用。
     const PROVIDER_NOTES = {
       gmail: {
         title: 'Gmail needs an App Password',
@@ -4435,7 +4435,7 @@ async function initUnifiedIntegrations() {
           await navigator.clipboard.writeText(value);
           return true;
         } catch (_) {
-          // Fall through to the textarea path below.
+          // 回退到下面的 textarea 路径。
         }
       }
       const ta = document.createElement('textarea');
@@ -4491,11 +4491,11 @@ async function initUnifiedIntegrations() {
         </div>`;
     };
 
-    // Custom dropdown wire-up — the native <select> stays in the DOM as the
-    // data source and accessibility target, but the visible UI is a button +
-    // popup so each provider row can render with its SVG logo. Selecting an
-    // option updates select.value and dispatches a `change` event so the
-    // existing autofill handler below runs unchanged.
+    // 自定义下拉框接线——原生 <select> 保留在 DOM 中作为
+    // 数据源和无障碍目标，但可见 UI 是按钮 + 弹出框，
+    // 让每个提供者行能渲染其 SVG Logo。选择
+    // 选项会更新 select.value 并触发 `change` 事件，
+    // 让下方现有的自动填充处理器不变地运行。
     (() => {
       const trigger = el('uf-email-provider-trigger');
       const menu = el('uf-email-provider-menu');
@@ -4512,7 +4512,7 @@ async function initUnifiedIntegrations() {
       const _closeMenu = () => { menu.style.display = 'none'; };
       const _openMenu = () => {
         menu.style.display = 'block';
-        // Drop-up when there's not enough room below the trigger.
+        // 当触发器下方空间不足时向上弹出。
         const tRect = trigger.getBoundingClientRect();
         const mRect = menu.getBoundingClientRect();
         const below = window.innerHeight - tRect.bottom;
@@ -4541,9 +4541,9 @@ async function initUnifiedIntegrations() {
       _setFromKey(sel.value || '');
     })();
 
-    // Provider preset → autofill IMAP + SMTP host/port + STARTTLS, set the
-    // helper note, and update the Email/Username placeholders to a
-    // provider-specific example so users see the right format at a glance.
+    // 提供者预设 → 自动填充 IMAP + SMTP 主机/端口 + STARTTLS，设置
+    // 帮助说明，并将 Email/Username 占位符更新为
+    // 提供者特定的示例，让用户一眼就能看到正确的格式。
     el('uf-email-provider').addEventListener('change', (e) => {
       const key = e.target.value;
       _renderProviderNote(key);
@@ -4562,7 +4562,7 @@ async function initUnifiedIntegrations() {
       }
     });
 
-    // "Same as IMAP" toggle — hide the SMTP creds rows when on.
+    // "与 IMAP 相同"开关——开启时隐藏 SMTP 凭据行。
     const _syncSmtpSame = () => {
       const same = el('uf-smtp-same').checked;
       formEl.querySelectorAll('.uf-smtp-creds').forEach(r => {
@@ -4583,9 +4583,9 @@ async function initUnifiedIntegrations() {
       el('uf-smtp-security').value = _smtpSecurity(existing);
       el('uf-smtp-user').value = existing.smtp_user || '';
       el('uf-email-default').checked = !!existing.is_default;
-      // If the saved SMTP user matches the IMAP user, keep the "Same as
-      // IMAP" toggle ON (and stay hidden). Otherwise turn it off so the
-      // separate SMTP credentials are visible for editing.
+      // 如果已保存的 SMTP 用户与 IMAP 用户匹配，保持"与 IMAP
+      // 相同"开关开启（并保持隐藏）。否则关闭它，让
+      // 单独的 SMTP 凭据可见可编辑。
       const sameCreds = !!(existing.imap_user && existing.smtp_user && existing.imap_user === existing.smtp_user);
       el('uf-smtp-same').checked = sameCreds || !existing.smtp_user;
       _syncSmtpSame();
@@ -4616,8 +4616,8 @@ async function initUnifiedIntegrations() {
       inp.addEventListener('change', _resetTestBtn);
     });
 
-    // Collect the current form values + apply the "Same as IMAP" mirror —
-    // shared by both Save and Test so they agree on what's being sent.
+    // 收集当前表单值 + 应用"与 IMAP 相同"镜像——
+    // 由保存和测试共享，确保两者对发送内容一致。
     const _collectBody = () => {
       const body = {
         name: el('uf-email-name').value.trim(),
@@ -4641,23 +4641,23 @@ async function initUnifiedIntegrations() {
       return body;
     };
 
-    // Spinner SVG kept inline so we can swap it back to the original
-    // checkmark on completion. ~13px to match the button icon size.
+    // 旋转图标 SVG 保持内联，完成后可切换回原始
+    // 勾选标记。~13px 以匹配按钮图标大小。
     const _spinner = '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;border:1.5px solid currentColor;border-top-color:transparent;animation:whirlpool-spin 0.7s linear infinite"></span>';
     const _checkIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 
     el('uf-email-test').addEventListener('click', async () => {
       const body = _collectBody();
-      // Edit-mode + blank password = use the saved row's stored creds
-      // via the account_id shortcut. Other overrides in the body still
-      // win (server merges).
+      // 编辑模式 + 空白密码 = 通过 account_id 快捷方式
+      // 使用已保存行的存储凭据。body 中的其他覆盖仍然
+      // 生效（服务器合并）。
       if (isEdit && !body.imap_password) body.account_id = editId;
       const msg = el('uf-email-msg');
       const btn = el('uf-email-test');
       const ico = btn.querySelector('.uf-email-test-ico');
       btn.dataset.origIco = btn.dataset.origIco || ico.innerHTML;
       btn.disabled = true;
-      // Clear any prior green/red while testing.
+      // 测试时清除之前的绿色/红色。
       btn.style.background = '';
       btn.style.borderColor = '';
       btn.style.color = '';
@@ -4682,9 +4682,9 @@ async function initUnifiedIntegrations() {
         });
         const d = await r.json();
         if (d.ok) {
-          // Button becomes the indicator — green checkmark with the
-          // cookbook-style halo + breathing animation. No status text;
-          // the glow is the signal.
+          // 按钮变成指示器——绿色勾选标记配合
+          // cookbook 风格的光晕 + 呼吸动画。无状态文本；
+          // 光晕就是信号。
           btn.style.background = 'var(--green, #50fa7b)';
           btn.style.borderColor = 'var(--green, #50fa7b)';
           btn.style.color = '#0b0';
@@ -4694,8 +4694,8 @@ async function initUnifiedIntegrations() {
           btn.style.animation = 'cookbook-srv-glow-ok 2.4s ease-in-out infinite';
           ico.innerHTML = _checkIcon;
         } else {
-          // Failure — red glow, original icon, error detail in status
-          // text so we can say WHICH half failed (IMAP vs SMTP).
+          // 失败——红色光晕，原始图标，状态文本中显示
+          // 错误详情，让我们知道哪一半失败了（IMAP vs SMTP）。
           btn.style.background = 'var(--red)';
           btn.style.borderColor = 'var(--red)';
           btn.style.color = '#fff';
@@ -4722,7 +4722,7 @@ async function initUnifiedIntegrations() {
 
     el('uf-email-save').addEventListener('click', async () => {
       const body = _collectBody();
-      // Name is optional — fall back to Email so the list still has a label.
+      // 名称可选——回退到 Email，让列表仍有标签。
       if (!body.name) body.name = body.from_address;
       if (!body.name) { el('uf-email-msg').textContent = 'Need at least a Name or Email'; el('uf-email-msg').style.color = 'var(--red)'; return; }
       const saveBtn = el('uf-email-save');
@@ -4764,7 +4764,7 @@ async function initUnifiedIntegrations() {
     });
   }
 
-  // ── Vaultwarden form ──
+  // ── Vaultwarden 表单 ──
   async function showVaultForm() {
     formEl.innerHTML = `
       <div class="admin-card" style="margin-top:8px">
@@ -4891,9 +4891,9 @@ async function initUnifiedIntegrations() {
     });
   }
 
-  // ── MCP form — full management view ──
+  // ── MCP 表单 — 完整管理视图 ──
   async function showMcpForm(editId) {
-    // Toggle an in-flight loading state on a button (disabled + dimmed + label).
+    // 切换按钮上的进行中加载状态（禁用 + 变暗 + 标签）。
     function _setBtnLoading(btn, loading, label) {
       if (!btn) return;
       btn.disabled = loading;
@@ -4903,7 +4903,7 @@ async function initUnifiedIntegrations() {
     }
     function _showMcpPasteback(id) {
       const msg = el('uf-mcp-msg'); if (!msg) return;
-      if (el('uf-mcp-pasteback')) return;  // already shown
+      if (el('uf-mcp-pasteback')) return;  // 已显示
       msg.innerHTML =
         'Authorize in the opened tab. If the redirect fails (remote access), paste the resulting URL here: ' +
         '<input id="uf-mcp-pasteback" class="settings-input" placeholder="http://localhost:7000/api/mcp/oauth/callback?code=..." style="margin-top:4px">' +
@@ -4922,8 +4922,8 @@ async function initUnifiedIntegrations() {
       });
     }
 
-    // Drives the OAuth flow: waits for the auth_url (discovery+DCR may lag),
-    // opens it once, then resolves on connected/error.
+    // 驱动 OAuth 流程：等待 auth_url（发现+DCR 可能有延迟），
+    // 打开一次，然后在连接/错误时解决。
     async function _handleMcpAuth(id, initialAuthUrl, tries = 90) {
       let opened = false;
       const openAuth = (u) => { if (!opened && u) { opened = true; window.open(u, '_blank', 'noopener'); _showMcpPasteback(id); } };
@@ -4948,15 +4948,15 @@ async function initUnifiedIntegrations() {
             if (msg) msg.textContent = `Failed: ${s.error || 'unknown'}`; return;
           }
         } catch (e) {
-          // Tolerate a single blip, but surface persistent failures instead of
-          // silently polling until timeout.
+          // 容忍单次波动，但暴露持续失败，而不是
+          // 沉默地轮询直到超时。
           if (++fails >= 5 && msg) msg.textContent = `Status check failing (${e.message || 'network error'}) — still retrying…`;
         }
       }
       if (msg) msg.textContent = 'Authorization timed out. Reconnect from the server list to retry.';
     }
     if (editId && editId !== 'new') {
-      // Show management view for existing server
+      // 显示现有服务器的管理视图
       formEl.innerHTML = '<div class="admin-card" style="margin-top:8px"><span style="opacity:0.5;font-size:11px">Loading...</span></div>';
       try {
         const res = await fetch('/api/mcp/servers', { credentials: 'same-origin' });
@@ -4983,7 +4983,7 @@ async function initUnifiedIntegrations() {
             </div>
             <div id="uf-mcp-tools-panel"></div>
           </div>`;
-        // Reconnect
+        // 重新连接
         el('uf-mcp-reconnect').addEventListener('click', async () => {
           const msg = el('uf-mcp-msg'); msg.textContent = 'Reconnecting...';
           try {
@@ -4991,10 +4991,10 @@ async function initUnifiedIntegrations() {
             const d = await r.json();
             msg.textContent = d.connected ? `Connected (${d.tool_count} tools)` : `Failed: ${d.error || 'unknown'}`;
             await renderList();
-            showMcpForm(editId); // refresh this view
+            showMcpForm(editId); // 刷新此视图
           } catch (e) { msg.textContent = 'Failed'; }
         });
-        // Toggle enable/disable
+        // 切换启用/禁用
         el('uf-mcp-toggle').addEventListener('click', async () => {
           const fd = new FormData(); fd.append('is_enabled', String(!srv.is_enabled));
           await fetch(`/api/mcp/servers/${srv.id}`, { method: 'PATCH', body: fd, credentials: 'same-origin' });
@@ -5002,7 +5002,7 @@ async function initUnifiedIntegrations() {
           showMcpForm(editId);
         });
         el('uf-mcp-cancel').addEventListener('click', () => { formEl.style.display = 'none'; });
-        // Load tools list
+        // 加载工具列表
         if (srv.status === 'connected' && srv.tool_count > 0) {
           const panel = el('uf-mcp-tools-panel');
           try {
@@ -5026,7 +5026,7 @@ async function initUnifiedIntegrations() {
         }
       } catch (_) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">Failed to load server</div>'; }
     } else {
-      // Add new MCP server form
+      // 添加新 MCP 服务器表单
       formEl.innerHTML = `
         <div class="admin-card" style="margin-top:8px">
           <h2 style="font-size:13px">Add MCP Server</h2>
@@ -5059,7 +5059,7 @@ async function initUnifiedIntegrations() {
       el('uf-mcp-cancel').addEventListener('click', () => { formEl.style.display = 'none'; });
       el('uf-mcp-save').addEventListener('click', async () => {
         const transport = el('uf-mcp-transport').value;
-        // routes/mcp_routes.py uses FastAPI Form(...) — send multipart, not JSON.
+        // routes/mcp_routes.py 使用 FastAPI Form(...)——发送 multipart，而非 JSON。
         const fd = new FormData();
         fd.append('name', el('uf-mcp-name').value);
         fd.append('transport', transport);
@@ -5118,7 +5118,7 @@ async function initUnifiedIntegrations() {
       { key: 'cookbook:read', label: 'Cookbook', detail: 'List cookbook tasks + tail their tmux output (debug a model serve from outside the UI)' },
       { key: 'cookbook:launch', label: 'Cookbook launch', detail: 'Launch and stop cookbook serve tasks. Powerful: runs SSH commands on your configured servers, bounded by the same allowlist the UI uses (vllm/python3/sglang/llama-server/...)' },
     ];
-    // Strict name-prefix match keeps Codex and Claude tokens in their own forms.
+    // 严格的名称前缀匹配将 Codex 和 Claude 令牌保留在各自的表单中。
     const agentTokens = (Array.isArray(tokens) ? tokens : []).filter(tok =>
       (tok.name || '').toLowerCase().startsWith(cfg.namePrefix)
     );
@@ -5519,7 +5519,7 @@ async function initUnifiedIntegrations() {
             });
             const d = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error(d.detail || 'Failed');
-            if (msg) { msg.textContent = 'Saved'; msg.style.color = 'var(--green, #50fa7b)'; }
+            if (msg) { msg.textContent = t('settings.saved'); msg.style.color = 'var(--green, #50fa7b)'; }
             await renderList();
           } catch (err) {
             cb.checked = !cb.checked;
@@ -5596,7 +5596,7 @@ async function initUnifiedIntegrations() {
   await renderList();
 }
 
-/* ── Admin visibility sync ── */
+/* ── 管理员可见性同步 ── */
 function syncAdminVisibility() {
   if (!modalEl) return;
   const isAdmin = !!window._isAdmin;
@@ -5621,7 +5621,7 @@ export function open(tab) {
     modalEl.querySelectorAll('[data-settings-tab]').forEach(b => b.classList.toggle('active', b.dataset.settingsTab === tab));
     modalEl.querySelectorAll('[data-settings-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.settingsPanel !== tab));
   }
-  // Auto-init admin data if showing an admin tab
+  // 如果显示管理标签页，自动初始化管理数据
   const activeTab = tab || (modalEl.querySelector('[data-settings-tab].active') || {}).dataset?.settingsTab || 'services';
   document.body.classList.toggle('settings-appearance-open', activeTab === 'appearance');
   syncAppearanceOpacity(activeTab === 'appearance');
@@ -5633,10 +5633,10 @@ export function open(tab) {
 
 export function close() {
   if (!modalEl) return;
-  // Always clear the appearance-tab body class so the rest of the app
-  // doesn't keep its dimmed state if the modal got closed mid-tab.
+  // 始终清除外观标签页的 body class，让应用其余部分
+  // 不会在模态框在标签页中间关闭时保持变暗状态。
   document.body.classList.remove('settings-appearance-open');
-  syncAppearanceOpacity(false); // clear any opacity-slider fade
+  syncAppearanceOpacity(false); // 清除任何不透明度滑块淡化效果
   const content = modalEl.querySelector('.modal-content, .settings-modal-content');
   if (content && !content.classList.contains('modal-closing')) {
     content.classList.add('modal-closing');

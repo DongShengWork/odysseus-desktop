@@ -1,4 +1,4 @@
-"""Search provider implementations: SearXNG, Brave, DuckDuckGo, Google PSE, Tavily, Serper."""
+"""搜索提供商实现：SearXNG、Brave、DuckDuckGo、Google PSE、Tavily、Serper。"""
 
 import json
 import logging
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 20
 
-# Provider registry — maps setting value to (label, needs_key, needs_url)
+# 提供商注册表 — 将设置值映射为 (标签, 需要密钥, 需要 URL)
 PROVIDER_INFO = {
     "searxng":  ("SearXNG",           False, True),
     "brave":    ("Brave Search",      True,  False),
@@ -29,10 +29,10 @@ PROVIDER_INFO = {
 }
 
 
-# ── Settings helpers ──
+# ── 设置辅助 ──
 
 def _get_search_settings() -> dict:
-    """Return search settings from admin config, falling back to env defaults."""
+    """从管理员配置返回搜索设置，回退到环境变量默认值。"""
     try:
         from src.settings import load_settings
         return load_settings()
@@ -41,7 +41,7 @@ def _get_search_settings() -> dict:
 
 
 def _get_search_instance() -> str:
-    """Return the active search API URL from admin settings, falling back to env var."""
+    """从管理员设置返回活跃的搜索 API URL，回退到环境变量。"""
     settings = _get_search_settings()
     url = (settings.get("search_url") or "").strip()
     if url:
@@ -50,7 +50,7 @@ def _get_search_instance() -> str:
 
 
 def _get_provider_key(provider: str) -> str:
-    """Return the API key for a specific provider, with legacy fallback."""
+    """返回特定提供商的 API 密钥，带旧版回退。"""
     settings = _get_search_settings()
     key_map = {
         "brave": "brave_api_key",
@@ -63,7 +63,7 @@ def _get_provider_key(provider: str) -> str:
         val = (settings.get(field) or "").strip()
         if val:
             return val
-    # Legacy fallback: old shared search_api_key field
+    # 旧版回退：旧的共享 search_api_key 字段
     legacy = (settings.get("search_api_key") or "").strip()
     if legacy:
         return legacy
@@ -78,7 +78,7 @@ def _get_provider_key(provider: str) -> str:
 
 
 def _get_result_count() -> int:
-    """Return configured result count, default 5."""
+    """返回配置的结果数量，默认 5。"""
     settings = _get_search_settings()
     try:
         return int(settings.get("search_result_count", 5))
@@ -86,13 +86,13 @@ def _get_result_count() -> int:
         return 5
 
 
-# Canonical SafeSearch levels: "strict" (default), "moderate", "off".
-# Each provider has its own knob name and value space -- see _safesearch_for(...).
+# 标准安全搜索等级："strict"（默认）、"moderate"、"off"。
+# 各提供商有自己的开关名称和值空间 — 参见 _safesearch_for(...)。
 _SAFESEARCH_LEVELS = ("strict", "moderate", "off")
 
 
 def _get_safesearch_level() -> str:
-    """Return configured SafeSearch level normalized to a canonical value."""
+    """返回配置的安全搜索等级，标准化为标准值。"""
     settings = _get_search_settings()
     raw = (settings.get("search_safesearch") or "strict").strip().lower()
     if raw in _SAFESEARCH_LEVELS:
@@ -106,7 +106,7 @@ def _get_safesearch_level() -> str:
 
 
 def _safesearch_for(provider: str) -> Optional[str]:
-    """Translate the canonical SafeSearch level into provider-specific values."""
+    """将标准安全搜索等级转换为特定于提供商的值。"""
     level = _get_safesearch_level()
     if provider == "searxng":
         return {"strict": "2", "moderate": "1", "off": "0"}[level]
@@ -127,32 +127,32 @@ def _safesearch_for(provider: str) -> Optional[str]:
 
 _NEWS_HINTS = ("news", "nyheter", "headlines", "breaking", "latest", "today", "idag")
 
-# Default general engines (google/duckduckgo/brave/startpage/wikipedia) are
-# routinely rate-limited / CAPTCHA-blocked on this instance and return nothing.
-# Pin engines that actually respond so non-news queries get results without any
-# third-party API fallback. Override via SEARXNG_GENERAL_ENGINES.
+# 默认通用引擎（google/duckduckgo/brave/startpage/wikipedia）在
+# 此实例上经常被限速/CAPTCHA 阻止，不返回结果。
+# 锁定实际响应的引擎，使非新闻查询无需任何
+# 第三方 API 回退即可获取结果。可通过 SEARXNG_GENERAL_ENGINES 覆盖。
 _GENERAL_ENGINES = os.environ.get("SEARXNG_GENERAL_ENGINES", "bing,mojeek,presearch")
 
 
 def searxng_search_api(query: str, count: Optional[int] = None, categories: str = "general",
                        time_filter: Optional[str] = None) -> List[dict]:
-    """Search using SearXNG JSON API. Returns list of {title, url, snippet}."""
+    """使用 SearXNG JSON API 搜索。返回 {title, url, snippet} 列表。"""
     count = count if count is not None else _get_result_count()
     instance = _get_search_instance()
     api_key = ""
     headers = {"User-Agent": "Mozilla/5.0"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    # News/fresh queries do badly in the 'general' category — it favours
-    # encyclopedic/tourism pages, ignores recency, and (with no language pin)
-    # bleeds in foreign-language results. When the agent layer detected
-    # freshness (time_filter) or the query reads like a news lookup, switch to
-    # the 'news' category, constrain recency, and pin language to English so a
-    # search like "Canada latest news" returns actual news instead of Wikipedia.
-    # Pin English for ALL searches — without it, SearXNG geolocates / mixes
-    # languages and brand-ambiguous terms bleed in foreign SEO pages (e.g.
-    # "Odyssey" → Honda Japan, "Trojan" → Japanese malware blogs, "Polyphemus"
-    # → Chinese math forums). The news path already did this; general didn't.
+    # 新闻/新鲜查询在 'general' 类别中表现不佳 — 它偏好
+    # 百科全书/旅游页面，忽略时效性，且（无语言固定时）
+    # 混入外语结果。当 agent 层检测到
+    # 新鲜度（time_filter）或查询读起来像新闻查询时，切换到
+    # 'news' 类别，限制时效性，并固定语言为英语，使
+    # "Canada latest news" 这样的搜索返回实际新闻而非维基百科。
+    # 为所有搜索固定英语 — 否则 SearXNG 会地理定位/混合
+    # 语言，品牌歧义词条会混入外语 SEO 页面（例如
+    # "Odyssey" → Honda Japan，"Trojan" → Japanese malware blogs，"Polyphemus"
+    # → Chinese math forums）。新闻路径已经这样做了；通用路径没有。
     params = {
         "q": query,
         "format": "json",
@@ -164,13 +164,13 @@ def searxng_search_api(query: str, count: Optional[int] = None, categories: str 
     if is_news and categories == "general":
         params["categories"] = "news"
         if time_filter in ("day", "week", "month", "year"):
-            # 'day' is too sparse on most SearXNG news engines — widen to a week
-            # so there's enough volume; the news category already biases recent.
+            # 'day' 在大多数 SearXNG 新闻引擎上结果太稀疏 — 扩大到一周
+            # 以确保有足够的量；新闻类别本来就偏向近期。
             params["time_range"] = "week" if time_filter in ("day", "week") else time_filter
     else:
         params["categories"] = categories
-        # Route general queries to engines that aren't blocked (default general
-        # set returns 0 on this instance — see _GENERAL_ENGINES).
+        # 将通用查询路由到未被阻止的引擎（默认通用
+        # 引擎集在此实例上返回 0 — 参见 _GENERAL_ENGINES）。
         if categories == "general" and _GENERAL_ENGINES:
             params["engines"] = _GENERAL_ENGINES
     try:
@@ -199,9 +199,9 @@ def searxng_search_api(query: str, count: Optional[int] = None, categories: str 
         active_params = params
         parsed, data = _run(active_params)
         if not parsed and is_news and categories == "general":
-            # Some self-hosted SearXNG configs have no working news engines.
-            # Fall back to the known-good general engines before reporting an
-            # empty search, otherwise common queries like "Canada news" fail.
+            # 某些自托管 SearXNG 配置没有可用的新闻引擎。
+            # 在报告空搜索之前回退到已知好的通用引擎，
+            # 否则像 "Canada news" 这样的常见查询会失败。
             fallback = {
                 "q": query,
                 "format": "json",
@@ -249,7 +249,7 @@ def searxng_search_api(query: str, count: Optional[int] = None, categories: str 
 
 
 def searxng_search(query, max_results=10):
-    """Search using SearXNG instance - parsing HTML."""
+    """使用 SearXNG 实例搜索 — 解析 HTML。"""
     instance = _get_search_instance()
     api_key = ""
     req_headers = {"User-Agent": "Mozilla/5.0"}
@@ -284,14 +284,14 @@ def searxng_search(query, max_results=10):
 # ── Brave ──
 
 def brave_search(query: str, count: Optional[int] = None, time_filter: Optional[str] = None) -> List[dict]:
-    """Search using Brave API with key from admin settings or env var."""
+    """使用 Brave API 搜索，密钥从管理员设置或环境变量获取。"""
     count = count if count is not None else _get_result_count()
     api_key = _get_provider_key("brave") or os.environ.get("DATA_BRAVE_API_KEY") or ""
     return _brave_search_impl(query, count, time_filter, search_config={"brave_api_key": api_key})
 
 
 def _brave_search_impl(query: str, count: int, time_filter: Optional[str] = None, search_config: dict = None) -> List[dict]:
-    """Core Brave API call. Returns a list of result dicts or an empty list on failure."""
+    """Brave API 核心调用。返回结果字典列表，失败时返回空列表。"""
     enhanced_query = build_enhanced_query(query, time_filter)
     config = search_config or {}
 
@@ -355,16 +355,16 @@ def _brave_search_impl(query: str, count: int, time_filter: Optional[str] = None
     return results
 
 
-# ── DuckDuckGo (free, no key) ──
+# ── DuckDuckGo（免费，无需密钥）──
 
 def _is_duckduckgo_host(host: str) -> bool:
-    """True only for duckduckgo.com and its subdomains."""
+    """仅对 duckduckgo.com 及其子域返回 True。"""
     host = (host or "").lower()
     return host == "duckduckgo.com" or host.endswith(".duckduckgo.com")
 
 
 def _resolve_ddg_redirect(raw: str) -> str:
-    """Resolve a DuckDuckGo /l/?uddg= redirect URL to its destination."""
+    """解析 DuckDuckGo /l/?uddg= 重定向 URL 到目标地址。"""
     if not raw:
         return raw
     resolved = raw
@@ -384,7 +384,7 @@ def _resolve_ddg_redirect(raw: str) -> str:
 
 
 def duckduckgo_search(query: str, count: Optional[int] = None, time_filter: Optional[str] = None) -> List[dict]:
-    """Search using DuckDuckGo via the duckduckgo-search library. No API key needed."""
+    """使用 DuckDuckGo 通过 duckduckgo-search 库搜索。无需 API 密钥。"""
     count = count if count is not None else _get_result_count()
     def _html_fallback() -> List[dict]:
         try:
@@ -452,15 +452,15 @@ def duckduckgo_search(query: str, count: Optional[int] = None, time_filter: Opti
         return _html_fallback()
 
 
-# ── Google Programmable Search Engine ──
+# ── Google 可编程搜索引擎 ──
 
 def google_pse_search(query: str, count: Optional[int] = None, time_filter: Optional[str] = None) -> List[dict]:
-    """Search using Google PSE (Custom Search JSON API).
+    """使用 Google PSE（自定义搜索 JSON API）搜索。
 
-    Requires two keys in settings:
-      - search_api_key: Google API key
-      - google_pse_cx: Programmable Search Engine ID (cx)
-    Or env vars GOOGLE_API_KEY and GOOGLE_PSE_CX.
+    需要在设置中配置两个密钥：
+      - search_api_key：Google API 密钥
+      - google_pse_cx：可编程搜索引擎 ID（cx）
+    或环境变量 GOOGLE_API_KEY 和 GOOGLE_PSE_CX。
     """
     count = count if count is not None else _get_result_count()
     settings = _get_search_settings()
@@ -475,13 +475,13 @@ def google_pse_search(query: str, count: Optional[int] = None, time_filter: Opti
         "key": api_key,
         "cx": cx,
         "q": query,
-        "num": min(count, 10),  # Google PSE max is 10 per request
+        "num": min(count, 10),  # Google PSE 每次请求最多 10 条
     }
     safe = _safesearch_for("google_pse")
     if safe:
         params["safe"] = safe
     if time_filter:
-        # dateRestrict: d[number], w[number], m[number], y[number]
+        # dateRestrict：d[数字], w[数字], m[数字], y[数字]
         time_map = {"day": "d1", "week": "w1", "month": "m1", "year": "y1"}
         if time_filter in time_map:
             params["dateRestrict"] = time_map[time_filter]
@@ -526,7 +526,7 @@ def google_pse_search(query: str, count: Optional[int] = None, time_filter: Opti
 # ── Tavily ──
 
 def tavily_search(query: str, count: Optional[int] = None, time_filter: Optional[str] = None) -> List[dict]:
-    """Search using Tavily API. Requires search_api_key or TAVILY_API_KEY env var."""
+    """使用 Tavily API 搜索。需要 search_api_key 或 TAVILY_API_KEY 环境变量。"""
     count = count if count is not None else _get_result_count()
     api_key = _get_provider_key("tavily") or os.environ.get("TAVILY_API_KEY", "")
     if not api_key:
@@ -585,7 +585,7 @@ def tavily_search(query: str, count: Optional[int] = None, time_filter: Optional
 # ── Serper.dev ──
 
 def serper_search(query: str, count: Optional[int] = None, time_filter: Optional[str] = None) -> List[dict]:
-    """Search using Serper.dev API. Requires search_api_key or SERPER_API_KEY env var."""
+    """使用 Serper.dev API 搜索。需要 search_api_key 或 SERPER_API_KEY 环境变量。"""
     count = count if count is not None else _get_result_count()
     api_key = _get_provider_key("serper") or os.environ.get("SERPER_API_KEY", "")
     if not api_key:

@@ -4,9 +4,9 @@
  * document's overall width/height so the result feels like the whole
  * image rotated as one piece.
  *
- * Pure-ish — reads/writes shared state directly; the factory takes a
- * small dep bag for the orchestration plumbing (undo snapshot, canvas
- * loading overlay, fit-zoom-to-viewport, composite redraw).
+ * 近似纯函数 — 直接读/写共享状态；工厂函数接受
+ * 一小部分依赖用于编排管道（撤销快照、画布
+ * 加载叠加层、适配缩放至视口、合成重绘）。
  *
  * @param {{
  *   saveState:           (label?: string) => void,
@@ -21,18 +21,18 @@ import { state } from './state.js';
 export function createCanvasTransforms({ saveState, composite, fitZoom, showCanvasLoading, hideCanvasLoading }) {
   return {
     /**
-     * Rotate the entire document by `deg` (90 / 180 / 270). 90 and 270
-     * swap canvas dimensions. Each layer is rotated around its own
-     * centre, then its centre is rotated around the old image centre
-     * and translated into the new image's frame.
+     * 将整个文档旋转 `deg` 度（90 / 180 / 270）。90 和 270
+     * 会交换画布尺寸。每个图层围绕自己的中心旋转，
+     * 然后其中心围绕旧图像中心旋转
+     * 并平移到新图像的框架中。
      *
-     * Wrapped in requestAnimationFrame because the rotation pass can
+     * 包裹在 requestAnimationFrame 中，因为旋转操作对于大图像
      * block the UI for 0.5–2 s on big images — the spinner overlay
      * paints before we block.
      */
     rotateAll(deg) {
       if (!state.layers.length) return;
-      saveState(`Rotate ${deg}°`);
+      saveState(t('editor.rotate_n', { deg: deg }));
       showCanvasLoading('Rotating…');
       const oldW = state.imgWidth, oldH = state.imgHeight;
       const swap = (deg === 90 || deg === 270);
@@ -45,16 +45,16 @@ export function createCanvasTransforms({ saveState, composite, fitZoom, showCanv
           for (const layer of state.layers) {
             const lw = layer.canvas.width, lh = layer.canvas.height;
             const off = state.layerOffsets.get(layer.id) || { x: 0, y: 0 };
-            // Layer centre in old image coords.
+            // 旧图像坐标中的图层中心。
             const cx = off.x + lw / 2;
             const cy = off.y + lh / 2;
-            // Rotate the centre around the old image centre and
-            // translate so the new image centre lands at (newW/2, newH/2).
+            // 围绕旧图像中心旋转中心，并平移使得
+            // 新图像中心落在 (newW/2, newH/2)。
             const dx = cx - oldW / 2;
             const dy = cy - oldH / 2;
             const nx = dx * cos - dy * sin + newW / 2;
             const ny = dx * sin + dy * cos + newH / 2;
-            // New per-layer dims: swap when 90/270.
+            // 95度/270度时交换每个图层的尺寸。
             const newLw = swap ? lh : lw;
             const newLh = swap ? lw : lh;
             const tmp = document.createElement('canvas');
@@ -66,10 +66,10 @@ export function createCanvasTransforms({ saveState, composite, fitZoom, showCanv
             layer.canvas.width = newLw;
             layer.canvas.height = newLh;
             layer.ctx.drawImage(tmp, 0, 0);
-            // The adjustment-render caches are keyed only by the adjustment
-            // signature, which rotation doesn't change — so composite would draw
-            // the STALE pre-rotation cache (the "had to click twice" bug). Drop
-            // them so the next composite re-renders from the rotated canvas.
+            // 调整渲染缓存的键仅由调整特征的签名决定，
+            // 而旋转不会改变签名 — 因此合成可能会绘制
+            // 过期的旋转前缓存（即"需要点两次"的 Bug）。丢弃它们
+            // 以便下次合成时从旋转后的画布重新渲染。
             layer._adjCacheKey = null;
             layer._adjFinalKey = null;
             state.layerOffsets.set(layer.id, {
@@ -115,8 +115,8 @@ export function createCanvasTransforms({ saveState, composite, fitZoom, showCanv
         tctx.restore();
         layer.ctx.clearRect(0, 0, lw, lh);
         layer.ctx.drawImage(tmp, 0, 0);
-        // Invalidate the adjustment-render caches (keyed by adjustment sig only)
-        // so composite redraws from the flipped canvas, not a stale cache.
+        // 使调整渲染缓存失效（键仅由调整特征签名决定）
+        // 以便合成时从翻转后的画布重绘，而非使用过期缓存。
         layer._adjCacheKey = null;
         layer._adjFinalKey = null;
         const off = state.layerOffsets.get(layer.id) || { x: 0, y: 0 };

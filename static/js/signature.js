@@ -1,10 +1,10 @@
 // static/js/signature.js
 //
-// Reusable signature module. Two entry points:
-//   capture(opts)  — open a drawing modal, return Promise<Signature|null>
-//   pick(opts)     — show saved signatures + a "new" tile, return Promise<Signature|null>
+// 可复用的签名模块。两个入口点：
+//   capture(opts)  — 打开绘图弹窗，返回 Promise<Signature|null>
+//   pick(opts)     — 显示已保存的签名 + "新建"卡片，返回 Promise<Signature|null>
 //
-// Signature shape: { id, dataUrl, width, height, name }
+// 签名结构：{ id, dataUrl, width, height, name }
 //
 // Drawing uses a per-stroke smoother: each quadratic-bezier segment is anchored
 // at the previous point with control points at midpoints, which yields a
@@ -28,9 +28,9 @@ function _safeSignatureDataUrl(raw) {
   return /^data:image\/png;base64,[a-z0-9+/=\s]+$/i.test(value) ? value : '';
 }
 
-// Last signature the user picked or created in this session. Lets the export
-// modal pre-fill subsequent signature fields with the same one — sign once,
-// applies everywhere.
+// 本次会话中用户最后选择或创建的签名。
+// 使得导出弹窗可以自动预填后续签名字段——
+// 签一次，处处适用。
 let _lastUsed = null;
 export function getLastUsed() { return _lastUsed; }
 export function setLastUsed(sig) { _lastUsed = sig || null; }
@@ -46,17 +46,17 @@ class SmoothPad {
     // Heavy-smoothing knobs (much smoother than v1):
     //  - minDistance: jitter floor (px) — bigger = more aggressive thinning
     //  - emaAlpha: live EMA on incoming points (lower = smoother, laggier)
-    //  - chaikinIters: Chaikin corner-cutting passes on stroke-end redraw
+    //  - chaikinIters: 笔划重绘结束时的 Chaikin 切角迭代次数
     //    (each pass roughly doubles segment count and rounds every corner;
     //    3 passes is silky, 4 is glass)
-    //  - tension: secondary Catmull-Rom tightness for the final cubic curve
+    //  - tension: 最终三次 Catmull-Rom 曲线的二次紧密度
     this.minDistance = opts.minDistance ?? 5.0;
     this.emaAlpha = opts.emaAlpha ?? 0.15;
     this.chaikinIters = opts.chaikinIters ?? 4;
     this.tension = opts.tension ?? 0.35;
     this._strokes = [];   // array of { points: [{x,y,t,p}] }
     this._current = null;
-    this._currentSmoothed = null; // EMA point used for live drawing
+    this._currentSmoothed = null; // 用于实时绘制展示的 EMA 点
     this._isEmpty = true;
     this._wirePointer();
     this.clear();
@@ -125,8 +125,8 @@ class SmoothPad {
   _onUp(e) {
     if (!this._current) return;
     try { this.canvas.releasePointerCapture(e.pointerId); } catch (_) {}
-    // Heavy-smoothing finalize: redraw the just-finished stroke as a
-    // Catmull-Rom-fit cubic (much smoother than incremental quadratics).
+    // 重度平滑收尾：将刚完成的笔划重新绘制为 Catmull-Rom 拟合三次曲线
+    // （比渐进的二次贝塞尔平滑得多）。
     const stroke = this._current;
     this._current = null;
     this._currentSmoothed = null;
@@ -145,8 +145,8 @@ class SmoothPad {
   }
 
   _chaikinPass(pts) {
-    // Each interior pair (a,b) becomes two new points at 1/4 and 3/4 along
-    // the segment. Endpoints preserved.
+    // 每一对内部点 (a,b) 变为沿线段 1/4 和 3/4 位置的两个新点。
+    // 端点保持不变。
     if (pts.length < 3) return pts;
     const out = [pts[0]];
     for (let i = 0; i < pts.length - 1; i++) {
@@ -209,11 +209,11 @@ class SmoothPad {
   _widthBetween(a, b) {
     const dt = Math.max(1, b.t - a.t);
     const dist = Math.hypot(b.x - a.x, b.y - a.y);
-    const v = dist / dt;          // px/ms
-    // Slower strokes → thicker line. Tunable mapping.
+    const v = dist / dt;          // 像素/毫秒
+    // 越慢的笔划 → 越粗的线条。可调映射。
     const k = 1 / (1 + v * 4);
     let w = this.minWidth + (this.maxWidth - this.minWidth) * k;
-    // Stylus pressure further modulates
+    // 触控笔压力进一步调节
     const pAvg = (a.p + b.p) / 2;
     w *= 0.6 + 0.8 * pAvg;
     return Math.max(this.minWidth * 0.8, Math.min(this.maxWidth * 1.2, w));
@@ -232,7 +232,7 @@ class SmoothPad {
   }
 
   _drawSegment(p0, p1, p2) {
-    // Quadratic bezier from mid(p0,p1) to mid(p1,p2) with control p1.
+    // 从 mid(p0,p1) 到 mid(p1,p2) 的二次贝塞尔曲线，以 p1 为控制点。
     const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
     const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
     const w = this._widthBetween(p1, p2);
@@ -267,15 +267,15 @@ class SmoothPad {
 
   isEmpty() { return this._isEmpty; }
 
-  // Trim transparent border so the saved signature isn't surrounded by
-  // empty space when stamped into a PDF rect.
+  // 裁剪透明边框，使得保存的签名在贴入 PDF 矩形时不会被
+  // 空白空间包围。
   toTrimmedDataUrl(padding = 4) {
     const cw = this.canvas.width;
     const ch = this.canvas.height;
     const ctx = this.ctx;
     const data = ctx.getImageData(0, 0, cw, ch).data;
     let minX = cw, minY = ch, maxX = -1, maxY = -1;
-    // bgColor is opaque white — detect non-white pixels
+    // bgColor 是不透明白色 —— 检测非白色像素
     for (let y = 0; y < ch; y++) {
       for (let x = 0; x < cw; x++) {
         const i = (y * cw + x) * 4;
@@ -288,7 +288,7 @@ class SmoothPad {
       }
     }
     if (maxX < 0) {
-      // empty
+      // 空
       return { dataUrl: this.canvas.toDataURL('image/png'), width: cw, height: ch };
     }
     minX = Math.max(0, minX - padding);
@@ -300,9 +300,9 @@ class SmoothPad {
     const off = document.createElement('canvas');
     off.width = w; off.height = h;
     const octx = off.getContext('2d');
-    // Transparent background so the signature blends with the PDF
+    // 透明背景使签名与 PDF 融合
     octx.drawImage(this.canvas, minX, minY, w, h, 0, 0, w, h);
-    // Replace white with transparent
+    // 将白色替换为透明
     const id = octx.getImageData(0, 0, w, h);
     const px = id.data;
     for (let i = 0; i < px.length; i += 4) {
@@ -316,7 +316,7 @@ class SmoothPad {
 }
 
 function _modal(innerHtml) {
-  // Match the app's standard .modal pattern (defined in static/style.css).
+  // 匹配应用的标准 .modal 模式（定义在 static/style.css 中）。
   const overlay = document.createElement('div');
   overlay.className = 'modal sig-modal-overlay';
   overlay.style.cssText = 'pointer-events:auto;background:rgba(0,0,0,0.45);z-index:10100;';
@@ -349,8 +349,8 @@ async function _deleteSignature(id) {
   await fetch(`${API_BASE}/api/signatures/${id}`, { method: 'DELETE' });
 }
 
-// Smoothness slider maps a single 0–10 value to the two main knobs.
-// Persisted in localStorage so the user's preference sticks.
+// 平滑度滑块将单个 0–10 的值映射到两个主要参数。
+// 持久化到 localStorage 以便用户偏好保持不变。
 const SMOOTH_KEY = 'odysseus.signature.smoothness';
 function _loadSmoothness() {
   const v = parseInt(localStorage.getItem(SMOOTH_KEY) || '', 10);
@@ -360,7 +360,7 @@ function _saveSmoothness(v) {
   try { localStorage.setItem(SMOOTH_KEY, String(v)); } catch (_) {}
 }
 function _smoothnessToParams(v) {
-  // 0 = raw, 10 = extreme glass
+  // 0 = 原始，10 = 极致玻璃
   return {
     minDistance: 1.0 + v * 0.6,        // 1.0 → 7.0
     emaAlpha: Math.max(0.05, 0.6 - v * 0.055), // 0.6 → 0.05
@@ -375,7 +375,7 @@ function _applySmoothness(pad, v) {
   pad._repaintAll();
 }
 
-// ── capture: open the drawing modal, save on confirm ─────────────────────
+// ── capture：打开绘图弹窗，确认后保存 ─────────────────────
 export function capture(opts = {}) {
   return new Promise((resolve) => {
     const initialSmooth = _loadSmoothness();
@@ -392,7 +392,7 @@ export function capture(opts = {}) {
             <input id="sig-smoothness" class="sig-smoothness" type="range" min="0" max="10" step="1" value="${initialSmooth}" style="flex:1;">
             <span class="sig-smoothness-val" style="width:18px;text-align:right;font-variant-numeric:tabular-nums;opacity:0.7;">${initialSmooth}</span>
           </div>
-          <input class="sig-name" type="text" placeholder="Name (optional, e.g. 'Full' or 'Initials')" style="margin-top:10px;">
+          <input class="sig-name" type="text" placeholder=t('signature.name_placeholder') style="margin-top:10px;">
         </div>
         <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid var(--border);margin-top:6px;">
           <button class="sig-clear confirm-btn confirm-btn-secondary">Clear</button>
@@ -456,7 +456,7 @@ export function capture(opts = {}) {
   });
 }
 
-// ── pick: show saved signatures + new tile ───────────────────────────────
+// ── pick：显示已保存的签名 + 新建卡片 ───────────────────────────────
 export function pick(opts = {}) {
   return new Promise(async (resolve) => {
     const sigs = await _listSignatures();
@@ -507,7 +507,7 @@ export function pick(opts = {}) {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const id = btn.dataset.id;
-        if (!await window.styledConfirm('Delete this signature?', { confirmText: 'Delete', danger: true })) return;
+        if (!await window.styledConfirm(t('signature.delete_confirm'), { confirmText: t('common.delete'), danger: true })) return;
         await _deleteSignature(id);
         btn.closest('.sig-tile')?.remove();
       });

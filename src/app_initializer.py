@@ -1,5 +1,5 @@
 # src/app_initializer.py
-"""Initialize all application components and dependencies."""
+"""初始化所有应用程序组件和依赖。"""
 import os
 import logging
 from typing import Dict, Any
@@ -26,7 +26,7 @@ from src.search import update_search_config
 logger = logging.getLogger(__name__)
 
 def create_directories():
-    """Create necessary directories if they don't exist."""
+    """创建必要的目录（如果不存在）。"""
     for directory in (DATA_DIR, PERSONAL_DIR, RUNBOOK_DIR, UPLOAD_DIR):
         os.makedirs(directory, exist_ok=True)
         
@@ -35,32 +35,32 @@ def initialize_managers(base_dir: str, rag_manager=None) -> Dict[str, Any]:
     Initialize all manager and handler instances.
 
     Args:
-        base_dir: Base directory path
-        rag_manager: RAG manager instance (optional)
+        base_dir: 基础目录路径
+        rag_manager: RAG 管理器实例（可选）
     Returns:
-        Dictionary containing all initialized components
+        包含所有已初始化组件的字典
     """
-    # Create directories first
+    # 首先创建目录
     create_directories()
 
-    # Initialize core managers
+    # 初始化核心管理器
     memory_manager = MemoryManager(DATA_DIR)
     skills_manager = SkillsManager(DATA_DIR)
     session_manager = SessionManager(SESSIONS_FILE)
-    set_session_manager(session_manager)  # Enable Session.add_message() persistence
+    set_session_manager(session_manager)  # 启用 Session.add_message() 持久化
     upload_handler = UploadHandler(base_dir, UPLOAD_DIR)
     personal_docs_manager = PersonalDocsManager(PERSONAL_DIR, rag_manager)
     api_key_manager = APIKeyManager(DATA_DIR)
     preset_manager = PresetManager(DATA_DIR)
 
-    # Initialize memory vector store (share embedding model with RAG if available)
+    # 初始化 Memory Vector Store（如果 RAG 可用则共享嵌入模型）
     memory_vector = None
     try:
         from src.memory_vector import MemoryVectorStore
         embedding_model = getattr(rag_manager, '_model', None) if rag_manager else None
         memory_vector = MemoryVectorStore(DATA_DIR, embedding_model=embedding_model)
         if memory_vector.healthy:
-            # Rebuild index from existing memories if empty
+            # 如果为空，从现有 memories 重建索引
             if memory_vector.count() == 0:
                 existing = memory_manager.load()
                 if existing:
@@ -78,11 +78,11 @@ def initialize_managers(base_dir: str, rag_manager=None) -> Dict[str, Any]:
         NativeMemoryProvider(memory_manager, memory_vector),
     ])
 
-    # Initialize processors
+    # 初始化处理器
     chat_processor = ChatProcessor(memory_manager, personal_docs_manager, memory_vector=memory_vector, skills_manager=skills_manager)
     research_handler = ResearchHandler()
     
-    # Initialize chat handler with all dependencies
+    # 使用所有依赖初始化聊天处理器
     chat_handler = ChatHandler(
         session_manager=session_manager,
         memory_manager=memory_manager,
@@ -92,10 +92,10 @@ def initialize_managers(base_dir: str, rag_manager=None) -> Dict[str, Any]:
         upload_handler=upload_handler,
     )
     
-    # Initialize model discovery
+    # 初始化模型发现
     model_discovery = ModelDiscovery(DEFAULT_HOST, OPENAI_API_KEY)
     
-    # Load and apply saved API keys
+    # 加载并应用已保存的 API 密钥
     saved_keys = api_key_manager.load()
     if "brave" in saved_keys:
         update_search_config(api_key=saved_keys["brave"])

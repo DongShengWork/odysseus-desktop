@@ -1,20 +1,20 @@
 # services/memory/skills.py
-"""Skills storage layer.
+"""技能存储层。
 
-Skills live on disk as `data/skills/<category>/<name>/SKILL.md` files with
-YAML frontmatter and a structured markdown body (When to Use / Procedure /
-Pitfalls / Verification). See `skill_format.py` for the format.
+技能以 `data/skills/<category>/<name>/SKILL.md` 文件的形式存储在磁盘上，
+包含 YAML frontmatter 和结构化的 markdown 正文（何时使用 / 步骤 /
+陷阱 / 验证）。格式说明参见 `skill_format.py`。
 
-Usage counters (`uses`, `last_used`) live in a sidecar
-`data/skills/_usage.json` keyed by owner plus skill name so the SKILL.md
-content doesn't churn on every retrieval.
+使用计数（`uses`、`last_used`）存储在侧车文件
+`data/skills/_usage.json` 中，按 owner 加技能名称索引，这样 SKILL.md
+内容不会因每次检索而变动。
 
-Ownership: skills declare `owner: <username>` in frontmatter. Single-user
-deployments can leave that blank.
+所有权：技能在 frontmatter 中声明 `owner: <username>`。单用户
+部署可以将其留空。
 
-This module also retains a JSON fallback for any legacy `data/skills.json`
-entries — they're surfaced as read-only `Skill` objects so old data still
-loads while a user migrates them to disk.
+本模块还保留了 JSON 回退机制，用于任何旧的 `data/skills.json`
+条目 — 它们以只读 `Skill` 对象形式呈现，以便在用户迁移
+到磁盘期间旧数据仍然可用。
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Token / similarity helpers (kept for the relevance fallback)
+# Token / 相似度辅助函数（保留用于相关性回退）
 # ---------------------------------------------------------------------------
 
 def _tokenize(text: str) -> set:
@@ -45,9 +45,9 @@ def _jaccard(a: set, b: set) -> float:
 
 
 def _to_float(x, default: float = 0.0) -> float:
-    """Coerce a possibly hand-edited frontmatter value to float without
-    raising — a blank or non-numeric `confidence:` in a SKILL.md must not
-    blow up retrieval or eviction."""
+    """将可能被手动编辑的 frontmatter 值转换为 float 而不
+    抛出异常 — SKILL.md 中空白或非数字的 `confidence:` 不能
+    导致检索或淘汰崩溃。"""
     try:
         return float(x)
     except (TypeError, ValueError):
@@ -60,13 +60,13 @@ def _to_float(x, default: float = 0.0) -> float:
 
 
 class SkillsManager:
-    """Read/write SKILL.md files under <data_dir>/skills/."""
+    """在 <data_dir>/skills/ 目录下读写 SKILL.md 文件。"""
 
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
         self.skills_root = os.path.join(data_dir, "skills")
         self.usage_file = os.path.join(self.skills_root, "_usage.json")
-        self.legacy_file = os.path.join(data_dir, "skills.json")  # back-compat
+        self.legacy_file = os.path.join(data_dir, "skills.json")  # 向后兼容
         os.makedirs(self.skills_root, exist_ok=True)
 
     # ----------------------------------------------------------------------
@@ -107,8 +107,8 @@ class SkillsManager:
 
     @staticmethod
     def _usage_key(name: str, owner: Optional[str] = None) -> str:
-        # Skill names are not globally unique once multiple owners are present.
-        # Keep the usage sidecar keyed the same way the skill file is scoped.
+    # 当存在多个 owner 时，技能名称在全局范围内不唯一。
+    # 保持 usage 侧车文件的键与技能文件的作用域一致。
         return f"{owner}::{name}" if owner else name
 
     def _usage_entry(self, usage: Dict[str, Dict], name: str, owner: Optional[str] = None) -> Dict:
@@ -121,9 +121,9 @@ class SkillsManager:
     def set_audit(self, name: str, verdict: str, by_teacher: bool = False,
                   worker_model: str = "", teacher_model: str = "",
                   owner: Optional[str] = None) -> None:
-        """Record the last test/audit result for a skill in the usage sidecar
-        (so it surfaces in load() without touching SKILL.md). Drives the
-        'verified' check + teacher mark on the card."""
+        """记录技能的最后一次测试/审核结果到 usage 侧车文件
+        （使其在 load() 中出现而无需修改 SKILL.md）。驱动
+        卡片上的 'verified' 检查 + teacher 标记。"""
         import time as _t
         usage = self._load_usage()
         key = self._usage_key(name, owner)
@@ -140,8 +140,8 @@ class SkillsManager:
     def set_necessity(self, name: str, necessary: bool,
                       redundant_with=None, reason: str = "",
                       owner: Optional[str] = None) -> None:
-        """Record the advisory 'is this skill necessary?' judgment in the usage
-        sidecar. Surfaced on the card as a flag; never acts on the skill."""
+        """将咨询性的"此技能是否必要？"判断记录在 usage 侧车文件中。
+        在卡片上以标记形式展示；从不对技能本身执行操作。"""
         usage = self._load_usage()
         key = self._usage_key(name, owner)
         e = usage.setdefault(key, {"uses": 0, "last_used": None})
@@ -181,12 +181,12 @@ class SkillsManager:
         return path
 
     def backfill_owner(self, primary_owner: str, valid_owners: Optional[set[str]] = None) -> int:
-        """Assign legacy/unclaimed skill files to the primary owner.
+        """将旧的无主技能文件分配给主 owner。
 
-        Skills are disk-backed, so the DB legacy-owner migration cannot fix
-        them. If strict owner filtering is enabled and SKILL.md files have no
-        owner or an owner from a deleted/test account, the UI appears empty even
-        though files still exist. This mirrors the DB legacy-owner sweep.
+        技能是基于磁盘的，因此 DB 旧 owner 迁移无法修复它们。
+        如果启用了严格的 owner 过滤，且 SKILL.md 文件没有
+        owner 或 owner 来自已删除/测试账户，即使文件仍然存在，
+        UI 也显示为空。这镜像了 DB 旧 owner 的清理逻辑。
         """
         primary_owner = (primary_owner or "").strip()
         if not primary_owner:
@@ -211,11 +211,11 @@ class SkillsManager:
         return changed
 
     # ----------------------------------------------------------------------
-    # Public API — keeps the old method names so callers don't break
+    # 公共 API — 保持旧方法名不破坏调用方
     # ----------------------------------------------------------------------
 
     def load_all(self) -> List[Dict]:
-        """Return every skill as a plain dict, plus any legacy JSON entries."""
+        """返回每个技能的纯字典，以及任何旧 JSON 条目。"""
         usage = self._load_usage()
         out: List[Dict] = []
         seen_names: set[str] = set()
@@ -235,7 +235,7 @@ class SkillsManager:
             d["necessity"] = u.get("necessity")
             out.append(d)
             seen_names.add(sk.name)
-        # Legacy JSON entries — surfaced as draft, not editable from new flow
+        # 旧 JSON 条目 — 以草稿形式呈现，不可通过新流程编辑
         if os.path.exists(self.legacy_file):
             try:
                 with open(self.legacy_file, encoding="utf-8") as f:
@@ -279,11 +279,11 @@ class SkillsManager:
         entries = self.load_all()
         if owner is None:
             return entries
-        # SECURITY: strict ownership filter. The previous predicate also
-        # included skills with NO owner field (`not s.get("owner")`), which
-        # leaked legacy / un-stamped skills to every authenticated user.
-        # Hide them now; the owner needs to be backfilled on disk if those
-        # skills should be visible to a specific user.
+        # 安全：严格的 owner 过滤。之前的判断也
+        # 包含了没有 owner 字段的技能（`not s.get("owner")`），这会将
+        # 旧/未标记的技能泄露给每个已认证用户。
+        # 现在将其隐藏；如果需要向特定用户显示这些技能，
+        # owner 需要在磁盘上进行回填。
         return [s for s in entries if s.get("owner") == owner]
 
     # ----------------------------------------------------------------------
@@ -316,14 +316,14 @@ class SkillsManager:
         status: str = "draft",
         version: str = "1.0.0",
     ) -> Dict:
-        # Normalize name
+        # 规范化名称
         nm = slugify(name or title or description or "skill")
 
-        # Free dedup-at-creation (always, no API): for LLM-authored skills,
-        # skip if a near-identical skill already exists (Jaccard over
-        # name+description+when_to_use+procedure). User-authored skills are
-        # never auto-skipped — a human asked for it. The every-X AI audit
-        # handles the fuzzier near-duplicates this cheap check won't catch.
+        # 创建时免费去重（始终启用，无 API）：对于 LLM 创作的技能，
+        # 如果已存在高度相似的技能（在 name+description+when_to_use+procedure
+        # 上计算 Jaccard 相似度），则跳过。用户创作的技能
+        # 从不自动跳过 — 是人要求的。每 X 次 AI 审计
+        # 处理此廉价检查无法捕获的模糊近似重复。
         _all = self.load_all()
         _dedup_pool = _all if owner is None else [s for s in _all if s.get("owner") == owner]
         if source != "user":
@@ -340,16 +340,16 @@ class SkillsManager:
                         " ".join(s.get("procedure", []) or []),
                     ]))
                     if _jaccard(cand, ex) >= 0.82:
-                        # Near-identical — don't grow the library; bump the
-                        # existing skill's usage and return it so the caller
-                        # knows it already exists.
+                        # 高度相似 — 不扩充库；增加
+                        # 现用技能的计数并返回，让调用方
+                        # 知道它已存在。
                         try:
                             self.record_use(s["name"], owner=s.get("owner"))
                         except Exception:
                             pass
                         return {**s, "_deduped": True, "_duplicate_of": s.get("name")}
 
-        # Avoid clobbering an existing skill with the same name
+        # 避免与同名现有技能冲突
         existing = {s["name"] for s in _all}
         base = nm
         i = 2
@@ -389,7 +389,7 @@ class SkillsManager:
         source_url: str = "",
         category: str = "imported",
     ) -> Dict:
-        """Install a fetched skill bundle (relative path → text) under skills/."""
+        """安装已拉取的技能包（相对路径 → 文本）到 skills/ 目录下。"""
         from .skill_importer import SkillImportError, pick_skill_md, _safe_relpath
         from core.atomic_io import atomic_write_text
 
@@ -410,7 +410,7 @@ class SkillsManager:
         skill_dir = self._skill_dir(cat, nm)
         os.makedirs(skill_dir, exist_ok=True)
 
-        # Preserve bundle layout (templates/, references/, etc.) under the skill dir.
+        # 保留包布局（templates/、references/ 等）在技能目录下。
         for rel, content in files.items():
             safe = _safe_relpath(rel)
             dest = os.path.join(skill_dir, safe)

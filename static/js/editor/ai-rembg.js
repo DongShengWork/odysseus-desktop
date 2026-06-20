@@ -1,8 +1,8 @@
 /**
- * Background Remove (rembg) + Sharpen wiring + the live edge-cleanup
- * tuner that runs on the most-recent rembg cutout.
+ * 背景移除（rembg）+ 锐化连接 + 在最近一次 rembg 抠图上
+ * 运行的实时边缘清理调节器。
  *
- *   rembg-run button: flatten + POST to /api/image/remove-bg with an
+ *   rembg-run 按钮: 展平 + POST 到 /api/image/remove-bg，
  *     optional hint_mask if the user has a wand/lasso selection
  *     active. After the new layer lands, hides every previously-
  *     visible layer so the cutout reads cleanly, and binds the
@@ -12,18 +12,18 @@
  *     moment it lands; subsequent feather/grow slider tweaks
  *     rebuild the layer's alpha from that snapshot WITHOUT
  *     re-running the model.
- *      - Grow > 0 → blur snap alpha, threshold low (32) → grow.
- *      - Grow < 0 → blur snap alpha, threshold high (200) → shrink.
- *      - Feather > 0 → blur the whole layer (alpha + RGB) so the
+ *      - 膨胀 > 0 → 模糊快照 alpha，低阈值 (32) → 扩展。
+ *      - 膨胀 < 0 → 模糊快照 alpha，高阈值 (200) → 收缩。
+ *      - 羽化 > 0 → 模糊整个图层（alpha + RGB），
  *        edge softens AND the residual color fringe from the
  *        original background gets blurred away.
  *
- *   Sharpen: small slider + button; just calls _applyImageTool
- *     against /api/image/sharpen.
+ *   锐化: 小型滑块 + 按钮；仅通过 /api/image/sharpen
+ *     调用 _applyImageTool。
  *
- *   buildSelectionHintMask: pure-ish utility — returns a base64 PNG
- *     (no data: prefix) of the active wand or lasso selection, or
- *     null. Returned so other wand-rembg call sites can use it.
+ *   buildSelectionHintMask: 纯工具函数 — 返回激活的魔棒
+ *     或套索选区的 base64 PNG（无 data: 前缀），或 null。
+ *     返回以便其他魔棒-rembg 调用点可以使用。
  *
  * @param {{
  *   applyImageTool:             (endpoint, payload, layerName, btn, opts?) => Promise<void>,
@@ -41,7 +41,7 @@ export function wireRembgAndSharpen({
   applyImageTool, openCookbookForDependency,
   composite, renderLayerPanel, uiModule,
 }) {
-  // ── Sharpen ──
+  // ── 锐化 ──
   const sharpenPrev = document.getElementById('ge-sharpen-preview');
   if (sharpenPrev) sharpenPrev.style.opacity = '0.5';
   document.getElementById('ge-sharpen-amount')?.addEventListener('input', (e) => {
@@ -50,10 +50,10 @@ export function wireRembgAndSharpen({
   });
   document.getElementById('ge-sharpen-run')?.addEventListener('click', () => {
     const amount = parseInt(document.getElementById('ge-sharpen-amount')?.value || '50');
-    applyImageTool('/api/image/sharpen', { amount }, 'Sharpened', document.getElementById('ge-sharpen-run'));
+    applyImageTool('/api/image/sharpen', { amount }, '已锐化', document.getElementById('ge-sharpen-run'));
   });
 
-  // ── Bg Remove ──
+  // ── 背景移除 ──
   document.getElementById('ge-rembg-install-link')?.addEventListener('click', () => {
     openCookbookForDependency('rembg');
   });
@@ -61,17 +61,17 @@ export function wireRembgAndSharpen({
     const payload = {};
     const hint = buildSelectionHintMask();
     if (hint) payload.hint_mask = hint;
-    // NB: edge_feather / edge_grow are applied CLIENT-side so the
-    // sliders can re-tune the cutout without re-running the model.
+    // 注意: edge_feather / edge_grow 在客户端应用，
+    // 这样滑块可以重新调节抠图而无需重新运行模型。
     const btn = document.getElementById('ge-rembg-run');
     const before = state.layers.length;
-    // Snapshot which layers were visible BEFORE the run so we know
-    // which to hide after a successful cutout.
+    // 快照运行前哪些图层是可见的，以便知道
+    // 成功抠图后需要隐藏哪些。
     const prevVisible = state.layers.filter(l => l.visible).map(l => l.id);
-    await applyImageTool('/api/image/remove-bg', payload, 'BG Removed', btn);
-    // applyImageTool finishes after fetch but the new layer is added
-    // inside img.onload (one tick later). Poll for up to 60 frames
-    // (~1s) for the new layer to appear before we auto-hide.
+    await applyImageTool('/api/image/remove-bg', payload, '已移除背景', btn);
+    // applyImageTool 在 fetch 后完成，但新图层在
+    // img.onload 内添加（延迟一个 tick）。轮询最多 60 帧
+    // (~1s) 等待新图层出现，然后再自动隐藏。
     let frames = 0;
     while (state.layers.length <= before && frames < 60) {
       await new Promise(r => requestAnimationFrame(r));
@@ -80,8 +80,8 @@ export function wireRembgAndSharpen({
     if (state.layers.length > before) {
       const newLayer = state.layers[state.layers.length - 1];
       bindRembgLiveTuner(newLayer);
-      // Auto-hide underlying layers so the user sees just the
-      // cutout — the eye toggles back on if they re-enable manually.
+      // 自动隐藏底层图层，让用户只看到抠图 —
+      // 如果用户手动重新开启，眼睛图标会重新亮起。
       for (const layer of state.layers) {
         if (prevVisible.includes(layer.id) && layer.id !== newLayer.id) {
           layer.visible = false;
@@ -90,7 +90,7 @@ export function wireRembgAndSharpen({
       composite();
       renderLayerPanel();
     }
-    // Reset sliders so the new cutout starts clean.
+    // 重置滑块，让新抠图从干净状态开始。
     const f = document.getElementById('ge-rembg-feather');
     const g = document.getElementById('ge-rembg-grow');
     if (f) { f.value = 0; document.getElementById('ge-rembg-feather-label').textContent = '0px'; syncRembgFeather(0); }
@@ -108,7 +108,7 @@ export function wireRembgAndSharpen({
     snap.getContext('2d').drawImage(layer.canvas, 0, 0);
     state.rembgLiveLayer = layer;
     state.rembgLiveSnap = snap;
-    rembgApplyEdgeNow();  // initial pass (no-op at 0/0)
+    rembgApplyEdgeNow();  // 初始通过（0/0 时无操作）
   }
   let rembgRaf = null;
   function scheduleRembgApply() {
@@ -124,14 +124,14 @@ export function wireRembgAndSharpen({
     const w = snap.width, h = snap.height;
     const lctx = layer.ctx;
 
-    // 1) Start fresh from the pristine cutout snapshot.
+    // 1) 从原始抠图快照重新开始。
     lctx.clearRect(0, 0, w, h);
     lctx.drawImage(snap, 0, 0);
 
-    // 2) Edge ±N — dilate / erode alpha via blur+threshold:
-    //      grow > 0 → low threshold (32) → halo counts as opaque → grows.
-    //      grow < 0 → high threshold (200) → only solid interior → shrinks.
-    //    RGB is kept; only alpha is replaced.
+    // 2) 边缘 ±N — 通过模糊+阈值扩展/侵蚀 alpha:
+    //      膨胀 > 0 → 低阈值 (32) → 光晕计为不透明 → 扩展。
+    //      膨胀 < 0 → 高阈值 (200) → 仅实心内部 → 收缩。
+    //    RGB 保留；仅替换 alpha。
     if (grow !== 0) {
       const blurC = document.createElement('canvas');
       blurC.width = w; blurC.height = h;
@@ -149,10 +149,10 @@ export function wireRembgAndSharpen({
       lctx.putImageData(layerData, 0, 0);
     }
 
-    // 3) Feather softens whatever edge we have now. Blur the entire
-    //    layer (alpha + RGB) — alpha gets smooth falloff, RGB gets a
-    //    faint blur at the edge which actually helps hide residual
-    //    colour fringing from the original background.
+    // 3) 羽化柔化我们当前的任何边缘。模糊整个图层
+    //    （alpha + RGB）— alpha 获得平滑衰减，RGB 在边缘
+    //    获得轻微模糊，这实际上有助于隐藏原始背景
+    //    残留的颜色晕。
     if (feather > 0) {
       const fC = document.createElement('canvas');
       fC.width = w; fC.height = h;
@@ -166,7 +166,7 @@ export function wireRembgAndSharpen({
     composite();
   }
 
-  // ── Slider preview swatches + wiring ──
+  // ── 滑块预览样本 + 连接 ──
   const rembgFeatherPrev = document.getElementById('ge-rembg-feather-preview');
   const rembgGrowPrev = document.getElementById('ge-rembg-grow-preview');
   function syncRembgFeather(v) {
@@ -176,7 +176,7 @@ export function wireRembgAndSharpen({
   }
   function syncRembgGrow(v) {
     if (!rembgGrowPrev) return;
-    // -10..+10 → scale 0.6 .. 1.4 so the swatch visibly grows/shrinks.
+    // -10..+10 → 缩放 0.6..1.4，让样本可见地扩大/缩小。
     const s = 1 + v * 0.04;
     rembgGrowPrev.style.transform = `scale(${s})`;
     rembgGrowPrev.style.background = v < 0 ? 'color-mix(in srgb, var(--fg) 40%, transparent)' : 'var(--fg)';
@@ -196,10 +196,10 @@ export function wireRembgAndSharpen({
     scheduleRembgApply();
   });
 
-  // ── Selection-hint mask builder (used here + by wand-rembg) ──
-  // Full-image white-on-transparent mask PNG (base64, no `data:`
-  // prefix) of whichever selection is active — wand first, lasso
-  // second. Returns null if neither has a selection.
+  // ── 选区提示蒙版构建器（此处 + wand-rembg 使用）──
+  // 全图白色透明蒙版 PNG（base64，无 `data:` 前缀）
+  // 对应当前激活的选区 — 优先魔棒，其次套索。
+  // 如果两者都没有选区则返回 null。
   function buildSelectionHintMask() {
     const w = state.imgWidth, h = state.imgHeight;
     if (state.wandMask && state.wandLayerId) {

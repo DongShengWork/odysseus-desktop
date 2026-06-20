@@ -1,4 +1,4 @@
-"""Editor draft routes — persisted in-progress gallery-editor sessions.
+"""编辑器草稿路由 — 持久化的进行中画廊编辑器会话。
 
 The gallery editor (image canvas) lets users layer edits on top of a
 photo (or a blank canvas). Persisting those layered sessions to the
@@ -6,14 +6,14 @@ server makes them survive cache clears and roams across devices —
 unlike the legacy per-image localStorage drafts.
 
 Each draft carries:
-  - id           — opaque uuid (the client never sees gallery-image ids
+                    对 GalleryImage X 的编辑"
                     as draft ids, so blank-canvas drafts work too)
   - source_image_id (nullable) — back-pointer for "this draft started as
-                    an edit of GalleryImage X"
-  - payload      — full JSON snapshot (layers as base64 PNG dataURLs,
+                    对 GalleryImage X 的编辑"
+  - payload — 完整的 JSON 快照（图层为 base64 PNG dataURL、
                     offsets, opacities, etc.) the editor knows how to
-                    rehydrate
-  - thumbnail    — small data URL for the landing-list grid
+                    对 GalleryImage X 的编辑"
+  - thumbnail — 用于列表网格的小型 data URL
 """
 
 import json

@@ -1,10 +1,10 @@
 # src/deep_research.py
 """
-IterResearch-style deep research engine.
+IterResearch 风格的深度研究引擎。
 
-Implements an iterative Think→Search→Extract→Synthesize loop where the LLM
-drives every decision: what to search, what's relevant, what's missing, and
-when to stop.  Inspired by Alibaba's IterResearch approach.
+实现一个迭代式 思考→搜索→提取→综合 循环，其中 LLM
+驱动每个决策：搜索什么、什么是相关的、缺少什么，以及
+何时停止。受阿里巴巴 IterResearch 方法启发。
 """
 import asyncio
 import json
@@ -36,7 +36,7 @@ def current_date_context() -> str:
     )
 
 # ---------------------------------------------------------------------------
-# Prompts
+# 提示词
 # ---------------------------------------------------------------------------
 RESEARCH_PLAN_PROMPT = """\
 You are a research strategist. Before searching, analyze this question and create a research plan.
@@ -183,10 +183,10 @@ CATEGORY_PROMPTS = {
 # ---------------------------------------------------------------------------
 class DeepResearcher:
     """
-    Iterative research engine following the IterResearch pattern.
+    Iterative 研究引擎，遵循 IterResearch 模式。
 
-    Each round: LLM generates queries → SearXNG search → LLM extracts from
-    top pages → LLM synthesizes into evolving report → LLM decides continue/stop.
+    每轮：LLM 生成查询 → SearXNG 搜索 → LLM 从顶部页面提取 →
+    LLM 综合到不断演进的报告中 → LLM 决定继续/停止。
     """
 
     def __init__(

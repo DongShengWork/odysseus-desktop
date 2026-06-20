@@ -1,8 +1,8 @@
 # core/models.py
 """
-Pure data models — no database logic, no side effects.
+纯数据模型 — 无数据库逻辑，无副作用。
 
-These are simple datacontainers. All persistence is handled by SessionManager.
+这些是简单的数据容器。所有持久化由 SessionManager 处理。
 """
 
 from dataclasses import dataclass
@@ -33,20 +33,20 @@ get_session_manager = get_session_manager_instance
 
 @dataclass
 class ChatMessage:
-    """A single chat message."""
+    """单条聊天消息。"""
     role: str
     content: str
     metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dict for API responses."""
+        """转换为字典以用于 API 响应。"""
         result = {"role": self.role, "content": self.content}
         if self.metadata:
             result["metadata"] = self.metadata
         return result
 
     def get(self, key: str, default=None):
-        """Dict-like access for compatibility."""
+        """类字典访问以保持兼容性。"""
         return getattr(self, key, default)
 
 
@@ -93,7 +93,7 @@ class Session:
 
     def add_message(self, message: ChatMessage):
         """
-        Add a message to this session.
+        向此会话中添加一条消息。
 
         Appends to the authoritative history list and increments
         message_count. Delegates to SessionManager for persistence
@@ -102,17 +102,17 @@ class Session:
         self.history.append(message)
         self.message_count = len(self.history)
 
-        # Delegate to session manager for persistence
+        # 委托给会话管理器进行持久化
         if _SESSION_MANAGER_INSTANCE:
             _SESSION_MANAGER_INSTANCE._persist_message(self.id, message)
 
     def get_context_messages(self) -> List[Dict[str, Any]]:
-        """Get messages in format for LLM API.
+        """获取用于发送给 LLM API 的消息格式。
 
         Slash-command / setup replies are persisted to history so they render
         in the transcript, but they are UI chatter (e.g. ``/setup ...`` and its
         status lines) the user never meant as conversation. They carry
-        ``metadata.source == "slash"``; exclude them here so they never reach
+        ``metadata.source == "slash"`` 标记；在此排除它们，使其
         the model. Display/history-load paths use the raw ``history`` and are
         unaffected.
         """
@@ -123,7 +123,7 @@ class Session:
         ]
 
     def get(self, key: str, default=None):
-        """Dict-like access for compatibility."""
+        """类字典访问以保持兼容性。"""
         return getattr(self, key, default)
 
     def __getitem__(self, key: str):

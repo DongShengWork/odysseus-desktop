@@ -1,15 +1,15 @@
-// compare/index.js — orchestrator module (public API)
+// compare/index.js — 编排模块（公共 API）
 /**
- * Model A/B Comparison module.
- * Builds its own multi-pane grid layout (up to 8 models).
- * Sends same prompt to all models in parallel, lets user vote.
+ * 模型 A/B 对比模块。
+ * 构建自己的多窗格网格布局（最多 8 个模型）。
+ * 将相同的提示同时发送给所有模型，让用户投票。
  *
  * Uses show/hide on the original container children instead of
  * innerHTML replacement, so event listeners on the input bar,
  * compare button, mode toggle, etc. are preserved.
  */
 
-// ── Submodule imports ──
+// ── 子模块导入 ──
 import state from './state.js';
 import { EVAL_PROMPTS, WAVE_FRAMES,
   ICON_DICE, ICON_EXPAND, ICON_COLLAPSE, ICON_CLOSE,
@@ -31,7 +31,7 @@ import {
 import { handleVote, buildVoteBar, addFinishBadge, spawnConfetti, _saveVote, registerCompareActions } from './vote.js';
 import { showScoreboard } from './scoreboard.js';
 
-// ── External dependency imports ──
+// ── 外部依赖导入 ──
 import Storage from '../storage.js';
 import uiModule from '../ui.js';
 import sessionModule from '../sessions.js';
@@ -42,21 +42,21 @@ import markdownModule from '../markdown.js';
 
 var escapeHtml = uiModule.esc;
 
-/** Slot label: letters (A, B) in parallel, numbers (1, 2) in sequential */
+/** 槽位标签：并行用字母（A、B），顺序用数字（1、2） */
 function _slotChar(i) { return state._parallel ? String.fromCharCode(65 + i) : String(i + 1); }
 
 // ────────────────────────────────────────────────────────────────────────────
-// ── Toolbar indicator sync ──
+// ── 工具栏指示器同步 ──
 // ────────────────────────────────────────────────────────────────────────────
-// ── init ──
+// ── 初始化 ──
 // ────────────────────────────────────────────────────────────────────────────
 
 function init(apiBase) {
   state.API_BASE = apiBase;
-  // Clean up unsaved compare sessions on page close/refresh
+  // 在页面关闭/刷新时清理未保存的对比会话
   window.addEventListener('beforeunload', () => {
     if (!state._saveOnClose && state._paneSessionIds.length > 0) {
-      // sendBeacon uses POST — use the bulk delete endpoint
+      // sendBeacon 使用 POST — 使用批量删除端点
       navigator.sendBeacon(
         `${state.API_BASE}/api/sessions/bulk-delete`,
         new Blob([JSON.stringify({ ids: state._paneSessionIds })], { type: 'application/json' })
@@ -77,7 +77,7 @@ function isCompareActive() {
 // ── closeCompare ──
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Close compare mode (public API for toolbar indicator). */
+/** 关闭对比模式（工具栏指示器的公共 API）。 */
 function closeCompare() {
   if (state.isActive) deactivate(true);
 }
@@ -86,7 +86,7 @@ function closeCompare() {
 // ── toggleMode ──
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Toggle compare mode — shows model selector, then builds UI. */
+/** 切换对比模式 — 显示模型选择器，然后构建 UI。 */
 async function toggleMode() {
   if (state.isActive) {
     deactivate(true);
@@ -112,15 +112,15 @@ async function toggleMode() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// ── deactivate ──
+// ── 停用 ──
 // ────────────────────────────────────────────────────────────────────────────
 
 async function deactivate(teardown) {
-  // Abort any in-flight streams
+  // 中止所有正在进行的流
   state._abortControllers.forEach(ac => { if (ac) ac.abort(); });
   state._abortControllers = [];
 
-  // Move sessions to compare folder if saving
+  // 如果保存则将会话移动到对比文件夹
   if (state._saveOnClose && state._paneSessionIds.length > 0) {
     const modelShorts = _modelDisplayNames(state._selectedModels);
     const folderName = 'Compare: ' + modelShorts.join(' vs ');
@@ -131,7 +131,7 @@ async function deactivate(teardown) {
     ));
   }
 
-  // Capture session IDs to delete before resetting state
+  // 在重置状态之前捕获要删除的会话 ID
   const sessionIdsToDelete = (!state._saveOnClose && teardown && state._paneSessionIds.length > 0)
     ? [...state._paneSessionIds] : [];
 
@@ -148,28 +148,28 @@ async function deactivate(teardown) {
   state._expectedAnswer = '';
   _syncToolbarIndicator(false);
 
-  // Restore main textarea placeholder
+  // 恢复主文本区域的 placeholder
   const msgTA = document.getElementById('message');
   if (msgTA) msgTA.placeholder = '';
 
-  // Restore toolbar indicator display states and pointer events
+  // 恢复工具栏指示器的显示状态和指针事件
   Object.entries(state._savedIndicatorDisplay).forEach(([id, display]) => {
     const el = document.getElementById(id);
     if (el) { el.style.display = display; el.style.pointerEvents = ''; }
   });
   state._savedIndicatorDisplay = {};
 
-  // Unlock mode toggle
+  // 解锁模式切换
   const _modeToggleR = document.querySelector('.mode-toggle');
   if (_modeToggleR) { _modeToggleR.style.pointerEvents = ''; _modeToggleR.style.opacity = ''; }
 
-  // Restore tool toggle pointer events
+  // 恢复工具开关的指针事件
   ['overflow-plus-btn', 'web-toggle-btn', 'bash-toggle-btn'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.pointerEvents = '';
   });
 
-  // Restore agent/chat mode to what it was before compare
+  // 将 agent/chat 模式恢复到对比之前的状态
   const _ts = Storage.loadToggleState();
   _ts.mode = state._savedMode;
   Storage.saveToggleState(_ts);
@@ -177,10 +177,10 @@ async function deactivate(teardown) {
   if (_ab2 && _cb2) { _ab2.classList.toggle('active', state._savedMode === 'agent'); _cb2.classList.toggle('active', state._savedMode === 'chat'); }
   document.querySelectorAll('[data-mode-tool]').forEach(b => { b.style.display = state._savedMode === 'agent' ? '' : 'none'; });
 
-  // Delete unsaved sessions, then reload
+  // 删除未保存的会话，然后重新加载
   if (teardown) {
     if (sessionIdsToDelete.length > 0) {
-      // keepalive ensures requests complete even during page navigation
+      // keepalive 确保即使在页面导航期间也能完成请求
       await Promise.all(sessionIdsToDelete.map(sid =>
         fetch(`${state.API_BASE}/api/session/${sid}`, { method: 'DELETE', keepalive: true }).catch(() => {})
       ));
@@ -193,10 +193,10 @@ async function deactivate(teardown) {
 // ── _buildCompareUI ──
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Build the compare UI: sessions, header bar, grid of panes, vote bar, eval dropdown. */
+/** 构建对比 UI：会话、标题栏、窗格网格、投票栏、评测下拉菜单。 */
 async function _buildCompareUI() {
   if (state._selectedModels.length < 1) {
-    if (uiModule) uiModule.showError('Select at least 1 model');
+    if (uiModule) uiModule.showError(t('compare.select_at_least_one'));
     return;
   }
 
@@ -204,14 +204,14 @@ async function _buildCompareUI() {
   const modelShorts = _modelDisplayNames(state._selectedModels);
   _persistSelections();
 
-  // 1. Create sessions (skip for search mode — no LLM sessions needed)
+  // 1. 创建会话（搜索模式跳过 — 不需要 LLM 会话）
   if (state._compareMode !== 'search') {
     const sessionIds = [];
     for (let i = 0; i < n; i++) {
       const m = state._selectedModels[i];
       const fd = new FormData();
-      // Blind mode: name the session by its neutral slot so the sidebar /
-      // GET /api/sessions can't de-anonymize the comparison (issue #1285).
+      // 盲评模式：以中立槽位命名会话，使侧边栏 /
+      // GET /api/sessions 无法去匿名化对比（问题 #1285）。
       fd.append('name', '[CMP] ' + (state._blindMode ? 'Model ' + _slotChar(i) : modelShorts[i]));
       fd.append('endpoint_url', m.endpoint || '');
       fd.append('model', m.model || '');
@@ -231,7 +231,7 @@ async function _buildCompareUI() {
   state._paneMetrics = state._selectedModels.map(() => null);
   state._abortControllers = state._selectedModels.map(() => null);
 
-  // 2. Auto-collapse sidebar if many panes
+  // 2. 如果有很多窗格则自动折叠侧边栏
   if (n > 3) {
     const sidebar = document.getElementById('sidebar');
     if (sidebar && !sidebar.classList.contains('hidden')) {
@@ -243,14 +243,14 @@ async function _buildCompareUI() {
     }
   }
 
-  // 3. Hide mobile new-chat button during compare
+  // 3. 对比期间隐藏移动端的新聊天按钮
   const _mobileNewBtn = document.getElementById('mobile-new-chat-btn');
   if (_mobileNewBtn) {
     _mobileNewBtn.dataset.cmpWasDisplay = _mobileNewBtn.style.display;
     _mobileNewBtn.style.display = 'none';
   }
 
-  // 4. Save toolbar indicator display states before hiding
+  // 4. 在隐藏之前保存工具栏指示器的显示状态
   const indicatorIds = ['overflow-tts-btn', 'overflow-attach-btn', 'overflow-rag-btn', 'overflow-research-btn', 'overflow-doc-btn', 'rag-indicator-btn', 'research-toggle-btn'];
   state._savedIndicatorDisplay = {};
   indicatorIds.forEach(id => {
@@ -258,7 +258,7 @@ async function _buildCompareUI() {
     if (el) state._savedIndicatorDisplay[id] = el.style.display;
   });
 
-  // 5. Save current mode and lock to the right one for this compare type
+  // 5. 保存当前模式并锁定到正确的对比类型模式
   const _toggleState = Storage.loadToggleState();
   state._savedMode = _toggleState.mode || 'chat';
   const _targetMode = (state._compareMode === 'agent') ? 'agent' : 'chat';
@@ -272,7 +272,7 @@ async function _buildCompareUI() {
   const _modeToggle = document.querySelector('.mode-toggle');
   if (_modeToggle) { _modeToggle.style.pointerEvents = 'none'; _modeToggle.style.opacity = '0.4'; }
 
-  // 6. Force tool toggles per compare mode
+  // 6. 根据对比模式强制设置工具开关
   disableToolToggles();
   if (state._compareMode === 'search') {
     const webChk = document.getElementById('web-toggle');
@@ -286,7 +286,7 @@ async function _buildCompareUI() {
     if (resBtn) { resBtn.style.display = ''; resBtn.classList.add('active'); }
   }
 
-  // 7. Hide existing chat container children (preserves event listeners)
+  // 7. 隐藏现有的聊天容器子元素（保留事件监听器）
   const container = document.getElementById('chat-container');
   state._compareElements = [];
   Array.from(container.children).forEach(child => {
@@ -296,7 +296,7 @@ async function _buildCompareUI() {
   });
   container.classList.add('compare-active');
 
-  // 8. Header bar
+  // 8. 标题栏
   const cols = Math.min(n, 4);
   const headerBar = document.createElement('div');
   headerBar.className = 'compare-header-bar';
@@ -304,7 +304,7 @@ async function _buildCompareUI() {
   const headerLabel = document.createElement('span');
   headerLabel.style.cssText = 'font-size:10px;font-weight:400;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
   const _modeLabel = ({ search: ' search providers', agent: ' agents', research: ' research models' }[state._compareMode] || ' models');
-  headerLabel.textContent = 'Comparing' + _modeLabel + (state._blindMode ? ' (blind)' : '') + ' · ' + state._timeout + 's timeout';
+  headerLabel.textContent = t('compare.comparing') + _modeLabel + (state._blindMode ? ' (blind)' : '') + ' · ' + state._timeout + 's timeout';
   // Left side: the Compare tool icon (two side-by-side panes, matching the
   // rail/sidebar icon) + the label. Other tool headers carry their icon; this
   // one was missing it.
@@ -324,14 +324,14 @@ async function _buildCompareUI() {
 
   const checkBtn = document.createElement('button');
   checkBtn.id = 'compare-check-btn';
-  checkBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><span style="font-size:11px;margin-left:3px;">Probe</span>';
-  checkBtn.title = 'Probe unverified models with a small test request';
+  checkBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><span style="font-size:11px;margin-left:3px;">' + t('compare.probe') + '</span>';
+  checkBtn.title = t('compare.probe_title');
   checkBtn.style.cssText = _btnCSS;
   checkBtn.addEventListener('click', () => _checkUnprobed());
   headerActions.appendChild(checkBtn);
 
-  // Check button is dynamic: only visible when at least one selected model
-  // hasn't been probed yet. Show right after add/change, hide after success.
+  // Check 按钮是动态的：仅当至少有一个选中的模型尚未探测时才可见。
+  // 在添加/更改后显示，成功后隐藏。
   window._updateCheckBtnState = function() {
     const btn = document.getElementById('compare-check-btn');
     if (!btn) return;
@@ -339,14 +339,14 @@ async function _buildCompareUI() {
     btn.style.display = hasUnprobed ? '' : 'none';
   };
 
-  // (Scoreboard button moved into the vote bar, next to Tie — see vote.js.)
+  // （Scoreboard 按钮移到了投票栏中，紧挨 Tie — 见 vote.js。）
 
   const exportWrap = document.createElement('div');
   exportWrap.style.cssText = 'position:relative;display:inline-flex;';
   const exportBtn = document.createElement('button');
   exportBtn.id = 'compare-export-btn';
-  exportBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span style="font-size:11px;margin-left:3px;">Export</span>';
-  exportBtn.title = 'Export options';
+  exportBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span style="font-size:11px;margin-left:3px;">' + t('compare.export') + '</span>';
+  exportBtn.title = t('compare.export_title');
   exportBtn.style.cssText = _btnCSS;
   exportBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -358,7 +358,7 @@ async function _buildCompareUI() {
   const shuffleBtn = document.createElement('button');
   shuffleBtn.id = 'compare-shuffle-btn';
   shuffleBtn.innerHTML = ICON_DICE + '<span style="font-size:11px;margin-left:3px;">Shuffle</span>';
-  shuffleBtn.title = 'Shuffle pane positions';
+  shuffleBtn.title = t('compare.shuffle_panes');
   shuffleBtn.style.cssText = _btnCSS;
   shuffleBtn.addEventListener('click', () => shufflePanePositions());
   headerActions.appendChild(shuffleBtn);
@@ -366,7 +366,7 @@ async function _buildCompareUI() {
   const addBtn = document.createElement('button');
   addBtn.id = 'compare-add-btn';
   addBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span style="font-size:11px;margin-left:3px;">Add</span>';
-  addBtn.title = 'Add model pane';
+  addBtn.title = t('compare.add_model_pane');
   addBtn.style.cssText = _btnCSS;
   addBtn.addEventListener('click', () => _addPane(addBtn));
   headerActions.appendChild(addBtn);
@@ -374,24 +374,24 @@ async function _buildCompareUI() {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'compare-close-btn';
   closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-  closeBtn.title = 'Close compare mode';
-  // Match Export/Score/Shuffle/Model styling so the X sits flush with
-  // the rest of the toolbar instead of being a 24×24 bordered square.
+  closeBtn.title = t('compare.close_compare');
+  // 匹配 Export/Score/Shuffle/Model 样式，使 X 与工具栏其余部分齐平，
+  // 而不是一个 24×24 带边框的方块。
   closeBtn.style.cssText = _btnCSS;
   closeBtn.addEventListener('click', () => deactivate(true));
   headerActions.appendChild(closeBtn);
 
-  // Move Export to the far left of the action cluster (per user preference).
+  // 将 Export 移到操作集群的最左边（按用户偏好）。
   headerActions.insertBefore(exportWrap, headerActions.firstChild);
 
   headerBar.appendChild(headerActions);
   container.appendChild(headerBar);
   state._compareElements.push(headerBar);
 
-  // Initial visibility — hidden if all current models are already probed
+  // 初始可见性 — 如果当前所有模型都已探测则隐藏
   window._updateCheckBtnState();
 
-  // 9. Grid of panes
+  // 9. 窗格网格
   const grid = document.createElement('div');
   grid.className = 'compare-grid';
   grid.dataset.cols = String(cols);
@@ -456,7 +456,7 @@ async function _buildCompareUI() {
   container.appendChild(grid);
   state._compareElements.push(grid);
 
-  // 10. Vote bar placeholder
+  // 10. 投票栏占位符
   const voteBar = document.createElement('div');
   voteBar.id = 'compare-vote-bar';
   voteBar.className = 'compare-vote-bar';
@@ -466,7 +466,7 @@ async function _buildCompareUI() {
 
   if (state._blindMode && n > 1) shufflePanePositions();
 
-  // 11. Move chat input bar to the bottom of the container
+  // 11. 将聊天输入栏移到容器底部
   const inputBar = document.querySelector('.chat-input-bar');
   if (inputBar) {
     inputBar.style.display = '';
@@ -475,16 +475,16 @@ async function _buildCompareUI() {
   }
   const msgTA = document.getElementById('message');
   if (msgTA) {
-    msgTA.placeholder = 'Enter prompt for all models...';
+    msgTA.placeholder = t('compare.prompt_placeholder');
     requestAnimationFrame(() => msgTA.focus());
   }
 
-  // Eval-prompts picker — sits inside the message box at top-right (where
-  // model-picker normally lives). Model-picker is irrelevant during compare,
-  // so hide it and restore on deactivate via the wrap's _cleanup.
+  // 评测提示选择器 — 位于消息框右上角（模型选择器通常所在的位置）。
+  // 模型选择器在对比期间不相关，因此隐藏它并在停用时通过 wrap 的
+  // _cleanup 恢复显示。
   _setupEvalPicker();
 
-  // 12. Hide tool buttons that don't apply during compare
+  // 12. 隐藏对比期间不适用的工具按钮
   ['overflow-tts-btn', 'overflow-attach-btn', 'overflow-rag-btn', 'overflow-research-btn', 'overflow-doc-btn', 'rag-indicator-btn', 'web-toggle-btn', 'bash-toggle-btn', 'overflow-plus-btn'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.style.display = 'none'; el.style.pointerEvents = 'none'; }
@@ -507,14 +507,14 @@ function _setSendBtn(mode) {
   if (!btn) return;
   if (mode === 'stop') {
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
-    btn.title = 'Stop all models';
+    btn.title = t('compare.stop_all');
     btn.dataset.mode = 'streaming';
     btn.classList.remove('mic-mode', 'newchat-mode');
   } else {
     btn.dataset.mode = '';
     btn.innerHTML = SEND_SVG;
     btn.style.color = '';
-    btn.title = 'Send to all models';
+    btn.title = t('compare.send_all');
     btn.classList.remove('mic-mode', 'newchat-mode', 'newchat-expanded');
   }
 }
@@ -524,11 +524,11 @@ function _setSendBtn(mode) {
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Handle submit from the main chat input while compare is active.
- * Called by app.js submit guard.
+ * 在对比激活时处理来自主聊天输入的提交。
+ * 由 app.js 提交守卫调用。
  */
 function handleCompareSubmit(e) {
-  // If streaming, act as stop button
+  // 如果正在流式传输，则作为停止按钮
   if (state._streaming) {
     stopAll();
     return;
@@ -537,29 +537,29 @@ function handleCompareSubmit(e) {
   const message = input ? input.value.trim() : '';
   if (!message) return;
   input.value = '';
-  // Reset textarea height
+  // 重置文本区域高度
   input.style.height = '';
-  // Notify input listeners (eval-picker visibility, autosize, etc.) that the
-  // textarea is empty again — programmatic clears don't fire `input` natively.
+  // 通知输入监听器（评测选择器可见性、自动调整大小等）文本区域
+  // 已重新为空 — 程序化清除不会原生触发 `input`。
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  // Mobile: dismiss the on-screen keyboard after the prompt is sent so the
-  // user sees the streaming output instead of the typing area. A plain blur()
-  // is often ignored on Firefox mobile, so toggle readonly around it (and blur
-  // the active element too) to reliably collapse the keyboard.
-  // Mobile keyboard dismiss — use the SAME proven logic as the main chat send
-  // (chat.js handleChatSubmit). Compare returns early in that flow, so it never
-  // reached this code; replicating it here is what actually works on Firefox
-  // mobile (readonly + blur, then drop readonly only once the blur is confirmed
-  // or the user taps to type again — avoids the keyboard bouncing back up).
+  // 移动端：发送提示后关闭屏幕键盘，以便用户看到流式输出
+  // 而不是输入区域。简单的 blur() 在 Firefox 移动端上经常被忽略，
+  // 因此在 blur 前后切换 readonly（同时 blur 活动元素）来可靠地
+  // 收起键盘。
+  // 移动端键盘关闭 — 使用与主聊天发送（chat.js handleChatSubmit）
+  // 相同的已验证逻辑。Compare 在该流程中提前返回，因此从未执行过
+  // 此代码；在这里复制相同的逻辑才能真正在 Firefox 移动端上工作
+  // （readonly + blur，然后仅在 blur 确认后或用户再次点击输入时才
+  // 取消 readonly — 避免键盘弹回来）。
   if (window.innerWidth <= 768) {
     try {
       input.setAttribute('readonly', 'readonly');
       input.blur();
-      // Setting readonly on an ALREADY-FOCUSED textarea doesn't dismiss the
-      // keyboard on Firefox, and blur() is often ignored — so the readonly-only
-      // approach works only when the input happened not to be focused at send
-      // time (inconsistent between 1st/2nd prompt). Deterministically pull focus
-      // off the textarea by focusing a throwaway readonly input, then drop it.
+      // 对已经聚焦的 textarea 设置 readonly 不会在 Firefox 上关闭
+      // 键盘，blur() 也经常被忽略 — 所以仅 readonly 的方法只在输入
+      // 恰好在发送时未聚焦时有效（在第一次/第二次提示之间不一致）。
+      // 通过聚焦一个丢弃的 readonly 输入来可靠地将焦点从 textarea
+      // 上移开，然后丢弃它。
       const tmp = document.createElement('input');
       tmp.setAttribute('readonly', 'readonly');
       tmp.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:0;padding:0;';
@@ -585,22 +585,22 @@ function handleCompareSubmit(e) {
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Send prompt to all panes, stream responses.
- * Works for both first and follow-up messages.
+ * 向所有窗格发送提示，流式传输响应。
+ * 适用于第一条和后续消息。
  */
 async function _executeCompare(message) {
   if (state._streaming) return;
   if (state._selectedModels.length < 1) return;
 
-  // New round — allow voting again and clear the previous round's win/lose/tie
-  // styling (pane highlight + the Winner!/= title decorations), otherwise the
-  // old result stays stuck on the panes through the next prompt.
+  // 新一轮 — 允许再次投票并清除上一轮的胜负/平局样式
+  // （窗格高亮 + Winner!/= 标题装饰），否则旧结果会
+  // 在下一次提示时一直显示在窗格上。
   state._voted = false;
   for (let i = 0; i < state._selectedModels.length; i++) {
     const pane = document.querySelector('.compare-pane[data-pane="' + i + '"]');
     if (pane) {
       pane.classList.remove('winner', 'loser');
-      // Clear the previous round's Failed/Timeout badge and the eval ✓/✗ grade.
+      // 清除上一轮的 Failed/Timeout 徽章和评测 ✓/✗ 评分。
       pane.querySelector('.pane-grade-badge')?.remove();
     }
     const fb = document.getElementById('cmp-badge-' + i);
@@ -617,21 +617,21 @@ async function _executeCompare(message) {
   state._streaming = true;
   state._lastPrompt = message;
   _setSendBtn('stop');
-  // Disable header buttons during streaming
+  // 流式传输期间禁用标题栏按钮
   document.querySelectorAll('#compare-shuffle-btn, #compare-check-btn, #compare-add-btn').forEach(b => {
     b.disabled = true; b.style.opacity = '0.25'; b.style.pointerEvents = 'none';
   });
 
-  // ── Search mode: direct API calls, no SSE streaming ──
+  // ── 搜索模式：直接 API 调用，无 SSE 流式传输 ──
   if (state._compareMode === 'search') {
     try {
       const n = state._selectedModels.length;
 
-      // Clear previous vote buttons on follow-up
+      // 在后续提问时清除之前的投票按钮
       const voteBar = document.getElementById('compare-vote-bar');
       if (voteBar) voteBar.innerHTML = '';
 
-      // Add user query + spinner to each pane
+      // 为每个窗格添加用户查询 + Spinner
       for (let i = 0; i < n; i++) {
         const hist = document.getElementById('cmp-history-' + i);
         if (!hist) continue;
@@ -654,7 +654,7 @@ async function _executeCompare(message) {
         hist.scrollTop = hist.scrollHeight;
       }
 
-      // Fire searches — parallel or sequential based on _parallel setting
+      // 发起搜索 — 根据 _parallel 设置决定并行还是顺序执行
       const t0 = performance.now();
       state._abortControllers = state._selectedModels.map(() => new AbortController());
 
@@ -677,7 +677,7 @@ async function _executeCompare(message) {
       if (state._parallel) {
         results = await Promise.all(state._selectedModels.map((m, i) => _searchOne(m, i)));
       } else {
-        // Sequential — run one at a time, dim waiting panes
+        // 顺序 — 逐个运行，等待中的窗格变暗
         results = [];
         const panes = document.querySelectorAll('.compare-pane');
         panes.forEach((p, i) => { if (i > 0) p.style.opacity = '0.4'; });
@@ -685,7 +685,7 @@ async function _executeCompare(message) {
           const pane = panes[i];
           if (pane) pane.style.opacity = '1';
           results.push(await _searchOne(state._selectedModels[i], i));
-          // Render this result immediately
+          // 立即渲染此结果
           const { idx, data } = results[results.length - 1];
           const hist = document.getElementById('cmp-history-' + idx);
           if (hist) {
@@ -711,7 +711,7 @@ async function _executeCompare(message) {
               if (_pe) _pe.querySelectorAll('.pane-needs-response').forEach(b => b.style.display = '');
             }
           }
-          // Sequential: run synthesis for this pane immediately before moving to next
+          // 顺序模式：立即为此窗格运行合成，然后再移到下一个
           _seqSynthDone.add(idx);
           if (!data.error && data.results && data.results.length > 0) {
             const modelToUse = state._searchSynthModels?.[idx] || null;
@@ -733,10 +733,10 @@ async function _executeCompare(message) {
             }
           }
         }
-        // Reset opacity
+        // 重置不透明度
         panes.forEach(p => { p.style.opacity = ''; });
       }
-      // Render results into each pane
+      // 将结果渲染到每个窗格中
       for (const { idx, data } of results) {
         const hist = document.getElementById('cmp-history-' + idx);
         if (!hist) continue;
@@ -753,7 +753,7 @@ async function _executeCompare(message) {
           aiBody.appendChild(_renderSearchResults(data));
         }
 
-        // Footer metrics
+        // 页脚指标
         const footer = document.createElement('div');
         footer.className = 'msg-footer';
         const span = document.createElement('span');
@@ -766,18 +766,18 @@ async function _executeCompare(message) {
         aiMsg.appendChild(footer);
 
         hist.scrollTop = hist.scrollHeight;
-        // Show reroll/copy buttons for search results
+        // 为搜索结果显示重新运行/复制按钮
         const _paneEl = document.querySelector(`.compare-pane[data-pane="${idx}"]`);
         if (_paneEl) _paneEl.querySelectorAll('.pane-needs-response').forEach(b => b.style.display = '');
       }
 
-      // ── Synthesis: send results to LLM for analysis (respects _parallel setting) ──
+      // ── 合成：将搜索结果发送给 LLM 进行分析（遵循 _parallel 设置） ──
       if (state._searchSynthModels) {
-        // Build list of synthesis tasks
+        // 构建合成任务列表
         const synthTasks = [];
         for (let i = 0; i < results.length; i++) {
           const { idx, data } = results[i];
-          // Skip panes already synthesized in sequential mode
+          // 跳过已在顺序模式中合成的窗格
           if (_seqSynthDone.has(idx)) continue;
           if (data.error || !data.results || data.results.length === 0) continue;
 
@@ -787,7 +787,7 @@ async function _executeCompare(message) {
           const hist = document.getElementById('cmp-history-' + idx);
           if (!hist) continue;
 
-          // Add synthesis message with spinner
+          // 添加带 Spinner 的合成消息
           const synthMsg = document.createElement('div');
           synthMsg.className = 'msg msg-ai';
           synthMsg.innerHTML = '<div class="role">Analysis</div><div class="body"></div>';
@@ -799,10 +799,10 @@ async function _executeCompare(message) {
             spinner.start();
           }
           hist.appendChild(synthMsg);
-          // Auto-scroll to show the Analysis message
+          // 自动滚动以显示 Analysis 消息
           hist.scrollTop = hist.scrollHeight;
 
-          // Build synthesis prompt
+          // 构建合成提示
           const resultsText = data.results.map((r, ri) =>
             `[${ri + 1}] ${r.title}\n${r.snippet || ''}\nURL: ${r.url}`
           ).join('\n\n');
@@ -812,7 +812,7 @@ async function _executeCompare(message) {
           synthTasks.push({ idx, modelToUse, synthBody, synthMsg, spinner, hist, synthPrompt });
         }
 
-        // Run synthesis streams (parallel or sequential based on _parallel flag)
+        // 运行合成流（根据 _parallel 标志决定并行还是顺序执行）
         const runSynthesis = async (task) => _runSynthForPane(task.modelToUse, task.synthPrompt, task.synthBody, task.spinner, task.hist);
 
         if (state._parallel) {
@@ -827,7 +827,7 @@ async function _executeCompare(message) {
       buildVoteBar(n);
     } catch (err) {
       console.error('Search compare error:', err);
-      if (uiModule) uiModule.showError('Search compare failed: ' + err.message);
+      if (uiModule) uiModule.showError(t('compare.search_failed', { error: err.message }));
     } finally {
       state._streaming = false;
       _setSendBtn('send');
@@ -835,7 +835,7 @@ async function _executeCompare(message) {
     return;
   }
 
-  // ── Chat / Image mode ──
+  // ── Chat / Image 模式 ──
   const isFollowUp = document.getElementById('cmp-history-0')?.querySelector('.msg-ai');
 
   try {
@@ -849,7 +849,7 @@ async function _executeCompare(message) {
       }
     }
 
-    // ── Add user + AI bubbles to each pane ──
+    // ── 为每个窗格添加用户 + AI 气泡 ──
     const aiElements = [];
     for (let i = 0; i < n; i++) {
       const hist = document.getElementById('cmp-history-' + i);
@@ -866,7 +866,7 @@ async function _executeCompare(message) {
       aiMsg.innerHTML = '<div class="role">AI</div><div class="body"></div>';
       const aiBody = aiMsg.querySelector('.body');
       if (spinnerModule) {
-        // In sequential mode, only first pane says "Processing", rest say "Waiting"
+        // 在顺序模式中，只有第一个窗格显示"Processing"，其余显示"Waiting"
         const label = (!state._parallel && i > 0)
           ? 'Waiting for Model ' + _slotChar(i - 1) + '...'
           : 'Processing...';
@@ -880,21 +880,21 @@ async function _executeCompare(message) {
       aiElements.push(aiMsg);
     }
 
-    // ── Auto-extend timeout ──
+    // ── 自动延长超时 ──
     const researchChk = document.getElementById('research-toggle');
     const webChkT = document.getElementById('web-toggle');
     const noTimeLimit = state._compareMode === 'research' || (researchChk && researchChk.checked);
     const needsLongTimeout = state._compareMode === 'agent' || (webChkT && webChkT.checked);
     const runTimeout = noTimeLimit ? 999999 : needsLongTimeout ? Math.max(state._timeout, 300) : state._timeout;
 
-    // ── Pre-search if web toggle is on (share same results across all panes) ──
+    // ── 如果 web 开关打开则预搜索（所有窗格共享相同结果） ──
     let sharedSearchContext = null;
     let sharedSearchSources = null;
     const webChk = document.getElementById('web-toggle');
     const toggleState = Storage.loadToggleState();
     const isAgentMode = (toggleState.mode || 'chat') === 'agent';
     const webOn = webChk && webChk.checked;
-    // In agent mode, web_search is a tool (handled per-pane); in chat mode, pre-search and share
+    // 在 agent 模式中，web_search 是一个工具（每个窗格单独处理）；在 chat 模式中，预搜索并共享
     if (webOn && !isAgentMode) {
       try {
         const fd = new FormData();
@@ -910,47 +910,47 @@ async function _executeCompare(message) {
       }
     }
 
-    // ── Show vote bar immediately so user can vote anytime ──
+    // ── 立即显示投票栏，以便用户随时投票 ──
     buildVoteBar(n);
 
-    // ── Stream all panes (parallel or sequential based on _parallel flag) ──
+    // ── 流式传输所有窗格（根据 _parallel 标志决定并行还是顺序） ──
     state._finishOrder = 0;
     state._paneElapsed = new Array(n).fill(null);
     state._paneMetrics = new Array(n).fill(null);
     state._abortControllers = new Array(n).fill(null);
 
     if (state._parallel) {
-      // Run all panes at once
+      // 同时运行所有窗格
       await Promise.all(state._paneSessionIds.map((sid, i) =>
         streamToPane(i, sid, message, aiElements[i], { searchContext: sharedSearchContext, timeout: runTimeout })
       ));
     } else {
-      // Run one pane at a time (sequential) — active pane full opacity, others dimmed
+      // 逐个运行窗格（顺序） — 活跃窗格全不透明度，其他变暗
       const allPanes = document.querySelectorAll('.compare-pane');
       allPanes.forEach(p => { p.style.transition = 'opacity 0.4s ease'; });
-      // Dim all except first
+      // 变暗除第一个外的所有窗格
       allPanes.forEach((p, idx) => { p.style.opacity = idx === 0 ? '1' : '0.35'; });
 
       for (let i = 0; i < state._paneSessionIds.length; i++) {
-        // Update spinner
+        // 更新 Spinner
         if (aiElements[i] && aiElements[i]._spinner) {
           aiElements[i]._spinner.updateLabel('Processing...');
         }
 
         await streamToPane(i, state._paneSessionIds[i], message, aiElements[i], { searchContext: sharedSearchContext, timeout: runTimeout });
 
-        // Swap opacity: dim current, brighten next
+        // 切换不透明度：变暗当前，变亮下一个
         if (allPanes[i]) allPanes[i].style.opacity = '0.35';
         if (i + 1 < allPanes.length && allPanes[i + 1]) {
           allPanes[i + 1].style.opacity = '1';
         }
       }
 
-      // Restore all pane opacities when done
+      // 完成后恢复所有窗格的不透明度
       allPanes.forEach(p => { p.style.opacity = ''; p.style.transition = ''; });
     }
 
-    // Re-focus main input for follow-up
+    // 重新聚焦主输入框以进行后续提问
     if (state._continueChat) {
       const ta = document.getElementById('message');
       if (ta) ta.focus();
@@ -958,18 +958,18 @@ async function _executeCompare(message) {
 
   } catch (err) {
     console.error('Compare error:', err);
-    if (uiModule) uiModule.showError('Compare failed: ' + err.message);
+    if (uiModule) uiModule.showError(t('compare.compare_failed', { error: err.message }));
   } finally {
     state._streaming = false;
     _setSendBtn('send');
-    // Re-enable header buttons
+    // 重新启用标题栏按钮
     document.querySelectorAll('#compare-shuffle-btn, #compare-check-btn, #compare-add-btn').forEach(b => {
       b.disabled = false; b.style.opacity = '0.7'; b.style.pointerEvents = '';
     });
   }
 }
 
-// showModelSelector imported from ./selector.js
+// showModelSelector 从 ./selector.js 导入
 
 // ────────────────────────────────────────────────────────────────────────────
 // ── cleanupResults / removeOverlays ──
@@ -980,7 +980,7 @@ async function _executeCompare(message) {
  * response + metrics + grade) and copy it to the clipboard. Lets users save
  * or share a side-by-side at a glance.
  */
-// Build the comparison markdown string. Shared by all export paths.
+// 构建对比 Markdown 字符串。由所有导出路径共享。
 function _buildComparisonMarkdown() {
   const grid = document.querySelector('.compare-grid');
   if (!grid) return null;
@@ -1086,8 +1086,8 @@ function _exportDownloadMarkdown() {
 function _exportPrint() {
   const md = _buildComparisonMarkdown();
   if (!md) return;
-  // Render the markdown as a quick HTML view in a new window and trigger
-  // the system print dialog — user can pick "Save as PDF" from there.
+  // 将 Markdown 渲染为新窗口中的快速 HTML 视图并触发系统打印对话框 —
+  // 用户可以从那里选择"另存为 PDF"。
   const w = window.open('', '_blank');
   if (!w) return;
   try { w.opener = null; } catch (_) {}
@@ -1140,7 +1140,7 @@ async function _exportComparison(btn) {
     md += '---\n\n';
   });
 
-  // Copy to clipboard
+  // 复制到剪贴板
   const origLabel = btn ? btn.innerHTML : '';
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1163,9 +1163,9 @@ async function _exportComparison(btn) {
 }
 
 /**
- * Build the eval-prompts picker — shown only during compare. Mirrors the
- * absolute-positioned model-picker location (top-right of .chat-input-top)
- * and is auto-cleaned up by the standard _compareElements teardown.
+ * 构建评测提示选择器 — 仅在对比期间显示。镜像模型选择器
+ * 的绝对定位位置（.chat-input-top 的右上角），并在标准
+ * _compareElements 拆卸流程中自动清理。
  */
 function _setupEvalPicker() {
   const inputTop = document.querySelector('.chat-input-top');
@@ -1173,7 +1173,7 @@ function _setupEvalPicker() {
 
   const escapeHtml = uiModule.esc;
 
-  // Hide the model-picker so eval-prompts can occupy the same slot
+  // 隐藏模型选择器，使评测提示占据相同的位置
   const modelWrap = document.getElementById('model-picker-wrap');
   const prevModelDisplay = modelWrap ? modelWrap.style.display : '';
   if (modelWrap) modelWrap.style.display = 'none';
@@ -1186,7 +1186,7 @@ function _setupEvalPicker() {
   btn.type = 'button';
   btn.id = 'cmp-eval-btn';
   btn.className = 'cmp-eval-btn';
-  btn.title = 'Insert an evaluation prompt';
+  btn.title = t('compare.insert_eval_prompt');
   btn.innerHTML =
     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
     + '<span class="cmp-eval-label">Eval prompts</span>'
@@ -1198,7 +1198,7 @@ function _setupEvalPicker() {
 
   function _renderItems() {
     const mode = state._compareMode || 'chat';
-    // research/html aren't first-class compare types — fall back gracefully
+    // research/html 不是一级对比类型 — 优雅回退
     const key = EVAL_PROMPTS[mode] ? mode
       : (mode === 'research' ? 'search' : 'chat');
     const list = EVAL_PROMPTS[key] || [];
@@ -1207,7 +1207,7 @@ function _setupEvalPicker() {
       menu.innerHTML = '<div class="cmp-eval-empty">No prompts for this type</div>';
       return;
     }
-    // Group by sub-category in original order
+    // 按原始顺序按子类别分组
     const order = [];
     const groups = {};
     for (const p of list) {
@@ -1272,8 +1272,8 @@ function _setupEvalPicker() {
     '<span class="cmp-eval-expected-label">Expected:</span>'
     + ' <strong class="cmp-eval-expected-value"></strong>'
     + ' <button type="button" class="cmp-eval-expected-close" title="Dismiss">×</button>';
-  // Anchor the floating panel against the input bar (needs position:relative
-  // — added via CSS rule on .chat-input-bar:has(.cmp-eval-expected) below).
+  // 将浮动面板锚定在输入栏上（需要 position:relative —
+  // 通过下方 .chat-input-bar:has(.cmp-eval-expected) 上的 CSS 规则添加）。
   const inputBar = document.querySelector('.chat-input-bar');
   if (inputBar) {
     inputBar.appendChild(hintChip);
@@ -1299,7 +1299,7 @@ function _setupEvalPicker() {
   // Hide the picker when the textarea has any user text (it's only useful
   // when starting fresh). Reappears when cleared. The expected-answer
   // chip stays put across sends — clearing it on every empty-textarea
-  // tick wiped state._expectedAnswer before grading could read it, so
+  // tick 时清除它会清除 state._expectedAnswer，导致评分无法读取它，
   // pane ✓/✗ badges never appeared. The chip is only cleared via its
   // own dismiss button (or when the user picks a new eval).
   const ta = document.getElementById('message');
@@ -1311,8 +1311,8 @@ function _setupEvalPicker() {
   if (ta) ta.addEventListener('input', _syncEvalVisibility);
   _syncEvalVisibility();
 
-  // Stash cleanup so cleanupResults() can detach the doc listener and
-  // restore the model-picker when compare deactivates.
+  // 存储清理函数，使 cleanupResults() 能够在对比停用时分离文档监听器
+  // 并恢复模型选择器。
   wrap._cleanup = () => {
     document.removeEventListener('click', _onDocClick);
     if (ta) ta.removeEventListener('input', _syncEvalVisibility);
@@ -1322,9 +1322,9 @@ function _setupEvalPicker() {
   state._compareElements.push(wrap);
 }
 
-/** Remove compare UI elements and restore original view. */
+/** 移除对比 UI 元素并恢复原始视图。 */
 function cleanupResults() {
-  // Remove all compare elements
+  // 移除所有对比元素
   state._compareElements.forEach(el => {
     if (el._cleanup) el._cleanup();
     if (el._cleanupInput) el._cleanupInput();
@@ -1332,10 +1332,10 @@ function cleanupResults() {
   });
   state._compareElements = [];
 
-  // Remove any stray compare/probe overlays
+  // 移除任何残留的对比/探测覆盖层
   document.querySelectorAll('.compare-probe-overlay').forEach(el => el.remove());
 
-  // Restore sidebar
+  // 恢复侧边栏
   if (state._sidebarWasHidden) {
     const sidebar = document.getElementById('sidebar');
     if (sidebar) sidebar.classList.remove('hidden');
@@ -1348,7 +1348,7 @@ function cleanupResults() {
   }
   state._hasVisibleResults = false;
 
-  // Hard reload the page to cleanly restore all UI state
+  // 硬重新加载页面以干净地恢复所有 UI 状态
   window.location.reload();
 }
 
@@ -1365,11 +1365,11 @@ function removeOverlays() {
 // ── showShufflePoolEditor ──
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Shuffle pool editor — lets users exclude broken models from the dice. */
+/** 随机池编辑器 — 让用户从骰子池中排除有问题的模型。 */
 async function showShufflePoolEditor() {
   let models;
   try { models = await fetchModels(); } catch (e) {
-    if (uiModule) uiModule.showError('Failed to load models');
+    if (uiModule) uiModule.showError(t('compare.failed_load_models'));
     return;
   }
 
@@ -1397,7 +1397,7 @@ async function showShufflePoolEditor() {
 
   const desc = document.createElement('p');
   desc.style.cssText = 'color:color-mix(in srgb, var(--fg) 55%, transparent);font-size:0.85em;margin:0 0 12px;';
-  desc.textContent = 'Uncheck models to exclude them from random shuffle. They can still be picked manually.';
+  desc.textContent = t('compare.uncheck_hint');
   body.appendChild(desc);
 
   const list = document.createElement('div');
@@ -1405,7 +1405,7 @@ async function showShufflePoolEditor() {
 
   const excluded = getExcludedModels();
 
-  // Group by type
+  // 按类型分组
   const groups = { chat: [], image: [] };
   models.forEach(m => { if (groups[m.type]) groups[m.type].push(m); });
 
@@ -1453,7 +1453,7 @@ async function showShufflePoolEditor() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// ── Register cross-module callbacks ──
+// ── 注册跨模块回调 ──
 // ────────────────────────────────────────────────────────────────────────────
 
 registerCompareActions({ stopAll, resetCompare });
@@ -1461,7 +1461,7 @@ registerStreamActions({ rerollPane, autoPreviewHtml: _autoPreviewHtml });
 registerPaneActions({ setSendBtn: _setSendBtn, deactivate, streamToPane, renderSearchResults: _renderSearchResults, fetchModels });
 
 // ────────────────────────────────────────────────────────────────────────────
-// ── Public API ──
+// ── 公共 API ──
 // ────────────────────────────────────────────────────────────────────────────
 
 export { EVAL_PROMPTS, showScoreboard, handleCompareSubmit };

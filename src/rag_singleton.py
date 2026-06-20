@@ -1,5 +1,5 @@
 """
-RAG singleton instance for the application.
+应用的 RAG 单例实例。
 """
 import os
 import logging
@@ -12,22 +12,22 @@ logger = logging.getLogger(__name__)
 
 rag_instance = None
 _last_attempt = 0.0
-_RETRY_INTERVAL = 30  # seconds between re-init attempts
+_RETRY_INTERVAL = 30  # 重新初始化尝试之间的秒数
 
 
 def get_rag_manager():
-    """Lazy ChromaDB-backed VectorRAG initializer.
+    """懒加载的 ChromaDB 支持的 VectorRAG 初始化器。
 
-    Returns the VectorRAG instance on first successful init, None if ChromaDB
-    isn't reachable / available. Failed init attempts are throttled to once
-    per _RETRY_INTERVAL seconds so a missing ChromaDB doesn't busy-retry on
-    every request — callers (personal-doc routes etc.) get None back and
-    return a clean 503 to the user instead.
+    首次成功初始化时返回 VectorRAG 实例，如果 ChromaDB
+    不可达/不可用则返回 None。失败的初始化尝试每
+    _RETRY_INTERVAL 秒限制一次，因此缺失的 ChromaDB 不会
+    在每个请求上忙重试 — 调用方（个人文档路由等）收到 None
+    并改为向用户返回干净的 503。
 
-    Historical note: this used to be hardcoded to ``return None`` with a
-    comment about chromadb 1.4.1 / pydantic 2.12 being mutually incompatible.
-    That compat issue is resolved in current pinned versions
-    (chromadb 1.5.x + pydantic 2.13.x), so the real initializer is back.
+    历史说明：这里曾经硬编码为 ``return None``，
+    并附带 chromadb 1.4.1 / pydantic 2.12 互不兼容的注释。
+    该兼容性问题已在当前固定版本中解决
+    （chromadb 1.5.x + pydantic 2.13.x），因此真实的初始化器重新启用。
     """
     global rag_instance, _last_attempt
 
@@ -36,7 +36,7 @@ def get_rag_manager():
 
     now = time.monotonic()
     if now - _last_attempt < _RETRY_INTERVAL:
-        return None  # too soon to retry — last attempt failed
+        return None  # 重试太早 — 上次尝试失败
 
     _last_attempt = now
 

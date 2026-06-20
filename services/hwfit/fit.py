@@ -21,7 +21,7 @@ GPU_BANDWIDTH = {
     "9070 xt": 624, "9070": 488, "9060 xt": 322, "9060": 322,
 }
 
-# Pre-sort keys by length descending for correct substring matching
+# 按长度降序预排序键，确保正确的子串匹配
 _BW_KEYS_SORTED = sorted(GPU_BANDWIDTH.keys(), key=len, reverse=True)
 
 # Apple Silicon unified-memory bandwidth (GB/s). For chip families with both
@@ -127,7 +127,7 @@ def _lookup_bandwidth(system):
 
 
 def _estimate_speed(model, quant, run_mode, system, offload_frac=0.0):
-    """Estimate tok/s. Uses active params for MoE (only active experts run per token).
+    """估算 tok/s。使用 MoE 的活跃参数量（每 token 仅活跃专家参与计算）。
 
     offload_frac (0..1): fraction of the model's weights that spill to system RAM
     (CPU) because they don't fit VRAM. Generation reads every active weight per
@@ -135,8 +135,8 @@ def _estimate_speed(model, quant, run_mode, system, offload_frac=0.0):
     slow path. We model effective bandwidth as a blend of GPU VRAM bandwidth and
     system-RAM bandwidth weighted by what's where — far more accurate than a flat
     "halve it" for partial offload, which under/over-shoots depending on amount.
-    Calibrated against a measured RX 9060 XT: DeepSeek-Coder-V2-Lite Q4_K_M with
-    light offload → ~59 t/s est vs 59.8 measured.
+    已对实测 RX 9060 XT 校准：DeepSeek-Coder-V2-Lite Q4_K_M 轻度卸载时，
+    估算 ~59 t/s vs 实测 59.8。
     """
     pb = _active_params_b(model)
     is_moe = model.get("is_moe", False)
@@ -150,21 +150,21 @@ def _estimate_speed(model, quant, run_mode, system, offload_frac=0.0):
             return 0.0
         efficiency = 0.55
         if run_mode == "cpu_offload":
-            # Dual-channel DDR4-3200 ≈ 50 GB/s; DDR5 systems higher, but be
-            # conservative since offloaded MoE is also compute-bound on CPU.
+            # 双通道 DDR4-3200 ≈ 50 GB/s；DDR5 系统更高，但需要保守
+            # 估计，因为卸载的 MoE 在 CPU 端同样受计算能力限制。
             cpu_bw = 55.0
             frac = min(max(offload_frac, 0.0), 1.0)
-            # If we don't know the fraction (legacy callers pass 0 with
-            # cpu_offload), assume a meaningful spill so we don't overestimate.
+            # 如果不知道卸载比例（旧调用方在 cpu_offload 模式传入 0），
+            # 假设有意义的溢出量，避免高估性能。
             if frac <= 0.0:
                 frac = 0.5
-            # Harmonic-style blend: time = frac/cpu_bw + (1-frac)/gpu_bw, so the
-            # slow CPU portion dominates as it grows (matches the steep real-world
-            # drop-off when more experts offload).
+            # 调和式混合：time = frac/cpu_bw + (1-frac)/gpu_bw，
+            # 因此当更多专家卸载时，CPU 慢速部分会逐渐主导
+            # （与实际中卸载比例增加时性能陡降的现象一致）。
             eff_bw = 1.0 / (frac / cpu_bw + (1.0 - frac) / bw)
             raw_tps = (eff_bw / model_gb) * efficiency
             return raw_tps * (0.8 if is_moe else 1.0)
-        # Fully on GPU.
+        # 完全在 GPU 上运行。
         raw_tps = (bw / model_gb) * efficiency
         return raw_tps * (0.8 if is_moe else 1.0)
 
@@ -232,9 +232,9 @@ def _quality_score(model, quant, use_case):
     if model_uc == "coding" and use_case == "coding":
         base += 6
     elif model_uc == "coding" and use_case in ("general", "chat"):
-        # Coder-specialized models are still useful generally, but they should
-        # not dominate the default scan. If the user wants code, the Coding
-        # filter gives them the boost above.
+        # 代码专用模型在通用场景下仍有价值，但不应
+        # 占据默认扫描的主导位置。用户需要代码时会通过
+        # Coding 筛选器获得上述加分。
         base -= 10
     if model_uc == "reasoning" and use_case == "reasoning" and pb >= 13:
         base += 5
@@ -276,7 +276,7 @@ def _context_score(ctx, use_case):
 
 
 def _try_quant_at(model, quant, ctx, gpu_vram, available_ram):
-    """Try a specific quant at a given context. Returns (run_mode, quant, ctx, mem) or None."""
+    """在给定上下文下尝试特定量化。返回 (run_mode, quant, ctx, mem) 或 None。"""
     mem = estimate_memory_gb(model, quant, ctx)
     if gpu_vram > 0 and mem <= gpu_vram:
         return "gpu", quant, ctx, mem
@@ -284,7 +284,7 @@ def _try_quant_at(model, quant, ctx, gpu_vram, available_ram):
         return "cpu_offload", quant, ctx, mem
     if gpu_vram <= 0 and mem <= available_ram:
         return "cpu_only", quant, ctx, mem
-    # Try halving context
+    # 尝试将上下文长度减半
     cur_ctx = ctx // 2
     while cur_ctx >= 1024:
         mem = estimate_memory_gb(model, quant, cur_ctx)
@@ -297,11 +297,11 @@ def _try_quant_at(model, quant, ctx, gpu_vram, available_ram):
 
 
 def _quant_bits(q):
-    """Approximate bit-width of a quant label so GGUF quant tiers (Q4/Q8/…) can
-    be matched against prequantized formats (AWQ 4, AWQ-8bit, FP8, GPTQ-4bit…).
-    Returns 0 when unknown (caller treats unknown as "don't filter")."""
+    """近似量化标签的位宽，使 GGUF 量化等级（Q4/Q8/…）能与
+    预量化格式（AWQ 4、AWQ-8bit、FP8、GPTQ-4bit…）匹配。
+    未知时返回 0（调用方视作"不过滤"）。"""
     qu = (q or "").upper().replace("-", "").replace("_", "").replace(" ", "")
-    # GGUF k-quants + float formats
+    # GGUF k-quant 系列 + 浮点格式
     if qu.startswith("Q8") or "FP8" in qu or "INT8" in qu or qu.startswith("W8"):
         return 8
     if qu.startswith("Q4") or qu.startswith("IQ4") or "FP4" in qu or "NF4" in qu or "INT4" in qu or qu.startswith("W4"):
@@ -316,7 +316,7 @@ def _quant_bits(q):
         return 6
     if qu.startswith("F16") or qu.startswith("BF16") or qu.startswith("F32"):
         return 16
-    # Prequantized formats: pull the bit-width digit (AWQ4 / AWQ4BIT / GPTQ8 / 4BIT / INT8 ...)
+    # 预量化格式：提取位宽数字（AWQ4 / AWQ4BIT / GPTQ8 / 4BIT / INT8 ...）
     m = re.search(r"(?:AWQ|GPTQ|MLX|EXL2|BNB|INT|W)(\d{1,2})", qu) or re.search(r"(\d{1,2})BIT", qu)
     if m:
         b = int(m.group(1))
@@ -336,13 +336,13 @@ def _native_quant(model):
         return "FP8"
     if "gptq" in text:
         m = re.search(r"(?:gptq|int|w)(?:[-_]?)(\d{1,2})(?:bit)?", text)
-        # Canonical catalog label is "GPTQ-Int4"/"GPTQ-Int8" (see models.py
-        # QUANT_BPP / QUANT_QUALITY_PENALTY keys); "GPTQ-4bit" misses both
-        # maps, so BPP and the quality penalty silently fall to defaults.
+        # 规范的目录标签为 "GPTQ-Int4"/"GPTQ-Int8"（参见 models.py
+        # QUANT_BPP / QUANT_QUALITY_PENALTY 的键）；"GPTQ-4bit" 两个映射
+        # 都会错过，因此 BPP 和质量罚分静默回退到默认值。
         return f"GPTQ-Int{m.group(1)}" if m else "GPTQ-Int4"
     if "awq" in text:
         m = re.search(r"(?:awq|int|w)(?:[-_]?)(\d{1,2})(?:bit)?", text)
-        # Catalog keys are "AWQ-4bit"/"AWQ-8bit"; bare "AWQ" misses the maps.
+        # 目录中的键为 "AWQ-4bit"/"AWQ-8bit"；裸 "AWQ" 无法匹配。
         return f"AWQ-{m.group(1)}bit" if m else "AWQ-4bit"
     if "mlx" in text:
         m = re.search(r"mlx[-_]?(\d{1,2})bit", text)
@@ -364,11 +364,11 @@ def analyze_model(model, system, target_quant=None, scoring_use_case=None, targe
     gpu_count = system.get("gpu_count", 1) or 1
     single_gpu_vram = gpu_vram / gpu_count if gpu_count > 1 else gpu_vram
     available_ram = system.get("available_ram_gb", 0)
-    # When the user has explicitly picked a GPU config (not RAM mode), they want
-    # to see what runs ON the GPU(s) — not big models that only "fit" by spilling
-    # most layers to system RAM. Zeroing the offload budget makes _try_quant_at
-    # take only its GPU branches (fit on VRAM, shrinking context if needed),
-    # otherwise return None. Fixes "96 GB GPU still lists a 175 GB model".
+    # 当用户明确选择了 GPU 配置（非 RAM 模式），他们想看的是真正在
+    # GPU 上运行的结果 — 而不是通过将大部分层溢出到系统 RAM 才
+    # "装得下"的大模型。将卸载预算清零会让 _try_quant_at 只走 GPU
+    # 分支（装在显存里，必要时缩减上下文），否则返回 None。
+    # 这修复了 "96 GB GPU 仍显示 175 GB 模型" 的问题。
     gpu_only = bool(system.get("gpu_only")) and has_gpu and gpu_vram > 0
     eff_ram = 0 if gpu_only else available_ram
     is_moe = model.get("is_moe", False)
@@ -382,7 +382,7 @@ def analyze_model(model, system, target_quant=None, scoring_use_case=None, targe
     native_quant = _native_quant(model)
     preq = is_prequantized(model)
 
-    # GGUF models can't be sharded across GPUs — use single GPU VRAM
+    # GGUF 模型不能跨 GPU 分片 — 使用单 GPU 显存
     is_gguf = bool(model.get("gguf_sources"))
     quant_upper = (native_quant or "").upper()
     is_gguf_quant = any(quant_upper.startswith(p) for p in ("Q2", "Q3", "Q4", "Q5", "Q6", "Q8", "IQ", "F16", "F32"))
@@ -397,17 +397,17 @@ def analyze_model(model, system, target_quant=None, scoring_use_case=None, targe
 
     native_gpu_only = preq and not native_quant.startswith("mlx-")
 
-    # Determine which quant to evaluate at
+    # 确定要评估的量化级别
     native_quant_prefixes = (
         "AWQ-", "GPTQ-", "FP8", "FP4", "NVFP4", "MXFP4", "NF4",
         "INT4", "INT8", "W4A16", "W8A8", "W8A16",
     )
 
     if preq:
-        # Native HF/vLLM quantized repos come at a fixed format. If the user
-        # picked a GGUF quant tier (Q4/Q8/etc.), do not treat same-bit
-        # AWQ/GPTQ/FP8/FP4 builds as equivalent; those formats are separate
-        # serving paths and only appear when explicitly selected or unfiltered.
+        # 原生 HF/vLLM 量化仓库使用固定格式。如果用户选择了
+        # GGUF 量化等级（Q4/Q8/等），不要将同一位宽的
+        # AWQ/GPTQ/FP8/FP4 构建视为等价；这些格式是独立的
+        # 服务路径，仅在明确选择或未过滤时出现。
         if target_quant:
             if not any(target_quant.startswith(p) for p in native_quant_prefixes):
                 return None
@@ -416,35 +416,35 @@ def analyze_model(model, system, target_quant=None, scoring_use_case=None, targe
                 return None
         quant_to_try = native_quant
     elif target_quant:
-        # User picked a specific quant
+        # 用户选择了特定的量化级别
         quant_to_try = target_quant
     elif gpu_count >= 2:
-        # Multi-GPU box: vLLM/SGLang can't serve GGUF Q* quants (those are
-        # llama.cpp-only). Default non-prequantized models to BF16 so the row
-        # is meaningful on a multi-GPU rig. If BF16 doesn't fit, the model
-        # surfaces as too_tight — better than showing a Q4 row the user
-        # can't actually serve with vLLM on >1 GPU.
+        # 多 GPU 机器：vLLM/SGLang 无法服务 GGUF Q* 量化（那些是
+        # llama.cpp 专用）。将非预量化模型默认为 BF16，使行
+        # 在多 GPU 环境中有意义。如果 BF16 装不下，模型会显示为
+        # too_tight — 比显示一个用户在 >1 GPU 上
+        # 实际上无法用 vLLM 服务的 Q4 行更好。
         quant_to_try = "BF16"
     else:
-        # Default: Q4_K_M (user's stated preference) — kept for single-GPU
-        # and RAM modes where llama.cpp serving is the natural path.
+        # 默认：Q4_K_M（用户的设定偏好）— 保留给单 GPU
+        # 和 RAM 模式，这些场景下 llama.cpp 服务是自然路径。
         quant_to_try = "Q4_K_M"
 
-    # Multi-GPU filter: skip the row if the resolved quant is a GGUF tier
-    # (Q*/IQ-prefixed) — vLLM/SGLang can't serve those, so showing them on
-    # a 2+ GPU rig just clutters the list with unservable candidates.
+    # 多 GPU 筛选：如果解析出的量化是 GGUF 等级（Q*/IQ- 前缀），
+    # 跳过该行 — vLLM/SGLang 无法服务这些，因此在 2+ GPU 配置中
+    # 显示它们只会让列表充斥不可服务的候选项。
     if gpu_count >= 2 and quant_to_try and not target_quant and quant_to_try.upper().startswith(("Q2", "Q3", "Q4", "Q5", "Q6", "Q8", "IQ")):
         return None
 
     result = _try_quant_at(model, quant_to_try, ctx, effective_vram, 0 if native_gpu_only else eff_ram)
 
     if result is None:
-        # Model doesn't fit on the user's current hardware. Surface it
-        # anyway with a "too_tight" badge instead of silently dropping
-        # it — without this, editing the hardware config to try LARGER
-        # tiers never revealed the bigger models, because they were
-        # filtered out before the user could see what would fit. The
-        # client already knows how to render too_tight (red row).
+        # 模型在当前硬件上装不下。仍然展示它，但标记
+        # "too_tight"，而不是静默地将其丢弃 — 否则，
+        # 编辑硬件配置尝试更大容量时，用户永远看不到
+        # 更大的模型，因为它们在用户看到能装下什么之前就
+        # 被过滤掉了。客户端已经知道如何渲染 too_tight
+        # （红色行）。
         oversized_required = estimate_memory_gb(model, quant_to_try, ctx)
         return {
             "name": model.get("name"),
@@ -468,7 +468,7 @@ def analyze_model(model, system, target_quant=None, scoring_use_case=None, targe
 
     run_mode, quant, fit_ctx, required_gb = result
 
-    # Determine fit level
+    # 确定适配级别
     budget = effective_vram if run_mode == "gpu" else available_ram
     if required_gb > budget:
         return None
@@ -485,8 +485,8 @@ def analyze_model(model, system, target_quant=None, scoring_use_case=None, targe
     else:
         fit_level = "marginal"
 
-    # Fraction of the model that spills to CPU RAM (drives the offload speed
-    # model). When offloading, anything beyond the GPU's VRAM lives in system RAM.
+    # 溢出到 CPU RAM 的模型权重比例（驱动卸载速度
+    # 模型）。卸载时，超出 GPU 显存的部分位于系统 RAM 中。
     offload_frac = 0.0
     if run_mode == "cpu_offload" and required_gb > 0 and effective_vram > 0:
         offload_frac = max(0.0, (required_gb - effective_vram) / required_gb)
@@ -528,27 +528,27 @@ def analyze_model(model, system, target_quant=None, scoring_use_case=None, targe
 
 
 def _version_key(name):
-    """Parse the model's version number from its display name so equal-score
-    rows can break ties in favor of the newer release (e.g. M2.7 > M2.5).
-    Returns a float; 0.0 for names with no recognizable version. The regex
-    grabs the FIRST 'word-with-digits' pattern after a hyphen/underscore,
-    so e.g. 'MiniMax-M2.7' -> 2.7, 'Qwen3.6-35B' -> 3.6, 'M2' -> 2.0."""
+    """从模型的展示名称中解析版本号，使同龄分
+    的行可以按较新版本打破平局（例如 M2.7 > M2.5）。
+    返回 float；无法识别版本号的名称返回 0.0。正则表达式
+    抓取连字符/下划线后的第一个"包含数字的单词"，
+    因此例如 'MiniMax-M2.7' -> 2.7, 'Qwen3.6-35B' -> 3.6, 'M2' -> 2.0。"""
     import re as _re
     if not name:
         return 0.0
-    # Match the version-marker word: a letter followed by a number with
-    # optional decimal, e.g. M2.7, V4, Pro3. Take the first hit; ignore
-    # "B" param-count suffixes (Qwen3-235B should yield 3, not 235).
+    # 匹配版本标记词：一个字母后跟数字，可带小数，
+    # 例如 M2.7, V4, Pro3。取第一个命中；忽略
+    # 带 "B" 后缀的参数量（Qwen3-235B 应产出 3，不应产出 235）。
     for m in _re.finditer(r"[A-Za-z](\d+(?:\.\d+)?)(?![A-Za-z])", name):
         val = m.group(1)
-        # Skip param-count tokens (e.g. "235B" gives "235" but the next
-        # char would be "B" — already excluded by the negative lookahead).
+        # 跳过参数量标记（例如 "235B" 给出 "235"，但下一个
+        # 字符是 "B" — 已被否定前瞻排除）。
         try:
             f = float(val)
         except ValueError:
             continue
-        # Heuristic: bare integers >= 100 are almost certainly param counts
-        # (1B/3B/8B/70B/235B…), not version numbers. Skip them.
+        # 启发式规则：裸整数 >= 100 几乎肯定是参数量
+        # （1B/3B/8B/70B/235B…）而非版本号。跳过它们。
         if "." not in val and f >= 100:
             continue
         return f
@@ -558,7 +558,7 @@ def _version_key(name):
 SORT_KEYS = {
     # Score sort with version-aware tiebreaker — when two rows tie on
     # composite score (a common case for the SAME base model in different
-    # versions, e.g. MiniMax-M2.5 vs M2.7 both at the same FP8 budget),
+    # 例如 MiniMax-M2.5 vs M2.7 在相同 FP8 预算下同分），
     # prefer the newer version. Without this, ties resolved to whatever
     # order they came out of the registry, which let older releases land
     # above newer ones in user-facing lists.
@@ -567,7 +567,7 @@ SORT_KEYS = {
     "vram": lambda r: r["required_gb"],
     "params": lambda r: r["params_b"],
     "context": lambda r: r["context"],
-    # Newest first. release_date is an ISO-ish string ("2026-05-30"); plain
+    # 最新优先。release_date 是类 ISO 字符串（"2026-05-30"）；
     # string sort is chronological. Missing dates sort last (empty < any date,
     # and we sort reverse=True for newest, so "" lands at the bottom).
     "newest": lambda r: r.get("release_date") or "",
@@ -575,17 +575,17 @@ SORT_KEYS = {
 
 
 def rank_models(system, use_case=None, limit=50, search=None, sort="score", quant=None, target_context=None, fit_only=False):
-    """Rank all models against detected hardware. Returns sorted list of fit results.
+    """按检测到的硬件对所有模型评分排序。返回排序后的适配结果列表。
 
-    fit_only: when True, drop rows whose fit_level is "too_tight" (model doesn't
-    actually fit on the chosen budget). When False (default), every model is
-    shown — sorting by Param means highest-param PERIOD, even ones that won't
-    run, so the user can see the truth.
+    fit_only：为 True 时，丢弃 fit_level 为 "too_tight" 的行（模型无法
+    放入所选预算）。为 False（默认）时，显示所有模型 —
+    按参数排序意味着永久显示最高参数量，即使无法运行，
+    这样用户能看到真实情况。
     """
     models = get_models()
     results = []
 
-    # Include image gen models only when explicitly filtered
+    # 仅在明确按 image_gen 筛选时包含图像生成模型
     if use_case == "image_gen":
         try:
             from services.hwfit.image_models import rank_image_models
@@ -620,10 +620,10 @@ def rank_models(system, use_case=None, limit=50, search=None, sort="score", quan
             })
         if use_case == "image_gen":
             sort_fn = SORT_KEYS.get(sort, SORT_KEYS["score"])
-            results.sort(key=sort_fn, reverse=True)  # see main path below
+            results.sort(key=sort_fn, reverse=True)  # 参见下方主路径
             return results[:limit]
 
-    # If user picked a native prequantized format, filter to only those models.
+    # 如果用户选择了原生预量化格式，仅筛选这些模型。
     filter_native = quant and any(quant.startswith(p) for p in (
         "AWQ-", "GPTQ-", "FP8", "FP4", "NVFP4", "MXFP4", "NF4",
         "INT4", "INT8", "W4A16", "W8A8", "W8A16",
@@ -634,52 +634,52 @@ def rank_models(system, use_case=None, limit=50, search=None, sort="score", quan
     rocm = system_backend == "rocm"
     is_windows = system.get("platform") == "windows"
 
-    # Consumer AMD Radeon (RDNA, gfx10/11/12): the practical local serving path
-    # is GGUF via llama.cpp. vLLM/SGLang on ROCm are validated for datacenter
-    # Instinct (CDNA, gfx9xx) but are unreliable on consumer RDNA — AWQ kernels
-    # are largely unsupported there and FP8 needs out-of-tree patches. So treat
-    # consumer RDNA like Apple Silicon (GGUF-only) and leave CDNA untouched.
-    # Unknown family (no rocminfo) is left untouched to avoid hiding models from
-    # a possibly-capable Instinct box on a misdetect.
+    # 消费级 AMD Radeon（RDNA, gfx10/11/12）：实际的本地服务路径
+    # 是 GGUF via llama.cpp。ROCm 上的 vLLM/SGLang 已针对数据中心
+    # Instinct（CDNA, gfx9xx）验证，但在消费级 RDNA 上不可靠 —
+    # AWQ kernel 大多不支持，FP8 需要额外补丁。因此将
+    # 消费级 RDNA 当作 Apple Silicon 对待（仅 GGUF），保持 CDNA 不变。
+    # 未知系列（无 rocminfo）保持不变，避免在误检测时
+    # 隐藏本可能运行在 Instinct 上的模型。
     gpu_family = (system.get("gpu_family") or "").lower()
     consumer_amd = system_backend == "rocm" and gpu_family == "rdna"
 
     for m in models:
         native_q = _native_quant(m)
 
-        # MLX needs the mlx_lm runtime, which Odysseus does not generate serve
-        # commands for. Hide it on every backend, including Metal.
+        # MLX 需要 mlx_lm 运行时，Odysseus 不为其生成 serve
+        # 命令。在所有后端（包括 Metal）上隐藏它。
         if native_q.startswith("mlx-") or "mlx" in (m.get("name") or "").lower():
             continue
 
-        # ROCm support for vLLM/SGLang quantized safetensors is too brittle to
-        # recommend blindly in the default scan. Keep AWQ/GPTQ/FP8 discoverable
-        # only when the user explicitly picks that format from the quant filter;
-        # otherwise prefer GGUF/Q* entries that Odysseus can route through
-        # llama.cpp/Ollama without pretending "fits VRAM" means "servable".
+        # ROCm 对 vLLM/SGLang 量化 safetensors 的支持过于脆弱，
+        # 不能在默认扫描中盲目推荐。仅当用户从量化筛选器
+        # 明确选择该格式时，AWQ/GPTQ/FP8 才可见；否则优先 GGUF/Q*
+        # 条目，Odysseus 可通过 llama.cpp/Ollama 路由，而不会
+        # 假装"显存放得下"就意味"可以服务"。
         if rocm and is_prequantized(m) and not filter_native:
             continue
 
-        # On Apple Silicon the only serving engines are llama.cpp and Ollama,
-        # both GGUF-only (vLLM/SGLang are CUDA/ROCm and don't run on macOS). So
-        # a model is Metal-servable ONLY if it ships a real GGUF. Drop everything
-        # else — raw safetensors repos (which the catalog still tags with a
-        # default GGUF quant) and vLLM-only AWQ/GPTQ/FP8 builds alike. Without
-        # this the Cookbook recommends models the Mac can't run; on CUDA these
-        # stay visible because vLLM serves safetensors directly.
+        # 在 Apple Silicon 上唯一的服务引擎是 llama.cpp 和 Ollama，
+        # 两者都仅支持 GGUF（vLLM/SGLang 是 CUDA/ROCm 的，不在 macOS
+        # 上运行）。因此模型仅在提供真实 GGUF 时才是 Metal 可服务的。
+        # 丢弃其他所有 — 裸 safetensors 仓库（目录仍标有默认 GGUF
+        # 量化）和 vLLM 专用的 AWQ/GPTQ/FP8 构建。否则 Cookbook
+        # 会推荐 Mac 无法运行的模型；在 CUDA 上这些保持可见，
+        # 因为 vLLM 直接服务 safetensors。
         #
-        # Consumer AMD (RDNA) is the same story: GGUF via llama.cpp is the
-        # servable path, so a model needs a real GGUF to be recommended.
-        # Otherwise the Cookbook rates vLLM-only AWQ/GPTQ builds "GOOD" on a
-        # Radeon that can't actually serve them.
+        # 消费级 AMD（RDNA）同理：GGUF via llama.cpp 是
+        # 可服务路径，因此模型需要真实 GGUF 才能被推荐。
+        # 否则 Cookbook 会在实际上无法服务的 Radeon 上
+        # 将 vLLM 专用的 AWQ/GPTQ 评为 "GOOD"。
         #
-        # Windows is the same: Odysseus only supports llama.cpp on Windows,
-        # which requires GGUF. vLLM/SGLang are explicitly blocked, so AWQ/GPTQ
-        # models without a GGUF source are unservable there.
+        # Windows 同理：Odysseus 在 Windows 上仅支持 llama.cpp，
+        # 这需要 GGUF。vLLM/SGLang 被显式阻止，因此没有 GGUF
+        # 源的 AWQ/GPTQ 模型在那里不可服务。
         if (apple_silicon or consumer_amd or is_windows) and not (m.get("is_gguf") or m.get("gguf_sources")):
             continue
 
-        # Format filter: AWQ tab -> only AWQ models, FP4 tab -> FP4-family models, etc.
+        # 格式过滤器：AWQ 标签 -> 仅 AWQ 模型，FP4 标签 -> FP4 系列模型等。
         if filter_native:
             if quant == "FP8" and native_q != "FP8":
                 continue
@@ -718,8 +718,8 @@ def rank_models(system, use_case=None, limit=50, search=None, sort="score", quan
     # see the truth instead of a quietly-truncated view. Score sort is unchanged
     # (it's the default ranking and naturally pushes non-fits to the bottom).
     if fit_only:
-        # Hide rows that definitely don't fit (the "too_tight" badge) — user
-        # explicitly asked for a Fit-only view.
+        # 隐藏确实装不下的行（"too_tight" 标记）— 用户
+        # 明确要求仅显示适配的视图。
         results = [r for r in results if r.get("fit_level") != "too_tight"]
     sort_fn = SORT_KEYS.get(sort, SORT_KEYS["score"])
     # Always sort descending then truncate top-N so each column shows the

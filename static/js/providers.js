@@ -1,6 +1,6 @@
-// AI provider logo SVGs — regex-based matching for self-hosted model names
-// Uses official logos from Simple Icons where available, custom minimal SVGs otherwise
-// All SVGs use viewBox="0 0 24 24" fill="currentColor"
+// AI provider logo SVG — 基于正则匹配自托管模型名称
+// 尽量使用 Simple Icons 的官方 logo，否则使用自定义的极简 SVG
+// 所有 SVG 使用 viewBox="0 0 24 24" fill="currentColor"
 
 const _PROVIDERS = [
   // Ollama
@@ -89,7 +89,7 @@ const _PROVIDERS = [
     '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.948 8.798v-1.43a6.7 6.7 0 0 1 .424-.018c3.922-.124 6.493 3.374 6.493 3.374s-2.774 3.851-5.75 3.851c-.398 0-.787-.062-1.158-.185v-4.346c1.528.185 1.837.857 2.747 2.385l2.04-1.714s-1.492-1.952-4-1.952a6.016 6.016 0 0 0-.796.035m0-4.735v2.138l.424-.027c5.45-.185 9.01 4.47 9.01 4.47s-4.08 4.964-8.33 4.964c-.37 0-.733-.035-1.095-.097v1.325c.3.035.61.062.91.062 3.957 0 6.82-2.023 9.593-4.408.459.371 2.34 1.263 2.73 1.652-2.633 2.208-8.772 3.984-12.253 3.984-.335 0-.653-.018-.971-.053v1.864H24V4.063zm0 10.326v1.131c-3.657-.654-4.673-4.46-4.673-4.46s1.758-1.944 4.673-2.262v1.237H8.94c-1.528-.186-2.73 1.245-2.73 1.245s.68 2.412 2.739 3.11M2.456 10.9s2.164-3.197 6.5-3.533V6.201C4.153 6.59 0 10.653 0 10.653s2.35 6.802 8.948 7.42v-1.237c-4.84-.6-6.492-5.936-6.492-5.936z"/></svg>'],
 ];
 
-// Returns an SVG string for the given model ID, or null if no match
+// 返回给定 model ID 的 SVG 字符串，无匹配时返回 null
 export function providerLogo(modelId) {
   if (!modelId) return null;
   for (const [re, svg] of _PROVIDERS) {
@@ -100,7 +100,7 @@ export function providerLogo(modelId) {
 
 // Host suffix → friendly provider label. The model-info card shows this so the
 // SAME model name served by DIFFERENT routes is distinguishable (e.g.
-// `claude-haiku` via OpenRouter vs GitHub Copilot vs Anthropic direct); the logo
+// GitHub Copilot vs Anthropic 直连）可以区分；logo 仅反映模型厂商，
 // only reflects the model vendor, not the actual endpoint. Patterns are anchored
 // to the end of the hostname (^|.)domain$ so a host like `max.airlines.com`
 // doesn't match `x.ai`.
@@ -133,7 +133,7 @@ export function providerLabel(endpointUrl) {
   try {
     host = new URL(endpointUrl).hostname;
   } catch (_) {
-    // Not a full URL (e.g. bare host[:port]) — strip scheme/path/port best-effort.
+    // 不是完整的 URL（例如裸 host[:port]）—— 尽力去掉 scheme/path/port。
     host = endpointUrl.replace(/^[a-z]+:\/\//i, "").split("/")[0].split(":")[0];
   }
   if (!host) return null;
@@ -143,7 +143,7 @@ export function providerLabel(endpointUrl) {
   for (const [re, label] of _ENDPOINT_LABELS) {
     if (re.test(host)) return label;
   }
-  // Unknown host → drop a leading "api." for a cleaner readout.
+  // 未知主机 → 去掉前缀 "api." 以获得更清晰的显示。
   return host.replace(/^api\./i, "");
 }
 

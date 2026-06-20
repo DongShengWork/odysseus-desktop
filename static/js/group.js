@@ -1,5 +1,5 @@
 // static/js/group.js
-// Group Chat — multi-model conversations (parallel or round-robin)
+// 群聊 — 多模型对话（并行或轮询）
 
 import uiModule from './ui.js';
 import markdownModule from './markdown.js';
@@ -13,28 +13,28 @@ import Storage from './storage.js';
 let API_BASE = '';
 let _active = false;
 let _models = [];          // [{mid, display, url, endpointId}]
-let _participantSessions = [];  // session IDs for each model
-const _groupParticipants = [];  // module-level participants list
+let _participantSessions = [];  // 每个模型的会话 ID
+const _groupParticipants = [];  // 模块级别的参与者列表
 let _abortControllers = [];
-let _mode = 'round-robin';    // 'parallel' or 'round-robin'
+let _mode = 'round-robin';    // 'parallel' 或 'round-robin'
 let _roundRobinIdx = 0;
 let _parentSessionId = null;
 const GROUP_STATE_KEY = 'odysseus-group-state';
 
 export function init(apiBase) {
   API_BASE = apiBase;
-  // Initialize Group tab inside Characters modal
+  // 在角色模态框内初始化群组标签页
   setTimeout(_initGroupTab, 500);
 }
 
 function _initGroupTab() {
   const participantsEl = document.getElementById('group-participants');
   const addBtn = document.getElementById('group-add-btn');
-  const startBtn = document.getElementById('save-custom-preset'); // main footer "Start" button
+  const startBtn = document.getElementById('save-custom-preset'); // 主底部"开始"按钮
   const modeBtn = document.getElementById('group-mode-btn');
   if (!participantsEl || !addBtn) return;
 
-  // _groupParticipants is at module scope
+  // _groupParticipants 位于模块作用域
   let _modelsCache = null;
 
   async function _getModels() {
@@ -73,12 +73,12 @@ function _initGroupTab() {
           <span style="font-size:12px;font-weight:500;">${uiModule.esc(label)}</span>
           ${sublabel && sublabel !== label ? '<span style="font-size:10px;opacity:0.35;margin-left:4px;">' + uiModule.esc(sublabel) + '</span>' : ''}
         </span>
-        <button style="background:none;border:none;color:var(--fg);opacity:0.5;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;position:relative;top:-4px;" data-idx="${idx}" title="Remove">&times;</button>
+        <button style="background:none;border:none;color:var(--fg);opacity:0.5;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;position:relative;top:-4px;" data-idx="${idx}" title="${t('group.remove')}">&times;</button>
       `;
       row.querySelector('button').addEventListener('click', () => { _groupParticipants.splice(idx, 1); _render(); });
       participantsEl.appendChild(row);
     });
-    // startBtn is shared — don't disable it
+    // startBtn 是共享的 — 不禁用它
   }
 
   addBtn.addEventListener('click', async () => {
@@ -90,19 +90,19 @@ function _initGroupTab() {
     const charSel = document.createElement('select');
     charSel.className = 'preset-input';
     charSel.style.cssText = 'font-size:11px;flex:1;height:26px;';
-    charSel.innerHTML = '<option value="">Empty...</option>' +
+    charSel.innerHTML = '<option value="">' + t('group.none_placeholder') + '</option>' +
       characters.map(c => '<option value="' + c.id + '">' + uiModule.esc(c.name) + '</option>').join('');
 
     const modelSel = document.createElement('select');
     modelSel.className = 'preset-input';
     modelSel.style.cssText = 'font-size:11px;flex:1;height:26px;';
-    modelSel.innerHTML = '<option value="">Model…</option>' +
+    modelSel.innerHTML = '<option value="">' + t('group.model_placeholder') + '</option>' +
       models.map(m => '<option value="' + m.mid + '">' + uiModule.esc(m.display) + '</option>').join('');
 
-    // Auto-add when model is selected
+    // 选择模型时自动添加
     modelSel.addEventListener('change', () => {
       if (!modelSel.value) return;
-      if (_groupParticipants.length >= 8) { uiModule.showToast('Max 8'); return; }
+      if (_groupParticipants.length >= 8) { uiModule.showToast(t('group.max_participants')); return; }
       const entry = { character: null, model: null };
       entry.model = models.find(m => m.mid === modelSel.value) || null;
       if (charSel.value) entry.character = characters.find(c => c.id === charSel.value) || null;
@@ -116,22 +116,22 @@ function _initGroupTab() {
     participantsEl.appendChild(picker);
   });
 
-  // Mode toggle — same style as Compare's parallel button
+  // 模式切换 — 与对比功能的并行按钮样式相同
   if (modeBtn) {
     const ICON_PAR = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
     const ICON_SEQ = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>';
     modeBtn.addEventListener('click', () => {
       _mode = _mode === 'parallel' ? 'round-robin' : 'parallel';
       modeBtn.classList.toggle('active', _mode === 'parallel');
-      modeBtn.innerHTML = (_mode === 'parallel' ? ICON_PAR : ICON_SEQ) + '<span class="compare-toggle-label">' + (_mode === 'parallel' ? 'Parallel' : 'Sequential') + '</span>';
+      modeBtn.innerHTML = (_mode === 'parallel' ? ICON_PAR : ICON_SEQ) + '<span class="compare-toggle-label">' + (_mode === 'parallel' ? t('group.parallel') : t('group.sequential')) + '</span>';
     });
   }
 
-  // Hook into the main "Start" button — only act when Group tab is active
+  // 钩子主"开始"按钮 — 仅在群组标签页激活时生效
   if (startBtn) startBtn.addEventListener('click', async () => {
     const activeTab = document.querySelector('.preset-tab.active');
     if (!activeTab || activeTab.dataset.chartab !== 'group') return;
-    // Get default model from current session as fallback
+    // 从当前会话获取默认模型作为后备
     const _defaultModel = (window.sessionModule && window.sessionModule.getSessions) ?
       (() => {
         const s = window.sessionModule.getSessions().find(x => x.id === window.sessionModule.getCurrentSessionId());
@@ -142,14 +142,14 @@ function _initGroupTab() {
     const picked = _groupParticipants.map(p => {
       let m = p.model ? { ...p.model } : (_defaultModel ? { ..._defaultModel } : null);
       if (!m || !m.url) {
-        console.warn('[group] Participant has no valid model:', p);
+        console.warn('[group] 参与者没有有效模型:', p);
         return null;
       }
       if (p.character) m.character = { characterId: p.character.id, characterName: p.character.name, characterPrompt: p.character.prompt };
       return m;
     }).filter(Boolean);
 
-    if (picked.length < 2) { uiModule.showToast('Need at least 2 participants — add models or characters'); return; }
+    if (picked.length < 2) { uiModule.showToast(t('group.need_two_participants')); return; }
 
     const modal = document.getElementById('custom-preset-modal');
     if (modal) modal.classList.add('hidden');
@@ -162,7 +162,7 @@ function _initGroupTab() {
 
     await startGroup(picked, 'group-' + Date.now());
 
-    // Auto-save as preset if 2+ participants
+    // 如果有 2+ 个参与者，自动保存为预设
     if (picked.length >= 2) {
       const presetData = {
         id: 'grp-' + Date.now(),
@@ -178,7 +178,7 @@ function _initGroupTab() {
       try {
         const existing = await fetch(API_BASE + '/api/presets/groups', { credentials: 'same-origin' }).then(r => r.json());
         const groups = existing.groups || [];
-        // Don't duplicate if same participants
+        // 如果参与者相同则不重复添加
         const sig = presetData.participants.map(p => p.modelId + ':' + (p.characterId || '')).sort().join(',');
         const exists = groups.some(g => (g.participants || []).map(p => p.modelId + ':' + (p.characterId || '')).sort().join(',') === sig);
         if (!exists) {
@@ -192,26 +192,26 @@ function _initGroupTab() {
       } catch (e) {}
     }
 
-    uiModule.showToast('Group chat ready — ' + picked.length + ' participants');
+    uiModule.showToast(t('group.group_ready', { n: picked.length }));
   });
 
   const groupTab = document.querySelector('.preset-tab[data-chartab="group"]');
   if (groupTab) groupTab.addEventListener('click', () => {
     _modelsCache = null;
-    if (startBtn) startBtn.textContent = 'Start Group';
+    if (startBtn) startBtn.textContent = t('group.start_group_chat');
     _loadGroupPresets();
     if (_groupParticipants.length === 0) {
       setTimeout(() => addBtn.click(), 100);
     }
   });
 
-  // Load and render saved group presets
+  // 加载并渲染已保存的群组预设
   async function _loadGroupPresets() {
     try {
       const res = await fetch(API_BASE + '/api/presets/groups', { credentials: 'same-origin' });
       const data = await res.json();
       const groups = data.groups || [];
-      // Render presets above participant list
+      // 在参与者列表上方渲染预设
       let presetsDiv = document.getElementById('group-presets-list');
       if (!presetsDiv) {
         presetsDiv = document.createElement('div');
@@ -226,7 +226,7 @@ function _initGroupTab() {
         chip.className = 'preset-save-btn';
         chip.style.cssText = 'padding:3px 10px;font-size:11px;background:color-mix(in srgb, var(--fg) 5%, transparent);border:1px solid var(--border);';
         const chipLabel = document.createElement('span');
-        chipLabel.textContent = g.name || 'Group ' + (idx + 1);
+        chipLabel.textContent = g.name || t('group.group_n', { n: idx + 1 });
         chip.appendChild(chipLabel);
         const chipX = document.createElement('span');
         chipX.textContent = ' \u00d7';
@@ -243,7 +243,7 @@ function _initGroupTab() {
         chip.appendChild(chipX);
         chip.title = (g.participants || []).map(p => p.characterName || p.modelDisplay || '?').join(', ');
         chip.addEventListener('click', async () => {
-          // Load preset participants
+          // 加载预设参与者
           const [models, chars] = await Promise.all([_getModels(), _getCharacterList()]);
           _groupParticipants.length = 0;
           (g.participants || []).forEach(p => {
@@ -257,10 +257,10 @@ function _initGroupTab() {
           _mode = g.mode || 'parallel';
           _render();
         });
-        // Long-press / right-click to delete
+        // 长按/右键删除
         chip.addEventListener('contextmenu', async (e) => {
           e.preventDefault();
-          if (await window.styledConfirm('Delete preset "' + (g.name || 'Group') + '"?', { confirmText: 'Delete', danger: true })) {
+          if (await window.styledConfirm(t('group.delete_preset_confirm', { name: g.name || '群组' }), { confirmText: t('common.delete'), danger: true })) {
             groups.splice(idx, 1);
             fetch(API_BASE + '/api/presets/groups', {
               method: 'POST', credentials: 'same-origin',
@@ -271,24 +271,24 @@ function _initGroupTab() {
         });
         presetsDiv.appendChild(chip);
       });
-    } catch (e) { console.warn('[group] Failed to load presets:', e); }
+    } catch (e) { console.warn('[group] 加载预设失败:', e); }
   }
-  // Restore button text when switching away from Group tab
+  // 切换到其他标签页时恢复按钮文本
   document.querySelectorAll('.preset-tab[data-chartab]').forEach(tab => {
     if (tab.dataset.chartab !== 'group') {
       tab.addEventListener('click', () => {
-        if (startBtn) startBtn.textContent = 'Start';
+        if (startBtn) startBtn.textContent = t('group.start');
       });
     }
   });
 }
 
 async function _getCharacterList() {
-  // Built-in characters from PROMPT_TEMPLATES
+  // 来自 PROMPT_TEMPLATES 的内置角色
   const chars = PROMPT_TEMPLATES.filter(t => t.isCharacter).map(t => ({
     id: t.id, name: t.name, prompt: t.prompt,
   }));
-  // User-created characters from presets
+  // 来自预设的用户创建的角色
   try {
     const allPresets = getAllPresets();
     if (allPresets && allPresets.custom && allPresets.custom.character_name) {
@@ -299,9 +299,9 @@ async function _getCharacterList() {
       });
     }
   } catch (e) {}
-  // Load user templates and wait for them before returning.
-  // The endpoint returns a JSON array directly (not {templates:[...]}).
-  // All user templates are personas by definition — no isCharacter filter needed.
+  // 加载用户模板并等待返回。
+  // 端点直接返回 JSON 数组（不是 {templates:[...]}）。
+  // 所有用户模板都是角色 — 无需 isCharacter 过滤。
   try {
     const r = await fetch(API_BASE + '/api/presets/templates', { credentials: 'same-origin' });
     const data = await r.json();
@@ -320,7 +320,7 @@ export function setActive(v) { _active = v; }
 export function getMode() { return _mode; }
 export function setMode(m) { _mode = m; }
 
-// ── Model Picker ─────────────────────────────────────
+// ── 模型选择器 ─────────────────────────────────────
 
 export async function showModelPicker() {
   return new Promise((resolve) => {
@@ -332,52 +332,52 @@ export async function showModelPicker() {
     content.className = 'modal-content';
     content.style.width = 'min(480px, 92vw)';
 
-    // Header
+    // 标题
     const header = document.createElement('div');
     header.className = 'modal-header';
-    header.innerHTML = '<h4>Group Chat — Select Models</h4>';
+    header.innerHTML = '<h4>' + t('group.pick_models_title') + '</h4>';
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
     closeBtn.innerHTML = '&#x2716;';
     closeBtn.addEventListener('click', () => { overlay.remove(); resolve(null); });
     header.appendChild(closeBtn);
 
-    // Body
+    // 内容区
     const body = document.createElement('div');
     body.className = 'modal-body';
 
-    // Mode toggle
+    // 模式切换
     const modeRow = document.createElement('div');
     modeRow.style.cssText = 'display:flex;gap:8px;margin-bottom:10px;align-items:center;font-size:12px;';
     modeRow.innerHTML = `
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
-        <input type="radio" name="group-mode" value="parallel" ${_mode === 'parallel' ? 'checked' : ''}> All respond
+        <input type="radio" name="group-mode" value="parallel" ${_mode === 'parallel' ? 'checked' : ''}> ${t('group.all_respond')}
       </label>
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
-        <input type="radio" name="group-mode" value="round-robin" ${_mode === 'round-robin' ? 'checked' : ''}> Round-robin
+        <input type="radio" name="group-mode" value="round-robin" ${_mode === 'round-robin' ? 'checked' : ''}> ${t('group.round_robin')}
       </label>
     `;
     body.appendChild(modeRow);
 
-    // Search
+    // 搜索
     const search = document.createElement('input');
     search.type = 'text';
-    search.placeholder = 'Filter models…';
+    search.placeholder = t('group.filter_models');
     search.className = 'memory-search-input';
     search.style.marginBottom = '8px';
     body.appendChild(search);
 
-    // Model list
+    // 模型列表
     const list = document.createElement('div');
     list.style.cssText = 'max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;';
     body.appendChild(list);
 
-    // Selected count + start button
+    // 已选计数 + 开始按钮
     const footer = document.createElement('div');
     footer.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:10px;';
     footer.innerHTML = `
-      <span id="group-selected-count" style="font-size:11px;opacity:0.5;">0 selected</span>
-      <button id="group-start-btn" class="btn-primary" disabled style="padding:6px 16px;font-size:12px;">Start Group Chat</button>
+      <span id="group-selected-count" style="font-size:11px;opacity:0.5;">${t('group.selected_n', { n: 0 })}</span>
+      <button id="group-start-btn" class="btn-primary" disabled style="padding:6px 16px;font-size:12px;">${t('group.start_group_chat')}</button>
     `;
     body.appendChild(footer);
 
@@ -387,19 +387,19 @@ export async function showModelPicker() {
     overlay.style.display = 'flex';
     document.body.appendChild(overlay);
 
-    // Get all available models — try cached first, fetch if empty
+    // 获取所有可用模型 — 先尝试缓存，为空则获取
     const selected = new Set();
     let _cachedModels = null;
     async function getAllModels() {
       if (_cachedModels) return _cachedModels;
       let items = (window.modelsModule && window.modelsModule.getCachedItems) ? window.modelsModule.getCachedItems() : [];
-      // Fallback: fetch from API if cache is empty
+      // 降级方案：如果缓存为空则从 API 获取
       if (!items || items.length === 0) {
         try {
           const res = await fetch(API_BASE + '/api/models', { credentials: 'same-origin' });
           const data = await res.json();
           items = data.items || [];
-        } catch (e) { console.warn('[group] Failed to fetch models:', e); }
+        } catch (e) { console.warn('[group] 获取模型失败:', e); }
       }
       const result = [];
       const seen = new Set();
@@ -417,7 +417,7 @@ export async function showModelPicker() {
     }
 
     async function render(filter) {
-      list.innerHTML = '<div style="opacity:0.4;padding:8px;font-size:12px;">Loading models…</div>';
+      list.innerHTML = '<div style="opacity:0.4;padding:8px;font-size:12px;">' + t('group.loading_models') + '</div>';
       const all = await getAllModels();
       const q = (filter || '').toLowerCase();
       all.forEach(m => {
@@ -440,12 +440,12 @@ export async function showModelPicker() {
         });
         row.querySelector('input').addEventListener('change', (e) => {
           if (e.target.checked) {
-            if (selected.size >= 8) { e.target.checked = false; uiModule.showToast('Max 8 models'); return; }
+            if (selected.size >= 8) { e.target.checked = false; uiModule.showToast(t('group.max_8_models')); return; }
             selected.add(m.mid);
           } else {
             selected.delete(m.mid);
           }
-          document.getElementById('group-selected-count').textContent = selected.size + ' selected';
+          document.getElementById('group-selected-count').textContent = t('group.selected_n', { n: selected.size });
           document.getElementById('group-start-btn').disabled = selected.size < 2;
           row.style.background = selected.has(m.mid) ? 'color-mix(in srgb, var(--accent, var(--red)) 12%, transparent)' : '';
         });
@@ -456,24 +456,24 @@ export async function showModelPicker() {
     search.addEventListener('input', () => render(search.value));
     render();
 
-    // Mode toggle
+    // 模式切换
     modeRow.querySelectorAll('input[name=group-mode]').forEach(r => {
       r.addEventListener('change', () => { _mode = r.value; });
     });
 
-    // Start button
+    // 开始按钮
     document.getElementById('group-start-btn').addEventListener('click', async () => {
       const all = await getAllModels();
       const picked = all.filter(m => selected.has(m.mid));
 
-      // Step 2: Character assignment
+      // 步骤 2：角色分配
       body.innerHTML = '';
       const stepTitle = document.createElement('div');
       stepTitle.style.cssText = 'font-size:12px;opacity:0.5;margin-bottom:8px;';
-      stepTitle.textContent = 'Assign characters (optional)';
+      stepTitle.textContent = t('group.assign_role_optional');
       body.appendChild(stepTitle);
 
-      // Build character options
+      // 构建角色选项
       const characters = await _getCharacterList();
       const assignments = {}; // mid -> {characterId, characterName, characterPrompt}
 
@@ -487,7 +487,7 @@ export async function showModelPicker() {
         `;
         const sel = document.createElement('select');
         sel.style.cssText = 'font-size:11px;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--fg);max-width:140px;';
-        let optsHtml = '<option value="">No character</option>';
+        let optsHtml = '<option value="">' + t('group.no_role') + '</option>';
         characters.forEach(c => {
           optsHtml += `<option value="${c.id}">${uiModule.esc(c.name)}</option>`;
         });
@@ -504,13 +504,13 @@ export async function showModelPicker() {
         body.appendChild(row);
       }
 
-      // Go button
+      // 开始按钮
       const goBtn = document.createElement('button');
       goBtn.className = 'btn-primary';
       goBtn.style.cssText = 'margin-top:10px;padding:6px 16px;font-size:12px;width:100%;';
-      goBtn.textContent = 'Start Group Chat';
+      goBtn.textContent = t('group.start_group_chat');
       goBtn.addEventListener('click', () => {
-        // Attach character info to picked models
+        // 将角色信息附加到选中的模型
         picked.forEach(m => {
           if (assignments[m.mid]) {
             m.character = assignments[m.mid];
@@ -522,13 +522,13 @@ export async function showModelPicker() {
       body.appendChild(goBtn);
     });
 
-    // Click outside to close
+    // 点击外部关闭
     overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); resolve(null); } });
     search.focus();
   });
 }
 
-// ── Start / Stop ─────────────────────────────────────
+// ── 开始 / 停止 ─────────────────────────────────────
 
 export async function startGroup(models, parentSessionId) {
   _models = models;
@@ -536,7 +536,7 @@ export async function startGroup(models, parentSessionId) {
   _roundRobinIdx = 0;
   _participantSessions = [];
 
-  // Create a real parent session for persistence
+  // 创建一个真实的父会话以持久化
   const groupName = '[GRP] ' + models.map(m => m._groupName || m.character?.characterName || m.display).join(', ');
   try {
     const pfd = new FormData();
@@ -548,18 +548,18 @@ export async function startGroup(models, parentSessionId) {
     const pres = await fetch(`${API_BASE}/api/session`, { method: 'POST', body: pfd, credentials: 'same-origin' });
     const pdata = await pres.json();
     _parentSessionId = pdata.id;
-    // Register as group session for sidebar icon
+    // 注册为群组会话以便侧边栏图标显示
     try {
       const storedGroupSessions = Storage.getJSON('odysseus-group-sessions', []);
       const gids = Array.isArray(storedGroupSessions) ? storedGroupSessions : [];
       if (!gids.includes(_parentSessionId)) { gids.push(_parentSessionId); localStorage.setItem('odysseus-group-sessions', JSON.stringify(gids)); }
     } catch (e) {}
   } catch (e) {
-    console.error('[group] Failed to create parent session:', e);
+    console.error('[group] 创建父会话失败:', e);
     _parentSessionId = parentSessionId || 'group-' + Date.now();
   }
 
-  // Create a hidden session per model
+  // 为每个模型创建一个隐藏会话
   for (const m of models) {
     try {
       const fd = new FormData();
@@ -570,20 +570,20 @@ export async function startGroup(models, parentSessionId) {
       if (m.endpointId) fd.append('endpoint_id', m.endpointId);
       const res = await fetch(`${API_BASE}/api/session`, { method: 'POST', body: fd, credentials: 'same-origin' });
       if (!res.ok) {
-        console.error(`[group] Session creation failed for ${m.display}: HTTP ${res.status}`);
+        console.error(`[group] 会话创建失败：${m.display}：HTTP ${res.status}`);
         _participantSessions.push(null);
         continue;
       }
       const data = await res.json();
       if (!data.id) {
-        console.error(`[group] Session creation returned no ID for ${m.display}:`, data);
+        console.error(`[group] 会话创建未返回 ID：${m.display}：`, data);
         _participantSessions.push(null);
         continue;
       }
       _participantSessions.push(data.id);
-      // Inject group chat system prompt — use character if assigned
+      // 注入群聊系统提示 — 如果分配了角色则使用角色
       const displayName = m.character ? m.character.characterName : m.display;
-      m._groupName = displayName; // store for bubble labels
+      m._groupName = displayName; // 存储为气泡标签
       const otherNames = models.filter(x => x.mid !== m.mid).map(x =>
         x.character ? x.character.characterName : x.display
       ).join(', ');
@@ -597,10 +597,10 @@ export async function startGroup(models, parentSessionId) {
       let sysPrompt;
       if (m.character) {
         sysPrompt = m.character.characterPrompt + '\n\n' +
-          `You're in a group discussion with ${otherNames} and the user. ` +
-          _groupEtiquette + ' Stay in character.';
+          `你正在与 ${otherNames} 和用户进行群组讨论。` +
+          _groupEtiquette + ' 请保持角色定位。';
       } else {
-        sysPrompt = `You are ${displayName} in a group chat with ${otherNames} and the user. ` +
+        sysPrompt = `你是群聊中的 ${displayName}，参与方有 ${otherNames} 和用户。` +
           _groupEtiquette;
       }
 
@@ -610,24 +610,24 @@ export async function startGroup(models, parentSessionId) {
         body: JSON.stringify({ messages: [{ role: 'system', content: sysPrompt }]}),
       }).catch(() => {});
     } catch (e) {
-      console.error('[group] Failed to create participant session:', m.display, e);
+      console.error('[group] 创建参与者会话失败:', m.display, e);
       _participantSessions.push(null);
     }
   }
 
   _saveState();
 
-  // Now select the session so the UI switches to it.
+  // 现在选择会话，使 UI 切换到该会话。
   if (_parentSessionId && window.sessionModule) {
-    // loadSessions auto-selects a session, and if it picks anything other
-    // than the parent while the group is active, that intermediate
-    // selectSession calls stopGroup() (wiping GROUP_STATE_KEY) — so the
-    // explicit selectSession below finds no state and lands on a plain chat.
-    // loadSessions resolves its target as: URL hash → currentSessionId →
-    // lastSaved → most-recent. Pin BOTH the hash and currentSessionId to the
-    // parent so it deterministically targets the group session and fires no
-    // group-killing intermediate select. (Setting currentSessionId alone
-    // wasn't enough — the stale hash outranks it.)
+    // loadSessions 会自动选择一个会话，如果在群组活跃时
+    // 它选中的不是父会话，那么中间的选择会话调用
+    // 会调用 stopGroup()（清除 GROUP_STATE_KEY）——所以
+    // 下面明确的 selectSession 会发现没有状态，从而进入普通聊天。
+    // loadSessions 的目标解析优先级为：URL hash → currentSessionId →
+    // lastSaved → 最近会话。将 hash 和 currentSessionId 
+    // 都指向父会话，使它确定性地定位到群组会话，
+    // 不会触发中间的选择来清除群组状态。（仅设置 currentSessionId
+    // 是不够的——旧的 hash 优先级比它高。）
     try { history.replaceState(null, '', '#' + _parentSessionId); } catch (e) {}
     window.sessionModule.setCurrentSessionId(_parentSessionId);
     await window.sessionModule.loadSessions();
@@ -644,7 +644,7 @@ export function stopGroup() {
   localStorage.removeItem(GROUP_STATE_KEY);
 }
 
-// ── Send Message ─────────────────────────────────────
+// ── 发送消息 ─────────────────────────────────────
 
 export async function sendMessage(msg) {
   if (!_active || !_models.length) return;
@@ -652,7 +652,7 @@ export async function sendMessage(msg) {
   const box = document.getElementById('chat-history');
   if (!box) return;
 
-  // Save user message to parent session for persistence
+  // 保存用户消息到父会话以持久化
   if (_parentSessionId) {
     fetch(`${API_BASE}/api/session/${_parentSessionId}/inject_messages`, {
       method: 'POST', credentials: 'same-origin',
@@ -673,14 +673,14 @@ function _createGroupBubble(model, box) {
   wrap.className = 'msg msg-ai msg-group';
   wrap.style.position = 'relative';
 
-  // Role label — use character name if assigned, otherwise model name
+  // 角色标签 — 如果分配了角色则使用角色名称，否则使用模型名称
   const roleLabel = model._groupName || (model.character ? model.character.characterName : chatRenderer.shortModel(model.mid));
   const roleTs = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   wrap.innerHTML = `<div class="role">${uiModule.esc(roleLabel)} <span class="role-timestamp">${roleTs}</span></div><div class="body"></div>`;
   chatRenderer.applyModelColor(wrap.querySelector('.role'), model.mid);
 
-  // Spinner — identical to chat.js line 3062
-  const spinner = spinnerModule.create('Generating response', 'right');
+  // 加载指示器 — 与 chat.js 第 3062 行相同
+  const spinner = spinnerModule.create(t('group.generating_reply'), 'right');
   const bodyDiv = wrap.querySelector('.body');
   bodyDiv.appendChild(spinner.createElement());
   spinner.start();
@@ -694,16 +694,16 @@ async function _sendParallel(msg, box) {
   const holders = _models.map(m => _createGroupBubble(m, box));
   uiModule.scrollHistory();
 
-  // Stream all models in parallel
+  // 并行流式传输所有模型
   _abortControllers = _models.map(() => new AbortController());
   const results = await Promise.allSettled(_models.map((m, i) =>
     _streamToHolder(i, _participantSessions[i], msg, holders[i], _abortControllers[i])
   ));
   _abortControllers = [];
 
-  // They answered simultaneously so they couldn't react this turn, but inject
-  // each response into the others' sessions so they're aware of each other on
-  // the next message and can remark on it.
+  // 它们同时回应，所以本轮无法相互反应，但将
+  // 每个回复注入到其他会话中，让它们在下一条消息时
+  // 互相知道对方说了什么，并能对此发表评论。
   await _syncAllResponses(holders);
 }
 
@@ -730,7 +730,7 @@ async function _sendRoundRobin(msg, box) {
     await _streamToHolder(idx, _participantSessions[idx], msg, wrap, ac);
     _abortControllers = [];
 
-    // After each response, inject it into all OTHER participant sessions
+    // 在每次回复后，将其注入到所有其他参与者会话中
     const response = wrap.dataset.raw || '';
     if (response) {
       for (let j = 0; j < _participantSessions.length; j++) {
@@ -745,16 +745,16 @@ async function _sendRoundRobin(msg, box) {
               content: `[${m._groupName || m.display}]: ${response}`
             }]}),
           });
-        } catch (e) { console.warn('[group] sync failed:', e); }
+        } catch (e) { console.warn('[group] 同步失败:', e); }
       }
     }
   }
-  // Order is randomized per-message now, so _roundRobinIdx no longer drives
-  // turn order; left in state for backward compat only.
+  // 排序现在是每条消息随机化，所以 _roundRobinIdx 不再驱动
+  // 轮次顺序；仅保留在状态中用于向后兼容。
   _saveState();
 }
 
-/** After parallel responses, inject each model's response into all other sessions. */
+/** 并行回复后，将每个模型的回复注入所有其他会话。 */
 async function _syncAllResponses(holders) {
   for (let i = 0; i < holders.length; i++) {
     const response = holders[i].dataset.raw || '';
@@ -772,14 +772,14 @@ async function _syncAllResponses(holders) {
             content: `[${model._groupName || model.display}]: ${response}`
           }]}),
         });
-      } catch (e) { /* silent */ }
+      } catch (e) { /* 静默处理 */ }
     }
   }
 }
 
 async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
   if (!sessionId) {
-    holderEl.querySelector('.body').innerHTML = '<i style="opacity:0.5;">[Session creation failed]</i>';
+    holderEl.querySelector('.body').innerHTML = '<i style="opacity:0.5;">' + t('group.session_create_failed') + '</i>';
     return;
   }
 
@@ -807,9 +807,9 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
       if (done) break;
       _buffer += decoder.decode(value, { stream: true });
 
-      // Process complete lines
+      // 处理完成的行
       const lines = _buffer.split('\n');
-      _buffer = lines.pop(); // keep incomplete last line
+      _buffer = lines.pop(); // 保留不完整的最后一行
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
@@ -818,7 +818,7 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
         try {
           const json = JSON.parse(line.slice(6));
 
-          // Text delta (OpenAI format)
+          // 文本增量（OpenAI 格式）
           if (json.choices?.[0]?.delta?.content) {
             if (_firstToken) { _firstToken = false; if (holderEl._spinner) { holderEl._spinner.destroy(); delete holderEl._spinner; } bodyEl.innerHTML = ''; }
             accumulated += json.choices[0].delta.content;
@@ -827,10 +827,10 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
             );
             uiModule.scrollHistory();
           }
-          // Text delta (Odysseus format)
+          // 文本增量（Odysseus 格式）
           else if (json.delta !== undefined) {
             if (_firstToken) { _firstToken = false; if (holderEl._spinner) { holderEl._spinner.destroy(); delete holderEl._spinner; } bodyEl.innerHTML = ''; }
-            // Handle thinking tags from vLLM
+            // 处理 vLLM 的思考标签
             let _d = json.delta;
             if (json.thinking) {
               if (!accumulated.includes('<think>')) _d = '<think>' + _d;
@@ -843,12 +843,12 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
             );
             uiModule.scrollHistory();
           }
-          // Agent tool events
+          // 代理工具事件
           else if (json.type === 'tool_start') {
             const toolDiv = document.createElement('div');
             toolDiv.className = 'agent-tool-event';
             toolDiv.style.cssText = 'font-size:11px;opacity:0.5;padding:2px 0;font-family:monospace;';
-            toolDiv.textContent = `⚙ ${json.tool || 'tool'}${json.command ? ': ' + json.command.substring(0, 60) : ''}`;
+            toolDiv.textContent = `⚙ ${json.tool || t('group.tool_fallback')}${json.command ? ': ' + json.command.substring(0, 60) : ''}`;
             bodyEl.appendChild(toolDiv);
           }
           else if (json.type === 'tool_output') {
@@ -858,7 +858,7 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
             outDiv.textContent = (json.output || '').substring(0, 200);
             bodyEl.appendChild(outDiv);
           }
-          // Generated image
+          // 生成的图片
           else if (json.type === 'generated_image' && json.url) {
             const safeImageUrl = chatRenderer.safeDisplayImageSrc(json.url);
             if (safeImageUrl) {
@@ -869,23 +869,23 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
               bodyEl.appendChild(img);
             }
           }
-          // Error
+          // 错误
           else if (json.error) {
             const errDiv = document.createElement('div');
             errDiv.style.cssText = 'color:var(--color-error);font-style:italic;padding:4px 0;';
-            errDiv.textContent = `[Error: ${json.error}]`;
+            errDiv.textContent = t('group.error_prefix', { msg: json.error });
             bodyEl.appendChild(errDiv);
           }
-        } catch (e) { /* skip unparseable */ }
+        } catch (e) { /* 跳过无法解析的内容 */ }
       }
     }
   } catch (e) {
     if (e.name === 'AbortError') return;
-    console.error('[group] Stream error:', e);
-    bodyEl.innerHTML += '<div style="color:var(--color-error);font-style:italic;">[Stream error]</div>';
+    console.error('[group] 流错误:', e);
+    bodyEl.innerHTML += '<div style="color:var(--color-error);font-style:italic;">' + t('group.stream_error') + '</div>';
   }
 
-  // Final render with footer
+  // 最终渲染，带页脚
   if (accumulated) {
     bodyEl.innerHTML = markdownModule.processWithThinking(
       markdownModule.squashOutsideCode(accumulated)
@@ -894,13 +894,13 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
     if (markdownModule.renderMermaid) markdownModule.renderMermaid(holderEl);
     holderEl.appendChild(chatRenderer.createMsgFooter(holderEl));
   } else if (!bodyEl.querySelector('.agent-tool-event') && !bodyEl.querySelector('img')) {
-    bodyEl.innerHTML = '<i style="opacity:0.5;">[No response]</i>';
+    bodyEl.innerHTML = '<i style="opacity:0.5;">' + t('group.no_reply') + '</i>';
   }
 
   holderEl.dataset.raw = accumulated;
   holderEl.dataset.groupModel = _models[modelIdx].mid;
 
-  // Save response to parent session for persistence
+  // 保存回复到父会话以持久化
   if (accumulated && _parentSessionId) {
     const gName = _models[modelIdx]._groupName || _models[modelIdx].display;
     fetch(`${API_BASE}/api/session/${_parentSessionId}/inject_messages`, {
@@ -914,7 +914,7 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
   }
 }
 
-// ── State Persistence ────────────────────────────────
+// ── 状态持久化 ────────────────────────────────
 
 function _saveState() {
   try {

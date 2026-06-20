@@ -1,5 +1,5 @@
 # services/research/service.py
-"""Research service — deep research with LLM-in-the-loop."""
+"""研究服务 — LLM 参与环路的深度研究。"""
 
 import re
 from dataclasses import dataclass, field
@@ -7,14 +7,14 @@ from typing import List, Optional, Callable
 
 from .research_handler import ResearchHandler
 
-# Markdown source links emitted by ResearchHandler._format_research_report,
-# e.g. "- [Some Title](https://example.com/page)".
+# ResearchHandler._format_research_report 发出的 Markdown 来源链接，
+# 例如 "- [Some Title](https://example.com/page)"。
 _SOURCE_LINK_RE = re.compile(r"^\s*-\s*\[(?P<title>[^\]]*)\]\((?P<url>[^)]+)\)\s*$")
 
 
 @dataclass
 class ResearchSource:
-    """A source found during research."""
+    """研究中找到的一个来源。"""
     url: str
     title: str
     snippet: str
@@ -23,7 +23,7 @@ class ResearchSource:
 
 @dataclass
 class ResearchResult:
-    """Result of a deep research query."""
+    """深度研究查询的结果。"""
     query: str
     summary: str
     sources: List[ResearchSource] = field(default_factory=list)
@@ -34,11 +34,11 @@ class ResearchResult:
 
 class ResearchService:
     """
-    Deep research service.
+    深度研究服务。
 
-    Usage:
+    用法：
         service = ResearchService()
-        result = await service.research("quantum computing advances 2024")
+        result = await service.research("2024 量子计算进展")
         print(result.summary)
     """
 
@@ -55,17 +55,17 @@ class ResearchService:
         on_progress: Optional[Callable[[dict], None]] = None,
     ) -> ResearchResult:
         """
-        Perform deep research on a topic.
+        对某个主题执行深度研究。
 
         Args:
-            topic: Research topic/question
-            llm_endpoint: LLM API endpoint
-            llm_model: Model to use
-            max_time: Maximum time in seconds
-            on_progress: Optional progress callback
+            topic: 研究主题/问题
+            llm_endpoint: LLM API 端点
+            llm_model: 要使用的模型
+            max_time: 最长耗时（秒）
+            on_progress: 可选进度回调
 
         Returns:
-            ResearchResult with findings
+            包含研究结果的 ResearchResult
         """
         import time
         start = time.time()
@@ -113,11 +113,11 @@ class ResearchService:
 
     @staticmethod
     def _parse_sources(report: str) -> List[ResearchSource]:
-        """Extract sources from the markdown ### Sources section of a report.
+        """从报告的 Markdown ### Sources 部分提取来源。
 
-        ResearchHandler emits one ``- [title](url)`` link per deduplicated
-        finding under a ``### Sources`` heading. Parse only that section so
-        inline links elsewhere in the body are not mistaken for sources.
+        ResearchHandler 为每个去重后的发现发出一个 ``- [title](url)`` 链接，
+        位于 ``### Sources`` 标题下。仅解析该部分，避免将正文
+        其他地方的内联链接误识别为来源。
         """
         if not report:
             return []
@@ -153,15 +153,15 @@ class ResearchService:
         llm_model: str,
         max_time: int = 300,
     ) -> dict:
-        """Start research in background. Returns task info."""
+        """在后台启动研究。返回任务信息。"""
         return self.handler.start_research(
             session_id, topic, llm_endpoint, llm_model, max_time
         )
 
     def get_status(self, session_id: str) -> Optional[dict]:
-        """Get status of background research."""
+        """获取后台研究的状态。"""
         return self.handler.get_status(session_id)
 
     def cancel(self, session_id: str) -> bool:
-        """Cancel background research."""
+        """取消后台研究。"""
         return self.handler.cancel_research(session_id)

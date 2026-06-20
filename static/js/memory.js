@@ -1,5 +1,5 @@
-// Memory Management Functions
-// This module handles all memory-related operations
+// 内存管理功能
+// 本模块处理所有内存相关操作
 
 import uiModule from './ui.js';
 import sessionModule from './sessions.js';
@@ -186,7 +186,7 @@ async function syncToggles() {
   await syncPrefToggle('memory-enabled-header-toggle', 'memory_enabled', 'Memory enabled', 'Memory disabled', false);
   // The Skills header toggle owns the `skills_enabled` pref (was never wired —
   // toggling it did nothing, so skills stayed on). Now it actually gates skill
-  // injection (see chat_helpers.py: uprefs.skills_enabled).
+  // 现在它真正控制技能注入（参见 chat_helpers.py: uprefs.skills_enabled）。
   await syncPrefToggle('skills-enabled-header-toggle', 'skills_enabled', 'Skills enabled', 'Skills disabled', false);
   await syncPrefToggle('auto-memory-toggle', 'auto_memory', 'Auto-extract memories enabled', 'Auto-extract memories disabled', false);
   await syncPrefToggle('auto-skills-toggle', 'auto_skills', 'Auto-extract skills enabled', 'Auto-extract skills disabled', false);
@@ -194,7 +194,7 @@ async function syncToggles() {
   await syncPrefSlider('skill-confidence-slider', 'skill_min_confidence', 'skill-confidence-label', 0.85);
   await syncPrefNumber('skill-max-input', 'skill_max_injected', 3);
 
-  // Reflect the header toggle into the sidebar dim + modal body opacity.
+  // 将头部开关状态反映到侧边栏变暗 + 模态框主体透明度。
   const headerToggle = document.getElementById('memory-enabled-header-toggle');
   if (headerToggle) {
     const modalBody = document.querySelector('.memory-modal-body');
@@ -209,7 +209,7 @@ async function syncToggles() {
     }
   }
 
-  // Same dim treatment for the Skills toggle — dims the skills panel when off.
+  // 对技能开关采用相同的变暗处理——关闭时使技能面板变暗。
   const skillsToggle = document.getElementById('skills-enabled-header-toggle');
   if (skillsToggle) {
     const skillsPanel = document.querySelector('[data-memory-panel="skills"]');
@@ -253,7 +253,7 @@ async function syncPrefSlider(elementId, prefKey, labelId, defaultVal) {
     if (res.ok) {
       const data = await res.json();
       let pref = (data.value === undefined || data.value === null) ? defaultVal : Number(data.value);
-      // pref 0 (or falsy) = "All" → max slider position; else percent.
+      // pref 0（或假值）= "All" → 最大滑块位置；否则为百分比。
       let pos = (!pref || pref <= 0) ? maxPos : Math.round(pref * 100);
       pos = Math.max(Number(slider.min), Math.min(maxPos, pos));
       slider.value = String(pos);
@@ -284,7 +284,7 @@ async function syncPrefSlider(elementId, prefKey, labelId, defaultVal) {
   }
 }
 
-/** Load/save an integer-valued pref backed by a <input type="number">. */
+/** 加载/保存由 <input type="number"> 支持的整数值偏好设置。 */
 async function syncPrefNumber(elementId, prefKey, defaultVal) {
   const input = document.getElementById(elementId);
   if (!input) return;
@@ -351,7 +351,7 @@ async function syncPrefToggle(elementId, prefKey, onMsg, offMsg, dimBelow = true
         });
         if (!res.ok) {
           console.error(`PUT ${prefKey} returned ${res.status}`);
-          toggle.checked = !toggle.checked; // revert
+          toggle.checked = !toggle.checked; // 恢复原值
           if (dimBelow) syncToggleDim(toggle);
           showError('Failed to save preference');
           return;
@@ -359,7 +359,7 @@ async function syncPrefToggle(elementId, prefKey, onMsg, offMsg, dimBelow = true
         showToast(toggle.checked ? onMsg : offMsg);
       } catch (e) {
         console.error(`Failed to save ${prefKey} pref:`, e);
-        toggle.checked = !toggle.checked; // revert
+        toggle.checked = !toggle.checked; // 恢复原值
         if (dimBelow) syncToggleDim(toggle);
         showError('Failed to save preference');
       }
@@ -402,11 +402,11 @@ export async function loadMemories() {
     renderMemoryList();
     updateMemoryCount();
   }
-  // Always wire toggles, even if memory API failed
+  // 始终连接开关，即使内存 API 失败
   syncToggles();
 }
 
-// ---- Bulk select mode ----
+// ---- 批量选择模式 ----
 
 const _SELECT_BTN_DOT_SVG = '<svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>';
 const _SELECT_BTN_X_SVG = '<svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:3px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
@@ -446,7 +446,7 @@ function toggleSelectItem(id) {
 function updateBulkCount() {
   const countEl = document.getElementById('memory-selected-count');
   const deleteBtn = document.getElementById('memory-bulk-delete');
-  if (countEl) countEl.textContent = `${selectedIds.size} Selected`;
+  if (countEl) countEl.textContent = `${t('brain.selected_n', { n: selectedIds.size })}`;
   if (deleteBtn) deleteBtn.disabled = selectedIds.size === 0;
 }
 
@@ -455,7 +455,7 @@ function toggleSelectAll() {
   if (!selectAllEl) return;
 
   if (selectAllEl.checked) {
-    // Select all currently visible/filtered items
+    // 选择当前所有可见/已筛选的项目
     const visible = getFilteredMemories();
     visible.forEach(m => selectedIds.add(m.id));
   } else {
@@ -468,7 +468,7 @@ function toggleSelectAll() {
 async function bulkDelete() {
   if (selectedIds.size === 0) return;
   const count = selectedIds.size;
-  if (!await uiModule.styledConfirm(`Delete ${count} ${count === 1 ? 'memory' : 'memories'}?`, { confirmText: 'Delete', danger: true })) return;
+  if (!await uiModule.styledConfirm(t('brain.delete_batch_confirm', { n: count, word: count === 1 ? t('brain.memory_singular') : t('brain.memory_plural') }), { confirmText: t('common.delete'), danger: true })) return;
 
   let deleted = 0;
   const deletedIds = [];
@@ -487,10 +487,10 @@ async function bulkDelete() {
   await animateMemoryRemoval(deletedIds);
   exitSelectMode();
   await loadMemories();
-  showToast(`Deleted ${deleted} ${deleted === 1 ? 'memory' : 'memories'}`);
+  showToast(t('brain.deleted_n', { n: deleted, word: deleted === 1 ? t('brain.memory_singular') : t('brain.memory_plural') }));
 }
 
-// ---- Tidy (audit) ----
+// ---- 整理（审计）----
 
 export async function tidyMemories() {
   const tidyBtn = document.getElementById('memory-tidy-btn');
@@ -510,7 +510,7 @@ export async function tidyMemories() {
     tidySpinner.start();
   }
 
-  // Snapshot current state for diffing
+  // 快照当前状态用于差异对比
   const beforeMap = new Map(memories.map(m => [m.id, { ...m }]));
 
   try {
@@ -531,15 +531,15 @@ export async function tidyMemories() {
       return;
     }
 
-    // Fetch the new state
+    // 获取新状态
     const freshRes = await fetch(`${window.location.origin}/api/memory`);
     const freshData = await freshRes.json();
     const afterList = freshData.memory || freshData || [];
     const afterMap = new Map(afterList.map(m => [m.id, m]));
 
-    // Compute diff
-    const removed = [];   // IDs that no longer exist
-    const edited = [];    // IDs where text changed
+    // 计算差异
+    const removed = [];   // 不再存在的 ID
+    const edited = [];    // 文本已更改的 ID
     for (const [id, oldMem] of beforeMap) {
       if (!afterMap.has(id)) {
         removed.push(id);
@@ -550,16 +550,16 @@ export async function tidyMemories() {
 
     if (tidySpinner) tidySpinner.updateMessage('Tidying memories');
 
-    // Animate the diff on the currently rendered list
+    // 在当前渲染的列表上动画显示差异
     await animateTidyDiff(removed, edited);
 
-    // Now load the clean state
+    // 现在加载清理后的状态
     memories = afterList;
     buildCategoryChips();
     renderMemoryList();
     updateMemoryCount();
 
-    showToast(`Tidied: ${data.removed} removed (${data.before} \u2192 ${data.after})`);
+    showToast(t('brain.tidied_result', { removed: data.removed, before: data.before, after: data.after }));
   } catch (error) {
     console.error('Tidy failed:', error);
     showError('Tidy failed — check console');
@@ -596,7 +596,7 @@ async function animateTidyDiff(removedIds, editedItems) {
   const memoryList = document.getElementById('memory-list');
   if (!memoryList) return;
 
-  // Tag each rendered item with its memory ID for lookup
+  // 为每个渲染项目标记其内存 ID 以便查找
   const items = memoryList.querySelectorAll('.memory-item');
   const itemMap = new Map();
   const filtered = getFilteredMemories();
@@ -604,7 +604,7 @@ async function animateTidyDiff(removedIds, editedItems) {
     if (filtered[i]) itemMap.set(filtered[i].id, el);
   });
 
-  // Animate edits first — show text morphing
+  // 先动画显示编辑——展示文本变形
   for (const { id, oldText, newText } of editedItems) {
     const el = itemMap.get(id);
     if (!el) continue;
@@ -626,7 +626,7 @@ async function animateTidyDiff(removedIds, editedItems) {
     await sleep(100);
   }
 
-  // Animate removals — strikethrough then fade out
+  // 动画显示删除——先删除线再淡出
   for (const id of removedIds) {
     const el = itemMap.get(id);
     if (!el) continue;
@@ -635,13 +635,13 @@ async function animateTidyDiff(removedIds, editedItems) {
     await sleep(200);
   }
 
-  // Let all removals animate together, then wait for them to finish
+  // 让所有删除一起动画，然后等待它们完成
   if (removedIds.length > 0) {
     await sleep(500);
   }
 }
 
-// ---- Filtering helper ----
+// ---- 筛选辅助函数 ----
 
 function getFilteredMemories() {
   const searchTerm = document.getElementById('memory-search')?.value?.toLowerCase().trim() || '';
@@ -666,13 +666,13 @@ function getFilteredMemories() {
     filtered.sort((a, b) => (b.uses || 0) - (a.uses || 0) || (b.timestamp || 0) - (a.timestamp || 0));
   }
 
-  // Pinned always float to top
+  // 置顶项始终浮动到顶部
   filtered.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   return filtered;
 }
 
-// ---- Render ----
+// ---- 渲染 ----
 
 export function renderMemoryList() {
   const memoryList = document.getElementById('memory-list');
@@ -696,7 +696,7 @@ export function renderMemoryList() {
       memoryList.innerHTML = `<div class="memory-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
         <span>No memories yet${_smiley}</span>
         <span style="opacity:0.7;font-size:11px;display:block;">
-          <a href="#" data-mem-goto-add style="color:var(--accent,var(--red));text-decoration:underline;">Import in Add tab</a>
+          <a href="#" data-mem-goto-add style="color:var(--accent,var(--red));text-decoration:underline;">${t('brain.import_in_add')}</a>
         </span>
       </div>`;
       memoryList.querySelector('[data-mem-goto-add]')?.addEventListener('click', (e) => {
@@ -715,7 +715,7 @@ export function renderMemoryList() {
     item.className = 'memory-item';
     item.dataset.memoryId = String(memory.id);
 
-    // Checkbox for select mode
+    // 选择模式下的复选框
     if (selectMode) {
       const cb = document.createElement('input');
       cb.type = 'checkbox';
@@ -735,7 +735,7 @@ export function renderMemoryList() {
       });
     }
 
-    // Content: text + metadata
+    // 内容：文本 + 元数据
     const content = document.createElement('div');
     content.className = 'memory-item-content';
 
@@ -769,7 +769,7 @@ export function renderMemoryList() {
       const useSpan = document.createElement('span');
       useSpan.className = 'memory-item-uses';
       useSpan.textContent = `${uses}×`;
-      useSpan.title = `Injected into chat context ${uses} time${uses === 1 ? '' : 's'}`;
+      useSpan.title = t('brain.injected_count', { n: uses });
       meta.appendChild(useSpan);
     }
 
@@ -788,7 +788,7 @@ export function renderMemoryList() {
 
     item.appendChild(content);
 
-    // Double-click text to edit (not in select mode)
+    // 双击文本进行编辑（不在选择模式下）
     if (!selectMode) {
       textSpan.addEventListener('dblclick', (e) => {
         e.stopPropagation();
@@ -797,7 +797,7 @@ export function renderMemoryList() {
       textSpan.style.cursor = 'text';
     }
 
-    // Menu button (hidden in select mode)
+    // 菜单按钮（在选择模式下隐藏）
     if (!selectMode) {
       const menuBtn = document.createElement('button');
       menuBtn.className = 'memory-menu-btn';
@@ -832,7 +832,7 @@ export function renderMemoryList() {
       // pattern as the email/documents/skills Select item.
       const selectItem = document.createElement('div');
       selectItem.className = 'dropdown-item-compact';
-      selectItem.innerHTML = '<span class="dropdown-icon"><span style="font-size:16px;line-height:1;">●</span></span><span>Select</span>';
+      selectItem.innerHTML = '<span class="dropdown-icon"><span style="font-size:16px;line-height:1;">●</span></span><span>${t('brain.select')}</span>';
       selectItem.addEventListener('click', (e) => {
         e.stopPropagation();
         if (dropdown.parentNode) dropdown.remove();
@@ -858,7 +858,7 @@ export function renderMemoryList() {
 
       menuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Close any other open dropdowns
+        // 关闭其他已打开的下拉菜单
         document.querySelectorAll('.memory-item-dropdown').forEach(d => d.remove());
         const rect = menuBtn.getBoundingClientRect();
         dropdown.style.position = 'fixed';
@@ -952,7 +952,7 @@ export function renderMemoryList() {
         item.addEventListener('pointercancel', _lpCancel);
       }
 
-      // Close dropdown on outside click
+      // 点击外部关闭下拉菜单
       document.addEventListener('click', () => { if (dropdown.parentNode) dropdown.remove(); }, { once: false });
     }
 
@@ -961,7 +961,7 @@ export function renderMemoryList() {
 
 }
 
-// ---- Inline edit with category picker ----
+// ---- 带类别选择器的内联编辑 ----
 
 function startInlineEdit(item, memory) {
   item.innerHTML = '';
@@ -1056,7 +1056,7 @@ async function saveInlineEdit(id, newText, newCategory) {
 
 export function updateMemoryCount() {
   const h2Count = document.getElementById('memory-count-h2');
-  const tabCount = document.getElementById('memory-count'); // optional (may be absent)
+  const tabCount = document.getElementById('memory-count'); // 可选（可能不存在）
   if (!h2Count && !tabCount) return;
 
   const searchInput = document.getElementById('memory-search');
@@ -1074,7 +1074,7 @@ export function updateMemoryCount() {
   const num = visible.length === scopeTotal ? `${scopeTotal}` : `${visible.length}/${scopeTotal}`;
   // Header (next to the "Memories" title) reads "N memories", like the
   // Documents header. The bare number still feeds any tab badge if present.
-  if (h2Count) h2Count.textContent = `${num} ${scopeTotal === 1 && visible.length === scopeTotal ? 'memory' : 'memories'}`;
+  if (h2Count) h2Count.textContent = `${t('brain.memory_count', { n: num, word: scopeTotal === 1 && visible.length === scopeTotal ? t('brain.memory_singular') : t('brain.memory_plural') })}`;
   if (tabCount) tabCount.textContent = num;
 }
 
@@ -1147,7 +1147,7 @@ export async function deleteMemory(id) {
   const memory = memories.find(m => m.id === id);
   if (!memory) return;
 
-  if (!await uiModule.styledConfirm(`Delete this memory?\n"${memory.text}"`, { confirmText: 'Delete', danger: true })) return;
+  if (!await uiModule.styledConfirm(t('brain.delete_confirm', { text: memory.text }), { confirmText: t('common.delete'), danger: true })) return;
 
   try {
     const response = await fetch(`${window.location.origin}/api/memory/${id}`, {
@@ -1196,7 +1196,7 @@ export async function extractMemory(sessionId) {
   } else {
     const header = document.createElement('div');
     header.className = 'memory-suggestions-header';
-    header.innerHTML = '<span>Suggested memories</span>';
+    header.innerHTML = '<span>${t('brain.suggested_memories')}</span>';
     const backBtn = document.createElement('button');
     backBtn.className = 'memory-item-btn';
     backBtn.textContent = 'back';
@@ -1236,7 +1236,7 @@ export async function extractMemory(sessionId) {
   modal.classList.remove('hidden');
 }
 
-// ---- Export ----
+// ---- 导出 ----
 
 export function exportMemories() {
   if (!memories || memories.length === 0) {
@@ -1251,10 +1251,10 @@ export function exportMemories() {
   a.download = 'memories.json';
   a.click();
   URL.revokeObjectURL(url);
-  showToast(`Exported ${memories.length} memories`);
+  showToast(t('brain.exported_n', { n: memories.length }));
 }
 
-// ---- Import from file ----
+// ---- 从文件导入 ----
 
 export async function importMemories() {
   const fileInput = document.getElementById('memory-import-file');
@@ -1299,7 +1299,7 @@ async function handleImportFile(file) {
     const data = await res.json();
     const suggestions = data.suggestions || [];
 
-    // Show suggestions using the existing suggestions UI
+    // 使用现有的建议界面显示建议
     const modal = document.getElementById('memory-modal');
     const body = document.getElementById('memory-suggestions-body');
     if (!body) return;
@@ -1325,7 +1325,7 @@ async function handleImportFile(file) {
       const headerTitle = document.createElement('span');
       const updateHeaderTitle = () => {
         const remaining = reviewItems.filter((item) => item.active).length;
-        headerTitle.textContent = `Imported from ${data.filename || file.name} (${remaining}) Review`;
+        headerTitle.textContent = t('brain.imported_from', { file: data.filename || file.name, remaining: remaining });
       };
       updateHeaderTitle();
       const headerActions = document.createElement('div');
@@ -1359,7 +1359,7 @@ async function handleImportFile(file) {
         if (memList) memList.classList.remove('hidden');
         await loadMemories();
         document.querySelector('.memory-tab[data-memory-tab="browse"]')?.click();
-        showToast(`Saved ${saved} memories`);
+        showToast(t('brain.saved_n', { n: saved }));
       });
       headerActions.appendChild(saveAllBtn);
       headerActions.appendChild(backBtn);
@@ -1428,21 +1428,21 @@ async function handleImportFile(file) {
       importBtn.disabled = false;
       importBtn.innerHTML = _origImportHtml;
     }
-    // Reset file input so the same file can be re-selected
+    // 重置文件输入以便可以重新选择相同的文件
     const fileInput = document.getElementById('memory-import-file');
     if (fileInput) fileInput.value = '';
   }
 }
 
-// Utility aliases (canonical implementations live in uiModule)
+// 工具别名（规范实现在 uiModule 中）
 var showToast = uiModule.showToast;
 var showError = uiModule.showError;
 
-// Event listeners
+// 事件监听器
 document.addEventListener('DOMContentLoaded', () => {
   _wireMemoryDrag();
 
-  // Memory modal tabs
+  // 记忆模态标签
   document.querySelectorAll('.memory-tab[data-memory-tab]').forEach(tab => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.memoryTab;
@@ -1450,7 +1450,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.memory-tab-panel[data-memory-panel]').forEach(p => {
         p.classList.toggle('hidden', p.dataset.memoryPanel !== target);
       });
-      // Lazy-load skills tab (cascade=true → play the domino-in entrance)
+      // 懒加载技能标签页（cascade=true → 播放多米诺入场动画）
       if (target === 'skills') {
         import('./skills.js').then(m => { if (m.loadSkills) m.loadSkills(true); else if (m.default?.loadSkills) m.default.loadSkills(true); });
       }

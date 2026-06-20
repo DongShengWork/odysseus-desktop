@@ -6,9 +6,9 @@
 // without each one importing 19 `let` bindings — which ES modules
 // don't allow from outside the defining module anyway.
 //
-// Writes look like `state._libOpen = true` everywhere; reads look like
-// `state._libOpen`. The names match the originals so the refactor is a
-// pure rename, not a semantic change.
+// 写入操作在任何地方都像 `state._libOpen = true`；读取操作像
+// `state._libOpen`。名称与原始变量匹配，因此这次重构纯粹是重命名，
+// 不涉及语义变更。
 
 export const state = {
   _libOpen: false,

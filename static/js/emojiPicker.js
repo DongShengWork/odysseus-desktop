@@ -1,28 +1,28 @@
 /**
- * emojiPicker.js — Monochrome icon picker (no colored emojis).
- * Curated set of common icons as inline SVGs. The PICKER shows monochrome SVGs,
- * and — crucially — every character it INSERTS is one with a real monochrome
- * (text) presentation. On insert we append U+FE0E (VARIATION SELECTOR-15) so the
- * glyph renders flat/text, not as a system color emoji — so the RECIPIENT of an
- * email/message sees a non-colored symbol too, not just the sender. Pure-emoji
- * faces (😂, 👍, 😎) have no text form and are intentionally excluded.
+ * emojiPicker.js — 单色图标选择器（无彩色表情）。
+ * 精选常用图标作为内联 SVG。选择器显示单色 SVG，
+ * 且关键的是 —— 它插入的每个字符都具有真正的单色
+ * （文本）呈现。插入时我们附加 U+FE0E（变体选择器-15），使
+ * 字形以扁平/文本形式渲染，而不是系统彩色表情符号 —— 这样邮件/消息的
+ * 接收方看到的也是非彩色符号，而不仅仅是发送方。纯表情
+ * 面孔（😂、👍、😎）没有文本形式，因此被有意排除。
  */
 
-// Each entry: [char, label, svgPath OR svg]
-// SVG icons matching Lucide style (24x24 viewBox, 2 stroke)
+// 每个条目：[字符, 标签, svgPath 或 svg]
+// SVG 图标采用 Lucide 风格（24x24 视图框，2 像素描边）
 const I = (path) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 
-// Text variation selector — appended to chars that might render as color emoji,
-// asks the browser to use text (monochrome) presentation if available.
+// 文本变体选择器 —— 附加到可能渲染为彩色表情符号的字符后面，
+// 要求浏览器在可用时使用文本（单色）呈现。
 const VS15 = '\uFE0E';
 
 const EMOJI_GROUPS = [
   {
     name: 'Faces & Hearts',
-    // Only chars with a genuine monochrome (text) presentation. VS15 is appended
-    // on insert (see _insertEmoji) so they render flat for the recipient too.
-    // Pure-emoji faces (grin/cry/sunglasses/thumbs) have no text form, so they're
-    // omitted — there is no way to send them non-colored as plain text.
+    // 仅包含具有真正单色（文本）呈现的字符。插入时附加 VS15
+    // （参见 _insertEmoji），使接收方也以扁平形式渲染。
+    // 纯表情面孔（咧嘴笑/哭泣/墨镜/点赞）没有文本形式，因此被
+    // 省略 —— 无法以非彩色的纯文本形式发送它们。
     items: [
       ['☻', 'grin', I('<circle cx="12" cy="12" r="10"/><path d="M7 14 C 7 18, 17 18, 17 14 Z"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>')],
       ['♡', 'heart-outline', I('<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>')],
@@ -106,21 +106,21 @@ let _pickerOpenedAt = 0;
 let _targetEl = null;
 let _closeOnOutsideClick = null;
 let _closeOnEscape = null;
-// For contenteditable targets we snapshot the caret/selection when the picker
-// opens, since focusing the picker's search box collapses the live selection.
+// 对于 contenteditable 目标，在选择器打开时保存光标/选区快照，
+// 因为聚焦选择器的搜索框会使活动选区折叠。
 let _savedRange = null;
 
-// `target` may be a textarea element id (string) or a resolver function that
-// returns the live target element — the latter lets a caller switch between a
-// textarea and a contenteditable (e.g. plain markdown vs. WYSIWYG email).
+// `target` 可以是 textarea 元素的 id（字符串）或返回活动目标元素的
+// 解析函数 —— 后者允许调用方在 textarea 和 contenteditable 之间切换
+// （例如纯 Markdown 与所见即所得邮件）。
 export function createEmojiButton(target) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'emoji-picker-btn';
   btn.title = 'Insert icon';
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>';
-  // Don't steal focus from the editor on press — keeps the caret/selection so
-  // the emoji lands where the user was typing.
+  // 按下时不从编辑器窃取焦点 —— 保留光标/选区使
+  // 表情符号插入到用户输入的位置。
   btn.addEventListener('mousedown', (e) => e.preventDefault());
   btn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -135,8 +135,8 @@ export function createEmojiButton(target) {
 function togglePicker(anchor, target) {
   const now = Date.now();
   if (_pickerEl) {
-    // Ignore the duplicate/ghost click mobile fires right after opening, which
-    // would otherwise re-toggle the picker shut the instant it appears.
+    // 忽略移动端在打开后立即触发的重复/幽灵点击，否则
+    // 会在选择器刚出现时立即重新切换关闭。
     if (now - _pickerOpenedAt < 400) return;
     _closePicker();
     return;
@@ -165,8 +165,8 @@ function togglePicker(anchor, target) {
     if (pr.right > window.innerWidth - 8) {
       _pickerEl.style.left = Math.max(8, window.innerWidth - pr.width - 8) + 'px';
     }
-    // Always open downward. If it would run past the bottom, cap its height so
-    // it scrolls internally instead of flipping up (which got cut off at top).
+    // 始终向下展开。如果会超出底部，则限制高度使其
+    // 内部滚动，而不是向上翻转（向上翻转会被顶部截断）。
     const avail = window.innerHeight - rect.bottom - 12;
     if (pr.height > avail) {
       _pickerEl.style.maxHeight = Math.max(160, avail) + 'px';
@@ -174,7 +174,7 @@ function togglePicker(anchor, target) {
   });
 
   const close = (e) => {
-    // Ignore the ghost/duplicate click mobile fires right after opening.
+    // 忽略移动端在打开后立即触发的幽灵/重复点击。
     if (e && e.type === 'click' && Date.now() - _pickerOpenedAt < 400) return;
     if (_pickerEl && !_pickerEl.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) {
       _closePicker();
@@ -277,7 +277,7 @@ function _insertEmoji(char) {
   // not just in our own (already-SVG) picker UI.
   const cp = char.codePointAt(0);
   const ins = cp >= 0x80 ? char + VS15 : char;
-  // Contenteditable (e.g. WYSIWYG email body) — insert at the saved caret.
+  // Contenteditable（例如所见即所得邮件正文）—— 在保存的光标位置插入。
   if (_targetEl.isContentEditable) {
     _targetEl.focus();
     let range = _savedRange;

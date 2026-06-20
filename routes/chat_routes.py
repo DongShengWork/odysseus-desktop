@@ -1,4 +1,4 @@
-"""Chat routes — /api/chat, /api/chat_stream, /api/inject_context, /api/search."""
+"""聊天路由 — /api/chat、/api/chat_stream、/api/inject_context、/api/search。"""
 
 import asyncio
 import json
@@ -44,7 +44,7 @@ from src.tool_policy import build_effective_tool_policy
 
 logger = logging.getLogger(__name__)
 
-# Track active streams for partial-save safety net
+# 跟踪活跃流，用于部分保存安全网
 _active_streams: Dict[str, dict] = {}
 _IMAGE_MODEL_PREFIXES = ("gpt-image", "dall-e", "chatgpt-image")
 
@@ -52,7 +52,7 @@ _IMAGE_MODEL_PREFIXES = ("gpt-image", "dall-e", "chatgpt-image")
 def _stream_set(session_id: str, **fields) -> None:
     """Update fields on the active-stream entry for `session_id`, or
     no-op if the entry has already been popped. Using .get() avoids a
-    KeyError race between `if x in d` and `d[x]["k"] = v` if a sibling
+    使用 .get() 避免了在 `if x in d` 和 `d[x]["k"] = v` 之间的 KeyError 竞态条件——
     finally pops the key in between (which becomes possible the moment
     a coroutine cancellation reaches an inner cleanup before the
     outermost cleanup runs)."""
@@ -103,7 +103,7 @@ def _session_url_matches_endpoint(session_url: str, endpoint_base: str) -> bool:
 
 
 def _clear_orphaned_session_endpoint(sess, owner: str | None = None) -> bool:
-    """Clear a session model if its endpoint was deleted from ModelEndpoint."""
+    """如果会话模型的端点已从 ModelEndpoint 中删除，则清除该会话模型。"""
     if not getattr(sess, "endpoint_url", ""):
         return False
     db = SessionLocal()
@@ -134,10 +134,10 @@ def _clear_orphaned_session_endpoint(sess, owner: str | None = None) -> bool:
 
 
 def _endpoint_cache_contains_model(endpoint, model: str) -> bool:
-    """Return True when a populated endpoint model cache includes ``model``.
+    """当已填充的端点模型缓存包含 ``model`` 时返回 True。
 
-    Empty/malformed caches are treated as unknown rather than a negative match
-    so older image endpoints without cached models still work.
+    空/格式错误的缓存被视为未知而非否定匹配，
+    以便没有缓存模型的旧图像端点仍然工作。
     """
     raw = getattr(endpoint, "cached_models", None)
     if not raw:
@@ -153,7 +153,7 @@ def _endpoint_cache_contains_model(endpoint, model: str) -> bool:
 
 
 def _is_image_generation_session(sess, owner: str | None = None) -> bool:
-    """Whether this chat session should bypass text chat and generate images.
+    """此聊天会话是否应绕过文本聊天并生成图像。
 
     Model-name prefixes are explicit image models. Endpoint type is only used
     when the current session endpoint actually matches that image endpoint, and
@@ -191,12 +191,12 @@ def _is_image_generation_session(sess, owner: str | None = None) -> bool:
 
 
 def _recover_empty_session_model(sess, session_id: str, owner: str | None = None) -> bool:
-    """Re-populate sess.model from the matching endpoint's cached models.
+    """从匹配端点的缓存模型重新填充 sess.model。
 
     Covers the window between endpoint setup and the first chat send: the
     picker showed a model in the dropdown but the session record never got
     written (Issue #587 — UI uses the cached endpoint list, not s.model).
-    For ChatGPT Subscription, also repairs stale OpenAI API model names such as
+    对于 ChatGPT Subscription，也会修复过时的 OpenAI API 模型名称，
     ``gpt-5`` that are not accepted by the Codex-backed ChatGPT account route.
     """
     current_model = (getattr(sess, "model", "") or "").strip()
@@ -261,9 +261,9 @@ def _recover_empty_session_model(sess, session_id: str, owner: str | None = None
                             db.commit()
                 except Exception:
                     live_models = []
-            # ChatGPT Subscription recovery must use the live Codex catalog.
-            # Cached rows are only trusted above to avoid revalidating a model
-            # that is already present in the visible picker list.
+            # ChatGPT Subscription 恢复必须使用实时的 Codex 目录。
+            # 缓存行仅在上面用于避免重新验证模型
+            # 该模型已在可见的选择列表中。
             cached = live_models
             if not cached:
                 return False
@@ -279,9 +279,9 @@ def _recover_empty_session_model(sess, session_id: str, owner: str | None = None
         if not isinstance(model, str) or not model.strip():
             return False
         model = model.strip()
-        # Persist so the next request, websocket reconnect, or page reload
-        # picks up the same model (we'd otherwise re-pick on every send
-        # and silently switch on the user if the cached order shifts).
+        # 持久化以便下次请求、websocket 重连或页面重新加载时
+        # 选择相同的模型（否则每次发送都会重新选择，
+        # 如果缓存顺序变化，会在用户不知情的情况下切换模型）。
         db_session_q = db.query(DBSession).filter(DBSession.id == session_id)
         if owner:
             db_session_q = db_session_q.filter(DBSession.owner == owner)
@@ -305,10 +305,10 @@ def _recover_empty_session_model(sess, session_id: str, owner: str | None = None
 
 
 def _set_user_time_from_request(request: Request) -> None:
-    """Copy browser timezone headers into the per-request context.
+    """将浏览器时区头复制到每个请求的上下文中。
 
-    This is intentionally ephemeral: it is used only while building prompts
-    and running tools for this request. It is not persisted or logged.
+    这是有意临时的：仅在构建提示和为此请求运行工具时使用。
+    不持久化也不记录。
     """
     try:
         tz_offset = request.headers.get("x-tz-offset")
@@ -338,7 +338,7 @@ def setup_chat_routes(
     router = APIRouter(tags=["chat"])
 
     # ------------------------------------------------------------------ #
-    # POST /api/chat (non-streaming)
+    # POST /api/chat（非流式）
     # ------------------------------------------------------------------ #
     @router.post("/api/chat", response_model=Dict[str, str])
     async def chat_endpoint(request: Request, chat_request: ChatRequest) -> Dict[str, str]:
@@ -352,8 +352,8 @@ def setup_chat_routes(
         time_filter = chat_request.time_filter
         preset_id = chat_request.preset_id
 
-        # Verify the caller owns this session before loading it.
-        # Without this, any authenticated user can post into another user's chat.
+        # 在加载会话之前验证调用者是否拥有该会话。
+        # 没有这个检查，任何已认证用户都可以向其他用户的聊天发送消息。
         _verify_session_owner(request, session)
 
         try:
@@ -364,9 +364,9 @@ def setup_chat_routes(
         if _clear_orphaned_session_endpoint(sess, owner=owner):
             raise HTTPException(400, "Selected model endpoint was removed. Pick another model in Settings.")
 
-        # Empty model + live endpoint = setup race (Issue #587). Repair from
-        # the endpoint's cached model list before privilege checks, which
-        # otherwise see "" and behave inconsistently with the allowlist.
+        # 模型为空 + 端点可用 = 设置竞态（Issue #587）。在权限检查之前
+        # 从端点的缓存模型列表中修复，否则权限检查会看到空字符串，
+        # 行为与允许列表不一致。
         _recover_empty_session_model(sess, session, owner=owner)
         if not getattr(sess, "model", "").strip():
             raise HTTPException(
@@ -374,21 +374,21 @@ def setup_chat_routes(
                 "No model selected for this chat. Open the model picker and choose one before sending.",
             )
 
-        # Same allowed_models + daily-cap gate as chat_stream (mirror so the
-        # non-streaming path can't be used to bypass).
+        # 与 chat_stream 相同的 allowed_models + 每日上限门控（镜像检查，
+        # 防止非流式路径被用来绕过限制）。
         _enforce_chat_privileges(request, sess)
 
         tool_policy = build_effective_tool_policy(last_user_message=message)
         allow_tool_preprocessing = not tool_policy.block_all_tool_calls
 
-        # Inline memory command
+        # 内联记忆命令
         memory_response = None
         if not tool_policy.blocks("manage_memory"):
             memory_response = await chat_handler.handle_memory_command(sess, message)
         if memory_response:
             return {"response": memory_response}
 
-        # Build shared context (preset, preprocess, preface, compact)
+        # 构建共享上下文（预设、预处理、前言、压缩）
         ctx = await build_chat_context(
             sess, request, chat_handler, chat_processor,
             message=message,
@@ -401,7 +401,7 @@ def setup_chat_routes(
             allow_tool_preprocessing=allow_tool_preprocessing,
         )
 
-        # Research injection
+        # 研究结果注入
         research_blocked_by_policy = (
             tool_policy.blocks("trigger_research")
             or tool_policy.blocks("manage_research")
@@ -436,7 +436,7 @@ def setup_chat_routes(
         update_session_last_accessed(session)
         session_manager.save_sessions()
 
-        # Background tasks (memory, webhook, auto-name)
+        # 后台任务（记忆、webhook、自动命名）
         run_post_response_tasks(
             sess, session_manager, session, message, reply, None,
             ctx.uprefs, memory_manager, memory_vector, webhook_manager,
@@ -483,36 +483,36 @@ def setup_chat_routes(
         search_context = form_data.get("search_context")  # pre-fetched web search results (compare mode)
         compare_mode = str(form_data.get("compare_mode", "")).lower() == "true"
         incognito = str(form_data.get("incognito", "")).lower() == "true"
-        # Plan mode is not part of the merge-ready UI. Ignore stale clients or
-        # manual form posts that still send plan_mode=true.
+        # Plan mode 不是当前可合并 UI 的一部分。忽略仍然
+        # 发送 plan_mode=true 的旧客户端或手动表单提交。
         plan_mode = False
         chat_mode = str(form_data.get("mode", "")).lower()  # 'chat' or 'agent'
         # Workspace: confine the agent's file/shell tools to this folder.
         workspace, workspace_rejected = _resolve_request_workspace(
             request, form_data.get("workspace")
         )
-        # Plan mode is a modifier on agent mode — it only makes sense with tools.
+        # Plan mode 是 agent mode 的修饰符 — 只有在有工具时才有意义。
         if plan_mode:
             chat_mode = "agent"
-        # An approved plan being EXECUTED: the frontend sends the checklist back
-        # on each turn so we can pin it in context. This way a long plan on a
-        # weak model survives history truncation — the agent can always re-read
-        # the plan. Ignored while still proposing (plan_mode on). Capped so a
-        # huge plan can't blow the prompt.
+        # 正在执行已批准的计划：前端每次轮次都发回清单，
+        # 以便我们可以在上下文中固定它。这样即使在弱模型上，
+        # 长计划也能在历史截断后存活—agent 可以随时重新阅读计划。
+        # 仍在提案阶段（plan_mode 开启）时忽略。限制大小以防止
+        # 巨型计划撑爆 prompt。
         approved_plan = ""
         if not plan_mode:
             approved_plan = (form_data.get("approved_plan") or "").strip()[:8192]
-        # Did the USER explicitly pick agent mode? (vs. us auto-escalating
-        # below). Skill extraction should only learn from real agent sessions,
-        # not chats we quietly promoted for a notes/calendar intent.
+        # 用户是否明确选择了 agent mode？（区别于我们下面的自动升级）。
+        # 技能提取应只从真正的 agent 会话中学习，
+        # 而不是我们为 notes/calendar 意图悄悄提升的聊天。
         user_requested_agent = (chat_mode == "agent")
         # Intent auto-escalation: if the user is clearly asking the assistant
         # to create a todo, reminder, or calendar event, promote chat → agent
-        # for this turn so the LLM has access to manage_notes / manage_calendar.
+        # 以便 LLM 可以访问 manage_notes / manage_calendar。
         # This is a LIGHT promotion — see the disabled_tools block below, which
-        # withholds shell/code/file tools so the model doesn't try to `bash`
+        # 它会扣留 shell/code/file 工具，防止模型尝试通过 bash
         # its way through a plain chat request (and fail, especially with the
-        # shell disabled).
+        # 这是轻量级提升 — 见下方 disabled_tools 块，
         auto_escalated = False
         _tool_intent = _classify_tool_intent(message) if isinstance(message, str) else None
         if chat_mode == "chat" and _tool_intent and _tool_intent.needs_tools:
@@ -587,8 +587,8 @@ def setup_chat_routes(
             )
 
         try:
-            # Attachment-only sends: skip the message-required check when the
-            # user has attached one or more files (the attachment IS the action).
+            # 仅含附件的发送：当用户附加了一个或多个文件时
+            # 跳过消息必填检查（附件本身就是操作）。
             _has_atts = (
                 bool(body and isinstance(body.get("attachments"), list) and body["attachments"])
                 or bool(form_data.get("attachments"))
@@ -596,8 +596,8 @@ def setup_chat_routes(
             message, session = coerce_message_and_session(
                 body, message, session, session_manager, allow_empty=_has_atts,
             )
-            # Verify ownership AFTER coerce (which may resolve a default session)
-            # but BEFORE loading. Prevents cross-user session hijack.
+            # 在 coerce（可能解析默认会话）之后验证所有权，
+            # 但在加载之前。防止跨用户会话劫持。
             _verify_session_owner(request, session)
             sess = session_manager.get_session(session)
             owner = get_current_user(request)
@@ -608,7 +608,7 @@ def setup_chat_routes(
             # endpoint setup, or a previous endpoint delete/recreate). Pull
             # the first cached model off the matching endpoint so the
             # upstream isn't called with model="" (which surfaces as a
-            # generic 401/503).
+            # 拉取模型，以免上游收到 model=""（表现为通用 401/503）。
             _recover_empty_session_model(sess, session, owner=owner)
             if not getattr(sess, "model", "").strip():
                 raise HTTPException(
@@ -621,19 +621,19 @@ def setup_chat_routes(
             raise HTTPException(400, "Invalid request parameters")
 
         # ------------------------------------------------------------------ #
-        # Privilege gates that must fire BEFORE any LLM work / token spend.
-        #   1. allowed_models — reject if session.model isn't in the user's
-        #      configured allowlist (empty list = "no restriction").
-        #   2. max_messages_per_day — count user-role ChatMessage rows owned
-        #      by this user in the last UTC day; 429 if at/over the cap.
-        # Admins always have full privileges via get_privileges (returns
-        # ADMIN_PRIVILEGES wholesale) so this is a no-op for them.
+        # 在任何 LLM 工作/令牌消耗之前必须执行的特权门控。
+        #   1. allowed_models — 如果 session.model 不在用户的
+        #      配置允许列表中则拒绝（空列表 = "无限制"）。
+        #   2. max_messages_per_day — 统计该用户在最近一个 UTC 日内
+        #      拥有的 user-role ChatMessage 行数；达到或超过上限时返回 429。
+        # 管理员通过 get_privileges 始终拥有完全特权（返回
+        # ADMIN_PRIVILEGES），因此这对他们是无操作的。
         _enforce_chat_privileges(request, sess)
 
-        # Ensure session has auth headers
+        # 确保会话有认证头
         resolve_session_auth(sess, session, owner=get_current_user(request))
 
-        # Check for research_pending BEFORE mode persist overwrites it
+        # 在模式持久化覆盖之前检查 research_pending
         do_research = str(use_research).lower() == "true"
         if not do_research:
             if get_session_mode(session) == 'research_pending':
@@ -655,7 +655,7 @@ def setup_chat_routes(
         )
         allow_tool_preprocessing = not pre_context_tool_policy.block_all_tool_calls
 
-        # Build shared context (stream path uses enhanced_message for context preface)
+        # 构建共享上下文（流路径使用 enhanced_message 作为上下文前言）
         ctx = await build_chat_context(
             sess, request, chat_handler, chat_processor,
             message=message,
@@ -671,25 +671,25 @@ def setup_chat_routes(
             compare_mode=compare_mode,
             webhook_manager=webhook_manager,
             use_enhanced_message=True,
-            # Skills index only ships when the model can actually call
-            # manage_skills (agent mode). In plain chat or incognito the
-            # index would be useless / unwanted noise.
+            # 技能索引仅在模型实际可以调用
+            # manage_skills（agent mode）时发送。在普通聊天或隐身模式下，
+            # 索引无用/会成为噪音。
             agent_mode=(chat_mode == "agent"),
             allow_tool_preprocessing=allow_tool_preprocessing,
         )
 
-        _research_flags = {"do": do_research}  # Mutable container for generator scope
+        _research_flags = {"do": do_research}  # 可变容器，供生成器作用域使用
 
-        # Query active document — prefer explicit ID from frontend, fall back to session lookup
+        # 查询活动文档 — 优先使用前端的显式 ID，回退到会话查找
         active_doc = None
         _doc_db = SessionLocal()
         try:
             if active_doc_id:
                 logger.info(f"[doc-inject] active_doc_id from frontend: {active_doc_id}")
-                # Scope to the caller's documents. The session and in-memory
-                # fallbacks below are already owner/session-bound; this
-                # explicit-id path looked up by id alone, so a user could
-                # inject another user's document by passing its id.
+                # 限定为调用者的文档。会话和在内存中的
+                # 后续回退已经绑定到所有者/会话；而这个
+                # explicit-id 路径仅按 id 查找，因此用户可能
+                # 通过传递其 id 来注入另一个用户的文档。
                 _doc_q = _doc_db.query(DBDocument).filter(DBDocument.id == active_doc_id)
                 active_doc = _owner_session_filter(_doc_q, ctx.user).first()
                 if active_doc:
@@ -733,12 +733,12 @@ def setup_chat_routes(
                 active_doc = _owner_session_filter(_session_doc_q, ctx.user).order_by(DBDocument.updated_at.desc()).first()
                 if active_doc:
                     logger.info(f"[doc-inject] found by session fallback: title={active_doc.title!r}")
-            # Last resort: the document the agent itself just created/edited
-            # (tracked in-memory by the tool layer). This rescues docs that
-            # got orphaned from their session (session_id NULL) — otherwise
-            # neither lookup above can associate them with this conversation,
-            # so the agent never sees what it just wrote. Guarded so we never
-            # leak a doc that belongs to a DIFFERENT session.
+            # 最后手段：agent 自己刚创建/编辑的文档
+            # （由工具层在内存中跟踪）。这能救回与
+            # 会话失去关联的文档（session_id 为 NULL）— 否则
+            # 以上两种查找都无法将其与此对话关联，
+            # 因此 agent 永远看不到它刚写的内容。有防护措施，
+            # 不会泄露属于不同会话的文档。
             if not active_doc:
                 try:
                     from src.agent_tools.document_tools import get_active_document
@@ -760,7 +760,7 @@ def setup_chat_routes(
         finally:
             _doc_db.close()
 
-        # Build disabled-tools set from frontend toggles + user privileges
+        # 从前端开关 + 用户权限构建禁用工具集合
         disabled_tools = set()
         # Only disable bash/web_search when the caller *explicitly* set them
         # to a falsy value.  When unset (None), defer to per-user privilege
@@ -777,8 +777,8 @@ def setup_chat_routes(
             disabled_tools.add("web_search")
             disabled_tools.add("web_fetch")
 
-        # Nobody/incognito mode: deny tools that would expose the user's
-        # persistent memory, past chats, or other identity-linked data.
+        # 匿名/隐身模式：拒绝会暴露用户持久记忆、
+        # 历史聊天或其他身份关联数据的工具。
         if incognito:
             disabled_tools.update({
                 "manage_memory",      # persistent memory store
@@ -801,7 +801,7 @@ def setup_chat_routes(
                 "mcp__email__send_email",
             })
 
-        # Enforce per-user privileges
+        # 根据每个用户的权限强制执行
         _privs = {}
         _user = ctx.user
         if _user and hasattr(request.app.state, 'auth_manager') and request.app.state.auth_manager:
@@ -822,27 +822,27 @@ def setup_chat_routes(
             if not _privs.get("can_use_agent", True):
                 _effective_mode = 'chat'
                 chat_mode = 'chat'
-        # Global admin disabled tools
+        # 全局管理员禁用的工具
         from src.settings import get_setting
         _global_disabled = get_setting("disabled_tools", [])
         if _global_disabled and isinstance(_global_disabled, list):
             disabled_tools.update(_global_disabled)
 
-        # Light auto-escalation: the user is in chat mode and just expressed a
-        # notes/calendar/email intent. Grant the relevant managers but withhold
-        # the heavy "do things on the computer" tools — otherwise the model
-        # tries to shell out for a request that never needed it, then fails
-        # (and looks broken when the shell is disabled).
+        # 轻量级自动升级：用户处于聊天模式，刚表达了
+        # notes/calendar/email 意图。授予相关管理器但扣留
+        # 重型"在计算机上操作"的工具 — 否则模型
+        # 会为不需要的请求尝试 shell 执行，然后失败
+        # （在 shell 被禁用时看起来像是坏了）。
         if auto_escalated:
             disabled_tools.update({
                 "bash", "python", "read_file", "write_file", "builtin_browser",
             })
 
-        # Disable document tools in compare sessions — they break the pane UI
+        # 在比较会话中禁用文档工具 — 它们会破坏窗格 UI
         if sess.name and sess.name.startswith("[CMP]"):
             disabled_tools.update({"create_document", "edit_document", "update_document"})
 
-        # Compare mode: disable tools based on compare type
+        # 比较模式：根据比较类型禁用工具
         if compare_mode:
             _compare_strip = {
                 "create_document", "edit_document", "update_document",
@@ -852,13 +852,13 @@ def setup_chat_routes(
                 "generate_image", "ui_control",
             }
             disabled_tools.update(_compare_strip)
-            # In chat mode compare, disable ALL agent tools (no bash, python, file ops)
+            # 在聊天模式比较中，禁用所有 agent 工具（无 bash、python、文件操作）
             if chat_mode == 'chat':
                 disabled_tools.update({"bash", "python", "read_file", "write_file", "web_search", "web_fetch", "search_chats", "manage_tasks"})
 
-        # Plan mode: investigate read-only, propose a plan, don't mutate. Block
-        # every tool not on the read-only allowlist. (stream_agent_loop enforces
-        # this again + drops MCP, so this is belt-and-suspenders.)
+        # Plan mode：调查只读，提出计划，不要变更。阻止
+        # 所有不在只读允许列表上的工具。（stream_agent_loop 会再次
+        # 执行此操作 + 丢弃 MCP，所以这是双重保障。）
         if plan_mode:
             from src.tool_security import plan_mode_disabled_tools
             disabled_tools.update(plan_mode_disabled_tools())
@@ -876,8 +876,8 @@ def setup_chat_routes(
             do_research and _research_flags["do"] and not research_blocked_by_policy
         )
 
-        # Persist session mode after policy/privilege gates so blocked research
-        # turns remain ordinary chat/agent streams and saved messages.
+        # 在策略/权限门控之后持久化会话模式，以便被阻止的研究
+        # 轮次保持为普通的 chat/agent 流和已保存的消息。
         _effective_mode = 'research' if effective_do_research else (chat_mode or 'chat')
         if _effective_mode in ('agent', 'research', 'chat'):
             set_session_mode(session, _effective_mode)
@@ -888,7 +888,7 @@ def setup_chat_routes(
             research_sources = None
             web_sources = ctx.web_sources
 
-            # Register active stream for partial-save safety net
+            # 注册活跃流，用于部分保存安全网
             _active_streams[session] = {"status": "streaming", "partial": "", "query": message, "is_research": effective_do_research, "mode": _effective_mode}
 
             # The client sent a workspace the server refused to bind (deleted
@@ -915,20 +915,20 @@ def setup_chat_routes(
             if web_sources:
                 yield f"data: {json.dumps({'type': 'web_sources', 'data': web_sources})}\n\n"
 
-            # Emit which memories were injected into context (captured before stream)
+            # 发送已注入到上下文中的记忆（在流之前捕获）
             if ctx.used_memories:
                 yield f"data: {json.dumps({'type': 'memories_used', 'data': ctx.used_memories})}\n\n"
 
-            # Run research as a background task (survives page refresh)
+            # 作为后台任务运行研究（在页面刷新后仍存活）
             if effective_do_research:
                 _r_ep, _r_model, _r_headers = _resolve_research_endpoint(sess)
                 _auth_keys = list(_r_headers.keys()) if _r_headers else []
                 logger.info(f"Research endpoint resolved: model={_r_model}, endpoint={_r_ep}, auth_keys={_auth_keys}, sess_headers_keys={list(sess.headers.keys()) if isinstance(sess.headers, dict) else type(sess.headers)}")
 
-                # Clarification round: only for very short/vague queries on first research message.
-                # Skip in compare mode — each pane is a fresh session, so every one would
-                # ask clarifying questions and the user would have to answer each pane
-                # separately, breaking the parallel comparison.
+                # 澄清轮次：仅对首次研究消息中非常简短/模糊的查询。
+                # 在比较模式下跳过 — 每个窗格都是新会话，因此每个窗格都会
+                # 询问澄清问题，用户必须分别回答每个窗格，
+                # 破坏并行比较。
                 _prior_json = research_handler._get_session_json(session)
                 _history_len = len(sess.history) if hasattr(sess, 'history') else 0
                 _is_first_research = not _prior_json and _history_len <= 2 and not compare_mode
@@ -936,7 +936,7 @@ def setup_chat_routes(
                 if _is_first_research:
                     logger.info(f"First research message — asking clarifying questions for: {message[:60]}")
                     yield f'data: {json.dumps({"type": "model_info", "model": sess.model, "suffix": "Research"})}\n\n'
-                    # Set DB mode to research_pending so the NEXT message auto-triggers research
+                    # 将数据库模式设置为 research_pending，以便下一条消息自动触发研究
                     set_session_mode(session, "research_pending")
                     ctx.messages.insert(0, {"role": "system", "content":
                         "The user wants to start deep web research. Before searching, ask 2-3 brief "
@@ -949,9 +949,9 @@ def setup_chat_routes(
                     _skip_research = False
 
                 if not _skip_research:
-                    # Phase 2: Start actual research
+                    # 第 2 阶段：开始实际研究
                     def _on_research_done(_sid, _result, _sources, _findings):
-                        """Persist research to DB when background task finishes."""
+                        """当后台任务完成时，将研究结果持久化到数据库。"""
                         if incognito:
                             return
                         try:
@@ -971,7 +971,7 @@ def setup_chat_routes(
                         except Exception as _e:
                             logger.error(f"Failed to persist research to DB: {_e}")
 
-                    # Check for prior research to continue from
+                    # 检查是否有之前的研究可以继续
                     _prior_report = ""
                     _prior_findings = None
                     _prior_urls = None
@@ -984,7 +984,7 @@ def setup_chat_routes(
                         if _prior_report:
                             logger.info(f"Continuing research for session {session} with {len(_src_urls)} prior URLs")
 
-                    # Synthesize conversation into a focused research query
+                    # 将对话合成为聚焦的研究查询
                     _research_query = await research_handler.synthesize_query(
                         sess, message, _r_ep, _r_model, _r_headers,
                     )
@@ -1032,7 +1032,7 @@ def setup_chat_routes(
                     if research_findings:
                         yield f"data: {json.dumps({'type': 'research_findings', 'data': research_findings})}\n\n"
 
-                    # Signal frontend to fetch and render the research result
+                    # 通知前端获取并渲染研究结果
                     yield f"data: {json.dumps({'type': 'research_done', 'data': {'session_id': session}})}\n\n"
                     yield "data: [DONE]\n\n"
                     research_handler.clear_result(session)
@@ -1042,23 +1042,23 @@ def setup_chat_routes(
 
             messages = ctx.messages
 
-            # Auto-compact notification
+            # 自动压缩通知
             if ctx.was_compacted:
                 yield f"data: {json.dumps({'type': 'compacted', 'context_length': ctx.context_length})}\n\n"
 
             full_response = ""
             last_metrics = None
 
-            # Configured fallback chain for the default chat model. Tried in
-            # order if the session's primary model fails before producing
-            # output. Resolved once per request.
+            # 为默认聊天模型配置的回退链。如果会话的
+            # 主模型在产生输出之前失败，按顺序尝试。
+            # 每个请求解析一次。
             try:
                 from src.endpoint_resolver import resolve_chat_fallback_candidates
                 _fallback_candidates = resolve_chat_fallback_candidates(owner=_user)
             except Exception:
                 _fallback_candidates = []
 
-            # Send model name early so the frontend can show it during streaming
+            # 提前发送模型名称，以便前端在流式传输期间显示它
             _model_suffix = "Research" if effective_do_research else None
             _model_info = {"type": "model_info", "model": sess.model}
             if _model_suffix:
@@ -1094,7 +1094,7 @@ def setup_chat_routes(
                 _desc = _img_result.get("results", _img_result.get("error", "Image generation complete"))
                 full_response = _desc
                 yield f'data: {json.dumps({"delta": _desc})}\n\n'
-                # Save to session history
+                # 保存到会话历史
                 if not incognito:
                     _ev = {"round": 1, "tool": "generate_image", "command": _user_msg[:100], "output": _img_output, "exit_code": 0 if "error" not in _img_result else 1}
                     for _ek in ("image_url", "image_id", "image_prompt", "image_model", "image_size", "image_quality"):
@@ -1111,18 +1111,18 @@ def setup_chat_routes(
                 _answered_by = None  # set if the selected model failed and a fallback answered
                 _requested_model = sess.model
                 _actual_model = None
-                # ── Chat mode: call stream_llm directly, NO tools, NO document access ──
+                # ── 聊天模式：直接调用 stream_llm，无工具，无文档访问 ──
                 try:
                     _chat_candidates = [(sess.endpoint_url, sess.model, sess.headers)] + _fallback_candidates
                     async for chunk in stream_llm_with_fallback(
                         _chat_candidates,
                         messages,
                         temperature=ctx.preset.temperature,
-                        # Respect the preset; 0/unset = let the server decide (no
-                        # cap), matching agent mode. The old hard 4096 fallback
-                        # truncated reasoning models mid-<think> — they'd burn the
-                        # whole budget thinking and never emit the answer (seen in
-                        # Compare on heavy generation prompts).
+                        # 尊重预设；0/未设置 = 让服务器决定（无
+                        # 上限），与 agent mode 一致。旧的硬编码 4096 回退
+                        # 会在 <think> 中间截断推理模型 — 它们会烧掉
+                        # 整个预算来思考，而从不输出答案（在
+                        # 比较模式的重型生成 prompt 中见过）。
                         max_tokens=ctx.preset.max_tokens,
                         prompt_type=preset_id,
                         tools=None,
@@ -1132,17 +1132,17 @@ def setup_chat_routes(
                             try:
                                 data = json.loads(chunk[6:])
                                 if "delta" in data:
-                                    # Reasoning tokens arrive flagged thinking:true.
-                                    # Forward them so the client can show a thinking
-                                    # indicator, but don't fold them into the saved
-                                    # reply (mirrors the rewrite path below).
+                                    # 推理令牌以 thinking:true 标记到达。
+                                    # 转发它们以便客户端可以显示思考
+                                    # 指示器，但不要将它们合并到保存的
+                                    # 回复中（镜像下面的重写路径）。
                                     if not data.get("thinking"):
                                         full_response += data["delta"]
                                         _stream_set(session, partial=full_response)
                                     yield chunk
                                 elif data.get("type") == "fallback":
-                                    # Selected model failed; a fallback answered.
-                                    # Forward the notice and remember the real model.
+                                    # 选定的模型失败；回退模型应答。
+                                    # 转发通知并记住真实模型。
                                     _answered_by = data.get("answered_by") or _answered_by
                                     _actual_model = _actual_model or _answered_by
                                     data["selected_model"] = data.get("selected_model") or _requested_model
@@ -1160,14 +1160,14 @@ def setup_chat_routes(
                                         pct = min(round((last_metrics["input_tokens"] / ctx.context_length) * 100, 1), 100.0)
                                         last_metrics["context_percent"] = pct
                                         last_metrics["context_length"] = ctx.context_length
-                                    # The frontend reads `tokens_per_second`; the raw usage event
-                                    # carries the backend's true gen speed as `gen_tps` (llama.cpp
-                                    # timings). Map it through so this direct-chat path shows real
-                                    # t/s instead of "n/a" → falling back to a bare token count.
+                                    # 前端读取 `tokens_per_second`；原始使用事件
+                                    # 携带后端真实的生成速度作为 `gen_tps`（llama.cpp
+                                    # 计时）。映射它以便此直接聊天路径显示真实
+                                    # t/s 而不是 "n/a" → 回退到裸令牌计数。
                                     if last_metrics.get("gen_tps") and not last_metrics.get("tokens_per_second"):
                                         last_metrics["tokens_per_second"] = last_metrics["gen_tps"]
                                         last_metrics["tps_source"] = "backend"
-                                    # Wall-clock response time for the stats popup ("Time").
+                                    # 统计弹窗（"时间"）的墙钟响应时间。
                                     last_metrics.setdefault("response_time", round(time.time() - _chat_start, 2))
                                     yield f'data: {json.dumps({"type": "metrics", "data": last_metrics})}\n\n'
                             except json.JSONDecodeError:
@@ -1178,7 +1178,7 @@ def setup_chat_routes(
                         elif chunk.startswith("event: "):
                             yield chunk
                         elif chunk == "data: [DONE]\n\n":
-                            # Generate fallback metrics if LLM didn't send usage
+                            # 如果 LLM 没有发送使用量统计，生成回退指标
                             if not last_metrics and full_response:
                                 _elapsed = time.time() - _chat_start
                                 _est_in = estimate_tokens(messages)
@@ -1238,7 +1238,7 @@ def setup_chat_routes(
                 finally:
                     _active_streams.pop(session, None)
             else:
-                # ── Agent mode: full agent loop with tools ──
+                # ── Agent mode：完整的 agent 循环，带工具 ──
                 _agent_rounds = 0
                 _agent_tool_calls = 0
                 _answered_by = None  # set if the selected model failed and a fallback answered
@@ -1248,8 +1248,8 @@ def setup_chat_routes(
                     from src.settings import get_setting
                     from src.agent_tools import MAX_AGENT_ROUNDS as _DEFAULT_ROUNDS
                     _tool_budget = int(get_setting("agent_max_tool_calls", 0))
-                    # Per-message round cap from settings; clamp defensively in
-                    # case settings.json was hand-edited to a bad value.
+                    # 来自设置的每消息轮次上限；防御性地限制在
+                    # settings.json 被手动编辑为错误值的情况下。
                     try:
                         _max_rounds = int(get_setting("agent_max_rounds", _DEFAULT_ROUNDS) or _DEFAULT_ROUNDS)
                     except (TypeError, ValueError):
@@ -1282,9 +1282,9 @@ def setup_chat_routes(
                             try:
                                 data = json.loads(chunk[6:])
                                 if "delta" in data:
-                                    # Reasoning tokens arrive flagged thinking:true.
-                                    # Forward them for the live indicator, but keep
-                                    # them out of the saved reply (same as chat mode).
+                                    # 推理令牌以 thinking:true 标记到达。
+                                    # 转发它们用于实时指示器，但将它们
+                                    # 保留在保存的回复之外（与聊天模式相同）。
                                     if not data.get("thinking"):
                                         full_response += data["delta"]
                                         _stream_set(session, partial=full_response)
@@ -1306,10 +1306,10 @@ def setup_chat_routes(
                                         _agent_tool_calls += 1
                                     yield chunk
                                 elif data.get("type") == "fallback":
-                                    # Selected model failed; a fallback answered.
-                                    # Forward the notice and remember the real
-                                    # model so metrics reflect it, not the masked
-                                    # selected model.
+                                    # 选定的模型失败；回退模型应答。
+                                    # 转发通知并记住真实
+                                    # 模型，以便指标反映它，
+                                    # 而不是被屏蔽的选定模型。
                                     _answered_by = data.get("answered_by") or _answered_by
                                     _actual_model = _actual_model or _answered_by
                                     data["selected_model"] = data.get("selected_model") or _requested_model
@@ -1355,12 +1355,12 @@ def setup_chat_routes(
                             _stream_set(session, status="done")
                             yield chunk
                 except (asyncio.CancelledError, GeneratorExit):
-                    # Client disconnected — save partial response. Wrap
-                    # the save in its own try so an exception inside
-                    # add_message / save_sessions doesn't mask the
-                    # original CancelledError (which prevented the
-                    # outer finally from running and left _active_streams
-                    # with a stale entry).
+                    # 客户端断开连接 — 保存部分响应。将
+                    # 保存包裹在它自己的 try 中，以便 add_message /
+                    # save_sessions 内部的异常不会掩盖
+                    # 原始的 CancelledError（这会阻止外部
+                    # finally 运行，导致 _active_streams 留下
+                    # 过时的条目）。
                     try:
                         if full_response:
                             logger.info("Client disconnected mid-stream for session %s, saving partial response (%d chars)", session, len(full_response))
@@ -1382,34 +1382,34 @@ def setup_chat_routes(
                     _active_streams.pop(session, None)
 
         async def _safe_stream() -> AsyncGenerator[str, None]:
-            """Wrapper that guarantees _active_streams cleanup even if stream_with_save
-            raises before reaching a mode-specific finally block."""
+        """包装器，确保即使 stream_with_save 在到达特定模式的
+        finally 块之前抛出异常，_active_streams 清理也会执行。"""
             try:
                 async for chunk in stream_with_save():
                     yield chunk
             finally:
                 _active_streams.pop(session, None)
 
-        # Compare panes are short-lived, single-shot generations whose sessions
-        # exist only to drive that one pane — there's nothing to "resume" and
-        # the user expects the pane's Stop button (which aborts the fetch,
-        # closing this SSE) to promptly cancel the upstream LLM call. Detaching
-        # them would keep burning upstream tokens/compute after the pane is
-        # stopped or the comparison is abandoned, and would surface a stale
-        # "still streaming" /resume target for a session nobody will revisit.
+        # 比较窗格是短生命周期、一次性生成，其会话
+        # 只用于驱动该窗格 — 没有需要"恢复"的内容，
+        # 用户期望窗格的停止按钮（中止 fetch，
+        # 关闭此 SSE）能够迅速取消上游 LLM 调用。分离它们
+        # 会在窗格停止或比较被放弃后继续消耗上游令牌/计算资源，
+        # 并且会显示过时的"仍在流式传输"/恢复目标，
+        # 指向一个不会再被访问的会话。
         #
-        # So: stream them directly (no agent_runs wrapping). Starlette cancels
-        # the underlying async generator (raising CancelledError/GeneratorExit
-        # inside it) as soon as it notices the client disconnected — which the
-        # mode-specific except blocks above already handle by saving the
-        # partial response exactly once. This stops the upstream call promptly
-        # without waiting on the next streamed chunk.
+        # 因此：直接流式传输它们（不使用 agent_runs 包装）。Starlette
+        # 在检测到客户端断开后立即取消底层异步生成器
+        # （在内部引发 CancelledError/GeneratorExit）—
+        # 上述特定模式的 except 块已经通过仅一次保存
+        # 部分响应来处理此情况。这样可以迅速停止上游调用，
+        # 而无需等待下一个流式块。
         #
-        # Normal chat/agent streams keep the DETACHED behavior below: they
-        # survive the client closing the tab / navigating away. The SSE response just subscribes (replay
-        # buffered output + live); dropping the SSE only removes a subscriber —
-        # the run keeps going and saves the assistant message on completion
-        # regardless. Reconnect via /api/chat/resume.
+        # 普通聊天/agent 流保持下面的 DETACHED 行为：它们
+        # 在客户端关闭标签页/导航离开后仍然存活。SSE 响应仅订阅（重播
+        # 缓冲输出 + 实时）；丢弃 SSE 只移除一个订阅者 —
+        # 运行继续，并在完成时无条件保存助手消息。
+        # 通过 /api/chat/resume 重新连接。
         if compare_mode:
             return StreamingResponse(_safe_stream(), media_type="text/event-stream")
 
@@ -1417,8 +1417,8 @@ def setup_chat_routes(
         return StreamingResponse(agent_runs.subscribe(session), media_type="text/event-stream")
 
     # ------------------------------------------------------------------ #
-    # GET /api/chat/resume — reconnect to a detached run that's still going
-    # (e.g. after reopening a session whose agent kept running in the background)
+    # GET /api/chat/resume — 重新连接到仍在进行的分离运行
+    # （例如重新打开一个 agent 在后台持续运行的会话）
     # ------------------------------------------------------------------ #
     @router.get("/api/chat/resume/{session_id}")
     async def chat_resume(request: Request, session_id: str) -> StreamingResponse:
@@ -1428,8 +1428,8 @@ def setup_chat_routes(
         return StreamingResponse(agent_runs.subscribe(session_id), media_type="text/event-stream")
 
     # ------------------------------------------------------------------ #
-    # POST /api/chat/stop — cancel a detached run (Stop button). Closing the SSE
-    # no longer stops it (it's detached), so the Stop button must call this.
+    # POST /api/chat/stop — 取消分离的运行（停止按钮）。关闭 SSE
+    # 不再停止它（它是分离的），所以停止按钮必须调用此端点。
     # ------------------------------------------------------------------ #
     @router.post("/api/chat/stop/{session_id}")
     async def chat_stop(request: Request, session_id: str) -> Dict[str, Any]:
@@ -1438,16 +1438,16 @@ def setup_chat_routes(
         return {"stopped": stopped}
 
     # ------------------------------------------------------------------ #
-    # GET /api/chat/stream_status — check if a stream is active for a session
+    # GET /api/chat/stream_status — 检查会话是否有活跃的流
     # ------------------------------------------------------------------ #
     @router.get("/api/chat/stream_status/{session_id}")
     async def chat_stream_status(request: Request, session_id: str) -> Dict[str, Any]:
         _verify_session_owner(request, session_id)
-        # A detached run can still be going even if _active_streams was popped;
-        # report it as active so the client knows to reconnect via /resume.
-        # Read once via .get() to avoid a KeyError race between the membership
-        # check and the indexed read if a sibling stream's finally pops the
-        # entry in between (same pattern _stream_set already uses).
+        # 即使 _active_streams 已被弹出，分离的运行仍可能在进行中；
+        # 报告它为活跃状态，以便客户端知道通过 /resume 重新连接。
+        # 通过 .get() 读取一次以避免成员检查
+        # 和索引读取之间的 KeyError 竞态，如果兄弟流的 finally
+        # 在中间弹出了条目（与 _stream_set 已使用的模式相同）。
         rec = _active_streams.get(session_id)
         if rec is None:
             if agent_runs.is_active(session_id):
@@ -1471,7 +1471,7 @@ def setup_chat_routes(
             raise HTTPException(404, "Session not found")
 
     # ------------------------------------------------------------------ #
-    # GET /api/search — search across chat messages
+    # GET /api/search — 搜索聊天消息
     # ------------------------------------------------------------------ #
     @router.get("/api/search")
     async def search_messages(
@@ -1495,11 +1495,11 @@ def setup_chat_routes(
         ]
 
     # ------------------------------------------------------------------ #
-    # POST /api/rewrite — lightweight rewrite of last AI message (no tools)
+    # POST /api/rewrite — 轻量级重写最后一条 AI 消息（无工具）
     # ------------------------------------------------------------------ #
     @router.post("/api/rewrite")
     async def rewrite_message(request: Request) -> StreamingResponse:
-        """Rewrite the last AI message with an instruction (shorter/simpler/etc).
+        """使用指令重写最后一条 AI 消息（更短/更简单等）。
 
         Unlike the full chat pipeline, this does NOT run the agent loop or tools.
         It just asks the LLM to rewrite the given text.
@@ -1570,8 +1570,7 @@ def setup_chat_routes(
                     elif chunk == "data: [DONE]\n\n":
                         # Update the last assistant message in session history.
                         # Strip reasoning-model <think> blocks so the persisted
-                        # rewrite is just the rewritten text, not its scratchpad.
-                        from src.research_utils import strip_thinking
+        It just asks the LLM to rewrite the given text.                        from src.research_utils import strip_thinking
                         full_response = strip_thinking(full_response).strip() or full_response
                         if full_response:
                             for msg in reversed(sess.history):

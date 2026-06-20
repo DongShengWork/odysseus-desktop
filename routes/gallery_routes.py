@@ -1,4 +1,4 @@
-"""Gallery routes — browsable library for photos and AI-generated images."""
+"""画廊路由 — 照片和 AI 生成图片的可浏览图库。"""
 
 import os
 import hashlib
@@ -162,14 +162,14 @@ def setup_gallery_routes() -> APIRouter:
         album_id = form.get("album_id") or None
         content = await read_upload_limited(file, GALLERY_UPLOAD_MAX_BYTES, "Gallery upload")
 
-        # Duplicate detection via SHA-256
+        # 通过 SHA-256 进行重复检测
         file_hash = hashlib.sha256(content).hexdigest()
         db = SessionLocal()
         try:
             if album_id and user is not None:
                 _get_or_404_album(db, album_id, user)
 
-            # SECURITY: scope the dup-detect to THIS user — otherwise a
+            # 安全性：将重复检测范围限定为此用户 — 否则一个用户可能看到另一个用户的图像哈希
             # caller can probe whether someone else uploaded the same
             # file (the response leaks the existing row's id+filename).
             _dup_q = db.query(GalleryImage).filter(
@@ -196,7 +196,7 @@ def setup_gallery_routes() -> APIRouter:
             img_path = img_dir / filename
             img_path.write_bytes(content)
 
-            # Extract EXIF for images only — PIL can't parse video containers
+            # 仅为图像提取 EXIF — PIL 无法解析视频容器
             # and the failure path logs a noisy WARNING. We'll add ffprobe-based
             # video metadata extraction in a follow-up.
             exif = {} if is_video else _extract_exif(content)
@@ -254,7 +254,7 @@ def setup_gallery_routes() -> APIRouter:
             img_path = img_dir / _sanitize_gallery_filename(img.filename)
             img_path.write_bytes(content)
 
-            # Refresh dimensions in case the editor resized the canvas.
+            # 刷新尺寸，以防编辑器调整了画布大小。
             # updated_at auto-bumps via TimestampMixin's onupdate hook.
             try:
                 from PIL import Image
@@ -329,11 +329,11 @@ def setup_gallery_routes() -> APIRouter:
             if not img_path.exists():
                 raise HTTPException(404, "Image file not found")
 
-            # PIL rotates counter-clockwise; the API takes "clockwise"
+            # PIL 逆时针旋转；API 接受 "clockwise"（顺时针）
             # convention so we negate to match user expectation.
             with Image.open(img_path) as pil:
                 rotated = pil.rotate(-angle, expand=True)
-                # Recompute hash so dedupe stays accurate.
+                # 重新计算哈希，使重复检测保持准确。
                 buf = BytesIO()
                 ext = img.filename.rsplit(".", 1)[-1].lower()
                 save_kwargs = {}
@@ -371,7 +371,7 @@ def setup_gallery_routes() -> APIRouter:
         image_bytes = await read_upload_limited(file, GALLERY_TRANSFORM_UPLOAD_MAX_BYTES, "Image upload")
         b64 = base64.b64encode(image_bytes).decode()
 
-        # Find image endpoint
+        # 查找图像端点
         db = SessionLocal()
         try:
             ep = _first_visible_image_endpoint(db, user)
@@ -385,7 +385,7 @@ def setup_gallery_routes() -> APIRouter:
         if not base_url.endswith("/v1"):
             base_url += "/v1"
 
-        # Use img2img endpoint if available, otherwise upscale via canvas on client
+        # 如果可用，使用 img2img 端点，否则通过客户端画布放大
         try:
             async with httpx.AsyncClient(timeout=120) as client:
                 resp = await client.post(f"{base_url}/images/upscale", json={
@@ -394,7 +394,7 @@ def setup_gallery_routes() -> APIRouter:
                 if resp.status_code == 200:
                     data = resp.json()
                     return {"image": data.get("data", [{}])[0].get("b64_json", "")}
-                # Fallback: no upscale endpoint — return error
+                # 回退：无放大端点 — 返回错误
                 return {"error": f"Upscale endpoint not available ({resp.status_code})"}
         except Exception as e:
             return {"error": str(e)}
@@ -484,7 +484,7 @@ def setup_gallery_routes() -> APIRouter:
         user = get_current_user(request)
         db = SessionLocal()
         try:
-            # Distinct tags for filter UI
+            # 去重标签用于过滤器 UI
             tag_q = db.query(GalleryImage.tags).filter(
                 GalleryImage.is_active == True, GalleryImage.tags != None, GalleryImage.tags != ""
             )
@@ -497,7 +497,7 @@ def setup_gallery_routes() -> APIRouter:
                     if t:
                         all_tags.add(t)
 
-            # Distinct models for filter UI
+            # 去重模型用于过滤器 UI
             model_q = db.query(GalleryImage.model).filter(
                 GalleryImage.is_active == True, GalleryImage.model != None
             )
@@ -505,7 +505,7 @@ def setup_gallery_routes() -> APIRouter:
             model_rows = model_q.distinct().all()
             all_models = sorted([m for (m,) in model_rows if m])
 
-            # Base query with left join to sessions for session_name
+            # 基本查询，左连接 sessions 获取 session_name
             q = (
                 db.query(GalleryImage, DbSession.name)
                 .outerjoin(DbSession, GalleryImage.session_id == DbSession.id)
@@ -513,7 +513,7 @@ def setup_gallery_routes() -> APIRouter:
             )
             q = _owner_filter(q, user)
 
-            # Search filter (prompt + tags + ai_tags)
+            # 搜索过滤（prompt + tags + ai_tags）
             if search:
                 term = f"%{search}%"
                 from sqlalchemy import or_
@@ -523,7 +523,7 @@ def setup_gallery_routes() -> APIRouter:
                     GalleryImage.ai_tags.ilike(term),
                 ))
 
-            # Tag filter. The UI stacks multiple tag pills by passing them
+            # 标签过滤。UI 通过传递多个标签药丸叠加过滤
             # comma-separated — each tag adds a separate AND-filter so the
             # result set narrows as the user piles tags on. A single tag
             # (no commas) is the original behaviour.
@@ -537,29 +537,29 @@ def setup_gallery_routes() -> APIRouter:
                         GalleryImage.ai_tags.ilike(f"%{one}%"),
                     ))
 
-            # Model filter
+            # 模型过滤
             if model:
                 q = q.filter(GalleryImage.model == model)
 
-            # Album filter
+            # 相册过滤
             if album:
                 q = q.filter(GalleryImage.album_id == album)
 
-            # Favorites filter
+            # 收藏过滤
             if favorites:
                 q = q.filter(GalleryImage.favorite == True)
 
-            # Total before pagination
+            # 分页前的总数
             total = q.count()
-            # How many of those have AI tags — surfaced as "X/Y photos tagged"
+            # 其中有多少具有 AI 标签 — 显示为 "X/Y 张照片已标记"
             # in the AI-tagging settings header.
             total_tagged = q.filter(
                 GalleryImage.ai_tags.isnot(None), GalleryImage.ai_tags != ""
             ).count()
 
-            # Sorting
+            # 排序
             if sort == "shuffle":
-                # Seeded shuffle: fetch all matching IDs, shuffle them
+                # 种子随机：获取所有匹配的 ID，打乱它们
                 # deterministically with `seed`, then re-query for just the
                 # page we want. Stable across pagination as long as the
                 # client keeps the same seed.
@@ -576,7 +576,7 @@ def setup_gallery_routes() -> APIRouter:
                         .filter(GalleryImage.id.in_(page_ids))
                         .all()
                     )
-                    # Restore the shuffled order
+                    # 恢复打乱的顺序
                     by_id = {img.id: (img, session_name) for img, session_name in page_rows}
                     rows = [by_id[i] for i in page_ids if i in by_id]
                 else:
@@ -747,7 +747,7 @@ def setup_gallery_routes() -> APIRouter:
             if not user or img.owner != user:
                 raise HTTPException(404, "Image not found")
             if req.tags is not None:
-                # Drop any tag from the user-tags field that already lives in
+                # 从用户标签字段中删除已存在于 ai_tags 的任何标签
                 # ai_tags — earlier flows wrote AI suggestions to both fields
                 # and the UI showed every photo with the same chips twice.
                 ai_set = {t.strip().lower() for t in (img.ai_tags or '').split(',') if t.strip()}
@@ -765,7 +765,7 @@ def setup_gallery_routes() -> APIRouter:
                 img.favorite = req.favorite
             if req.album_id is not None:
                 if req.album_id:
-                    # Validate the target album belongs to the caller before
+                    # 在移动前验证目标相册属于调用者
                     # moving the image into it — mirrors add_to_album, so you
                     # cannot file your image into another user's album.
                     _get_or_404_album(db, req.album_id, user)
@@ -784,7 +784,7 @@ def setup_gallery_routes() -> APIRouter:
             db.close()
 
     # ---- POST /api/gallery/download-zip ----
-    # Bundle the given image ids into a single .zip for download. Used by the
+    # 将给定的图像 ID 打包成单个 .zip 供下载。由批量操作工具栏使用。
     # gallery's bulk "Download" when many photos are selected (one file instead
     # of a flood of individual downloads).
     @router.post("/api/gallery/download-zip")
@@ -839,9 +839,9 @@ def setup_gallery_routes() -> APIRouter:
             db.close()
 
     # ---- POST /api/gallery/clear-user-tags ----
-    # Wipe the `tags` field on every image owned by the current user.
-    # Leaves `ai_tags` intact. Use after a bug populated user-tags with
-    # AI-suggested values you never added.
+    # 清除当前用户拥有的每张图像上的 `tags` 字段。
+    # 保留 `ai_tags` 不变。在 bug 用 AI 建议值填充了用户标签后使用。
+    # AI 建议但你从未添加的值。
     @router.post("/api/gallery/clear-user-tags")
     async def clear_gallery_user_tags(request: Request) -> Dict[str, Any]:
         user = get_current_user(request)
@@ -863,8 +863,8 @@ def setup_gallery_routes() -> APIRouter:
             db.close()
 
     # ---- POST /api/gallery/clear-ai-tags ----
-    # Wipe the `ai_tags` field on every image owned by the current user.
-    # Leaves user `tags` intact. Use when AI-suggested tags like "dog" /
+    # 清除当前用户拥有的每张图像上的 `ai_tags` 字段。
+    # 保留用户 `tags` 不变。当 AI 建议的标签如 "dog" / "cat" 不需要时使用。
     # "woman" have leaked into the gallery and you want them gone.
     @router.post("/api/gallery/clear-ai-tags")
     async def clear_gallery_ai_tags(request: Request, image_id: Optional[str] = Query(None)) -> Dict[str, Any]:

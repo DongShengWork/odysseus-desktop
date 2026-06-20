@@ -15,7 +15,7 @@ class APIKeyManager:
         self.key_file = os.path.join(data_dir, ".key")
         
     def get_or_create_key(self) -> bytes:
-        """Get or create encryption key for API keys"""
+        """获取或创建 API 密钥的加密密钥"""
         if os.path.exists(self.key_file):
             # Older versions wrote .key with the process umask (often 0o644,
             # i.e. group/world-readable). Re-restrict on read so existing
@@ -34,24 +34,24 @@ class APIKeyManager:
             return key
     
     def encrypt_api_key(self, api_key: str) -> str:
-        """Encrypt an API key"""
+        """加密 API 密钥"""
         if not api_key:
             return ""
         f = Fernet(self.get_or_create_key())
         return f.encrypt(api_key.encode()).decode()
     
     def decrypt_api_key(self, encrypted_key: str) -> str:
-        """Decrypt an API key"""
+        """解密 API 密钥"""
         if not encrypted_key:
             return ""
         f = Fernet(self.get_or_create_key())
         return f.decrypt(encrypted_key.encode()).decode()
     
     def _load_raw(self) -> Dict[str, str]:
-        """Load the raw, still-encrypted keys dict from disk.
+        """从磁盘加载原始的、仍加密的密钥字典。
 
-        Tolerates a missing/corrupt/wrong-shaped file by returning {} — the
-        same robustness load() relies on at startup.
+        容忍缺失/损坏/格式错误的文件，返回 {} —
+        这与 load() 在启动时依赖的健壮性相同。
         """
         if not os.path.exists(self.api_keys_file):
             return {}
@@ -59,12 +59,12 @@ class APIKeyManager:
             with open(self.api_keys_file, 'r', encoding="utf-8") as f:
                 encrypted_keys = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
-            # A corrupt/truncated api_keys.json must not crash load() (called on
-            # startup via app_initializer) — treat it as no stored keys.
+            # 损坏/截断的 api_keys.json 不能导致 load() 崩溃（由
+            # app_initializer 在启动时调用）— 将其视为没有存储的密钥。
             logger.warning("Failed to read API keys file: %s", e)
             return {}
         if not isinstance(encrypted_keys, dict):
-            # Legacy/wrong shape (e.g. a list) — .items() would raise. Ignore it.
+            # 旧版/错误格式（例如列表）— .items() 会抛出异常。忽略它。
             logger.warning("API keys file has unexpected shape (%s); ignoring", type(encrypted_keys).__name__)
             return {}
 
@@ -75,7 +75,7 @@ class APIKeyManager:
         }
 
     def save(self, provider: str, api_key: str):
-        """Save encrypted API key to file.
+        """将加密后的 API 密钥保存到文件。
 
         Operates on the raw (still-encrypted) on-disk dict so other providers'
         keys stay encrypted. Loading via load() first would decrypt them and
@@ -88,7 +88,7 @@ class APIKeyManager:
             json.dump(keys, f)
 
     def load(self) -> Dict[str, str]:
-        """Load and decrypt API keys"""
+        """加载并解密 API 密钥"""
         encrypted_keys = self._load_raw()
         decrypted = {}
         for provider, key in encrypted_keys.items():

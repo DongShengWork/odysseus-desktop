@@ -1,5 +1,5 @@
-// Odysseus UI — Initialization Scripts
-// ES6 module — extracted from index.html inline scripts
+// Odysseus UI — 初始化脚本
+// ES6 模块 — 从 index.html 内联脚本中提取
 
 import Storage from './storage.js';
 
@@ -19,7 +19,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
 
 // SECURITY: defense-in-depth state wipe on user switch. If the authenticated
 // user is different from the one whose state is cached in this browser,
-// wipe localStorage + sessionStorage so the new account doesn't inherit
+  // 与浏览器中缓存的用户不同，则清除 localStorage + sessionStorage，
 // the previous user's last session id, last-used model, draft chat input,
 // or cached lists. The settings-tab Logout button already wipes on
 // explicit logout; this catches the cases where a different user signs
@@ -57,27 +57,27 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
           el.style.display = 'none';
         });
       };
-      // Document editor — overflow menu button + the docs panel rail/tool button.
+      // 文档编辑器 — 溢出菜单按钮 + 文档面板 rail/工具按钮。
       hideOn('#overflow-doc-btn, #tool-doc-btn', privs.can_use_documents);
-      // Research — sidebar tool + the in-input deep-research toggle.
+      // 研究 — 侧边栏工具 + 输入框中的深度研究开关。
       hideOn('#tool-research-btn, #research-toggle-btn', privs.can_use_research);
-      // Memory & skills (rail/tool button only — UI/API entry).
+      // 记忆 & 技能（仅 rail/工具按钮 — UI/API 入口）。
       hideOn('#tool-memory-btn', privs.can_manage_memory);
-      // Agent mode toggle — force chat mode by hiding the Agent toggle button.
+      // Agent 模式切换 — 通过隐藏 Agent 切换按钮强制设为聊天模式。
       if (privs.can_use_agent === false) {
         const _agent = document.getElementById('mode-agent-btn');
         const _chat = document.getElementById('mode-chat-btn');
         if (_agent) _agent.style.display = 'none';
         if (_chat) { _chat.classList.add('active'); _chat.click?.(); }
       }
-    } catch (_) { /* DOM not ready or unexpected shape — UI gates are non-fatal */ }
-  } catch (_) { /* anonymous / loopback mode — nothing to do */ }
+    } catch (_) { /* DOM 未就绪或数据格式异常 — UI 权限控制失败不影响功能 */ }
+  } catch (_) { /* 匿名/环回模式 — 无需处理 */ }
 })();
 
-/* Sidebar section default-collapsed setup. The click-to-toggle handlers
-   themselves live in js/section-management.js — attaching them in BOTH
-   places caused two toggles per click, which read as "clicks aren't doing
-   anything" (even-count parity). Keep only the initial-state-apply here. */
+/* 侧边栏分区默认折叠设置。点击切换处理器本身在
+   js/section-management.js 中 — 在两个地方都绑定会导致每次点击
+   触发两次切换，表现为"点击无反应"（偶次奇偶性抵消）。
+   此处仅保留初始状态应用逻辑。 */
 {
   const KEY = Storage.KEYS.SIDEBAR_COLLAPSED;
   const saved = Storage.getJSON(KEY, {});
@@ -119,15 +119,15 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     return Math.round(el.getBoundingClientRect().width);
   };
   const _sync = () => {
-    // Icon rail width
+    // 图标 rail 宽度
     const rw = _measure(rail);
     if (rw === null) {
       root.style.removeProperty('--icon-rail-w');
     } else if (rw > 0) {
       root.style.setProperty('--icon-rail-w', rw + 'px');
     } else {
-      // 0 from a visible-but-not-yet-laid-out rail: don't shadow the
-      // CSS fallback; re-sync on the next frame instead.
+      // 可见但尚未布局的 rail 宽度为 0：不覆盖 CSS 回退值；
+      // 改为下一帧重新同步。
       const cs = rail && window.getComputedStyle(rail);
       const hidden = !cs || cs.display === 'none' || cs.visibility === 'hidden';
       if (hidden) {
@@ -138,8 +138,8 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
         return;
       }
     }
-    // Sidebar width — `.sidebar.hidden` collapses to width: 0 so the
-    // measurement is naturally 0 in the hidden state.
+    // 侧边栏宽度 — `.sidebar.hidden` 折叠为 width: 0，因此
+    // 隐藏状态下的测量自然为 0。
     const sw = _measure(sidebar);
     if (sw === null) {
       root.style.removeProperty('--sidebar-w');
@@ -153,9 +153,9 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     if (rail) ro.observe(rail);
     if (sidebar) ro.observe(sidebar);
   }
-  // Class flips (sidebar.hidden ↔ visible) don't trigger ResizeObserver
-  // until layout settles a frame later; also watch the class attribute
-  // so we re-sync immediately when the user toggles the hamburger.
+  // Class 切换（sidebar.hidden ↔ visible）不会立即触发 ResizeObserver，
+  // 需要等到下一帧布局完成后；同时监听 class 属性，以便用户点击汉堡菜单
+  // 时立即重新同步。
   if (sidebar && typeof MutationObserver !== 'undefined') {
     new MutationObserver(_sync).observe(sidebar, { attributes: true, attributeFilter: ['class', 'style'] });
   }
@@ -165,8 +165,8 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
   window.addEventListener('resize', _sync);
 }
 
-/* Keep minimized tool chips above the composer. Both the current modalManager
-   dock and the legacy fallback dock consume this root-level clearance. */
+/* 让最小化的工具 chips 保持在输入框上方。当前的 modalManager
+   dock 和旧版回退 dock 都使用此根级间距。 */
 {
   const root = document.documentElement;
   const chatBar = document.querySelector('.chat-input-bar');
@@ -198,7 +198,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
   window.addEventListener('resize', _syncComposerClearance);
 }
 
-/* ---- Resizable sidebar — drag edge to resize, collapse if small, drag rail edge to expand ---- */
+/* ---- 可调整大小的侧边栏 — 拖拽边缘调整宽度，缩小则折叠，拖拽 rail 边缘则展开 ---- */
 {
   const sidebar = document.getElementById('sidebar');
   const handle = document.getElementById('sidebar-resize-handle');
@@ -216,7 +216,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     return (w >= MIN_WIDTH && w <= MAX_WIDTH) ? w : 340;
   }
 
-  // Restore saved width
+  // 恢复已保存的宽度
   const savedWidth = Storage.get(STORAGE_KEY);
   if (savedWidth) {
     const w = parseInt(savedWidth, 10);
@@ -225,7 +225,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
 
   let startX, startWidth, isRight, collapsed, expanding;
 
-  // --- Drag from sidebar edge to resize / collapse ---
+  // --- 从侧边栏边缘拖拽调整大小/折叠 ---
   handle.addEventListener('mousedown', (e) => {
     e.preventDefault();
     expanding = false;
@@ -239,7 +239,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     document.addEventListener('mouseup', stopDrag);
   });
 
-  // --- Drag from icon rail edge to expand sidebar ---
+  // --- 从图标 rail 边缘拖拽展开侧边栏 ---
   if (railHandle) {
     railHandle.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -249,7 +249,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
       startX = e.clientX;
       collapsed = false;
 
-      // Unhide sidebar at 0 width so we can grow it
+      // 以 0 宽度显示侧边栏，以便后续展开
       sidebar.classList.remove('hidden');
       sidebar.classList.add('resizing');
       sidebar.style.width = '0px';
@@ -320,12 +320,12 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     document.removeEventListener('mouseup', stopExpandDrag);
 
     if (collapsed) {
-      // Didn't drag far enough — snap back to icon rail
+      // 拖拽距离不够 — 回弹到图标 rail
       sidebar.style.width = '';
       sidebar.classList.add('hidden');
       if (typeof syncRailSide === 'function') syncRailSide();
     } else {
-      // Expanded — save width and sync
+      // 已展开 — 保存宽度并同步
       const finalWidth = parseInt(sidebar.style.width, 10);
       if (finalWidth >= MIN_WIDTH) {
         Storage.set(STORAGE_KEY, String(finalWidth));
@@ -337,7 +337,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
   } // end if (sidebar && handle)
 }
 
-/* ---- Mobile viewport fix — keep chat visible when virtual keyboard opens ---- */
+/* ---- 移动端视口修复 — 虚拟键盘打开时保持聊天可见 ---- */
 {
   if (window.visualViewport) {
     let _lastVVHeight = window.visualViewport.height;
@@ -356,7 +356,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     });
   }
 
-  // Fade welcome screen when mobile keyboard opens (input focus/blur)
+  // 移动端键盘打开时淡出欢迎屏幕（输入框聚焦/失焦）
   if ('ontouchstart' in window) {
     document.addEventListener('DOMContentLoaded', function() {
       var _msgInput = document.getElementById('message');
@@ -382,7 +382,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
 }
 
 /* ── Release welcome-screen entrance animations once the page is settled ──
-   The splash's entrance animations (#welcome-screen / .welcome-name) are held
+   启动画面（#welcome-screen / .welcome-name）的入场动画由 CSS
    by CSS (`body:not(.welcome-ready)`) until this runs, so they no longer play
    while fonts are loading and the layout is still shifting on first paint
    (which made the splash "go haywire"). We flip the flag after fonts are ready
@@ -401,5 +401,5 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
   try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(release); } catch (_) {}
   if (document.readyState === 'complete') release();
   else window.addEventListener('load', release);
-  setTimeout(release, 1200);  // hard fallback — never leave the splash hidden
+  setTimeout(release, 1200);  // 硬回退 — 确保启动画面不会一直隐藏
 })();

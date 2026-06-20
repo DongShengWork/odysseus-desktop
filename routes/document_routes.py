@@ -1,4 +1,4 @@
-"""Document routes — CRUD for living documents with version history."""
+"""文档路由 — 带版本历史的活跃文档 CRUD 操作。"""
 
 import uuid
 import logging

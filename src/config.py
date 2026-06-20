@@ -10,96 +10,96 @@ from src.constants import DATA_DIR as _DATA_DIR_CONST
 # IS_WINDOWS`. Defined locally (a trivial `os.name == "nt"`) rather than imported
 # from core.platform_compat, to keep this dependency-light config module from
 # dragging in the whole core/__init__ + llm_core import chain. The platform
-# *helper functions* (safe_chmod, pid_alive, find_bash, ...) live solely in
+# 平台*辅助函数*（safe_chmod、pid_alive、find_bash 等）仅存在于
 # core.platform_compat — that remains their single source of truth. Keep platform
-# branches as small inline `if IS_WINDOWS:` deltas (never parallel *_windows.py
+# 内联 `if IS_WINDOWS:` 差异（绝不要平行的 *_windows.py 文件），
 # files) so they stay easy to integrate with upstream changes.
 IS_WINDOWS = os.name == "nt"
 
 class DataConfig(BaseSettings):
-    """Configuration for data storage and file handling."""
+    """数据存储和文件处理的配置。"""
     # Base directory
-    base_dir: Path = Field(default=Path(__file__).parent.parent, description="Base directory for the application")
+    base_dir: Path = Field(default=Path(__file__).parent.parent, description="应用程序基础目录")
     
     # Data paths
-    data_dir: Path = Field(default=Path(_DATA_DIR_CONST), description="Main data directory")
-    uploads_dir: Path = Field(default=Path(_DATA_DIR_CONST) / "uploads", description="Directory for uploaded files")
-    sessions_file: Path = Field(default=Path(_DATA_DIR_CONST) / "sessions.json", description="Sessions storage file")
-    memory_file: Path = Field(default=Path(_DATA_DIR_CONST) / "memory.json", description="Memory storage file")
-    memory_doc: Path = Field(default=Path(_DATA_DIR_CONST) / "memory_doc.md", description="Memory document file")
-    personal_dir: Path = Field(default=Path(_DATA_DIR_CONST) / "personal_docs", description="Personal documents directory")
-    runbook_dir: Path = Field(default=Path(_DATA_DIR_CONST) / "personal_docs" / "runbook", description="Runbook directory")
+    data_dir: Path = Field(default=Path(_DATA_DIR_CONST), description="主数据目录")
+    uploads_dir: Path = Field(default=Path(_DATA_DIR_CONST) / "uploads", description="上传文件目录")
+    sessions_file: Path = Field(default=Path(_DATA_DIR_CONST) / "sessions.json", description="Sessions 存储文件")
+    memory_file: Path = Field(default=Path(_DATA_DIR_CONST) / "memory.json", description="Memory 存储文件")
+    memory_doc: Path = Field(default=Path(_DATA_DIR_CONST) / "memory_doc.md", description="Memory 文档文件")
+    personal_dir: Path = Field(default=Path(_DATA_DIR_CONST) / "personal_docs", description="个人文档目录")
+    runbook_dir: Path = Field(default=Path(_DATA_DIR_CONST) / "personal_docs" / "runbook", description="Runbook 目录")
     
     # Upload settings
-    max_upload_size: int = Field(default=10 * 1024 * 1024, description="Maximum upload size in bytes (10MB)")
+    max_upload_size: int = Field(default=10 * 1024 * 1024, description="最大上传大小（字节，10MB）")
     allowed_extensions: List[str] = Field(
         default=[
             '.txt', '.py', '.html', '.md', '.json', '.csv',
             '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.pdf'
         ],
-        description="Allowed file extensions for uploads"
+        description="允许上传的文件扩展名"
     )
-    chunk_size: int = Field(default=1000, description="Chunk size for document processing")
-    chunk_overlap: int = Field(default=200, description="Overlap between chunks for document processing")
-    cleanup_days: int = Field(default=30, description="Number of days after which to clean up old uploads")
+    chunk_size: int = Field(default=1000, description="文档处理的块大小")
+    chunk_overlap: int = Field(default=200, description="文档处理的块重叠")
+    cleanup_days: int = Field(default=30, description="清理旧上传的天数")
     
     model_config = SettingsConfigDict(env_prefix="DATA_")
 
 class LLMConfig(BaseSettings):
-    """Configuration for LLM integration."""
+    """LLM 集成的配置。"""
     
     # LLM endpoints
-    default_host: str = Field(default="localhost", description="Default host for LLM services")
-    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key if using OpenAI")
-    openai_compat_path: str = Field(default="/v1/chat/completions", description="OpenAI compatible API path")
+    default_host: str = Field(default="localhost", description="LLM 服务的默认主机")
+    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API 密钥（如使用 OpenAI）")
+    openai_compat_path: str = Field(default="/v1/chat/completions", description="OpenAI 兼容 API 路径")
     
     # LLM behavior
-    max_context_messages: int = Field(default=90, description="Maximum number of context messages to keep")
-    request_timeout: int = Field(default=20, description="Request timeout in seconds")
-    llm_stream_timeout: int = Field(default=30, description="LLM streaming timeout in seconds")
-    llm_max_tokens: int = Field(default=4096, description="Maximum tokens for LLM responses")
-    llm_temperature: float = Field(default=0.3, description="Temperature for LLM responses")
+    max_context_messages: int = Field(default=90, description="保留的最大上下文消息数")
+    request_timeout: int = Field(default=20, description="请求超时秒数")
+    llm_stream_timeout: int = Field(default=30, description="LLM 流式传输超时秒数")
+    llm_max_tokens: int = Field(default=4096, description="LLM 响应的最大 token 数")
+    llm_temperature: float = Field(default=0.3, description="LLM 响应的温度参数")
     
     model_config = SettingsConfigDict(env_prefix="LLM_")
 
 class SearchConfig(BaseSettings):
-    """Configuration for search functionality."""
+    """搜索功能的配置。"""
     
     # Web search
     searxng_instance: str = Field(
         default="http://localhost:8080",
-        description="SearXNG instance URL (self-hosted)"
+        description="SearXNG 实例 URL（自托管）"
     )
-    web_search_count: int = Field(default=10, description="Number of search results to retrieve")
-    web_search_max_pages: int = Field(default=6, description="Maximum number of pages to search")
-    web_search_max_workers: int = Field(default=4, description="Maximum number of worker threads for web search")
+    web_search_count: int = Field(default=10, description="检索的搜索结果数量")
+    web_search_max_pages: int = Field(default=6, description="搜索的最大页面数")
+    web_search_max_workers: int = Field(default=4, description="Web 搜索的最大工作线程数")
     
     # Research service
     research_service_url: str = Field(
         default="http://localhost:8003/research", 
-        description="URL for research service"
+        description="Research 服务 URL"
     )
-    research_timeout: int = Field(default=300, description="Research service timeout in seconds")
+    research_timeout: int = Field(default=300, description="Research 服务超时秒数")
     
     # API keys (optional)
-    serpapi_key: Optional[str] = Field(default=None, description="SerpAPI key if used")
-    google_api_key: Optional[str] = Field(default=None, description="Google API key if used")
-    google_cx: Optional[str] = Field(default=None, description="Google Custom Search Engine ID if used")
+    serpapi_key: Optional[str] = Field(default=None, description="SerpAPI 密钥（如使用）")
+    google_api_key: Optional[str] = Field(default=None, description="Google API 密钥（如使用）")
+    google_cx: Optional[str] = Field(default=None, description="Google 自定义搜索引擎 ID（如使用）")
     
     model_config = SettingsConfigDict(env_prefix="SEARCH_")
 
 class SecurityConfig(BaseSettings):
-    """Configuration for security and rate limiting."""
+    """安全和速率限制的配置。"""
     
     # Rate limiting
-    max_concurrent_uploads: int = Field(default=3, description="Maximum concurrent uploads per IP")
-    upload_rate_limit: int = Field(default=5, description="Maximum uploads per minute per IP")
-    upload_rate_window: int = Field(default=60, description="Rate limit window in seconds")
-    upload_rate_max_entries: int = Field(default=1000, description="Maximum number of rate limit entries to keep")
+    max_concurrent_uploads: int = Field(default=3, description="每个 IP 的最大并发上传数")
+    upload_rate_limit: int = Field(default=5, description="每个 IP 每分钟的最大上传数")
+    upload_rate_window: int = Field(default=60, description="速率限制窗口秒数")
+    upload_rate_max_entries: int = Field(default=1000, description="保留的最大速率限制条目数")
     
     # Security settings
-    allowed_origins: List[str] = Field(default=["*"], description="Allowed origins for CORS")
-    max_file_size: int = Field(default=10 * 1024 * 1024, description="Maximum file size in bytes")
+    allowed_origins: List[str] = Field(default=["*"], description="CORS 允许的来源")
+    max_file_size: int = Field(default=10 * 1024 * 1024, description="最大文件大小（字节）")
     dangerous_file_types: List[str] = Field(
         default=[
             'application/x-executable', 'application/x-sharedlib',
@@ -107,20 +107,20 @@ class SecurityConfig(BaseSettings):
             'application/x-sh', 'application/x-bat', 'application/x-vbs',
             'application/javascript', 'application/x-javascript'
         ],
-        description="Potentially dangerous MIME types to block"
+        description="需要阻止的潜在危险 MIME 类型"
     )
     dangerous_extensions: List[str] = Field(
         default=[
             '.exe', '.dll', '.bat', '.cmd', '.sh', '.bash', 
             '.js', '.vbs', '.ps1', '.py', '.php', '.jsp', '.asp', '.aspx'
         ],
-        description="Potentially dangerous file extensions to block"
+        description="需要阻止的潜在危险文件扩展名"
     )
     
     model_config = SettingsConfigDict(env_prefix="SECURITY_")
 
 class AppConfig(BaseSettings):
-    """Main application configuration combining all components."""
+    """组合所有组件的主应用程序配置。"""
     
     data: DataConfig = DataConfig()
     llm: LLMConfig = LLMConfig()
@@ -128,22 +128,22 @@ class AppConfig(BaseSettings):
     security: SecurityConfig = SecurityConfig()
     
     # Application settings
-    debug: bool = Field(default=False, description="Enable debug mode")
-    log_level: str = Field(default="INFO", description="Logging level")
+    debug: bool = Field(default=False, description="启用调试模式")
+    log_level: str = Field(default="INFO", description="日志级别")
     
     @field_validator("data", mode="before")
     def set_data_paths(cls, v, info):
-        """Set data paths relative to base_dir."""
-        # Get the base_dir from the field values or use default
+        """根据 base_dir 设置数据路径。"""
+        # 从字段值获取 base_dir 或使用默认值
         if isinstance(v, dict) and "base_dir" in v:
             base_dir = v["base_dir"]
         else:
             base_dir = Path(__file__).parent.parent
         
-        # Convert string paths to Path objects relative to base_dir
+        # 将字符串路径转换为相对于 base_dir 的 Path 对象
         data_dir = Path(_DATA_DIR_CONST)
         
-        # Get values from the input dict or use defaults
+        # 从输入字典获取值或使用默认值
         max_upload_size = v.get("max_upload_size", 10 * 1024 * 1024) if isinstance(v, dict) else 10 * 1024 * 1024
         allowed_extensions = v.get("allowed_extensions", [
             '.txt', '.py', '.html', '.md', '.json', '.csv',
@@ -173,12 +173,12 @@ class AppConfig(BaseSettings):
     
     model_config = SettingsConfigDict()
 
-# Create global config instance
+# 创建全局配置实例
 config = AppConfig()
 
-# Create directories if they don't exist
+# 如果目录不存在则创建它们
 def create_directories():
-    """Create required directories if they don't exist."""
+    """创建所需的目录（如果不存在）。"""
     directories = [
         config.data.data_dir,
         config.data.uploads_dir,
@@ -189,21 +189,21 @@ def create_directories():
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
 
-# Validate configuration on startup
+# 启动时验证配置
 def validate_config():
-    """Validate the application configuration."""
-    # Check if LLM host is reachable if specified
+    """验证应用程序配置。"""
+    # 检查 LLM 主机是否可达（如果指定了）
     if config.llm.default_host and config.llm.default_host.startswith("192.168."):
-        # This is a local IP, assume it's valid
+        # 这是本地 IP，假设它有效
         pass
     
-    # Check if API keys are set when needed
+    # 检查需要时 API 密钥是否已设置
     if not config.llm.openai_api_key:
-        # OpenAI API key not set, that's OK if not using OpenAI
+        # OpenAI API 密钥未设置，如果不使用 OpenAI 则没问题
         pass
     
-    # Create directories
+    # 创建目录
     create_directories()
 
-# Initialize configuration
+# 初始化配置
 validate_config()

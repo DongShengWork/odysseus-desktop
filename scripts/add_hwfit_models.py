@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-add_hwfit_models.py — bulk-add Hugging Face models to the hwfit catalog
-(services/hwfit/data/hf_models.json).
+add_hwfit_models.py — 批量将 Hugging Face 模型添加到 hwfit 目录
+(services/hwfit/data/hf_models.json)。
 
-Adds:
-  * every model from one or more HF authors (e.g. cyankiwi's AWQ quants)
-  * any explicitly-listed repos
+添加：
+  * 来自一个或多个 HF 作者的所有模型（例如 cyankiwi 的 AWQ 量化版本）
+  * 任何明确列出的仓库
 
-Metadata is taken from the HF Hub `list_models(full=True)` response plus the
-repo name (which encodes the param size, e.g. "Qwen3.6-35B-A3B"). Param-less
-names fall back, in order, to the parent `base_model:` tag, the repo's
-`config.json` (computed from `hidden_size` / `num_hidden_layers` / MoE
-fields), and finally a per-repo `model_info()` call to read safetensors.
+元数据来自 HF Hub `list_models(full=True)` 响应以及
+仓库名称（编码了参数规模，例如 "Qwen3.6-35B-A3B"）。无参数名称
+依次回退到父级 `base_model:` 标签、仓库的
+`config.json`（从 `hidden_size` / `num_hidden_layers` / MoE
+字段计算），最后是每个仓库的 `model_info()` 调用来读取 safetensors。
 
-Re-runnable: merges by `name`, leaving existing entries untouched unless
---overwrite is passed. Writes a .bak first.
+可重复运行：按 `name` 合并，除非传入 --overwrite 否则
+保留现有条目不变。先写入 .bak 备份。
 
 Usage:
     python3 scripts/add_hwfit_models.py
@@ -32,8 +32,8 @@ DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "services", "hwfit", "
 DATA_PATH = os.path.abspath(DATA_PATH)
 
 AUTHORS = ["cyankiwi"]
-# Specific repos to add (in addition to the authors above). Optional explicit
-# overrides {repo: {field: value}} for things the name/metadata can't convey.
+# 要添加的特定仓库（除了上面的作者之外）。可选显式
+# 覆盖 {repo: {field: value}}，用于名称/元数据无法表达的内容。
 EXTRA_REPOS = {
     "deepseek-ai/DeepSeek-V4-Flash":            {"parameter_count": "168B", "quantization": "Q4_K_M"},
     "MiniMaxAI/MiniMax-M2.7":                   {"parameter_count": "228.7B", "quantization": "Q4_K_M"},
@@ -41,7 +41,7 @@ EXTRA_REPOS = {
     "cyankiwi/MiniMax-M2.7-AWQ-4bit":           {"parameter_count": "228.7B", "quantization": "AWQ-4bit"},
 }
 
-# Tags that are not architecture names.
+# 不是架构名称的标签。
 _GENERIC_TAGS = {
     "transformers", "safetensors", "conversational", "text-generation",
     "image-text-to-text", "text-generation-inference", "endpoints_compatible",
@@ -54,8 +54,8 @@ api = HfApi()
 
 
 def _parse_params(name):
-    """Return (parameters_raw, active_parameters_or_None) from a repo name.
-    Handles dense ("27B") and MoE ("235B-A22B") naming."""
+    """从仓库名称返回 (parameters_raw, active_parameters_or_None)。
+    处理密集（"27B"）和 MoE（"235B-A22B"）命名。"""
     base = name.split("/")[-1]
     active = None
     m_active = re.search(r"-[Aa](\d+\.?\d*)[Bb](?![a-zA-Z])", base)
@@ -64,8 +64,8 @@ def _parse_params(name):
         base_wo = base[:m_active.start()] + base[m_active.end():]
     else:
         base_wo = base
-    # First "<num>B" token that is a plausible size. Case-insensitive b, but the
-    # negative lookahead means "8bit"/"4bit" are NOT treated as "8B"/"4B".
+    # 第一个是合理规模的 "<num>B" 标记。不区分大小写的 b，
+    # 但负向前瞻确保 "8bit"/"4bit" 不会被当作 "8B"/"4B" 处理。
     total = None
     for m in re.finditer(r"(\d+\.?\d*)[Bb](?![a-zA-Z])", base_wo):
         total = int(float(m.group(1)) * 1e9)
@@ -74,15 +74,15 @@ def _parse_params(name):
 
 
 def _params_from_config(cfg):
-    """Estimate (total, active) parameter counts from a HF config.json dict.
+    """从 HF config.json 字典估算 (total, active) 参数数量。
 
-    Returns (None, None) when the architecture fields aren't usable. Covers:
-      * explicit ``num_parameters`` / ``n_params`` (rare but authoritative)
-      * dense transformers (LLaMA / Qwen / Mistral / GLM-dense / etc.) via
-        embeddings + per-layer attention + MLP
-      * MoE (Qwen3-MoE, GLM-4-MoE, DeepSeek-style) using ``num_experts`` or
-        ``n_routed_experts`` (+ ``n_shared_experts``). Active count assumes
-        ``num_experts_per_tok`` routed experts plus any shared experts.
+    当架构字段不可用时返回 (None, None)。涵盖：
+      * 显式 ``num_parameters`` / ``n_params``（罕见但权威）
+      * 密集 transformers（LLaMA / Qwen / Mistral / GLM-dense 等）通过
+        嵌入 + 每层注意力 + MLP
+      * MoE（Qwen3-MoE, GLM-4-MoE, DeepSeek-style）使用 ``num_experts`` 或
+        ``n_routed_experts``（+ ``n_shared_experts``）。活跃数量假设
+        ``num_experts_per_tok`` 路由专家加上任何共享专家。
 
     The estimate is intentionally coarse — within ~5-10% of the true count for
     standard decoder-only architectures — which is fine for the downstream
@@ -92,8 +92,8 @@ def _params_from_config(cfg):
     if not isinstance(cfg, dict):
         return None, None
 
-    # Authoritative fields first. Some custom configs embed the trained
-    # parameter count directly.
+    # 首先权威字段。一些自定义配置直接嵌入了训练后的
+    # 参数数量。
     for key in ("num_parameters", "n_params", "total_params"):
         v = cfg.get(key)
         if isinstance(v, (int, float)) and v > 0:
@@ -117,22 +117,22 @@ def _params_from_config(cfg):
     n_kv = _i("num_key_value_heads") or n_heads
     head_dim = _i("head_dim") or (h // n_heads if n_heads else h)
 
-    # Attention: Q is hidden_size wide, KV is grouped (GQA / MQA).
+    # Attention：Q 是 hidden_size 宽，KV 是分组的（GQA / MQA）。
     q_proj = h * (n_heads * head_dim if n_heads else h)
     kv_proj = 2 * h * (n_kv * head_dim if n_kv else h)
     o_proj = (n_heads * head_dim if n_heads else h) * h
     per_layer_attn = q_proj + kv_proj + o_proj
 
-    # Dense MLP: gate + up + down (SwiGLU / GeGLU). Configs without a gate
-    # (plain GELU) are within the noise floor of this estimate.
+    # 密集 MLP：gate + up + down（SwiGLU / GeGLU）。没有 gate 的配置
+    # （纯 GELU）在此估算的噪音范围内。
     per_layer_dense_mlp = 3 * h * ffn
 
-    # MoE routing. Both naming conventions are seen in the wild.
+    # MoE routing。在实践中两种命名约定都可见。
     n_experts = _i("num_experts") or _i("n_routed_experts") or 0
     n_shared = _i("n_shared_experts") or 0
     n_active = _i("num_experts_per_tok") or 0
     moe_ffn = _i("moe_intermediate_size") or ffn
-    # Some configs (GLM-4-MoE, DeepSeek-V3) keep the first K layers dense.
+    # 一些配置（GLM-4-MoE, DeepSeek-V3）保持前 K 层为密集。
     first_dense = _i("first_k_dense_replace") or 0
 
     if n_experts > 0 and n_active > 0:
@@ -152,7 +152,7 @@ def _params_from_config(cfg):
         active_mlp = total_mlp
 
     embed = vocab * h
-    # Untied output head doubles the embedding contribution.
+    # 未绑定的输出头使嵌入贡献加倍。
     head = 0 if cfg.get("tie_word_embeddings", True) else vocab * h
 
     total = embed + head + L * per_layer_attn + total_mlp
@@ -168,11 +168,11 @@ _CONFIG_CACHE = {}
 
 
 def _fetch_config_json(repo_id):
-    """Download and cache a repo's config.json. Returns a dict or None.
+    """下载并缓存仓库的 config.json。返回 dict 或 None。
 
-    Network / 404 / private-repo failures are swallowed — the caller already
-    has a safetensors fallback below this. We rely on huggingface_hub's own
-    on-disk cache so repeated script runs don't re-hit the Hub.
+    网络 / 404 / 私有仓库失败会被吞掉 — 调用方在此之下已有
+    safetensors 回退。我们依赖 huggingface_hub 自身的
+    磁盘缓存，因此重复运行脚本不会重新访问 Hub。
     """
     if repo_id in _CONFIG_CACHE:
         return _CONFIG_CACHE[repo_id]
@@ -182,7 +182,7 @@ def _fetch_config_json(repo_id):
         _CONFIG_CACHE[repo_id] = None
         return None
     except Exception:
-        # Network hiccup, gated repo, etc. — don't crash the bulk run.
+        # 网络波动、受限仓库等 — 不要让批量运行崩溃。
         _CONFIG_CACHE[repo_id] = None
         return None
     try:
@@ -196,7 +196,7 @@ def _fetch_config_json(repo_id):
 
 
 def _base_model_tag(tags):
-    """Return the `base_model:...` repo id from tags, if any."""
+    """从标签中返回 `base_model:...` 仓库 ID（如果有的话）。"""
     for t in (tags or []):
         if t.startswith("base_model:"):
             return t.split(":")[-1]
@@ -252,10 +252,10 @@ def _entry_from_modelinfo(mi, overrides):
     name = mi.id
     provider = name.split("/")[0]
     total, active = _parse_params(name)
-    # If the name has no size but an override supplies one, use that.
+    # 如果名称没有规模但覆盖提供了规模，使用它。
     if total is None and overrides and overrides.get("parameter_count"):
         total, _ov_active = _parse_params("x/" + overrides["parameter_count"])
-    # Next, try the base_model tag (the unquantized parent often names its size).
+    # 接下来，尝试 base_model 标签（未量化的父模型通常命名了其规模）。
     if total is None:
         bm = _base_model_tag(getattr(mi, "tags", None))
         if bm:
@@ -264,14 +264,14 @@ def _entry_from_modelinfo(mi, overrides):
                 total = bt
                 if ba and active is None:
                     active = ba
-    # Determine quant first — we need it to unpack the safetensors fallback.
+    # 首先确定量化类型 — 我们需要它来解包 safetensors 回退。
     quant = _quant_from_name(name)
-    # Next-to-last resort: parse config.json. This is robust against
-    # parameter-less repo names (e.g. "GLM-4.5" with no "9B" suffix) where
-    # both the regex and the base_model tag come up empty. We try this
-    # before safetensors so non-standard names still resolve without a
-    # per-repo manual override in EXTRA_REPOS. Source repo first (works for
-    # unquantized models) then the quantized parent via base_model:.
+    # 倒数第二步尝试：解析 config.json。这对于没有参数的仓库名称
+    # （例如 "GLM-4.5" 没有 "9B" 后缀）很可靠，当正则表达式和
+    # base_model 标签都为空时。我们在 safetensors 之前尝试此方法，
+    # 以便非标准名称仍然可以解析，而无需在 EXTRA_REPOS 中手动覆盖。
+    # 先尝试源仓库（适用于未量化模型），然后通过 base_model: 尝试
+    # 量化的父仓库。
     if total is None:
         config_targets = [name]
         bm = _base_model_tag(getattr(mi, "tags", None))
@@ -288,8 +288,8 @@ def _entry_from_modelinfo(mi, overrides):
                     active = ca
                 break
     # Last resort: read safetensors element counts. For pre-quantized repos
-    # (AWQ/GPTQ/MLX-Int4 etc.) the weights are packed: 8× 4-bit weights per
-    # I32 element, 4× 8-bit weights per I32. The bare safetensors total
+    #（AWQ/GPTQ/MLX-Int4 等），权重被打包：每个 I32 元素 8×4-bit 权重，
+    # 每个 I32 4×8-bit 权重。因此裸 safetensors 总数按相同因子
     # therefore undercounts real parameter count by the same factor, which
     # then feeds a wrong `min_vram_gb` downstream. Sum per-dtype and unpack
     # the packed I32 tensors so the catalog stores the true param count.
@@ -306,9 +306,9 @@ def _entry_from_modelinfo(mi, overrides):
                 else:
                     pack_factor = 1
                 if params_by_dtype:
-                    # I32/I64 hold the packed quantized weights; everything
-                    # else (F16/BF16 scales, zeros, embeddings) is already at
-                    # its real element count.
+                # I32/I64 保存打包的量化权重；其他所有
+                #（F16/BF16 scale、zero-point、嵌入）保持其
+                # 真实元素计数。
                     packed = sum(c for d, c in params_by_dtype.items() if d in ("I32", "I64"))
                     rest = sum(c for d, c in params_by_dtype.items() if d not in ("I32", "I64"))
                     total = packed * pack_factor + rest
@@ -317,11 +317,11 @@ def _entry_from_modelinfo(mi, overrides):
         except Exception:
             pass
     if total is None:
-        return None  # can't size it — skip
+        return None  # 无法估算规模 — 跳过
     pb = total / 1e9
     created = getattr(mi, "created_at", None)
     rel = created.strftime("%Y-%m-%d") if created else datetime.utcnow().strftime("%Y-%m-%d")
-    # Rough RAM/VRAM hints (fit.py recomputes the real requirement from params+quant).
+    # 粗略的 RAM/VRAM 提示（fit.py 从 params+quant 重新计算真实需求）。
     _BPP = {"AWQ-4bit": 0.58, "GPTQ-Int4": 0.58, "mlx-4bit": 0.55, "mlx-6bit": 0.85,
             "AWQ-8bit": 1.1, "GPTQ-Int8": 1.1, "mlx-8bit": 1.1, "FP8": 1.1,
             "FP4": 0.58, "NVFP4": 0.58, "MXFP4": 0.58, "NF4": 0.58,
@@ -352,7 +352,7 @@ def _entry_from_modelinfo(mi, overrides):
         entry["is_moe"] = True
         entry["active_parameters"] = active
     entry.update(overrides or {})
-    # If an override set parameter_count, keep parameters_raw consistent.
+    # 如果覆盖设置了 parameter_count，保持 parameters_raw 一致。
     if overrides and "parameter_count" in overrides and "parameters_raw" not in overrides:
         t2, _ = _parse_params("x/" + overrides["parameter_count"])
         if t2:

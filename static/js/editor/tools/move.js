@@ -1,12 +1,12 @@
 /**
- * Move tool — drag a layer around the canvas, with optional snap-on-Ctrl
- * to other layers' edges/centers and to canvas edges/center.
+ * 移动工具 — 在画布上拖拽图层，可选按住 Ctrl
+ * 吸附到其他图层的边缘/中心以及画布边缘/中心。
  *
- * Owns its own input handlers (begin/drag/end) and reads/writes the
- * shared `state` store directly. The factory takes a small dependency
- * bag for things that still live in galleryEditor.js — `activeLayer`,
- * `saveState`, `composite` — so this module doesn't have to know about
- * the orchestrator.
+ * 拥有自己的输入处理器（begin/drag/end），直接读写
+ * 共享的 `state` 存储。工厂函数接受一个小的依赖包，
+ * 用于仍在 galleryEditor.js 中的功能 —
+ * `activeLayer`、`saveState`、`composite` —
+ * 因此本模块无需了解协调器。
  *
  * @param {{
  *   activeLayer: () => {id: string, canvas: HTMLCanvasElement, locked?: boolean} | null,
@@ -57,9 +57,9 @@ export function createMoveTool({ activeLayer, saveState, composite }) {
       const dy = coords.y - state.moveStartY;
       let nx = state.moveLayerOffsetX + dx;
       let ny = state.moveLayerOffsetY + dy;
-      // Ctrl held = snap to canvas edges/center and to every other
-      // visible layer's edges/center. Opt-in to avoid a "sticky" feel
-      // during normal drags.
+      // Ctrl 按住 = 吸附到画布边缘/中心以及每个
+      // 可见图层的边缘/中心。选择加入以避免正常拖拽
+      // 时产生"粘滞"感。
       if (e.ctrlKey || e.metaKey) {
         const snapped = computeSnap(layer, nx, ny);
         nx = snapped.x;

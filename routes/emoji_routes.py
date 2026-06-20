@@ -1,5 +1,5 @@
 # routes/emoji_routes.py
-# Same-origin emoji SVG proxy. The frontend rewrites emoji in chat to a
+# 同源 emoji SVG 代理。前端将聊天中的 emoji 重写为
 #   <span class="emoji" style="--em:url('/api/emoji/<codepoints>.svg')">
 # which uses the returned SVG as a CSS mask tinted to the text color, so emoji
 # render as monochrome line icons (project rule: never colorful emoji). The

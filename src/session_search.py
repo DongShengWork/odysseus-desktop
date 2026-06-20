@@ -1,4 +1,4 @@
-"""Shared session transcript search for UI and agent tools."""
+"""UI 和 agent 工具共享的会话历史搜索。"""
 
 from __future__ import annotations
 
@@ -77,11 +77,11 @@ def _snippet(content: str, query: str, radius: int = 60) -> str:
 
 
 def _sanitize_fts_query(query: str) -> str | None:
-    """Convert free text into a conservative FTS5 MATCH query.
+    """将自由文本转换为保守的 FTS5 MATCH 查询。
 
-    User input can contain FTS5 operators or punctuation that raises
-    sqlite3.OperationalError. For transcript search we do not need advanced
-    syntax in v1, so keep only words and balanced quoted phrases.
+    用户输入可能包含 FTS5 运算符或标点符号，会触发
+    sqlite3.OperationalError。对于历史搜索，v1 不需要高级
+    语法，因此只保留词词和平衡的引号短语。
     """
     parts: list[str] = []
     for match in re.finditer(r'"([^"]+)"|[\w][\w._-]*', query, flags=re.UNICODE):
@@ -305,10 +305,10 @@ def search_session_messages(
     include_legacy_owner: bool = True,
     db=None,
 ) -> list[SessionSearchResult]:
-    """Search session transcripts using FTS5 when available.
+    """使用 FTS5（可用时）搜索会话历史记录。
 
-    `owner=None` is deliberately treated as legacy/null-owner scope rather
-    than global access.
+    `owner=None` 有意作为旧版/空所有者范围处理，而非
+    全局访问。
     """
     query = (query or "").strip()
     if not query:

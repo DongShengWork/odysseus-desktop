@@ -1,4 +1,4 @@
-"""Lightweight routing hints for chat requests that need tools.
+"""为需要工具的聊天请求提供轻量级路由提示。
 
 These patterns are intentionally conservative. They only promote plain chat
 to agent mode when the user asks the assistant to take an action, not when the
@@ -14,7 +14,7 @@ from typing import Iterable, Pattern
 
 @dataclass(frozen=True)
 class ToolIntent:
-    """A cheap, deterministic chat-to-agent routing decision."""
+    """一种廉价的、确定性的聊天到 agent 的路由决策。"""
 
     needs_tools: bool
     category: str = ""
@@ -49,9 +49,9 @@ _PANEL = (
 _ROUTING_PATTERNS: tuple[tuple[str, str, Pattern[str]], ...] = tuple(
     (category, reason, re.compile(pattern, re.I))
     for category, reason, pattern in (
-        # Calendar/event creation. Covers "Can you add an entry to my
-        # calendar?", imperatives like "add lunch to my calendar", and
-        # follow-ups such as "you should be able to create that event now".
+        # 日历/事件创建。涵盖"你能往我的日历里添加一项吗？"、祈使句如
+        # "把午餐加到我的日历里"，以及后续请求如
+        # "你现在应该可以创建那个事件了"。
         ("calendar", "assistant calendar action request", rf"{_ACTION_QUESTION}{_CALENDAR_ACTION}\b.{{0,120}}\b{_CALENDAR_THING}\b"),
         ("calendar", "calendar follow-up action request", rf"{_ACTION_FOLLOWUP}{_CALENDAR_ACTION}\b.{{0,120}}\b{_CALENDAR_THING}\b"),
         ("calendar", "calendar imperative action request", rf"{_PLEASE}{_CALENDAR_ACTION}\b.{{0,120}}\b{_CALENDAR_THING}\b"),
@@ -60,15 +60,15 @@ _ROUTING_PATTERNS: tuple[tuple[str, str, Pattern[str]], ...] = tuple(
         ("calendar", "calendar target action request", rf"\b{_CALENDAR_ACTION}\b.{{0,120}}\b(?:to|on|in|into|for)\s+(?:my\s+|the\s+|this\s+)?calendar\b"),
         ("calendar", "put item on calendar request", r"\bput\s+.+\bon\s+(?:my\s+)?calendar\b"),
 
-        # Calendar/event lookup. A question such as "Do I have Taekwondo
-        # classes this week?" needs the calendar tool; plain chat cannot know.
+        # 日历/事件查询。诸如"我这周有跆拳道课吗？"这种问题需要日历工具；
+        # 纯聊天无法知道答案。
         ("calendar", "calendar lookup request", rf"\b(?:list|show|check|find)\b.{{0,120}}\b(?:my\s+|the\s+)?(?:upcoming|next|today'?s?|tomorrow'?s?|this\s+week'?s?)\b.{{0,120}}\b{_CALENDAR_READ_THING}\b"),
         ("calendar", "calendar lookup question", rf"\b(?:what|which)\b.{{0,120}}\b(?:upcoming|next|today'?s?|tomorrow'?s?|this\s+week'?s?)\b.{{0,120}}\b{_CALENDAR_READ_THING}\b"),
         ("calendar", "calendar availability question", rf"\bdo\s+i\s+have\b.{{0,120}}\b(?:upcoming|next|today|tomorrow|this\s+week)\b.{{0,120}}\b{_CALENDAR_READ_THING}\b"),
         ("calendar", "calendar agenda question", r"\bwhat(?:'s| is)\s+on\s+(?:my\s+)?calendar\b"),
         ("calendar", "next calendar item question", r"\bwhen\s+(?:is|are)\s+(?:my\s+)?next\s+(?:event|meeting|appointment|class)\b"),
 
-        # Notes, todos, checklists, and reminders.
+        # 笔记、待办事项、清单和提醒。
         ("notes", "reminder request", r"\bremind\s+me\b"),
         ("notes", "assistant note/todo action request", rf"{_ACTION_QUESTION}(?:add|create|make|take|jot|write\s+down|set)\b.{{0,120}}\b(?:note|todo|task|checklist|reminder)\b"),
         ("notes", "note/todo imperative request", rf"{_PLEASE}(?:add|create|make)\s+(?:a\s+|an\s+)?(?:todo|task|reminder|note|checklist)\b"),
@@ -77,7 +77,7 @@ _ROUTING_PATTERNS: tuple[tuple[str, str, Pattern[str]], ...] = tuple(
         ("notes", "set reminder request", rf"{_PLEASE}set\s+(?:a\s+)?reminder\b"),
         ("notes", "assistant reminder request", rf"{_ACTION_QUESTION}set\s+(?:a\s+)?reminder\b"),
 
-        # Email actions.
+        # 邮件操作。
         ("email", "assistant email action request", rf"{_ACTION_QUESTION}(?:send|write|reply|email|message|archive|delete|mark)\b.{{0,120}}\b(?:emails?|mail|messages?|inbox|unread|read)\b"),
         ("email", "send/write/reply email request", rf"{_PLEASE}(?:send|write|reply)\b.{{0,120}}\b(?:emails?|mail|messages?)\b"),
         ("email", "archive/delete/mark email request", rf"{_PLEASE}(?:archive|delete|mark)\b.{{0,120}}\b(?:emails?|mail|messages?|inbox)\b"),
@@ -86,18 +86,18 @@ _ROUTING_PATTERNS: tuple[tuple[str, str, Pattern[str]], ...] = tuple(
         ("email", "check inbox request", r"\bcheck\s+(?:my\s+)?(?:email|inbox|mail)\b"),
         ("email", "unread email request", r"\bunread\s+(?:email|mail)s?\b"),
 
-        # UI/control-plane actions that should open panels or flip toggles.
+        # UI/控制面板操作，应打开面板或切换开关。
         ("ui", "open/show panel request", rf"{_PLEASE}(?:open|show|bring\s+up)\s+(?:me\s+)?(?:my\s+|the\s+)?{_PANEL}\b"),
         ("ui", "tool or feature toggle request", r"\b(?:disable|enable|turn\s+(?:on|off))\s+(?:the\s+)?(?:shell|search|web|browser|documents?|memory|skills|images?|calendar|email|mail|research|incognito)\b"),
 
-        # Deep research jobs, not quick conceptual mentions of research.
+        # 深度研究任务，而非快速提及的研究概念。
         ("web", "explicit web search request", rf"{_PLEASE}(?:do|run|use|perform|make)\s+(?:a\s+)?(?:web\s+search|search\s+the\s+web)\b.+"),
         ("web", "web lookup imperative request", rf"{_PLEASE}(?:web\s+search|search\s+the\s+web|search\s+online|look\s+up|google)\b.+"),
         ("web", "assistant web lookup request", rf"{_ACTION_QUESTION}(?:web\s+search|search\s+the\s+web|search\s+online|look\s+up|google)\b.+"),
         ("research", "deep research imperative request", rf"{_PLEASE}(?:research|deep\s+dive|look\s+into|investigate)\s+.+"),
         ("research", "assistant deep research request", rf"{_ACTION_QUESTION}(?:research|do\s+research|deep\s+dive|look\s+into|investigate)\s+.+"),
 
-        # Shell / remote-host intent.
+        # Shell / 远程主机意图。
         ("shell", "ssh request", r"\bssh\s+(?:in)?to\b"),
         ("shell", "ssh target request", r"\bssh\s+\w+"),
         ("shell", "remote command request", r"\b(run|execute)\s+.{1,40}\bon\s+\w+"),
@@ -118,7 +118,7 @@ _TOOL_INTENT_PATTERNS: tuple[Pattern[str], ...] = tuple(
 
 
 def classify_tool_intent(text: str) -> ToolIntent:
-    """Classify whether a chat message should be promoted to agent mode."""
+    """判断聊天消息是否应被提升为 agent 模式。"""
     if not text:
         return ToolIntent(False, reason="empty message")
     if _EXPLANATORY_PREFIX.search(text):
@@ -130,7 +130,7 @@ def classify_tool_intent(text: str) -> ToolIntent:
 
 
 def message_needs_tools(text: str, patterns: Iterable[Pattern[str]] = _TOOL_INTENT_PATTERNS) -> bool:
-    """Return True when a plain chat message should be promoted to agent mode."""
+    """当普通聊天消息应被提升为 agent 模式时返回 True。"""
     if not text:
         return False
     if _EXPLANATORY_PREFIX.search(text):

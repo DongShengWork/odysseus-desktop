@@ -1,5 +1,5 @@
 """
-RAG-based tool selection for agent mode.
+基于 RAG 的 tool 选择，用于 agent 模式。
 
 Instead of injecting all tool descriptions into the system prompt,
 embed them in a ChromaDB collection and retrieve only the top-K

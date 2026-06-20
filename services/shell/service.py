@@ -9,7 +9,7 @@ from pathlib import Path
 
 @dataclass
 class ShellResult:
-    """Result of a shell command."""
+    """Shell 命令的执行结果。"""
     stdout: str
     stderr: str
     exit_code: int
@@ -18,9 +18,9 @@ class ShellResult:
 
 class ShellService:
     """
-    Shell execution service.
+    Shell 执行服务。
 
-    Usage:
+    用法：
         service = ShellService()
         result = await service.execute("ls -la")
         print(result.stdout)
@@ -38,15 +38,15 @@ class ShellService:
         cwd: Optional[str] = None,
     ) -> ShellResult:
         """
-        Execute a shell command.
+        执行 Shell 命令。
 
         Args:
-            command: Shell command to run
-            timeout: Timeout in seconds (default: self.timeout)
-            cwd: Working directory (default: home)
+            command: 要运行的 Shell 命令
+            timeout: 超时时间（秒），默认使用 self.timeout
+            cwd: 工作目录，默认使用 home 目录
 
         Returns:
-            ShellResult with stdout, stderr, exit_code
+            包含 stdout、stderr、exit_code 的 ShellResult
         """
         timeout = timeout or self.timeout
         cwd = cwd or self.cwd
@@ -91,7 +91,7 @@ class ShellService:
         timeout: int = 120,
     ) -> AsyncIterator[dict]:
         """
-        Execute a command and stream output.
+        执行命令并流式输出。
 
         Yields:
             {"stream": "stdout"|"stderr", "data": line}

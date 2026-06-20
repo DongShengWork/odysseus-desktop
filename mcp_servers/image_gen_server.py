@@ -1,7 +1,7 @@
 """
 image_gen_server.py
 
-MCP server exposing image generation via OpenAI-compatible APIs.
+MCP 服务器，通过 OpenAI 兼容 API 暴露图像生成功能。
 """
 
 import asyncio
@@ -69,7 +69,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if quality == "medium" and _settings.get("image_quality"):
             quality = _settings["image_quality"]
 
-        # Auto-detect best available image model
+        # 自动检测最佳可用图像模型
         if not model_spec:
             for candidate in ("gpt-image-1.5", "gpt-image-1", "dall-e-3"):
                 try:
@@ -130,7 +130,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 img_path.write_bytes(base64.b64decode(img["b64_json"]))
                 image_url = f"{_pub_base}/api/generated-image/{filename}"
 
-                # Save to gallery
+                # 保存到画廊
                 try:
                     from src.database import SessionLocal, GalleryImage
                     db = SessionLocal()
@@ -152,8 +152,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             else:
                 return [TextContent(type="text", text="Error: Unexpected image API response format")]
 
-            # "Direct link:" rather than an "image_url:" label — small models copied the
-            # label token ("image_url") into the link href, producing a broken link.
+            # "Direct link:" 而非 "image_url:" 标签 — 小型模型会将
+            # 标签标记 ("image_url") 复制到链接 href 中，产生损坏的链接。
             result = (
                 f"Generated image for: {prompt[:100]}\n"
                 f"Direct link: {image_url}\n"

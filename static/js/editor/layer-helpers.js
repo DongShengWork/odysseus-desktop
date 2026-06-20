@@ -1,12 +1,12 @@
 /**
- * Pure helpers + constants for layers and adjustment sub-layers.
+ * 图层和调节子图层的纯辅助函数和常量。
  *
  * Everything in this module is stateless — feed in a layer object and
  * get back a value. The legacy gallery editor's module-level helpers
  * re-export from here so existing call sites keep working unchanged.
  */
 
-/** True if the layer has at least one FX/adjustment sub-layer. */
+/** 如果图层至少有一个 FX/调节子图层则返回 true。 */
 export function layerHasAdjustments(layer) {
   return !!(layer && layer.adjLayers && layer.adjLayers.length > 0);
 }
@@ -49,7 +49,7 @@ export function adjustmentsKey(adj) {
 }
 
 
-/** Identity params for each adjustment type. */
+/** 每种调节类型的恒等参数。 */
 export function defaultAdjParams(type) {
   switch (type) {
     case 'brightness-contrast': return { brightness: 1, contrast: 1 };
@@ -65,7 +65,7 @@ export function defaultAdjParams(type) {
 }
 
 
-/** Human-readable name for an adjustment type. */
+/** 调节类型的可读名称。 */
 export function adjLayerLabel(type) {
   return {
     'brightness-contrast': 'Brightness/Contrast',
@@ -89,11 +89,11 @@ export const ADJ_ICONS = {
 };
 
 
-/** SVG used in the topbar/history button glyphs. */
+/** 用于顶栏/历史记录按钮的 SVG。 */
 export const HISTORY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 16 14"/></svg>';
 
 
-/** Quick downsampled-alpha check: are there any opaque pixels on this canvas? */
+/** 快速降采样 alpha 检查：此画布上是否有不透明像素？ */
 export function isMaskCanvasEmpty(canvas) {
   if (!canvas) return true;
   try {
@@ -110,7 +110,7 @@ export function isMaskCanvasEmpty(canvas) {
 }
 
 
-/** Same as `isMaskCanvasEmpty` but accepts a layer wrapper. */
+/** 与 `isMaskCanvasEmpty` 相同，但接受图层包装器。 */
 export function isLayerEmpty(layer) {
   if (!layer || !layer.canvas) return true;
   return isMaskCanvasEmpty(layer.canvas);
@@ -118,8 +118,8 @@ export function isLayerEmpty(layer) {
 
 
 /**
- * Compact "now / 30s / 12m / 4h" relative-time string. Used in the
- * editor's history panel labels.
+ * 紧凑的"现在 / 30秒 / 12分钟 / 4小时"相对时间字符串。
+ * 用于编辑器历史面板的标签。
  */
 export function relTime(ts) {
   if (!ts) return '';

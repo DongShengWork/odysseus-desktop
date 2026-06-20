@@ -1,10 +1,10 @@
 # routes/skills_routes.py
-"""REST API for the Skills system.
+"""Skills 系统的 REST API。
 
 The on-disk format is SKILL.md (frontmatter + structured body) under
-`data/skills/<category>/<name>/`. Old shape (`title`, `problem`, `solution`,
+磁盘格式为 `data/skills/<category>/<name>/` 下的 SKILL.md（frontmatter + 结构化正文）。
 `steps`) still accepted on input — they're translated to the new fields
-(`description`, `when_to_use`, `body_extra`, `procedure`).
+它们会被转换为新字段（`description`、`when_to_use`、`body_extra`、`procedure`）。
 """
 
 import logging

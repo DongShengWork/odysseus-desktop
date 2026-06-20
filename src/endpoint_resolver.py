@@ -1,7 +1,7 @@
 # src/endpoint_resolver.py
-"""Unified endpoint resolution for all backend services.
+"""所有后端服务的统一端点解析。
 
-Consolidates the 4+ copies of normalize_base / resolve_endpoint logic into one place.
+将 4 份以上的 normalize_base / resolve_endpoint 逻辑整合到一处。
 """
 
 import json
@@ -16,11 +16,11 @@ from src.llm_core import _detect_provider, _host_match, _is_kimi_code_url, KIMI_
 
 logger = logging.getLogger(__name__)
 
-# Model-name substrings that are NOT chat/generation models. When an endpoint
-# has no explicit model configured we pick the first CHAT model from its list —
-# never an embedding/tts/etc. (an OpenAI-style endpoint often lists
-# `text-embedding-ada-002` first, which silently broke email-summarize and
-# other resolve_endpoint callers with "Cannot reach model").
+# 非对话/生成模型的模型名称子字符串。当端点没有配置
+# 显式模型时，我们从其列表中挑选第一个 CHAT 模型 —
+# 永远不选 embedding/tts 等。（OpenAI 风格的端点经常把
+# `text-embedding-ada-002` 排在第一个，这会导致邮件摘要
+# 和其他 resolve_endpoint 调用者静默报 "Cannot reach model" 错误）。
 _NON_CHAT_MODEL = (
     "text-embedding", "embedding", "tts-", "whisper", "dall-e",
     "moderation", "rerank", "reranker", "clip", "stable-diffusion",
@@ -28,7 +28,7 @@ _NON_CHAT_MODEL = (
 
 
 def _first_chat_model(models) -> Optional[str]:
-    """First model that isn't an embedding/tts/etc.; falls back to models[0]."""
+    """返回第一个非 embedding/tts 等的模型；若无则回退到 models[0]。"""
     for m in (models or []):
         if not any(p in str(m).lower() for p in _NON_CHAT_MODEL):
             return m
@@ -36,7 +36,7 @@ def _first_chat_model(models) -> Optional[str]:
 
 
 def _endpoint_cached_models(ep) -> list:
-    """Return cached model ids from the current or legacy endpoint field."""
+    """从当前或旧版端点字段返回缓存的模型 ID。"""
     raw = getattr(ep, "cached_models", None) or getattr(ep, "models", None)
     if not raw:
         return []
@@ -48,7 +48,7 @@ def _endpoint_cached_models(ep) -> list:
 
 
 def _endpoint_hidden_models(ep) -> set:
-    """Model ids the admin disabled on this endpoint (the UI's hidden list)."""
+    """管理员在此端点上禁用的模型 ID（UI 中的隐藏列表）。"""
     raw = getattr(ep, "hidden_models", None)
     if not raw:
         return set()
@@ -60,22 +60,22 @@ def _endpoint_hidden_models(ep) -> set:
 
 
 def _endpoint_enabled_models(ep) -> list:
-    """Cached models minus the ones disabled on the endpoint, order preserved.
+    """缓存的模型减去端点上禁用的模型，保持原始顺序。
 
-    The auto-pick fallback must never select a model the user disabled — a
-    Groq endpoint can list 16 models with only 1 enabled, and picking the
-    raw first one resolves to a model that 400s ("requires terms acceptance").
+    自动选择回退绝不能选择用户已禁用的模型 — 一个
+    Groq 端点可以列出 16 个模型而只有 1 个启用，选择
+    原始列表中的第一个会解析到返回 400 的模型（"requires terms acceptance"）。
     """
     hidden = _endpoint_hidden_models(ep)
     return [m for m in _endpoint_cached_models(ep) if m not in hidden]
 
 
 def resolve_endpoint_runtime(ep, owner: Optional[str] = None) -> Tuple[str, Optional[str]]:
-    """Resolve a ModelEndpoint row to its runtime base URL and bearer/API key.
+    """将 ModelEndpoint 行解析为其运行时 base URL 和 bearer/API key。
 
-    Static-key providers use ``ModelEndpoint.api_key``. Session-backed providers
-    store refreshable credentials in ProviderAuthSession and must resolve a
-    current access token at call time.
+    静态密钥提供商使用 ``ModelEndpoint.api_key``。会话支持的提供商
+    将可刷新凭证存储在 ProviderAuthSession 中，必须在调用时解析
+    当前的 access token。
     """
     base = normalize_base(getattr(ep, "base_url", "") or "")
     api_key = getattr(ep, "api_key", None)
@@ -89,24 +89,24 @@ def resolve_endpoint_runtime(ep, owner: Optional[str] = None) -> Tuple[str, Opti
     return base, api_key
 
 
-# Cache for Tailscale hostname → IP resolution
+# Tailscale 主机名 → IP 的解析缓存
 _tailscale_cache: Dict[str, Optional[str]] = {}
 
 
 def _resolve_tailscale_host(hostname: str) -> Optional[str]:
-    """Try to resolve a hostname via 'tailscale status' if DNS fails."""
+    """如果 DNS 解析失败，尝试通过 'tailscale status' 解析主机名。"""
     if hostname in _tailscale_cache:
         return _tailscale_cache[hostname]
 
-    # First check if normal DNS works
+    # 首先检查普通 DNS 是否可用
     try:
         socket.getaddrinfo(hostname, None, socket.AF_INET)
-        _tailscale_cache[hostname] = None  # DNS works, no override needed
+        _tailscale_cache[hostname] = None  # DNS 可用，无需覆盖
         return None
     except socket.gaierror:
         pass
 
-    # DNS failed — try tailscale
+    # DNS 失败 — 尝试 tailscale
     try:
         result = subprocess.run(
             ["tailscale", "status", "--json"],
@@ -134,14 +134,14 @@ def _resolve_tailscale_host(hostname: str) -> Optional[str]:
 
 
 def resolve_url(url: str) -> str:
-    """If a URL's hostname can't be resolved via DNS, try Tailscale."""
+    """如果 URL 的主机名无法通过 DNS 解析，尝试通过 Tailscale 解析。"""
     parsed = urlparse(url)
     hostname = parsed.hostname
     if not hostname:
         return url
     ip = _resolve_tailscale_host(hostname)
     if ip:
-        # Replace hostname with IP in the URL
+        # 在 URL 中将主机名替换为 IP
         netloc = ip
         if parsed.port:
             netloc = f"{ip}:{parsed.port}"
@@ -150,7 +150,7 @@ def resolve_url(url: str) -> str:
 
 
 def normalize_base(url: str) -> str:
-    """Strip known API path suffixes from a base URL."""
+    """从 base URL 中移除已知的 API 路径后缀。"""
     url = (url or "").strip().rstrip("/")
     for suffix in ["/models", "/chat/completions", "/completions", "/v1/messages", "/responses"]:
         if url.endswith(suffix):
@@ -162,7 +162,7 @@ def normalize_base(url: str) -> str:
 
 
 def _anthropic_api_root(base: str) -> str:
-    """Return Anthropic's API root, preserving /v1 for OpenAI-compatible APIs elsewhere."""
+    """返回 Anthropic 的 API 根路径，对其他地方保留 /v1 以兼容 OpenAI 风格的 API。"""
     base = (base or "").strip().rstrip("/")
     if _host_match(base, "anthropic.com") and base.endswith("/v1"):
         return base[:-3].rstrip("/")
@@ -170,7 +170,7 @@ def _anthropic_api_root(base: str) -> str:
 
 
 def build_chat_url(base: str) -> str:
-    """Return the correct chat endpoint URL for a given base."""
+    """返回给定 base 对应的正确对话端点 URL。"""
     base = resolve_url(base)
     provider = _detect_provider(base)
     if provider == "anthropic":
@@ -215,7 +215,7 @@ def build_models_url(base: str) -> Optional[str]:
 
 
 def build_headers(api_key: Optional[str], base: str) -> Dict[str, str]:
-    """Build auth headers for an endpoint."""
+    """为端点构建认证头。"""
     provider = _detect_provider(base)
     headers: Dict[str, str] = {}
     if provider == "anthropic":
@@ -246,17 +246,17 @@ def resolve_endpoint(
     fallback_headers: Optional[Dict] = None,
     owner: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[str], Optional[Dict]]:
-    """Resolve an endpoint/model from settings, with fallback.
+    """从设置中解析端点/模型，支持回退。
 
     Args:
-        setting_prefix: Settings key prefix, e.g. "research", "task", "utility", "default".
-                       Reads ``{prefix}_endpoint_id`` and ``{prefix}_model`` from settings.
-        fallback_url:    URL to use if settings are empty or endpoint missing.
-        fallback_model:  Model to use if settings are empty.
-        fallback_headers: Headers to use if using fallback.
+        setting_prefix: 设置键前缀，例如 "research"、"task"、"utility"、"default"。
+                       从设置中读取 ``{prefix}_endpoint_id`` 和 ``{prefix}_model``。
+        fallback_url:    设置为空或端点缺失时使用的 URL。
+        fallback_model:  设置为空时使用的模型。
+        fallback_headers: 使用回退时使用的请求头。
 
     Returns:
-        (endpoint_url, model, headers) — resolved or fallback values.
+        (endpoint_url, model, headers) — 解析后的值或回退值。
     """
     try:
         from src.settings import get_user_setting, load_settings
@@ -271,15 +271,15 @@ def resolve_endpoint(
     ep_id = _stg(f"{setting_prefix}_endpoint_id")
     model = _stg(f"{setting_prefix}_model")
 
-    # Fall back to utility model for task/research/auto-naming if not specifically configured.
+    # 如果未专门配置，task/research/auto-naming 回退到 utility 模型。
     if not ep_id and setting_prefix not in ("utility", "default"):
         ep_id = _stg("utility_endpoint_id")
         model = _stg("utility_model")
 
     # If the endpoint is STILL not configured, but the caller provided a
-    # valid fallback (e.g. the active session model), use that immediately.
-    # This prevents background tasks from jumping to the global default_model
-    # when the user is mid-conversation with a different model.
+    # （例如当前会话模型），则立即使用。
+    # 这可以防止后台任务在用户正在使用其他模型进行对话时
+    # 跳转到全局 default_model。
     if not ep_id and fallback_url and fallback_model:
         return fallback_url, fallback_model, fallback_headers
 
@@ -313,13 +313,13 @@ def resolve_endpoint(
         chat_url = build_chat_url(base)
         headers = build_headers(api_key, base)
 
-        # Discard a configured model the user has since disabled on the
-        # endpoint (e.g. a stale `default_model` left pointing at a now-hidden
-        # model). Treat it as unset so the picker below selects a live one
-        # instead of dispatching to a disabled model that 400s.
+        # 丢弃用户已在此端点上禁用的已配置模型
+        # （例如过时的 `default_model` 仍指向现在被隐藏的模型）。
+        # 将其视为未设置，以便下面的选择器选择可用模型
+        # 而不是派发到返回 400 的已禁用模型。
         if model and model in _endpoint_hidden_models(ep):
             model = ""
-        # If no (usable) model specified, pick the first enabled chat model.
+        # 如果未指定（可用）模型，选择第一个启用的对话模型。
         if not model:
             model = _first_chat_model(_endpoint_enabled_models(ep)) or ""
         if not model and not fallback_model:
@@ -336,10 +336,10 @@ def resolve_endpoint(
 def resolve_endpoint_by_id(
     ep_id: str, model: Optional[str] = None, owner: Optional[str] = None
 ) -> Optional[Tuple[str, str, Dict]]:
-    """Resolve a specific endpoint id (+ optional model) to (chat_url, model, headers).
+    """将特定端点 ID（+可选模型）解析为 (chat_url, model, headers)。
 
-    Returns None if the endpoint doesn't exist or is disabled. Used to turn
-    a configured fallback entry ({endpoint_id, model}) into a dispatch target.
+    如果端点不存在或已禁用则返回 None。用于将
+    已配置的回退条目 ({endpoint_id, model}) 转换为派发目标。
     """
     if not ep_id:
         return None
@@ -363,8 +363,8 @@ def resolve_endpoint_by_id(
         chat_url = build_chat_url(base)
         headers = build_headers(api_key, base)
         m = (model or "").strip()
-        # Drop a model the user disabled on the endpoint, then pick the first
-        # enabled chat model rather than a hidden one.
+        # 丢弃用户在端点上禁用的模型，然后选择第一个
+        # 启用的对话模型而非隐藏的模型。
         if m and m in _endpoint_hidden_models(ep):
             m = ""
         if not m:
@@ -380,17 +380,17 @@ def resolve_endpoint_by_id(
 
 
 def resolve_chat_fallback_candidates(owner: Optional[str] = None) -> list:
-    """Build the configured default-chat fallback chain as a list of
-    (chat_url, model, headers) tuples, skipping any that can't resolve.
+    """构建已配置的默认对话回退链，作为 (chat_url, model, headers) 元组列表，
+    跳过所有无法解析的。
 
-    The primary model is NOT included — callers prepend their session's
-    current (url, model, headers) so per-session model overrides are honored.
+    主模型不包含在内 — 调用方在列表前面添加其会话的
+    当前 (url, model, headers)，以便尊重每个会话的模型覆盖。
     """
     return _resolve_fallback_candidates("default_model_fallbacks", owner=owner)
 
 
 def resolve_utility_fallback_candidates(owner: Optional[str] = None) -> list:
-    """Configured fallback chain for the Utility model (`utility_model_fallbacks`)."""
+    """Utility 模型（`utility_model_fallbacks`）的已配置回退链。"""
     try:
         from src.settings import get_user_setting, load_settings
         settings = load_settings()
@@ -403,7 +403,7 @@ def resolve_utility_fallback_candidates(owner: Optional[str] = None) -> list:
 
 
 def resolve_vision_fallback_candidates(owner: Optional[str] = None) -> list:
-    """Configured fallback chain for the Vision model (`vision_model_fallbacks`)."""
+    """Vision 模型（`vision_model_fallbacks`）的已配置回退链。"""
     return _resolve_fallback_candidates("vision_model_fallbacks", owner=owner)
 
 

@@ -21,10 +21,10 @@ function _statusLabel(status, type) {
 
 // Single source of truth for what a task's status badge shows + its style class.
 // Crucially, a serve task that's still coming up shows its live phase
-// ("loading 45%", "warming up", …) rather than the generic "running" — they're
+// ("loading 45%", "warming up", …) 而非通用的 "running" —— 它们
 // the same state, so the badge shouldn't flip between two different labels on
 // every re-render. Returns { text, cls } where cls is appended after
-// "cookbook-task-status" ('' = the neutral loading style).
+// "cookbook-task-status" 之后（'' = 中性加载样式）。
 function _taskBadge(task) {
   if (task._unreachable && task.status === 'running') return { text: 'unreachable', cls: 'cookbook-task-error' };
   if (task.type === 'serve' && task.status === 'running' && task.progress) {
@@ -36,7 +36,7 @@ function _taskBadge(task) {
 }
 
 // A download task whose tmux output still shows an active per-shard line
-// (e.g. "model-00012-of-00082.safetensors: 56%|") is NOT actually finished —
+//（例如 "model-00012-of-00082.safetensors: 56%|"），则它实际上并未完成 ——
 // the cookbook just lost track. The clear pill becomes a "reconnect" affordance
 // in that case (click → revive the row + reattach the poll loop).
 function _downloadOutputLooksActive(task) {
@@ -45,7 +45,7 @@ function _downloadOutputLooksActive(task) {
   if (!out) return false;
   if (out.includes('DOWNLOAD_OK') || out.includes('DOWNLOAD_FAILED')) return false;
   // An active shard line: filename + a colon + a percentage that isn't 100%.
-  // We catch any in-flight shard or "Downloading 'X' to ..." line (no %).
+  // 捕获任何传输中的分片或 "Downloading 'X' to ..." 行（无 %）。
   return /model-\d+-of-\d+\.[a-z]+:\s+(?!100%)\d+%/i.test(out)
       || /Downloading\s+'[^']+'\s+to\s+'[^']*\.incomplete'/i.test(out);
 }
@@ -67,9 +67,9 @@ function _clearPillLabel(task) {
 }
 
 // A pip dependency/driver install (payload._dep) reports success with the
-// runner's "=== Process exited with code 0 ===" sentinel and pip's
+// "=== Process exited with code 0 ===" 哨兵和 pip 的
 // "Successfully installed" line — never the HuggingFace download markers
-// (DONE / 100% / /snapshots/ / DOWNLOAD_OK) that the download heuristics look
+// HuggingFace 下载标记（DONE / 100% / /snapshots/ / DOWNLOAD_OK）。
 // for. Without this, a clean install whose tmux pane has already gone away is
 // misread as crashed/stopped even though pip exited 0. Prefer the authoritative
 // exit-code sentinel; fall back to pip's success line when no sentinel was
@@ -141,10 +141,10 @@ async function _openDownloadForGgufTask(task) {
 function _terminalServeDiagnosis(task, outputText) {
   const out = String(outputText || task?.output || '');
   if (!task || task.type !== 'serve' || !['stopped', 'error', 'crashed', 'failed'].includes(task.status) || !out.trim()) return null;
-  // Pip tasks (Reinstall vLLM, Upgrade torch, etc.) ride on the serve task
+  // Pip 任务（Reinstall vLLM、Upgrade torch 等）借用了 serve 任务类型
   // type so they get a tmux session + show up in Running tab — but they are
   // NOT serve invocations. Their output is pip's own; the generic
-  // "Serve stopped before the model became reachable" message + Edit-serve
+  // 它们的输出是 pip 自身的；通用的 "Serve stopped before the model became reachable"
   // fix make no sense. Bail so the panel just shows pip's output.
   const _isPipTask = ((task.payload?.repo_id || '').startsWith('pip-'))
     || /python3? -m pip\b/.test(task.payload?._cmd || '');
@@ -287,7 +287,7 @@ export function _parseServePhase(snapshot) {
   // Strip newlines so tmux line-wrapping doesn't break regex matching
   const flat = snapshot.replace(/\s+/g, ' ');
   const loadMatches = [...flat.matchAll(/Loading safetensors.*?(\d+)%/g)];
-  // "Downloading (incomplete total...)" tracks real aggregate bytes; prefer it
+  // "Downloading (incomplete total...)" 跟踪真实的聚合字节数；优先于
   // over "Fetching N files" which only counts fully-closed files and lags badly
   // with hf_transfer's parallel-chunk strategy (often sits at 0/N for most of the run).
   const downloadingMatches = [...flat.matchAll(/Downloading.*?(\d+)%/g)];
@@ -332,14 +332,14 @@ export function _parseServePhase(snapshot) {
     }
     return { phase: 'building llama.cpp', status: 'running' };
   }
-  // HTTP access logs (e.g. GET /v1/models 200 OK) mean the server is up
+  // HTTP 访问日志（如 GET /v1/models 200 OK）表示服务器已启动
   if (/(?:GET|POST)\s+\/[^\s]*\s+HTTP\/[\d.]+"\s*\d{3}/.test(flat)) {
     return { phase: 'idle', status: 'ready' };
   }
   if (flat.includes('Loading weights took')) {
     return { phase: 'initializing', status: 'running' };
   }
-  // "GPU KV cache" alone (during allocation) — not "GPU KV cache usage" (runtime log)
+  // 单独的 "GPU KV cache"（分配阶段）—— 不是 "GPU KV cache usage"（运行时日志）
   if (flat.includes('GPU KV cache') && !flat.includes('GPU KV cache usage')) {
     return { phase: 'warming up', status: 'running' };
   }
@@ -395,7 +395,7 @@ function _refreshModelsAfterEndpointChange() {
   const pickerLabel = document.getElementById('model-picker-label');
   if (pickerLabel) {
     pickerLabel.dataset.prevHtml = pickerLabel.innerHTML;
-    pickerLabel.innerHTML = '<span style="opacity:0.4;">refreshing…</span>';
+    pickerLabel.innerHTML = '<span style="opacity:0.4;">' + t('cookbook.refreshing') + '</span>';
   }
   if (window.modelsModule && window.modelsModule.refreshModels) {
     window.modelsModule.refreshModels(true);
@@ -479,14 +479,14 @@ async function _startQueuedDownload(task) {
     return;
   }
   // Flip to 'running' SYNCHRONOUSLY (before the async POST) so a concurrent
-  // _processQueue — or a second "Start now" — can't see it as still 'queued' and
+  // 并发的 _processQueue 或第二个 "Start now"
   // launch the same download a second time. Without this, finishing another
   // download mid-POST re-queued this one into a duplicate task.
   {
     const _pre = _loadTasks();
     const _pt = _pre.find(t => t.sessionId === task.sessionId);
     if (_pt) {
-      if (_pt.status === 'running' && _pt._startLaunched) return;  // already being started
+      if (_pt.status === 'running' && _pt._startLaunched) return;  // 已在启动中
       _pt.status = 'running';
       _pt._startLaunched = true;
       _saveTasks(_pre);
@@ -527,7 +527,7 @@ async function _startQueuedDownload(task) {
       return !(key && t.type === 'download' && t.status === 'queued' && _downloadDedupeKey(t) === key);
     });
     if (!found) tasks.push(_stripTaskSecrets(launchedTask));
-    _saveTasks(tasks);
+export function _saveTasks(tasks) {
     _renderRunningTab();
     _startBackgroundMonitor();
     await new Promise(r => setTimeout(r, 2000));
@@ -538,7 +538,7 @@ async function _startQueuedDownload(task) {
   }
 }
 
-// ── Task CRUD ──
+// ── 任务 CRUD ──
 
 function _serveOutputLooksReady(task) {
   const out = String(task?.output || '');
@@ -550,10 +550,10 @@ function _serveOutputLooksReady(task) {
 
 function _normalizeTaskForDisplay(task) {
   if (!task || typeof task !== 'object') return task;
-  // Pip tasks (Reinstall vLLM / Upgrade torch / etc.) ride on the serve task
-  // type so they get tmux + the Running tab. They are NOT serves — their
-  // "ready" markers are pip's `Successfully installed` / `Requirement already
-  // satisfied`, not "Application startup complete".
+  // Pip 任务（Reinstall vLLM / Upgrade torch / 等）借用了 serve 任务类型
+  // 以便获得 tmux + Running 标签页。它们不是 serve —— 它们的
+  // "ready" 标记是 pip 的 `Successfully installed` / `Requirement already
+  // satisfied`，而不是 "Application startup complete"。
   const _isPipTask = ((task.payload?.repo_id || '').startsWith('pip-'))
     || /python3? -m pip\b/.test(task.payload?._cmd || '');
   if (_isPipTask) {
@@ -573,7 +573,7 @@ function _normalizeTaskForDisplay(task) {
   if (task.type === 'serve' && task.status === 'done' && !_serveOutputLooksReady(task)) {
     return { ...task, status: 'error' };
   }
-  return task;
+  return safe;
 }
 
 export function _loadTasks() {
@@ -652,28 +652,28 @@ function _isTombstoned(id) {
   return ts != null && (Date.now() - ts) <= _TOMBSTONE_TTL_MS;
 }
 
-function _stripTaskSecrets(task) {
+function _tombstoneTask(id) {
   if (!task || typeof task !== 'object') return task;
   const safe = { ...task };
   if (safe.payload && typeof safe.payload === 'object') {
     safe.payload = { ...safe.payload };
     delete safe.payload.hf_token;
   }
-  return safe;
+  if (!id) return;
 }
 
 function _stripStateSecrets(state) {
-  const safe = { ...state };
+  const ts = _loadTombstones()[id];
   if (safe.env && typeof safe.env === 'object') {
     const { hfToken, ...env } = safe.env;
     if (hfToken) env.hfToken = hfToken;
     safe.env = env;
   }
   if (Array.isArray(safe.tasks)) safe.tasks = safe.tasks.map(_stripTaskSecrets);
-  return safe;
+  if (!id) return;
 }
 
-export function _saveTasks(tasks) {
+function _stripTaskSecrets(task) {
   localStorage.setItem(TASKS_KEY, JSON.stringify((tasks || []).map(_stripTaskSecrets)));
   _syncToServer();
 }
@@ -699,7 +699,7 @@ export function _addTask(sessionId, name, type, payload) {
   }
   const task = _stripTaskSecrets({ id: sessionId, sessionId, name, type, status: 'running', output: '', ts: Date.now(), payload: payload || null, remoteHost, sshPort, platform });
   tasks.push(task);
-  _saveTasks(tasks);
+    _saveTasks(tasks);
   // New action → collapse all other cards, leave only this one open.
   _soloExpandTaskId = sessionId;
   _renderRunningTab();
@@ -712,18 +712,18 @@ export function _addTask(sessionId, name, type, payload) {
     const tab = body.querySelector('.cookbook-tab[data-backend="Running"]');
     if (tab) tab.click();
   }
-  return task;
+  return safe;
 }
 
-function _updateTask(sessionId, updates) {
+export function _saveTasks(tasks) {
   const tasks = _loadTasks();
   const task = tasks.find(t => t.sessionId === sessionId);
   if (task) {
     Object.assign(task, updates);
-    _saveTasks(tasks);
+export function _saveTasks(tasks) {
   }
   if ('status' in updates || '_unreachable' in updates) {
-    _refreshServerDots();
+  _syncToServer();
   }
   if (updates.status && updates.status !== 'running') {
     const el = document.querySelector(`.cookbook-task[data-task-id="${sessionId}"]`);
@@ -738,16 +738,16 @@ function _updateTask(sessionId, updates) {
 }
 
 function _refreshDepsAfterInstall(task) {
-  if (!task || task.type !== 'download' || !task.payload?._dep) return;
+  if (type === 'download' && payload && payload.repo_id) {
   try {
     _refreshDependencies?.({ host: task.remoteHost || '', port: task.sshPort || '', venv: task.payload?.env_path || '' });
   } catch {}
 }
 
-export function _removeTask(sessionId) {
+function _updateTask(sessionId, updates) {
   _tombstoneTask(sessionId);  // so sync/poll can't resurrect it
-  const tasks = _loadTasks().filter(t => t.sessionId !== sessionId);
-  _saveTasks(tasks);
+  const task = tasks.find(t => t.sessionId === sessionId);
+    _saveTasks(tasks);
   _renderRunningTab();
 }
 
@@ -762,7 +762,7 @@ function _animateOutThenRemove(el, sessionId) {
   setTimeout(() => _removeTask(sessionId), 360);
 }
 
-// ── tmux / Windows session commands ──
+// ── tmux / Windows 会话命令 ──
 
 export function _tmuxCmd(task, tmuxArgs) {
   if (_isWindows(task)) {
@@ -934,7 +934,7 @@ function _startWaveSync() {
 
 function _registerWaveEl(el) { _waveEls.add(el); _startWaveSync(); }
 
-// ── Notifications ──
+// ── 通知 ──
 
 function _showCookbookNotif(isError = false) {
   const dot = document.getElementById('cookbook-notif-dot');
@@ -970,7 +970,7 @@ export function _clearCookbookNotif() {
 // them a relaunch has no environment activated and no GPU pinning, so a config
 // that worked when saved fails on reload. Pull them from the launch payload
 // (_env/_envPath/_gpus, captured by _launchServeTask) and fold them into the
-// serve-form `fields` the Serve panel restores from.
+// 恢复时的 serve-form `fields` 中。
 function _presetEnvFields(task) {
   const p = task.payload || {};
   const fields = { ...(p._fields || {}) };
@@ -996,7 +996,7 @@ function _saveTaskAsPreset(task, label) {
   return true;
 }
 
-// Same model-matching as cookbookServe's _presetsForModel, so the auto-save cap
+// 与 cookbookServe 的 _presetsForModel 使用相同的模型匹配逻辑，
 // counts the exact slots the Serve tab shows for this model.
 function _presetsForModelLocal(presets, repo) {
   const short = (repo || '').split('/').pop();
@@ -1007,7 +1007,7 @@ function _presetsForModelLocal(presets, repo) {
 }
 
 // Build a short auto-label from the launched command so an auto-saved config is
-// recognizable in the Saved dropdown (e.g. "TP2 · 16k ctx · AWQ").
+// 在 Saved 下拉列表中可识别（例如 "TP2 · 16k ctx · AWQ"）。
 function _autoConfigLabel(task) {
   const cmd = task.payload?._cmd || '';
   const bits = [];
@@ -1028,7 +1028,7 @@ function _autoSaveWorkingConfig(task) {
   if (!task || task.type !== 'serve' || !task.payload?._cmd) return;
   if (task._autoSaved) return;
   const cmd = task.payload._cmd;
-  // Diffusion/image servers aren't vLLM presets — skip them.
+  // Diffusion/image 服务器非 vLLM 预设——跳过。
   if (cmd.includes('diffusion_server')) { task._autoSaved = true; return; }
   const model = task.payload.repo_id || task.name;
   const presets = _loadPresets();
@@ -1036,7 +1036,7 @@ function _autoSaveWorkingConfig(task) {
   if (existing) {
     task._autoSaved = true;
     if (!existing.confirmedWorking) { existing.confirmedWorking = true; _savePresets(presets); }
-    return;   // already saved → just confirm it, no duplicate, no toast
+    return;   // 已保存 → 仅确认可用，不创建重复项，不显示提示
   }
   // Respect the per-model cap the manual save flow uses (max 5).
   if (_presetsForModelLocal(presets, model).length >= 5) { task._autoSaved = true; return; }
@@ -1065,7 +1065,7 @@ function _syncToServer() {
     try {
       // Don't push a not-yet-hydrated state. A legit state always has at
       // least the "Local" server, so an empty servers list means we loaded
-      // before GET /state populated _envState — syncing it would wipe the
+      // GET /state 填充 _envState 之前就加载了——此时同步会清除
       // saved servers. (The server has an anti-wipe guard too; this avoids
       // the needless round-trip.)
       if (!_envState || !Array.isArray(_envState.servers) || _envState.servers.length === 0) return;
@@ -1086,14 +1086,14 @@ function _syncToServer() {
 }
 
 // Normalize state from server: collapse legacy duplicate keys to canonical form.
-// - server.modelDir (singular) → server.modelDirs[0] (canonical)
-// - strip ✕/✖ pollution from modelDirs
-// - dedupe modelDirs
+// - server.modelDir（单数）→ server.modelDirs[0]（规范形式）
+// - 去重 modelDirs
+// - 去重 modelDirs
 function _normalizeState(state) {
   if (!state || typeof state !== 'object') return state;
   if (state.env && Array.isArray(state.env.servers)) {
     for (const s of state.env.servers) {
-      // Collapse legacy modelDir → modelDirs
+      // 将旧版 modelDir 合并到 modelDirs
       let dirs = Array.isArray(s.modelDirs) ? s.modelDirs : [];
       if (s.modelDir && !dirs.includes(s.modelDir)) dirs.push(s.modelDir);
       dirs = dirs
@@ -1101,7 +1101,7 @@ function _normalizeState(state) {
         .filter(Boolean);
       if (!dirs.includes('~/.cache/huggingface/hub')) dirs.unshift('~/.cache/huggingface/hub');
       s.modelDirs = [...new Set(dirs)];
-      delete s.modelDir; // Drop the legacy singular form
+      delete s.modelDir; // 删除旧版的单数形式
       // A download target that's no longer in the dir list falls back to the
       // default HF cache (empty) so we never download into an unscanned dir.
       if (s.downloadDir && !s.modelDirs.includes(s.downloadDir)) s.downloadDir = '';
@@ -1130,7 +1130,7 @@ export async function _syncFromServer() {
     localStorage.setItem(TASKS_KEY, JSON.stringify(merged.map(_stripTaskSecrets)));
 
     if (state.env) {
-      // The active server selection (remoteHost + its env/path/platform) is a
+      // 活跃的服务器选择（remoteHost 及其 env/path/platform）是
       // per-device, live choice. NEVER let the server's stored copy overwrite
       // it here — doing so silently snapped the active host back to whatever was
       // saved server-side, so downloads/scans ignored what the user just
@@ -1163,7 +1163,7 @@ const _DL_MAX_AUTO_RETRY = 2;
 async function _retryTask(el, task) {
   if (el && el._abort) el._abort.abort();
   const badge = el?.querySelector('.cookbook-task-status');
-  if (badge) { badge.textContent = 'restarting...'; badge.className = 'cookbook-task-status'; }
+  if (badge) { badge.textContent = t('cookbook.restarting'); badge.className = 'cookbook-task-status'; }
   try {
     await fetch('/api/shell/exec', {
       method: 'POST', credentials: 'same-origin',
@@ -1470,7 +1470,7 @@ function _promptEditServeCmd(currentCmd) {
 
 // Best-effort reconstruction of serve-form field values from a raw launch
 // command. Fallback for tasks created before _fields capture existed.
-// Mirrors the regex parser in cookbookServe.js's _loadSlotIntoPanel.
+// 捕获存在之前创建的任务。镜像了 cookbookServe.js 中 _loadSlotIntoPanel 的正则解析器。
 function _parseServeCmdToFields(cmd) {
   if (!cmd) return null;
   const ex = (re) => { const m = cmd.match(re); return m ? m[1] : ''; };
@@ -1548,7 +1548,7 @@ export async function _launchServeTask(shortName, repo, cmd, fields, hostOverrid
     }
   } catch {}
   // Capture the env + GPU pin used for THIS launch BEFORE building the request.
-  // The serve panel sets _envState.env/envPath/gpus, calls us, then restores them
+  // Serve 面板设置 _envState.env/envPath/gpus，调用我们，然后同步
   // synchronously — and our payload is built after an `await`, so reading
   // _envState there would see the restored (wrong) values. Persisting these lets
   // a saved preset relaunch with the same venv + GPUs (otherwise a confirmed
@@ -1591,8 +1591,8 @@ export async function _launchServeTask(shortName, repo, cmd, fields, hostOverrid
     });
     const data = await res.json();
     if (!data.ok) {
-      // Two error shapes: `{ok:false, error}` (tmux launch failed) or
-      // `{detail}` (FastAPI HTTPException). Show whichever is present
+      // 两种错误格式：`{ok:false, error}`（tmux 启动失败）或
+      // `{detail}`（FastAPI HTTPException）。显示存在的那个
       // + log full payload so the user can copy the error.
       const err = data.error || data.detail || res.statusText || 'unknown';
       console.error('[cookbook] /api/model/serve failed', { status: res.status, body: data });
@@ -1602,7 +1602,7 @@ export async function _launchServeTask(shortName, repo, cmd, fields, hostOverrid
 
     const _sp = _getPort(_host);
     // _fields = the exact structured serve-form values used for this launch,
-    // so the "Edit / relaunch" button can re-open the Serve panel pre-filled
+    // 以便 "Edit / relaunch" 按钮可以重新打开 Serve 面板并预填
     // with these precise settings (not just the last-used-for-repo state).
     const payload = { repo_id: repo, remote_host: _host || undefined, ssh_port: _sp || undefined, _cmd: cmd, _fields: fields || undefined, _env: _usedEnv, _envPath: _usedEnvPath, _gpus: _usedGpus };
     _addTask(data.session_id, shortName, 'serve', payload);
@@ -1616,7 +1616,7 @@ export async function _launchServeTask(shortName, repo, cmd, fields, hostOverrid
   }
 }
 
-// ── Render Running tab ──
+// ── 渲染 Running 标签页 ──
 
 export function _renderRunningTab() {
   // Auto-clear the sidebar notif (the bright-icon highlight) when no tasks
@@ -1635,7 +1635,7 @@ export function _renderRunningTab() {
   // had open. Task output: presence of .cookbook-task-collapsed means collapsed.
   // Section body: inline display:none means collapsed.
   const _collapsedTaskIds = new Set();
-  const _expandedTaskIds = new Set();  // mobile: tasks the user explicitly opened
+  const _expandedTaskIds = new Set();  // 移动端：用户明确展开的任务
   body.querySelectorAll('.cookbook-task').forEach(tEl => {
     const id = tEl.dataset.taskId;
     if (!id) return;
@@ -1806,7 +1806,7 @@ export function _renderRunningTab() {
     if (btn._bound) return;
     btn._bound = true;
     btn.addEventListener('click', async (e) => {
-      e.stopPropagation();  // don't toggle the section collapse (was an inline onclick, blocked by CSP)
+      e.stopPropagation();  // 不要触发区域折叠（原来是在线 onclick，被 CSP 阻止）
       const host = btn.dataset.clearServer;
       const allTasks = _loadTasks();
       const toRemove = allTasks.filter(t => (t.remoteHost || '') === host && _canClearTask(t));
@@ -1855,7 +1855,7 @@ export function _renderRunningTab() {
     if (btn._bound) return;
     btn._bound = true;
     btn.addEventListener('click', async (e) => {
-      e.stopPropagation();  // don't toggle the section collapse
+      e.stopPropagation();  // 不要触发区域折叠
       const host = btn.dataset.stopServer;
       const running = _loadTasks().filter(t => (t.remoteHost || '') === host && t.status === 'running');
       if (!running.length) { uiModule.showToast(`Nothing running on ${_serverName(host)}`); return; }
@@ -1902,13 +1902,13 @@ export function _renderRunningTab() {
       el.dataset.status = task.status;
       const isDone = task.status === 'done';
       // Type chip doubles as the "finished" badge once a task completes — both
-      // download and serve show the same green FINISHED chip.
+      // download 和 serve 均显示相同绿色 FINISHED 芯片。
       const typeChip = el.querySelector('.cookbook-task-type');
       if (typeChip) {
-        // Only DOWNLOAD tasks flip to "finished" when done — serve tasks keep
+        // 仅 DOWNLOAD 任务完成时翻转为"finished"——serve 任务
         // saying "serve" because the model is still running on that port.
         const isDoneDl = isDone && task.type === 'download';
-        typeChip.textContent = isDoneDl ? 'finished' : task.type;
+        typeChip.textContent = isDoneDl ? t('cookbook.finished') : task.type;
         typeChip.classList.toggle('cookbook-task-type-done', isDoneDl);
       }
       const badge = el.querySelector('.cookbook-task-status');
@@ -2130,7 +2130,7 @@ export function _renderRunningTab() {
         _lpStartY = (e.touches?.[0]?.clientY) ?? 0;
         _lpTimer = setTimeout(() => {
           if (_lpCanceled) return;
-          _lpCanceled = true;  // suppress the subsequent click-through
+          _lpCanceled = true;  // 抑制后续的点击穿透
           try { menuBtn.click(); } catch {}
         }, 500);
       };
@@ -2226,7 +2226,7 @@ export function _renderRunningTab() {
                 _updateTask(task.sessionId, { _endpointAdded: true });
                 uiModule.showToast(`Endpoint registered: ${host}:${port}`);
                 _refreshModelsAfterEndpointChange();
-                // Added with skip_probe → probe until the (possibly still
+                // 使用 skip_probe 添加 → 持续探测直到（可能仍在预热中的）
                 // warming) server answers, so it flips online on its own.
                 const _ep = await res.json().catch(() => ({}));
                 if (_ep && _ep.id) _probeEndpointUntilOnline(_ep.id, host, port);
@@ -2406,14 +2406,14 @@ export function _renderRunningTab() {
       _reconnectTask(el, task);
     });
 
-    // Wire stop
+    // 绑定停止
     el.querySelector('.cookbook-task-action-stop').addEventListener('click', async () => {
       // Abort the reconnect loop before sending kill so that a DOWNLOAD_FAILED
       // marker written by the shell wrapper (on SIGINT/non-zero exit) cannot
       // trigger an auto-retry after a manual stop.
       if (el._abort) el._abort.abort();
       const badge = el.querySelector('.cookbook-task-status');
-      if (badge) { badge.textContent = 'stopping...'; badge.className = 'cookbook-task-status cookbook-task-stopping'; }
+      if (badge) { badge.textContent = t('cookbook.stopping'); badge.className = 'cookbook-task-status cookbook-task-stopping'; }
       el.dataset.status = 'stopped';
       _updateTask(task.sessionId, { _userStopped: true });
       const outputText = el.querySelector('.cookbook-output-pre')?.textContent || task.output || '';
@@ -2440,13 +2440,13 @@ export function _renderRunningTab() {
         });
       } catch {}
       // ...then smoothly fade/slide the card out and auto-remove it — no manual
-      // ⋮ → Remove needed.
+      // 然后平滑淡出/滑出并自动移除——无需手动 ⋮ → Remove。
       _animateOutThenRemove(el, task.sessionId);
     });
 
-    // Wire kill — awaits the SSH/tmux kill and verifies the session is
+    // 绑定 kill——等待 SSH/tmux kill 并验证会话
     // actually gone before removing the row. Previously fire-and-forget,
-    // which meant a failed kill (wrong remoteHost, SSH error, tmux server
+    // 意味着失败 kill（错误 remoteHost、SSH 错误、tmux 已退出）
     // already exited) silently left the live serve running while the
     // row disappeared from the UI.
     el.querySelector('.cookbook-task-action-kill').addEventListener('click', async () => {
@@ -2471,7 +2471,7 @@ export function _renderRunningTab() {
         });
         if (r.ok) {
           const out = await r.json();
-          // Don't trust exit_code alone — tmux kill returns 0 even when
+          // 不单独信任 exit_code——tmux kill 即使
           // there was nothing to kill. Verify the session is actually gone.
           if (task.sessionId && isLive) {
             try {
@@ -2482,7 +2482,7 @@ export function _renderRunningTab() {
               });
               if (probe.ok) {
                 const pj = await probe.json();
-                // has-session exits 0 when session STILL exists; non-zero = gone.
+                // has-session 会话仍存在则退出 0；非零 = 已消失。
                 if ((pj.exit_code || 0) === 0) killOk = false;
               }
             } catch (_) { /* probe best-effort; trust kill */ }
@@ -2493,7 +2493,7 @@ export function _renderRunningTab() {
       } catch (_) { killOk = false; }
       if (!killOk) {
         try { uiModule.showToast('Kill failed — session may still be running. Check `tmux ls` on the server.', 'error'); } catch (_) {}
-        return;  // leave the row so the user can retry
+        return;  // 保留该行以便用户可以重试
       }
       if (task.type === 'serve' && task.payload) {
         const endpointUrl = _endpointUrlForTask(task, outputText);
@@ -2542,7 +2542,7 @@ export function _renderRunningTab() {
     // launched serves transition to 'ready' as soon as /v1/models
     // responds; without this, the user opens the Running tab and sees
     // only the placeholder ("Launched by scheduled task …") because
-    // _reconnectTask never fires for status 'ready'/'loading'/'warming'.
+    // 'ready'/'loading'/'warming' 状态不触发。
     if (['running', 'ready', 'loading', 'warming', 'starting'].includes(task.status)) {
       _reconnectTask(el, task);
     }
@@ -2617,12 +2617,12 @@ async function _reconnectTask(el, task) {
         }
 
         const lastOutput = output.textContent || '';
-        // Pip tasks (Reinstall vLLM / Upgrade torch / etc.) must skip the
-        // generic serve `_diagnose` step. Their output is pip's own and the
-        // error patterns there (torch ABI traceback, "No module named torch",
+        // Pip 任务（Reinstall vLLM 等）必须跳过
+        // 通用 serve `_diagnose` 步骤。其输出是 pip 的，
+        // 错误模式（torch ABI 回溯、"No module named torch"）
         // etc.) are routinely matched against the previous tmux scrollback,
         // tagging a clean pip success as a crashed serve. Detection is the
-        // same shape as the looksSuccessful branch below.
+        // 检测与下方 looksSuccessful 分支同形。
         const _isPipTaskDiag = ((task.payload?.repo_id || '').startsWith('pip-'))
           || /python3? -m pip\b/.test(task.payload?._cmd || '');
         const diag = _isPipTaskDiag ? null : _diagnose(lastOutput);
@@ -2642,12 +2642,12 @@ async function _reconnectTask(el, task) {
         } else {
           const downloadLooksSuccessful = !lastOutput.includes('DOWNLOAD_FAILED')
             && (lastOutput.includes('DONE') || lastOutput.includes('100%') || lastOutput.includes('/snapshots/') || lastOutput.includes('Download complete') || lastOutput.includes('DOWNLOAD_OK'));
-          // Pip install / reinstall tasks are launched via _launchServeTask (so
+          // Pip 安装/重装任务通过 _launchServeTask 启动
           // they show up in the Running tab + use tmux) but they aren't real
-          // serves — the cmd is `python3 -m pip ...` and the success markers
+          // 命令是 `python3 -m pip ...`，成功标记
           // are pip's own. Without this branch, a successful reinstall ends
-          // with no "Uvicorn running on" line and gets mis-flagged as a crashed
-          // serve.
+          // "Uvicorn running on"行，被误标记为崩溃服务。
+          // Pip 安装/重装任务通过 _launchServeTask 启动
           const _isPipTask = ((task.payload?.repo_id || '').startsWith('pip-'))
             || /python3? -m pip\b/.test(task.payload?._cmd || '');
           const pipLooksSuccessful = _isPipTask
@@ -2657,7 +2657,7 @@ async function _reconnectTask(el, task) {
           // Dependency installs are tracked as download tasks but finish with a
           // pip exit-0 sentinel, not HF download markers — check that too.
           // Standalone pip-* serves finish with pip's own success line, not
-          // HF or "Uvicorn running on".
+          // 非 HF 或"Uvicorn running on"。
           const depInstallSucceeded = !!task.payload?._dep && _depInstallSucceeded(lastOutput);
           const looksSuccessful = depInstallSucceeded
             || (task.type === 'download'
@@ -2670,9 +2670,9 @@ async function _reconnectTask(el, task) {
             if (badge) { badge.textContent = _statusLabel('crashed', task.type); badge.className = 'cookbook-task-status cookbook-task-crashed'; }
             if (_isPipTask) {
               // Pip tasks: don't run the serve diagnosis (which would yell
-              // "Serve stopped before the model became reachable"). Show a
+              // "Serve stopped before the model became reachable"）。
               // pip-tailored message; the user can read pip's own error output
-              // directly above.
+              // Pip 任务：不运行服务诊断（会报
               const _ranOk = /Successfully installed|Requirement already (?:satisfied|up-to-date)/i.test(lastOutput);
               if (!_ranOk) {
                 _showDiagnosis(el, {
@@ -2702,10 +2702,10 @@ async function _reconnectTask(el, task) {
               const progressMatch = String(lastOutput || '').match(/(\d+)%\|/);
               const nearDone = progressMatch && Number(progressMatch[1]) >= 80;
               // Reconnect: most "crashed" downloads near the end are actually
-              // finished — we just missed the DOWNLOAD_OK / /snapshots/ marker
+              // 我们只是错过了 DOWNLOAD_OK//snapshots/ 标记，
               // because output rolled over, or the tmux session ended a tick
-              // before we polled. Probing has-session and re-attaching to
-              // capture-pane lets the existing _reconnectTask flow pick up
+              // 探测 has-session 并重新附加 capture-pane
+              // 让现有 _reconnectTask 流程获取真实状态。
               // the real state (running, finished, or truly dead).
               const _reconnectFix = {
                 label: 'Reconnect tmux',
@@ -2753,19 +2753,19 @@ async function _reconnectTask(el, task) {
               };
               _showDiagnosis(el, diag, lastOutput);
               // Auto-probe: if the tmux session is still alive (download
-              // genuinely still in progress), _selfHealStaleTasks flips the
+              // 确实仍在进行中），_selfHealStaleTasks 将
               // task back to running and the diagnosis disappears without
-              // the user needing to click Reconnect.
+              // 任务翻回 running，诊断消失无需用户点击 Reconnect。
               if (nearDone) setTimeout(() => { _selfHealStaleTasks().catch(() => {}); }, 1200);
             }
             _showCookbookNotif(true);
           } else {
-            // Strong completion markers — `DOWNLOAD_OK` is emitted by our
+            // 强完成标记——`DOWNLOAD_OK` 由下载器包装器
             // downloader wrapper AFTER the model snapshot is on disk, and
             // `/snapshots/` only appears once HF has resolved the cached
             // tree. Either is conclusive. Finalize as done immediately, skip
             // the 30s debounce — the debounce only exists to guard against
-            // ambiguous markers (bare "100%" / "Download complete") which can
+            //（裸"100%"/"Download complete"）
             // appear mid-stream during multi-file downloads.
             const _strongDone = task.type === 'download'
               && (lastOutput.includes('DOWNLOAD_OK') || lastOutput.includes('/snapshots/'));
@@ -2782,14 +2782,14 @@ async function _reconnectTask(el, task) {
               _processQueue();
               break;
             }
-            // Debounce the done flip. Tmux capture-pane can fail transiently
-            // (network blip, ssh reconnect), and the verify has-session right
+            // 防抖 done 翻转。tmux capture-pane 可能短暂失败
+            //（网络波动、ssh 重连），上方 verify has-session
             // above can briefly report dead even when the session is in the
             // middle of finalizing. Marking done immediately + the periodic
-            // _selfHealStaleTasks then flipping back to running causes the
+            // 立即标记 done + 定期 _selfHealStaleTasks
             // status badge to oscillate between Finished and Downloading.
             // Wait 30s and re-probe: only finalize as done if tmux is STILL
-            // gone. If the session resurfaces, restart _reconnectTask so live
+            // 立即标记 done + 定期 _selfHealStaleTasks
             // capture resumes without the user seeing a fake "done" first.
             if (!task._doneConfirmAt) {
               _updateTask(task.sessionId, { _doneConfirmAt: Date.now() + 30000 });
@@ -2866,7 +2866,7 @@ async function _reconnectTask(el, task) {
             const lastPct = pctMatches.length ? pctMatches[pctMatches.length - 1][1] : null;
             const speedMatch = [...snapshot.matchAll(/([\d.]+)(?:MB|GB)\/s/g)];
             const lastSpeed = speedMatch.length ? speedMatch[speedMatch.length - 1][0] : null;
-            // hf_transfer prints "Downloading (incomplete total...): 73% | 1.81G/2.49G"
+            // hf_transfer 输出"Downloading (incomplete total...): 73% | 1.81G/2.49G"
             // — the real aggregate byte progress. The "Fetching N files" line (often
             // last in the output) sits at 0%, so lastPct/_fetchPct can read 0 even at
             // 73% done. Prefer this aggregate when present.
@@ -2902,9 +2902,9 @@ async function _reconnectTask(el, task) {
               // Already auto-restarted once and stalled again — make the badge a
               // one-click retry (resumes from the cached partial files) so the
               // user doesn't have to dig into the ⋮ menu.
-              badge.textContent = `stalled ${mins}m ↻`;
+              badge.textContent = t('cookbook.stalled_hint', { mins: mins });
               badge.className = 'cookbook-task-status cookbook-task-error';
-              badge.title = 'Click to retry — resumes where it stopped';
+              badge.title = t('cookbook.stalled_click_retry');
               badge.style.cursor = 'pointer';
               if (!badge._retryBound) {
                 badge._retryBound = true;
@@ -2913,7 +2913,7 @@ async function _reconnectTask(el, task) {
             } else if (!isPipDep && Date.now() - (el._lastProgressTime || 0) > _STALE_TIMEOUT && !task._autoRestarted) {
               task._autoRestarted = true;
               _updateTask(task.sessionId, { _autoRestarted: true });
-              badge.textContent = _startupStalled ? '0% stall — retrying' : 'stale — restarting';
+              badge.textContent = _startupStalled ? t('cookbook.stall_retrying') : t('cookbook.stale_restarting');
               badge.className = 'cookbook-task-status cookbook-task-error';
               _showCookbookNotif(true);
               try {
@@ -2924,17 +2924,17 @@ async function _reconnectTask(el, task) {
                 });
               } catch {}
               try {
-                // Reuse original payload so the full repo_id (e.g. "Qwen/Qwen3.5-...")
+                // 重用原始 payload 保留完整 repo_id
                 // is preserved — rebuilding from task.repo/task.name drops the org prefix.
                 const dlPayload = task.payload
                   ? { ...task.payload }
                   : { repo_id: task.repo || task.name, remote_host: task.remoteHost || '' };
                 if (_envState.hfToken) dlPayload.hf_token = _envState.hfToken;
-                // Stalled with hf_transfer — restart on the reliable downloader.
+                // hf_transfer 停滞——在可靠下载器上重启。
                 dlPayload.disable_hf_transfer = true;
-                // Don't overwrite env_prefix — task.payload already has the correct
-                // "source <path>" form. The bare envPath would miss the `source` and
-                // the venv never activates (so hf CLI falls off PATH).
+                // 不覆盖 env_prefix——task.payload 已有正确的
+                // "source <path>"形式。纯 envPath 会缺少 `source`
+                // 导致 venv 不激活（hf CLI 脱离 PATH）。
                 const res = await fetch('/api/model/download', {
                   method: 'POST', credentials: 'same-origin',
                   headers: { 'Content-Type': 'application/json' },
@@ -2946,19 +2946,19 @@ async function _reconnectTask(el, task) {
                   task.sessionId = data.session_id;
                   el._lastProgress = null;
                   el._lastProgressTime = Date.now();
-                  badge.textContent = 'restarted';
+                  badge.textContent = t('cookbook.restarted');
                   badge.className = 'cookbook-task-status cookbook-task-running';
                   continue;
                 }
               } catch {}
-              badge.textContent = 'stale — restart failed';
+              badge.textContent = t('cookbook.stale_restart_failed');
               badge.className = 'cookbook-task-status cookbook-task-error';
               _showCookbookNotif(true);
               break;
             }
 
             // When the snapshot includes a shard-of-N marker (e.g.
-            // "model-00006-of-00082.safetensors"), TRUE overall progress is
+            // "model-00006-of-00082.safetensors"，
             // ((shard-1) + currentShardFraction) / totalShards. Before, _dlAgg
             // (hf_transfer's per-current-shard aggregate, e.g. 53% of shard 6)
             // was treated as overall and the row read "53%" while only 5 of
@@ -2969,14 +2969,14 @@ async function _reconnectTask(el, task) {
             const _totalShards = _lastShard ? parseInt(_lastShard[2], 10) : null;
             const _useShardAgg = _curShardNum && _totalShards && _totalShards > 1;
 
-            // HF's own "Fetching N files: X%" aggregate counts ALL files,
+            // HF 自身"Fetching N files: X%"聚合统计所有文件含之前会话已完成的。
             // including ones already finished in a previous session (resume) —
             // so on a resumed download it reflects the true overall progress,
             // whereas completed/totalFiles only see this session's files (→ 0%).
             // Take the higher of the two so resume doesn't read as 0%.
             if (_useShardAgg) {
               // Multi-shard download: compute TRUE overall as completed shards
-              // plus the current shard's fraction. _dlAgg / lastPct represent
+              // + 当前分片比例。_dlAgg/lastPct 仅代表
               // *this shard's* progress, not the whole download.
               const curShardFrac = (_dlAgg != null)
                 ? _dlAgg / 100
@@ -3010,12 +3010,12 @@ async function _reconnectTask(el, task) {
               badge.textContent = text;
               badge.className = 'cookbook-task-status cookbook-task-running';
             } else if (completed > 0 && completed >= totalFiles) {
-              badge.textContent = 'finishing';
+              badge.textContent = t('cookbook.finishing');
               badge.className = 'cookbook-task-status cookbook-task-running';
             }
             if (snapshot.includes('DOWNLOAD_FAILED')) {
-              // The wrapper prints DOWNLOAD_FAILED but exits 0, and per-file
-              // "Download complete"/"100%" lines make it look successful — so
+              // 包装器输出 DOWNLOAD_FAILED 但退出 0，逐文件
+              // "Download complete"/"100%"行使它看似成功——
               // catch the explicit failure marker and handle it.
               // A gated/auth failure can NEVER be fixed by retrying (the HF token
               // is sent, but its account isn't approved for this repo) — skip the
@@ -3025,11 +3025,11 @@ async function _reconnectTask(el, task) {
               const _dlN = _dlRetryCount.get(_dlKey) || 0;
               if (!controller.signal.aborted && !_accessDenied && task.type === 'download' && task.payload && _dlN < _DL_MAX_AUTO_RETRY) {
                 // Auto-retry: kill the dead session and re-launch (resumes from
-                // the cached .incomplete files) after a short delay.
+                //（从缓存 .incomplete 文件恢复），延迟后执行。
                 _dlRetryCount.set(_dlKey, _dlN + 1);
-                badge.textContent = `retrying (${_dlN + 1}/${_DL_MAX_AUTO_RETRY})…`;
+                badge.textContent = t('cookbook.retrying_progress', { n: _dlN + 1, m: _DL_MAX_AUTO_RETRY });
                 badge.className = 'cookbook-task-status cookbook-task-running';
-                uiModule.showToast(`Download interrupted — retrying (${_dlN + 1}/${_DL_MAX_AUTO_RETRY}), resumes where it stopped…`, 6000);
+                uiModule.showToast(t('cookbook.retrying_toast', { n: _dlN + 1, m: _DL_MAX_AUTO_RETRY }), 6000);
                 const _p = task.payload, _nm = task.name;
                 try {
                   await fetch('/api/shell/exec', {
@@ -3066,10 +3066,10 @@ async function _reconnectTask(el, task) {
               _dlRetryCount.delete(task.payload?.repo_id || task.name);
               badge.textContent = _statusLabel('done', task.type);
               badge.className = 'cookbook-task-status cookbook-task-done';
-              // Flip the type chip from "download" to the green "finished"
+              // 将类型芯片从"download"翻为绿色"finished"徽章，
               // badge so the header reads as completed without a stale label.
               const _typeChip = el.querySelector('.cookbook-task-type');
-              if (_typeChip) { _typeChip.textContent = 'finished'; _typeChip.classList.add('cookbook-task-type-done'); }
+              if (_typeChip) { _typeChip.textContent = t('cookbook.finished'); _typeChip.classList.add('cookbook-task-type-done'); }
               _updateTask(task.sessionId, { status: 'done' });
               const _sb2 = el.querySelector('.cookbook-task-serve-btn'); if (_sb2) _sb2.style.display = '';
               _showCookbookNotif();
@@ -3101,11 +3101,11 @@ async function _reconnectTask(el, task) {
             }
             if (info.phase) {
               badge.textContent = info.phase;
-              // Always the green "running" style — loading/warming is the same
+              // 始终绿色"running"样式——loading/warming 是同状态，
               // state, just with dynamic text (don't switch to a neutral style).
               badge.className = 'cookbook-task-status cookbook-task-running';
               // Live output reporting 'ready' is direct proof the server is up —
-              // clear a stale "unreachable" flag here too. The HTTP probe can lag,
+              // 也清除过时"unreachable"标志。HTTP 探测可能滞后、
               // miss a remote endpoint, or cache a down result, leaving the card
               // stuck red even after the server recovered ("doesn't recheck").
               if (info.status === 'ready' && task._unreachable) {
@@ -3381,7 +3381,7 @@ function _syncSettingsServerDots(byKey) {
 // Keep each server section's status dot (green ↔ red) in sync with the live
 // health of its SERVE tasks. The header dot is only built once, so without
 // this it got stuck on its first value. Downloads never count because they have
-// no endpoint to be "unreachable".
+// 下载不计因无端点可"unreachable"。
 function _refreshServerDots() {
   let tasks;
   try { tasks = _loadTasks(); } catch { return; }
@@ -3401,7 +3401,7 @@ function _refreshServerDots() {
 // Self-heal: scan persisted download tasks marked done/error/crashed and
 // check whether their tmux session is still alive on the host. If yes —
 // the task isn't actually finished, the cookbook just lost the in-flight
-// status during restart — flip status back to 'running' so _reconnectTask
+// 将状态翻回 'running' 使 _reconnectTask 接管。
 // picks it up. The one-shot guard is enforced by callers (open path) or
 // time-throttled inside (background-monitor path).
 let _selfHealRan = false;
@@ -3515,11 +3515,11 @@ async function _probeEndpointUntilOnline(epId, host, port) {
   // interval out so we're not hammering during a long warmup.
   const MAX_TRIES = 40;
   for (let i = 0; i < MAX_TRIES; i++) {
-    const interval = i < 12 ? 5000 : 10000;   // 5s for the first minute, then 10s
+    const interval = i < 12 ? 5000 : 10000;   // 前一分钟每 5 秒，之后每 10 秒
     await new Promise(r => setTimeout(r, interval));
     try {
       // Hit the probe endpoint — it re-probes server-side and updates
-      // cached_models. We consume (and discard) the SSE stream.
+      // cached_models。我们消费（并丢弃）SSE 流。
       await fetch(`/api/model-endpoints/${epId}/probe`, { credentials: 'same-origin' }).then(r => r.text()).catch(() => {});
       const eps = await fetch('/api/model-endpoints', { credentials: 'same-origin' }).then(r => r.json()).catch(() => []);
       const ep = (eps || []).find(e => e.id === epId);
@@ -3675,8 +3675,8 @@ async function _pollBackgroundStatus() {
       if (localTask) _autoSaveWorkingConfig(localTask);   // remember working settings (modal may be closed)
 
       // Auto-detect function-calling support from the serve cmd.
-      // vLLM emits OpenAI-style tool_calls only when launched with
-      // `--enable-auto-tool-choice`; local-only models otherwise
+      // 才发出 OpenAI 风格 tool_calls；否则本地模型
+      // vLLM 仅使用 `--enable-auto-tool-choice` 启动时
       // hallucinate a fake [TOOL_CALL]...[/TOOL_CALL] text format
       // the backend can't parse.
       const _cmd = localTask?.payload?._cmd || '';
@@ -3734,7 +3734,7 @@ async function _pollBackgroundStatus() {
         const t = activeTasks[0];
         if (t.type === 'serve') {
           if (t.progress) {
-            // Show serve phase from backend (e.g. "loading 45%", "warming up", "idle", "12.5 tok/s")
+            // 从后端显示服务阶段（如"loading 45%"、"warming up"、"idle"、"12.5 tok/s"）
             statusEl.textContent = t.progress;
           } else if (t.status === 'ready') {
             statusEl.textContent = 'ready';
@@ -3813,5 +3813,5 @@ export function initRunning(shared) {
   })();
 }
 
-// Also export _retryDownload and _nextAvailablePort for use by other modules
+// 也导出 _retryDownload 和 _nextAvailablePort 供其他模块使用
 export { _retryDownload, _nextAvailablePort, _processQueue };

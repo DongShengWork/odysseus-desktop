@@ -1,47 +1,47 @@
-"""SKILL.md parser & writer.
+"""SKILL.md 解析器与写入器。
 
-Reads/writes a single skill from a `SKILL.md` file with YAML frontmatter
-and a structured markdown body. Inspired by Hermes' skills format
-(https://hermes-agent.nousresearch.com/docs/user-guide/features/skills).
+读取/写入单个 skill 的 `SKILL.md` 文件，包含 YAML 前置元数据
+和结构化的 Markdown 正文。灵感来源于 Hermes 的 skills 格式
+(https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)。
 
-Frontmatter shape (YAML):
+前置元数据结构 (YAML):
 
     ---
     name: open-pr-from-branch
-    description: One-line summary surfaced in the skills index.
+    description: 在技能索引中展示的单行摘要。
     version: 1.0.0
     category: dev
     tags: [git, github]
-    platforms: [linux, macos]            # optional
-    requires_toolsets: []                # optional
-    fallback_for_toolsets: []            # optional
+    platforms: [linux, macos]            # 可选
+    requires_toolsets: []                # 可选
+    fallback_for_toolsets: []            # 可选
     status: published                    # draft | published
     confidence: 0.8                      # 0..1
     source: learned                      # learned | taught | imported
-    teacher_model: claude-opus-4-7       # optional
+    teacher_model: claude-opus-4-7       # 可选
     created: 2026-05-09T21:43:00Z
     ---
 
-Body sections (any subset; rendered as headings):
+正文节（任意组合；渲染为标题）:
 
     ## When to Use
-    Trigger conditions in plain English.
+    用简洁英文描述的触发条件。
 
     ## Procedure
-    1. First step
-    2. Second step
+    1. 第一步
+    2. 第二步
 
     ## Pitfalls
-    - Common failure mode + how to recover
+    - 常见失败模式 + 如何恢复
 
     ## Verification
-    - How to confirm success
+    - 如何确认成功
 
-    Anything else (raw paragraphs after the last known section) is preserved
-    in `body_extra` and round-trips on save.
+    其余内容（最后一个已知节后之间的原始段落）保留在
+    `body_extra` 中，并在保存时完整往返。
 
-Usage counters (`uses`, `last_used`) live in a sidecar `_usage.json` keyed
-by skill name, so the SKILL.md file doesn't churn on every retrieval.
+使用计数器（`uses`, `last_used`）存储在 `_usage.json` 侧文件中，
+按技能名称索引，这样 SKILL.md 文件不会在每次检索时发生变动。
 """
 
 from __future__ import annotations
@@ -63,9 +63,9 @@ _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
 def slugify(text: str, fallback: str = "skill") -> str:
-    """Convert a free-form title to a kebab-case slug suitable for a directory
-    name. Strips non-alphanumerics, collapses runs, trims leading/trailing
-    dashes. Caps at 60 chars."""
+    """将自由格式的标题转换为适合目录名的 kebab-case 格式。
+    去除非字母数字字符、合并连续重复、去除首尾
+    连字符。最大 60 字符。"""
     s = str(text or "").strip().lower()
     s = _SLUG_RE.sub("-", s)
     s = s.strip("-")
@@ -73,12 +73,12 @@ def slugify(text: str, fallback: str = "skill") -> str:
 
 
 # ---------------------------------------------------------------------------
-# Frontmatter (minimal YAML — we don't pull in PyYAML for one feature)
+# 前置元数据（最小 YAML — 我们不为此引入 PyYAML 依赖）
 # ---------------------------------------------------------------------------
 
-# We accept a tiny subset of YAML: scalar `key: value`, inline lists `[a, b]`,
-# and block lists with `-`. That covers everything in our schema and avoids
-# a new dependency.
+# 我们接受 YAML 的微小子集：标量 `key: value`、内联列表 `[a, b]`、
+# 和以 `-` 开头的块列表。这涵盖了我们的全部模式，并避免了
+# 新增依赖。
 
 _FM_KEY_RE = re.compile(r"^([a-z_][a-z0-9_]*):\s*(.*)$", re.IGNORECASE)
 _FM_BLOCK_LIST_RE = re.compile(r"^\s*-\s*(.*)$")
@@ -101,7 +101,7 @@ def _parse_scalar(raw: str) -> Any:
         return None
     if (raw[0] == raw[-1]) and raw[0] in ("'", '"'):
         return raw[1:-1]
-    # Try number
+    # 尝试解析为数字
     try:
         if "." in raw:
             return float(raw)
@@ -112,7 +112,7 @@ def _parse_scalar(raw: str) -> Any:
 
 
 def _split_top_level(s: str, sep: str) -> List[str]:
-    """Split `s` on `sep` ignoring separators inside [] or quotes."""
+    """按 `sep` 分割 `s`，忽略 [] 或引号内的分隔符。"""
     out, buf, depth, quote = [], [], 0, None
     for ch in s:
         if quote:
@@ -139,7 +139,7 @@ def _split_top_level(s: str, sep: str) -> List[str]:
 
 
 def parse_frontmatter(text: str) -> tuple[Dict[str, Any], str]:
-    """Pull the YAML frontmatter out of a SKILL.md and return (fm, body)."""
+    """从 SKILL.md 中提取 YAML 前置元数据，返回 (fm, body)。"""
     if not text.startswith("---"):
         return {}, text
     end = text.find("\n---", 3)
@@ -211,7 +211,7 @@ def emit_frontmatter(fm: Dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Skill body sections
+# 技能正文节
 # ---------------------------------------------------------------------------
 
 _KNOWN_SECTIONS = ("when_to_use", "procedure", "pitfalls", "verification")
@@ -231,15 +231,15 @@ _KEY_TO_HEADING = {
 
 
 def parse_body(body: str) -> Dict[str, Any]:
-    """Split a SKILL.md body into known sections.
+    """将 SKILL.md 正文拆分为已知节。
 
     Returns:
         {
             "when_to_use": str,
-            "procedure":   list[str],   # numbered/bulleted lines
+            "procedure":   list[str],   # 编号/项目符号行
             "pitfalls":    list[str],
             "verification": list[str],
-            "body_extra":  str,         # anything not under a known heading
+            "body_extra":  str,         # 不在已知标题下的任何内容
         }
     """
     out = {k: ([] if k != "when_to_use" else "") for k in _KNOWN_SECTIONS}
@@ -283,7 +283,7 @@ def _parse_list_lines(text: str) -> List[str]:
         if m:
             items.append(m.group(1).strip())
         elif items:
-            # continuation of previous bullet
+            # 上一条项目符号的延续
             items[-1] = items[-1] + " " + s
         else:
             items.append(s)
@@ -312,13 +312,13 @@ def emit_body(sections: Dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Skill record
+# 技能记录
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class Skill:
-    name: str                                          # slug, dir name
+    name: str                                          # slug，目录名
     description: str = ""
     version: str = "1.0.0"
     category: str = "general"
@@ -331,20 +331,20 @@ class Skill:
     source: str = "learned"
     teacher_model: Optional[str] = None
     owner: Optional[str] = None
-    created: str = ""                                  # ISO8601
+    created: str = ""                                  # ISO8601 格式
     when_to_use: str = ""
     procedure: List[str] = field(default_factory=list)
     pitfalls: List[str] = field(default_factory=list)
     verification: List[str] = field(default_factory=list)
     body_extra: str = ""
-    # Sidecar (not persisted in SKILL.md)
+    # 侧文件信息（不持久化到 SKILL.md 中）
     uses: int = 0
     last_used: Optional[int] = None
-    # File path on disk (set when read)
+    # 磁盘上的文件路径（读取时设置）
     path: Optional[str] = None
 
     # ----------------------------------------------------------------------
-    # Serialization
+    # 序列化
     # ----------------------------------------------------------------------
 
     def to_frontmatter(self) -> Dict[str, Any]:
@@ -392,7 +392,7 @@ class Skill:
             "last_used": self.last_used,
             "path": self.path,
         }
-        # Back-compat aliases for the old API/UI
+        # 为旧 API/UI 提供向后兼容的别名
         d["title"] = self.description or self.name.replace("-", " ").title()
         d["problem"] = self.when_to_use
         d["solution"] = (self.procedure[0] if self.procedure else "") if not self.body_extra else self.body_extra

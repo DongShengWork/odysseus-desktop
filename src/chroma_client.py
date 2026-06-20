@@ -1,8 +1,8 @@
 """
 chroma_client.py
 
-Singleton ChromaDB HTTP client.
-Connects to a ChromaDB instance running as a standalone service.
+单例 ChromaDB HTTP 客户端。
+连接到作为独立服务运行的 ChromaDB 实例。
 """
 
 import os
@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 
 _client = None
 
-# A short connect probe so an unreachable ChromaDB fails fast instead of
-# blocking on the OS connection timeout (~30-60s, WinError 10060 on Windows),
-# which otherwise stalls app startup. Tunable via CHROMADB_CONNECT_TIMEOUT.
+# 短连接探针，使无法访问的 ChromaDB 快速失败，而不是
+# 阻塞在操作系统连接超时上（~30-60s，Windows 上为 WinError 10060），
+# 否则会延迟应用启动。可通过 CHROMADB_CONNECT_TIMEOUT 配置。
 _CONNECT_TIMEOUT = float(os.getenv("CHROMADB_CONNECT_TIMEOUT", "2.0"))
 
 
 def _port_open(host: str, port: int, timeout: float = None) -> bool:
-    """Return True if a TCP connection to host:port succeeds within timeout."""
+    """如果在超时内成功建立到 host:port 的 TCP 连接，则返回 True。"""
     try:
         with socket.create_connection((host, port), timeout=timeout or _CONNECT_TIMEOUT):
             return True
@@ -29,10 +29,10 @@ def _port_open(host: str, port: int, timeout: float = None) -> bool:
 
 
 def get_chroma_client():
-    """Get or create the singleton ChromaDB HTTP client.
+    """获取或创建单例 ChromaDB HTTP 客户端。
 
-    Raises RuntimeError with a clear install hint if the `chromadb` package
-    is not installed — it's an optional dependency (RAG + memory vectors).
+    如果 `chromadb` 包未安装则抛出 RuntimeError 并附带清晰的安装提示 —
+    它是可选依赖（RAG + memory vectors）。
     """
     global _client
     if _client is not None:
@@ -58,9 +58,9 @@ def get_chroma_client():
 
     client = chromadb.HttpClient(host=host, port=port)
 
-    # Health check before caching — if the port is open but the service isn't
-    # healthy yet (e.g. still starting), don't poison the singleton with a dead
-    # client; leave _client unset so the next call retries.
+    # 缓存前先做健康检查 — 如果端口开放但服务尚未就绪
+    # （例如仍在启动中），不要用无效的客户端污染单例；
+    # 保持 _client 未设置，让下次调用重试。
     client.heartbeat()
     _client = client
     logger.info(f"ChromaDB connected: {host}:{port}")
@@ -68,6 +68,6 @@ def get_chroma_client():
 
 
 def reset_client():
-    """Reset the singleton (e.g. after config change)."""
+    """重置单例（例如配置更改后）。"""
     global _client
     _client = None

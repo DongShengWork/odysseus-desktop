@@ -1,4 +1,4 @@
-"""Search routes — /api/search/config GET, /api/search POST."""
+"""搜索路由 — /api/search/config GET、/api/search POST。"""
 
 import logging
 from typing import Dict, Any

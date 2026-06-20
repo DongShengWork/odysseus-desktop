@@ -1,5 +1,5 @@
 # services/memory/__init__.py
-"""Memory service — persistent memory storage and retrieval."""
+"""记忆服务 — 持久化记忆存储与检索。"""
 
 from .service import MemoryService, Memory, MemorySearchResult
 from .memory import MemoryManager

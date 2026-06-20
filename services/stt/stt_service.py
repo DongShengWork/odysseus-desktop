@@ -12,20 +12,20 @@ logger = logging.getLogger(__name__)
 
 
 class STTService:
-    """Multi-provider STT service.
+    """多提供商 STT 服务。
 
-    Reads provider config from data/settings.json on each call.
-    Providers:
-      "disabled"        — no STT
-      "browser"         — client-side Web Speech API (no server transcription)
-      "local"           — faster-whisper on CPU/GPU
-      "endpoint:<id>"   — OpenAI-compatible /audio/transcriptions via ModelEndpoint
+    每次调用时从 data/settings.json 读取提供商配置。
+    提供商：
+      "disabled"        — 无 STT
+      "browser"         — 客户端 Web Speech API（无服务端转录）
+      "local"           — faster-whisper（CPU/GPU）
+      "endpoint:<id>"   — 通过 ModelEndpoint 的 OpenAI 兼容 /audio/transcriptions
     """
 
     def __init__(self):
-        self._whisper_model = None  # lazy-init
+        self._whisper_model = None  # 延迟初始化
 
-    # ── Settings ──
+    # ── 设置 ──
 
     def _load_settings(self) -> dict:
         from src.settings import load_settings
@@ -46,14 +46,14 @@ class STTService:
         if provider == "disabled":
             return False
         if provider == "browser":
-            return True  # handled client-side
+            return True  # 由客户端处理
         if provider == "local":
             return self._get_whisper() is not None
         if provider.startswith("endpoint:"):
-            return True  # assume reachable
+            return True  # 假定可连接
         return False
 
-    # ── Local Whisper ──
+    # ── 本地 Whisper ──
 
     def _get_whisper(self):
         if self._whisper_model is None:
@@ -65,14 +65,14 @@ class STTService:
             try:
                 settings = self._load_settings()
                 model_size = settings.get("stt_model", "base")
-                # faster-whisper runs on CTranslate2, not torch. torch is only
-                # used (optionally) to detect a CUDA device for acceleration —
-                # if it's missing or unusable we just run on CPU. Keeping this
-                # probe separate (and tolerant of any failure, e.g. a broken
-                # CUDA/torch install that raises OSError on import) means a
-                # torch-less or torch-broken machine still does CPU
-                # transcription instead of failing with a misleading
-                # "faster-whisper not installed" error.
+                # faster-whisper 运行在 CTranslate2 上，而非 torch。torch 仅
+                # （可选）用于检测 CUDA 设备以加速 —
+                # 如果 torch 缺失或不可用就直接用 CPU。将此探测
+                # 保持独立（并容忍任何失败，例如损坏的
+                # CUDA/torch 安装在导入时抛出 OSError），意味着
+                # 无 torch 或 torch 损坏的机器仍然进行 CPU
+                # 转录，而不是以误导性的
+                # "faster-whisper not installed" 错误失败。
                 try:
                     import torch
                     use_cuda = torch.cuda.is_available()
@@ -93,7 +93,7 @@ class STTService:
             return None
         tmp_path = None
         try:
-            # Write to temp file (faster-whisper needs a file path or file-like)
+            # 写入临时文件（faster-whisper 需要文件路径或类文件对象）
             with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
                 tmp.write(audio_bytes)
                 tmp_path = tmp.name
@@ -114,7 +114,7 @@ class STTService:
             if tmp_path:
                 Path(tmp_path).unlink(missing_ok=True)
 
-    # ── API endpoint ──
+    # ── API 端点 ──
 
     def _transcribe_api(self, audio_bytes: bytes, endpoint_id: str, model: str, language: str = "") -> Optional[str]:
         from src.database import SessionLocal, ModelEndpoint
@@ -151,7 +151,7 @@ class STTService:
             logger.error(f"API STT transcription failed: {e}")
             return None
 
-    # ── Public interface ──
+    # ── 公共接口 ──
 
     def transcribe(self, audio_bytes: bytes) -> Optional[str]:
         settings = self._load_settings()
@@ -177,7 +177,7 @@ class STTService:
         settings = self._load_settings()
         provider = settings["stt_provider"]
         stt_enabled = settings.get("stt_enabled", False)
-        # If toggle is off, report as disabled
+        # 如果开关关闭，报告为已禁用
         effective_provider = provider if stt_enabled else "disabled"
 
         stats = {
@@ -198,7 +198,7 @@ class STTService:
         return stats
 
 
-# Module-level singleton
+# 模块级单例
 _stt_service = None
 
 def get_stt_service() -> STTService:

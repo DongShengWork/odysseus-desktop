@@ -1,17 +1,17 @@
 /**
- * Transform-tool session lifecycle + floating popup wiring.
+ * 变换工具会话生命周期 + 浮动弹窗接线。
  *
- *   _startTransform        snapshot the active layer + open popup
- *   _openTransformPopup    build the W/H/rotation popup, wire inputs
- *   _wireTransformDrag     header drag, mobile + desktop position handling
- *   _reapplyTransform      live preview re-render from the snapshot
- *   _confirmTransform      commit + clear session state
- *   _cancelTransform       restore via undo() + clear session state
+ *   _startTransform        快照活动图层 + 打开弹窗
+ *   _openTransformPopup    构建 W/H/旋转弹窗，连接输入
+ *   _wireTransformDrag     标题栏拖拽，移动端 + 桌面端位置处理
+ *   _reapplyTransform      从快照实时预览重新渲染
+ *   _confirmTransform      提交 + 清除会话状态
+ *   _cancelTransform       通过 undo() 恢复 + 清除会话状态
  *
- * Handle-drag interactions on the CANVAS (corner / rotation grip) live
- * in `editor/tools/transform-drag.js` — those mutate the same staged
- * `state.transformPending*` fields that the popup inputs do, so both
- * surfaces stay in sync via `_reapplyTransform()`.
+ * 画布上的手柄拖拽交互（角点/旋转把手）位于
+ * `editor/tools/transform-drag.js` — 那些交互会修改与弹窗输入
+ * 相同的暂存 `state.transformPending*` 字段，
+ * 因此两者通过 `_reapplyTransform()` 保持同步。
  *
  * @param {{
  *   activeLayer:           () => object | null,
@@ -43,7 +43,7 @@ export function createTransformSession({
   function startTransform() {
     const layer = activeLayer();
     if (!layer || layer.locked) { uiModule.showToast('Select an unlocked layer'); return; }
-    if (state.transformActive) { cancelTransform(); return; } // toggle off
+    if (state.transformActive) { cancelTransform(); return; } // 切换关闭
     state.transformActive = true;
     state.transformLayer = layer;
     state.transformOrigW = layer.canvas.width;
@@ -53,18 +53,18 @@ export function createTransformSession({
     state.transformPendingRot = 0;
     state.transformPendingFlipH = false;
     state.transformPendingFlipV = false;
-    // Snapshot the layer so live preview can re-derive from the
-    // original pixels on every keystroke instead of stacking
-    // destructive edits.
+    // 对图层进行快照，这样每次按键时都可以从
+    // 原始像素重新派生实时预览，而不是累积
+    // 破坏性的编辑。
     state.transformOrigCanvas = document.createElement('canvas');
     state.transformOrigCanvas.width = state.transformOrigW;
     state.transformOrigCanvas.height = state.transformOrigH;
     state.transformOrigCanvas.getContext('2d').drawImage(layer.canvas, 0, 0);
     state.transformOrigOffset = { ...(state.layerOffsets.get(layer.id) || { x: 0, y: 0 }) };
     saveState();
-    // Fit canvas to viewport so the corner handles are visible —
-    // without this, a layer larger than the viewport leaves the grab
-    // markers off-screen.
+    // 将画布适配到视口，使角点手柄可见 —
+    // 否则，大于视口的图层会导致抓取
+    // 标记在屏幕外。
     try { fitZoom(); } catch {}
     composite();
     drawTransformHandles();
@@ -78,10 +78,10 @@ export function createTransformSession({
     }
   }
 
-  // Floating Transform popup — horizontal layout, draggable via its
-  // header, anchored over the right panel (layers area) by default
-  // so it doesn't cover the canvas. Lets the user type exact W/H/Rot
-  // and flip via negative values.
+  // 浮动变换弹窗 — 水平布局，可通过标题栏拖拽，
+  // 默认锚定在右侧面板（图层面板区域）上方，
+  // 这样就不会遮挡画布。让用户可以输入精确的 W/H/旋转值
+  // 并通过负值翻转。
   function openTransformPopup() {
     closeTransformPopup();
     if (!state.container) return;
@@ -101,10 +101,10 @@ export function createTransformSession({
     aspectBtn.classList.toggle('active', state.transformAspectLock);
     aspectBtn.setAttribute('aria-pressed', state.transformAspectLock ? 'true' : 'false');
 
-    // Aspect-lock follower model: while the lock is engaged, ONE
-    // field is the "driver" and the other is read-only + dimmed.
-    // Driver = whichever field the user last typed in. Toggling the
-    // chain releases the follower.
+    // 宽高比锁定跟随模型：锁定启用时，一个字段
+    // 是"主导"，另一个是只读 + 变暗。
+    // 主导 = 最后用户输入的字段。切换
+    // 锁定会释放跟随者。
     let driver = null;
     const applyAspectVisuals = () => {
       if (!state.transformAspectLock || !driver) {
@@ -165,21 +165,21 @@ export function createTransformSession({
       state.transformAspectLock = !state.transformAspectLock;
       aspectBtn.classList.toggle('active', state.transformAspectLock);
       aspectBtn.setAttribute('aria-pressed', state.transformAspectLock ? 'true' : 'false');
-      // Reset follower the moment the user breaks the lock so both
-      // fields go editable; re-engaging means "next type sets the driver".
+      // 在用户打破锁定的瞬间重置跟随者，
+      // 使两个字段都可编辑；重新启用意味着"下次输入设置主导"。
       driver = null;
       applyAspectVisuals();
     });
     pop.querySelector('#ge-transform-apply').addEventListener('click', () => confirmTransform());
     pop.querySelector('#ge-transform-cancel').addEventListener('click', () => cancelTransform());
     pop.querySelector('#ge-transform-cancel-btn')?.addEventListener('click', () => cancelTransform());
-    // Minimise — collapses the body so only the header is visible.
+    // 最小化 — 折叠主体，只显示标题栏。
     pop.querySelector('#ge-transform-min')?.addEventListener('click', (e) => {
       e.stopPropagation();
       pop.classList.toggle('ge-transform-popup-minimised');
     });
-    // Quick actions: flip W/H via sign so the reapply pipeline picks
-    // up the new orientation. Rotate-90 nudges rotation ±90°.
+    // 快捷操作：通过正负号翻转 W/H，使重新应用管线
+    // 获取新的方向。Rotate-90 将旋转值 ±90°。
     pop.querySelector('#ge-transform-flip-h')?.addEventListener('click', () => {
       const wIn = pop.querySelector('#ge-transform-w');
       const cur = parseInt(wIn.value, 10) || state.transformOrigW;
@@ -200,9 +200,9 @@ export function createTransformSession({
       while (next > 180) next -= 360;
       while (next <= -180) next += 360;
       rIn.value = String(next);
-      // Big images: rotation pass blocks UI ~0.5–2 s. Show a spinner
-      // so the user sees something happen. rAF defers the heavy work
-      // past the current frame so the overlay paints first.
+      // 大图片：旋转过程会阻塞 UI 约 0.5-2 秒。显示一个加载动画
+      // 让用户看到有事情发生。rAF 将繁重的工作
+      // 推迟到当前帧之后，使覆盖层先绘制。
       showCanvasLoading('Rotating…');
       requestAnimationFrame(() => {
         try { rIn.dispatchEvent(new Event('input', { bubbles: true })); }
@@ -212,9 +212,9 @@ export function createTransformSession({
     attachSpinRepeat(pop);
   }
 
-  // Header-drag for the Transform popup. Default position: over the
-  // right panel (layers area). Mobile pins via stylesheet so we use
-  // setProperty 'important' to override during drag.
+  // 变换弹窗的标题栏拖拽。默认位置：在
+  // 右侧面板（图层面板区域）上方。移动端通过样式表固定，
+  // 我们使用 setProperty 'important' 覆盖拖拽时的位置。
   function wireTransformDrag(pop) {
     const isMobile = window.matchMedia('(max-width: 820px)').matches;
     const defaultRight = 20;
@@ -310,9 +310,9 @@ export function createTransformSession({
     document.addEventListener('touchcancel', endDrag);
   }
 
-  // Re-derive the active layer's pixels from the original snapshot
-  // with the popup's current W/H/flip/rotation applied. Cheap —
-  // paints into an off-screen canvas of the final size.
+  // 从原始快照重新派生活动图层的像素，应用
+  // 弹窗当前的 W/H/翻转/旋转值。成本低 —
+  // 绘制到最终尺寸的离屏画布上。
   function reapplyTransform() {
     const layer = state.transformLayer;
     if (!layer || !state.transformOrigCanvas) return;
@@ -322,8 +322,8 @@ export function createTransformSession({
     const rotRad = (rotDeg * Math.PI) / 180;
     const cos = Math.abs(Math.cos(rotRad));
     const sin = Math.abs(Math.sin(rotRad));
-    // Bounding box of the rotated W×H — canvas grows so corners
-    // don't clip.
+    // 旋转后 W×H 的边界框 — 画布扩大
+    // 以防止角点被裁剪。
     const finalW = Math.max(1, Math.round(w * cos + h * sin));
     const finalH = Math.max(1, Math.round(w * sin + h * cos));
     const tmp = document.createElement('canvas');
@@ -341,7 +341,7 @@ export function createTransformSession({
     layer.canvas.height = finalH;
     layer.ctx.clearRect(0, 0, finalW, finalH);
     layer.ctx.drawImage(tmp, 0, 0);
-    // Recenter the layer so the rotation pivot stays put visually.
+    // 重新居中图层，使旋转轴在视觉上保持原位。
     const origCenterX = state.transformOrigOffset.x + state.transformOrigW / 2;
     const origCenterY = state.transformOrigOffset.y + state.transformOrigH / 2;
     state.layerOffsets.set(layer.id, {
@@ -367,7 +367,7 @@ export function createTransformSession({
     closeTransformPopup();
     state.transformOrigCanvas = null;
     state.transformOrigOffset = null;
-    if (state.transformLayer) undo(); // restore saved state
+    if (state.transformLayer) undo(); // 恢复保存的状态
     state.transformActive = false;
     state.transformLayer = null;
     state.transformHandle = null;

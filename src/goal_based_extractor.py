@@ -1,6 +1,6 @@
 # src/goal_based_extractor.py
 """
-Goal-based content extraction prompt inspired by Alibaba Tongyi DeepResearch.
+受阿里巴巴通义 DeepResearch 启发的目标导向内容提取提示词。
 """
 
 EXTRACTOR_SYSTEM = """Extract relevant information from a webpage for a given research goal.

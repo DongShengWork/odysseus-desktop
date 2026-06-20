@@ -1,9 +1,9 @@
 /**
  * AI inpaint subsystem — Generate, Remove, and Outpaint variants
- * all share a single `runInpaint` core; only the prompt, strength,
+ * 共享一个 `runInpaint` 核心；仅 prompt、strength 和按钮目标不同。
  * and button-target differ. Returns a wireInpaintButtons() function
  * to attach handlers to the three buttons (#ge-inpaint-run,
- * #ge-inpaint-remove, #ge-inpaint-outpaint).
+ * (#ge-inpaint-run, #ge-inpaint-remove, #ge-inpaint-outpaint)。
  *
  *   runInpaint:
  *     - Build a union mask from every visible mask sub-layer (across
@@ -11,15 +11,15 @@
  *       not just the currently-active mask.
  *     - Dilate the mask ~padPx so the model fills a buffer zone the
  *       post-gen Feather/Edge slider can fade into.
- *     - POST flattened canvas + dilated mask to /api/image/inpaint.
+ *     - 将展平后的画布 + 膨胀后的蒙版 POST 到 /api/image/inpaint。
  *     - Drop the result as a new layer, snapshot the AI image + hard
  *       mask on the layer for live edge tuning, hide every
  *       contributing mask sub-layer, reveal the post-gen Feather +
  *       Edge Stroke sliders capped at ±padPx.
  *
- *   Remove: detects OpenAI vs SDXL backend and swaps the prompt
- *     (gpt-image-1 follows "remove …" semantically; SDXL has to be
- *     prompted with a fill description + strength 0.99).
+ *   Remove: 检测 OpenAI 与 SDXL 后端并切换 prompt
+ *     （gpt-image-1 按语义理解 "remove …"；SDXL 需要
+ *     填充描述 + strength 0.99 来提示）。
  *
  *   Outpaint: auto-generates a mask covering empty (transparent)
  *     regions of the flattened composite, dilates it 12px inward
@@ -48,17 +48,17 @@ export function wireInpaintButtons({
   saveState, createLayer, composite, renderLayerPanel,
   spinnerModule, uiModule,
 }) {
-  // Shared inpaint runner — used by Generate, Remove, and Outpaint.
+  // 共享的 inpaint 运行器 — 用于生成、移除和扩图。
   async function runInpaint({ prompt, strength, btnId, labelId, idleLabel, busyLabel }) {
     // Pre-check: build the union mask the AI will receive and verify
     // at least one pixel is painted.
     const preMerged = buildMergedMaskCanvas();
-    if (!preMerged) { if (uiModule) uiModule.showToast('Draw the area you want to inpaint first'); return; }
+    if (!preMerged) { if (uiModule) uiModule.showToast('先绘制你想要修复的区域'); return; }
     const pmCtx = preMerged.getContext('2d');
     const maskData = pmCtx.getImageData(0, 0, preMerged.width, preMerged.height).data;
     let hasMask = false;
     for (let i = 3; i < maskData.length; i += 4) { if (maskData[i] > 0) { hasMask = true; break; } }
-    if (!hasMask) { if (uiModule) uiModule.showToast('Draw the area you want to inpaint first'); return; }
+    if (!hasMask) { if (uiModule) uiModule.showToast('先绘制你想要修复的区域'); return; }
     const btn = document.getElementById(btnId);
     const btnLabel = labelId ? document.getElementById(labelId) : null;
     btn.disabled = true;
@@ -68,7 +68,7 @@ export function wireInpaintButtons({
       runWp = spinnerModule.createWhirlpool(14);
       runWp.element.style.cssText = 'margin:0;flex-shrink:0;';
       btn.appendChild(runWp.element);
-    } catch (_) { /* spinner is optional */ }
+    } catch (_) { /* spinner 是可选的 */ }
     // Canvas-overlay whirlpool — visual feedback right where the
     // user's working, since the run button lives in the side panel
     // and may be out of view at high zoom. Positioned over the
@@ -79,7 +79,7 @@ export function wireInpaintButtons({
       const area = state.container && state.container.querySelector('.ge-canvas-area');
       const mainRect = state.mainCanvas.getBoundingClientRect();
       if (area && mainRect.width && mainRect.height) {
-        // Find the mask's bbox so we can centre the whirlpool over it.
+        // 找到蒙版的边界框以便将旋转动画居中。
         let cx = state.imgWidth / 2, cy = state.imgHeight / 2;
         try {
           const merged = buildMergedMaskCanvas();
@@ -107,9 +107,9 @@ export function wireInpaintButtons({
         document.body.appendChild(canvasWpEl);
         canvasWp.start();
       }
-    } catch (_) { /* overlay is decorative */ }
+    } catch (_) { /* 叠加层仅为装饰 */ }
     try {
-      // Flatten current image.
+      // 展平当前图像。
       const flatCanvas = document.createElement('canvas');
       flatCanvas.width = state.imgWidth; flatCanvas.height = state.imgHeight;
       const flatCtx = flatCanvas.getContext('2d');
@@ -151,7 +151,7 @@ export function wireInpaintButtons({
       }
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      if (!data.image) throw new Error('No image returned from inpaint endpoint');
+      if (!data.image) throw new Error('inpaint 端点未返回图像');
       // Load result as a new layer and clip with the user-drawn mask
       // so only the inpainted region is visible. Cache the
       // unfeathered (AI image + hard mask) on the layer so the live
@@ -159,20 +159,20 @@ export function wireInpaintButtons({
       // without re-running the model.
       const resultImg = new Image();
       resultImg.onload = () => {
-        if (!state.editorOpen) return; // user closed mid-decode
+        if (!state.editorOpen) return; // 用户在解码中途关闭了
         try {
-          saveState('Inpaint result');
-          // OpenAI returns at one of its allowed sizes (1024²,
-          // 1024×1536, 1536×1024) which often differs from our
-          // canvas. Scale to canvas size with smoothing so the
-          // inpaint blends in regardless of source dims.
+          saveState('Inpaint 结果');
+          // OpenAI 返回其允许的尺寸之一（1024²、1024×1536、
+          // 1536×1024），这些尺寸通常与我们的画布不同。
+          // 使用平滑缩放将结果缩放到画布尺寸，以便无论
+          // 源尺寸如何都能无缝融合。
           const shortPrompt = (prompt || '').trim().replace(/\s+/g, ' ').slice(0, 40);
-          const layerName = shortPrompt ? `Inpaint: ${shortPrompt}` : 'Inpaint Result';
+          const layerName = shortPrompt ? `Inpaint: ${shortPrompt}` : 'Inpaint 结果';
           const resultLayer = createLayer(layerName, state.imgWidth, state.imgHeight);
           resultLayer.ctx.imageSmoothingEnabled = true;
           resultLayer.ctx.imageSmoothingQuality = 'high';
           resultLayer.ctx.drawImage(resultImg, 0, 0, state.imgWidth, state.imgHeight);
-          // Snapshot the AI result + hard mask used for this run.
+          // 快照此次运行所用的 AI 结果 + 硬蒙版。
           const aiSnap = document.createElement('canvas');
           aiSnap.width = state.imgWidth; aiSnap.height = state.imgHeight;
           aiSnap.getContext('2d').drawImage(resultLayer.canvas, 0, 0);
@@ -181,29 +181,29 @@ export function wireInpaintButtons({
           maskSnap.height = state.maskCanvas.height;
           maskSnap.getContext('2d').drawImage(state.maskCanvas, 0, 0);
           resultLayer.inpaintSource = { ai: aiSnap, mask: maskSnap, padPx };
-          // Apply initial alpha = hard mask (no feather, no edge shift).
+          // 应用初始 alpha = 硬蒙版（无羽化，无边缘偏移）。
           applyInpaintFeather(resultLayer, 0, 0);
           state.layers.push(resultLayer);
           state.activeLayerId = resultLayer.id;
           state.lastInpaintLayerId = resultLayer.id;
-          // Hide every mask sub-layer that contributed to the
-          // generation so the red overlay doesn't cover the result —
-          // but KEEP the mask pixels intact, and reflect "hidden"
-          // on each sub-row's eye icon.
+          // 隐藏所有参与生成的蒙版子图层，
+          // 这样红色叠加层不会覆盖结果 —
+          // 但保留蒙版像素完整，并在每个子行的眼睛图标
+          // 上反映"隐藏"状态。
           for (const ly of state.layers) {
             if (!ly.masks || !ly.masks.length) continue;
             for (const mk of ly.masks) mk.visible = false;
           }
           composite();
           renderLayerPanel();
-          // Reveal post-generation Feather + Edge Stroke sliders.
-          // Cap Edge Stroke at ±padPx so the slider can't ask for
-          // more AI buffer than we generated.
+          // 显示生成后的羽化 + 边缘描边滑块。
+          // 边缘描边限制在 ±padPx，这样滑块不会请求超出
+          // 我们生成的 AI 缓冲区范围。
           const fRow = document.getElementById('ge-inpaint-postfeather-row');
           const fSlider = document.getElementById('ge-feather-slider');
           const fLabel = document.getElementById('ge-feather-label');
-          // Divider + heading are always visible; once Generate
-          // succeeds we hide the "Available after Generate" hint.
+          // 分隔线 + 标题始终可见；生成成功后
+          // 隐藏"生成后可用"提示。
           const divEl = document.getElementById('ge-inpaint-postedge-divider');
           const titleEl = document.getElementById('ge-inpaint-postedge-title');
           const hintEl = document.getElementById('ge-inpaint-postedge-hint');
@@ -223,19 +223,19 @@ export function wireInpaintButtons({
             eSlider.value = '0';
           }
           if (eLabel) eLabel.textContent = '0px';
-          if (uiModule) uiModule.showToast('Inpaint complete — drag Edge feather / Edge stroke to blend', 5000);
+          if (uiModule) uiModule.showToast('Inpaint 完成 — 拖动边缘羽化 / 边缘描边来融合', 5000);
         } catch (renderErr) {
-          console.error('[inpaint] render error', renderErr);
-          if (uiModule) uiModule.showToast('Inpaint render failed: ' + (renderErr.message || renderErr), 6000);
+          console.error('[inpaint] 渲染错误', renderErr);
+          if (uiModule) uiModule.showToast('Inpaint 渲染失败: ' + (renderErr.message || renderErr), 6000);
         }
       };
       resultImg.onerror = (e) => {
-        console.error('[inpaint] base64 decode failed', e);
-        if (uiModule) uiModule.showToast('Inpaint result failed to decode', 6000);
+        console.error('[inpaint] base64 解码失败', e);
+        if (uiModule) uiModule.showToast('Inpaint 结果解码失败', 6000);
       };
       resultImg.src = 'data:image/png;base64,' + data.image;
     } catch (e) {
-      if (uiModule) uiModule.showToast('Inpaint failed: ' + e.message, 6000);
+      if (uiModule) uiModule.showToast('Inpaint 失败: ' + e.message, 6000);
     } finally {
       btn.disabled = false;
       if (btnLabel) btnLabel.textContent = idleLabel;
@@ -246,23 +246,23 @@ export function wireInpaintButtons({
     }
   }
 
-  // Generate.
+  // 生成。
   document.getElementById('ge-inpaint-run').addEventListener('click', async () => {
     const prompt = document.getElementById('ge-inpaint-prompt')?.value?.trim();
-    if (!prompt) { if (uiModule) uiModule.showToast('Enter a prompt for inpainting'); return; }
+    if (!prompt) { if (uiModule) uiModule.showToast('输入 inpainting 的提示词'); return; }
     const strength = (parseInt(document.getElementById('ge-strength-slider')?.value || '75')) / 100;
     await runInpaint({
       prompt, strength,
       btnId: 'ge-inpaint-run',
       labelId: 'ge-inpaint-run-label',
-      idleLabel: 'Generate', busyLabel: 'Generating',
+      idleLabel: '生成', busyLabel: '生成中',
     });
   });
 
-  // Remove — detects backend type and substitutes a content-aware
-  // fill prompt. gpt-image-1 understands "remove …" semantically;
-  // SDXL inpaint pipelines literally try to draw the prompt, so we
-  // send a generic surroundings-matching prompt and crank strength.
+  // 移除 — 检测后端类型并替换为内容感知填充 prompt。
+  // gpt-image-1 按语义理解 "remove …"；
+  // SDXL inpaint 管道会字面地尝试绘制 prompt，所以
+  // 我们发送一个通用的环境匹配 prompt 并调高 strength。
   document.getElementById('ge-inpaint-remove').addEventListener('click', async () => {
     const sel = getSelectedAIEndpoint('inpaint');
     const ep = (sel.endpoint || '').toLowerCase();
@@ -286,7 +286,7 @@ export function wireInpaintButtons({
       prompt, strength,
       btnId: 'ge-inpaint-remove',
       labelId: 'ge-inpaint-remove-label',
-      idleLabel: 'Remove', busyLabel: 'Removing',
+      idleLabel: '移除', busyLabel: '移除中',
     });
   });
 
@@ -295,7 +295,7 @@ export function wireInpaintButtons({
   // seamlessly. Mask is dilated ~12px so the AI sees adjacent
   // opaque pixels as context. Ignores the user's drawn mask.
   document.getElementById('ge-inpaint-outpaint').addEventListener('click', async () => {
-    // 1) Flatten visible layers to detect alpha=0 (empty) regions.
+    // 1) 展平可见图层以检测 alpha=0（空白）区域。
     const flat = document.createElement('canvas');
     flat.width = state.imgWidth; flat.height = state.imgHeight;
     const fctx = flat.getContext('2d');
@@ -307,7 +307,7 @@ export function wireInpaintButtons({
     }
     fctx.globalAlpha = 1;
     const flatData = fctx.getImageData(0, 0, state.imgWidth, state.imgHeight).data;
-    // 2) White wherever the composite is transparent.
+    // 2) 在合成图透明处涂白。
     const maskRaw = document.createElement('canvas');
     maskRaw.width = state.imgWidth; maskRaw.height = state.imgHeight;
     const mrCtx = maskRaw.getContext('2d');
@@ -323,12 +323,12 @@ export function wireInpaintButtons({
       }
     }
     if (emptyCount === 0) {
-      if (uiModule) uiModule.showToast('No empty areas to outpaint — canvas is fully covered.');
+      if (uiModule) uiModule.showToast('没有空白区域可扩图 — 画布已被完全覆盖。');
       return;
     }
     mrCtx.putImageData(mrImg, 0, 0);
-    // 3) Dilate the mask outward 12px so it overlaps a band of
-    //    opaque pixels — context for the model to blend cleanly.
+    // 3) 向外膨胀蒙版 12px，使其覆盖一条不透明像素带 —
+    //    作为模型干净融合的上下文。
     const expanded = document.createElement('canvas');
     expanded.width = state.imgWidth; expanded.height = state.imgHeight;
     const ectx = expanded.getContext('2d');
@@ -345,14 +345,14 @@ export function wireInpaintButtons({
       expData.data[i + 3] = v;
     }
     ectx.putImageData(expData, 0, 0);
-    // 4) Temporarily replace the active mask sub-layer with the
-    //    outpaint mask. Snapshot the previous so we can restore.
+    // 4) 用扩图蒙版临时替换激活的蒙版子图层。
+    //    保存先前的蒙版以便恢复。
     const mask = ensureActiveMaskLayer();
-    if (!mask) { if (uiModule) uiModule.showToast('No active layer for outpaint'); return; }
+    if (!mask) { if (uiModule) uiModule.showToast('没有激活的图层用于扩图'); return; }
     const savedMask = mask.ctx.getImageData(0, 0, mask.canvas.width, mask.canvas.height);
     mask.ctx.clearRect(0, 0, mask.canvas.width, mask.canvas.height);
     mask.ctx.drawImage(expanded, 0, 0);
-    // 5) Prompt: prefer user input, else a generic fill.
+    // 5) Prompt: 优先用户输入，否则使用通用填充。
     const userP = document.getElementById('ge-inpaint-prompt')?.value?.trim();
     const prompt = userP || 'seamless natural continuation of the surrounding image, photorealistic, matching style, no objects, no people, no text';
     const strength = 0.99;
@@ -361,11 +361,11 @@ export function wireInpaintButtons({
         prompt, strength,
         btnId: 'ge-inpaint-outpaint',
         labelId: 'ge-inpaint-outpaint-label',
-        idleLabel: 'Outpaint', busyLabel: 'Outpainting',
+        idleLabel: '扩图', busyLabel: '扩图中',
       });
     } finally {
-      // Restore the user's previous mask drawing so subsequent
-      // Generate/Remove operates on what they actually drew.
+      // 恢复用户之前的蒙版绘制，以便后续生成/移除操作
+      // 基于用户实际绘制的内容。
       mask.ctx.clearRect(0, 0, mask.canvas.width, mask.canvas.height);
       mask.ctx.putImageData(savedMask, 0, 0);
       composite();

@@ -1,7 +1,7 @@
-// static/js/presets.js
+// static/js/presets.js — 提示词预设管理
 
 /**
- * Preset management
+ * 提示词预设管理
  */
 
 let API_BASE = '';
@@ -26,7 +26,7 @@ export function loadStoredObject(key) {
   }
 }
 
-// Built-in prompt templates (moved from cot_prompts.py)
+// 内置提示词模板（从 cot_prompts.py 迁移而来）
 export const PROMPT_TEMPLATES = [
   {
     id: 'socrates',
@@ -74,7 +74,7 @@ export const PROMPT_TEMPLATES = [
 let userTemplates = [];
 
 /**
- * Initialize with dependencies
+ * 初始化依赖
  */
 export function init(apiBase) {
   API_BASE = apiBase;
@@ -110,14 +110,14 @@ function initExpandButton() {
     const draft = promptInput ? promptInput.value.trim() : '';
     if (!name && !draft) return;
 
-    // Get current model from picker
+    // 从当前选择器获取模型
     const modelLabel = document.getElementById('model-picker-label');
     const currentModel = modelLabel ? modelLabel.textContent.trim() : '';
 
     btn.classList.add('expanding');
     const origText = btn.innerHTML;
 
-    // Show spinner in textarea
+    // 在文本框中显示加载旋转动画
     const wrap = promptInput.parentElement;
     let spinner = null;
     try {
@@ -130,7 +130,7 @@ function initExpandButton() {
       promptInput.style.opacity = '0.3';
     } catch (e) {}
 
-    btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> Expanding...';
+    btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> ' + window.i18nModule.t('presets.expanding');
 
     try {
       const res = await fetch(`${API_BASE}/api/presets/expand`, {
@@ -150,7 +150,7 @@ function initExpandButton() {
       console.error('Expand failed:', e);
     }
 
-    // Clean up spinner
+    // 清除旋转动画
     if (spinner) { spinner.destroy(); }
     promptInput.style.opacity = '';
     btn.classList.remove('expanding');
@@ -159,7 +159,7 @@ function initExpandButton() {
 }
 
 /**
- * Init slider value displays
+ * 初始化滑块值显示
  */
 function initEnabledToggle() {
   const tempSlider = document.getElementById('custom-temperature');
@@ -181,14 +181,14 @@ function initEnabledToggle() {
 }
 
 /**
- * Character select dropdown — pick saved characters or "New character..."
+ * 角色选择下拉菜单 — 选择已保存的角色或"新建角色…"
  */
 function initNameDropdown() {
   const select = document.getElementById('char-template-select');
   const delBtn = document.getElementById('char-delete-template-btn');
   if (!select) return;
 
-  // + New button — clear form for new character
+  // + 新建按钮 — 清空表单以创建新角色
   const newBtn = document.getElementById('char-new-btn');
   if (newBtn) {
     newBtn.addEventListener('click', () => {
@@ -202,7 +202,7 @@ function initNameDropdown() {
   select.addEventListener('change', () => {
     const val = select.value;
     if (!val || val === '__default__') {
-      // "Default" or "New character..." — reset all fields
+      // "默认" 或 "新建角色…" — 重置所有字段
       const nameInput = document.getElementById('custom-character-name');
       const promptInput = document.getElementById('custom-system-prompt');
       const tempInput = document.getElementById('custom-temperature');
@@ -214,11 +214,11 @@ function initNameDropdown() {
       const nameRow = document.getElementById('char-name-row');
       if (nameRow) nameRow.style.display = '';
       if (tempInput) { tempInput.value = 1.0; if (tempValue) tempValue.textContent = '1.0'; tempInput.dispatchEvent(new Event('input')); }
-      if (tokensInput) { tokensInput.value = 8448; if (tokensValue) tokensValue.textContent = 'No limit'; tokensInput.dispatchEvent(new Event('input')); }
+      if (tokensInput) { tokensInput.value = 8448; if (tokensValue) tokensValue.textContent = window.i18nModule.t('presets.no_limit'); tokensInput.dispatchEvent(new Event('input')); }
       if (delBtn) delBtn.style.display = 'none';
       return;
     }
-    // Load the selected template
+    // 加载选中的模板
     const nameInput = document.getElementById('custom-character-name');
     const isSaved = userTemplates.find(t => t.name === val);
     const builtin = PROMPT_TEMPLATES.find(t => t.name === val);
@@ -231,7 +231,7 @@ function initNameDropdown() {
     if (delBtn) delBtn.style.display = (isSaved || (builtin && !isPreset)) ? '' : 'none';
   });
 
-  // Delete template button — confirms, then removes template + character memories
+  // 删除模板按钮 — 确认后删除模板 + 角色记忆
   if (delBtn) {
     delBtn.addEventListener('click', async () => {
       const charName = select.value;
@@ -240,17 +240,17 @@ function initNameDropdown() {
       const isBuiltin = PROMPT_TEMPLATES.some(t => t.name === charName);
       if (!await window.styledConfirm(`Delete "${charName}"?\n\nThis will remove the persona and all its memories.`, { confirmText: 'Delete', danger: true })) return;
       try {
-        // Delete saved template if exists
+        // 删除保存的模板（如果存在）
         if (match) {
           await fetch(`${API_BASE}/api/presets/templates/${match.id}`, { method: 'DELETE' });
         }
-        // Hide built-in preset
+        // 隐藏内置预设
         if (isBuiltin) {
           const hidden = loadStoredArray('odysseus-hidden-presets');
           if (!hidden.includes(charName)) hidden.push(charName);
           localStorage.setItem('odysseus-hidden-presets', JSON.stringify(hidden));
         }
-        // Deactivate if this was the active character
+        // 如果当前是激活角色，则停用
         if (presets.custom && presets.custom.character_name === charName) {
           selectedPreset = null;
           presets.custom = { ...presets.custom, character_name: '', system_prompt: '', enabled: false };
@@ -270,12 +270,12 @@ function initNameDropdown() {
 
 function _tryLoadTemplate(name) {
   if (!name) return;
-  // Check user templates first, then built-in
+  // 先检查用户模板，再检查内置模板
   let tmpl = userTemplates.find(t => t.name === name);
   if (!tmpl) {
     const builtin = PROMPT_TEMPLATES.find(t => t.name === name);
     if (builtin) {
-      // Built-in: load prompt + temperature, clear name (styles, not characters)
+      // 内置：加载提示词 + 温度，清除名称（风格，非角色）
       const promptInput = document.getElementById('custom-system-prompt');
       const tempInput = document.getElementById('custom-temperature');
       const tempValue = document.getElementById('temp-value');
@@ -342,31 +342,31 @@ function _populateCharSelect() {
     });
     select.appendChild(group);
   }
-  // Restore selection if it still exists
+  // 如果选项仍然存在，则恢复选择
   if (currentVal) select.value = currentVal;
 }
 
 /**
- * Init reset button — clears all character fields
+ * 初始化重置按钮 — 清除所有角色字段
  */
 function initResetButton() {
   const btn = document.getElementById('reset-character-btn');
   if (!btn) return;
   btn.addEventListener('click', () => {
-    // Just reset the form to default — no confirmation needed
+    // 将表单重置为默认值 — 无需确认
     const charSelect = document.getElementById('char-template-select');
     if (charSelect) {
       charSelect.value = '__default__';
       charSelect.dispatchEvent(new Event('change'));
     }
-    // Deactivate character
+    // 停用角色
     selectedPreset = null;
     _syncCharIndicator();
   });
 }
 
 /**
- * Load user templates from server and populate datalist
+ * 从服务器加载用户模板并填充 datalist
  */
 async function loadUserTemplates() {
   try {
@@ -384,10 +384,10 @@ async function loadUserTemplates() {
 
 
 /**
- * Init "Save as Character" button
+ * 初始化"保存为角色"按钮
  */
 /**
- * "Create Persistent Chat" button — creates a favorited session for the current character
+ * "创建持久聊天"按钮 — 为当前角色创建一个收藏的会话
  */
 function initPersistentChat() {
   const btn = document.getElementById('create-persistent-chat-btn');
@@ -399,12 +399,12 @@ function initPersistentChat() {
     if (!charName) return;
 
     try {
-      // Get current model info from session module
+      // 从会话模块获取当前模型信息
       const sessionModule = (await import('./sessions.js'));
       const sessions = sessionModule.getSessions();
       const current = sessions.find(s => s.id === sessionModule.getCurrentSessionId());
 
-      // Create new session
+      // 创建新会话
       const fd = new FormData();
       fd.append('name', charName);
       if (current) {
@@ -417,28 +417,28 @@ function initPersistentChat() {
       const data = await res.json();
       const sessionId = data.session_id || data.id;
 
-      // Favorite it
+      // 收藏它
       const favFd = new FormData();
       favFd.append('important', true);
       await fetch(`${API_BASE}/api/session/${sessionId}/important`, { method: 'POST', body: favFd });
 
-      // Save session → character mapping so it restores on switch
+      // 保存会话 → 角色映射，以便切换时恢复
       const charSessions = loadStoredObject('odysseus-char-sessions');
       charSessions[sessionId] = charName;
       localStorage.setItem('odysseus-char-sessions', JSON.stringify(charSessions));
 
-      // Close modal, reload sessions, switch to the new chat
+      // 关闭模态框，重新加载会话，切换到新对话
       const modal = document.getElementById('custom-preset-modal');
       if (modal) modal.classList.add('hidden');
       await sessionModule.loadSessions();
       await sessionModule.selectSession(sessionId);
 
-      btn.textContent = 'Created!';
-      setTimeout(() => { btn.textContent = 'Create Persistent Chat'; }, 1500);
+      btn.textContent = window.i18nModule.t('presets.created');
+      setTimeout(() => { btn.textContent = window.i18nModule.t('presets.create_persistent_chat'); }, 1500);
     } catch (e) {
       console.error('Failed to create persistent chat:', e);
-      btn.textContent = 'Error';
-      setTimeout(() => { btn.textContent = 'Create Persistent Chat'; }, 2000);
+      btn.textContent = window.i18nModule.t('presets.error');
+      setTimeout(() => { btn.textContent = window.i18nModule.t('presets.create_persistent_chat'); }, 2000);
     }
   });
 }
@@ -480,23 +480,23 @@ function initSaveAsTemplate() {
       const data = await res.json();
       if (data.success) {
         await loadUserTemplates();
-        btn.textContent = 'Saved!';
-        setTimeout(() => { btn.textContent = 'Save as Template'; }, 1500);
+        btn.textContent = window.i18nModule.t('presets.saved');
+        setTimeout(() => { btn.textContent = window.i18nModule.t('presets.save_as_template'); }, 1500);
       } else {
-        btn.textContent = 'Error';
-        setTimeout(() => { btn.textContent = 'Save as Template'; }, 2000);
+        btn.textContent = window.i18nModule.t('presets.error');
+        setTimeout(() => { btn.textContent = window.i18nModule.t('presets.save_as_template'); }, 2000);
       }
     } catch (e) {
       console.error('Failed to save template:', e);
-      btn.textContent = 'Restart server';
+      btn.textContent = window.i18nModule.t('presets.restart_server');
       btn.style.color = 'var(--color-error)';
-      setTimeout(() => { btn.textContent = 'Save as Template'; btn.style.color = ''; }, 3000);
+      setTimeout(() => { btn.textContent = window.i18nModule.t('presets.save_as_template'); btn.style.color = ''; }, 3000);
     }
   });
 }
 
 /**
- * Load presets from server
+ * 从服务器加载提示词预设
  */
 export async function loadPresets(showError) {
   try {
@@ -520,7 +520,7 @@ export async function loadPresets(showError) {
       }
     }
 
-    // Auto-activate custom preset if enabled and has content
+    // 如果自定义预设已启用且有内容，则自动激活
     if (custom && custom.enabled !== false && (custom.character_name || custom.system_prompt)) {
       selectedPreset = 'custom';
       const miniBtn = document.getElementById('overflow-preset-btn');
@@ -536,7 +536,7 @@ export async function loadPresets(showError) {
 }
 
 /**
- * Set active preset
+ * 设置活动预设
  */
 export function setActivePreset(presetId) {
   document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -555,7 +555,7 @@ export function setActivePreset(presetId) {
 }
 
 /**
- * Open custom preset modal
+ * 打开自定义预设模态框
  */
 export function openCustomPresetModal() {
   const modal = document.getElementById('custom-preset-modal');
@@ -574,13 +574,13 @@ export function openCustomPresetModal() {
   const promptInput = document.getElementById('custom-system-prompt');
 
   if (nameInput) nameInput.value = savedConfig.character_name || '';
-  // Sync select dropdown to current character
+  // 将下拉选择框同步到当前角色
   const charSelect = document.getElementById('char-template-select');
   if (charSelect) {
     const charName = savedConfig.character_name || '';
     if (charName) {
       charSelect.value = charName;
-      // If current name isn't in the list, fall back to "New character..." with name filled in
+      // 如果当前名称不在列表中，回退到"新建角色…"并填入名称
       if (charSelect.value !== charName) charSelect.value = '';
     } else {
       charSelect.value = '__default__';
@@ -599,13 +599,13 @@ export function openCustomPresetModal() {
   }
   if (promptInput) promptInput.value = savedConfig.system_prompt || '';
 
-  // Load inject fields
+  // 加载注入字段
   const prefixInput = document.getElementById('inject-prefix');
   const suffixInput = document.getElementById('inject-suffix');
   if (prefixInput) prefixInput.value = savedConfig.inject_prefix || '';
   if (suffixInput) suffixInput.value = savedConfig.inject_suffix || '';
 
-  // Track initial state to detect changes for dynamic button label
+  // 追踪初始状态以检测变化，用于动态按钮标签
   const _snapshot = {
     name: nameInput ? nameInput.value : '',
     prompt: promptInput ? promptInput.value : '',
@@ -620,20 +620,20 @@ export function openCustomPresetModal() {
       || (promptInput && promptInput.value !== _snapshot.prompt)
       || (tempInput && tempInput.value !== _snapshot.temp)
       || (tokensInput && tokensInput.value !== _snapshot.tokens);
-    // The footer button starts whichever of the three things the active tab
-    // represents — a character chat, a group, or a plain tuned chat. Label
-    // it so the action is obvious instead of a generic "Start".
+    // 页脚按钮启动的是当前活动标签页所代表的三种模式之一
+    // — 角色对话、群组对话或普通调参对话。标签应该清晰地
+    // 表明操作意图，而不是一个通用的"开始"。
     const activeTab = document.querySelector('.preset-tab.active')?.dataset.chartab || 'inject';
     let label;
     if (activeTab === 'group') {
       label = 'Start Group';
     } else if (activeTab === 'inject') {
-      // Inject tab = a plain tuned "prompt" chat (prefix/suffix + temp/tokens),
-      // no persona.
+      // 注入标签页 = 普通调参"提示词"对话（前缀/后缀 + 温度/令牌数），
+      // 不包含角色。
       label = 'Start Prompt';
     } else {
-      // Character/persona tab. "Save & " prefix when the user edited a template,
-      // so it's clear the edit is being saved on start.
+      // 角色/人物标签页。"保存并"前缀用于用户编辑模板时，
+      // 以明确表示编辑会在开始时被保存。
       label = changed ? 'Save & Start Persona' : 'Start Persona';
     }
     btn.textContent = label;
@@ -647,21 +647,21 @@ export function openCustomPresetModal() {
       cancelBtn.style.display = featOn ? '' : 'none';
       cancelBtn.textContent = activeTab === 'group' ? 'Cancel group' : 'Cancel';
     }
-    // Reset only makes sense on the character tab (it resets the persona).
+    // 重置按钮仅在角色标签页中才有意义（它重置角色人设）。
     if (resetBtn) resetBtn.style.display = (changed && activeTab === 'character') ? '' : 'none';
   }
   [nameInput, promptInput, tempInput, tokensInput].forEach(el => {
     if (el) el.addEventListener('input', _updateStartBtn);
   });
-  // Re-label the Start button when the user switches tabs. Rebind the fresh
-  // closure each time the modal opens (removing any stale one) so the label
-  // logic always reads this open's snapshot/inputs.
+  // 当用户切换标签页时重新标记"开始"按钮。每次打开模态框时
+  // 重新绑定一个新的闭包（移除旧的），这样标签逻辑总是读取
+  // 本次打开的初始快照/输入值。
   document.querySelectorAll('.preset-tab[data-chartab]').forEach(tab => {
     if (tab._startLabelSync) tab.removeEventListener('click', tab._startLabelSync);
     tab._startLabelSync = _updateStartBtn;
     tab.addEventListener('click', _updateStartBtn);
   });
-  // Wire the "Cancel" button once — turn off the active tab's feature + close.
+  // 绑定"取消"按钮一次 — 关闭活动标签页的功能 + 关闭模态框。
   const _cancelBtn = document.getElementById('cancel-custom-preset');
   if (_cancelBtn && !_cancelBtn._wired) {
     _cancelBtn._wired = true;
@@ -683,7 +683,7 @@ export function openCustomPresetModal() {
       if (m) m.classList.add('hidden');
     });
   }
-  // When selecting a template, update snapshot so it counts as "unchanged"
+  // 选择模板时，更新快照使其被视为"未更改"
   if (charSelect) charSelect.addEventListener('change', () => setTimeout(() => {
     _snapshot.name = nameInput ? nameInput.value : '';
     _snapshot.prompt = promptInput ? promptInput.value : '';
@@ -707,7 +707,7 @@ export function openCustomPresetModal() {
     nameInput.addEventListener('input', _syncCharRows);
   }
 
-  // Persistent chat: lock character identity (dropdown, name) but allow style/temp/memory edits
+  // 持久聊天：锁定角色身份（下拉框、名称），但允许编辑风格/温度/记忆
   const isPersistent = !!window._persistentChatSession;
   const lockNotice = document.getElementById('char-lock-notice');
   const resetBtn = document.getElementById('reset-character-btn');
@@ -726,7 +726,7 @@ export function openCustomPresetModal() {
       const notice = document.createElement('div');
       notice.id = 'char-lock-notice';
       notice.style.cssText = 'font-size:11px;color:var(--color-muted);text-align:center;padding:6px;margin-bottom:8px;border:1px dashed var(--border);border-radius:6px;';
-      notice.textContent = 'Persistent chat — persona is locked. Style, temperature, and memory can still be changed.';
+      notice.textContent = window.i18nModule.t('presets.persistent_chat_notice');
       modal.querySelector('.modal-body').prepend(notice);
     }
   } else {
@@ -741,7 +741,7 @@ export function openCustomPresetModal() {
 }
 
 /**
- * Save custom preset
+ * 保存自定义预设
  */
 export async function saveCustomPreset(showToast, showError) {
   const nameInput = document.getElementById('custom-character-name');
@@ -751,10 +751,10 @@ export async function saveCustomPreset(showToast, showError) {
 
   if (!tempInput || !tokensInput || !promptInput) return;
 
-  // This only runs for Character / Inject starts (the Group tab is handled by
-  // group.js and skipped in app.js). If a group is still active from a prior
-  // session, deactivate it — otherwise the chat-submit handler keeps routing
-  // messages through group fan-out and a character chat "becomes a group".
+  // 此函数仅用于角色/注入启动（群组标签页由 group.js 处理，
+  // 在 app.js 中被跳过）。如果之前会话的群组仍然活跃，
+  // 则将其停用 — 否则聊天提交处理器会持续将消息通过群组分发路由，
+  // 导致角色对话"变成群组"。
   try {
     if (window.groupModule && window.groupModule.isActive()) {
       window.groupModule.stopGroup();
@@ -762,10 +762,10 @@ export async function saveCustomPreset(showToast, showError) {
     }
   } catch (_) {}
 
-  // Starting from the Inject tab means a plain tuned chat (prefix/suffix +
-  // temp/tokens) — NOT a persona. The name/system-prompt fields live on the
-  // Character tab and may still hold a previously-selected character, so
-  // ignore them here or the chat would launch in-character.
+  // 从注入标签页启动意味着一个普通的调参对话（前缀/后缀 +
+  // 温度/令牌数） — 不是角色人设。名称/系统提示词字段位于
+  // 角色标签页，可能仍保留着之前选择的角色，因此这里忽略它们，
+  // 否则对话会以角色身份启动。
   const _activeTab = document.querySelector('.preset-tab.active')?.dataset.chartab || 'character';
   const _isInjectStart = _activeTab === 'inject';
 
@@ -775,7 +775,7 @@ export async function saveCustomPreset(showToast, showError) {
   const max_tokens = rawTokens > 8192 ? 0 : rawTokens;
   const system_prompt = _isInjectStart ? '' : promptInput.value;
 
-  const enabled = true; // always enabled when saving — deactivation happens via X/Reset
+  const enabled = true; // 保存时始终启用 — 停用通过 X/重置按钮触发
 
   const _prefixInput = document.getElementById('inject-prefix');
   const _suffixInput = document.getElementById('inject-suffix');
@@ -812,13 +812,13 @@ export async function saveCustomPreset(showToast, showError) {
       const _hasContent = !!(system_prompt || name || _hasTuning || _hasInject);
       if (enabled && _hasContent) {
         selectedPreset = 'custom';
-        // Turn off research — doesn't make sense with a character
+        // 关闭研究模式 — 与角色不兼容
         if (window._syncResearchIndicator) window._syncResearchIndicator(false);
       } else {
         selectedPreset = null;
       }
 
-      // Update mini button state
+      // 更新迷你按钮状态
       const miniBtn = document.getElementById('overflow-preset-btn');
       if (miniBtn) {
         miniBtn.classList.toggle('active', enabled && _hasContent);
@@ -826,7 +826,7 @@ export async function saveCustomPreset(showToast, showError) {
 
       setTimeout(() => { _syncCharIndicator(); }, 0);
 
-      // Auto-save to templates (non-blocking) — skip built-in presets
+      // 自动保存到模板（非阻塞） — 跳过内置预设
       const _selVal = document.getElementById('char-template-select')?.value || '';
       const isBuiltinPreset = PROMPT_TEMPLATES.some(t => t.isPreset && (t.name === name || t.name === _selVal));
       const saveName = isBuiltinPreset ? null : (name || null);
@@ -842,7 +842,7 @@ export async function saveCustomPreset(showToast, showError) {
       }
 
       if (showToast) {
-        // The Inject tab is a plain tuned "prompt" chat, not a persona — say so.
+        // 注入标签页是一个普通的调参"提示词"对话，不是角色人设 — 请明确告知用户。
         showToast(_isInjectStart ? 'Prompt saved' : 'Persona saved');
       }
       const modal = document.getElementById('custom-preset-modal');
@@ -863,28 +863,28 @@ export async function saveCustomPreset(showToast, showError) {
 }
 
 /**
- * Get selected preset ID
+ * 获取当前选中的预设 ID
  */
 export function getSelectedPreset() {
   return selectedPreset;
 }
 
 /**
- * Get preset by ID
+ * 按 ID 获取预设
  */
 export function getPreset(presetId) {
   return presets[presetId];
 }
 
 /**
- * Get all presets
+ * 获取所有预设
  */
 export function getAllPresets() {
   return presets;
 }
 
 /**
- * Get the character name (if set)
+ * 获取角色名称（如果已设置）
  */
 export function getCharacterName() {
   if (!selectedPreset) return '';
@@ -894,7 +894,7 @@ export function getCharacterName() {
 }
 
 /**
- * Get inject prefix/suffix (if set and preset active)
+ * 获取注入前缀/后缀（仅在预设已设置且激活时）
  */
 export function getInject() {
   // Only inject when a preset is actually ACTIVE — mirror getCharacterName's
@@ -911,7 +911,7 @@ export function getInject() {
 }
 
 /**
- * Fully deactivate the character — clear preset, hide indicator, update overflow btn.
+ * 完全停用角色 — 清除预设，隐藏指示器，更新溢出按钮。
  */
 export function deactivateCharacter() {
   selectedPreset = null;
@@ -923,11 +923,11 @@ export function deactivateCharacter() {
 }
 
 /**
- * Show/hide the memory scope bar and wire up scope switching.
- * Called after presets load and after saving character.
+ * 显示/隐藏记忆范围栏并连接范围切换。
+ * 在加载预设和保存角色后调用。
  */
 /**
- * Copy all user memories (non-character) into the character's memory pool.
+ * 将所有用户记忆（非角色记忆）合并到角色的记忆池中。
  */
 async function _mergeUserMemories(charName) {
   try {
@@ -955,7 +955,7 @@ function _reloadMemoryList() {
 }
 
 /**
- * Show/hide the character indicator pill in the chat input bar.
+ * 显示/隐藏聊天输入栏中的角色指示器标签。
  */
 function _syncCharIndicator() {
   const btn = document.getElementById('character-indicator-btn');
@@ -965,13 +965,13 @@ function _syncCharIndicator() {
   const custom = presets.custom;
   const enabled = custom?.enabled !== false;
   const hasChar = enabled && !!custom?.character_name;
-  // "Inject mode": custom preset is active for plain tuning / inject only —
-  // no persona. Detected from the custom config so it survives a reload.
+  // "注入模式"：自定义预设仅用于普通调参/注入 — 不包含角色人设。
+  // 从自定义配置中检测，以便在重新加载后依然能够存活。
   const _t = parseFloat(custom?.temperature);
   const _hasTuning = (!isNaN(_t) && _t !== 1.0) || (!!custom?.max_tokens && custom.max_tokens !== 0);
   const _hasInject = !!(custom?.inject_prefix || custom?.inject_suffix);
   const injectActive = enabled && !custom?.character_name && (_hasTuning || _hasInject);
-  // Icon path sets for the indicator chip.
+  // 指示器标签的图标路径集合。
   const _AVATAR = '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>';
   const _SYRINGE = '<path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5"/><path d="m9 11 4 4"/><path d="m5 19-3 3"/><path d="m14 4 6 6"/>';
   if (hasChar || injectActive) {
@@ -982,19 +982,19 @@ function _syncCharIndicator() {
       if (nameSpan) nameSpan.textContent = custom.character_name;
       btn.title = `Persona: ${custom.character_name} — click to configure`;
     } else {
-      // Inject/tuning chat — syringe tag labeled "Prompt" to match the
-      // window identity, no persona name.
+      // 注入/调参对话 — 注射器标签，标注"Prompt"以匹配窗口标识，
+      // 不显示角色名称。
       if (iconEl) iconEl.innerHTML = _SYRINGE;
-      if (nameSpan) nameSpan.textContent = 'Prompt';
-      btn.title = 'Custom settings active — click to configure';
+      if (nameSpan) nameSpan.textContent = window.i18nModule.t('presets.prompt');
+      btn.title = window.i18nModule.t('presets.custom_settings_active');
     }
-    // Hide X in persistent chats
+    // 在持久聊天中隐藏 X
     const xIcon = btn.querySelector('.tool-indicator-x');
     if (xIcon) xIcon.style.display = window._persistentChatSession ? 'none' : '';
     if (!btn._wired) {
       btn._wired = true;
       btn.addEventListener('click', (e) => {
-        // If clicking the X, deactivate character
+        // 如果点击了 X，则停用角色
         if (e.target.closest('.tool-indicator-x')) {
           if (window._persistentChatSession) return; // locked in persistent chat
           selectedPreset = null;
@@ -1003,7 +1003,7 @@ function _syncCharIndicator() {
           btn.classList.remove('active');
           const miniBtn = document.getElementById('overflow-preset-btn');
           if (miniBtn) miniBtn.classList.remove('active');
-          // Save disabled state to backend
+          // 将停用状态保存到后端
           fetch(`${API_BASE}/api/presets/custom`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1021,17 +1021,17 @@ function _syncCharIndicator() {
 }
 
 /**
- * Called on every session switch. Handles persistent chat character lock.
- * - Entering a persistent chat: activate its character
- * - Leaving a persistent chat: deactivate the character
- * - Non-persistent chats: leave character state as-is
+ * 在每次会话切换时调用。处理持久聊���角色锁定。
+ * - 进入持久聊天：激活其角色
+ * - 离开持久聊天：停用该角色
+ * - 非持久聊天：保持角色状态不变
  */
 let _prevSessionId = null;
 
 export function onSessionSwitch(sessionId) {
   const charSessions = loadStoredObject('odysseus-char-sessions');
 
-  // Leaving a persistent chat — deactivate for this switch only
+  // 离开持久聊天 — 仅在此次切换时停用
   if (window._persistentChatSession) {
     selectedPreset = null;
     window._persistentChatSession = null;
@@ -1040,11 +1040,11 @@ export function onSessionSwitch(sessionId) {
 
   _prevSessionId = sessionId;
 
-  // Clean up stale entries (deleted sessions)
-  // If sessionId doesn't exist in the session list, remove its mapping
+  // 清理过时的映射（已删除的会话）
+  // 如果 sessionId 不在会话列表中，则移除其映射
   const charName = charSessions[sessionId];
   if (charName) {
-    // Find the template (saved or built-in)
+    // 查找模板（已保存或内置）
     const tmpl = userTemplates.find(t => t.name === charName)
       || PROMPT_TEMPLATES.find(t => t.name === charName);
     if (tmpl) {
@@ -1059,7 +1059,7 @@ export function onSessionSwitch(sessionId) {
       selectedPreset = 'custom';
     }
     _syncCharIndicator();
-    // Mark this as a locked persistent chat
+    // 将其标记为锁定的持久聊天
     window._persistentChatSession = sessionId;
   } else {
     window._persistentChatSession = null;
@@ -1067,14 +1067,14 @@ export function onSessionSwitch(sessionId) {
 }
 
 /**
- * Check if the current session is a persistent (locked) character chat.
+ * 检查当前会话是否为持久（锁定）角色对话。
  */
 export function isPersistentChat() {
   return !!window._persistentChatSession;
 }
 
 /**
- * Remove a session from persistent chat mappings (call when session is deleted).
+ * 从持久聊���映射中移除会话（在会话被删除时调用）。
  */
 export function removePersistentChat(sessionId) {
   const charSessions = loadStoredObject('odysseus-char-sessions');
@@ -1082,7 +1082,7 @@ export function removePersistentChat(sessionId) {
     delete charSessions[sessionId];
     localStorage.setItem('odysseus-char-sessions', JSON.stringify(charSessions));
   }
-  // If we were in that persistent chat, fully clear state
+  // 如果我们正处在那个持久聊天中，完全清除状态
   if (window._persistentChatSession === sessionId) {
     window._persistentChatSession = null;
     selectedPreset = null;

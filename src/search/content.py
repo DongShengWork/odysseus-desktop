@@ -1,7 +1,7 @@
-"""Compatibility wrapper for the canonical services.search.content module.
+"""标准 services.search.content 模块的兼容性包装。
 
-``src.search.content`` stays importable for older agent/deep-research code, but the
-implementation now lives in ``services.search.content`` so the two cannot drift.
+``src.search.content`` 保持可导入以兼容旧版 agent/deep-research 代码，但
+实现已移至 ``services.search.content``，以避免两份实现出现差异。
 """
 
 import sys

@@ -1,4 +1,4 @@
-"""Authentication routes — login, logout, signup, status, user management."""
+"""认证路由 — 登录、登出、注册、状态、用户管理。"""
 
 from fastapi import APIRouter, Request, Response, HTTPException
 from pydantic import BaseModel
@@ -97,7 +97,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/setup")
     async def first_run_setup(body: SetupRequest, request: Request):
-        """Create initial admin account. Only works if no accounts exist."""
+        """创建初始管理员账户。仅在没有账户时有效。"""
         if not _setup_limiter.check(request.client.host):
             raise HTTPException(429, "Too many requests — try again later")
         if auth_manager.is_configured:
@@ -111,7 +111,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/signup")
     async def signup(body: SignupRequest, request: Request):
-        """Create a new user account. Only works if signup is enabled by admin."""
+        """创建新用户账户。仅在管理员开启注册时有效。"""
         if not _signup_limiter.check(request.client.host):
             raise HTTPException(429, "Too many requests — try again later")
         if not auth_manager.is_configured:
@@ -131,18 +131,18 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     async def login(body: LoginRequest, request: Request, response: Response):
         if not _login_limiter.check(request.client.host):
             raise HTTPException(429, "Too many requests — try again later")
-        # Verify password first
+        # 先验证密码
         username = body.username.strip().lower()
         if not await asyncio.to_thread(auth_manager.verify_password, username, body.password):
             raise HTTPException(401, "Invalid credentials")
-        # Check 2FA if enabled
+        # 如果启用了 2FA，检查
         if auth_manager.totp_enabled(username):
             if not body.totp_code:
-                # Password OK but need TOTP — tell client to show code input
+                # 密码正确但需要 TOTP — 告知客户端显示验证码输入
                 return {"ok": False, "requires_totp": True, "username": username}
             if not auth_manager.totp_verify(username, body.totp_code):
                 raise HTTPException(401, "Invalid 2FA code")
-        # All checks passed — create session (password already verified above)
+        # 所有检查通过 — 创建会话（密码已在上面验证）
         token = await asyncio.to_thread(auth_manager.create_session_trusted, username)
         cookie_kwargs = dict(
             key=SESSION_COOKIE,
@@ -153,7 +153,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             path="/",
         )
         if body.remember:
-            cookie_kwargs["max_age"] = 60 * 60 * 24 * 7  # 7 days
+            cookie_kwargs["max_age"] = 60 * 60 * 24 * 7  # 7 天
         response.set_cookie(**cookie_kwargs)
         return {"ok": True, "username": username}
 
@@ -170,10 +170,10 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         token = request.cookies.get(SESSION_COOKIE)
         result = auth_manager.status(token)
         result["signup_enabled"] = auth_manager.signup_enabled
-        # Include the caller's effective privileges so the frontend can
-        # hide / dim UI controls the user isn't allowed to use. Admins get
-        # ADMIN_PRIVILEGES (everything on), regular users get their stored
-        # set merged with DEFAULT_PRIVILEGES.
+        # 包含调用者的有效权限，以便前端可以隐藏/灰显
+        # 用户不允许使用的 UI 控件。管理员获得
+        # ADMIN_PRIVILEGES（全部开启），普通用户获得其存储的
+        # 权限集与 DEFAULT_PRIVILEGES 合并后的结果。
         try:
             u = result.get("username")
             if u:
@@ -197,12 +197,12 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         return {"ok": True}
 
     # ------------------------------------------------------------------
-    # Two-factor authentication
+    # 双因素认证
     # ------------------------------------------------------------------
 
     @router.post("/2fa/setup")
     async def totp_setup(request: Request):
-        """Generate a TOTP secret and return the QR code URI."""
+        """生成 TOTP 密钥并返回二维码 URI。"""
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
@@ -212,7 +212,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if not secret:
             raise HTTPException(500, "Failed to generate secret")
         uri = auth_manager.totp_get_provisioning_uri(user, secret)
-        # Generate QR code as base64 PNG
+        # 生成二维码为 base64 PNG
         import qrcode, io, base64
         qr = qrcode.make(uri, box_size=6, border=2)
         buf = io.BytesIO()
@@ -225,7 +225,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/2fa/confirm")
     async def totp_confirm(body: TotpVerifyRequest, request: Request):
-        """Verify a TOTP code to confirm 2FA setup. Returns backup codes."""
+        """验证 TOTP 验证码以确认 2FA 设置。返回备用码。"""
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
@@ -239,7 +239,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/2fa/disable")
     async def totp_disable(body: TotpDisableRequest, request: Request):
-        """Disable 2FA. Requires password confirmation."""
+        """禁用 2FA。需要密码确认。"""
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
@@ -249,13 +249,13 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.get("/2fa/status")
     async def totp_status(request: Request):
-        """Check if 2FA is enabled for the current user."""
+        """检查当前用户是否启用了 2FA。"""
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
         return {"enabled": auth_manager.totp_enabled(user)}
 
-    # Admin-only routes
+    # 管理员专属路由
     @router.get("/users")
     async def list_users(request: Request):
         user = _get_current_user(request)
@@ -323,7 +323,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                 )
                 return False
 
-        # Usernames are ownership keys for user data. Rename the common
+        # 用户名是用户数据的所有权键。在更改认证数据之前，
         # owner-scoped DB rows so the account keeps access to its sessions,
         # docs, email accounts, tasks, etc.
         try:
@@ -355,7 +355,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                 )
             raise HTTPException(500, "Failed to rename user data")
 
-        # Per-user prefs are JSON-backed, not SQL-backed.
+        # 每用户偏好设置使用 JSON 存储，而非 SQL。
         try:
             from routes.prefs_routes import _load as _load_prefs, _save as _save_prefs
             prefs = _load_prefs()
@@ -482,11 +482,11 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                 if str(getattr(sess, "owner", None) or "").strip().lower() == old_username:
                     sess.owner = new_username
 
-        # The owner-rename loop above updated ApiToken.owner in the DB, but the
-        # bearer-token cache still maps each token to the OLD owner. Without
-        # refreshing it, the renamed user's API tokens resolve to the old (now
-        # non-existent) owner and stop reaching their data until the cache next
-        # goes dirty. Invalidate it now, like the token CRUD routes do.
+        # 上面的 owner 重命名循环已更新了数据库中的 ApiToken.owner，
+        # 但 bearer-token 缓存仍然将每个令牌映射到旧的 owner。如果不
+        # 刷新它，重命名用户的 API 令牌会解析到旧的（现已不存在的）
+        # owner，并停止访问其数据，直到缓存下次标记为脏。现在就使其
+        # 失效，与令牌 CRUD 路由的做法相同。
         invalidator = getattr(request.app.state, "invalidate_token_cache", None)
         if callable(invalidator):
             invalidator()
@@ -520,12 +520,12 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     @router.post("/signup-toggle", deprecated=True)
     async def toggle_signup(request: Request):
         """
-        Toggle open registration on/off. Admin only.
+        切换开放注册开/关。仅限管理员。
 
-        DEPRECATED: This endpoint uses toggle semantics which can lead to unsafe state changes.
-        Use PUT /open-signup instead.
+        已弃用：此端点使用切换语义，可能导致不安全的
+        状态变更。请改用 PUT /open-signup。
 
-        This endpoint is kept for backward compatibility and may be removed in future versions.
+        保留此端点用于向后兼容，可能在未来版本中移除。
         """
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
@@ -535,7 +535,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.put("/open-signup")
     async def set_signup_enabled(body: SetOpenRegistrationRequest, request: Request):
-        """Set open signup enabled state. Admin only."""
+        """设置开放注册启用状态。仅限管理员。"""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -566,24 +566,24 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             raise
         if not ok:
             raise HTTPException(400, "Cannot delete user")
-        # delete_user removes the user's ApiToken rows, but the bearer-auth
-        # middleware serves from an in-memory prefix->token cache that only
-        # rebuilds when flagged dirty. Without this, a deleted user's already
-        # cached token keeps authenticating until some other token op or a
-        # restart clears the cache. Mirror what the token routes do.
+        # delete_user 会删除用户的 ApiToken 行，但 bearer-auth
+        # 中间件从一个内存中的 prefix->token 缓存中提供服务，
+        # 该缓存仅在标记为脏时才重建。没有这个，已删除用户的已缓存
+        # 令牌会继续认证，直到其他令牌操作或重启清除缓存。
+        # 与令牌路由的做法相同。
         _invalidate_api_token_cache()
         return {"ok": True}
 
-    # ---- Feature visibility (admin-managed) ----
+    # ---- 功能可见性（管理员管理） ----
 
     @router.get("/features")
     async def get_features():
-        """Public: returns which UI features are enabled."""
+        """公开：返回启用了哪些 UI 功能。"""
         return _load_features()
 
     @router.post("/features")
     async def set_features(request: Request):
-        """Admin only: update feature toggles."""
+        """仅限管理员：更新功能开关。"""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -595,13 +595,13 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         _save_features(current)
         return current
 
-    # ---- App settings (admin-managed) ----
+    # ---- 应用设置（管理员管理） ----
 
     @router.get("/settings")
     async def get_settings(request: Request):
-        """Returns app settings. Admins get the full set; non-admins get
-        a scrubbed copy with secret keys blanked. The frontend uses this
-        for keybinds + TTS prefs, so it stays callable without admin."""
+        """返回应用设置。管理员获得完整集合；非管理员获得
+        已屏蔽密钥的脱敏副本。前端将其用于键位绑定 +
+        TTS 偏好设置，因此无需管理员即可调用。"""
         user = _get_current_user(request)
         settings = _load_settings()
         if user and auth_manager.is_admin(user):
@@ -610,17 +610,17 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/settings")
     async def set_settings(request: Request):
-        """Admin only: update app settings."""
+        """仅限管理员：更新应用设置。"""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
         body = await request.json()
         current = _load_settings()
-        # Per-key validation for numeric settings: coerce to int and clamp to a
-        # sane range so a bad value can't disable the agent or let it run away.
+        # 对数值设置逐键校验：将其强制转为整数并限制在合理范围内，
+        # 以避免错误的值禁用 agent 或使其失控。
         _INT_RANGES = {
             "agent_max_rounds": (1, 200),
-            "agent_max_tool_calls": (0, 1000),  # 0 = unlimited
+            "agent_max_tool_calls": (0, 1000),  # 0 = 无限制
         }
         for key in DEFAULT_SETTINGS:
             if key not in body:
@@ -637,30 +637,30 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         _save_settings(current)
         return current
 
-    # ---- Integrations CRUD ----
+    # ---- 集成 CRUD ----
 
-    # Run migration on startup
+    # 在启动时运行迁移
     migrate_from_settings()
 
     @router.get("/integrations")
     async def list_integrations_route(request: Request):
-        """List all integrations (admin only, keys masked)."""
+        """列出所有集成（仅限管理员，密钥已遮蔽）。"""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
         items = load_integrations()
-        # Mask API keys for frontend display
+        # 遮蔽 API 密钥以供前端显示
         safe = [mask_integration_secret(item) for item in items]
         return {"integrations": safe}
 
     @router.get("/integrations/presets")
     async def list_presets():
-        """List available integration presets."""
+        """列出可用的集成预设。"""
         return {"presets": {k: {kk: vv for kk, vv in v.items() if kk != "api_key"} for k, v in INTEGRATION_PRESETS.items()}}
 
     @router.post("/integrations")
     async def create_integration(request: Request):
-        """Create a new integration (admin only)."""
+        """创建新的集成（仅限管理员）。"""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -670,7 +670,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.put("/integrations/{integration_id}")
     async def update_integration_route(integration_id: str, request: Request):
-        """Update an existing integration (admin only)."""
+        """更新现有集成（仅限管理员）。"""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -682,7 +682,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.delete("/integrations/{integration_id}")
     async def delete_integration_route(integration_id: str, request: Request):
-        """Delete an integration (admin only)."""
+        """删除集成（仅限管理员）。"""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -693,7 +693,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/integrations/{integration_id}/test")
     async def test_integration_route(integration_id: str, request: Request):
-        """Test connectivity to an integration (admin only)."""
+        """测试与集成的连接（仅限管理员）。"""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -713,9 +713,9 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             import httpx
             from urllib.parse import urlparse
             # Strip any path/query the user accidentally pasted in the
-            # base URL (e.g. `http://host:8091/odysseus`) — otherwise
+            # （例如 `http://host:8091/odysseus`）— 否则主题会
             # the topic gets appended after the path and we publish to
-            # `/odysseus/odysseus` (which ntfy 404s on). ntfy itself
+            # 被附加在路径后面，我们会发布到 `/odysseus/odysseus`
             # only ever serves from the root.
             raw_base = (integ.get("base_url") or "").strip()
             parsed = urlparse(raw_base)
@@ -760,7 +760,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             except Exception as e:
                 hint = ""
                 if parsed.hostname not in ("127.0.0.1", "localhost"):
-                    hint = " If this is Docker Compose ntfy, set NTFY_BIND to that host/Tailscale IP and NTFY_BASE_URL to the same server URL in .env, then recreate ntfy."
+                    hint = " 如果使用 Docker Compose ntfy，请在 .env 中将 NTFY_BIND 设置为该主机/Tailscale IP，NTFY_BASE_URL 设置为相同的服务器 URL，然后重建 ntfy。"
                 return {"ok": False, "message": f"ntfy publish to {full_url} failed: {e}.{hint}"[:500]}
 
         if preset == "discord_webhook":
@@ -784,8 +784,8 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             except Exception as e:
                 return {"ok": False, "message": f"Request failed: {e}"[:400]}
 
-        # All other presets: GET against a known health endpoint.
-        # Fall back to detecting from name if preset is missing.
+        # 所有其他预设：对已知的健康检查端点执行 GET。
+        # 如果预设缺失，回退到从名称检测。
         health_paths = {
             "miniflux": "/v1/me",
             "gitea": "/api/v1/version",
