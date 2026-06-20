@@ -1,5 +1,5 @@
 # src/chat_helpers.py
-"""URL extraction, message/upload validation, request parsing."""
+"""URL 提取、消息/上传验证、请求解析。"""
 
 import re
 import os
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_urls(text: str) -> List[str]:
-    """Extract URLs from text using regex pattern."""
+    """使用正则模式从文本中提取 URL。"""
     url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
     urls = re.findall(url_pattern, text)
     cleaned_urls = []
@@ -68,11 +68,10 @@ _VISION_VL_RE = re.compile(r'(?<![a-z])vl(?![a-z])|vlm')
 
 
 def is_vision_model(model_name: str) -> bool:
-    """Best-effort check of whether a model can natively accept images.
+    """尽力检测模型是否原生支持图像输入。
 
-    Decides whether image attachments get passed through to the model or
-    swapped for a separate caption. Err toward True, since a false negative
-    drops the image entirely. See issue #124.
+    决定图像附件是直接传递给模型还是替换为单独的说明。
+    偏向 True，因为假阴性会导致图像完全丢失。参见 issue #124。
     """
     m = (model_name or "").lower()
     if any(kw in m for kw in _VISION_MODEL_KEYWORDS):
@@ -86,7 +85,7 @@ _lmstudio_models_cache: dict = {}
 
 
 def _is_local_host(host: Optional[str]) -> bool:
-    """True for loopback/LAN/Tailscale hosts (never public domains)."""
+    """对回环/局域网/Tailscale 主机返回 True（绝不会是公共域名）。"""
     host = (host or "").lower()
     if not host:
         return False
@@ -102,8 +101,8 @@ def _is_local_host(host: Optional[str]) -> bool:
 
 
 def _probe_lmstudio_models(url: str) -> Optional[list]:
-    """Return LM Studio's native /api/v1/models list, or None when the endpoint
-    isn't LM Studio or is unreachable (short-TTL cached; transient errors uncached)."""
+    """返回 LM Studio 的原生 /api/v1/models 列表，当端点不是
+    LM Studio 或不可达时返回 None（短 TTL 缓存；瞬时错误不缓存）。"""
     parsed = urlparse(url)
     host = parsed.hostname or ""
     key = (host, parsed.port)
@@ -133,8 +132,8 @@ def _probe_lmstudio_models(url: str) -> Optional[list]:
 
 
 def lmstudio_supports_vision(url: str, model: str) -> Optional[bool]:
-    """Read `model`'s capabilities.vision flag from LM Studio, or None when the
-    endpoint isn't LM Studio or doesn't report it (so callers fall back)."""
+    """从 LM Studio 读取 `model` 的 capabilities.vision 标志，当端点
+    不是 LM Studio 或未报告时返回 None（以便调用方回退）。"""
     if not model:
         return None
     # Never probe a remote provider; LM Studio is always a local/LAN host.
@@ -157,9 +156,8 @@ def lmstudio_supports_vision(url: str, model: str) -> Optional[bool]:
 
 
 def model_supports_vision(model_name: str, endpoint_url: str = "") -> bool:
-    """Whether a model accepts images, using the endpoint's reported
-    capability when available (LM Studio) and falling back to name-based
-    detection otherwise."""
+    """模型是否接受图像，优先使用端点报告的能力（LM Studio），
+    否则回退到基于名称的检测。"""
     if endpoint_url:
         try:
             advertised = lmstudio_supports_vision(endpoint_url, model_name or "")
@@ -171,7 +169,7 @@ def model_supports_vision(model_name: str, endpoint_url: str = "") -> bool:
 
 
 def validate_message(message: str) -> str:
-    """Validate message input."""
+    """验证消息输入。"""
     if not message:
         raise HTTPException(status_code=400, detail="Message is required")
 
@@ -186,7 +184,7 @@ def validate_message(message: str) -> str:
 
 
 def validate_file_upload(file: UploadFile) -> UploadFile:
-    """Validate uploaded file meets requirements."""
+    """验证上传文件是否符合要求。"""
     if not file or not file.filename:
         raise HTTPException(
             status_code=400,
@@ -251,10 +249,10 @@ def validate_file_upload(file: UploadFile) -> UploadFile:
 def coerce_message_and_session(req_json: dict | None, message: str | None,
                                session: str | None, session_manager,
                                allow_empty: bool = False):
-    """Extract message and session from request, with validation.
+    """从请求中提取消息和会话，并进行验证。
 
-    If allow_empty=True (e.g. attachment-only sends), the message-required
-    check is skipped and an empty/whitespace message is normalized to "".
+    如果 allow_empty=True（例如仅附件发送），则跳过消息必填
+    检查，空白消息会被规范化为 ""。
     """
     try:
         if message is None or session is None:

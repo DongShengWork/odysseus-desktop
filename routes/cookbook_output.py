@@ -1,7 +1,7 @@
-"""Pure helpers for shaping cookbook task output for the status response.
+"""Cookbook 任务输出的纯辅助函数，用于构建状态响应。
 
-Kept dependency-free (no FastAPI / SQLAlchemy imports) so the behavior can be
-unit-tested without standing up the whole app.
+保持无依赖（不导入 FastAPI / SQLAlchemy），以便无需启动整个应用
+即可进行单元测试。
 """
 
 import re

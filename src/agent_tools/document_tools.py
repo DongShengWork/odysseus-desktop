@@ -15,13 +15,13 @@ _active_model: Optional[str] = None
 
 
 def set_active_document(doc_id: Optional[str]):
-    """Set the active document ID for document tool execution."""
+    """设置活动文档 ID，用于文档工具执行。"""
     global _active_document_id
     _active_document_id = doc_id
 
 
 def set_active_model(model: Optional[str]):
-    """Set the current model name for version summaries."""
+    """设置当前模型名称，用于版本摘要。"""
     global _active_model
     _active_model = model
 
@@ -31,15 +31,15 @@ def get_active_document():
 
 
 def clear_active_document(doc_id: Optional[str] = None) -> bool:
-    """Clear the in-memory active-document pointer.
+    """清除内存中的活动文档指针。
 
-    With ``doc_id`` given, only clears when it matches the current pointer, so a
-    different active document is left untouched. Returns True if it was cleared.
+    传入 ``doc_id`` 时，仅在匹配当前指针时清除，以避免影响
+    其他活动文档。清除成功返回 True。
 
-    Called when a document is detached from its session or deleted (its tab is
-    closed): without this, the stale pointer makes the last-resort doc-injection
-    path re-surface a closed document in a later, unrelated chat — even one whose
-    session no longer matches — because an unlinked doc has session_id NULL (#1160).
+    当文档从会话中分离或删除时调用（其标签页被关闭）：
+    如果不这样做，过期指针会使最后手段的文档注入路径
+    在后续无关聊天中重新显示已关闭的文档——即使其会话
+    已不匹配——因为未链接的文档 session_id 为 NULL（#1160）。
     """
     global _active_document_id
     if doc_id is None or _active_document_id == doc_id:
@@ -75,13 +75,13 @@ def _most_recent_owned_document(db, Document, owner: Optional[str], active_only:
 
 
 # ---------------------------------------------------------------------------
-# Document tools — create/update/edit/suggest living documents
+# 文档工具 — 创建/更新/编辑/建议活动文档
 # ---------------------------------------------------------------------------
 
 def _sniff_doc_language(text: str) -> str:
-    """Best-effort detect a document's language from its content when the model
-    didn't specify one. Defaults to 'markdown' (prose). Recognizes the common
-    markup/code types the editor supports so e.g. an SVG isn't saved as markdown."""
+    """尽力从内容中检测文档语言（当模型未指定时）。
+    默认为 'markdown'（散文）。识别编辑器支持的常见
+    标记/代码类型，这样 SVG 就不会被保存为 markdown。"""
     import json as _json, re as _re2
     s = (text or "").strip()
     if not s:
@@ -131,8 +131,8 @@ def _looks_like_email_document(text: str = "", title: str = "") -> bool:
     return bool(_re.search(r"(?im)^To:\s*", s) and _re.search(r"(?im)^Subject:\s*", s))
 
 def _coerce_email_document_content(existing: str, incoming: str) -> str:
-    """Keep email docs in the To/Subject/---/body shape even if a model writes
-    only the body or dumps header labels without the separator."""
+    """保持邮件文档为 To/Subject/---/正文格式，即使模型只写了
+    正文或直接输出头部标签而没有分隔符。"""
     import re as _re
     old = existing or ""
     new = (incoming or "").strip()
@@ -155,14 +155,14 @@ def _coerce_email_document_content(existing: str, incoming: str) -> str:
     return header.rstrip() + "\n---\n" + body
 
 def _parse_tool_args(content):
-    """Parse a tool-call argument blob.
+    """解析工具调用参数块。
 
-    Accepts either a JSON string or an already-decoded dict. Unwraps the
-    common `{"body": {...}}` envelope that smaller models emit when they
-    read tool descriptions like "Body is JSON: {...}" literally — they
-    pass `body` as a field name rather than treating it as a noun.
+    接受 JSON 字符串或已解码的字典。解包常见的
+    `{"body": {...}}` 封装，较小的模型在读取类似
+    "Body is JSON: {...}" 的工具描述时会字面传递 `body` 作为字段名，
+    而非将其视为名词。
 
-    Returns a dict on success, raises ValueError on bad JSON.
+    成功时返回字典，JSON 解析失败时抛出 ValueError。
     """
     if isinstance(content, str):
         try:

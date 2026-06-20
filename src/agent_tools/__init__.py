@@ -1,14 +1,14 @@
 """
-agent_tools.py — Facade module.
+agent_tools.py — 外观模块。
 
-Re-exports tool parsing, schemas, execution, and implementations
-for backward compatibility. All importers continue to work unchanged.
+重新导出工具解析、模式、执行和实现，
+以保持向后兼容。所有导入方无需修改即可继续工作。
 
-Sub-modules:
-  - tool_parsing.py: regex patterns, parse/strip functions
-  - tool_schemas.py: FUNCTION_TOOL_SCHEMAS, function_call_to_tool_block
-  - tool_execution.py: execute_tool_block, format_tool_result, MCP helpers
-  - tool_implementations.py: all do_* tool functions
+子模块：
+  - tool_parsing.py：正则模式、解析/剥离函数
+  - tool_schemas.py：FUNCTION_TOOL_SCHEMAS、function_call_to_tool_block
+  - tool_execution.py：execute_tool_block、format_tool_result、MCP 辅助函数
+  - tool_implementations.py：所有 do_* 工具函数
 """
 
 import logging

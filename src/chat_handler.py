@@ -1,5 +1,5 @@
 # src/chat_handler.py
-"""Handler for chat endpoint operations."""
+"""聊天端点操作处理器。"""
 import os
 import asyncio
 import logging
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChatHandler:
-    """Handles chat operations for both streaming and non-streaming endpoints."""
+    """处理流式和非流式端点的聊天操作。"""
 
     def __init__(
         self,
@@ -53,7 +53,7 @@ class ChatHandler:
     # ------------------------------------------------------------------
 
     def validate_and_extract_preset(self, preset_id: Optional[str]) -> tuple:
-        """Returns (temperature, max_tokens, preset_system_prompt, character_name)."""
+        """返回 (temperature, max_tokens, preset_system_prompt, character_name)。"""
         if preset_id and preset_id not in self.preset_manager.presets:
             raise HTTPException(400, f"Invalid preset_id: {preset_id}")
 
@@ -85,11 +85,11 @@ class ChatHandler:
         return temperature, max_tokens, preset_system_prompt, character_name
 
     def enhance_message_if_needed(self, message: str) -> str:
-        """CoT enhancement disabled — modern models reason natively."""
+        """CoT 增强已禁用 — 现代模型原生推理。"""
         return message
 
     # ------------------------------------------------------------------
-    # Preprocessing — shared between /api/chat and /api/chat_stream
+    # 预处理 — /api/chat 和 /api/chat_stream 共享
     # ------------------------------------------------------------------
 
     async def preprocess_message(
@@ -101,13 +101,13 @@ class ChatHandler:
         allow_tool_preprocessing: bool = True,
     ) -> tuple:
         """
-        Common preprocessing for both chat endpoints.
+        两个聊天端点的通用预处理。
 
-        Returns (enhanced_message, user_content, text_for_context, youtube_transcripts, attachment_meta)
+        返回 (enhanced_message, user_content, text_for_context, youtube_transcripts, attachment_meta)
 
-        If `auto_opened_docs` is provided, server-side document auto-creation
-        (e.g. from an attached fillable PDF) appends entries describing the
-        new doc so the caller can announce it to the frontend before streaming.
+        如果提供 `auto_opened_docs`，服务端文档自动创建
+        （例如来自附加的可填写 PDF）会追加描述新文档的条目，
+        以便调用方可以在流式传输之前向前端宣告。
         """
         enhanced_message = message
         attachment_meta: List[Dict[str, Any]] = []
@@ -295,7 +295,7 @@ class ChatHandler:
             session.history = session.history[-MAX_CONTEXT_MESSAGES:]
 
     async def handle_memory_command(self, session, message: str) -> Optional[str]:
-        """Process inline memory commands. Returns response string or None."""
+        """处理内联记忆命令。返回响应字符串或 None。"""
         is_memory_cmd, memory_text = self.memory_manager.process_inline_memory_command(
             message
         )
