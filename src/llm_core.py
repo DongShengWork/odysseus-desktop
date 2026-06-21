@@ -796,7 +796,6 @@ def _format_upstream_error(status: int, body: bytes | str, url: str) -> str:
 
     Auth failures (401/403) become 'xAI rejected the API key' etc., so the UI
     不再显示原始 JSON 如 ``{"error":{"message":"User not found."}}``。"""
-    """
     if isinstance(body, bytes):
         try:
             body = body.decode("utf-8", errors="replace")

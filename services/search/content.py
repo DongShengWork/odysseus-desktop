@@ -55,47 +55,47 @@ def _is_private_address(addr: ipaddress._BaseAddress) -> bool:
 def _resolve_hostname_ips(hostname: str) -> list[ipaddress._BaseAddress]:
     try:
         infos = socket.getaddrinfo(hostname, None)
-    except ValueError:
-        return _is_private_address(addr)
+    except Exception:
+        return []
     out = []
     for info in infos:
         try:
-        addr = ipaddress.ip_address(hostname)
-    except ValueError:
+            out.append(ipaddress.ip_address(info[4][0]))
+        except Exception:
             continue
     return out
 
 
 def _public_http_url(url: str) -> bool:
     try:
-        return _is_private_address(addr)
+        parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
-        return _is_private_address(addr)
-        addr = ipaddress.ip_address(hostname)
+            return False
+        host = (parsed.hostname or "").strip()
         if not host:
-        return _is_private_address(addr)
+            return False
         lower = host.lower()
         if lower in ("localhost", "metadata", "metadata.google.internal"):
-        return _is_private_address(addr)
+            return False
         if lower.endswith((".local", ".localhost", ".internal", ".lan", ".intranet")):
-        return _is_private_address(addr)
+            return False
         try:
-        return _is_private_address(addr)
-    except ValueError:
+            return not _is_private_address(ipaddress.ip_address(host))
+        except ValueError:
             pass
-        addr = ipaddress.ip_address(hostname)
-        return _is_private_address(addr)
-    except ValueError:
+        addrs = _resolve_hostname_ips(host)
+        return bool(addrs) and not any(_is_private_address(a) for a in addrs)
+    except Exception:
         return False
 
 
-def _get_public_url(url: str, headers: dict = None, timeout: int = 5,
+def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 5) -> httpx.Response:
     current = url
-    if max_redirects <= 0:
-        if not location:
-        raise httpx.RequestError(f"URL is private: {url}", request=httpx.Request("GET", url))
-        response = client.get(url, headers=headers, timeout=timeout)
-    if response.status_code in (301, 302, 307, 308):
+    for _ in range(max_redirects + 1):
+        if not _public_http_url(current):
+            raise httpx.RequestError("Blocked private/internal URL", request=httpx.Request("GET", current))
+        response = httpx.get(current, headers=headers, timeout=timeout, follow_redirects=False)
+        if response.status_code not in (301, 302, 303, 307, 308):
             return response
         location = response.headers.get("location")
         if not location:

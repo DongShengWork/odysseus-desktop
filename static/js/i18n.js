@@ -183,4 +183,11 @@ export function translateDOM(root = document) {
 // 自动监听语言变更并重新翻译 DOM
 onLocaleChange(() => translateDOM());
 
+// 将 t() 暴露为全局函数，供其他模块直接使用
+window.t = t;
+window.setLocale = setLocale;
+window.getCurrentLocale = getCurrentLocale;
+window.initI18n = initI18n;
+window.translateDOM = translateDOM;
+
 export default { initI18n, t, setLocale, getCurrentLocale, getSupportedLocales, getLocaleDisplayName, onLocaleChange, translateDOM };

@@ -1382,8 +1382,8 @@ def setup_chat_routes(
                     _active_streams.pop(session, None)
 
         async def _safe_stream() -> AsyncGenerator[str, None]:
-        """包装器，确保即使 stream_with_save 在到达特定模式的
-        finally 块之前抛出异常，_active_streams 清理也会执行。"""
+            """包装器，确保即使 stream_with_save 在到达特定模式的
+            finally 块之前抛出异常，_active_streams 清理也会执行。"""
             try:
                 async for chunk in stream_with_save():
                     yield chunk
@@ -1570,7 +1570,8 @@ def setup_chat_routes(
                     elif chunk == "data: [DONE]\n\n":
                         # Update the last assistant message in session history.
                         # Strip reasoning-model <think> blocks so the persisted
-        It just asks the LLM to rewrite the given text.                        from src.research_utils import strip_thinking
+                        # rewrite is just the rewritten text, not its scratchpad.
+                        from src.research_utils import strip_thinking
                         full_response = strip_thinking(full_response).strip() or full_response
                         if full_response:
                             for msg in reversed(sess.history):

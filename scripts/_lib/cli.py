@@ -103,7 +103,6 @@ def run(parser: argparse.ArgumentParser, argv=None) -> int:
 
     Intercepts `--version` / `-V` before argparse can complain about the
     否则子解析器上的 `argparse.required=True` 会先触发。"""
-    subparsers fires first otherwise."""
     raw_argv = sys.argv[1:] if argv is None else list(argv)
     if any(a in ("--version", "-V") for a in raw_argv):
         sys.stdout.write(f"{parser.prog} {VERSION}\n")

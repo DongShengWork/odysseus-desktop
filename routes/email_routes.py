@@ -3357,7 +3357,8 @@ def setup_email_routes():
         }
 
     @router.post("/accounts/{account_id}/set-default")
-    async def test_account_config(req: Request, owner: str = Depends(require_user)):        _assert_owns_account(account_id, owner)
+    async def test_account_config(req: Request, owner: str = Depends(require_user)):
+        _assert_owns_account(account_id, owner)
         from core.database import SessionLocal, EmailAccount
         db = SessionLocal()
         try:

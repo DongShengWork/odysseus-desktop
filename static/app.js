@@ -3,6 +3,7 @@
 // ES6 模块 — 入口点，无导出（将所有模块连接在一起）
 // ============================================
 import Storage from './js/storage.js';
+import i18nModule from './js/i18n.js';
 import uiModule from './js/ui.js';
 import workspaceModule from './js/workspace.js';
 import fileHandlerModule from './js/fileHandler.js';
@@ -52,6 +53,17 @@ window.sessionModule = sessionModule;
 window.uiModule = uiModule;
 window.adminModule = adminModule;
 window.cookbookModule = cookbookModule;
+window.i18nModule = i18nModule;
+
+// 初始化 i18n：加载翻译文件并翻译 DOM
+(async () => {
+  try {
+    await i18nModule.initI18n();
+    i18nModule.translateDOM();
+  } catch (e) {
+    console.warn('[i18n] Init error:', e);
+  }
+})();
 
 // 任何 fetch 请求返回 401 时重定向到登录页
 const _origFetch = window.fetch;

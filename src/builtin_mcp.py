@@ -178,10 +178,9 @@ async def register_builtin_servers(mcp_manager):
 
 
 def _npx_package_from_args(args):
-    """Pick the package spec out of an npx args list shaped like
     """从形如 ['-y', '<package@version>', ...flags] 的 npx args
-    convention doesn't match (we then skip the cache check and just
-    try the connect)."""
+    列表中提取包规格。如果格式不匹配则返回 None
+    （此时跳过缓存检查直接尝试连接）。"""
     if not args:
         return None
     if "-y" in args:
