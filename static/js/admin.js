@@ -968,7 +968,7 @@ function initEndpointForm() {
     if (res.ok && d.online) {
       const models = d.models || [];
       const preview = models.slice(0, 3).map(m => esc(String(m).split('/').pop())).join(', ');
-      msg.innerHTML = t('admin.online_found', { n: models.length }) `: ${preview}${models.length > 3 ? ', …' : ''}` : ''}`;
+      msg.innerHTML = `Online — found ${models.length} model${models.length !== 1 ? 's' : ''}${preview ? `: ${preview}${models.length > 3 ? ', …' : ''}` : ''}`;
       msg.className = 'admin-success';
       return;
     }

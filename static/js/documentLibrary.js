@@ -2050,7 +2050,7 @@ let _libraryArchivedView = false;   // 文档标签页是否显示已归档文�
           if (isArchive) _renderLibArchive(); else _renderLibChats();
         });
       } catch (e) {
-        preview.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:6px 4px;color:var(--color-error);">${t('library.failed_preview')}</div>';
+        preview.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:6px 4px;color:var(--color-error);">Failed to load preview</div>';
       }
     }
 

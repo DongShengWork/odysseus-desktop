@@ -1615,11 +1615,11 @@ async function _renderAgenda() {
     // 空状态镜像邮件面板：简短消息 + 设置 ›
     // 集成链接来设置 CalDAV，或者快速"创建事件"操作。
     h += '<div class="cal-empty" style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">' +
-      '<span>${t('calendar.no_upcoming_events')}</span>' +
+      '<span>No upcoming events</span>' +
       '<span style="opacity:0.7;font-size:11px;">' +
         '<a href="#" data-cal-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">Settings &rsaquo; Integrations</a>' +
         ' &middot; ' +
-        '<a href="#" data-cal-create-event="1" style="color:var(--accent,var(--red));text-decoration:underline;">${t('calendar.create_event')}</a>' +
+        '<a href="#" data-cal-create-event="1" style="color:var(--accent,var(--red));text-decoration:underline;">Create event</a>' +
       '</span>' +
     '</div>';
   } else {

@@ -832,7 +832,7 @@ export function renderMemoryList() {
       // pattern as the email/documents/skills Select item.
       const selectItem = document.createElement('div');
       selectItem.className = 'dropdown-item-compact';
-      selectItem.innerHTML = '<span class="dropdown-icon"><span style="font-size:16px;line-height:1;">●</span></span><span>${t('brain.select')}</span>';
+      selectItem.innerHTML = '<span class="dropdown-icon"><span style="font-size:16px;line-height:1;">●</span></span><span>Select</span>';
       selectItem.addEventListener('click', (e) => {
         e.stopPropagation();
         if (dropdown.parentNode) dropdown.remove();
@@ -1196,7 +1196,7 @@ export async function extractMemory(sessionId) {
   } else {
     const header = document.createElement('div');
     header.className = 'memory-suggestions-header';
-    header.innerHTML = '<span>${t('brain.suggested_memories')}</span>';
+    header.innerHTML = '<span>Suggested memories</span>';
     const backBtn = document.createElement('button');
     backBtn.className = 'memory-item-btn';
     backBtn.textContent = 'back';
