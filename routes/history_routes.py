@@ -175,13 +175,13 @@ def setup_history_routes(session_manager) -> APIRouter:
                             db.delete(db_msg)
                             deleted += 1
 
-                    # Remove from in-memory history by matching _db_id
+                    # 移除 from in-memory history by matching _db_id
                     def _get_db_id(m):
                         meta = m.metadata if isinstance(m, ChatMessage) else (m.get('metadata') if isinstance(m, dict) else None)
                         return meta.get('_db_id') if isinstance(meta, dict) else None
                     session.history = [m for m in session.history if _get_db_id(m) not in msg_ids]
                 elif indices:
-                    # Legacy index-based delete
+                    # Legacy 索引-based delete
                     indices = sorted(indices, reverse=True)
                     db_messages = db.query(DbChatMessage).filter(
                         DbChatMessage.session_id == session_id
@@ -243,7 +243,7 @@ def setup_history_routes(session_manager) -> APIRouter:
                 meta['edited'] = True
                 db_msg.meta_data = json.dumps(meta)
 
-                # Update in-memory history by matching _db_id
+                # 更新 in-memory history by matching _db_id
                 for hmsg in session.history:
                     hmeta = hmsg.metadata if isinstance(hmsg, ChatMessage) else hmsg.get('metadata')
                     if isinstance(hmeta, dict) and hmeta.get('_db_id') == msg_id:
@@ -273,7 +273,7 @@ def setup_history_routes(session_manager) -> APIRouter:
         _verify_session_owner(request, session_id)
         try:
             session = session_manager.get_session(session_id)
-            # Find last assistant message and add stopped metadata
+            # Find last 助手消息 and add stopped metadata
             for msg in reversed(session.history):
                 if (isinstance(msg, ChatMessage) and msg.role == 'assistant') or \
                    (isinstance(msg, dict) and msg.get('role') == 'assistant'):
@@ -331,7 +331,7 @@ def setup_history_routes(session_manager) -> APIRouter:
             meta_update = body.get("metadata", {})
             session = session_manager.get_session(session_id)
 
-            # Update in-memory
+            # 更新 in-memory
             for msg in reversed(session.history):
                 if (isinstance(msg, ChatMessage) and msg.role == 'assistant') or \
                    (isinstance(msg, dict) and msg.get('role') == 'assistant'):
@@ -345,7 +345,7 @@ def setup_history_routes(session_manager) -> APIRouter:
                         msg['metadata'].update(meta_update)
                     break
 
-            # Update in DB
+            # 更新 in DB
             db = SessionLocal()
             try:
                 import json as _json
@@ -382,7 +382,7 @@ def setup_history_routes(session_manager) -> APIRouter:
             separator = body.get("separator", "\n\n")
             session = session_manager.get_session(session_id)
 
-            # Find last two assistant messages in-memory
+            # Find last two 助手消息s in-memory
             ai_indices = []
             for i, msg in enumerate(session.history):
                 role = msg.role if isinstance(msg, ChatMessage) else msg.get('role', '')
@@ -399,13 +399,13 @@ def setup_history_routes(session_manager) -> APIRouter:
             content2 = msg2.content if isinstance(msg2, ChatMessage) else msg2.get('content', '')
             merged_content = content1 + separator + content2
 
-            # Merge metadata
+            # 合并 metadata
             meta1 = (msg1.metadata if isinstance(msg1, ChatMessage) else msg1.get('metadata')) or {}
             meta2 = (msg2.metadata if isinstance(msg2, ChatMessage) else msg2.get('metadata')) or {}
             merged_meta = {**meta1, **meta2}
             merged_meta.pop('stopped', None)  # no longer stopped after continue
 
-            # Update first message, remove second
+            # 更新 first message, remove second
             if isinstance(msg1, ChatMessage):
                 msg1.content = merged_content
                 msg1.metadata = merged_meta
@@ -426,7 +426,7 @@ def setup_history_routes(session_manager) -> APIRouter:
             for ri in sorted(remove_indices, reverse=True):
                 session.history.pop(ri)
 
-            # Update DB
+            # 更新 DB
             db = SessionLocal()
             try:
                 import json as _json
@@ -436,7 +436,7 @@ def setup_history_routes(session_manager) -> APIRouter:
                     .order_by(DbChatMessage.timestamp)
                     .all()
                 )
-                # Find last two assistant messages in DB
+                # Find last two 助手消息s in DB
                 ai_db = [(i, m) for i, m in enumerate(db_messages) if m.role == 'assistant']
                 if len(ai_db) >= 2:
                     (_, db1), (_, db2) = ai_db[-2], ai_db[-1]
@@ -470,12 +470,12 @@ def setup_history_routes(session_manager) -> APIRouter:
             body = await request.json()
             keep_count = body.get("keep_count", 0)
 
-            # Get the source session
+            # 获取 the source session
             source = session_manager.sessions.get(session_id)
             if not source:
                 raise HTTPException(404, "Session not found")
 
-            # Create new session
+            # 创建 new session
             new_id = str(uuid.uuid4())
             fork_name = f"\u2ADD {source.name}"
             new_session = session_manager.create_session(
@@ -492,7 +492,7 @@ def setup_history_routes(session_manager) -> APIRouter:
             for msg in msgs_to_copy:
                 # Copy the metadata dict. Sharing it would let the fork's
                 # persistence (add_message -> _persist_message stamps
-                # _db_id/timestamp onto the dict) mutate the SOURCE session's
+                # _db_id/时间戳 onto the dict) mutate the SOURCE session's
                 # in-memory messages, corrupting their _db_id and breaking
                 # edit/delete-by-id on the original conversation.
                 meta = dict(msg.metadata) if isinstance(msg.metadata, dict) else None
@@ -555,7 +555,7 @@ def setup_history_routes(session_manager) -> APIRouter:
             older = session.history[:-keep_count]
             recent = session.history[-keep_count:]
 
-            # Build text to summarize
+            # 构建 text to summarize
             convo_text = "\n".join(
                 f"{_message_role(m).upper()}: "
                 f"{_message_text(m)[:2000]}"
@@ -588,7 +588,7 @@ def setup_history_routes(session_manager) -> APIRouter:
                 content=f"[Conversation summary — {len(older)} earlier messages were compacted]\n\n{summary}",
                 metadata={"compacted": True, "hidden": True},
             )
-            # Visible assistant message just shows stats
+            # Visible 助手消息 just shows stats
             summary_msg = ChatMessage(
                 role="assistant",
                 content=f"**Conversation compacted** — {len(older)} messages summarized, {len(recent)} kept.",
@@ -599,14 +599,14 @@ def setup_history_routes(session_manager) -> APIRouter:
             session.message_count = len(session.history)
             logger.info(f"Compact: session {session_id} history now has {len(session.history)} messages (was {msg_count_before})")
 
-            # Update DB: delete old messages, insert summary
+            # 更新 DB: delete old messages, insert summary
             db = SessionLocal()
             try:
                 db_msgs = db.query(DbChatMessage).filter(
                     DbChatMessage.session_id == session_id
                 ).order_by(DbChatMessage.timestamp).all()
 
-                # Delete all but the last keep_count
+                # 删除 all but the last keep_count
                 for m in db_msgs[:-keep_count]:
                     db.delete(m)
 
@@ -634,7 +634,7 @@ def setup_history_routes(session_manager) -> APIRouter:
                 )
                 db.add(db_summary)
 
-                # Update session record
+                # 更新 session record
                 db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
                 if db_session:
                     db_session.message_count = len(session.history)

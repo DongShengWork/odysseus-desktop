@@ -395,7 +395,7 @@ async def _eval_skill_retrieval_precision(skill_md: str, others: list,
     }
 
 
-# In-memory skill-test jobs, keyed by (owner, skill_name). Runs server-side so
+# In-memory skill-test jobs, keyed by (owner, skill_name). 运行 server-side so
 # the test survives the modal being closed; the UI polls /test-status. (Not
 # persisted across restart — it's a "come back in a bit" convenience.)
 _skill_test_jobs: dict = {}
@@ -485,7 +485,7 @@ async def _run_skill_test_job(key, name, md, task, url, model, headers, owner, s
     job["status"] = "done"
 
 
-# ── Autonomous skill audit: test → judge → self-edit → retry → teacher → flag ──
+# ── Autonomous skill audit: test → judge → self-edit → 重试 → teacher → flag ──
 _skill_audit_jobs: dict = {}
 
 
@@ -875,7 +875,7 @@ async def _audit_one_skill(skills_manager, skill, url, model, headers,
         log(f"{name}: {status} — inconclusive")
         return {"skill": name, "result": "inconclusive", "verdict": verdict, "status": status}
 
-    # Self-edit + retry.
+    # Self-edit + 重试.
     log(f"{name}: self-editing to fix issues…")
     new_md = await _improve_skill_md(md, verdict, transcript, url, model, headers)
     if new_md and new_md.strip() != md.strip() and _apply_skill_md(skills_manager, name, new_md, owner):
@@ -893,8 +893,8 @@ async def _audit_one_skill(skills_manager, skill, url, model, headers,
 
     # Teacher escalation (if a distinct teacher model is configured). The
     # teacher only REWRITES the skill — it does NOT run the test. The point is
-    # to verify the regular (student) model can now succeed with the teacher's
-    # improved procedure, so the retry runs on the worker model, not the teacher.
+    # to 验证 the regular (student) model can now succeed with the teacher's
+    # improved procedure, so the 重试 runs on the worker model, not the teacher.
     teacher_ran = False
     if teacher and teacher[0] and teacher[1] and (teacher[1] != model or teacher[0] != url):
         teacher_ran = True

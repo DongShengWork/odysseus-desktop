@@ -363,7 +363,7 @@ class McpManager:
             }
             clear_auth_url(server_id)
             # Tools changed (this can complete after connect_server already
-            # returned, via the background OAuth flow), so bump the generation
+            # returned, via the background OAuth 流程), so bump the generation
             # to invalidate the tool-prompt cache.
             self._generation += 1
             logger.info(f"MCP server connected: {name} ({server_id}) - {len(tools)} tools via http")

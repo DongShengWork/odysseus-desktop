@@ -116,8 +116,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = _rag_manager.index_personal_documents(directory)
             indexed = result.get("indexed_count", 0) if isinstance(result, dict) else 0
             # 记录目录以便 `list` 和 `remove_directory` 可以看到它。
-            # 索引刚刚在上面完成，因此传入 index=False 以避免第二次
-            # （无所有者）扫描。否则目录已被索引但从未在 indexed_directories
+            # 索引刚刚在上面完成，因此传入 索引=False 以避免第二次
+            # （无所有者）扫描。否则目录已被索引但从未在 索引ed_directories
             # 中被跟踪，导致其不可见/不可移除。
             if _personal_docs_manager and hasattr(_personal_docs_manager, "add_directory"):
                 try:

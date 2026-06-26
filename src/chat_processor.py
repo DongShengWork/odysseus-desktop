@@ -190,7 +190,7 @@ class ChatProcessor:
         preface = []
         rag_sources = []
 
-        # Add preset system prompt if specified
+        # 添加 preset 系统提示 if specified
         if preset_system_prompt:
             preface.append({
                 "role": "system",
@@ -244,7 +244,7 @@ class ChatProcessor:
                 except Exception as _e:
                     logger.warning("Failed to increment memory uses: %s", _e)
 
-            # (skills index injection moved out — see below; only fires in
+            # (skills 索引 injection moved out — see below; only fires in
             # agent mode so chat mode and incognito stay clean.)
 
         # RAG: search if enabled and rag_manager available, inject only above threshold
@@ -253,7 +253,7 @@ class ChatProcessor:
                 rag_manager = getattr(self.personal_docs_manager, 'rag_manager', None)
                 if rag_manager:
                     results = rag_manager.search(message, k=5, owner=owner)
-                    # Filter by similarity threshold
+                    # 过滤 by similarity threshold
                     relevant = [r for r in results if r.get("similarity", 0) >= self.RAG_SIMILARITY_THRESHOLD]
                     if relevant:
                         logger.info(f"RAG: {len(relevant)}/{len(results)} results above threshold {self.RAG_SIMILARITY_THRESHOLD}")
@@ -274,7 +274,7 @@ class ChatProcessor:
             except Exception as e:
                 logger.warning(f"RAG retrieval failed: {e}")
 
-        # Add web search if enabled
+        # 添加 web search if enabled
         web_sources = []
         if use_web:
             try:
@@ -305,11 +305,11 @@ class ChatProcessor:
                         f"Content from {url}:\n\n{content}",
                     ))
 
-        # Skills index — progressive disclosure. Only injected when the
+        # Skills 索引 — progressive disclosure. Only injected when the
         # model has the `manage_skills` tool available (agent_mode), and
         # never in incognito mode (the user has explicitly opted out of
         # context retention this turn). In plain chat mode the model can't
-        # call the tool anyway, so the index would be noise.
+        # call the tool anyway, so the 索引 would be noise.
         if agent_mode and not incognito and use_skills and self.skills_manager:
             try:
                 idx = self.skills_manager.index_for(owner=owner)

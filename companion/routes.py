@@ -219,7 +219,7 @@ def setup_companion_routes() -> APIRouter:
         import json as _json
         payload_json = _json.dumps(payload, separators=(",", ":"))
         # 仅将已知的 PNG data-URI 写入 src；其他所有值都已通过
-        # html.escape 处理。
+        # html.转义 处理。
         qr_block = (
             f'<img src="{html.escape(qr)}" alt="Pairing QR" width="260" height="260">'
             if qr_ok else "<p><em>QR rendering unavailable -- enter the details manually.</em></p>"

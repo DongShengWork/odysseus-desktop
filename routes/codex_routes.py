@@ -566,7 +566,7 @@ def setup_codex_routes(
         if not _re.fullmatch(r"[a-zA-Z0-9_-]+", session_id):
             raise HTTPException(400, "Invalid session id")
         tail = max(20, min(int(tail or 400), 4000))
-        # Resolve the task's host (if any) from cookbook state so we can
+        # 解析 the task's host (if any) from cookbook state so we can
         # SSH 连接到正确的机器，与 UI 的 _reconnectTask 行为一致。
         state = _read_cookbook_state()
         tasks = state.get("tasks") or []
@@ -674,7 +674,7 @@ def setup_codex_routes(
             if isinstance(mds, str) and mds.strip() not in HF_DEFAULTS:
                 return mds
             return ""
-        # Resolve friendly host name → real host (matches list_cached_models flow).
+        # 解析 friendly host name → real host (matches list_cached_models flow).
         resolved_host = host or ""
         srv: dict[str, Any] = {}
         if host:

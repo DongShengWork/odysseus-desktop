@@ -313,7 +313,7 @@ def email_health(accounts: List[Dict[str, Any]],
         return _svc("email", DISABLED, "No email accounts configured.")
     if connect is None:
         from routes.email_helpers import _imap_connect
-        # Impose the service-health budget on the IMAP connect itself.
+        # Impose the 服务-health budget on the IMAP connect itself.
         connect = lambda aid: _imap_connect(aid, timeout=_PROBE_TIMEOUT)  # noqa: E731
 
     def _label(acc: Dict[str, Any]) -> str:

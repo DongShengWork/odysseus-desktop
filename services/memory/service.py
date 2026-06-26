@@ -1,4 +1,4 @@
-# services/memory/service.py
+# 服务s/memory/服务.py
 """记忆服务 — 持久化记忆存储与检索。"""
 
 from dataclasses import dataclass, field

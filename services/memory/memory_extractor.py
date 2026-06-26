@@ -404,7 +404,7 @@ async def extract_and_store(
                 continue
 
             # 去重：先检查向量相似度（快速），然后精确文本匹配。
-            # 运行时的 embedding/ChromaDB 失败（后端 OOM、模型被驱逐、
+            # 运行时的 嵌入/ChromaDB 失败（后端 OOM、模型被驱逐、
             # 远程端点宕机）不应中止整批处理 — 回退到
             # 下面的文本/模糊去重，而不是丢失此会话中提取的每条
             # 已验证事实。（`.healthy` 仅在初始化时设置，因此

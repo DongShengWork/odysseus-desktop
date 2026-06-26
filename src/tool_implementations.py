@@ -34,8 +34,8 @@ def _validate_cookbook_ssh_target(remote_host: Any, ssh_port: Any = "") -> tuple
 # Active email state
 # ---------------------------------------------------------------------------
 
-# When the user has an email reader window open, the frontend tells the
-# backend about it on each chat submit. Email tools can resolve "this email"
+# When the user has an email reader window open, the 前端 tells the
+# 后端 about it on each chat submit. Email tools can resolve "this email"
 # without guessing a UID. Cleared between requests by chat_routes.
 _active_email_ref: Optional[Dict[str, str]] = None
 
@@ -89,7 +89,7 @@ def _parse_tool_args(content):
         args = {}
     # Unwrap {"body": {...}} envelope — but only if `body` is the sole key
     # and points at a dict. We don't want to clobber a legitimate `body`
-    # field on tools where it's a real arg (e.g. send_email body text).
+    # field on tools where it's a real arg (e.g. send_邮件正文 text).
     if (
         isinstance(args, dict)
         and len(args) == 1
@@ -451,7 +451,7 @@ async def do_manage_tasks(content: str, owner: Optional[str] = None) -> Dict:
                 )
 
             task_id = str(_uuid.uuid4())
-            # Guard each fallback with `or`: args.get("prompt", default) returns
+            # Guard each 回退 with `or`: args.get("prompt", default) returns
             # None when the key is present but null, and None[:50] raises.
             name = args.get("name") or (args.get("prompt") or args.get("action_name") or "Task")[:50]
 
@@ -654,7 +654,7 @@ async def do_manage_endpoints(content: str, owner: Optional[str] = None) -> Dict
 
 
 # ---------------------------------------------------------------------------
-# MCP server management tool
+# MCP 服务器 management tool
 # ---------------------------------------------------------------------------
 
 # Parallel to routes/cookbook_helpers._validate_serve_cmd but deliberately the
@@ -827,7 +827,7 @@ async def do_manage_mcp(content: str, owner: Optional[str] = None) -> Dict:
         env = args.get("env", {})
         if not name or not command:
             return {"error": "name and command are required", "exit_code": 1}
-        # Validate BEFORE any DB write or spawn: a rejected registration must
+        # 验证 BEFORE any DB write or spawn: a rejected registration must
         # leave no enabled row (which would otherwise auto-reconnect on restart)
         # and must not attempt a connection.
         _mcp_err = _validate_mcp_command(command, cmd_args, env)
@@ -1012,7 +1012,7 @@ async def do_manage_webhooks(content: str, owner: Optional[str] = None) -> Dict:
 
 
 # ---------------------------------------------------------------------------
-# API token management tool
+# API 令牌 management tool
 # ---------------------------------------------------------------------------
 
 async def do_manage_tokens(content: str, owner: Optional[str] = None) -> Dict:
@@ -1082,7 +1082,7 @@ async def do_manage_settings(content: str, owner: Optional[str] = None) -> Dict:
     try:
         # set/get/list/delete operate on the REAL app settings (the same store
         # the Settings panel writes), so changing a model / voice / search
-        # engine / reminder channel from chat actually takes effect.
+        # engine / 提醒 channel from chat actually takes effect.
         from src.settings import load_settings, save_settings, DEFAULT_SETTINGS
 
         # Secrets/credentials the agent must NOT write — kept read-only (masked)
@@ -1219,7 +1219,7 @@ async def do_manage_settings(content: str, owner: Optional[str] = None) -> Dict:
                 return {"error": f"Unknown setting '{raw}'. Use action='list' to see available settings.", "exit_code": 1}
             if _is_secret(key):
                 return {"response": f"'{key}' is a credential/secret — for security I can't set it from chat. Open Settings and set it there.", "exit_code": 0}
-            # Structured settings (dicts/lists like keybinds, default_model_fallbacks)
+            # Structured settings (dicts/lists like keybinds, default_model_回退s)
             # have no safe scalar coercion — _coerce would pass a bare string
             # straight through and clobber the structure. Refuse them here; they're
             # edited in their dedicated panels. (reset/delete still restore the
@@ -1336,7 +1336,7 @@ async def do_manage_settings(content: str, owner: Optional[str] = None) -> Dict:
 
 
 # ---------------------------------------------------------------------------
-# API call tool
+# API 调用 tool
 # ---------------------------------------------------------------------------
 
 async def do_api_call(content: str) -> Dict:
@@ -1471,9 +1471,9 @@ async def do_manage_notes(content: str, owner: Optional[str] = None) -> Dict:
             elif not content_raw and text_raw:
                 content_raw = text_raw
             # Accept both `items` (legacy/internal field) and `checklist_items`
-            # (the schema-exposed name used by native function calls). Models
+            # (the schema-exposed name used by native 函数调用s). Models
             # following the schema emit `checklist_items`; older code paths
-            # and direct API callers still use `items`.
+            # and direct API 调用ers still use `items`.
             items_raw = args.get("checklist_items")
             if items_raw is None:
                 items_raw = args.get("items")
@@ -1482,7 +1482,7 @@ async def do_manage_notes(content: str, owner: Optional[str] = None) -> Dict:
             # Accept natural-language due_date ("tomorrow at 1pm") in
             # addition to ISO. Use the user-tz-aware parser so the LLM's
             # naive times ("today at 9pm") are anchored to the USER's clock,
-            # not the server's. Returns ISO with explicit offset so frontend
+            # not the server's. 返回 ISO with explicit offset so 前端
             # `new Date()` resolves the right absolute moment regardless of
             # where the user is.
             due_raw = args.get("due_date")
@@ -1494,9 +1494,9 @@ async def do_manage_notes(content: str, owner: Optional[str] = None) -> Dict:
                 except Exception:
                     due_iso = due_raw  # fall through; trust the model
             if due_iso and title:
-                # Calendar event reminders are represented as Notes. If the
-                # model creates a calendar event with reminder_minutes and then
-                # also creates a separate note reminder for the same title/time,
+                # Calendar event 提醒s are represented as Notes. If the
+                # model creates a 日历事件 with 提醒_minutes and then
+                # also creates a separate note 提醒 for the same title/time,
                 # keep the existing note so the user gets only one dispatch.
                 existing_q = db.query(Note).filter(
                     Note.archived == False,  # noqa: E712
@@ -1529,7 +1529,7 @@ async def do_manage_notes(content: str, owner: Optional[str] = None) -> Dict:
             )
             db.add(note)
             db.commit()
-            # Return note_id so the chat-side renderer can build a real
+            # 返回 note_id so the chat-side renderer can build a real
             # "View note" button that opens the notes modal at this id.
             # Previously the create response only included a prose
             # confirmation; the model would type "View note" as a markdown
@@ -1553,11 +1553,11 @@ async def do_manage_notes(content: str, owner: Optional[str] = None) -> Dict:
             for field in ("title", "content", "note_type", "color", "label"):
                 if field in args and args[field] is not None:
                     setattr(note, field, args[field])
-            # Parse due_date the same way the `add` action does. The schema
+            # 解析 due_date the same way the `add` action does. The schema
             # advertises natural language ("tomorrow at 9am"), and naive ISO
-            # strings need the user's tz offset attached so the frontend's
+            # strings need the user's tz offset attached so the 前端's
             # `new Date()` resolves the right absolute moment. Storing the raw
-            # value here left updated reminders as unparseable literals that
+            # value here left updated 提醒s as unparseable literals that
             # never fired.
             if args.get("due_date") is not None:
                 due_raw = args["due_date"]
@@ -1769,7 +1769,7 @@ async def do_manage_calendar(content: str, owner: Optional[str] = None) -> Dict:
             return None, "event already passed"
         if remind_at <= now:
             # If the requested "before" time already passed but the event is
-            # still upcoming, create an immediate Note reminder instead of
+            # still upcoming, create an immediate Note 提醒 instead of
             # silently dropping it.
             remind_at = now
         start_fmt = dtstart.strftime("%a %b %d") if all_day else dtstart.strftime("%a %b %d %H:%M")
@@ -1951,7 +1951,7 @@ async def do_manage_calendar(content: str, owner: Optional[str] = None) -> Dict:
                 else:
                     dtend = dtstart + timedelta(hours=1)
 
-            # Dedup: if a non-cancelled event with the same title + start time already
+            # Dedup: if a non-cancelled event with the same title + 开始时间 already
             # exists, return its UID instead of creating a fresh copy. Prevents the
             # email triage from multiplying events when several emails reference the
             # same meeting. Compare case-insensitively since LLM-extracted titles
@@ -2040,7 +2040,7 @@ async def do_manage_calendar(content: str, owner: Optional[str] = None) -> Dict:
                 reminder_blurb = f" with reminder {minutes_before} min before"
             else:
                 reminder_blurb = f" without reminder ({reminder_skipped_reason or 'reminder time already passed'})"
-            # Return a clickable anchor so the agent can surface a link
+            # 返回 a clickable anchor so the agent can surface a link
             # that opens the calendar on that day. See the markdown
             # anchor convention ([Name](#event-<uid>)).
             return {
@@ -2070,7 +2070,7 @@ async def do_manage_calendar(content: str, owner: Optional[str] = None) -> Dict:
             if args.get("location") is not None:
                 ev.location = args["location"]
             if args.get("dtstart") is not None:
-                # Anchor naive/natural-language input to the USER's timezone and
+                # Anchor naive/natural-language input to the USER's 时区 and
                 # refresh is_utc, exactly like create_event. Parsing with the
                 # raw server-local _parse_dt here (and never touching is_utc)
                 # silently shifted an updated event by the user's UTC offset.
@@ -2134,7 +2134,7 @@ async def do_manage_calendar(content: str, owner: Optional[str] = None) -> Dict:
 
 # ── Cookbook tools ──
 
-# In-process loopback base for agent tools that call Odysseus's own API
+# In-process loopback base for 智能体工具s that call Odysseus's own API
 # (cookbook state, model serve, gallery, email, calendar). We ride the
 # per-process internal token so require_admin lets us through. See
 # core/middleware.py. Resolution (override / APP_PORT / 7000) lives in
@@ -2199,7 +2199,7 @@ async def _resolve_cookbook_host(name_or_host: str) -> str:
     for h in servers.get("hosts") or []:
         if (h.get("name") or "").lower() == low:
             return h.get("host") or ""   # "" for the Local entry
-    # Substring name match as a fallback
+    # Substring name match as a 回退
     for h in servers.get("hosts") or []:
         if low and low in (h.get("name") or "").lower():
             return h.get("host") or ""
@@ -2382,7 +2382,7 @@ async def _cookbook_register_task(
     # Placeholder output — the cookbook UI's CSS hides empty <pre>
     # via `.cookbook-output-pre:empty { display: none }`, so an
     # empty-string output makes the expansion appear broken until the
-    # frontend's reconnect-polling loop captures tmux output. A short
+    # 前端's reconnect-polling loop captures tmux output. A short
     # placeholder gives the user something to see immediately; it gets
     # replaced by real tmux output within a few seconds.
     target = f"{host}:" if host else "local:"
@@ -2443,7 +2443,7 @@ _APP_API_BLOCKLIST_METHOD_PATH = (
     ("POST",   "/api/cookbook/state"),   # whole-file overwrite — agent must use serve_preset/serve_model instead
     ("DELETE", "/api/cookbook/state"),
     # Host-control routes: package install, engine rebuild, and process
-    # signalling should not be reachable through the generic API bridge.
+    # 签名alling should not be reachable through the generic API bridge.
     ("POST",   "/api/cookbook/packages/install"),
     ("POST",   "/api/cookbook/rebuild-engine"),
     ("POST",   "/api/cookbook/kill-pid"),
@@ -2458,9 +2458,9 @@ _APP_API_BLOCKLIST_METHOD_PATH = (
     # fumbles the payload + the session doesn't reliably show up.
     ("POST",   "/api/research/start"),
     # Use the named tools — they handle owner attribution, natural-
-    # language due_date parsing, timezone, dedup, and tag/category
+    # language due_date parsing, 时区, dedup, and tag/category
     # normalization. Hitting the raw endpoint via app_api saves a
-    # note/event with the wrong fields, no reminder, or the wrong tz.
+    # note/event with the wrong fields, no 提醒, or the wrong tz.
     ("POST",   "/api/notes"),
     ("PUT",    "/api/notes"),
     ("DELETE", "/api/notes"),
@@ -2498,8 +2498,8 @@ async def do_app_api(content: str, owner: Optional[str] = None) -> Dict:
     base = _INTERNAL_BASE
 
     if action == "endpoints":
-        # Fetch FastAPI's OpenAPI schema so the agent can discover any
-        # endpoint without us pre-listing them. Filter by an optional
+        # 获取 FastAPI's OpenAPI schema so the agent can discover any
+        # endpoint without us pre-listing them. 过滤 by an optional
         # `filter` keyword (substring match on path or summary).
         kw = (args.get("filter") or "").lower()
         try:
@@ -2574,7 +2574,7 @@ async def do_app_api(content: str, owner: Optional[str] = None) -> Dict:
 
     body = args.get("body")
     query = args.get("query") or None
-    # Pass owner so the backend impersonates the user — without this,
+    # Pass owner so the 后端 impersonates the user — without this,
     # POSTs (notes, calendar, todos, ...) get owner="internal-tool"
     # and the user that asked for them can't see the result.
     headers = {**_internal_headers(owner=owner), "Content-Type": "application/json"}
@@ -2731,7 +2731,7 @@ async def do_download_model(content: str, owner: Optional[str] = None) -> Dict:
     if not repo_id:
         return {"error": "repo_id is required", "exit_code": 1}
     host = (args.get("host") or "").strip()
-    # Resolve a friendly server NAME ("gpu-box") to its ssh host string.
+    # 解析 a friendly server NAME ("gpu-box") to its ssh host string.
     if host:
         host = await _resolve_cookbook_host(host)
     # No host specified → default to the cookbook's currently-selected
@@ -2808,7 +2808,7 @@ async def do_serve_model(content: str, owner: Optional[str] = None) -> Dict:
     payload = {"repo_id": repo_id, "cmd": cmd}
     if host:
         payload["remote_host"] = host
-    # Resolve per-host env settings (venv/conda activate, gpus,
+    # 解析 per-host env settings (venv/conda activate, gpus,
     # hf_token, platform, ssh_port) from cookbook_state — same path
     # the UI uses. Without env_prefix, `vllm serve …` lands in a shell
     # without the user's venv and fails 'command not found'.
@@ -2940,7 +2940,7 @@ async def do_list_served_models(content: str, owner: Optional[str] = None) -> Di
             "exit_code": 0,
         }
 
-    # Sort so the agent sees what's actually LIVE first. Stopped/error/
+    # 排序 so the agent sees what's actually LIVE first. Stopped/error/
     # completed tasks are mostly historical noise — they shouldn't lead
     # the list when something is genuinely serving.
     _ORDER = {
@@ -3081,7 +3081,7 @@ async def _cookbook_kill_session(session_id: str, *, remote_host: str = "",
         if kill_failed and not already_gone:
             return {"error": f"Failed to {verb.lower()} {target_label}: {kill_err or 'kill-session returned non-zero'}", "exit_code": 1}
 
-        # Update state: mark stopped (so the UI + list reflect reality).
+        # 更新 state: mark stopped (so the UI + list reflect reality).
         if matched is not None:
             try:
                 matched["status"] = "stopped"
@@ -3143,7 +3143,7 @@ async def do_tail_serve_output(content: str, owner: Optional[str] = None) -> Dic
     headers = _internal_headers()
     remote = _string_arg(args.get("remote_host") or args.get("host"))
     sport = _string_arg(args.get("ssh_port"))
-    # Resolve host from cookbook state if caller didn't pass one — same
+    # 解析 host from cookbook state if caller didn't pass one — same
     # lookup _cookbook_kill_session uses.
     if not remote:
         state: Dict[str, Any] = {}
@@ -3166,13 +3166,13 @@ async def do_tail_serve_output(content: str, owner: Optional[str] = None) -> Dic
         except HTTPException as e:
             return {"error": str(getattr(e, "detail", e)), "exit_code": 1}
 
-    # Prefer the persisted /tmp/odysseus-tmux/SESSION.log file over the
+    # Prefer the persisted /tmp/odysseus-tmux/SESSION.日志文件 over the
     # live tmux pane. The pane is what the user would see scrolling on
     # their screen — including the post-crash neofetch banner and the
     # idle bash prompt that overwrites the actual traceback the moment
-    # vllm exits. The log file is the raw stdout/stderr of the wrapped
+    # vllm exits. The 日志文件 is the raw stdout/stderr of the wrapped
     # process and survives the crash unchanged. We only fall back to
-    # the pane when the log file doesn't exist (older sessions launched
+    # the pane when the 日志文件 doesn't exist (older sessions launched
     # before the tmux+tee wrapper was added).
     log_path = f"/tmp/odysseus-tmux/{session_id}.log"
     pane_inner = f"tmux capture-pane -t {shlex.quote(session_id)} -p -S -{tail} 2>/dev/null"
@@ -3385,7 +3385,7 @@ async def do_adopt_served_model(content: str, owner: Optional[str] = None) -> Di
     except Exception as e:
         return {"error": f"verify failed: {e}", "exit_code": 1}
 
-    # Best-effort health check — does port respond to /v1/models?
+    # Best-effort 健康检查 — does port respond to /v1/models?
     if host:
         health_cmd = f"ssh -o ConnectTimeout=5 {shlex.quote(host)} 'curl -s -m 3 http://localhost:{int(port)}/v1/models'"
     else:
@@ -3448,7 +3448,7 @@ async def do_adopt_served_model(content: str, owner: Optional[str] = None) -> Di
     # Optionally register as a chat endpoint
     endpoint_msg = ""
     if add_endpoint:
-        # Resolve host to a URL. SSH form `user@host` → just take host.
+        # 解析 host to a URL. SSH form `user@host` → just take host.
         host_only = host.split("@", 1)[-1] if host else "localhost"
         endpoint_url = f"http://{host_only}:{int(port)}/v1"
         try:
@@ -3495,7 +3495,7 @@ async def do_list_cookbook_servers(content: str, owner: Optional[str] = None) ->
     default = servers.get("default_host") or ""
     if not hosts:
         return {"output": "No cookbook servers configured. Downloads/serves default to localhost.", "servers": [], "default_host": "", "exit_code": 0}
-    # Resolve which server is the default by its friendly name too.
+    # 解析 which server is the default by its friendly name too.
     default_name = next((h.get("name") for h in hosts if h.get("host") == default and h.get("name")), default or "local")
     lines = [f"{len(hosts)} configured server(s) (default: {default_name}):"]
     for h in hosts:
@@ -3597,7 +3597,7 @@ async def do_serve_preset(content: str, owner: Optional[str] = None) -> Dict:
     payload: Dict[str, Any] = {"repo_id": repo_id, "cmd": cmd}
     if host:
         payload["remote_host"] = host
-    # Resolve per-host env settings the same way the UI does — pulls
+    # 解析 per-host env settings the same way the UI does — pulls
     # env_prefix (source ~/vllm-env/bin/activate), gpus, hf_token,
     # etc. from cookbook_state.env so launches actually find vllm.
     env_cfg = await _cookbook_env_for_host(host)
@@ -3862,7 +3862,7 @@ async def do_manage_research(content: str, owner: Optional[str] = None) -> Dict:
     # SECURITY: the research id is interpolated straight into a filesystem
     # path (data/deep_research/<rid>.json) for read AND delete. Without this
     # gate an agent-supplied id like "../settings" or "../../etc/passwd"
-    # escapes the research dir — reading exfiltrates arbitrary *.json into
+    # 转义s the research dir — reading exfiltrates arbitrary *.json into
     # chat, deleting unlinks arbitrary *.json on disk. Allow only a bare
     # token (research session ids are hex/uuid/slug — no separators).
     if rid and not re.fullmatch(r"[A-Za-z0-9_-]+", rid):
@@ -3961,7 +3961,7 @@ async def do_trigger_research(content: str, owner: Optional[str] = None) -> Dict
             ),
             "session_id": sid,
             "anchor": f"[{topic}](#research-{sid})",
-            # UI hint so the frontend can open/refresh the research panel.
+            # UI hint so the 前端 can open/refresh the research panel.
             "ui_event": "research_started",
             "research_session_id": sid,
             "exit_code": 0,
@@ -4004,7 +4004,7 @@ async def do_resolve_contact(content: str, owner: Optional[str] = None) -> Dict:
                 if email and "@" in email:
                     contacts[email] = {"name": c.get("name") or email, "source": "contacts"}
                     has_email = True
-            # Fall back to phone numbers when the contact has no email address
+            # Fall back to phone numbers when the contact has no 邮件地址
             if not has_email:
                 for phone in (c.get("phones") or []):
                     phone = (phone or "").strip()
@@ -4053,7 +4053,7 @@ async def do_manage_contact(content: str, owner: Optional[str] = None) -> Dict:
     except Exception as e:
         return {"error": f"Contacts module unavailable: {e}", "exit_code": 1}
     # The contacts helpers are sync (httpx blocking calls to CardDAV) — run
-    # them in a thread so we don't block the event loop.
+    # them in a thread so we don't block the 事件循环.
     import asyncio
     try:
         if action == "list":
@@ -4265,7 +4265,7 @@ async def do_vault_unlock(content: str, owner: Optional[str] = None) -> Dict:
     if not session:
         return {"error": "bw returned empty session", "exit_code": 1}
 
-    # Save session to vault.json
+    # 保存 session to vault.json
     from pathlib import Path
     p = Path(VAULT_FILE)
     cfg = {}

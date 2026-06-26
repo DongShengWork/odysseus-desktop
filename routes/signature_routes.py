@@ -91,7 +91,7 @@ def setup_signature_routes() -> APIRouter:
             q = db.query(Signature)
             if user is not None:
                 # SECURITY: strict ownership — the previous OR predicate
-                # returned every null-owner signature to every user.
+                # returned every null-owner 签名ature to every user.
                 q = q.filter(Signature.owner == user)
             sigs = q.order_by(Signature.created_at.desc()).all()
             return {"signatures": [_to_dict(s) for s in sigs]}

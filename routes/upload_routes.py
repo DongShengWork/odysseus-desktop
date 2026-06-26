@@ -133,7 +133,7 @@ def setup_upload_routes(upload_handler):
         # `files`, so a single multi-file request counted itself as N concurrent
         # uploads and tripped the limit (issue #1346: "attach more than one file
         # → the model doesn't even see them"). save_upload still enforces the
-        # per-minute sliding-window rate limit per file.
+        # per-minute sliding-window 速率限制 per file.
         recent_uploads = count_recent_uploads(
             upload_handler.upload_rate_log.get(client_ip, []), time.time()
         )
@@ -221,7 +221,7 @@ def setup_upload_routes(upload_handler):
         path = _resolve_upload_path(file_id)
         mime = (info or {}).get("mime") or _mt.guess_type(path)[0] or "application/octet-stream"
         from fastapi.responses import FileResponse
-        # Downscaled thumbnail for image previews — generated once and cached.
+        # Downscaled thumbnail for 镜像 previews — generated once and cached.
         if thumb and mime.startswith("image/"):
             try:
                 from PIL import Image, ImageOps
@@ -231,9 +231,9 @@ def setup_upload_routes(upload_handler):
                 if (not os.path.exists(thumb_path)
                         or os.path.getmtime(thumb_path) < os.path.getmtime(path)):
                     im = Image.open(path)
-                    # iPhone / camera JPEGs encode rotation in EXIF rather than
+                    # iPhone / camera JPEGs 编码 rotation in EXIF rather than
                     # the pixel data. Browsers honour that on the original via
-                    # image-orientation:from-image, but PIL strips EXIF when it
+                    # 镜像-orientation:from-镜像, but PIL strips EXIF when it
                     # saves the JPEG thumb, leaving the pixels sideways. Bake
                     # the rotation into the pixels before thumbnailing.
                     im = ImageOps.exif_transpose(im)
@@ -244,7 +244,7 @@ def setup_upload_routes(upload_handler):
                 return FileResponse(thumb_path, media_type="image/jpeg", headers=UPLOAD_RESPONSE_HEADERS)
             except Exception as e:
                 logger.warning(f"Thumbnail generation failed for {file_id}: {e}")
-                # Fall through to the full image.
+                # Fall through to the full 镜像.
         return FileResponse(
             path,
             media_type=mime,

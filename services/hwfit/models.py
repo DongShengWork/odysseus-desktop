@@ -14,7 +14,7 @@ QUANT_BPP = {
     "GPTQ-Int4": 0.50, "GPTQ-Int8": 1.0,
     "mlx-4bit": 0.55, "mlx-8bit": 1.0, "mlx-6bit": 0.75,
     # DeepSeek-V4-style mixed: MoE experts in FP4 (bulk), attention + non-
-    # expert dense in FP8, embeddings/LM head in BF16. By weight count the
+    # expert dense in FP8, 嵌入s/LM head in BF16. By weight count the
     # experts dominate so the effective BPP sits closer to FP4 than FP8.
     # 实测：DeepSeek-V4-Flash 284B / 156 GB ≈ 0.55 B/param。
     "FP4-MoE-Mixed": 0.55,

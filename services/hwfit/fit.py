@@ -28,9 +28,9 @@ GPU_BANDWIDTH = {
 # 按长度降序预排序键，确保正确的子串匹配
 _BW_KEYS_SORTED = sorted(GPU_BANDWIDTH.keys(), key=len, reverse=True)
 
-# Apple Silicon unified-memory bandwidth (GB/s). For chip families with both
+# Apple Silicon unified-内存带宽 (GB/s). For chip families with both
 # binned and full variants under the same "Apple Mx Max" brand string, prefer
-# GPU core count when hardware detection provides it; otherwise fall back to the
+# GPU core count when 硬件检测 provides it; otherwise fall back to the
 # conservative tier so speed estimates do not over-promise.
 APPLE_BANDWIDTH_FIXED = {
     "m1 ultra": 800, "m1 max": 400, "m1 pro": 200, "m1": 68,
@@ -142,12 +142,12 @@ def _canonical_cpu_backend(system):
     cpu_name = (system.get("cpu_name") or "").lower()
     gpu_name = (system.get("gpu_name") or "").lower()
 
-    # Already-canonical CPU backends
+    # Already-canonical CPU 后端s
     if backend in ("cpu_x86", "cpu_arm"):
         return backend
 
     # Raw CPU-architecture aliases. Treat plain "arm" as 32-bit ARM, not the
-    # ARM64-class CPU fallback used for Apple Silicon/aarch64 machines.
+    # ARM64-class CPU 回退 used for Apple Silicon/aarch64 machines.
     if backend in ("x86_64", "amd64", "i386", "i686"):
         return "cpu_x86"
     if backend in ("arm64", "aarch64"):
@@ -160,11 +160,11 @@ def _canonical_cpu_backend(system):
         if cpu_arch in ("arm64", "aarch64"):
             return "cpu_arm"
 
-    # Apple Silicon enters ranking as backend="metal"; its CPU path is ARM.
+    # Apple Silicon enters ranking as 后端="metal"; its CPU path is ARM.
     if backend in ("metal", "mps", "apple") or "apple" in cpu_name or "apple" in gpu_name:
         return "cpu_arm"
 
-    # Conservative default for CUDA/ROCm/discrete GPU backends and unknowns.
+    # Conservative default for CUDA/ROCm/discrete GPU 后端s and unknowns.
     return "cpu_x86"
 
 
@@ -185,8 +185,8 @@ def _estimate_speed(model, quant, run_mode, system, offload_frac=0.0):
     bw = _lookup_bandwidth(system)
     backend = system.get("backend", "cpu_x86")
 
-    # CPU-only inference must never inherit a GPU backend's fallback constant,
-    # even if the detected system happens to report a CUDA/Metal/ROCm backend.
+    # CPU-only inference must never inherit a GPU 后端's 回退 constant,
+    # even if the detected system happens to report a CUDA/Metal/ROCm 后端.
     if run_mode == "cpu_only":
         backend = _canonical_cpu_backend(system)
 
@@ -607,7 +607,7 @@ SORT_KEYS = {
     # composite score (a common case for the SAME base model in different
     # 例如 MiniMax-M2.5 vs M2.7 在相同 FP8 预算下同分），
     # prefer the newer version. Without this, ties resolved to whatever
-    # order they came out of the registry, which let older releases land
+    # order they came out of the 仓库, which let older releases land
     # above newer ones in user-facing lists.
     "score": lambda r: (r["score"], _version_key(r.get("name") or "")),
     "speed": lambda r: r["speed_tps"],
@@ -632,7 +632,7 @@ def rank_models(system, use_case=None, limit=50, search=None, sort="score", quan
     models = get_models()
     results = []
 
-    # 仅在明确按 image_gen 筛选时包含图像生成模型
+    # 仅在明确按 镜像_gen 筛选时包含图像生成模型
     if use_case == "image_gen":
         try:
             from services.hwfit.image_models import rank_image_models

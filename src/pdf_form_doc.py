@@ -96,7 +96,7 @@ _PLAIN_FRONT_MATTER_RE = re.compile(
 
 # Bullet line emitted by render_form_as_markdown. The trailing comment is the
 # anchor we rely on to recover the field name even after the user/model edits
-# the value. The field name is percent-encoded so spaces, newlines, parens
+# the value. The field name is percent-编码d so spaces, newlines, parens
 # and other special chars in raw AcroForm names don't break parsing.
 #   - **label:** value <!-- field=NAME-ENC type=text -->
 #   - **label** [opts]: value <!-- field=NAME-ENC type=choice -->

@@ -1,4 +1,4 @@
-# services/docs/service.py
+# 服务s/docs/服务.py
 """文档服务 — 个人文档 RAG。"""
 
 from dataclasses import dataclass

@@ -11,7 +11,7 @@ BASE_DIR = os.path.join(get_app_root(), "")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 DATA_DIR = os.getenv("ODYSSEUS_DATA_DIR", get_default_data_dir())
 
-# Data file paths
+# Data 文件路径s
 # Single source of truth: every persisted file/dir lives under DATA_DIR, which
 # is the ONLY place ODYSSEUS_DATA_DIR is read. Import these constants instead of
 # re-deriving paths from __file__ or a relative "data" literal.
@@ -62,10 +62,10 @@ MAIL_ATTACHMENTS_DIR = os.getenv("ODYSSEUS_MAIL_ATTACHMENTS_DIR", os.path.join(D
 # which sets the var to "" when the host hasn't defined it. os.getenv(name, default)
 # only returns the default when the var is ABSENT, so the empty string would win →
 # os.makedirs("") raises [Errno 2] No such file or directory: '' → FastEmbed fails to
-# init and all vector features (RAG, semantic memory, tool index) silently degrade.
+# init and all vector features (RAG, semantic memory, tool 索引) silently degrade.
 FASTEMBED_CACHE_DIR = os.getenv("FASTEMBED_CACHE_PATH") or os.path.join(DATA_DIR, "fastembed_cache")
 
-# Agent tool output limits (single source of truth — imported by tool_execution.py,
+# Agent 工具输出 limits (single source of truth — imported by tool_execution.py,
 # tool_implementations.py, agent_tools.py, and any other module that needs them)
 MAX_OUTPUT_CHARS = 10_000       # cap for bash/python/web_search/web_fetch output
 MAX_READ_CHARS = 20_000         # cap for read_file / document preview

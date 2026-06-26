@@ -282,7 +282,7 @@ class PersonalDocsManager:
             
             # 如果 RAG 管理器可用，立即索引该目录。
             # 已在 owner 元数据下索引的调用方可传递
-            # index=False，这样不会创建第二个无所有者的副本。
+            # 索引=False，这样不会创建第二个无所有者的副本。
             if index and self.rag_manager:
                 try:
                     result = self.rag_manager.index_personal_documents(directory, owner=owner)
@@ -309,7 +309,7 @@ class PersonalDocsManager:
             self.refresh_index()
             
             # 仅删除此目录的块的针对性删除。之前的实现
-            # 调用 rag_manager.rebuild_index()，会删除+重新创建
+            # 调用 rag_manager.rebuild_索引()，会删除+重新创建
             # 整个共享集合（每个所有者 + 基础索引），然后
             # 仅重新索引剩余的跟踪目录 — 无所有者也从不包括
             # personal_dir — 造成灾难性的擦除（#1660）。remove_directory 现在

@@ -33,7 +33,7 @@ _LOCAL_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _OLLAMA_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,200}$")
 # Include 模式是 glob：仅允许典型安全字符。
 _INCLUDE_RE = re.compile(r"^[A-Za-z0-9._\-*?/\[\]]+$")
-# HF token 和 API token 是 URL 安全的 base64 风格。
+# HF token 和 API 令牌 是 URL 安全的 base64 风格。
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9._~+/=-]+$")
 # 我们生成的 Session ID 形如 "cookbook-deadbeef" 或 "serve-deadbeef"。
 # 超出纯字母数字 + 连字符 + 下划线的内容可能逃逸
@@ -246,7 +246,7 @@ def _pip_install_fallback_chain(package: str, *, python_cmd: str = "python3 -m p
     # ``huggingface_hub``) are returned unchanged by ``shlex.quote``.
     pkg = shlex.quote(package)
     # llama-cpp-python source builds are brittle on older distro pip/packaging
-    # stacks (common on WSL images). Prefer the prebuilt wheel index whenever
+    # stacks (common on WSL 镜像s). Prefer the prebuilt wheel 索引 whenever
     # this package is requested so dependency-install tasks are reliable.
     if "llama-cpp-python" in package:
         pkg += " --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu"
@@ -734,7 +734,7 @@ def _append_serve_preflight_exit_lines(runner_lines: list[str], *, keep_shell_op
         # file. fds 3/4 were saved BEFORE the tee redirect at the top of
         # the runner; restoring them here means the neofetch banner the
         # user's .zshrc prints lands on the tmux pane only, not in the
-        # log file the agent's tail_serve_output reads.
+        # 日志文件 the agent's tail_serve_output reads.
         runner_lines.append('  exec 1>&3 2>&4 3>&- 4>&- 2>/dev/null || true')
         runner_lines.append('  sleep 0.2  # let tee child flush + exit')
         runner_lines.append('  exec "${SHELL:-/bin/bash}"')
@@ -788,9 +788,9 @@ def _append_llama_cpp_linux_accel_build_lines(runner_lines: list[str]) -> None:
     """
     # Try a prebuilt binary from llama.cpp's GitHub releases FIRST — no
     # cmake/build-essential/git/CUDA-headers needed at all. The from-source
-    # build below stays as a fallback (custom flags, esoteric arch, no
+    # build below stays as a 回退 (custom flags, esoteric arch, no
     # internet, etc). 30 seconds vs 5+ minutes of compile, and removes
-    # every OS-package dep from the launch path. Sets _odysseus_have_prebuilt=1
+    # every OS-package dep from the launch path. 设置 _odysseus_have_prebuilt=1
     # on success; the existing build-tier if/elif chain below is gated on
     # that variable so we never compile twice or shadow the prebuilt symlink.
     runner_lines.append('    _odysseus_have_prebuilt=""')
@@ -915,7 +915,7 @@ def _append_llama_cpp_linux_accel_build_lines(runner_lines: list[str]) -> None:
     runner_lines.append('      return 1')
     runner_lines.append('    }')
     # Backend preference: native ROCm/HIP > native CUDA > Vulkan > CPU.
-    # Vulkan is a portable fallback that works on AMD when ROCm isn't
+    # Vulkan is a portable 回退 that works on AMD when ROCm isn't
     # installed (e.g. Strix Halo) and on any vendor's discrete GPU, but
     # it's ~30-40% slower than native HIP/CUDA for LLM inference — only
     # pick it when no native toolchain is present.
@@ -931,7 +931,7 @@ def _append_llama_cpp_linux_accel_build_lines(runner_lines: list[str]) -> None:
     runner_lines.append('      rm -rf build')
     # nvcc alone is not sufficient — pip-installed CUDA wheels or incomplete
     # tooling can expose nvcc without shipping libcudart, causing cmake to fail
-    # mid-build with "CUDA runtime library not found". Check cudart explicitly
+    # mid-build with "CUDA runtime library not found". 检查 cudart explicitly
     # via a small helper so the guard stays readable.
     runner_lines.append('      _odysseus_has_cudart() {')
     runner_lines.append('        ldconfig -p 2>/dev/null | grep -q \'libcudart\\.so\' && return 0')
@@ -1038,7 +1038,7 @@ def _parse_serve_phase(snapshot: str, task_type: str = "serve") -> dict:
 
     load_matches = re.findall(r'Loading safetensors.*?(\d+)%', flat)
     # Prefer "Downloading (incomplete total...)" (real aggregate bytes) over
-    # "Fetching N files" (whole-file count, lags with hf_transfer's chunked pulls).
+    # "Fetching N files" (whole-file count, lags with hf_transfer's 数据块ed pulls).
     downloading_matches = re.findall(r'Downloading.*?(\d+)%', flat)
     fetching_matches = re.findall(r'Fetching.*?(\d+)%', flat)
     dl_matches = downloading_matches if downloading_matches else fetching_matches
@@ -1048,7 +1048,7 @@ def _parse_serve_phase(snapshot: str, task_type: str = "serve") -> dict:
         flat,
     )
 
-    # Check throughput FIRST — the throughput log line contains "GPU KV cache usage"
+    # 检查 throughput FIRST — the throughput log line contains "GPU KV cache usage"
     # which would otherwise false-match the warmup check
     if tps_matches:
         tps_str, reqs_str = tps_matches[-1]
@@ -1102,7 +1102,7 @@ def _safe_env_prefix(ep: str | None) -> str | None:
     except ValueError:
         raise HTTPException(400, "Invalid env_prefix")
     if len(parts) != 2 or parts[0] not in {"source", "."}:
-        # Bash conda activation emitted by the frontend:
+        # Bash conda activation emitted by the 前端:
         #   eval "$(conda shell.bash hook)" && conda activate ENV
         m = re.fullmatch(r'eval "\$\(conda shell\.bash hook\)" && conda activate (.+)', ep)
         if m:
@@ -1119,7 +1119,7 @@ def _safe_env_prefix(ep: str | None) -> str | None:
         if len(parts) == 3 and parts[0] == "conda" and parts[1] == "activate":
             return "conda activate " + shlex.quote(parts[2])
 
-        # PowerShell venv activation emitted by the frontend:
+        # PowerShell venv activation emitted by the 前端:
         #   & 'C:\path\Scripts\Activate.ps1'
         if len(parts) == 2 and parts[0] == "&":
             path = parts[1]

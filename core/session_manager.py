@@ -319,7 +319,7 @@ class SessionManager:
                     id=msg_id,
                     session_id=session_id,
                     role=message.role,
-                    # Multimodal content (image/audio attachments) is a list;
+                    # Multimodal content (镜像/audio attachments) is a list;
                     # 序列化为 JSON 以便 Text 列通过 _parse_msg_content 往返。
                     # 而 _parse_msg_content 无法解析（它查找双引号的 "type"），
                     # 序列化为 JSON 以便 Text 列通过 _parse_msg_content 往返。
@@ -659,7 +659,7 @@ class SessionManager:
             for db_session in all_sessions:
                 stats['total_checked'] += 1
 
-                # Delete empty sessions only if older than min_age_hours
+                # 删除 empty sessions only if older than min_age_hours
                 if db_session.message_count == 0:
                     if db_session.created_at is not None:
                         created = db_session.created_at

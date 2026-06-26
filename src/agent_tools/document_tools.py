@@ -52,7 +52,7 @@ def _owned_document_query(query, Document, owner: Optional[str]):
     if owner is None:
         # A bare Python `False` is not a valid SQL expression — SQLAlchemy 1.4
         # deprecates it and 2.0 raises ArgumentError. Use the SQL `false()`
-        # literal to return zero rows for an unscoped (owner-less) query.
+        # literal to return zero rows for an un权限范围d (owner-less) query.
         from sqlalchemy import false
         return query.filter(false())
     return query.filter(Document.owner == owner)
@@ -109,7 +109,7 @@ def _sniff_doc_language(text: str) -> str:
     first = s.split("\n", 1)[0].strip().lower()
     if first.startswith("#!"):
         return "python" if "python" in first else "bash"
-    # Code by strong leading signals (line-anchored so prose with stray words won't match)
+    # Code by strong leading 签名als (line-anchored so prose with stray words won't match)
     if _re2.search(r"(?m)^\s*(def \w|class \w|import \w|from \w[\w.]* import )", s):
         return "python"
     if _re2.search(r"(?m)^\s*(function \w|const \w|let \w|export |import .* from )", s):
@@ -175,7 +175,7 @@ def _parse_tool_args(content):
         args = {}
     # Unwrap {"body": {...}} envelope — but only if `body` is the sole key
     # and points at a dict. We don't want to clobber a legitimate `body`
-    # field on tools where it's a real arg (e.g. send_email body text).
+    # field on tools where it's a real arg (e.g. send_邮件正文 text).
     if (
         isinstance(args, dict)
         and len(args) == 1
@@ -265,7 +265,7 @@ class CreateDocumentTool:
             if content is None:
                 content = "\n".join(lines)
 
-        # Validate language: must be in known set, else default based on content
+        # 验证 language: must be in known set, else default based on content
         if language and language not in _KNOWN_LANGS:
             language = None
         if not language:
@@ -432,7 +432,7 @@ class EditDocumentTool:
                 else:
                     # Defensive: the active-doc context shows a "N\t" line-number
                     # gutter for reference. Weaker models sometimes copy that prefix
-                    # into FIND. If the exact match failed, retry with a leading
+                    # into FIND. If the exact match failed, 重试 with a leading
                     # "<digits><tab>" stripped from each FIND line — but only use it
                     # when that stripped form actually matches, so we never corrupt a
                     # legitimately tab-prefixed document.
@@ -499,7 +499,7 @@ class SuggestDocumentTool:
             if not doc:
                 return {"error": f"Document {target_id} not found"}
 
-            # Validate that FIND text exists in document
+            # 验证 that FIND text exists in document
             valid = []
             for s in suggestions:
                 if s["find"] in doc.current_content:

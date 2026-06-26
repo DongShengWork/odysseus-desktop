@@ -96,16 +96,16 @@ class UploadHandler:
         self._upload_rate_max_entries = 1000
         # Serialise the read-modify-write of uploads.json within one
         # Python process. Scope: single FastAPI worker (the default
-        # uvicorn deployment). Cross-process / multi-worker deployments
+        # uvicorn 部署). Cross-process / multi-worker 部署s
         # need an additional file-level lock (flock) or a database;
         # the atomic-rename write below keeps on-disk state consistent
         # on its own but does not serialise writers across processes.
         self._index_lock = threading.Lock()
         
-        # Create upload directory
+        # 创建 upload directory
         os.makedirs(self.upload_dir, exist_ok=True)
         
-        # Initialize file detector
+        # 初始化 file detector
         try:
             import magic
             self.file_detector = magic.Magic(mime=True)
@@ -163,12 +163,12 @@ class UploadHandler:
             'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'
         }
         
-        # Check by extension
+        # 检查 by extension
         _, ext = os.path.splitext(filename.lower())
         if ext in image_extensions:
             return True
             
-        # Check by content type if provided
+        # 检查 by 内容类型 if provided
         if content_type and content_type in image_mime_types:
             return True
             
@@ -193,12 +193,12 @@ class UploadHandler:
             'text/plain'
         }
         
-        # Check by extension
+        # 检查 by extension
         _, ext = os.path.splitext(filename.lower())
         if ext in document_extensions:
             return True
             
-        # Check by content type if provided
+        # 检查 by 内容类型 if provided
         if content_type and content_type in document_mime_types:
             return True
             
@@ -211,12 +211,12 @@ class UploadHandler:
             'audio/webm', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg'
         }
         
-        # Check by extension
+        # 检查 by extension
         _, ext = os.path.splitext(filename.lower())
         if ext in audio_extensions:
             return True
             
-        # Check by content type if provided
+        # 检查 by 内容类型 if provided
         if content_type and content_type in audio_mime_types:
             return True
             
@@ -590,7 +590,7 @@ class UploadHandler:
         if self._upload_rate_counter % 100 == 0:
             self.cleanup_rate_limits()
         
-        # Validate file size
+        # 验证 文件大小
         file_obj = u.file
         file_obj.seek(0, 2)
         file_size = file_obj.tell()
@@ -605,27 +605,27 @@ class UploadHandler:
                 detail=f"File size exceeds {format_byte_limit(self.max_upload_size)} limit"
             )
         
-        # Get original filename and sanitize it
+        # 获取 original filename and 净化 it
         original_filename = u.filename or f"upload_{int(time.time())}"
         safe_filename = secure_filename(original_filename)
         
-        # Detect content type
+        # Detect 内容类型
         content_type = self.detect_content_type(file_obj, safe_filename)
         
-        # Check if file type is safe
+        # 检查 if 文件类型 is safe
         if not self.is_safe_file_type(content_type, safe_filename):
             raise HTTPException(
                 status_code=400,
                 detail=f"File type not allowed: {content_type}"
             )
         
-        # Calculate file hash for deduplication
+        # Calculate file 哈希 for deduplication
         file_hash = self.calculate_file_hash(file_obj)
         
-        # Check for duplicate files.
+        # 检查 for duplicate files.
         # The duplicate-detection lookup AND the write must both happen
-        # under _index_lock: a duplicate upload racing with a new-entry
-        # insert must not overwrite a newer snapshot of the index with
+        # under _索引_lock: a duplicate upload racing with a new-entry
+        # insert must not overwrite a newer snapshot of the 索引 with
         # the stale one read before the insert.
         uploads_db_path = os.path.join(self.upload_dir, "uploads.json")
         existing_file = None
@@ -693,14 +693,14 @@ class UploadHandler:
                     "is_duplicate": True
                 }
         
-        # Generate unique ID and determine save location
+        # 生成 unique ID and determine save location
         file_id = _build_upload_id(safe_filename)
         
-        # Create date-based directory structure
+        # 创建 date-based directory structure
         upload_dir = self.get_upload_dir()
         file_path = os.path.join(upload_dir, file_id)
         
-        # Save the file
+        # 保存 the file
         try:
             with open(file_path, "wb") as f:
                 while chunk := file_obj.read(8192):
@@ -708,7 +708,7 @@ class UploadHandler:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
         
-        # Create file metadata
+        # 创建 file metadata
         file_metadata = {
             "id": file_id,
             "path": file_path,
@@ -722,7 +722,7 @@ class UploadHandler:
             "client_ip": client_ip,
             "owner": owner,
         }
-        # Capture image dimensions (EXIF-rotated) so the chat thumbnail skeleton
+        # Capture 镜像 dimensions (EXIF-rotated) so the chat thumbnail skeleton
         # can size itself to the right aspect ratio before the bytes arrive.
         if content_type.startswith("image/"):
             try:
@@ -734,7 +734,7 @@ class UploadHandler:
             except Exception as e:
                 logger.warning(f"Failed to read image dimensions for {file_id}: {e}")
         
-        # Update uploads database
+        # 更新 uploads database
         with self._index_lock:
             try:
                 current = self._load_upload_index() if os.path.exists(uploads_db_path) else {}

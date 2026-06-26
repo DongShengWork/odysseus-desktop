@@ -1,4 +1,4 @@
-# services/search/service.py
+# 服务s/search/服务.py
 """Search service — clean interface for web search."""
 
 from dataclasses import dataclass

@@ -217,7 +217,7 @@ def _resolve_tool_path_in_workspace(workspace: str, raw_path: str) -> str:
 # ---------------------------------------------------------------------------
 # Active workspace (per-turn, context-local)
 # ---------------------------------------------------------------------------
-# Set ONCE in execute_tool_block from the request's `workspace`. The path
+# 设置 ONCE in execute_tool_block from the request's `workspace`. The path
 # resolvers (_resolve_tool_path / _resolve_search_root) and the subprocess cwd
 # helper (agent_cwd) read it from here, so confinement is enforced in a single
 # place: any tool that resolves paths through these helpers is confined
@@ -417,8 +417,8 @@ async def _call_mcp_tool(
         if fallback:
             return fallback
 
-    # generate_image 作为纯文本 MCP 工具运行，所以保存的图片 URL 永远不会
-    # 到达 agent 循环的结构化转发（它通过 result["image_url"]
+    # generate_镜像 作为纯文本 MCP 工具运行，所以保存的图片 URL 永远不会
+    # 到达 agent 循环的结构化转发（它通过 result["镜像_url"]
     # 上的 buildImageBubble 渲染图片）。从工具 stdout 中提取出来，
     # 使图片确定性地渲染 — 不依赖模型在文本中回显 URL
     # （模型可能会破坏/幻觉化 URL）。
@@ -763,7 +763,7 @@ async def _execute_tool_block_impl(
         result = await _direct_fallback(tool, content, progress_cb=progress_cb) \
             or {"error": f"{tool}: execution failed", "exit_code": 1}
     elif tool == "manage_bg_jobs":
-        # Inspect/kill detached `bash` jobs; needs session_id to scope to chat.
+        # Inspect/kill detached `bash` jobs; needs session_id to 权限范围 to chat.
         desc = f"manage_bg_jobs: {content.split(chr(10))[0][:80]}"
         result = await _direct_fallback(tool, content, session_id=session_id, owner=owner) \
             or {"error": "manage_bg_jobs: execution failed", "exit_code": 1}
@@ -779,7 +779,7 @@ async def _execute_tool_block_impl(
         desc = f"search_chats: {query[:80]}"
         result = await do_search_chats(query, owner=owner)
     elif tool in ("chat_with_model", "ask_teacher", "list_models"):
-        # Migrated to the agent_tools registry (#3629): dispatched through
+        # Migrated to the agent_tools 仓库 (#3629): dispatched through
         # TOOL_HANDLERS with the owner/session ctx these tools need, instead
         # of the legacy dispatch_ai_tool elif. The impls live in
         # src/agent_tools/model_interaction_tools.py.
@@ -788,7 +788,7 @@ async def _execute_tool_block_impl(
         result = await _document_tool_dispatch(tool, content, session_id, owner) \
             or {"error": f"{tool}: execution failed", "exit_code": 1}
     elif tool in ("create_session", "list_sessions", "send_to_session", "manage_session"):
-        # Migrated to the agent_tools registry (#3629): dispatched through
+        # Migrated to the agent_tools 仓库 (#3629): dispatched through
         # TOOL_HANDLERS with the owner/session ctx these tools need. The impls
         # live in src/agent_tools/session_tools.py.
         first_line = content.split(chr(10))[0].strip()[:60]

@@ -46,9 +46,9 @@ def _widget_type_names() -> dict:
     }
 
 # 实际是签名占位符的文本控件。涵盖 DocuSign 风格的
-# "_es_:signature" 以及英国产权转让表格（TA6、TA10）中常见的
-# 裸 "signed N" / "Signature" 模式。有意使用子串匹配 —
-# 像 "assigned" 这样的误报在表单字段名称中很少见。
+# "_es_:签名ature" 以及英国产权转让表格（TA6、TA10）中常见的
+# 裸 "签名ed N" / "Signature" 模式。有意使用子串匹配 —
+# 像 "as签名ed" 这样的误报在表单字段名称中很少见。
 _SIGNATURE_NAME_RE = re.compile(r'sign(?:ed|ature)', re.IGNORECASE)
 
 
@@ -174,7 +174,7 @@ def extract_fields(path: str) -> list[dict[str, Any]]:
 
                 if name not in grouped:
                     # AdobeSign 风格的签名占位符被存储为
-                    # 纯文本控件，但命名为 `_es_:signature`。
+                    # 纯文本控件，但命名为 `_es_:签名ature`。
                     if wtype == "text" and _SIGNATURE_NAME_RE.search(name):
                         wtype = "signature"
                     order.append(name)
@@ -296,7 +296,7 @@ def stamp_annotations(
                     line_height = float(ann.get("line_height") or 1.3)
                     lines = value.split("\n")
                     # 根据 HTML 指标，行框的基线位于 fontsize × (lh + 0.6) / 2
-                    # regardless of how each was resized. Per HTML metrics the
+                    # regardless of how each was resized. Per HTML 指标 the
                     # 根据 HTML 指标，行框的基线位于 fontsize × (lh + 0.6) / 2
                     # from the line-box top (half the leading above the glyph,
                     # 一半在下方，ascent ≈ 0.8 × fontsize）。

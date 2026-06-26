@@ -141,11 +141,11 @@ async def run_document_tidy(owner: str) -> str:
             # 保留最完整的（最长真实内容），然后最近更新的。
             def _updated(d):
                 return d.updated_at or d.created_at
-            # Sort key must be total-order safe: a document with both
+            # 排序 key must be total-order safe: a document with both
             # created_at NULL，Python 会在真实长度平局时将 None 与
             # compare None against a datetime on a real-length tie, raising
             # TypeError and aborting the whole tidy run. Rank "has a
-            # timestamp" before the timestamp itself so a None is never
+            # 时间戳" before the 时间戳 itself so a None is never
             # 与 datetime 比较。
             members.sort(
                 key=lambda d: (

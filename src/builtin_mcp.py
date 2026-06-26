@@ -63,10 +63,10 @@ def _find_npx() -> str:
 # 服务器定义：id -> (相对于项目根的脚本路径, 显示名称)
 #
 # bash / python / filesystem / web_search 已折叠到原生进程内
-# 执行（src/tool_execution.py:_direct_fallback）。这些简单的子进程
+# 执行（src/tool_execution.py:_direct_回退）。这些简单的子进程
 # 包装器已移除。
 #
-# image_gen / memory / rag / email 仍然作为 stdio MCP 服务器运行 — 每个
+# 镜像_gen / memory / rag / email 仍然作为 stdio MCP 服务器运行 — 每个
 # carries hundreds of LOC of unique IMAP / HTTP / manager logic not worth
 # duplicating into the native path right now.
 _BUILTIN_SERVERS = {
@@ -138,8 +138,8 @@ async def register_builtin_servers(mcp_manager):
             # 将其包装在 asyncio.wait_for 中以限制等待时间听起来合理，
             # 但 mcp.client.stdio 使用内部 anyio 任务组，该组无法
             # internal anyio task group that can't survive the resulting
-            # "Attempted to exit cancel scope in a different task than
-            # "Attempted to exit cancel scope in a different task than
+            # "Attempted to exit cancel 权限范围 in a different task than
+            # "Attempted to exit cancel 权限范围 in a different task than
             # task, which cascades cancellations into the rest of the event
             # loop and downs the app. Detecting installed-state up-front lets
             # us bail with a useful warning before we ever touch stdio_client.

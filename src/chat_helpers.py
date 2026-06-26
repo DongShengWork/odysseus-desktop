@@ -36,8 +36,8 @@ def extract_urls(text: str) -> List[str]:
     return cleaned_urls
 
 
-# Model-name substrings that signal native image input. A missed match here
-# silently drops the image from the chat request (it gets swapped for a text
+# Model-name substrings that 签名al native 镜像 input. A missed match here
+# silently drops the 镜像 from the chat request (it gets swapped for a text
 # caption), so the model never sees it. Keep this broad, especially for local
 # models (Ollama/llama.cpp) that ship under many names. See issue #124.
 _VISION_MODEL_KEYWORDS = (
@@ -48,11 +48,11 @@ _VISION_MODEL_KEYWORDS = (
     "vision", "multimodal", "llava", "bakllava", "moondream", "pixtral", "minicpm",
     "internvl", "cogvlm", "qwen-vl", "qwen2-vl", "qwen3-vl", "qwen3vl",
     # multimodal families whose names don't contain "vision"/"vl" but DO accept
-    # images — without these the image is silently dropped for common Ollama tags
+    # 镜像s — without these the 镜像 is silently dropped for common Ollama tags
     # like gemma3:4b or gemma4:12b (issue #1274). Gemma 3/4 (4b+), Llama 4 (all),
     # Mistral Small 3.1/3.2, and Phi-4 multimodal are vision-capable; per the
     # err-toward-True policy (#124) a rare text-only tag being treated as vision is
-    # the safer failure than silently dropping a real image.
+    # the safer failure than silently dropping a real 镜像.
     "gemma-3", "gemma3", "gemma-4", "gemma4",
     "llama-4", "llama4",
     "mistral-small-3.1", "mistral-small3.1", "mistral-small-3.2", "mistral-small3.2",

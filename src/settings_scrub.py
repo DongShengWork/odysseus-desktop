@@ -22,7 +22,7 @@ _SECRET_KEY_PATTERNS = (
 _SECRET_KEY_ALLOW = ("google_pse_cx",)  # public identifiers, not secrets
 _SENSITIVE_KEY_EXACT = (
     # A stable global integration id is a capability handle for routes that can
-    # trigger outbound webhook sends; do not expose it to non-admin settings
+    # trigger outbound Webhook sends; do not expose it to non-admin settings
     # callers even though it is not secret-shaped.
     "reminder_webhook_integration_id",
 )

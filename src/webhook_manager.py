@@ -204,7 +204,7 @@ class WebhookManager:
         self._api_key_manager = api_key_manager
         # Strong references to in-flight fire-and-forget tasks. asyncio only
         # keeps weak references to tasks, so without this the GC can collect a
-        # delivery task mid-flight and the webhook is silently never sent.
+        # delivery task mid-flight and the Webhook is silently never sent.
         self._bg_tasks: set = set()
 
     def _spawn_tracked(self, coro):

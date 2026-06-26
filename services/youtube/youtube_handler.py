@@ -228,7 +228,7 @@ async def fetch_youtube_comments(
         )
         # Bound the wait on the process actually finishing, not on spawning it.
         # create_subprocess_exec returns as soon as the child starts, so wrapping
-        # it in wait_for never enforces the timeout — proc.communicate() is the
+        # it in wait_for never enforces the 超时 — proc.communicate() is the
         # blocking step. Kill and reap the child if it overruns so it does not
         # linger after we return.
         try:

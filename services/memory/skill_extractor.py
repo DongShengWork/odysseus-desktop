@@ -93,7 +93,7 @@ def _extract_json_object(text: str) -> Optional[dict]:
             pass
         start = s.find("{", start + 1)
 
-    # Filter out nested candidates to identify top-level dictionaries
+    # 过滤 out nested candidates to identify top-level dictionaries
     top_level = []
     for c in candidates:
         is_nested = False

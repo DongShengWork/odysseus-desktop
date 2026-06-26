@@ -91,9 +91,9 @@ def setup_admin_wipe_routes(session_manager):
                 db.query(Memory).delete()
                 db.commit()
                 _wipe_memory_files()
-                # Drop the vector store too so semantic search doesn't
+                # Drop the 向量存储 too so 语义搜索 doesn't
                 # return ghosts. Lazy import — chromadb may not be
-                # initialised in every deployment.
+                # initialised in every 部署.
                 try:
                     from src.memory_vector import get_memory_vector_store
                     mv = get_memory_vector_store()
@@ -114,7 +114,7 @@ def setup_admin_wipe_routes(session_manager):
                     for _, _, files in os.walk(skills_dir):
                         count += sum(1 for f in files if f == "SKILL.md")
                     _rmtree_quiet(skills_dir)
-                # Legacy fallback file
+                # Legacy 回退 file
                 legacy = SKILLS_FILE
                 if os.path.exists(legacy):
                     try:
@@ -130,7 +130,7 @@ def setup_admin_wipe_routes(session_manager):
                 return {"status": "deleted", "kind": kind, "count": count}
 
             if kind == "tasks":
-                # TaskRun rows reference tasks via FK — clear them first.
+                # Task运行 rows reference tasks via FK — clear them first.
                 db.query(TaskRun).delete()
                 count = db.query(ScheduledTask).count()
                 db.query(ScheduledTask).delete()

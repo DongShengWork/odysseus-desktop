@@ -46,7 +46,7 @@ TOOL_TAGS = {"bash", "python", "web_search", "web_fetch", "read_file", "write_fi
              "delete_email", "mark_email_read",
              # Cookbook 工具（LLM 服务 + 下载）。没有这些
              # 条目，对 e.g. list_served_models 的原生函数调用
-             # 在到达调度器之前就会被当作 "Unknown function call" 拒绝
+             # 在到达调度器之前就会被当作 "Unknown 函数调用" 拒绝
              # — 导致整个 cookbook 操作面静默失败。
              "download_model", "serve_model",
              "list_served_models", "stop_served_model",

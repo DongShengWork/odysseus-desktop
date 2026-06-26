@@ -125,13 +125,13 @@ def _reminder_text_from_note(note: Note) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# Reminder dispatch — module-level so background tasks (built-in actions)
+# Reminder dispatch — module-level so 后台任务s (built-in actions)
 # can call it directly without an HTTP roundtrip + auth cookie. The route
 # version below is a thin wrapper that pulls `owner` from the request.
 # ---------------------------------------------------------------------------
 
-# Scheduler reference — set by setup_note_routes() so dispatch_reminder can
-# push a parallel in-app notification (frontend polls the scheduler's queue
+# Scheduler reference — set by setup_note_routes() so dispatch_提醒 can
+# push a parallel in-app 通知 (前端 polls the scheduler's queue
 # and fires real browser Notification(...) popups). Optional; works without it.
 _scheduler_ref = None
 
@@ -184,10 +184,10 @@ async def dispatch_reminder(
                 last_dt = _dt.fromisoformat(str(last))
                 if last_dt.tzinfo is None:
                     last_dt = last_dt.replace(tzinfo=_tz.utc)
-                # Legacy cache values were plain timestamps and could be
-                # written by the frontend even when the email/ntfy send failed.
-                # Treat those as browser-only dedupe so email reminders can be
-                # retried by the backend scanner after a failed frontend path.
+                # Legacy cache values were plain 时间戳s and could be
+                # written by the 前端 even when the email/ntfy send failed.
+                # Treat those as browser-only dedupe so email 提醒s can be
+                # retried by the 后端 scanner after a failed 前端 path.
                 should_skip = last_dt >= _dt.now(_tz.utc) - _td(minutes=25)
                 if should_skip and channel in ("email", "ntfy", "webhook"):
                     should_skip = last_channel == channel
@@ -304,8 +304,8 @@ async def dispatch_reminder(
             from email.mime.text import MIMEText
             from email.mime.multipart import MIMEMultipart
             from datetime import datetime as _dt
-            # `reminder_email_account_id` lets the user pick WHICH email
-            # account to send reminders from (when they have several
+            # `提醒_email_account_id` lets the user pick WHICH email
+            # account to send 提醒s from (when they have several
             # configured in Integrations). Falls back to the default
             # account when no explicit choice is saved.
             _acc_id = (settings.get("reminder_email_account_id") or "").strip() or None
@@ -332,7 +332,7 @@ async def dispatch_reminder(
                     logger.debug(f"Reminder SMTP fallback lookup failed: {_fallback_error}")
             from_addr = (cfg.get("from_address") or cfg.get("smtp_user") or "").strip()
             recipient = (settings.get("reminder_email_to") or "").strip() or from_addr
-            # Loud diagnostic so we can see WHY a reminder didn't send (the
+            # Loud diagnostic so we can see WHY a 提醒 didn't send (the
             # previous "silently no-op when cfg has no smtp_host" was invisible).
             logger.info(
                 f"dispatch_reminder[email] note_id={note_id} owner={owner!r} "
@@ -401,7 +401,7 @@ async def dispatch_reminder(
             import json as _wjson
             from src.integrations import load_integrations
             # Built-in payload defaults for known presets so users don't have
-            # to configure a template just to use a standard service.
+            # to configure a template just to use a standard 服务.
             _PRESET_TEMPLATE_DEFAULTS = {
                 "discord_webhook": '{"embeds": [{"title": "{{title}}", "description": "{{message}}", "color": 5793266}]}',
             }
@@ -420,13 +420,13 @@ async def dispatch_reminder(
                 else:
                     # Fall back to a built-in default for known presets so
                     # users don't have to configure a template for standard
-                    # services like Discord.
+                    # 服务s like Discord.
                     if not template:
                         template = _PRESET_TEMPLATE_DEFAULTS.get(intg.get("preset", ""), "")
                     if not template:
                         webhook_error = "No payload template configured"
                     else:
-                        # Render template: JSON-escape the values so the result
+                        # 渲染 template: JSON-转义 the values so the result
                         # is always valid JSON regardless of special characters.
                         # dumps() returns `"value"` — strip outer quotes.
                         msg = (synthesis or note_body or title or "Reminder")[:4000]
@@ -442,11 +442,11 @@ async def dispatch_reminder(
                             elif auth_type == "header":
                                 hdrs[intg.get("auth_header") or "Authorization"] = api_key
                         url = intg["base_url"].rstrip("/")
-                        # SSRF guard — matches the pattern used by webhook_routes,
-                        # CalDAV, search, and embeddings. Blocks link-local / metadata
+                        # SSRF guard — matches the pattern used by Webhook_routes,
+                        # CalDAV, search, and 嵌入s. Blocks link-local / metadata
                         # addresses (169.254.x.x) by default; set
                         # REMINDER_WEBHOOK_BLOCK_PRIVATE_IPS=true to also block
-                        # RFC-1918 ranges for locked-down deployments.
+                        # RFC-1918 ranges for locked-down 部署s.
                         import os as _os
                         from src.url_safety import check_outbound_url as _chk
                         _block = _os.getenv("REMINDER_WEBHOOK_BLOCK_PRIVATE_IPS", "false").lower() == "true"
@@ -493,10 +493,10 @@ async def dispatch_reminder(
             ntfy_error = str(e) or e.__class__.__name__
             logger.warning(f"Reminder ntfy send failed: {e}")
 
-    # In-app browser notification ALWAYS fires (regardless of channel). The
-    # frontend polls `/api/tasks/notifications` and turns any entry with a
+    # In-app browser 通知 ALWAYS fires (regardless of channel). The
+    # 前端 polls `/api/tasks/通知s` and turns any entry with a
     # `body` into a real `Notification(...)` — same surface as task-success
-    # popups. Lets the user see reminders inside the app even when the
+    # popups. Lets the user see 提醒s inside the app even when the
     # primary channel is email/ntfy and the tab is open.
     browser_sent = False
     local_browser_sent = (not queue_browser and channel == "browser")
@@ -517,7 +517,7 @@ async def dispatch_reminder(
     # reads, so the background scanner's REPING_MIN window suppresses a
     # second send for the same note within 25 min. Without this, a note
     # whose due_date fires while the user has the app open got TWO emails
-    # (frontend-fired here + background-fired by ping_notes 0–5 min later).
+    # (前端-fired here + background-fired by ping_notes 0–5 min later).
     if (email_sent or ntfy_sent or webhook_sent or browser_sent or local_browser_sent) and note_id:
         try:
             import json as _json
@@ -561,10 +561,10 @@ async def dispatch_reminder(
 # ---------------------------------------------------------------------------
 
 def setup_note_routes(task_scheduler=None):
-    # Expose the scheduler to module-level `dispatch_reminder` so reminders
-    # can also push to the in-app notification queue (the polling system
+    # Expose the scheduler to module-level `dispatch_提醒` so 提醒s
+    # can also push to the in-app 通知 queue (the polling system
     # turns each entry into a real browser Notification + the existing
-    # tasks-tab badge / dot system).
+    # tasks-tab 徽章 / dot system).
     global _scheduler_ref
     _scheduler_ref = task_scheduler
 
@@ -572,13 +572,13 @@ def setup_note_routes(task_scheduler=None):
 
     def _owner(request: Request) -> Optional[str]:
         # require_user, not bare get_current_user: a request that reaches
-        # these owner-scoped routes with NO identity (auth-middleware
-        # regression, SSRF from a sibling service) must fail closed (401)
+        # these owner-权限范围d routes with NO identity (auth-middleware
+        # regression, SSRF from a sibling 服务) must fail closed (401)
         # when auth is configured — not be treated as the single-user mode
         # and handed blanket access to every account's notes. The documented
         # anonymous modes (AUTH_ENABLED=false, LOCALHOST_BYPASS on loopback,
         # unconfigured first-run) still resolve to None, the single-user
-        # path. fire_reminder below already gated this way; the CRUD routes
+        # path. fire_提醒 below already gated this way; the CRUD routes
         # did not.
         return require_user(request) or None
 

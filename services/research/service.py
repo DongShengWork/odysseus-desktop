@@ -1,4 +1,4 @@
-# services/research/service.py
+# 服务s/research/服务.py
 """研究服务 — LLM 参与环路的深度研究。"""
 
 import re
@@ -80,8 +80,8 @@ class ResearchService:
 
         duration = time.time() - start
 
-        # call_research_service returns a formatted markdown report string
-        # (see ResearchHandler.call_research_service -> _format_research_report),
+        # call_research_服务 returns a formatted markdown report string
+        # (see ResearchHandler.call_research_服务 -> _format_research_report),
         # not a dict. Treat it as such; tolerate an unexpected dict/None defensively.
         if isinstance(result, dict):
             sources = [

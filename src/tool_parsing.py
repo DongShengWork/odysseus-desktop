@@ -32,7 +32,7 @@ _TOOL_CALL_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Pattern 3: XML-style tool calls (minimax, some other models)
+# Pattern 3: XML-style 工具调用s (minimax, some other models)
 # <minimax:tool_call><invoke name="bash"><parameter name="command">...</parameter></invoke></minimax:tool_call>
 # Also handles: <tool_call><invoke ...>, <function_call><invoke ...>, plain <invoke ...>
 _XML_TOOL_CALL_RE = re.compile(
@@ -75,7 +75,7 @@ _TOOL_CODE_RE = re.compile(
 )
 
 # Pattern 5: DeepSeek DSML markup leaking into content. When deepseek
-# models can't emit structured tool_calls (e.g. we sent no tool schemas
+# models can't emit structured tool_calls (e.g. we sent no 工具模式s
 # that round, or the API didn't parse them), they fall back to raw
 # markup using fullwidth-pipe delimiters:
 #   <｜｜DSML｜｜tool_calls>
@@ -393,7 +393,7 @@ def _parse_tool_call_block(raw: str) -> Optional[ToolBlock]:
     if not mapped:
         return None
 
-    # Extract the command/content — try several patterns
+    # 提取 the command/content — try several patterns
     content = None
 
     # Pattern: --command "value" or --command 'value'
@@ -599,7 +599,7 @@ def _parse_stepfun_tool_call(tool_name: str, body: str) -> Optional[ToolBlock]:
 
 def _parse_tool_code_block(raw: str) -> Optional[ToolBlock]:
     """Parse a <tool_code>{tool => 'name', args => '...'}</tool_code> block (MiniMax style)."""
-    # Extract tool name
+    # 提取 tool name
     tool_match = re.search(r"tool\s*=>\s*['\"](\S+?)['\"]", raw)
     if not tool_match:
         return None
@@ -612,11 +612,11 @@ def _parse_tool_code_block(raw: str) -> Optional[ToolBlock]:
 
     mapped = _TOOL_NAME_MAP.get(tool_name)
 
-    # Extract args content
+    # 提取 args content
     args_match = re.search(r"args\s*=>\s*['\"]?\s*([\s\S]*?)\s*['\"]?\s*$", raw, re.DOTALL)
     args_body = args_match.group(1).strip().strip("'\"") if args_match else ""
 
-    # Parse XML params inside args (e.g. <command>ls</command>)
+    # 解析 XML params inside args (e.g. <command>ls</command>)
     xml_params = {}
     for pm in re.finditer(r"<(\w+)>([\s\S]*?)</\1>", args_body):
         xml_params[pm.group(1)] = pm.group(2).strip()
@@ -648,7 +648,7 @@ def _parse_tool_code_block(raw: str) -> Optional[ToolBlock]:
         if content:
             return ToolBlock(mapped, content.strip())
     elif tool_name and args_body:
-        # Unknown tool — try as MCP tool call
+        # Unknown tool — try as MCP 工具调用
         content = "\n".join(f"{k}: {v}" for k, v in xml_params.items()) if xml_params else args_body
         return ToolBlock(tool_name, content.strip())
     return None
@@ -692,7 +692,7 @@ def parse_tool_blocks(text: str, skip_fenced: bool = False) -> List[ToolBlock]:
             if not content:
                 continue
             # If a code block's content is an <invoke> XML call (some models wrap
-            # tool calls in ```python or ```xml fences), parse the invoke instead.
+            # 工具调用s in ```python or ```xml fences), parse the invoke instead.
             if '<invoke' in content:
                 for inv in _XML_INVOKE_RE.finditer(content):
                     block = _parse_xml_invoke(inv)

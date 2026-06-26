@@ -73,8 +73,8 @@ def _load_analytics() -> Dict[str, Any]:
     try:
         with open(ANALYTICS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        # Merge over defaults so a file written by an older schema (or a
-        # partial write) still has every counter — _record_query indexes
+        # 合并 over defaults so a file written by an older schema (or a
+        # partial write) still has every counter — _record_query 索引es
         # these keys directly and would otherwise raise KeyError.
         merged = _default_analytics()
         if isinstance(data, dict):

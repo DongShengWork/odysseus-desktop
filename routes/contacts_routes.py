@@ -228,7 +228,7 @@ def _build_vcard(name: str, email: str, uid: Optional[str] = None,
     else:
         first = name
         last = ""
-    # N field is structured (5 components separated by ';') — escape each
+    # N field is structured (5 components separated by ';') — 转义 each
     # component individually so a comma in the name doesn't split it.
     n_field = f"{_vesc(last)};{_vesc(first)};;;"
     lines = [
@@ -317,7 +317,7 @@ def _fetch_via_report(cfg, auth):
             out.append(c)
         # If the REPORT parsed to ZERO contacts, don't trust it — some
         # CardDAV servers treat an empty <filter/> as "match nothing" and
-        # return a valid-but-empty 207. Return None so the caller falls
+        # return a valid-but-empty 207. 返回 None so the caller falls
         # back to the plain GET (which lists everything). A genuinely empty
         # address book just costs one extra GET that also returns nothing.
         if not out:
@@ -377,7 +377,7 @@ def _resolve_resource_url(uid: str) -> str:
     found = _lookup()
     if found:
         return found
-    # Not in cache (or no href) — refresh once and retry before guessing.
+    # Not in cache (or no href) — refresh once and 重试 before guessing.
     try:
         _fetch_contacts(force=True)
     except Exception:
@@ -466,7 +466,7 @@ def _import_vcards(text: str) -> Dict:
         logger.warning("CardDAV import URL rejected: %s", e)
         return {"imported": 0, "failed": 0, "total": 0, "error": str(e)}
     auth = (cfg["username"], cfg["password"]) if cfg["username"] else None
-    # Split into individual cards. re.split drops the BEGIN line, so we
+    # 分割 into individual cards. re.split drops the BEGIN line, so we
     # re-add it. Normalize CRLF.
     raw = (text or "").replace("\r\n", "\n").replace("\r", "\n")
     blocks = []
@@ -481,11 +481,11 @@ def _import_vcards(text: str) -> Dict:
     imported = 0
     failed = 0
     for block in blocks:
-        # Extract or assign a UID.
+        # 提取 or as签名 a UID.
         m = re.search(r"^UID:(.+)$", block, re.MULTILINE)
         uid = (m.group(1).strip() if m else "") or str(uuid.uuid4())
         if not m:
-            # Inject a UID right after the VERSION line (or after BEGIN).
+            # 注入 a UID right after the VERSION line (or after BEGIN).
             if re.search(r"^VERSION:", block, re.MULTILINE):
                 block = re.sub(r"(^VERSION:.*$)", r"\1\nUID:" + uid, block, count=1, flags=re.MULTILINE)
             else:
@@ -744,7 +744,7 @@ def setup_contacts_routes():
         address = (data.get("address") or "").strip()
         if not email:
             return {"success": False, "error": "Email required"}
-        # Check if already exists by email
+        # 检查 if already exists by email
         if email:
             contacts = _fetch_contacts()
             for c in contacts:
@@ -758,7 +758,7 @@ def setup_contacts_routes():
         else:
             ok = _create_contact(name, email)
         # If a phone was provided, do an immediate update to thread it
-        # through (the simple _create_contact signature only takes name +
+        # through (the simple _create_contact 签名ature only takes name +
         # email + address; phones happen via update).
         if ok and phone:
             try:

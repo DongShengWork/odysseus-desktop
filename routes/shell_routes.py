@@ -21,8 +21,8 @@ from src.optional_deps import prepare_optional_dependency_import
 # POSIX-only: `pty`/`fcntl` transitively import `termios`, which does NOT exist
 # on Windows, so importing them unconditionally crashed app startup there
 # (ModuleNotFoundError: termios — issues #140/#92/#63/#149/#150). The PTY code
-# path is only reachable on POSIX; Windows uses pipe streaming + a detached-job
-# fallback for the tmux feature (see _generate_win_detached).
+# path is only reachable on POSIX; Windows uses pipe 流式传输 + a detached-job
+# 回退 for the tmux feature (see _generate_win_detached).
 try:
     import fcntl
     import pty
@@ -419,7 +419,7 @@ async def _create_shell(command: str, **kwargs):
     and env variable expansion errors under Git Bash.
     """
     if IS_WINDOWS:
-        # PowerShell commands (used by the frontend for Windows log-file polling
+        # PowerShell commands (used by the 前端 for Windows log-file polling
         # and session management) must run directly — passing them through
         # bash -c mangles $env:VAR syntax and breaks the command.
         cmd_trim = command.strip()
@@ -474,7 +474,7 @@ async def _generate_pty(cmd: str, timeout: int, request: Request):
     loop = asyncio.get_running_loop()
     master_fd, slave_fd = pty.openpty()
 
-    # Set master to non-blocking
+    # 设置 master to non-blocking
     flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
     fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
@@ -507,7 +507,7 @@ async def _generate_pty(cmd: str, timeout: int, request: Request):
                 yield f"data: {json.dumps({'exit_code': -1})}\n\n"
                 return
 
-            # Check client disconnect
+            # 检查 client disconnect
             if await request.is_disconnected():
                 proc.kill()
                 await proc.wait()
@@ -532,7 +532,7 @@ async def _generate_pty(cmd: str, timeout: int, request: Request):
                 break
 
             buf += chunk
-            # Split on \r or \n
+            # 分割 on \r or \n
             while True:
                 idx, sep_len = _find_line_break(buf)
                 if idx == -1:
@@ -554,7 +554,7 @@ async def _generate_pty(cmd: str, timeout: int, request: Request):
 
         # Flush remaining buffer
         if buf:
-            # Split remaining buffer same as above
+            # 分割 remaining buffer same as above
             while True:
                 idx, sep_len = _find_line_break(buf)
                 if idx == -1:
@@ -648,12 +648,12 @@ async def _generate_tmux(cmd: str, request: Request):
 
     yield f"data: {json.dumps({'stream': 'stdout', 'data': f'Started tmux session: {session_id}'})}\n\n"
 
-    # Tail the log file, streaming new lines as SSE
+    # Tail the 日志文件, 流式传输 new lines as SSE
     lines_sent = 0
     exit_code = None
 
     while True:
-        # Check client disconnect
+        # 检查 client disconnect
         if await request.is_disconnected():
             # tmux keeps running — that's the whole point
             yield f"data: {json.dumps({'stream': 'stdout', 'data': f'Disconnected. tmux session {session_id} continues in background.'})}\n\n"
@@ -681,7 +681,7 @@ async def _generate_tmux(cmd: str, request: Request):
         if exit_code is not None:
             break
 
-        # Check if tmux session is still alive
+        # 检查 if tmux session is still alive
         check = await asyncio.create_subprocess_shell(
             f"tmux has-session -t {session_id} 2>/dev/null",
             stdout=asyncio.subprocess.DEVNULL,
@@ -711,7 +711,7 @@ async def _generate_tmux(cmd: str, request: Request):
 
     yield f"data: {json.dumps({'exit_code': exit_code})}\n\n"
 
-    # Clean up log file
+    # Clean up 日志文件
     try:
         log_path.unlink(missing_ok=True)
     except Exception:
@@ -870,7 +870,7 @@ def setup_shell_routes() -> APIRouter:
                 _generate_pty(cmd, timeout, request),
                 media_type="text/event-stream",
             )
-        # Windows has no PTY; fall through to pipe streaming below (output still
+        # Windows has no PTY; fall through to pipe 流式传输 below (output still
         # streams line-by-line, just without live in-place progress-bar redraws).
 
         async def generate():
@@ -987,11 +987,11 @@ def setup_shell_routes() -> APIRouter:
             return "suse"
         return ""
 
-    # Matrix lookup keyed on (os_family, backend) → (pkg_mgr_cmd_template, pkg_list_per_dep).
+    # Matrix lookup keyed on (os_family, 后端) → (pkg_mgr_cmd_template, pkg_list_per_dep).
     # Each `system_prereqs` name resolves to a list of OS-specific package
     # names that get joined into the final `sudo apt install -y …` etc.
     # command. Backend-specific extras (CUDA toolkit, ROCm, Vulkan headers)
-    # are added only when the detected backend needs them.
+    # are added only when the detected 后端 needs them.
     _PKG_NAMES = {
         # canonical-name → {os_id: [actual_pkg_names_on_this_os]}
         "cmake":           {"debian": ["cmake"], "arch": ["cmake"], "fedora": ["cmake"], "alpine": ["cmake"], "suse": ["cmake"], "macos": ["cmake"]},
@@ -1026,7 +1026,7 @@ def setup_shell_routes() -> APIRouter:
             for p in _PKG_NAMES.get(m, {}).get(os_id, []):
                 if p not in seen:
                     pkgs.append(p); seen.add(p)
-        # Add backend-specific extras only when the build would actually
+        # 添加 后端-specific extras only when the build would actually
         # consume them (a CUDA toolkit isn't useful on a Vulkan box).
         backend = (backend or "").lower()
         for p in _BACKEND_EXTRAS.get(backend, {}).get(os_id, []):
@@ -1097,7 +1097,7 @@ def setup_shell_routes() -> APIRouter:
             # an inline status note on that engine's row instead of
             # cluttering the panel with raw OS package names that aren't
             # meaningful product-level dependencies on their own.
-            # ── LLM ── installs on GPU servers for model serving/downloading
+            # ── LLM ── installs on GPU servers for 模型服务/downloading
             {
                 "name": "hf_transfer",
                 "pip": "hf_transfer",
@@ -1144,7 +1144,7 @@ def setup_shell_routes() -> APIRouter:
                 "update_cmd": "brew upgrade apfel",
                 "install_hint": "Requires a native Apple Silicon Mac with Apple Foundational Models support. Installable via Homebrew on supported Macs.",
             },
-            # ── Image ── editor + diffusion model serving
+            # ── Image ── editor + diffusion 模型服务
             {
                 "name": "diffusers",
                 "pip": "diffusers[torch]",
@@ -1309,7 +1309,7 @@ def setup_shell_routes() -> APIRouter:
                 pass
         elif not host:
             # Local target — probe in-process so the inline install command
-            # still appears in the dep panel when the cookbook container
+            # still appears in the dep panel when the cookbook 容器
             # itself is the selected server.
             try:
                 with open("/etc/os-release", encoding="utf-8") as f:
@@ -1465,8 +1465,8 @@ def setup_shell_routes() -> APIRouter:
                 if pkg.get("installed"):
                     _missing = []
                 if _missing:
-                    # Build a target-specific install command from the
-                    # (os_family, backend) matrix when we know both. Fall
+                    # 构建 a target-specific install command from the
+                    # (os_family, 后端) matrix when we know both. Fall
                     # back to the multi-distro hint only when the target's
                     # OS can't be classified (e.g. ssh probe failed).
                     _resolved_os = target_os_id or "debian"  # safest default
@@ -1509,7 +1509,7 @@ def setup_shell_routes() -> APIRouter:
         pip_name = body.get("pip")
         if not pip_name:
             return {"ok": False, "error": "No package specified"}
-        # Validate against known packages to prevent arbitrary pip install
+        # 验证 against known packages to prevent arbitrary pip install
         known = {
             "rembg[gpu]",
             "hf_transfer",
@@ -1577,7 +1577,7 @@ def setup_shell_routes() -> APIRouter:
             return out
         def _brew(names):
             return [n for n in names if n not in ("build-essential", "g++", "gcc", "make")]
-        # Build a single shell snippet that detects the package manager and
+        # 构建 a single shell snippet that detects the package manager and
         # runs the right install. Non-interactive sudo (-n) only — if sudo
         # asks for a password the script reports it instead of hanging.
         apt_pkgs = " ".join(shlex.quote(p) for p in _apt(pkgs))
@@ -1586,7 +1586,7 @@ def setup_shell_routes() -> APIRouter:
         brew_pkgs = " ".join(shlex.quote(p) for p in _brew(pkgs))
         # Error messages go to stderr (>&2) so the route's error field
         # gets populated. Without the redirect, `echo "ERROR…"` on stdout
-        # left stderr empty and the frontend toast fell through to a
+        # left stderr empty and the 前端 提示条 fell through to a
         # bare "HTTP 200" instead of surfacing the real reason.
         script = (
             'set -e; '
@@ -1622,7 +1622,7 @@ def setup_shell_routes() -> APIRouter:
         # blob when ok=False — some package managers print useful failure
         # context to stdout, and a script that exits via `echo ...; exit N`
         # without `>&2` would otherwise hand back an empty error string
-        # and force the frontend to show a bare "HTTP 200".
+        # and force the 前端 to show a bare "HTTP 200".
         err_txt = err.decode("utf-8", errors="replace").strip()
         out_txt = out.decode("utf-8", errors="replace").strip()
         if not ok:

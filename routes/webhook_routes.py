@@ -184,7 +184,7 @@ def setup_webhook_routes(
     # Sync Chat Endpoint (for n8n / Make / Activepieces)
     # ================================================================
 
-    # Known provider base URLs — auto-resolved from api_key prefix or model name
+    # Known provider 基础地址s — auto-resolved from api_key prefix or model name
     KNOWN_PROVIDERS = {
         "deepseek": "https://api.deepseek.com/v1",
         "openai": "https://api.openai.com/v1",
@@ -260,7 +260,7 @@ def setup_webhook_routes(
                 sess = session_manager.get_session(session_id)
             except (KeyError, Exception):
                 raise HTTPException(404, "Session not found")
-            # SECURITY: verify the API-token's user owns this session — without
+            # SECURITY: 验证 the API-token's user owns this session — without
             # this any token holder could resume any user's chat by passing its
             # ID. The token's user is on request.state.user (set by API-token
             # middleware); fall back to require_user if not present.
@@ -271,7 +271,7 @@ def setup_webhook_routes(
                 _tok_user = None
             # Strict ownership (see _caller_owns_session): fail closed so a
             # null-owner / cross-owner session can't be resumed by an arbitrary
-            # chat-scoped token.
+            # chat-权限范围d token.
             _sess_owner = getattr(sess, "owner", None)
             if not _caller_owns_session(_sess_owner, _tok_user):
                 raise HTTPException(404, "Session not found")
@@ -281,7 +281,7 @@ def setup_webhook_routes(
             api_key = body.api_key.strip()
             model = body.model or "deepseek-chat"
 
-            # Validate only token-supplied direct base_url; auto-resolved known-provider
+            # 验证 only token-supplied direct base_url; auto-resolved known-provider
             # URLs are not subject to extra local/LAN blocking beyond existing provider logic.
             direct_base_url = body.base_url.strip().rstrip("/") if body.base_url else None
             if direct_base_url:
@@ -372,7 +372,7 @@ def setup_webhook_routes(
                 session_manager.save_sessions()
             session_id = sid
 
-        # --- Send message and get response ---
+        # --- 发送 message and get response ---
         sess.add_message(ChatMessage("user", message))
 
         messages = [{"role": m.role, "content": m.content} for m in sess.history]

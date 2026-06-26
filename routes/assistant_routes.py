@@ -87,8 +87,8 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
         return owner
 
     # Synthetic / non-human owners that should NEVER get an assistant +
-    # check-in tasks seeded. Hitting any /assistant route under one of these
-    # used to seed a full CrewMember + Morning/Midday/Evening tasks under that
+    # check-in tasks 随机种子ed. Hitting any /assistant route under one of these
+    # used to 随机种子 a full CrewMember + Morning/Midday/Evening tasks under that
     # owner, which then double-fired alongside the real user's check-ins.
     # RESERVED_USERNAMES covers the same set; the `not owner` guard handles "".
 
@@ -167,7 +167,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
             if not crew_db:
                 raise HTTPException(status_code=404, detail="Assistant not found")
 
-            # Update CrewMember fields.
+            # 更新 CrewMember fields.
             if payload.name is not None:
                 crew_db.name = payload.name.strip() or crew_db.name
             if payload.avatar is not None:
@@ -199,7 +199,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
             crew_db.updated_at = datetime.utcnow()
 
-            # Update check-in tasks.
+            # 更新 check-in tasks.
             if payload.check_ins:
                 now_utc = datetime.utcnow()
                 tz_name = crew_db.timezone or None

@@ -181,7 +181,7 @@ def setup_mcp_routes(mcp_manager: McpManager):
         if transport == "http" and not url:
             raise HTTPException(400, "url is required for HTTP transport")
 
-        # Parse JSON fields
+        # 解析 JSON fields
         try:
             parsed_args = json.loads(args) if args else []
         except json.JSONDecodeError:
@@ -193,7 +193,7 @@ def setup_mcp_routes(mcp_manager: McpManager):
         if not isinstance(parsed_env, dict):
             parsed_env = {}
 
-        # Parse OAuth config
+        # 解析 OAuth config
         parsed_oauth_config = None
         if oauth_config:
             try:
@@ -202,7 +202,7 @@ def setup_mcp_routes(mcp_manager: McpManager):
                 pass
         _apply_mcp_oauth_env(parsed_env, parsed_oauth_config)
 
-        # Write OAuth credentials file if provided (for Google MCP servers)
+        # Write OAuth credentials file if provided (for Google MCP 服务器s)
         logger.info(f"MCP add_server: oauth_file={oauth_file!r}")
         if oauth_file:
             try:
@@ -234,7 +234,7 @@ def setup_mcp_routes(mcp_manager: McpManager):
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Failed to write OAuth file: {e}")
 
-        # Save to DB
+        # 保存 to DB
         db = SessionLocal()
         try:
             srv = McpServer(
@@ -253,7 +253,7 @@ def setup_mcp_routes(mcp_manager: McpManager):
         finally:
             db.close()
 
-        # Check if OAuth token already exists — skip connection attempt if not
+        # 检查 if OAuth token already exists — skip connection attempt if not
         needs_oauth = False
         if parsed_oauth_config:
             needs_oauth = _mcp_oauth_token_missing(parsed_oauth_config)
@@ -423,7 +423,7 @@ def setup_mcp_routes(mcp_manager: McpManager):
         finally:
             db.close()
 
-    # ── OAuth flow for Google MCP servers ──────────────────────────
+    # ── OAuth 流程 for Google MCP 服务器s ──────────────────────────
 
     @router.get("/oauth/authorize/{server_id}")
     def oauth_authorize(server_id: str, request: Request):
@@ -564,13 +564,13 @@ def setup_mcp_routes(mcp_manager: McpManager):
             tokens = resp.json()
             logger.info(f"OAuth tokens received for server {server_id}")
 
-            # Save tokens to the file the MCP package expects
+            # 保存 tokens to the file the MCP package expects
             os.makedirs(os.path.dirname(token_file), exist_ok=True)
             with open(token_file, "w", encoding="utf-8") as f:
                 json.dump(tokens, f, indent=2)
             logger.info(f"Saved OAuth tokens to {token_file}")
 
-            # Attempt to connect the MCP server now
+            # Attempt to connect the MCP 服务器 now
             args = json.loads(srv.args) if srv.args else []
             env = json.loads(srv.env) if srv.env else {}
             connected = await mcp_manager.connect_server(

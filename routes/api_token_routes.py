@@ -170,10 +170,10 @@ def setup_api_token_routes() -> APIRouter:
                 raise HTTPException(403, "Not your token")
             if isinstance(payload.get("name"), str) and payload["name"].strip():
                 token.name = payload["name"].strip()[:MAX_NAME_LEN]
-            # 仅在调用者实际发送了 scopes 参数时才修改。部分更新
-            # 如重命名（{"name": ...} 不含 "scopes" 键）必须
-            # 不能静默地将 token 重置为默认 scope — 这会导致
-            # 之前授予的所有 scope 被丢弃。
+            # 仅在调用者实际发送了 权限范围s 参数时才修改。部分更新
+            # 如重命名（{"name": ...} 不含 "权限范围s" 键）必须
+            # 不能静默地将 token 重置为默认 权限范围 — 这会导致
+            # 之前授予的所有 权限范围 被丢弃。
             if "scopes" in payload:
                 token.scopes = ",".join(_normalize_scopes(payload.get("scopes")))
             db.add(token)

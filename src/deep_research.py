@@ -536,9 +536,9 @@ class DeepResearcher:
         if self._cancelled or self._time_exceeded():
             return all_findings
 
-        # Fetch and extract URLs with backpressure. Local model servers often
+        # 获取 and extract URLs with backpressure. Local model servers often
         # serialize requests behind one GPU; flooding them makes every request
-        # slower and can trip the extraction timeout.
+        # slower and can trip the extraction 超时.
         semaphore = asyncio.Semaphore(self.extraction_concurrency)
 
         async def _bounded_extract(result: Dict) -> Optional[Dict]:
@@ -574,7 +574,7 @@ class DeepResearcher:
                 logger.info("Search is disabled for research")
                 return []
 
-            # Try primary provider, then fallbacks
+            # Try primary provider, then 回退s
             chain = _build_provider_chain(provider)
             raised = False
             for prov in chain:
@@ -593,7 +593,7 @@ class DeepResearcher:
             # raised, record an actionable reason here — otherwise this empty
             # path leaves `_last_search_error` unset and the caller surfaces a
             # bare "unknown error" (issue #344). This is exactly the SearXNG
-            # case where the service is reachable but all its engines fail, so
+            # case where the 服务 is reachable but all its engines fail, so
             # each provider returns [] without throwing.
             if not raised:
                 self._last_search_error = (
@@ -671,7 +671,7 @@ class DeepResearcher:
     async def _synthesize(self, question: str, findings: List[Dict],
                           current_report: str) -> str:
         """LLM synthesizes all findings into an updated report."""
-        # Format findings for the prompt
+        # 格式化 findings for the prompt
         window = findings[-self.synthesis_window:]
         if len(findings) > self.synthesis_window:
             logger.info(f"Synthesis using last {self.synthesis_window} of {len(findings)} findings")
@@ -817,7 +817,7 @@ class DeepResearcher:
         except json.JSONDecodeError:
             pass
 
-        # Handle truncated arrays — e.g. '["query one", "query two", "query thr'
+        # 处理 truncated arrays — e.g. '["query one", "query two", "query thr'
         # Repair from the LAST array start so an echoed example array earlier
         # in the reply is not harvested into the real query set.
         last_start = text.rfind('[')

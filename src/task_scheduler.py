@@ -19,14 +19,14 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-# Shell/file tools a scheduled task's agent should be offered by default,
+# Shell/file tools a 定时任务's agent should be offered by default,
 # mirroring the chat agent (where these are on unless a privilege or global
 # setting turns them off). The RAG tool selector + ASSISTANT_ALWAYS_AVAILABLE
-# never include bash/python, so on a host with an empty/degraded tool-embedding
-# index a task could not run shell or Python even for an admin owner. Offering
+# never include bash/python, so on a host with an empty/degraded tool-嵌入
+# 索引 a task could not run shell or Python even for an admin owner. Offering
 # them here is safe: stream_agent_loop's blocked_tools_for_owner() still strips
 # this whole group for non-admin multi-user owners, and only admits it for
-# admins and single-user (AUTH_ENABLED=false) deployments.
+# admins and single-user (AUTH_ENABLED=false) 部署s.
 TASK_DEFAULT_SHELL_TOOLS = frozenset({
     "bash", "python", "read_file", "write_file", "edit_file",
     "grep", "glob", "ls", "get_workspace",
@@ -48,10 +48,10 @@ def compose_task_relevant_tools(rag_tools, assistant_always, disabled_tools):
 
 
 # ── Shared TTL cache (singleflight) ────────────────────────────────────────
-# Multiple scheduled tasks firing in the same minute often need the same
-# external data (Miniflux unreads, MCP tool snapshots, etc.). This cache
+# Multiple 定时任务s firing in the same minute often need the same
+# external data (Miniflux unreads, MCP 工具 snapshots, etc.). This cache
 # deduplicates those fetches — in-flight requests for the same key await the
-# same underlying coroutine, and completed results are reused until TTL expiry.
+# same underlying 协程, and completed results are reused until TTL expiry.
 _shared_cache: Dict[Tuple, Tuple[float, Any]] = {}
 _shared_cache_pending: Dict[Tuple, asyncio.Future] = {}
 _shared_cache_lock = asyncio.Lock()
@@ -156,7 +156,7 @@ def compute_next_run(schedule: str, scheduled_time: str,
     if not scheduled_time:
         return None
 
-    # Parse HH:MM — fail closed on malformed input (no colon, non-numeric,
+    # 解析 HH:MM — fail closed on malformed input (no colon, non-numeric,
     # out-of-range) the same way an invalid cron expression does above, so a
     # bad value like "9" or "9am" returns None instead of raising IndexError/
     # ValueError out of the create route (a 500) or the scheduler loop.
@@ -228,8 +228,8 @@ def _resolve_task_timezone(db, task) -> str | None:
     return None
 
 
-# Built-in "housekeeping" tasks seeded for every owner, keyed by action.
-# These are the canonical defaults — used both to seed and to revert a
+# Built-in "housekeeping" tasks 随机种子ed for every owner, keyed by action.
+# These are the canonical defaults — used both to 随机种子 and to revert a
 # built-in task the user has altered. schedule "daily" uses scheduled_time;
 # "cron" uses cron_expression.
 HOUSEKEEPING_DEFAULTS = {
@@ -296,8 +296,8 @@ class TaskScheduler:
         self._task = None
         self._executing = set()  # task IDs currently running OR queued behind the semaphore
         # Guards mutations of _executing. _check_due_tasks runs in the loop
-        # coroutine; trigger_task() can be called from request handlers; the
-        # event bus fires from background tasks. Without this lock long-running
+        # 协程; trigger_task() can be called from request handlers; the
+        # event bus fires from 后台任务s. Without this lock long-running
         # tasks could be double-dispatched.
         self._executing_lock = asyncio.Lock()
         self._pending_notifications = []  # completed task notifications
@@ -387,8 +387,8 @@ class TaskScheduler:
             notes = self._pending_notifications[:]
             self._pending_notifications.clear()
             return notes
-        # Strict owner scope — used to OR-in null-owner notifications for
-        # "legacy single-user" compat but that leaked notification bodies to
+        # Strict owner 权限范围 — used to OR-in null-owner 通知s for
+        # "legacy single-user" compat but that leaked 通知 bodies to
         # any authenticated user once a second account existed.
         keep, take = [], []
         for n in self._pending_notifications:
@@ -457,7 +457,7 @@ class TaskScheduler:
         # Defense-in-depth dedupe sweep: for any owner with >1 rows where
         # is_default_assistant=True, keep the oldest and demote the rest +
         # delete their orphaned check-in tasks. This is the safety net for
-        # the synthetic-owner seeding bug (we cleaned a manual instance of
+        # the synthetic-owner 随机种子ing bug (we cleaned a manual instance of
         # it, but a stale code path or DB import could recreate it).
         try:
             from core.database import SessionLocal, CrewMember, ScheduledTask
@@ -475,7 +475,7 @@ class TaskScheduler:
                     keep = rows[0]
                     losers = rows[1:]
                     loser_ids = [r.id for r in losers]
-                    # Delete the orphaned tasks tied to the loser crews — they
+                    # 删除 the orphaned tasks tied to the loser crews — they
                     # are duplicates of the keeper's check-ins.
                     n_tasks = db.query(ScheduledTask).filter(
                         ScheduledTask.crew_member_id.in_(loser_ids)
@@ -499,10 +499,10 @@ class TaskScheduler:
         # infra (no LLM), shouldn't clutter the Tasks UI, fires on its own
         # cadence inside the scheduler process.
         #
-        # Calendar event reminders are represented as Notes by the calendar UI,
-        # so the Notes scanner is the single reminder dispatch path. Running the
-        # old event scanner too caused duplicate emails/notifications for the
-        # same calendar event.
+        # Calendar event 提醒s are represented as Notes by the calendar UI,
+        # so the Notes scanner is the single 提醒 dispatch path. Running the
+        # old event scanner too caused duplicate emails/通知s for the
+        # same 日历事件.
         self._note_pings_task = asyncio.create_task(self._note_pings_loop())
         logger.info(f"Task scheduler started (concurrency cap: {self._concurrency_cap})")
         # Audit clusters: show any minute-of-day where >1 active scheduled
@@ -671,7 +671,7 @@ class TaskScheduler:
             db.close()
 
     async def _execute_task(self, task_id: str, *, bypass_model_slot: bool = False, release_executing: bool = True):
-        # Create the run record with status="queued" BEFORE waiting on the
+        # 创建 the run record with status="queued" BEFORE waiting on the
         # semaphore so the UI can show that a manually-triggered task is in
         # line behind another. Once we acquire the slot, flip to "running"
         # and hand off to _execute_task_locked.
@@ -775,7 +775,7 @@ class TaskScheduler:
                     run.status = "success"
                     run.result = result
                 else:
-                    # LLM task — use agent loop for tool access
+                    # LLM task — use 智能体循环 for 工具访问
                     result = await self._execute_llm_task(task, db)
                     run.status = "success"
                     run.result = result
@@ -848,7 +848,7 @@ class TaskScheduler:
 
             run.finished_at = _utcnow()
 
-            # Update task
+            # 更新 task
             task.last_run = _utcnow()
             task.run_count = (task.run_count or 0) + 1
             self._task_defer_counts.pop(task_id, None)
@@ -870,7 +870,7 @@ class TaskScheduler:
             db.commit()
             logger.info(f"Task '{task.name}' completed (run {run_id})")
             output = task.output_target or "session"
-            # Per-task notification gate. Default True (notifications_enabled
+            # Per-task 通知 gate. Default True (通知s_enabled
             # defaults to True at column level), but skip when the user has
             # explicitly turned them off for this task — quiets chatty
             # housekeeping cron tasks without disabling them entirely.
@@ -895,10 +895,10 @@ class TaskScheduler:
                     body=run.error or run.result,
                 )
 
-            # Log result to the assistant chat so all task activity is visible.
+            # 记录 result to the assistant chat so all task activity is visible.
             # Skip skipped/error rows — user shouldn't see "skipped: …" noise
             # for cron tasks that no-op'd, or duplicate error spam for tasks
-            # that already fired an error notification above.
+            # that already fired an error 通知 above.
             if run.status == "success":
                 self._log_to_assistant(db, task, run.result or "[success]")
 
@@ -919,8 +919,8 @@ class TaskScheduler:
 
         except Exception as exec_exc:
             logger.exception(f"Task {task_id} execution error")
-            # Fetch the task's owner so the error notification reaches
-            # the same user the success notification would have.
+            # 获取 the task's owner so the error 通知 reaches
+            # the same user the success 通知 would have.
             _owner = None
             try:
                 _t = db.query(ScheduledTask).filter(ScheduledTask.id == task_id).first()
@@ -965,7 +965,7 @@ class TaskScheduler:
                 try:
                     db.commit()
                 except Exception as commit_err:
-                    # Commit failed — without a fallback the run row stays
+                    # Commit failed — without a 回退 the run row stays
                     # "running" forever AND next_run stays in the past, so the
                     # scheduler busy-loops dispatching the same task every tick
                     # until restart. Force the recovery in a fresh session.
@@ -1008,7 +1008,7 @@ class TaskScheduler:
 
     # Built-in housekeeping actions whose output is pure infra (no user-facing
     # content) — don't pollute the assistant chat session with their summaries.
-    # Activity log + reminder email already carry everything the user needs.
+    # Activity log + 提醒 email already carry everything the user needs.
     _SILENT_ACTIONS = frozenset({
         "check_email_urgency",
         "learn_sender_signatures",
@@ -1099,8 +1099,8 @@ class TaskScheduler:
             return str(e), False
 
     # ── Check-in source discovery ──
-    # Pattern-based: if an MCP server has a tool matching a pattern, it becomes
-    # a check-in source. Add new patterns here to support new integrations —
+    # Pattern-based: if an MCP 服务器 has a tool matching a pattern, it becomes
+    # a check-in source. 添加 new patterns here to support new integrations —
     # no code changes needed elsewhere.
     CHECKIN_MCP_PATTERNS = [
         {"detect": "list_emails",   "section": "Email",    "tool": "list_emails",
@@ -1147,7 +1147,7 @@ class TaskScheduler:
                 else:
                     lines.append(f"- {subject}")
             elif line.startswith("[") or line.startswith("-"):
-                # Generic cleanup
+                # Generic 清理
                 cleaned = _re.sub(r'^\[?\d+\]?\s*(?:↩️\s*|📎\s*)?', '', line.lstrip('- '))
                 if cleaned.strip():
                     lines.append(f"- {cleaned.strip()}")
@@ -1185,7 +1185,7 @@ class TaskScheduler:
             _db = _SL()
             try:
                 for label, start, end in _digest_windows(now):
-                    # Strip timezone for naive DB comparison
+                    # Strip 时区 for naive DB comparison
                     _s = start.replace(tzinfo=None) if start.tzinfo else start
                     _e = end.replace(tzinfo=None) if end.tzinfo else end
                     evs = _checkin_calendar_events(_db, task.owner, _s, _e)
@@ -1234,7 +1234,7 @@ class TaskScheduler:
                 if not base_url:
                     continue
 
-                # Build auth headers
+                # 构建 auth headers
                 headers = {}
                 if integ.get("auth_type") == "header" and api_key:
                     headers[integ.get("auth_header", "X-Auth-Token")] = api_key
@@ -1295,7 +1295,7 @@ class TaskScheduler:
                     args = dict(pattern.get("args", {}))
                     args["account"] = "default"
                     try:
-                        # Cache 3 min: different scheduled tasks firing at the
+                        # Cache 3 min: different 定时任务s firing at the
                         # same minute share the same MCP snapshot.
                         async def _call_mcp(_q=qualified, _args=args):
                             return await mcp.call_tool(_q, _args)
@@ -1309,7 +1309,7 @@ class TaskScheduler:
                     except Exception:
                         pass
 
-        # Build the data dump and hand it to the LLM
+        # 构建 the data dump and hand it to the LLM
         data_dump = f"Current time: {time_str}\n\n"
         for key, val in raw.items():
             data_dump += f"--- {key} ---\n{val}\n\n"
@@ -1394,10 +1394,10 @@ class TaskScheduler:
         if is_checkin:
             return await self._execute_checkin(task, crew, db, session_id, endpoint_url, model)
 
-        # Build system prompt: crew member persona overrides the default.
+        # 构建 系统提示: crew member persona overrides the default.
         # Built-in character_id (Socrates, Razor, etc.) further biases the
         # voice — it prepends to whichever base prompt we landed on so the
-        # task still knows it's executing a scheduled task but in that
+        # task still knows it's executing a 定时任务 but in that
         # character's tone.
         system_prompt = (
             (crew.personality or "").strip()
@@ -1413,7 +1413,7 @@ class TaskScheduler:
                     system_prompt = f"{char_prompt}\n\n{system_prompt}"
             except Exception:
                 pass
-        # Inject current time so the model knows what's past vs upcoming
+        # 注入 current time so the model knows what's past vs upcoming
         tz_name = _resolve_task_timezone(db, task)
         try:
             if tz_name:
@@ -1430,8 +1430,8 @@ class TaskScheduler:
         # Compute the disabled-tools set: the crew's enabled_tools allowlist
         # (inverted) plus the operator's global disabled_tools setting. The
         # global list must be merged here — chat does the same merge before
-        # entering the agent loop (routes/chat_routes.py) — otherwise an admin
-        # or AUTH_ENABLED=false scheduled task would still see and call shell/
+        # entering the 智能体循环 (routes/chat_routes.py) — otherwise an admin
+        # or AUTH_ENABLED=false 定时任务 would still see and call shell/
         # file tools after the operator disabled them globally, because the
         # prompt/schema/execution gates only enforce what is passed in.
         disabled_tools: set[str] = set()
@@ -1467,7 +1467,7 @@ class TaskScheduler:
         except Exception as e:
             logger.warning(f"[assistant] RAG tool selection failed, using all: {e}")
 
-        # Try using the agent loop for full tool access
+        # Try using the 智能体循环 for full 工具访问
         try:
             result = await self._run_agent_loop(
                 endpoint_url, model, task, session_id,
@@ -1687,7 +1687,7 @@ class TaskScheduler:
             {"role": "user", "content": user_content},
         ]
 
-        # Resolve headers from the endpoint's API key
+        # 解析 headers from the endpoint's API key
         headers = {}
         try:
             from core.database import SessionLocal, ModelEndpoint
@@ -1709,10 +1709,10 @@ class TaskScheduler:
         full_text = ""
         tool_results = []
 
-        # Honor per-task max_steps (defense against runaway agent loops).
+        # Honor per-task max_steps (defense against runaway 智能体循环s).
         # Falls back to 20 if not set — the historical default.
         _task_max_rounds = task.max_steps if task.max_steps and task.max_steps > 0 else 20
-        # Tasks are background workloads: use the shared task fallback chain
+        # Tasks are background workloads: use the shared task 回退 chain
         # behind the primary endpoint so a downed primary won't silently yield
         # `(no output)`.
         try:
@@ -1747,15 +1747,15 @@ class TaskScheduler:
                         full_text += data["delta"]
                     elif data.get("type") == "tool_output":
                         # Tool results — capture summary so we have SOMETHING even
-                        # if the model never produces a final text response
+                        # if the model never produces a final 文本回复
                         tool_summary = data.get("stdout") or data.get("output") or data.get("result") or ""
                         if isinstance(tool_summary, str) and tool_summary.strip():
                             tool_results.append(f"[{data.get('tool', '?')}] {tool_summary[:500]}")
                 except (json.JSONDecodeError, KeyError):
                     pass
 
-        # Grace summarization — if the model exhausted rounds on tool calls
-        # without producing a final text response, do one last LLM call
+        # Grace summarization — if the model exhausted rounds on 工具调用s
+        # without producing a final 文本回复, do one last LLM call
         # asking it to summarize what it did. Guarantees output.
         if not full_text.strip():
             try:
@@ -1793,7 +1793,7 @@ class TaskScheduler:
         from src.research_utils import strip_thinking
         from src.settings import get_setting
 
-        # Resolve endpoint/model: research settings > task settings > session defaults
+        # 解析 endpoint/model: research settings > task settings > session defaults
         endpoint_url = task.endpoint_url
         model = task.model
         headers = {}
@@ -1824,7 +1824,7 @@ class TaskScheduler:
         # Record the resolved model for the run record (see _execute_task_locked).
         self._last_run_model = model
 
-        # Resolve headers
+        # 解析 headers
         try:
             from core.database import ModelEndpoint
             from src.endpoint_resolver import normalize_base, build_headers
@@ -1977,7 +1977,7 @@ class TaskScheduler:
             logger.warning(f"Task {task.id}: MCP manager not available for delivery")
             return
 
-        # Resolve recipient — prefer the configured email From (the established
+        # 解析 recipient — prefer the configured email From (the established
         # "email yourself" pattern from daily_brief), fall back to task.owner.
         # `_get_email_config()` is the single source of truth that handles both
         # the legacy `email_from` setting and the per-account DB rows.
@@ -2001,7 +2001,7 @@ class TaskScheduler:
             },
         }
         if recipient:
-            # Cover the common field names so we work across MCP servers (Gmail,
+            # Cover the common field names so we work across MCP 服务器s (Gmail,
             # generic SMTP, Slack DMs, etc.) without having to hard-code each.
             args["to"] = recipient
             args["recipient"] = recipient
@@ -2024,7 +2024,7 @@ class TaskScheduler:
                     f"exit={exit_code} stderr={stderr[:400]!r} stdout={stdout[:400]!r}"
                 )
             else:
-                # Include the MCP tool's own stdout (e.g. email_server returns
+                # Include the MCP 工具's own stdout (e.g. email_server returns
                 # "Sent email to ... with subject ...") + the body size so a
                 # silent SMTP failure is easier to spot in the logs.
                 logger.info(
@@ -2109,7 +2109,7 @@ class TaskScheduler:
                 ScheduledTask.task_type == "action",
                 ScheduledTask.action.in_(list(RETIRED_HOUSEKEEPING_ACTIONS)),
             ).delete(synchronize_session=False)
-            # Sweep orphan TaskRun rows (parent task deleted previously) so
+            # Sweep orphan Task运行 rows (parent task deleted previously) so
             # retired actions stop showing in Activity. Only runs when at least
             # one live task exists — avoids wiping run history on a fresh DB.
             try:
@@ -2217,7 +2217,7 @@ class TaskScheduler:
                                 tz_name=_resolve_task_timezone(db, task),
                             )
                 # Built-in housekeeping/action jobs should not create browser
-                # task notifications; user AI/research tasks still can.
+                # task 通知s; user AI/research tasks still can.
                 task.notifications_enabled = False
                 if (task.output_target or "session") == "session":
                     task.output_target = defs.get("output_target", "none")
@@ -2261,7 +2261,7 @@ class TaskScheduler:
                     "Housekeeping defaults for %s: seeded=%s renamed=%s deduped=%s retired=%s",
                     owner, seeded, sorted(set(renamed)), sorted(set(removed_dupes)), retired_count,
                 )
-            # Always commit — the orphan-run sweep above may have produced
+            # Always 提交 — the orphan-run sweep above may have produced
             # pending deletes even when no defaults changed.
             db.commit()
         except Exception as e:
@@ -2278,9 +2278,9 @@ class TaskScheduler:
         """Create the personal-assistant CrewMember, its pinned session, and three
         daily check-in ScheduledTasks for this owner — idempotent on is_default_assistant."""
         # Hard-reject synthetic owners. Without this, AuthMiddleware-stamped
-        # values like 'internal-tool' (loopback agent-tool callbacks) or 'api'
+        # values like 'internal-tool' (loopback agent-工具调用backs) or 'api'
         # (bearer-token integrations) would get a real assistant + 3 daily
-        # check-ins seeded, which then double-fire alongside the human user's
+        # check-ins 随机种子ed, which then double-fire alongside the human user's
         # check-ins. This was the root cause of the duplicate 'Morning check-in'
         # rows we had to manually clean up.
         if not owner or owner in RESERVED_USERNAMES:
@@ -2298,7 +2298,7 @@ class TaskScheduler:
             if existing:
                 return  # already seeded
 
-            # Resolve a default model/endpoint from any existing session so the
+            # 解析 a default model/endpoint from any existing session so the
             # assistant has something to call. The user can change this later.
             endpoint_url, model = self._resolve_defaults(db, owner)
 
@@ -2358,7 +2358,7 @@ class TaskScheduler:
                 "- If uncertain, ask rather than guess"
             )
 
-            # Create the singleton session first (CrewMember.session_id links to it).
+            # 创建 the singleton session first (CrewMember.session_id links to it).
             session_id = str(uuid.uuid4())
             sess = DbSession(
                 id=session_id,
@@ -2375,7 +2375,7 @@ class TaskScheduler:
             db.add(sess)
             db.flush()
 
-            # Create the assistant CrewMember.
+            # 创建 the assistant CrewMember.
             crew_id = str(uuid.uuid4())
             assistant = CrewMember(
                 id=crew_id,
@@ -2408,7 +2408,7 @@ class TaskScheduler:
             # Link the session back to the crew member so UI can resolve either way.
             sess.crew_member_id = crew_id
 
-            # No auto-seeded check-in tasks. The old behaviour created three
+            # No auto-随机种子ed check-in tasks. The old behaviour created three
             # daily ScheduledTasks (Morning/Midday/Evening) under every new
             # owner, which was intrusive and ran under whatever account was
             # marked is_default globally. Users now create their own

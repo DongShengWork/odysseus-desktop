@@ -152,7 +152,7 @@ def setup_personal_routes(personal_docs_manager, rag_manager, rag_available):
 
         # realpath (not abspath) so a symlink inside PERSONAL_DIR that points
         # outside it is resolved before the commonpath confinement check below;
-        # abspath only normalises `..` and would let such a symlink escape.
+        # abspath only normalises `..` and would let such a symlink 转义.
         base_abs = os.path.realpath(PERSONAL_DIR)
         candidate = directory if os.path.isabs(directory) else os.path.join(base_abs, directory)
         resolved = os.path.realpath(candidate)
@@ -204,7 +204,7 @@ def setup_personal_routes(personal_docs_manager, rag_manager, rag_available):
             
             logger.info(f"Adding directory to RAG: {directory}")
             
-            # Use the RAGManager to index the directory
+            # Use the RAGManager to 索引 the directory
             rag = _rag()
             if rag:
                 result = rag.index_personal_documents(directory, owner=owner)
@@ -255,7 +255,7 @@ def setup_personal_routes(personal_docs_manager, rag_manager, rag_available):
             if hasattr(personal_docs_manager, 'remove_directory'):
                 personal_docs_manager.remove_directory(directory)
 
-            # Remove from RAG vector store (best-effort)
+            # 移除 from RAG 向量存储 (best-effort)
             rag = _rag()
             if rag:
                 try:
@@ -311,7 +311,7 @@ def setup_personal_routes(personal_docs_manager, rag_manager, rag_available):
                     total_failed += 1
                     continue
 
-                # Chunk and index
+                # Chunk and 索引
                 chunks = rag._split_into_chunks(text, chunk_size=500)
                 for i, chunk in enumerate(chunks):
                     metadata = {
@@ -349,7 +349,7 @@ def setup_personal_routes(personal_docs_manager, rag_manager, rag_available):
     async def delete_file_from_rag(filepath: str = Query(...), owner: str = Depends(require_user), _admin: None = Depends(require_admin)):
         """Delete a specific file from RAG index and optionally from disk."""
         try:
-            # Remove chunks from RAG vector store (best-effort)
+            # 移除 数据块s from RAG 向量存储 (best-effort)
             removed = 0
             rag = _rag()
             if rag:
@@ -358,7 +358,7 @@ def setup_personal_routes(personal_docs_manager, rag_manager, rag_available):
                 except Exception as e:
                     logger.warning(f"RAG removal failed for {filepath}: {e}")
 
-            # Delete file from disk if it's in the caller's own uploads dir.
+            # 删除 file from disk if it's in the caller's own uploads dir.
             # Scope to the per-owner subdir, not the shared uploads root, so one
             # admin can't delete another user's personal files by path.
             deleted_from_disk = False

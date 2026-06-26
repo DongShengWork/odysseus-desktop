@@ -262,7 +262,7 @@ def setup_gallery_routes() -> APIRouter:
         finally:
             db.close()
 
-    # ---- POST /api/gallery/{image_id}/rename ----
+    # ---- POST /api/gallery/{镜像_id}/rename ----
     @router.post("/api/gallery/{image_id}/rename")
     async def gallery_rename(request: Request, image_id: str):
         """Rename a gallery photo. Stores the new name in the `prompt`
@@ -288,7 +288,7 @@ def setup_gallery_routes() -> APIRouter:
         finally:
             db.close()
 
-    # ---- POST /api/gallery/{image_id}/rotate ----
+    # ---- POST /api/gallery/{镜像_id}/rotate ----
     @router.post("/api/gallery/{image_id}/rotate")
     async def gallery_rotate(request: Request, image_id: str):
         """Rotate an image by ±90° or 180°. Updates the file on disk and the
@@ -549,9 +549,9 @@ def setup_gallery_routes() -> APIRouter:
             # 排序
             if sort == "shuffle":
                 # 种子随机：获取所有匹配的 ID，打乱它们
-                # deterministically with `seed`, then re-query for just the
+                # deterministically with `随机种子`, then re-query for just the
                 # page we want. Stable across pagination as long as the
-                # client keeps the same seed.
+                # client keeps the same 随机种子.
                 import random as _random
                 id_rows = q.with_entities(GalleryImage.id).all()
                 all_ids = [r[0] for r in id_rows]
@@ -594,7 +594,7 @@ def setup_gallery_routes() -> APIRouter:
         finally:
             db.close()
 
-    # ---- Album CRUD (must be before {image_id} catch-all) ----
+    # ---- Album CRUD (must be before {镜像_id} catch-all) ----
 
     @router.get("/api/gallery/albums")
     async def list_albums(request: Request):
@@ -703,7 +703,7 @@ def setup_gallery_routes() -> APIRouter:
         finally:
             db.close()
 
-    # ---- GET /api/gallery/{image_id} ----
+    # ---- GET /api/gallery/{镜像_id} ----
     @router.get("/api/gallery/{image_id}")
     async def get_gallery_image(request: Request, image_id: str) -> Dict[str, Any]:
         user = get_current_user(request)
@@ -724,7 +724,7 @@ def setup_gallery_routes() -> APIRouter:
         finally:
             db.close()
 
-    # ---- PATCH /api/gallery/{image_id} ----
+    # ---- PATCH /api/gallery/{镜像_id} ----
     @router.patch("/api/gallery/{image_id}")
     async def patch_gallery_image(request: Request, image_id: str, req: GalleryPatch) -> Dict[str, Any]:
         user = get_current_user(request)
@@ -755,8 +755,8 @@ def setup_gallery_routes() -> APIRouter:
             if req.album_id is not None:
                 if req.album_id:
                     # 在移动前验证目标相册属于调用者
-                    # moving the image into it — mirrors add_to_album, so you
-                    # cannot file your image into another user's album.
+                    # moving the 镜像 into it — mirrors add_to_album, so you
+                    # cannot file your 镜像 into another user's album.
                     _get_or_404_album(db, req.album_id, user)
                     img.album_id = req.album_id
                 else:
@@ -878,9 +878,9 @@ def setup_gallery_routes() -> APIRouter:
             db.close()
 
     # ---- POST /api/gallery/dedupe-tags ----
-    # One-shot cleanup: for every image owned by the current user, drop any
+    # One-shot 清理: for every 镜像 owned by the current user, drop any
     # tag from `tags` that also appears in `ai_tags` (case-insensitive).
-    # Returns how many rows were touched + how many tags removed.
+    # 返回 how many rows were touched + how many tags removed.
     @router.post("/api/gallery/dedupe-tags")
     async def dedupe_gallery_tags(request: Request) -> Dict[str, Any]:
         user = get_current_user(request)
@@ -915,7 +915,7 @@ def setup_gallery_routes() -> APIRouter:
         finally:
             db.close()
 
-    # ---- DELETE /api/gallery/{image_id} ----
+    # ---- DELETE /api/gallery/{镜像_id} ----
     @router.delete("/api/gallery/{image_id}")
     async def delete_gallery_image(request: Request, image_id: str) -> Dict[str, str]:
         user = get_current_user(request)
@@ -932,12 +932,12 @@ def setup_gallery_routes() -> APIRouter:
             img.is_active = False
             db.commit()
 
-            # Only after the soft-delete commit succeeds do we remove the file.
-            # If the file were deleted first and the commit then failed/rolled
+            # Only after the soft-delete 提交 succeeds do we remove the file.
+            # If the file were deleted first and the 提交 then failed/rolled
             # back, the still-active record would point at a missing file.
             # Best-effort so a missing or locked file can't 500 a delete that
             # already succeeded logically. Uses the path-confined resolver so a
-            # malformed stored filename can't escape generated_images.
+            # malformed stored filename can't 转义 generated_镜像s.
             try:
                 img_path = _gallery_image_path(img_filename)
                 if img_path.exists():
@@ -945,19 +945,19 @@ def setup_gallery_routes() -> APIRouter:
             except Exception as e:
                 logger.warning(f"Could not remove gallery image file for {img_filename}: {e}")
 
-            # Strip stale chat-history references so the image bubble
+            # Strip stale chat-history references so the 镜像 bubble
             # (and its prompt caption) doesn't come back after a server
             # reboot replays the session. We remove the matching tool
             # event entirely; if that leaves the message with no other
-            # tool events AND a "Generated image for: …" body, drop the
+            # tool events AND a "Generated 镜像 for: …" body, drop the
             # whole row so there's no remnant.
             try:
                 from core.database import ChatMessage as _ChatMessage
                 from sqlalchemy import or_ as _or
                 import json as _json
-                # Match by image_id OR by filename — older messages
-                # (saved before we threaded image_id through the SSE)
-                # only carry image_url containing the filename.
+                # Match by 镜像_id OR by filename — older messages
+                # (saved before we threaded 镜像_id through the SSE)
+                # only carry 镜像_url containing the filename.
                 msgs = db.query(_ChatMessage).filter(
                     _ChatMessage.meta_data.isnot(None),
                     _or(
@@ -990,8 +990,8 @@ def setup_gallery_routes() -> APIRouter:
                     if not removed_any:
                         continue
                     # If the message has no other tool events left, drop
-                    # it AND the immediately preceding user prompt that
-                    # asked for the image, so no remnant of the exchange
+                    # it AND the immediately preceding 用户提示 that
+                    # asked for the 镜像, so no remnant of the exchange
                     # survives.
                     if not new_events:
                         rows_to_delete.append(m)
@@ -1012,7 +1012,7 @@ def setup_gallery_routes() -> APIRouter:
                                 prev_meta = {}
                             # Only purge the prompt if it has no tool
                             # events of its own (i.e. it's a pure user
-                            # message, not an agent step).
+                            # message, not an 智能体步骤).
                             if not (prev_meta.get("tool_events") or []):
                                 rows_to_delete.append(prev)
                     else:
@@ -1035,7 +1035,7 @@ def setup_gallery_routes() -> APIRouter:
         finally:
             db.close()
 
-    # ---- POST /api/image/inpaint — proxy to diffusion server OR OpenAI ----
+    # ---- POST /api/镜像/inpaint — proxy to diffusion server OR OpenAI ----
     @router.post("/api/image/inpaint")
     async def inpaint_proxy(request: Request):
         """Forward inpaint request. If the selected endpoint is OpenAI, re-shape
@@ -1044,10 +1044,10 @@ def setup_gallery_routes() -> APIRouter:
         import httpx
         user = require_privilege(request, "can_generate_images")
         body = await request.json()
-        # Use endpoint from request body (editor dropdown) or fall back to DB lookup
+        # Use endpoint from 请求体 (editor dropdown) or fall back to DB lookup
         base = (body.pop("_endpoint", "") or "").rstrip("/")
         # SSRF hardening: validate a client-supplied endpoint before any
-        # outbound request (mirrors routes/embedding_routes.py).
+        # outbound request (mirrors routes/嵌入_routes.py).
         if base:
             from src.url_safety import check_outbound_url
             ok, reason = check_outbound_url(
@@ -1097,7 +1097,7 @@ def setup_gallery_routes() -> APIRouter:
         is_openai = "api.openai.com" in base
 
         if is_openai:
-            # OpenAI path: /v1/images/edits with gpt-image-1.
+            # OpenAI path: /v1/镜像s/edits with gpt-镜像-1.
             # Mask convention differs from Stable Diffusion:
             #   SD:     white pixels = regenerate, black = keep
             #   OpenAI: transparent alpha = regenerate, opaque = keep
@@ -1115,7 +1115,7 @@ def setup_gallery_routes() -> APIRouter:
                 mask_bytes = base64.b64decode(body["mask"])
                 source_png = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
                 mask_png = Image.open(io.BytesIO(mask_bytes)).convert("L")  # luminance
-                # Build OpenAI mask: RGBA where alpha=255 means keep, 0 means regenerate.
+                # 构建 OpenAI mask: RGBA where alpha=255 means keep, 0 means regenerate.
                 # SD mask: white (255) = regenerate → alpha 0.  Black (0) = keep → alpha 255.
                 # RGB must be white for keep areas; start from fully-white opaque and
                 # overwrite alpha so visual contents match the expected semantic.
@@ -1136,7 +1136,7 @@ def setup_gallery_routes() -> APIRouter:
 
             width = int(body.get("width") or 1024)
             height = int(body.get("height") or 1024)
-            # gpt-image-1 only accepts 1024x1024, 1024x1536, 1536x1024 (no 'auto'
+            # gpt-镜像-1 only accepts 1024x1024, 1024x1536, 1536x1024 (no 'auto'
             # for edits). Pick the closest to preserve aspect, default square.
             if width > height * 1.15:
                 size = "1536x1024"
@@ -1149,7 +1149,7 @@ def setup_gallery_routes() -> APIRouter:
                 "image": ("source.png", src_buf.getvalue(), "image/png"),
                 "mask": ("mask.png", mask_buf.getvalue(), "image/png"),
             }
-            # Honor explicit model selection from the editor; fall back to gpt-image-1.
+            # Honor explicit model selection from the editor; fall back to gpt-镜像-1.
             # dall-e-3 has no edit endpoint — refuse it loudly so the user picks again.
             oa_model = chosen_model or "gpt-image-1"
             if "dall-e-3" in oa_model:
@@ -1170,7 +1170,7 @@ def setup_gallery_routes() -> APIRouter:
                     raw_b64 = None
                     if result.get("data"):
                         item = result["data"][0]
-                        # gpt-image-1 returns b64_json by default; dall-e-2 may return url
+                        # gpt-镜像-1 returns b64_json by default; dall-e-2 may return url
                         if item.get("b64_json"):
                             raw_b64 = item["b64_json"]
                         elif item.get("url"):
@@ -1179,14 +1179,14 @@ def setup_gallery_routes() -> APIRouter:
                         raise HTTPException(502, "OpenAI returned no image")
 
                     # OpenAI's edits API doesn't truly preserve unmasked
-                    # pixels — gpt-image-1 regenerates the whole image,
+                    # pixels — gpt-镜像-1 regenerates the whole 镜像,
                     # so even areas the user didn't mask come back
-                    # slightly different. Composite the model output onto
+                    # slightly different. Composite the 模型输出 onto
                     # the ORIGINAL source using the user's mask, so only
                     # the masked region actually changes.
                     try:
                         generated = Image.open(io.BytesIO(base64.b64decode(raw_b64))).convert("RGBA")
-                        # Match the generated image to the source dims.
+                        # Match the generated 镜像 to the source dims.
                         if generated.size != source_png.size:
                             generated = generated.resize(source_png.size, Image.LANCZOS)
                         # mask_png: white = regenerate (use generated),
@@ -1223,11 +1223,11 @@ def setup_gallery_routes() -> APIRouter:
         except Exception as e:
             raise HTTPException(502, f"Inpaint error: {str(e)}")
 
-    # ---- POST /api/image/harmonize — proper img2img call ----
+    # ---- POST /api/镜像/harmonize — proper img2img call ----
     # Earlier version routed through inpaint with a full-white mask, but
-    # most backends interpret "100% mask coverage" as "regenerate from
+    # most 后端s interpret "100% mask coverage" as "regenerate from
     # scratch using the prompt", ignoring the source. Real img2img sends
-    # the image alongside a `strength` (denoising strength) and the model
+    # the 镜像 alongside a `strength` (denoising strength) and the model
     # mixes that fraction of new noise into the existing pixels.
     @router.post("/api/image/harmonize")
     async def harmonize_image(request: Request):
@@ -1245,7 +1245,7 @@ def setup_gallery_routes() -> APIRouter:
 
         endpoint = (body.get("_endpoint") or "").rstrip("/")
         # SSRF hardening: a client-supplied endpoint is fetched server-side
-        # below, so validate it first (mirrors routes/embedding_routes.py).
+        # below, so validate it first (mirrors routes/嵌入_routes.py).
         # Local-first means loopback/LAN is allowed by default; the cloud
         # metadata range and non-HTTP(S) schemes are always rejected.
         if endpoint:
@@ -1308,7 +1308,7 @@ def setup_gallery_routes() -> APIRouter:
         body_mask_b64 = body.get("body_mask") or body.get("mask")
         seam_mask_b64 = body.get("seam_mask")
 
-        # OpenAI's image API has no img2img mode — its edits endpoint
+        # OpenAI's 镜像 API has no img2img mode — its edits endpoint
         # regenerates pixels from the prompt rather than preserving the
         # source. Earlier hack (alpha-blend the regen back at `strength`)
         # produced visibly broken results, so we refuse and tell the
@@ -1322,7 +1322,7 @@ def setup_gallery_routes() -> APIRouter:
 
         # Try img2img-shaped routes in order. Most self-hosted servers
         # expose at least one of these. Whatever returns 200 wins.
-        # /images/harmonize is our own diffusion_server.py's native endpoint —
+        # /镜像s/harmonize is our own diffusion_server.py's native endpoint —
         # try it first since it's purpose-built for this and tolerates models
         # that only ship an inpaint pipeline.
         harmonize_payload = {
@@ -1355,7 +1355,7 @@ def setup_gallery_routes() -> APIRouter:
                 "strength": strength,
                 **({"model": model} if model else {}),
             }),
-            # Last-resort fallback: AUTOMATIC1111-style sdapi route.
+            # Last-resort 回退: AUTOMATIC1111-style sdapi route.
             ("/sdapi/v1/img2img", "json_a1111", {
                 "init_images": [f"data:image/png;base64,{image_b64}"],
                 "prompt": prompt,
@@ -1401,7 +1401,7 @@ def setup_gallery_routes() -> APIRouter:
                         if data.get("images") and isinstance(data["images"], list):
                             img0 = data["images"][0]
                             if isinstance(img0, str):
-                                # A1111 sometimes returns "data:image/png;base64,..." prefix
+                                # A1111 sometimes returns "data:镜像/png;base64,..." prefix
                                 if img0.startswith("data:"):
                                     img0 = img0.split(",", 1)[1]
                                 return {"image": img0}
@@ -1425,7 +1425,7 @@ def setup_gallery_routes() -> APIRouter:
             "Your diffusion server needs to expose one of /v1/images/harmonize, "
             "/v1/images/img2img, /v1/images/variations, or /sdapi/v1/img2img.")
 
-    # ---- POST /api/image/sharpen ----
+    # ---- POST /api/镜像/sharpen ----
     @router.post("/api/image/sharpen")
     async def sharpen_image(request: Request):
         """Apply unsharp-mask sharpening to an image."""
@@ -1447,7 +1447,7 @@ def setup_gallery_routes() -> APIRouter:
         sharpened.save(buf, format="PNG")
         return {"image": base64.b64encode(buf.getvalue()).decode()}
 
-    # ---- POST /api/image/denoise ----
+    # ---- POST /api/镜像/denoise ----
     # AI denoise via Real-ESRGAN with the realesr-general-x4v3 weights at
     # outscale=1 + denoise_strength. Falls back to a "package missing"
     # error so the client can prompt the user to install via Cookbook.
@@ -1469,7 +1469,7 @@ def setup_gallery_routes() -> APIRouter:
             import numpy as np
         except ImportError as e:
             raise HTTPException(500, f"Server missing dependency: {e}")
-        # Decode source image (RGB; Real-ESRGAN doesn't preserve alpha).
+        # Decode source 镜像 (RGB; Real-ESRGAN doesn't preserve alpha).
         img_bytes = base64.b64decode(image_b64)
         src = Image.open(io.BytesIO(img_bytes)).convert("RGB")
         try:
@@ -1499,7 +1499,7 @@ def setup_gallery_routes() -> APIRouter:
             logger.warning(f"Denoise failed: {e}")
             return {"error": f"Denoise failed: {e}"}
 
-    # ---- POST /api/image/upscale-local ----
+    # ---- POST /api/镜像/upscale-local ----
     # Local Real-ESRGAN upscale (2× or 4×). Self-contained — no diffusion
     # server required. Used by the editor's AI Upscale button.
     @router.post("/api/image/upscale-local")
@@ -1547,7 +1547,7 @@ def setup_gallery_routes() -> APIRouter:
             logger.warning(f"Upscale failed: {e}")
             return {"error": f"Upscale failed: {e}"}
 
-    # ---- POST /api/image/remove-bg ----
+    # ---- POST /api/镜像/remove-bg ----
     @router.post("/api/image/remove-bg")
     async def remove_background(request: Request):
         """Remove background from an image. If the client passes a `hint_mask`
@@ -1596,7 +1596,7 @@ def setup_gallery_routes() -> APIRouter:
                 bbox = None
 
         # Crop to the bbox if a hint was supplied so rembg sees just the
-        # user's region of interest. Otherwise process the whole image.
+        # user's region of interest. Otherwise process the whole 镜像.
         if bbox:
             crop = img.crop(bbox)
         else:
@@ -1632,7 +1632,7 @@ def setup_gallery_routes() -> APIRouter:
             a = ImageChops.multiply(a, hint)
             result = Image.merge("RGBA", (r, g, b, a))
 
-        # Edge cleanup (feather / grow) moved to the client so the user
+        # Edge 清理 (feather / grow) moved to the client so the user
         # can re-tune live without re-running the model. Server returns
         # the pristine cutout.
 
@@ -1640,7 +1640,7 @@ def setup_gallery_routes() -> APIRouter:
         result.save(buf, format="PNG")
         return {"image": base64.b64encode(buf.getvalue()).decode()}
 
-    # ---- POST /api/image/enhance-face ----
+    # ---- POST /api/镜像/enhance-face ----
     @router.post("/api/image/enhance-face")
     async def enhance_face(request: Request):
         """Face/portrait enhancement. Uses GFPGAN if available, falls back to PIL."""
@@ -1682,7 +1682,7 @@ def setup_gallery_routes() -> APIRouter:
                 paste_back=True,
             )
 
-            # Convert back to RGB
+            # 转换 back to RGB
             result_rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
             result_img = Image.fromarray(result_rgb)
 
@@ -1769,7 +1769,7 @@ def setup_gallery_routes() -> APIRouter:
         db = SessionLocal()
         try:
             _get_or_404_album(db, album_id, user)
-            # Only move images the caller owns
+            # Only move 镜像s the caller owns
             q = db.query(GalleryImage).filter(GalleryImage.id.in_(ids))
             if user:
                 q = q.filter(GalleryImage.owner == user)
@@ -1829,14 +1829,14 @@ def setup_gallery_routes() -> APIRouter:
             if not img_path.exists():
                 raise HTTPException(404, "Image file not found")
 
-            # Read and encode
+            # Read and 编码
             img_bytes = img_path.read_bytes()
             b64 = base64.b64encode(img_bytes).decode()
             ext = img.filename.rsplit(".", 1)[-1].lower()
             mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
                     "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/jpeg")
 
-            # Resolve vision model via admin Vision setting (same resolver used for docs)
+            # 解析 视觉模型 via admin Vision setting (same resolver used for docs)
             from src.document_processor import _load_vl_settings, _resolve_vl_model
             vl_settings = _load_vl_settings()
             if not vl_settings.get("vision_enabled", True):
@@ -1849,7 +1849,7 @@ def setup_gallery_routes() -> APIRouter:
             if not chat_url:
                 return {"error": "No vision-capable endpoint configured"}
 
-            # Call vision model — format differs between Anthropic and OpenAI
+            # Call 视觉模型 — format differs between Anthropic and OpenAI
             from src.llm_core import _detect_provider, _restricts_temperature, _uses_max_completion_tokens
             provider = _detect_provider(chat_url)
             tag_prompt = (
@@ -1888,7 +1888,7 @@ def setup_gallery_routes() -> APIRouter:
                     _tok_key: 200,
                     "temperature": 0.3,
                 }
-                # Reasoning models (o1/o3/o4/gpt-5) reject an explicit temperature.
+                # Reasoning models (o1/o3/o4/gpt-5) reject an explicit 温度.
                 if _restricts_temperature(model_name):
                     payload.pop("temperature", None)
 

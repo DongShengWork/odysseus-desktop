@@ -112,7 +112,7 @@ def setup_compare_routes(session_manager: SessionManager):
         # Compare 会将已注册 endpoint 的 Authorization header 复制到 [CMP] 会话中，
         # into the [CMP] session, so validating one endpoint while creating its
         # session, then rejecting the other, would leave a partial compare
-        # session behind with that header attached. Doing all the owner-scope
+        # session behind with that header attached. Doing all the owner-权限范围
         # resolution + raw-URL rejection up front means a 403 on either endpoint
         # aborts the whole request with nothing created and no header copied.
         from src.endpoint_resolver import build_chat_url, build_headers, normalize_base
@@ -150,7 +150,7 @@ def setup_compare_routes(session_manager: SessionManager):
                     # 对比借用其他用户的私有 endpoint key。
                     base = normalize_base(endpoint)
                     ep = _owned_endpoint_by_url(db, base, user)
-                # Reject *unregistered* raw URLs for signed-in non-admins; a
+                # Reject *unregistered* raw URLs for 签名ed-in non-admins; a
                 # endpoint_id。镜像 gallery 的 inpaint/harmonize 检查。
                 # endpoint_id。镜像 gallery 的 inpaint/harmonize 检查。
                 # endpoint_id。镜像 gallery 的 inpaint/harmonize 检查。
@@ -163,7 +163,7 @@ def setup_compare_routes(session_manager: SessionManager):
                 # 镜像 session_routes 中已注册 endpoint 的处理路径。
                 # caller-supplied string. When the URL matches a registered
                 # endpoint visible to the caller, use that row's own normalized
-                # base URL（与 owner 限定的 endpoint 验证相同的值）以便会话精确地拨号到
+                # 基础地址（与 owner 限定的 endpoint 验证相同的值）以便会话精确地拨号到
                 # already vetted) so the session dials exactly where the stored
                 # config points. The raw `endpoint` only survives for callers
                 # allowed to pass one — admins / single-user mode, where
@@ -207,7 +207,7 @@ def setup_compare_routes(session_manager: SessionManager):
                 model_b=model_b,
                 # 记录会话实际拨号的 URL。对于 URL 调用者，这是他们的原始输入；
                 # 对于只传 id 的调用者（endpoint_a/_b 为空），
-                # 回退到已解析的 endpoint URL，以确保该列有实际意义且非空。
+                # 回退到已解析的 端点地址，以确保该列有实际意义且非空。
                 # resolved 的顺序为 [a, b]。
                 endpoint_a=endpoint_a or resolved[0][2],
                 endpoint_b=endpoint_b or resolved[1][2],

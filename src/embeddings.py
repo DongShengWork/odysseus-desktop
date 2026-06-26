@@ -50,10 +50,10 @@ class EmbeddingClient:
         self.model = model or os.getenv("EMBEDDING_MODEL", _DEFAULT_MODEL)
         self.api_key = api_key or os.getenv("EMBEDDING_API_KEY")
         self._dim: Optional[int] = None
-        # Short connect timeout so a DOWN embedding endpoint (e.g. Ollama not
-        # running on :11434) fast-fails to the local FastEmbed fallback instead
+        # Short connect 超时 so a DOWN 嵌入 endpoint (e.g. Ollama not
+        # running on :11434) fast-fails to the local FastEmbed 回退 instead
         # of stalling startup ~30s per probe. Read stays generous for a real
-        # endpoint (embedding a short string returns in well under a second).
+        # endpoint (嵌入 a short string returns in well under a second).
         self._client = httpx.Client(timeout=httpx.Timeout(connect=3.0, read=10.0, write=5.0, pool=3.0))
 
     def get_sentence_embedding_dimension(self) -> int:
@@ -85,7 +85,7 @@ class EmbeddingClient:
             resp.raise_for_status()
             data = resp.json()
 
-            # OpenAI 格式: {"data": [{"embedding": [...], "index": 0}, ...]}
+            # OpenAI 格式: {"data": [{"嵌入": [...], "索引": 0}, ...]}
             embeddings = data.get("data", [])
             embeddings.sort(key=lambda e: e.get("index", 0))
             for emb in embeddings:
@@ -124,7 +124,7 @@ class FastEmbedClient:
         cache_dir = FASTEMBED_CACHE_DIR
         os.makedirs(cache_dir, exist_ok=True)
         # Windows 自愈：HuggingFace-hub 缓存将模型文件存储为符号链接
-        # (snapshots/<rev>/model.onnx -> ../../blobs/<hash>)。在网络共享/UNC 数据目录下
+        # (snapshots/<rev>/model.onnx -> ../../blobs/<哈希>)。在网络共享/UNC 数据目录下
         # network-share / UNC data dir Windows refuses to follow them
         # Windows 无法跟随它们 ([WinError 1463] "symbolic link cannot be followed because its type is
         # disabled"), and a cache copied between machines can carry dead symlinks

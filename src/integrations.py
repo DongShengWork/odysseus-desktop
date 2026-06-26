@@ -384,7 +384,7 @@ async def execute_api_call(
             base_url = base_url[: -len(suf)]
             break
 
-    # Validate path
+    # 验证 path
     if not path.startswith("/"):
         return {"error": "Path must start with /", "exit_code": 1}
     if re.search(r"^https?://", path) or "://" in path:
@@ -396,7 +396,7 @@ async def execute_api_call(
     url = _join_integration_url(base_url, path)
     method = method.upper()
 
-    # Build headers
+    # 构建 headers
     headers: Dict[str, str] = {}
     if extra_headers:
         headers.update(extra_headers)
@@ -445,7 +445,7 @@ async def execute_api_call(
         content_type = response.headers.get("content-type", "")
         status = response.status_code
 
-        # Format response body
+        # 格式化 回复体
         if "application/json" in content_type:
             try:
                 data = response.json()
@@ -461,7 +461,7 @@ async def execute_api_call(
                             "shown_items": 0,
                         }
                         # Overhead: the sentinel appears as an extra array element.
-                        # Add a conservative padding for the separating comma,
+                        # 添加 a conservative padding for the separating comma,
                         # newline, and indentation characters (~6 chars).
                         sentinel_overhead = len(
                             json.dumps(sentinel_placeholder, indent=2, ensure_ascii=False)
@@ -589,7 +589,7 @@ def migrate_from_settings() -> None:
     if not miniflux_url or not miniflux_key:
         return
 
-    # Check if a miniflux integration already exists
+    # 检查 if a miniflux integration already exists
     existing = load_integrations()
     for item in existing:
         if item.get("preset") == "miniflux":

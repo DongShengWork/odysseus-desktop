@@ -59,7 +59,7 @@ def discover_tailscale_hosts() -> List[str]:
         if self_ip:
             hosts.append(self_ip)
 
-        # 添加在线节点（跳过 funnel-ingress-nodes 和 android 设备）
+        # 添加在线节点（跳过 funnel-入口-nodes 和 android 设备）
         peers = data.get("Peer") if isinstance(data.get("Peer"), dict) else {}
         for peer in peers.values():
             if not isinstance(peer, dict):

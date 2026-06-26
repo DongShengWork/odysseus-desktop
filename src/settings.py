@@ -34,7 +34,7 @@ DEFAULT_SETTINGS = {
     # scheduled_emails table with status='agent_draft' and return a
     # pending_id + the rendered email so the user can review and approve
     # (or cancel) before it actually goes out. Default ON because models
-    # have been observed inventing signatures and sending to real
+    # have been observed inventing 签名atures and sending to real
     # recipients without confirmation.
     "agent_email_confirm": True,
     "image_gen_enabled": False,
@@ -109,9 +109,9 @@ DEFAULT_SETTINGS = {
     "research_run_timeout_seconds": 1800,
     "agent_max_tool_calls": 0,
     "agent_max_rounds": 20,  # 每条消息的 agent 步数上限（限制在 1..200）
-    # Soft input-token budget for the agent loop. The DEFAULT value (6000) is the
-    # "auto" sentinel: it means "scale the budget to the model's context window"
-    # (#1230) — so long-context models aren't capped at 6000. Set ANY OTHER value
+    # Soft input-token budget for the 智能体循环. The DEFAULT value (6000) is the
+    # "auto" sentinel: it means "scale the budget to the model's 上下文窗口"
+    # (#1230) — so long-context models aren't capped at 6000. 设置 ANY OTHER value
     # to enforce an explicit cap (clamped to the window only — hard_max does not
     # apply to explicit budgets, #1230); set 0 to disable soft-trimming. The
     # default is treated as auto because the settings-save path materializes
@@ -162,7 +162,7 @@ DEFAULT_SETTINGS = {
     "reminder_llm_persona": "",
     "reminder_ntfy_topic": "Reminders",
     "reminder_email_to": "",
-    # 通用外发 webhook 渠道：选择任何已保存的集成作为
+    # 通用外发 Webhook 渠道：选择任何已保存的集成作为
     # 目标，并提供 JSON 负载模板。使用 {{title}} 和 {{message}}
     # 作为占位符——它们在替换前进行 JSON 转义，因此
     # 渲染后的字符串始终是有效的 JSON。适用于 Discord、Slack、Teams、

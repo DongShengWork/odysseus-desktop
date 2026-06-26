@@ -117,7 +117,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         all_mem = memory_manager.load_all()
         all_mem.append(new_entry)
         memory_manager.save(all_mem)
-        # Sync vector index
+        # Sync vector 索引
         if memory_vector and memory_vector.healthy:
             memory_vector.add(new_entry["id"], text)
         try:
@@ -366,7 +366,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         if ext not in allowed:
             raise HTTPException(400, f"Unsupported file type: {ext}")
 
-        # Extract text based on file type
+        # 提取 text based on 文件类型
         if ext == ".pdf":
             from src.document_processor import _process_pdf
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -419,7 +419,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         if len(text) > 15000:
             text = text[:15000] + "\n[Truncated]"
 
-        # Send to LLM for memory extraction
+        # 发送 to LLM for 记忆提取
         import_prompt = (
             "You are a memory extraction assistant. The user uploaded a document. "
             "Analyze the text below and extract specific, useful facts — things like "
@@ -448,7 +448,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
                 headers=headers,
             )
 
-            # Parse JSON
+            # 解析 JSON
             raw = raw.strip()
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
@@ -520,7 +520,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
                 all_mem[i]["timestamp"] = int(time.time())
 
                 memory_manager.save(all_mem)
-                # Sync vector index (remove old, add updated)
+                # Sync vector 索引 (remove old, add updated)
                 if memory_vector and memory_vector.healthy:
                     memory_vector.remove(memory_id)
                     memory_vector.add(memory_id, text.strip())
@@ -534,7 +534,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         user = _owner(request)
         all_mem = memory_manager.load_all()
 
-        # Find and verify ownership before deleting
+        # Find and 验证 ownership before deleting
         target = next((m for m in all_mem if m["id"] == memory_id), None)
         if not target:
             raise HTTPException(404, f"Memory item {memory_id} not found")
@@ -542,7 +542,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
         all_mem = [m for m in all_mem if m["id"] != memory_id]
         memory_manager.save(all_mem)
-        # Sync vector index
+        # Sync vector 索引
         if memory_vector and memory_vector.healthy:
             memory_vector.remove(memory_id)
         return {"ok": True, "message": "Memory deleted successfully"}

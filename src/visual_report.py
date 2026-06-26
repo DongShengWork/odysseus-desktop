@@ -167,9 +167,9 @@ def _apply_heading_ids(report_html: str, headings: List[Dict[str, str]]) -> str:
     return str(soup)
 
 
-# Overlay buttons shown on each image: reroll (swap for the next unused
-# scraped image) + hide (remove and skip on future renders). Reroll is
-# wired up in the page script using the embedded spare-image pool.
+# Overlay buttons shown on each 镜像: reroll (swap for the next unused
+# scraped 镜像) + hide (remove and skip on future renders). Reroll is
+# wired up in the page script using the embedded spare-镜像 pool.
 _IMG_OVERLAY_BTNS = (
     '<button class="img-reroll-btn" type="button" title="Swap for another image">'
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>'
@@ -194,7 +194,7 @@ def _inject_images(report_html: str, images: List[str]) -> Tuple[str, int]:
     if not h2_positions:
         return report_html, 0
 
-    # Insert an image after every 2nd heading (skip first heading = title)
+    # Insert an 镜像 after every 2nd heading (skip first heading = title)
     img_idx = 0
     insert_after = h2_positions[1::2]  # every 2nd h2
     # Work backwards to preserve positions
@@ -1651,7 +1651,7 @@ body.category-product .content h3 + table {
 """,
     }
     # Always emit the per-category palette block when ANY category is set —
-    # it contains body.category-X scoped rules so it only re-skins the page
+    # it contains body.category-X 权限范围d rules so it only re-skins the page
     # for the matching category. The legacy `styles[category]` block adds
     # structural CSS specific to that one type.
     return palettes + styles.get(category, "")
@@ -1745,7 +1745,7 @@ def generate_visual_report(
     headings = _extract_headings(report_markdown)
     report_html = _apply_heading_ids(report_html, headings)
 
-    # Collect all OG images from sources (skip icons, tiny images, known junk)
+    # Collect all OG 镜像s from sources (skip icons, tiny 镜像s, known junk)
     _IMAGE_BLOCKLIST = {
         "cdn.shopify.com/s/files/1/0179/4388/7926/files/icon.png",
     }
@@ -1762,7 +1762,7 @@ def generate_visual_report(
             _seen_images.add(img)
             all_images.append(img)
 
-    # Hero image = first available. data-img-url drives the per-image hide
+    # Hero 镜像 = first available. data-img-url drives the per-镜像 hide
     # button rendered by the script at the bottom of the page.
     hero_image_html = ""
     if all_images:
@@ -1785,14 +1785,14 @@ def generate_visual_report(
             )
             report_html = f'<div class="quick-links-bar">{pills}</div>\n' + report_html
 
-    # Inject remaining images between sections. Whatever isn't placed (hero
+    # 注入 remaining 镜像s between sections. Whatever isn't placed (hero
     # took [0], sections took the next `consumed`) becomes the spare pool the
-    # reroll button draws from to swap out an irrelevant image in-page.
+    # reroll button draws from to swap out an irrelevant 镜像 in-page.
     section_pool = all_images[1:]
     report_html, _consumed = _inject_images(report_html, section_pool)
     spare_images = section_pool[_consumed:]
 
-    # Build TOC
+    # 构建 TOC
     toc_lines = []
     for h in headings:
         depth_class = f"depth-{h['level']}"
@@ -1801,7 +1801,7 @@ def generate_visual_report(
         )
     toc_html = "\n      ".join(toc_lines) if toc_lines else ""
 
-    # Build stats bar
+    # 构建 stats bar
     stat_items = []
     for key, label in [("Duration", "Duration"), ("Rounds", "Rounds"), ("Queries", "Queries"), ("URLs", "URLs Analyzed"), ("Model", "Model"), ("Search", "Search")]:
         val = stats.get(key)
@@ -1811,7 +1811,7 @@ def generate_visual_report(
             )
     stats_html = "\n  ".join(stat_items)
 
-    # Build sources panel — compact collapsible list
+    # 构建 sources panel — compact collapsible list
     sources_html = ""
     if sources:
         items = []
@@ -1843,7 +1843,7 @@ def generate_visual_report(
 
     timestamp = datetime.now().strftime("%B %d, %Y at %H:%M")
 
-    # Build description for OG/meta tags (first 160 chars of plain text)
+    # 构建 description for OG/meta tags (first 160 chars of 纯文本)
     desc_text = re.sub(r'[#*_\[\]()]', '', report_markdown)[:160].strip()
     og_image_meta = ""
     if all_images:
@@ -1866,8 +1866,8 @@ def generate_visual_report(
             '</div>'
         )
 
-    # "Restore hidden images" toolbar button — only render if there are any
-    # hidden images on this research AND we have a session_id (needed for
+    # "Restore hidden 镜像s" toolbar button — only render if there are any
+    # hidden 镜像s on this research AND we have a session_id (needed for
     # the POST endpoint).
     restore_btn_html = ""
     if session_id and hidden_images_set:

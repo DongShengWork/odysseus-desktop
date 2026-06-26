@@ -1,4 +1,4 @@
-# routes/cleanup_routes.py
+# routes/清理_routes.py
 """清理操作的路由。"""
 import logging
 from fastapi import APIRouter, HTTPException, Request

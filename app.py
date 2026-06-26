@@ -21,9 +21,9 @@ register_static_mime_types()
 
 # Windows: force HuggingFace/fastembed to COPY model files instead of symlinking.
 # On a network-share/UNC data dir Windows can't follow HF's symlinks ([WinError
-# 1463]), so the ONNX embedding model fails to load. huggingface_hub reads this
+# 1463]), so the ONNX 嵌入模型 fails to load. huggingface_hub reads this
 # at import time, so set it before anything pulls it in. (Mirrored in
-# src/embeddings.py for non-server entrypoints.)
+# src/嵌入s.py for non-server entrypoints.)
 if os.name == "nt":
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
@@ -104,7 +104,7 @@ except Exception as e:
 logger = logging.getLogger(__name__)
 
 # ========= APP =========
-# Lifespan is defined below (after all helpers it references are in scope)
+# Lifespan is defined below (after all helpers it references are in 权限范围)
 # and passed to FastAPI so we can use the modern context-manager lifecycle
 # instead of the deprecated @app.on_event("startup"/"shutdown") decorators.
 app = FastAPI(
@@ -135,10 +135,10 @@ app.add_middleware(
 )
 
 # ========= RESPONSE COMPRESSION (gzip) =========
-# The frontend's text assets (style.css, index.html, the JS bundles) shipped
+# The 前端's text assets (style.css, 索引.html, the JS bundles) shipped
 # uncompressed on every cold load. gzip cuts CSS/JS/HTML by ~75-85% on the wire
 # with no behavioural change. Starlette's GZipMiddleware excludes
-# `text/event-stream` by default, so the SSE streams (chat, shell, research,
+# `text/event-stream` by default, so the SSE 流s (chat, shell, research,
 # model-probe — all served with media_type="text/event-stream") are never
 # compressed or buffered; only complete bodies over minimum_size are. The
 # security-header middleware composes cleanly on top.
@@ -150,10 +150,10 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # ========= REQUEST TIMEOUT (FALLBACK FOR HUNG HANDLERS) =========
 # If a single request takes longer than REQUEST_HARD_TIMEOUT, abort it and
-# return 504 instead of holding the event loop hostage. Whitelisted paths
-# (streaming, long-running shell exec, research) are exempt because they
+# return 504 instead of holding the 事件循环 hostage. Whitelisted paths
+# (流式传输, long-running shell exec, research) are exempt because they
 # legitimately stay open. Without this, a single hung subprocess.run or
-# missing-timeout httpx call locks up the entire server for everyone.
+# missing-超时 httpx call locks up the entire server for everyone.
 import asyncio as _asyncio
 from starlette.middleware.base import BaseHTTPMiddleware as _BaseHTTPMiddleware
 from starlette.responses import JSONResponse as _JSONResponse
@@ -215,8 +215,8 @@ if AUTH_ENABLED:
     }
     AUTH_EXEMPT_PREFIXES = ["/static"]
     # Dynamic paths whose own handler proves identity via a path-embedded
-    # secret instead of the session/bearer auth. The route handler at
-    # routes/task_routes.py validates the per-task `webhook_token` itself
+    # secret instead of the session/bearer auth. The 路由处理器 at
+    # routes/task_routes.py validates the per-task `Webhook_token` itself
     # and returns 404 on mismatch, so the path is the credential — the
     # UI labels these URLs "no auth needed" precisely because external
     # callers (Zapier, n8n, curl) can't supply a session cookie. Without
@@ -234,7 +234,7 @@ if AUTH_ENABLED:
             return True
         return any(p.match(path) for p in AUTH_EXEMPT_PATTERNS)
 
-    # In-memory token cache: prefix → list[(token_id, token_hash, owner, scopes)]. The DB
+    # In-memory token cache: prefix → list[(token_id, token_哈希, owner, 权限范围s)]. The DB
     # query was running on every API-bearer request and scanning bcrypt
     # checks linearly. With this cache, we hit the DB only when the cache
     # version bumps (token created/revoked) — see _token_cache_invalidate
@@ -303,7 +303,7 @@ if AUTH_ENABLED:
         async def dispatch(self, request: Request, call_next):
             path = request.url.path
             # A genuine CORS preflight (OPTIONS + Access-Control-Request-Method)
-            # carries no credentials by design and must reach CORSMiddleware to be
+            # carries no credentials by de签名 and must reach CORSMiddleware to be
             # answered. AuthMiddleware is the outermost middleware, so gating the
             # preflight on auth 401s it before CORS can respond -- which blocks
             # every cross-origin browser/WebView client before the real request
@@ -335,11 +335,11 @@ if AUTH_ENABLED:
                     return await call_next(request)
             except Exception as _e:
                 logger.warning("Internal tool auth header check failed", exc_info=_e)
-            # Allow DIRECT localhost requests (internal service calls from
-            # heartbeats etc.). Tunnel/proxy-forwarded requests are excluded by
+            # Allow DIRECT localhost requests (internal 服务 calls from
+            # 心跳s etc.). Tunnel/proxy-forwarded requests are excluded by
             # _is_trusted_loopback so LOCALHOST_BYPASS can't be abused over a
-            # Cloudflare tunnel / reverse proxy. Keep LOCALHOST_BYPASS=false for
-            # network-exposed deployments regardless.
+            # Cloudflare tunnel / 反向代理. Keep LOCALHOST_BYPASS=false for
+            # network-exposed 部署s regardless.
             if LOCALHOST_BYPASS and _is_trusted_loopback(request):
                 return await call_next(request)
             if not auth_manager.is_configured:
@@ -348,7 +348,7 @@ if AUTH_ENABLED:
                     return RedirectResponse(url="/login", status_code=302)
                 return JSONResponse(status_code=401, content={"error": "Setup required"})
 
-            # --- Bearer token auth (API tokens for external integrations) ---
+            # --- Bearer token auth (API 令牌s for external integrations) ---
             auth_header = request.headers.get("authorization", "")
             if auth_header.startswith("Bearer ody_"):
                 raw_token = auth_header[7:]
@@ -372,9 +372,9 @@ if AUTH_ENABLED:
                             matched_scopes = scopes or []
                             break
                     if matched_id:
-                        # Update last_used_at off the hot path. Doing it
+                        # 更新 last_used_at off the hot path. Doing it
                         # inline used to keep the request open across an
-                        # extra commit; do it fire-and-forget instead.
+                        # extra 提交; do it fire-and-forget instead.
                         async def _touch_last_used(tid: str):
                             def _do():
                                 _db = SessionLocal()
@@ -399,7 +399,7 @@ if AUTH_ENABLED:
                         return await call_next(request)
                 except Exception:
                     logger.warning("API token auth error", exc_info=False)
-                # Invalid bearer token — reject immediately
+                # Invalid Bearer 令牌 — reject immediately
                 return JSONResponse(status_code=401, content={"error": "Invalid API token"})
 
             # --- Cookie-based session auth ---
@@ -447,8 +447,8 @@ async def serve_generated_image(filename: str, request: Request):
     """Serve generated images from the data directory."""
     img_path = resolve_generated_image_path(filename)
     # SECURITY: filename is the only key, so anyone who knows / guesses a
-    # 12-hex content hash could pull another user's image bytes. Require
-    # auth and verify ownership via the gallery row (when one exists).
+    # 12-hex content 哈希 could pull another user's 镜像 bytes. Require
+    # auth and 验证 ownership via the gallery row (when one exists).
     try:
         from src.auth_helpers import get_current_user
         from core.database import SessionLocal as _SL, GalleryImage as _GI
@@ -457,7 +457,7 @@ async def serve_generated_image(filename: str, request: Request):
             _db = _SL()
             try:
                 _row = _db.query(_GI).filter(_GI.filename == filename).first()
-                # Generated-but-not-yet-imported images have no row → allow.
+                # Generated-but-not-yet-imported 镜像s have no row → allow.
                 # Row exists with a different owner → 404 (don't confirm existence).
                 if _row is not None and _row.owner and _row.owner != _user:
                     raise HTTPException(status_code=404, detail="Image not found")
@@ -474,9 +474,9 @@ async def serve_generated_image(filename: str, request: Request):
         "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm",
         "mkv": "video/x-matroska", "m4v": "video/mp4",
     }.get(ext, "application/octet-stream")
-    # Generated-image filenames are content hashes → the bytes for a given
+    # Generated-镜像 filenames are content 哈希es → the bytes for a given
     # filename never change. Cache them hard so the gallery doesn't
-    # re-download every full-size image each time it's opened. `immutable`
+    # re-download every full-size 镜像 each time it's opened. `immutable`
     # tells the browser it never needs to revalidate within the max-age.
     return FileResponse(
         str(img_path),
@@ -489,10 +489,10 @@ from services.youtube import init_youtube
 init_youtube()
 
 # ========= RAG (vector document RAG) =========
-# VectorRAG (ChromaDB-backed personal-document semantic search). Initialized
+# VectorRAG (ChromaDB-backed personal-document 语义搜索). Initialized
 # lazily via get_rag_manager() — returns None if ChromaDB isn't reachable
 # (no server running on the configured host:port), in which case personal-doc
-# routes return a clean 503 instead of busy-retrying every request.
+# routes return a clean 503 instead of busy-重试ing every request.
 #
 # Note: this was previously hardcoded off because chromadb 1.4.1 / pydantic
 # 2.12 were mutually incompatible at the time. With the current pins
@@ -520,7 +520,7 @@ components = initialize_managers(BASE_DIR, rag_manager)
 session_manager   = components["session_manager"]
 from src.assistant_log import set_session_manager as _set_asst_sm
 _set_asst_sm(session_manager)
-# Set the global session manager singleton (used by core.models.Session.add_message)
+# 设置 the global session manager singleton (used by core.models.Session.add_message)
 from core.models import set_session_manager_instance
 set_session_manager_instance(session_manager)
 app.state.session_manager = session_manager
@@ -670,15 +670,15 @@ from routes.document_routes import setup_document_routes
 document_router = setup_document_routes(session_manager, upload_handler)
 app.include_router(document_router)
 
-# Signatures (reusable image stamps)
+# Signatures (reusable 镜像 stamps)
 from routes.signature_routes import setup_signature_routes
 app.include_router(setup_signature_routes())
 
-# Gallery (image library)
+# Gallery (镜像 library)
 from routes.gallery_routes import setup_gallery_routes
 app.include_router(setup_gallery_routes())
 
-# Persisted image-editor drafts (server-backed projects)
+# Persisted 镜像-editor drafts (server-backed projects)
 from routes.editor_draft_routes import setup_editor_draft_routes
 app.include_router(setup_editor_draft_routes())
 
@@ -702,7 +702,7 @@ app.include_router(calendar_router)
 from routes.shell_routes import setup_shell_routes
 app.include_router(setup_shell_routes())
 
-# Cookbook (model download/serve/cache, cookbook state sync)
+# Cookbook (模型下载/serve/cache, cookbook state sync)
 from routes.cookbook_routes import setup_cookbook_routes
 app.include_router(setup_cookbook_routes())
 
@@ -766,7 +766,7 @@ email_router = setup_email_routes()
 app.include_router(email_router)
 
 # Codex integration — HTTP surface for the Codex plugin/MCP bridge. Reuses
-# api_token scopes (todos:read|write, email:read|draft|send) so external
+# api_token 权限范围s (todos:read|write, email:read|draft|send) so external
 # Codex sessions can only touch the data the user explicitly allowed. Mounted
 # AFTER email so the codex_routes can borrow the email router for shared
 # search/threading helpers.
@@ -819,7 +819,7 @@ async def serve_calendar(request: Request):
 
 # Per-tool deep-link routes — all serve the same SPA, the JS auto-opens
 # the matching modal based on window.location.pathname. Each route also
-# gets a unique favicon + page title via inline script in index.html so
+# gets a unique favicon + page title via inline script in 索引.html so
 # bookmarks render with tool-specific icons.
 @app.get("/cookbook")
 async def serve_cookbook(request: Request):
@@ -915,7 +915,7 @@ async def _startup_event():
     logger.info("Application starting up...")
     webhook_manager.set_loop(asyncio.get_running_loop())
     # Wipe any leftover incognito sessions from previous process — they're
-    # ephemeral by design and must not survive a restart.
+    # ephemeral by de签名 and must not survive a restart.
     try:
         from core.database import SessionLocal as _SL, Session as _DbSess, ChatMessage as _DbMsg
         _db = _SL()
@@ -944,7 +944,7 @@ async def _startup_event():
         _startup_tasks.append(start_bg_monitor())
     except Exception as _e:
         logger.warning("Failed to start background-job monitor: %s", _e)
-    # MCP servers can be slow or blocked by local tooling. Connect them after
+    # MCP 服务器s can be slow or blocked by local tooling. Connect them after
     # the web server is accepting traffic instead of delaying the whole UI.
     async def _startup_mcp_connections():
         try:
@@ -961,8 +961,8 @@ async def _startup_event():
 
     _startup_tasks.append(asyncio.create_task(_startup_mcp_connections()))
 
-    # Pre-warm the RAG tool index off the request path. Loading the local
-    # embedding model + opening ChromaDB + indexing the built-in tools is a
+    # Pre-warm the RAG tool 索引 off the request path. Loading the local
+    # 嵌入模型 + opening ChromaDB + 索引ing the 内置工具s is a
     # one-time ~1-3s cost that otherwise lands on the user's FIRST message
     # (showing up as a big `tool_selection` time). Doing it here makes the
     # first turn as fast as subsequent ones (warm embed ≈ a few ms).
@@ -982,9 +982,9 @@ async def _startup_event():
         try:
             import httpx
             # model_discovery has no get_endpoints(); that call raised
-            # AttributeError every run and silently disabled warmup/keepalive.
-            # Resolve the /models probe URLs via the real discovery API, off the
-            # event loop since discovery does a blocking port scan.
+            # AttributeError every run and silently disabled warmup/保活.
+            # 解析 the /models probe URLs via the real discovery API, off the
+            # 事件循环 since discovery does a blocking port scan.
             urls = (
                 await asyncio.to_thread(model_discovery.warmup_ping_urls)
                 if model_discovery else []
@@ -1001,7 +1001,7 @@ async def _startup_event():
 
     _startup_tasks.append(asyncio.create_task(_warmup_endpoints()))
 
-    # Keep-alive: ping endpoints every 60 seconds to prevent cold starts
+    # Keep-alive: ping endpoints every 60 seconds to prevent 冷启动s
     async def _keepalive_loop():
         while True:
             try:
@@ -1082,8 +1082,8 @@ async def _startup_event():
     except Exception as e:
         logger.debug(f"Skill owner backfill skipped: {e}")
 
-    # Start scheduled task runner — skip when running under a cron-driven
-    # deployment where an external worker drives task firing. Mirrors
+    # 启动 定时任务 runner — skip when running under a cron-driven
+    # 部署 where an external worker drives task firing. Mirrors
     # `ODYSSEUS_INPROCESS_POLLERS` from the email pollers.
     _tasks_inprocess = os.environ.get("ODYSSEUS_INPROCESS_TASKS", "1").strip().lower()
     if _tasks_inprocess not in ("0", "false", "no", "off", ""):
@@ -1093,7 +1093,7 @@ async def _startup_event():
             "In-process task scheduler disabled (ODYSSEUS_INPROCESS_TASKS=0); "
             "drive task firing externally (e.g. cron)."
         )
-    # Periodic null-owner sweep — re-runs the legacy-owner assignment hourly
+    # Periodic null-owner sweep — re-runs the legacy-owner as签名ment hourly
     # so any data created while auth was disabled / localhost-bypassed gets
     # claimed by the admin instead of staying world-visible (M19).
     async def _null_owner_sweep_loop():
@@ -1140,7 +1140,7 @@ async def _startup_event():
 
     # Cookbook serve lifecycle — kills scheduler-launched serves whose
     # window-end has passed. Paired with the cookbook_serve builtin
-    # action; both are no-ops unless a scheduled task actually launches
+    # action; both are no-ops unless a 定时任务 actually launches
     # something with end_after_min set. Removing this line + the
     # cookbook_serve entry in BUILTIN_ACTIONS + src/cookbook_serve_lifecycle.py
     # removes the feature.
@@ -1157,17 +1157,17 @@ async def _shutdown_event():
             await upload_cleanup_task
         except asyncio.CancelledError:
             pass
-    # Stop task scheduler (no-op if it never started under the gate)
+    # 停止 任务调度器 (no-op if it never started under the gate)
     try:
         await task_scheduler.stop()
     except Exception:
         pass
-    # Close webhook manager
+    # Close Webhook manager
     try:
         await webhook_manager.close()
     except Exception as e:
         logger.warning(f"Webhook manager shutdown error: {e}")
-    # Disconnect all MCP servers
+    # Disconnect all MCP 服务器s
     try:
         await mcp_manager.disconnect_all()
     except Exception as e:

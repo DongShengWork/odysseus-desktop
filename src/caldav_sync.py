@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Pull window: 90 days back, 1 year forward. Keeps the REPORT cheap and
 # matches what the calendar UI typically renders. Far-future recurring
-# events still come through via RRULE expansion on the frontend.
+# events still come through via RRULE expansion on the 前端.
 _LOOKBACK_DAYS = 90
 _LOOKAHEAD_DAYS = 365
 _BLOCKED_HOSTS = {
@@ -347,15 +347,15 @@ def _sync_blocking(owner: str, url: str, username: str, password: str, account_i
                         db.commit()
                 result["calendars"] += 1
 
-                # Fetch events in window. `date_search` returns CalendarObject
+                # 获取 events in window. `date_search` returns CalendarObject
                 # resources; each may contain one VEVENT (most servers) or
                 # several (rare).
                 from icalendar import Calendar as iCal
 
                 seen_uids = set()
-                # Track events added to the session but not yet committed so
+                # Track events added to the session but not yet 提交ted so
                 # duplicate UIDs within the same batch are updated, not re-inserted
-                # (which would violate the UNIQUE constraint on commit).
+                # (which would violate the UNIQUE constraint on 提交).
                 pending: dict = {}
                 parse_failed = False
                 try:

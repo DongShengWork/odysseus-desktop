@@ -121,7 +121,7 @@ def _process_pdf(path: str, owner: str | None = None) -> str:
             if page_text:
                 pdf_text += f"\n\n[Page {page_num + 1} text]:\n{page_text}"
 
-            # For pages with images but little text, try VL model
+            # For pages with 镜像s but little text, try VL model
             try:
                 images = list(page.images)
             except Exception:
@@ -360,9 +360,9 @@ def analyze_image_with_vl_result(image_path: str, owner: str | None = None) -> d
                 ],
             }
         ]
-        # Vision-specific fallback chain (Settings → Vision → Fallbacks). A
+        # Vision-specific 回退 chain (Settings → Vision → Fallbacks). A
         # downed vision endpoint can fall through to the next configured model
-        # — same shape as task/chat but its own list (`vision_model_fallbacks`).
+        # — same shape as task/chat but its own list (`vision_model_回退s`).
         try:
             from src.endpoint_resolver import resolve_vision_fallback_candidates
             _vl_candidates = [(url, model_id, headers)] + resolve_vision_fallback_candidates(owner=owner)

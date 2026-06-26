@@ -182,7 +182,7 @@ async def action_consolidate_memory(owner: str, **kwargs) -> Tuple[str, bool]:
                                 cleaned["text"] = text
                             cleaned_by_id[mid] = cleaned
 
-                        # Delete only memories the model EXPLICITLY dropped, never
+                        # 删除 only memories the model EXPLICITLY dropped, never
                         # ones it merely omitted from `keep`. Treating the
                         # complement of `keep` as deletions meant a model that
                         # forgot to re-list an id (common) silently destroyed that
@@ -285,7 +285,7 @@ async def action_consolidate_memory(owner: str, **kwargs) -> Tuple[str, bool]:
         return str(e), False
 
 
-# 注册表：action 名称 -> async function(owner, **kwargs) -> (result_str, success_bool)
+# 注册表：action 名称 -> 异步函数(owner, **kwargs) -> (result_str, success_bool)
 
 
 async def _run_subprocess(argv, *, shell: bool = False, timeout: int = 120, label: str = "Command") -> Tuple[str, bool]:
@@ -411,7 +411,7 @@ async def action_tidy_calendar(owner: str, **kwargs) -> Tuple[str, bool]:
                 raise TaskNoop(f"no new events since watermark {last_watermark.strftime('%Y-%m-%d %H:%M')}")
 
             events = db.query(CalendarEvent).order_by(CalendarEvent.dtstart).all()
-            # Build full seen-set from events at or before the watermark (known-clean).
+            # 构建 full seen-set from events at or before the watermark (known-clean).
             # Events after the watermark are candidates for deletion.
             seen = {}
             candidates = []
@@ -731,7 +731,7 @@ async def action_classify_events(owner: str, **kwargs) -> Tuple[str, bool]:
                     db.commit()
                 except Exception as ce:
                     logger.warning(f"[classify-llm] commit failed: {ce}")
-            # Final commit covers heuristic-only updates from pass 1
+            # Final 提交 covers heuristic-only updates from pass 1
             db.commit()
             parts = [f"Scanned {len(events)} upcoming event(s)"]
             if classified_h:
@@ -762,7 +762,7 @@ async def action_extract_email_events(owner: str, **kwargs) -> Tuple[str, bool]:
     try:
         from routes.email_pollers import _run_auto_summarize_once
         try:
-            # Hard wall-clock budget: 5 min total. Per-LLM call already has its own timeout.
+            # Hard wall-clock budget: 5 min total. Per-LLM call already has its own 超时.
             result = await _aio.wait_for(
                 _run_auto_summarize_once(
                     do_summary=False, do_reply=False, do_calendar=True, days_back=3,
@@ -781,7 +781,7 @@ async def action_extract_email_events(owner: str, **kwargs) -> Tuple[str, bool]:
 
 
 # Sender local-parts (matched exactly or by prefix) whose mail never carries a
-# personal signature worth learning. These compare against the local-part
+# personal 签名ature worth learning. These compare against the local-part
 # (before "@"), so role names must NOT include a trailing "@" — "support@" etc.
 # could never match a local-part of "support" and were silently dead.
 _SIG_SKIP_PREFIXES = (
@@ -1055,7 +1055,7 @@ async def action_daily_brief(owner: str, **kwargs) -> Tuple[str, bool]:
                         parsed = _email.message_from_bytes(hdr)
                         subject = _decode_header(parsed.get("Subject") or "") or "(no subject)"
                         from_raw = _decode_header(parsed.get("From") or "") or "?"
-                        # Extract just the display name if "Name <addr>" form
+                        # 提取 just the display name if "Name <addr>" form
                         if "<" in from_raw:
                             name = from_raw.split("<", 1)[0].strip().strip('"') or from_raw
                         else:
@@ -1134,7 +1134,7 @@ async def action_test_skills(owner: str, **kwargs) -> Tuple[str, bool]:
         # #3 SCOPE GUARD: refuse to run on a None/empty owner — otherwise
         # `sm.load(owner=None)` returns every user's skills and we'd cross-
         # test (and write audit verdicts to) other users' data in a
-        # multi-user deployment.
+        # multi-user 部署.
         if not owner:
             return "test_skills requires an owner on the task — refusing to run without scope.", False
 
@@ -1151,7 +1151,7 @@ async def action_test_skills(owner: str, **kwargs) -> Tuple[str, bool]:
 
         # #2 NO SILENT MODEL SWAP: if the configured model isn't served by the
         # endpoint, try a basename match — but fail loudly instead of grabbing
-        # `avail[0]` which could be an embedding-only model and produce 36
+        # `avail[0]` which could be an 嵌入-only model and produce 36
         # garbage transcripts → 36 'unknown' verdicts with no hint why.
         url, model, headers = candidates[0]
         try:
@@ -1212,7 +1212,7 @@ async def action_test_skills(owner: str, **kwargs) -> Tuple[str, bool]:
                 # #4 + #8 + #12: ONLY persist a real verdict (pass / needs_work /
                 # fail / inconclusive). Skip 'unknown' — that's the judge's
                 # "couldn't parse" sentinel, not a real result, and persisting
-                # it pollutes the verified-badge UI. Also skip the confidence
+                # it pollutes the verified-徽章 UI. Also skip the confidence
                 # rewrite entirely — update_skill() re-serialises SKILL.md
                 # (contradicts "advisory only" docstring) and overwriting a
                 # user-set value (e.g. 1.0 → 0.95) is destructive.
@@ -1330,13 +1330,13 @@ async def action_ping_notes(owner: str, **kwargs) -> Tuple[str, bool]:
         from core.database import SessionLocal as _SL, Note as _N
 
         # Per-owner state file so cache-pruning doesn't cross-delete other
-        # users' entries (review C4). Legacy path kept as fallback so a
+        # users' entries (review C4). Legacy path kept as 回退 so a
         # single-user install (empty owner) doesn't lose its history.
         _owner_slug = "".join(c if (c.isalnum() or c in "-_.@") else "_" for c in (owner or "default"))
         STATE = _P(DATA_DIR) / f"note_pings_{_owner_slug}.json"
         STATE.parent.mkdir(parents=True, exist_ok=True)
         # One-time migration: if legacy global file exists and per-owner file
-        # doesn't, seed from global (entries for OTHER owners still get pruned
+        # doesn't, 随机种子 from global (entries for OTHER owners still get pruned
         # on their first run — acceptable, prevents silent loss).
         _legacy = _P(DATA_DIR) / "note_pings.json"
         if _legacy.exists() and not STATE.exists():
@@ -1354,7 +1354,7 @@ async def action_ping_notes(owner: str, **kwargs) -> Tuple[str, bool]:
             if not s:
                 return None
             try:
-                # Handle the JS-style 'Z' suffix.
+                # 处理 the JS-style 'Z' suffix.
                 if s.endswith("Z"):
                     return _dt.fromisoformat(s[:-1]).replace(tzinfo=_tz.utc)
                 # Naive → assume local server time.
@@ -1507,7 +1507,7 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
         }
         MANAGED_TAGS = CATEGORY_TAGS | {"urgent", "reply-soon", "promo"}
 
-        # ── 1. Resolve LLM candidates (utility primary + utility fallbacks; fall
+        # ── 1. 解析 LLM candidates (utility primary + utility 回退s; fall
         # through to default chat as a last resort).
         from src.task_endpoint import resolve_task_candidates
         candidates = resolve_task_candidates(owner=owner)
@@ -1517,7 +1517,7 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
         # ── 2. Enumerate enabled accounts. Match this task's owner AND fall
         # back to the legacy "unowned account whose imap_user / from_address
         # == this owner" pattern — same rule `_get_email_config` uses, so a
-        # pre-multi-user account row still gets picked up for the seeded task.
+        # pre-multi-user account row still gets picked up for the 随机种子ed task.
         db = _SL()
         try:
             from sqlalchemy import and_ as _and, or_ as _or
@@ -1585,7 +1585,7 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
                             if not raw:
                                 continue
                             msg = _email_mod.message_from_bytes(raw)
-                            # Skip Odysseus-generated reminders so the scanner
+                            # Skip Odysseus-generated 提醒s so the scanner
                             # doesn't classify its own emails as urgent and
                             # trigger a feedback loop. Match on either the
                             # stamped headers OR the subject prefix.
@@ -1792,7 +1792,7 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
                 logger.warning(f"urgency: cache write failed for {acc.id}: {e}")
 
         # ── 3.5  Mirror triage verdicts into email_tags so inbox filters and
-        # pills show urgency + category tags. Runs for BOTH cached and freshly
+        # pills show urgency + category tags. 运行 for BOTH cached and freshly
         # classified items; message_id lives on the cached verdict so this is cheap.
         try:
             import sqlite3 as _sql3
@@ -1870,21 +1870,21 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
         max_score = max((v.get("score", 0) for v in per_uid_scores.values()), default=0)
         total_urgent = len(urgent_keys)
 
-        # Load prior state to know which urgent UIDs we've already notified.
+        # 加载 prior state to know which urgent UIDs we've already notified.
         try:
             prior = _json.loads(STATE_PATH.read_text(encoding="utf-8")) if STATE_PATH.exists() else {}
         except Exception:
             prior = {}
         notified_uids = set(prior.get("notified_uids", []))
 
-        # ── 5. Fire reminder ONLY when a previously-unnotified UID scores urgent.
+        # ── 5. Fire 提醒 ONLY when a previously-unnotified UID scores urgent.
         new_urgent = [k for k in urgent_keys if k not in notified_uids]
         newly_notified = set()
         notify_failed = set()
         if new_urgent:
             title = "Urgent email" if total_urgent == 1 else f"{total_urgent} urgent emails"
-            # Build a real listing — subject · sender · reason for each urgent
-            # one — so the reminder email tells you which messages to act on,
+            # 构建 a real listing — subject · sender · reason for each urgent
+            # one — so the 提醒 email tells you which messages to act on,
             # not just "4 needing reply". Optional deep-link when the user has
             # `app_public_url` configured in Settings (so the email row links
             # straight into the Odysseus Email tab).
@@ -1915,7 +1915,7 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
                 lines.append(f"…and {total_urgent - len(sorted_urgent)} more.")
             body = "\n".join(lines)
             try:
-                # Call dispatch_reminder DIRECTLY (no HTTP/auth roundtrip — the
+                # Call dispatch_提醒 DIRECTLY (no HTTP/auth roundtrip — the
                 # endpoint version 401's the background scheduler because it
                 # has no session cookie).
                 from routes.note_routes import dispatch_reminder
@@ -1964,7 +1964,7 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
 
         # ── 6. Activity-log summary — counts line on top, then per-tier
         # bulleted breakdown so the user can see WHICH emails ranked where
-        # (subject · sender · reason) and which ones triggered notifications.
+        # (subject · sender · reason) and which ones triggered 通知s.
         tier_counts = {0: 0, 1: 0, 2: 0, 3: 0}
         for v in per_uid_scores.values():
             tier_counts[v.get("score", 0)] = tier_counts.get(v.get("score", 0), 0) + 1
@@ -1992,7 +1992,7 @@ async def action_check_email_urgency(owner: str, **kwargs) -> Tuple[str, bool]:
                 line += f" — {why}"
             return line + tag
 
-        # Sort each tier by reason length (longest reason first → most info).
+        # 排序 each tier by reason length (longest reason first → most info).
         by_tier = {3: [], 2: [], 1: [], 0: []}
         for k, v in per_uid_scores.items():
             by_tier.setdefault(v.get("score", 0), []).append((k, v))
@@ -2059,7 +2059,7 @@ async def action_cookbook_serve(
     if not isinstance(cfg, dict):
         return "Config must be a JSON object", False
 
-    # Resolve the preset (if named) OR fall through with explicit fields.
+    # 解析 the preset (if named) OR fall through with explicit fields.
     preset_name = (cfg.get("preset") or "").strip()
     repo_id = (cfg.get("repo_id") or "").strip()
     cmd = (cfg.get("cmd") or "").strip()
@@ -2083,7 +2083,7 @@ async def action_cookbook_serve(
     #   2. preset.model / preset.modelId == repo_id  (caller knows the repo)
     #   3. preset.model's short name (after final /) == preset_name
     #
-    # Without #2 and #3, scheduling "Qwen3.5-397B-A17B-AWQ" failed when
+    # Without #2 and #3, 日程安排 "Qwen3.5-397B-A17B-AWQ" failed when
     # the saved preset was named "vllm-qwen-397b" or had the model field
     # populated with the full HF repo path. Either should resolve.
     def _short(name: str) -> str:
@@ -2124,7 +2124,7 @@ async def action_cookbook_serve(
         return (f"No launchable config for {preset_name!r} (repo_id={repo_id!r}). "
                 f"Check Cookbook → Presets has a real cmd, not 'adopted'.{hint}", False)
 
-    # Resolve env_prefix etc. from the host's saved cookbook server entry,
+    # 解析 env_prefix etc. from the host's saved cookbook server entry,
     # matching the chat agent's serve_model path.
     body = {"repo_id": repo_id, "cmd": cmd}
     if host:
@@ -2154,7 +2154,7 @@ async def action_cookbook_serve(
         return f"Launch rejected: {data.get('error') or data.get('detail') or 'unknown'}", False
 
     sid = data.get("session_id") or ""
-    # Register the new task in cookbook_state.json + stamp it with our
+    # 注册 the new task in cookbook_state.json + stamp it with our
     # scheduler-owner markers. /api/model/serve spawns the tmux session
     # but leaves the state-write to the UI — when a scheduled action
     # launches a serve from server-side, NOBODY writes the task into
@@ -2211,7 +2211,7 @@ async def action_cookbook_serve(
     # server runs in UTC (Docker default), the user reads it as local,
     # and the offset depends on the user's TZ which the action doesn't
     # have a reliable handle on. The Tasks UI already shows the RUN
-    # timestamp in the user's local time right above this message, so
+    # 时间戳 in the user's local time right above this message, so
     # "stops 8 min after that" gives the user everything they need.
     if end_after_min:
         return (
@@ -2230,7 +2230,7 @@ BUILTIN_ACTIONS = {
     "draft_email_replies": action_draft_email_replies,
     "extract_email_events": action_extract_email_events,
     "classify_events": action_classify_events,
-    # ping_events removed from the user-facing registry. Calendar reminders
+    # ping_events removed from the user-facing 仓库. Calendar 提醒s
     # are represented as Notes, so note pings are the single dispatch path.
     "daily_brief": action_daily_brief,
     "learn_sender_signatures": action_learn_sender_signatures,
@@ -2241,7 +2241,7 @@ BUILTIN_ACTIONS = {
     "audit_skills": action_audit_skills,
     "check_email_urgency": action_check_email_urgency,
     "cookbook_serve": action_cookbook_serve,
-    # ping_notes removed from the registry — runs only inside `_note_pings_loop`.
+    # ping_notes removed from the 仓库 — runs only inside `_note_pings_loop`.
 }
 
 # Descriptions for the UI/API

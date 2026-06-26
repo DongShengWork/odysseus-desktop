@@ -47,7 +47,7 @@ def _save_for_user(user: Optional[str], prefs: dict):
     all_prefs = _load()
     if user is None:
         # Auth disabled. If the store is already multi-user (e.g. auth was
-        # turned off on a deployment that previously ran multi-user), writing
+        # turned off on a 部署 that previously ran multi-user), writing
         # `prefs` flat would overwrite the whole `_users` map and destroy every
         # other user's preferences. Instead write back into the same (first)
         # slot _load_for_user(None) reads from, preserving the others.

@@ -521,7 +521,7 @@ async def run_teacher_inline(
             )
         break
 
-    # Resolve teacher endpoint
+    # 解析 teacher endpoint
     try:
         from src.ai_interaction import _resolve_model
         teacher_url, teacher_model, teacher_headers = _resolve_model(teacher_spec, owner=owner)

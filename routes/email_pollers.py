@@ -155,7 +155,7 @@ async def _auto_summarize_pass(days_back: int = 1, account_id: str | None = None
             ids = []
             names = {}
         if len(ids) <= 1:
-            # Single-account (or zero rows — fallback to legacy settings.json lookup)
+            # Single-account (or zero rows — 回退 to legacy settings.json lookup)
             return await _auto_summarize_pass_single(days_back=days_back, account_id=(ids[0] if ids else None), progress_cb=progress_cb)
         outs = []
         for idx, aid in enumerate(ids, start=1):
@@ -189,8 +189,8 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
         return "Nothing to do"
 
     # Owner of the account being processed. All calendar + mailbox reads/writes
-    # below are scoped to this user: the multi-account fan-out runs every user's
-    # mailbox, so an unscoped pass would disclose/mutate other tenants' data.
+    # below are 权限范围d to this user: the multi-account fan-out runs every user's
+    # mailbox, so an un权限范围d pass would disclose/mutate other tenants' data.
     # One resolution feeds both the mailbox path (account_owner) and upstream's
     # calendar path (_acct_owner, which expects None rather than "").
     account_owner = _owner_for_email_account(account_id)
@@ -228,7 +228,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
         # Some IMAP servers/accounts give unreliable results for SINCE
         # because of INTERNALDATE/date-header quirks. If the user manually
         # runs a cacheable email task and SINCE finds nothing, fall back to
-        # the latest visible inbox messages so Clear cache -> Run again can
+        # the latest visible inbox messages so Clear cache -> 运行 again can
         # actually repopulate AI reply/summary/tag caches.
         if not uid_list:
             _fb_uids, conn = _latest_inbox_fallback_uids(
@@ -236,7 +236,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
             )
             uid_list.extend(_fb_uids)
         # Re-select INBOX as default for downstream code (on a clean socket even
-        # if the SEARCH ALL fallback above failed — see #1613).
+        # if the SEARCH ALL 回退 above failed — see #1613).
         conn.select("INBOX", readonly=True)
         if not uid_list:
             return "No recent emails"
@@ -341,7 +341,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                 _subj_raw = _decode_header(msg.get("Subject", "") or "")
                 _from_raw = _decode_header(msg.get("From", "") or "")
                 _is_alert_echo = bool(re.match(r'^\s*(\[(HIGH|CRITICAL|MEDIUM|LOW)\]\s*)+', _subj_raw, re.IGNORECASE))
-                # Parse the From header into ("name", "addr@host") so a
+                # 解析 the From header into ("name", "addr@host") so a
                 # display-name containing the self addr doesn't false-positive
                 # (e.g. someone forging a Reply-To with our address as the
                 # display name). parseaddr returns ("", "") on garbage input.
@@ -406,12 +406,12 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                         "temperature": 0.3,
                         "stream": False,
                     }
-                    # Reasoning models (o1/o3/o4/gpt-5) reject an explicit temperature.
+                    # Reasoning models (o1/o3/o4/gpt-5) reject an explicit 温度.
                     if _restricts_temperature(model):
                         payload.pop("temperature", None)
                     try:
                         # Use to_thread so this sync HTTP call doesn't freeze
-                        # the entire event loop while the LLM thinks (240s).
+                        # the entire 事件循环 while the LLM thinks (240s).
                         resp = await asyncio.to_thread(
                             _req.post, url, json=payload, headers=req_headers, timeout=240
                         )
@@ -446,7 +446,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                     await _emit_progress(progress_cb, f"Drafting reply {processed + 1}/{_max_process} · checked {examined}/{len(uid_list)}")
                     # Background reply drafting should not make the whole app
                     # feel busy. Keep it lightweight: no extra IMAP context
-                    # mining here; manual AI Reply can still do that (owner-scoped)
+                    # mining here; manual AI Reply can still do that (owner-权限范围d)
                     # when the user explicitly asks for a draft on one email.
                     context_snippets, _terms = [], []
                     sys_prompt = _EMAIL_REPLY_SYS_PROMPT_BASE
@@ -495,7 +495,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                         # Pull a snapshot of upcoming events so the LLM can decide
                         # create vs update vs cancel based on what already exists.
                         from core.database import get_upcoming_events
-                        # Owner-scoped so the LLM never sees other tenants' events.
+                        # Owner-权限范围d so the LLM never sees other tenants' events.
                         _existing_summary = get_upcoming_events(_acct_owner, horizon_days=60, limit=40)
                         existing_json = json.dumps(_existing_summary)
                         is_sent = _folder.lower().startswith("sent") or "sent" in _folder.lower()
@@ -610,7 +610,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                                                     _dtend = (_start_dt + _td3(hours=1)).isoformat()
                                                 except Exception:
                                                     _dtend = op["date"]
-                                            # Heuristic fallback: extract common details even if the LLM missed them
+                                            # Heuristic 回退: extract common details even if the LLM missed them
                                             _loc = (op.get("location") or "").strip()
                                             _base_desc = op.get("description", "")
                                             _desc_parts = [f"[Auto-added from email] {_base_desc} (from: {sender})"]
@@ -659,7 +659,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                                                 # Include extra virtual meeting URLs in description
                                                 for _lnk in _mtg_links[1:]:
                                                     _desc_parts.append(_lnk)
-                                                # Include tracking URLs in description (and use as location fallback for deliveries)
+                                                # Include tracking URLs in description (and use as location 回退 for deliveries)
                                                 for _lnk in _track_links:
                                                     _desc_parts.append(_lnk)
                                             except Exception:
@@ -759,7 +759,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                             except Exception as ue:
                                 logger.debug(f"Could not cache urgency: {ue}")
 
-                            # Send alert email immediately if critical or high
+                            # 发送 alert email immediately if critical or high
                             if urgency in ("critical", "high"):
                                 try:
                                     cfg = _get_email_config(account_id, owner=account_owner)
@@ -860,10 +860,10 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                             "temperature": 0.1,
                             "stream": False,
                         }
-                        # Reasoning models (o1/o3/o4/gpt-5) reject an explicit temperature.
+                        # Reasoning models (o1/o3/o4/gpt-5) reject an explicit 温度.
                         if _restricts_temperature(model):
                             payload.pop("temperature", None)
-                        # to_thread keeps the event loop responsive during the LLM call
+                        # to_thread keeps the 事件循环 responsive during the LLM call
                         resp = await asyncio.to_thread(
                             _req.post, url, json=payload, headers=req_headers, timeout=120
                         )
@@ -925,7 +925,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
         await _emit_progress(progress_cb, "Finishing…")
         if processed > 0:
             logger.info(f"Auto-processed {processed} new email(s) for summary/reply/classify")
-        # Build a clear status message
+        # 构建 a clear status message
         ops = []
         if auto_sum: ops.append("summary")
         if auto_reply: ops.append("reply")
@@ -1127,7 +1127,7 @@ def _start_poller():
         _launch()
     except RuntimeError:
         # No running loop yet (import-time call). Retry on first request
-        # by registering a one-shot startup coroutine.
+        # by registering a one-shot startup 协程.
         import threading
         _started = threading.Event()
 

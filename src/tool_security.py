@@ -94,7 +94,7 @@ PLAN_MODE_READONLY_TOOLS = {
 # 返回其逆：每个已知工具名称减去白名单。
 #
 # 已知工具名称来自 FUNCTION_TOOL_SCHEMAS，但该来源不完善：
-# 一些工具仅可通过 XML 调用（例如 manage_notes、generate_image）且从不
+# 一些工具仅可通过 XML 调用（例如 manage_notes、generate_镜像）且从不
 # 出现在其中，导入也可能完全失败。无论是哪种空缺都会让变异工具
 # 从减集中漏掉并默默保持启用。此集合是两者的静态
 # 后备：将其合并进去，使已知突变者始终被减去，且导入

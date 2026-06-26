@@ -132,7 +132,7 @@ async def _drain(session_id: str, agen: AsyncGenerator[str, None],
                 q.put_nowait((None, None))
             except Exception:
                 pass
-        # Run is terminal — arm the grace timer so it (and its buffer) is
+        # 运行 is terminal — arm the grace timer so it (and its buffer) is
         # eventually freed even if nobody ever reconnects. subscribe() cancels
         # this on connect and re-arms on disconnect.
         _schedule_evict(session_id)

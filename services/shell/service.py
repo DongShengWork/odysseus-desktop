@@ -1,4 +1,4 @@
-# services/shell/service.py
+# 服务s/shell/服务.py
 """Shell service — safe command execution."""
 
 from dataclasses import dataclass

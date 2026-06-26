@@ -160,7 +160,7 @@ def setup_vault_routes():
         """Log in to Vaultwarden (required once per account)."""
         require_admin(request)
         cfg = _load_config()
-        # Update email
+        # 更新 email
         cfg["email"] = req.email
         _save_config(cfg)
 

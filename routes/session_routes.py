@@ -218,7 +218,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
         # 但是：跳过最近 10 分钟内创建的会话。
         # 如果没有此保护，清除操作会在首次 /api/sessions 调用时
         # 就删除刚创建的活跃 "Nobody" 会话，从而破坏正在进行的
-        # 聊天。前端的 _cleanupIncognitoSessions 处理器知道哪个
+        # 聊天。前端的 _清理IncognitoSessions 处理器知道哪个
         # 会话是当前会话，不会删除活跃会话 — 此服务器端清除
         # 仅用于捕获前端遗漏的残留会话（标签页关闭、崩溃）。
         # 只清除足够旧、确定是孤立会话的行。
@@ -381,8 +381,8 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             )
             if not ids:
                 raise HTTPException(400, "Cannot reach /v1/models")
-            # 默认选择第一个 CHAT 模型 — 端点通常会先列出 embedding/
-            # tts/whisper 模型（例如 text-embedding-ada-002），这些
+            # 默认选择第一个 CHAT 模型 — 端点通常会先列出 嵌入/
+            # tts/whisper 模型（例如 text-嵌入-ada-002），这些
             # 无法进行对话。
             _NON_CHAT = ("text-embedding", "embedding", "tts-", "whisper",
                          "text-moderation", "moderation-", "dall-e", "rerank")
@@ -432,7 +432,7 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
             from src.endpoint_resolver import build_headers
             session.headers = build_headers(resolved_key, resolved_base)
             _persist_session_headers(sid, session.headers)
-        # 触发 webhook（同步安全）
+        # 触发 Webhook（同步安全）
         if webhook_manager:
             webhook_manager.fire_and_forget("session.created", {
                 "session_id": sid, "name": session.name, "model": model_to_use,

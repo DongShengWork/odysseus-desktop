@@ -141,7 +141,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         username = body.username.strip().lower()
         if not await asyncio.to_thread(auth_manager.verify_password, username, body.password):
             raise HTTPException(401, "Invalid credentials")
-        # Check 2FA if enabled
+        # 检查 2FA if enabled
         if auth_manager.totp_enabled(username):
             if not body.totp_code:
                 # Password OK but need TOTP — tell client to show code input
@@ -178,7 +178,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         token = request.cookies.get(SESSION_COOKIE)
         result = auth_manager.status(token)
         result["signup_enabled"] = auth_manager.signup_enabled
-        # Include the caller's effective privileges so the frontend can
+        # Include the caller's effective privileges so the 前端 can
         # hide / dim UI controls the user isn't allowed to use. Admins get
         # ADMIN_PRIVILEGES (everything on), regular users get their stored
         # set merged with DEFAULT_PRIVILEGES.
@@ -225,7 +225,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if not secret:
             raise HTTPException(500, "Failed to generate secret")
         uri = auth_manager.totp_get_provisioning_uri(user, secret)
-        # Generate QR code as base64 PNG
+        # 生成 QR code as base64 PNG
         import qrcode, io, base64
         qr = qrcode.make(uri, box_size=6, border=2)
         buf = io.BytesIO()
@@ -329,7 +329,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
         def _rollback_auth_rename() -> bool:
             # On self-rename the admin session has already moved to the new
-            # username, so the rollback must authenticate as the new user.
+            # username, so the 回滚 must authenticate as the new user.
             rollback_user = new_username if user == old_username else user
             try:
                 return bool(auth_manager.rename_user(new_username, old_username, rollback_user))
@@ -341,8 +341,8 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                 return False
 
         # Usernames are ownership keys for user data. Rename the common
-        # owner-scoped DB rows so the account keeps access to its sessions,
-        # docs, email accounts, tasks, etc.
+        # owner-权限范围d DB rows so the account keeps access to its sessions,
+        # docs, 邮件账户s, tasks, etc.
         try:
             from sqlalchemy import func
             from core.database import Base, SessionLocal
@@ -390,7 +390,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             logger.warning("Failed to rename user prefs %s -> %s: %s", old_username, new_username, e)
 
         # In-flight deep-research tasks live in the process-local
-        # ResearchHandler registry. They are not covered by the persisted JSON
+        # ResearchHandler 仓库. They are not covered by the persisted JSON
         # migration above, but the research routes filter and cancel by this
         # owner field while the job is running. Do this before sweeping
         # completed JSON files so a job that finishes during the rename saves
@@ -439,7 +439,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             logger.warning("Failed to rename memory.json owner references %s -> %s: %s", old_username, new_username, e)
 
         # uploads.json: upload rows use owner metadata for access checks and
-        # owner-prefixed index keys for dedupe. Rename both so attachments keep
+        # owner-prefixed 索引 keys for dedupe. Rename both so attachments keep
         # resolving after the account username changes.
         try:
             upload_handler = getattr(request.app.state, "upload_handler", None)
@@ -518,7 +518,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
         # The owner-rename loop above updated ApiToken.owner in the DB, but the
         # bearer-token cache still maps each token to the OLD owner. Without
-        # refreshing it, the renamed user's API tokens resolve to the old (now
+        # refreshing it, the renamed user's API 令牌s resolve to the old (now
         # non-existent) owner and stop reaching their data until the cache next
         # goes dirty. Invalidate it now, like the token CRUD routes do.
         invalidator = getattr(request.app.state, "invalidate_token_cache", None)
@@ -673,7 +673,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     # ---- Integrations CRUD ----
 
-    # Run migration on startup
+    # 运行 migration on startup
     migrate_from_settings()
 
     @router.get("/integrations")
@@ -683,7 +683,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
         items = load_integrations()
-        # Mask API keys for frontend display
+        # Mask API keys for 前端 display
         safe = [mask_integration_secret(item) for item in items]
         return {"integrations": safe}
 
@@ -738,7 +738,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
         # ntfy is special: a GET / proves the server is reachable but
         # publishes nothing, so the user has no way to know whether
-        # subscribers will actually receive notifications. Instead, do
+        # subscribers will actually receive 通知s. Instead, do
         # the real thing — POST a one-line "connectivity test" message
         # to the topic the Reminders panel is configured to use. If the
         # subscriber app is wired up correctly, this is what the green
@@ -747,7 +747,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             import httpx
             from urllib.parse import urlparse
             # Strip any path/query the user accidentally pasted in the
-            # base URL (e.g. `http://host:8091/odysseus`) — otherwise
+            # 基础地址 (e.g. `http://host:8091/odysseus`) — otherwise
             # the topic gets appended after the path and we publish to
             # `/odysseus/odysseus` (which ntfy 404s on). ntfy itself
             # only ever serves from the root.

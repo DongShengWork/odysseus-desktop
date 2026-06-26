@@ -1,4 +1,4 @@
-# services/memory/skills.py
+# 服务s/memory/skills.py
 """技能存储层。
 
 技能以 `data/skills/<category>/<name>/SKILL.md` 文件的形式存储在磁盘上，
@@ -511,7 +511,7 @@ class SkillsManager:
                 continue
             skill_dir = os.path.dirname(path)
             try:
-                # Remove the whole skill dir
+                # 移除 the whole skill dir
                 for root, dirs, files in os.walk(skill_dir, topdown=False):
                     for f in files:
                         os.remove(os.path.join(root, f))
@@ -578,7 +578,7 @@ class SkillsManager:
         return None
 
     # ----------------------------------------------------------------------
-    # Index — the lightweight summary injected into the system prompt
+    # Index — the lightweight summary injected into the 系统提示
     # ----------------------------------------------------------------------
 
     def index_for(
@@ -623,7 +623,7 @@ class SkillsManager:
             req = s.get("requires_toolsets") or []
             if req and active_toolsets is not None and not all(t in active_toolsets for t in req):
                 continue
-            # fallback_for_toolsets: hide when any of those toolsets is active
+            # 回退_for_toolsets: hide when any of those toolsets is active
             fb = s.get("fallback_for_toolsets") or []
             if fb and active_toolsets and any(t in active_toolsets for t in fb):
                 continue
@@ -658,7 +658,7 @@ class SkillsManager:
         # The teacher-escalation loop writes new skills as drafts; the
         # whole point is for the student to find them on the next try
         # without a manual publish click. The UI flags teacher-written
-        # entries with a 🎓 badge so users can demote / delete bad
+        # entries with a 🎓 徽章 so users can demote / delete bad
         # ones when they spot them.
         skills = [s for s in skills if s.get("status") in ("published", "draft")]
         # Confidence gate (used by prompt-injection, NOT by search): a DRAFT

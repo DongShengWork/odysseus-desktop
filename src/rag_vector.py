@@ -625,7 +625,7 @@ class VectorRAG:
         for sentence in sentences:
             sent_len = len(sentence)
 
-            # 如果单个句子超过 chunk_size，按字符分割
+            # 如果单个句子超过 数据块_size，按字符分割
             if sent_len > chunk_size:
                 # 先清空当前块
                 if current_chunk:

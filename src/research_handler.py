@@ -265,7 +265,7 @@ class ResearchHandler:
         if _research_json_path(session_id) is None:
             raise ValueError("Invalid research session_id")
 
-        # Resolve the hard wall-clock timeout from settings when the caller
+        # 解析 the hard wall-clock 超时 from settings when the caller
         # didn't pin one. Local / edge models routinely need more than the
         # old 600s default to finish a deep-research synthesis. A setting of
         # 0 disables the cap entirely (unlimited run); any other value is
@@ -322,7 +322,7 @@ class ResearchHandler:
 
         async def _run():
             # 硬挂钟超时 — 如果 LLM 调用挂起则保存部分结果
-            # hard_timeout 从 start_research() 传入
+            # hard_超时 从 start_research() 传入
             try:
                 result = await asyncio.wait_for(
                     self.call_research_service(

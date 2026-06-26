@@ -1,4 +1,4 @@
-# services/stt/stt_service.py
+# 服务s/stt/stt_服务.py
 """Multi-provider Speech-to-Text service — dispatches to local Whisper, OpenAI-compatible API, or browser."""
 
 import io

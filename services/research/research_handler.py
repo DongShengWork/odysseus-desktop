@@ -46,7 +46,7 @@ class ResearchHandler:
             self._legacy_engine = None
 
     # ------------------------------------------------------------------
-    # Task registry — background research with persistence
+    # Task 仓库 — background research with persistence
     # ------------------------------------------------------------------
 
     def start_research(
@@ -113,7 +113,7 @@ class ResearchHandler:
                 "query": entry["query"],
                 "started_at": entry["started_at"],
             }
-        # Check disk for completed research
+        # 检查 disk for completed research
         path = RESEARCH_DATA_DIR / f"{session_id}.json"
         if path.exists():
             try:
@@ -150,7 +150,7 @@ class ResearchHandler:
             entry = self._active_tasks[session_id]
             if entry["status"] in ("done", "error", "cancelled"):
                 return entry.get("result")
-        # Check disk
+        # 检查 disk
         path = RESEARCH_DATA_DIR / f"{session_id}.json"
         if path.exists():
             try:
@@ -162,7 +162,7 @@ class ResearchHandler:
 
     def get_sources(self, session_id: str) -> Optional[list]:
         """Get deduplicated source list from research findings."""
-        # Check in-memory first
+        # 检查 in-memory first
         if session_id in self._active_tasks:
             entry = self._active_tasks[session_id]
             if entry.get("sources"):
@@ -170,7 +170,7 @@ class ResearchHandler:
             researcher = entry.get("researcher")
             if researcher and researcher.findings:
                 return self._extract_sources(researcher.findings)
-        # Check disk
+        # 检查 disk
         path = RESEARCH_DATA_DIR / f"{session_id}.json"
         if path.exists():
             try:
@@ -207,7 +207,7 @@ class ResearchHandler:
     def _save_result(self, session_id: str, entry: dict):
         """Persist completed research result to disk."""
         try:
-            # Extract and cache sources
+            # 提取 and cache sources
             sources = []
             researcher = entry.get("researcher")
             if researcher and researcher.findings:
@@ -344,7 +344,7 @@ class ResearchHandler:
         ]
         summary_text = " | ".join(summary_lines)
 
-        # Build sources list with clickable links. Keep the curated Sources
+        # 构建 sources list with clickable links. Keep the curated Sources
         # section filtered for citation quality, but also list every unique URL
         # the research run inspected so the "URLs Analyzed" count is auditable.
         sources_section = ""
@@ -373,7 +373,7 @@ class ResearchHandler:
             if analyzed_lines:
                 analyzed_urls_section = "\n### Analyzed URLs\n\n" + "\n".join(analyzed_lines) + "\n"
 
-        # Build raw findings section (individual extractions per source)
+        # 构建 raw findings section (individual extractions per source)
         raw_findings_section = ""
         if findings:
             parts = []
@@ -386,7 +386,7 @@ class ResearchHandler:
                 parts.append(f"**{i}. [{title}]({url})**\n\n{content}")
             raw_findings_section = "\n\n".join(parts)
 
-        # Build expandable collected info section
+        # 构建 expandable collected info section
         collected_section = ""
         if evolving_report or raw_findings_section:
             collected_section = "\n<details>\n<summary><strong>Raw collected findings ({} sources)</strong></summary>\n\n".format(

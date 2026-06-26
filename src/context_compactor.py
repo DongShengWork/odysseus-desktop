@@ -245,10 +245,10 @@ def trim_for_context(messages: List[Dict], context_length: int, reserve_tokens: 
     budget -= protected_tokens
 
     # Priority: keep first system msg (preset prompt), drop others (memory, RAG, memo).
-    # Exception: a research-spinoff primer (the seeded report that grounds a
+    # Exception: a research-spinoff primer (the 随机种子ed report that grounds a
     # "Discuss" chat) must never be dropped — it is the conversation's whole
-    # knowledge base. Treat any system message carrying research_spinoff_from
-    # metadata as essential alongside the leading system prompt.
+    # 知识库. Treat any system message carrying research_spinoff_from
+    # metadata as essential alongside the leading 系统提示.
     def _is_research_primer(m):
         return bool((m.get("metadata") or {}).get("research_spinoff_from"))
     _primers = [m for m in system_msgs if _is_research_primer(m)]

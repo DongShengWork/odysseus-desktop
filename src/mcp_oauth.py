@@ -151,9 +151,9 @@ def build_provider(server_id: str, url: str, on_redirect=None):
         redirect_uris=[REDIRECT_URI],
         grant_types=["authorization_code", "refresh_token"],
         response_types=["code"],
-        # 不设置 scope：SDK 应用 MCP scope 选择策略，并在构建
+        # 不设置 权限范围：SDK 应用 MCP 权限范围 选择策略，并在构建
         # auth URL 之前从服务器的 WWW-Authenticate / protected-resource
-        # 元数据中覆盖此值。在这里硬编码 OIDC scope 会破坏许多
+        # 元数据中覆盖此值。在这里硬编码 OIDC 权限范围 会破坏许多
         # 非 OpenID provider 的 MCP 服务器。
         scope=None,
         token_endpoint_auth_method="none",

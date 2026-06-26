@@ -63,7 +63,7 @@ TOKEN_TTL = 60 * 60 * 24 * 7  # 7 days
 # synthetic-owner set the rest of the codebase already special-cases (see
 # `_SYNTHETIC_OWNERS` in routes/assistant_routes.py and the matching guards in
 # src/task_scheduler.py / routes/research_routes.py) — a real account with one
-# of those names would be denied an assistant and inconsistently owner-scoped.
+# of those names would be denied an assistant and inconsistently owner-权限范围d.
 # Refuse to create or rename into any of them so the sentinels can't be
 # impersonated. (Keep this in sync with that synthetic-owner set.)
 RESERVED_USERNAMES = frozenset({INTERNAL_TOOL_USER, "api", "demo", "system"})
@@ -124,7 +124,7 @@ class AuthManager:
                 with open(self.auth_path, "r", encoding="utf-8") as f:
                     self._config = json.load(f)
                 # Normalize all stored usernames to lowercase so they match
-                # the .strip().lower() applied at login/verify time. Fixes
+                # the .strip().lower() applied at login/验证 time. Fixes
                 # "Invalid credentials" when auth.json was written with
                 # mixed-case keys (e.g. via manual edit or a future migration).
                 if "users" in self._config:
@@ -303,11 +303,11 @@ class AuthManager:
                 return False
             if not self.users.get(requesting_user, {}).get("is_admin"):
                 return False
-            # Revoke API bearer tokens before removing the auth row. The bearer
+            # Revoke API Bearer 令牌s before removing the auth row. The bearer
             # path authenticates from ApiToken rows and does not require the
             # owner to still exist, so a successful delete must not leave active
             # rows behind. If the token store is unavailable, fail closed and
-            # keep the user/session state intact so the admin can retry.
+            # keep the user/session state intact so the admin can 重试.
             try:
                 from core.database import get_db_session, ApiToken
                 with get_db_session() as db:
@@ -385,7 +385,7 @@ class AuthManager:
         user = self.users.get(username, {})
         if user.get("is_admin"):
             return dict(ADMIN_PRIVILEGES)
-        # Merge stored privileges with defaults (in case new privileges were added)
+        # 合并 stored privileges with defaults (in case new privileges were added)
         stored = user.get("privileges", {})
         return {**DEFAULT_PRIVILEGES, **stored}
 
@@ -521,7 +521,7 @@ class AuthManager:
             self._config["users"][username]["totp_secret"] = secret
             self._config["users"][username]["totp_enabled"] = True
             self._config["users"][username].pop("totp_secret_pending", None)
-            # Generate backup codes
+            # 生成 backup codes
             backup = [secrets.token_hex(4) for _ in range(8)]
             self._config["users"][username]["totp_backup_codes"] = backup
             self._save()
@@ -540,7 +540,7 @@ class AuthManager:
             # auth.json). Fail closed — returning True here bypassed the second
             # factor entirely.
             return False
-        # Check backup codes first
+        # 检查 backup codes first
         backup = user.get("totp_backup_codes", [])
         if code in backup:
             with self._config_lock:

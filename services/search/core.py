@@ -112,7 +112,7 @@ def _call_provider(provider_name: str, query: str, count: int, time_filter: str 
 
 # 如果自托管 SearXNG 实例已启动但所有启用的引擎返回空结果，
 # 回退到免密钥服务商，确保初次安装时 "search X" 仍然可用。
-# 用户可通过 `search_fallback_chain` 覆盖/禁用。
+# 用户可通过 `search_回退_chain` 覆盖/禁用。
 _FALLBACK_ORDER = ["duckduckgo"]
 
 

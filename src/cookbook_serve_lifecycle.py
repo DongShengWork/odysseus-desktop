@@ -41,7 +41,7 @@ async def _delete_endpoint_for_task(task: dict) -> None:
     payload = task.get("payload") or {}
     cmd = str(payload.get("_cmd") or "")
     remote = task.get("remoteHost") or ""
-    # Build host the same way _auto_register_llm_endpoint does so URL match wins.
+    # 构建 host the same way _auto_register_llm_endpoint does so URL match wins.
     if remote:
         host = remote.split("@")[-1] if "@" in remote else remote
     else:

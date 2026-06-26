@@ -219,9 +219,9 @@ def _ensure_default_calendar(db, owner: str = None) -> CalendarCal:
     return cal
 
 
-# Per-request user time context. chat_routes sets this from browser timezone
+# Per-request user time context. chat_routes sets this from browser 时区
 # headers so natural-language times the LLM emits ("today at 9pm") are parsed
-# in the user's timezone, not the server's clock. None = unknown, fall back to
+# in the user's 时区, not the server's clock. None = unknown, fall back to
 # legacy server-local behavior.
 from src.user_time import (
     get_user_tz_name,
@@ -336,7 +336,7 @@ def parse_due_for_user(s: str) -> str:
             parsed2 = parsed2.replace(tzinfo=user_tz)
         return parsed2.isoformat()
     except Exception:
-        # Final fallback: legacy parser, naive.
+        # Final 回退: legacy parser, naive.
         return _parse_dt(s).isoformat()
 
 
@@ -554,7 +554,7 @@ def _expand_rrule(
         # 导出器（Google/Apple/Outlook/Fastmail）将边界写为绝对 UTC 值，
         # 例如 UNTIL=20240105T090000Z。dateutil 拒绝混合时区感知的 UNTIL 和朴素的 DTSTART
         # mix a tz-aware UNTIL with a naive DTSTART ("RRULE UNTIL values must be
-        # （"RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware"），
+        # （"RRULE UNTIL values must be specified in UTC when DTSTART is 时区-aware"），
         # below would silently collapse the whole series to a single event.
         # 移除尾部的 Z 使 UNTIL 匹配朴素 DTSTART。
         import re as _re
@@ -990,7 +990,7 @@ def setup_calendar_routes() -> APIRouter:
             for e in events:
                 expanded.extend(_expand_rrule(e, start_dt, end_dt))
 
-            # Sort by occurrence start time for consistent frontend ordering.
+            # 排序 by occurrence 开始时间 for consistent 前端 ordering.
             truncated = any(e.get("truncated") for e in expanded)
             expanded.sort(key=lambda d: d["dtstart"])
             response: dict = {"events": expanded}
@@ -1267,12 +1267,12 @@ def setup_calendar_routes() -> APIRouter:
 
                 dt_val = dtstart.dt
                 all_day = isinstance(dt_val, date) and not isinstance(dt_val, datetime)
-                # For timed events, preserve the source timezone by converting
+                # For timed events, preserve the source 时区 by converting
                 # to UTC before stripping tzinfo (DB stores naive). We mark
                 # is_utc=True，以便序列化器在输出时添加 Z
-                # suffix on output — without this, the frontend would parse
+                # suffix on output — without this, the 前端 would parse
                 # the naive ISO as the user's CURRENT local, which is exactly
-                # the bug where imported events fire reminders at wrong times.
+                # the bug where imported events fire 提醒s at wrong times.
                 from datetime import timezone as _tz
                 row_is_utc = False
                 if all_day:
@@ -1484,7 +1484,7 @@ def setup_calendar_routes() -> APIRouter:
         summary = (parsed.get("summary") or text)[:200]
         # Strip stale relative/absolute time tokens that the LLM (or the
         # user's raw input) sometimes leaks into the summary — these
-        # would otherwise be displayed verbatim in reminder notifications
+        # would otherwise be displayed verbatim in 提醒 通知s
         # that fire much later, when "in 29 min" is no longer true. The
         # 实际时间信息存储在 dtstart/dtend 中。
         summary = _re.sub(r'\bin\s+\d+\s*(min|minute|hour|hr|day)s?\b', '', summary, flags=_re.IGNORECASE)
@@ -1496,7 +1496,7 @@ def setup_calendar_routes() -> APIRouter:
         dtstart = (parsed.get("dtstart") or "").strip()
         dtend   = (parsed.get("dtend") or "").strip()
         # Force naive-local on LLM output. The model is anchored on the
-        # user's local "now" via the system prompt, so its emitted
+        # user's local "now" via the 系统提示, so its emitted
         # datetime is already meant to be the user's wall-clock time.
         # Some models append `Z` or a tz offset anyway, which would
         # 这会使 `_parse_dt_pair` 将行标记为 UTC 并将

@@ -27,7 +27,7 @@ class APIKeyManager:
             key = Fernet.generate_key()
             with open(self.key_file, 'wb') as f:
                 f.write(key)
-            # This key decrypts every stored provider credential, so restrict it
+            # This key 解密s every stored provider credential, so restrict it
             # to the owner (0o600) — it must not be group/world-readable. No-op
             # on Windows (files there are ACL-restricted to the user already).
             safe_chmod(self.key_file, 0o600)

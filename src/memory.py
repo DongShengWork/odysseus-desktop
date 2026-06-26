@@ -61,7 +61,7 @@ class MemoryManager:
                     line = line.strip()
                     # 查找可能包含记忆的列表项或编号列表
                     if re.match(r'^[-*•]|\d+\.', line):
-                        # Extract the text after the bullet/number. Group both
+                        # 提取 the text after the bullet/number. Group both
                         # markers so the capture applies to either — the previous
                         # 使捕获适用于任一情况 — 之前的 `^[-*•]|\d+\.\s*(.*)`
                         # group(1)=None 并在 .strip() 时崩溃。

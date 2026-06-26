@@ -68,7 +68,7 @@ def synthesis_system_prompt(persona_id: str) -> str:
     persona_prompt = PERSONAS.get(persona)
     if persona_prompt:
         # Persona drives the voice; the synthesis-instruction stays attached
-        # so the model knows it's writing a short reminder, not a chat reply.
+        # so the model knows it's writing a short 提醒, not a chat reply.
         return (
             persona_prompt
             + "\n\n"
