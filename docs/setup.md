@@ -1,42 +1,31 @@
-# Odysseus Setup Guide
+# Odysseus 安装指南
 
-This page keeps the detailed install, deployment, troubleshooting, and configuration notes out of the front README.
+本页面将详细的安装、部署、故障排除和配置说明从首页 README 中分离出来。
 
-## Quick Start
+## 快速开始
 
 > **Branch note:** `dev` is the default branch and contains the latest development changes, but it may be unstable. For the more stable curated branch, use [`main`](https://github.com/pewdiepie-archdaemon/odysseus/tree/main).
 
-Defaults work out of the box: clone, run, then configure models/search/email
-inside **Settings**. Only edit `.env` for deployment-level overrides like
-`APP_BIND`, `APP_PORT`, `AUTH_ENABLED`, `DATABASE_URL`, or a pre-seeded admin password.
+默认配置开箱即用：克隆、运行，然后在**设置**中配置模型/搜索/邮件。仅需编辑 `.env` 文件来设置部署级覆盖项，如 `APP_BIND`、`APP_PORT`、`AUTH_ENABLED`、`DATABASE_URL` 或预置管理员密码。
 
-On first setup, Odysseus creates an admin account (`admin` unless
-`ODYSSEUS_ADMIN_USER` is set) and prints a temporary password in the terminal.
-For Docker installs, the same line is in `docker compose logs odysseus`.
-Use that for the first login, then change it in **Settings**.
+首次安装时，Odysseus 创建管理员账户（默认为 `admin`，除非设置了 `ODYSSEUS_ADMIN_USER`），并在终端打印临时密码。使用 Docker 时，相同信息位于 `docker compose logs odysseus` 中。用该密码首次登录后，在**设置**中修改密码。
 
-Contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and
-pull request guidelines.
+参与贡献？详见 [CONTRIBUTING.md](CONTRIBUTING.md) 获取开发环境、测试和 PR 指南。
 
-### Docker (recommended)
+### Docker（推荐）
 ```bash
 git clone https://github.com/pewdiepie-archdaemon/odysseus.git
 cd odysseus
 cp .env.example .env       # optional, but recommended for explicit defaults
 docker compose up -d --build
 ```
-To include optional extras in the image (PDF viewer, Office extraction; includes AGPL PyMuPDF), build with `docker compose build --build-arg INSTALL_OPTIONAL=true` before `up`.
+如需在镜像中包含可选功能（PDF 查看器、Office 文档提取，含 AGPL 协议的 PyMuPDF），在 `up` 之前构建时添加 `docker compose build --build-arg INSTALL_OPTIONAL=true`。
 
-Open `http://localhost:7000` when the containers are healthy. Docker Compose
-binds the web UI to `127.0.0.1` by default. If the port is taken, set
-`APP_PORT=7001` in `.env` and recreate the container. Set `APP_BIND=0.0.0.0`
-only when you intentionally want LAN/reverse-proxy access.
+容器健康启动后，打开 `http://localhost:7000`。Docker Compose 默认将 Web 界面绑定到 `127.0.0.1`。如果端口被占用，在 `.env` 中设置 `APP_PORT=7001` 并重建容器。仅在确需 LAN/反向代理访问时才设置 `APP_BIND=0.0.0.0`。
 
-> **On Apple Silicon (M-series) Macs:** Docker can't reach the Metal GPU, so
-> Cookbook serves local models on CPU only. For GPU-accelerated model serving,
-> run natively instead — see [Apple Silicon](#apple-silicon) below.
+> **Apple Silicon（M 系列）Mac 注意：** Docker 无法访问 Metal GPU，因此 Cookbook 仅在 CPU 上运行本地模型。要使用 GPU 加速，请原生运行 — 见下方 [Apple Silicon](#apple-silicon) 章节。
 
-### Native Linux / macOS
+### 原生 Linux / macOS
 ```bash
 git clone https://github.com/pewdiepie-archdaemon/odysseus.git
 cd odysseus
@@ -46,14 +35,10 @@ pip install -r requirements.txt
 python setup.py
 python -m uvicorn app:app --host 127.0.0.1 --port 7000
 ```
-Requirements: Python 3.11+. Cookbook also needs `tmux` for background model
-downloads and serves. The app itself is lightweight; local model serving is the
-heavy part and depends on the model, runtime, GPU, and VRAM, so small hosts can
-connect to API or remote model servers instead. Use `--host 0.0.0.0` only when you intentionally want LAN/reverse-proxy access.
+环境要求：Python 3.11+。Cookbook 还需要 `tmux` 用于后台模型下载和服务。应用本身很轻量；本地模型服务是重负载部分，取决于模型、运行时、GPU 和 VRAM，因此小型主机可改用 API 或远程模型服务器。仅在确需 LAN/反向代理访问时才使用 `--host 0.0.0.0`。
 
 ### Apple Silicon
-Docker on macOS cannot use the Metal GPU. For GPU-accelerated Cookbook on an
-M-series Mac, run Odysseus natively:
+macOS 上的 Docker 无法使用 Metal GPU。要在 M 系列 Mac 上运行 GPU 加速的 Cookbook，请原生运行 Odysseus：
 
 ```bash
 git clone https://github.com/pewdiepie-archdaemon/odysseus.git
@@ -61,142 +46,107 @@ cd odysseus
 ./start-macos.sh
 ```
 
-It launches at `http://127.0.0.1:7860`. To expose it to your phone over a trusted LAN/VPN such as Tailscale, bind all interfaces:
+启动后访问 `http://127.0.0.1:7860`。如需通过受信任的 LAN/VPN（如 Tailscale）在手机上访问，绑定所有接口：
 
 ```bash
 ODYSSEUS_HOST=0.0.0.0 ./start-macos.sh
-# then open http://<tailscale-ip>:7860
+# 然后打开 http://<tailscale-ip>:7860
 ```
 
-The script also reads `.env` at startup, so `APP_BIND=0.0.0.0` and `APP_PORT`
-set there are picked up automatically without a command-line override each run.
+脚本在启动时也会读取 `.env` 文件，因此其中设置的 `APP_BIND=0.0.0.0` 和 `APP_PORT` 会自动生效，无需每次运行时手动指定。
 
-Keep `AUTH_ENABLED=true` (the default) before binding outside loopback. Do not
-expose this port directly to the public internet. To build a clickable app wrapper:
+在绑定到回环以外接口之前，请保持 `AUTH_ENABLED=true`（默认值）。请勿将此端口直接暴露于公网。构建可点击的桌面应用包装器：
 
 ```bash
 ./build-macos-app.sh
 ```
 
 <details>
-<summary>Cookbook, GPU, Ollama, and troubleshooting notes</summary>
+<summary>Cookbook、GPU、Ollama 及故障排除说明</summary>
 
-**Docker bundled services.** Compose starts Odysseus, ChromaDB, SearXNG, and
-ntfy. Odysseus and the bundled service ports bind to `127.0.0.1` by default, so
-they are reachable from the host but not exposed to your LAN/public internet
-unless you opt in.
+**Docker 捆绑服务。** Compose 启动 Odysseus、ChromaDB、SearXNG 和 ntfy。Odysseus 及捆绑服务端口默认绑定到 `127.0.0.1`，从主机可访问但不会暴露到 LAN/公网，除非您主动开启。
 
-**Cookbook storage in Docker.** Downloads live in `./data/huggingface`
-(`~/.cache/huggingface` in the container). Cookbook-installed Python CLIs and
-serve engines live in `./data/local` (`~/.local` in the container), so they
-survive container recreation.
+**Docker 中 Cookbook 的存储。** 下载文件位于 `./data/huggingface`（容器内为 `~/.cache/huggingface`）。Cookbook 安装的 Python CLI 和服务引擎位于 `./data/local`（容器内为 `~/.local`），因此容器重建后数据不会丢失。
 
-**Remote servers.** In **Cookbook -> Settings -> Servers**, generate the
-Odysseus SSH key and add the public key to the remote server's
-`~/.ssh/authorized_keys`. From the host you can also run:
+**远程服务器。** 在 **Cookbook → 设置 → 服务器** 中生成 Odysseus SSH 密钥，将公钥添加到远程服务器的 `~/.ssh/authorized_keys`。也可以在主机上运行以下命令：
 
 ```bash
 ssh-copy-id -i data/ssh/id_ed25519.pub user@server
 ```
 
-**Docker GPU overlays.** CPU-only users can skip this section. Cookbook can
-only detect GPUs that Docker exposes to the container — if the host runtime or
-device passthrough is not configured, Cookbook sees the iGPU, another card, or
-CPU instead of your intended GPU.
+**Docker GPU 叠加配置。** 仅 CPU 用户可跳过此节。Cookbook 只能检测 Docker 暴露给容器的 GPU——如果未配置主机运行时或设备直通，Cookbook 会错误地使用 iGPU、其他显卡或 CPU，而非您期望的 GPU。
 
-For NVIDIA, `scripts/check-docker-gpu.sh` diagnoses GPU passthrough and can
-optionally install the host runtime or update `.env`.
+NVIDIA 用户可运行 `scripts/check-docker-gpu.sh` 诊断 GPU 直通状态，并可选择安装主机运行时或更新 `.env`。
 
 ```bash
-# Read-only diagnostic (default — installs nothing, never edits .env):
+# 只读诊断（默认 — 不安装任何东西，不修改 .env）：
 scripts/check-docker-gpu.sh
 
-# Print OS-specific install commands without running them:
+# 打印系统特定的安装命令（不实际执行）：
 scripts/check-docker-gpu.sh --print-install-commands
 
-# Install NVIDIA Container Toolkit on Ubuntu/Debian (requires sudo):
+# 在 Ubuntu/Debian 上安装 NVIDIA Container Toolkit（需 sudo）：
 scripts/check-docker-gpu.sh --install-nvidia-toolkit
 
-# Write COMPOSE_FILE to .env (only when GPU passthrough is confirmed working):
+# 将 COMPOSE_FILE 写入 .env（仅在 GPU 直通确认可用时）：
 scripts/check-docker-gpu.sh --enable-nvidia-overlay
 
-# Full assisted setup — install toolkit, then enable overlay if passthrough works:
+# 完整辅助设置 — 安装toolkit，直通可用则启用叠加：
 scripts/check-docker-gpu.sh --install-nvidia-toolkit --enable-nvidia-overlay
 ```
 
-Safety notes:
-- The app never installs host GPU runtime automatically.
-- The app never edits `.env` automatically.
-- `.env` is only modified when `--enable-nvidia-overlay` is explicitly passed,
-  and only after GPU passthrough succeeds. `--yes` skips prompts but does not
-  bypass the passthrough gate.
-- `.env.bak.*` backups created by `--enable-nvidia-overlay` are ignored by
-  Git and the Docker build context.
+安全说明：
+- 应用绝不会自动安装主机 GPU 运行时。
+- 应用绝不会自动编辑 `.env`。
+- 仅当显式传入 `--enable-nvidia-overlay` 且 GPU 直通成功时才修改 `.env`。`--yes` 跳过提示但不会绕过直通检查。
+- `--enable-nvidia-overlay` 创建的 `.env.bak.*` 备份文件会被 Git 和 Docker 构建上下文忽略。
 
-To enable manually without the script, add this to `.env`:
+不使用脚本手动启用的方法，在 `.env` 中添加：
 
 ```bash
 COMPOSE_FILE=docker-compose.yml:docker/gpu.nvidia.yml
 ```
 
-**AMD / ROCm.** AMD setup is read-only diagnostic plus manual `.env` edit. Run:
+**AMD / ROCm。** AMD 配置为只读诊断加手动编辑 `.env`。运行：
 
 ```bash
 scripts/check-docker-amd-gpu.sh
 ```
 
-Then add the reported values to `.env`, replacing `RENDER_GID` with your host's
-numeric render group id:
+然后将报告的值添加到 `.env`，将 `RENDER_GID` 替换为主机上的数字渲染组 ID：
 
 ```bash
 COMPOSE_FILE=docker-compose.yml:docker/gpu.amd.yml
 RENDER_GID=989
 ```
 
-For NVIDIA/AMD GPU support, also read the comments in the selected overlay file: docker/gpu.nvidia.yml or docker/gpu.amd.yml.
+关于 NVIDIA/AMD GPU 支持，请同时阅读所选叠加文件中的注释：docker/gpu.nvidia.yml 或 docker/gpu.amd.yml。
 
-**Stack-management UIs (Portainer, Coolify, Dockhand, etc.).** These tools
-often accept only a single Compose file and do not reliably honor `COMPOSE_FILE`
-or multiple `-f` overlays. CLI users should keep using the `COMPOSE_FILE`
-overlay workflow above. For stack UIs, point the stack at one of the standalone
-files instead, which bundle the base stack plus the GPU settings:
+**容器管理界面（Portainer、Coolify、Dockhand 等）。** 这些工具通常只接受单个 Compose 文件，且不可靠地遵守 `COMPOSE_FILE` 或多 `-f` 叠加。CLI 用户请继续使用上述 `COMPOSE_FILE` 叠加工作流。对于管理界面，改为指向以下独立文件，它们包含了基础堆栈和 GPU 设置：
 
-- `docker-compose.gpu-nvidia.yml` — still requires the NVIDIA Container Toolkit
-  on the host.
-- `docker-compose.gpu-amd.yml` — still requires host ROCm/kfd/DRI setup, the
-  `video`/`render` group membership, and `RENDER_GID` when needed.
+- `docker-compose.gpu-nvidia.yml` — 仍需要主机安装 NVIDIA Container Toolkit。
+- `docker-compose.gpu-amd.yml` — 仍需要主机 ROCm/kfd/DRI 配置、`video`/`render` 组成员资格及 `RENDER_GID`（按需）。
 
-The base `docker-compose.yml` plus the `docker/gpu.*.yml` overlays remain the
-source of truth; the standalone files mirror them for single-file deployments.
+基础 `docker-compose.yml` 加 `docker/gpu.*.yml` 叠加文件仍是权威来源；独立文件为单文件部署提供镜像。
 
-Verify after enabling either overlay:
+启用任一叠加后验证：
 
 ```bash
 docker compose exec odysseus nvidia-smi -L   # NVIDIA
 docker compose exec odysseus sh -lc 'test -e /dev/kfd && test -d /dev/dri && ls -l /dev/kfd /dev/dri/renderD*'  # AMD
 ```
 
-> **GPU passthrough ≠ llama.cpp CUDA.** `nvidia-smi` passing inside the
-> container confirms Docker GPU access, but llama.cpp also needs `cudart` and
-> the CUDA Toolkit at runtime. If Cookbook logs show `Unable to find cudart
-> library`, `Could NOT find CUDAToolkit`, `CUDA Toolkit not found`, or
-> tensors/layers assigned to CPU, that is a Cookbook/llama.cpp build issue —
-> not a Docker passthrough failure. Reinstall the serve engine via
-> **Cookbook → Dependencies** to get a CUDA-enabled build.
+> **GPU 直通 ≠ llama.cpp CUDA。** 容器内 `nvidia-smi` 正常仅确认了 Docker GPU 访问权，但 llama.cpp 运行时还需要 `cudart` 和 CUDA Toolkit。如果 Cookbook 日志显示 `Unable to find cudart library`、`Could NOT find CUDAToolkit`、`CUDA Toolkit not found` 或张量/层分配给了 CPU，这是 Cookbook/llama.cpp 构建问题——而非 Docker 直通失败。通过 **Cookbook → 依赖** 重新安装服务引擎获取 CUDA 构建版本。
 >
-> The same split applies to AMD/ROCm: seeing `/dev/kfd` and `/dev/dri` inside
-> the container confirms device passthrough, not ROCm userspace or a
-> ROCm-enabled vLLM/llama.cpp build. `rocm-smi` and `rocminfo` are not expected
-> inside the slim Odysseus image.
+> 同样适用于 AMD/ROCm：容器内可见 `/dev/kfd` 和 `/dev/dri` 只确认设备直通，不确认 ROCm 用户空间或 ROCm 编译的 vLLM/llama.cpp。精简的 Odysseus 镜像内不会包含 `rocm-smi` 和 `rocminfo`。
 
-**Ollama with Docker.** If Ollama runs on the host, add this endpoint in
-Settings:
+**Ollama 与 Docker 配合使用。** 如果 Ollama 在主机上运行，在设置中添加以下端点：
 
 ```text
 http://host.docker.internal:11434/v1
 ```
 
-Ollama must listen outside its own loopback interface:
+Ollama 必须监听回环接口以外的地址：
 
 ```bash
 OLLAMA_HOST=0.0.0.0:11434 ollama serve
