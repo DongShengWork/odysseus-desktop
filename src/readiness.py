@@ -1,9 +1,9 @@
-"""Ithaca 锚点 — 本地实例就绪/完整性自检。
+"""Ithaca anchor — local-instance readiness / integrity self-check.
 
-超越 ``/api/health`` 的存活 ping，此检查确认自托管实例是
-完整且就位的：数据库可达，数据目录存在且
-可写，存储为本地优先。由 ``GET /api/ready`` 提供服务，适合
-编排器就绪探针（仅在所有关键检查通过时返回 200）。
+Beyond ``/api/health``'s liveness ping, this confirms the self-hosted instance is
+whole and at home: the database is reachable, the data directory is present and
+writable, and storage is local-first. Served by ``GET /api/ready`` and suitable
+for an orchestrator readiness probe (200 only when every critical check passes).
 """
 
 import os
@@ -13,11 +13,11 @@ from typing import Dict
 
 
 def check_readiness() -> Dict[str, object]:
-    """运行就绪检查并返回可 JSON 序列化的报告。
+    """Run the readiness checks and return a JSON-serialisable report.
 
-    ``ready`` 仅在所有关键检查（database, data_dir）通过时为 True。
-    ``local_first`` 为参考信息 — 远程数据库是有效的部署方式，因此
-    它永远不会导致就绪失败，只报告存储是否保留在本主机上。
+    ``ready`` is True only when every critical check (database, data_dir) passes.
+    ``local_first`` is informational — a remote database is a valid deployment, so
+    it never fails readiness, it only reports whether storage stays on this host.
     """
     from core.constants import APP_VERSION, DATA_DIR
     from core.database import DATABASE_URL, engine
@@ -25,7 +25,7 @@ def check_readiness() -> Dict[str, object]:
 
     checks: Dict[str, Dict[str, object]] = {}
 
-    # 数据库可达 — 最简单的诚实探针，确认引擎在线。
+    # Database reachable — the simplest honest probe that the engine is live.
     try:
         with engine.connect() as conn:
             conn.execute(sql_text("SELECT 1"))
@@ -33,7 +33,7 @@ def check_readiness() -> Dict[str, object]:
     except Exception as e:
         checks["database"] = {"ok": False, "error": str(e)}
 
-    # 数据目录存在且可写 — 家目录必须能持有自己的数据。
+    # Data directory present and writable — home must be able to hold its own data.
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
         probe = os.path.join(DATA_DIR, f".ready_probe_{uuid.uuid4().hex}")
@@ -44,7 +44,7 @@ def check_readiness() -> Dict[str, object]:
     except Exception as e:
         checks["data_dir"] = {"ok": False, "error": str(e)}
 
-    # 本地优先：存储保留在宿主机上（参考信息，永远不会致命）。
+    # Local-first: storage stays on the home machine (informational, never fatal).
     local_first = (
         DATABASE_URL.startswith("sqlite")
         or "localhost" in DATABASE_URL

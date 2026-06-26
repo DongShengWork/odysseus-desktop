@@ -74,7 +74,7 @@ export function initSidebarLayout(Storage, opts) {
     }
   }
 
-  // 设置 initial reference and expose globally
+  // Set initial reference and expose globally
   _syncRailSideFn = _syncRailSideCore;
   window.syncRailSide = syncRailSide;
 
@@ -107,7 +107,7 @@ export function initSidebarLayout(Storage, opts) {
   let _wasAutoCollapsed = false;
 
   // Deliberate "open the sidebar" used by the mobile swipe gesture (wired at
-  // module 权限范围). It MUST set _userToggledSidebar so the auto-collapse
+  // module scope). It MUST set _userToggledSidebar so the auto-collapse
   // MutationObserver doesn't immediately re-hide it (the swipe was opening it,
   // then checkSidebarAutoCollapse re-added .hidden because this flag was unset
   // — looked like nothing happened). Mirrors the hamburger's mobile-open path.
@@ -220,7 +220,7 @@ export function initSidebarLayout(Storage, opts) {
     if (!sidebar) return;
     const isHidden = sidebar.classList.contains('hidden');
 
-    // 检查 if chat area is too narrow (e.g. sidebar + doc panel both open).
+    // Check if chat area is too narrow (e.g. sidebar + doc panel both open).
     // BUT — if a tile-snapped modal exists, IT is what's making chat narrow,
     // and that's the user's explicit choice. Don't auto-collapse the sidebar
     // in response, or we get a reactive loop: snap → narrow chat → hide
@@ -465,13 +465,13 @@ export function initSidebarLayout(Storage, opts) {
     _modalObs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
   }
 
-  // (Mobile swipe-to-open-sidebar is wired at MODULE 权限范围 — see
+  // (Mobile swipe-to-open-sidebar is wired at MODULE scope — see
   // _initChatSwipeToOpenSidebar() at the bottom of this file — so it attaches
   // independently of this init function completing.)
 }
 
 // ── Mobile: swipe horizontally on the splash/chat to open the sidebar ──
-// Wired at MODULE 权限范围 (not inside initSidebarLayout) so a throw anywhere in
+// Wired at MODULE scope (not inside initSidebarLayout) so a throw anywhere in
 // that init can't drop this listener. Bound on `document` so it catches the
 // touch regardless of which child element is under the finger. touchmove is
 // NON-passive and calls preventDefault() once the gesture is locked
@@ -504,7 +504,7 @@ function _initChatSwipeToOpenSidebar() {
     // (body.doc-view), notes is open (body.notes-view), or a tool modal is up.
     if (document.body.classList.contains('doc-view') ||
         document.body.classList.contains('notes-view')) return;
-    // Not while Compare is running — it takes over #chat-容器 with its own
+    // Not while Compare is running — it takes over #chat-container with its own
     // panes/scroll, and the swipe-to-open-sidebar gesture gets in the way there.
     const cc = document.getElementById('chat-container');
     if (cc && cc.classList.contains('compare-active')) return;

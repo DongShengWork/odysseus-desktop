@@ -10,8 +10,8 @@ from starlette.responses import Response
 
 
 # Per-process token that lets the in-app tool layer hit admin-gated
-# routes via HTTP loopback (the agent's 工具调用s don't carry the
-# admin user's session cookie). 设置 once at import; tools read the
+# routes via HTTP loopback (the agent's tool calls don't carry the
+# admin user's session cookie). Set once at import; tools read the
 # same value from this module. Never persisted or exposed externally.
 INTERNAL_TOOL_TOKEN = os.environ.get("ODYSSEUS_INTERNAL_TOKEN") or secrets.token_hex(32)
 INTERNAL_TOOL_HEADER = "X-Odysseus-Internal-Token"
@@ -60,7 +60,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add standard security headers to all responses."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # 生成 a per-request nonce for inline scripts
+        # Generate a per-request nonce for inline scripts
         nonce = secrets.token_hex(16)
         request.state.csp_nonce = nonce
 
@@ -71,7 +71,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         is_tool_render = path.startswith("/api/tools/") and path.endswith("/render")
         # Document library PDF preview endpoint
         is_document_pdf_preview = path.startswith("/api/document/") and path.endswith("/render-pdf")
-        # Visual report pages are self-contained HTML — need inline scripts + external 镜像s
+        # Visual report pages are self-contained HTML — need inline scripts + external images
         is_report = path.startswith("/api/research/report/")
 
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -107,7 +107,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         else:
             response.headers["X-Frame-Options"] = "DENY"
             # NOTE: `style-src 'unsafe-inline'` is intentionally retained.
-            # `static/索引.html` and `static/login.html` ship inline <style>
+            # `static/index.html` and `static/login.html` ship inline <style>
             # blocks, and several JS modules build runtime `style=""` attrs.
             # Migrating to nonce-only requires templating the HTML files +
             # auditing every JS-set style attribute. Since inline styles

@@ -1,11 +1,11 @@
 /**
- * 画布上方各种浮动弹窗的静态标记。
+ * Static markup for misc floating popups that live above the canvas.
  *
- * 全部为纯 DOM。调用者在追加后通过 document.getElementById /
- * el.querySelector 绑定每个 ID。
+ * All pure DOM. Caller wires every ID via document.getElementById /
+ * el.querySelector after appending.
  */
 
-/** 键盘快捷键弹出窗口。 */
+/** Keyboard-shortcuts popover. */
 export function shortcutsPopupHTML() {
   return `
       <div id="ge-shortcuts-handle" style="display:flex;align-items:center;gap:6px;margin:-4px -6px 4px;padding:4px 6px;cursor:grab;user-select:none;touch-action:none;">
@@ -65,8 +65,8 @@ export function shortcutsPopupHTML() {
 
 
 /**
- * 历史记录面板——列出所有撤销条目的侧边栏。
- * @param {string} historyIcon  标题图标的行内 SVG 标记。
+ * History panel — sidebar listing all undo entries.
+ * @param {string} historyIcon  Inline SVG markup for the title icon.
  */
 export function historyPanelHTML(historyIcon) {
   return `

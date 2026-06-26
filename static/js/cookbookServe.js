@@ -894,7 +894,7 @@ function _rerenderCachedModels() {
     });
   }
 
-  // Long-press anywhere on a cached 模型卡片 → click its ⋮ menu, so
+  // Long-press anywhere on a cached model card → click its ⋮ menu, so
   // mobile users don't have to hit the small 3-dot target precisely.
   list.querySelectorAll('.memory-item').forEach(item => {
     const menuBtn = item.querySelector('.hwfit-cached-menu-btn');
@@ -944,7 +944,7 @@ function _rerenderCachedModels() {
       dropdown._anchor = btn;
       btn.classList.add('cookbook-menu-active');
       // Shared close — used by every item, the mobile Cancel, outside-click,
-      // and the Escape arbiter (reas签名ed to the 仓库-aware close below).
+      // and the Escape arbiter (reassigned to the registry-aware close below).
       let closeDropdown = () => { dropdown.remove(); btn.classList.remove('cookbook-menu-active'); };
       const _di = (svg) => `<span class="dropdown-icon">${svg}</span>`;
       const _serveIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
@@ -1088,7 +1088,7 @@ function _rerenderCachedModels() {
       // Serve state schema: { _byRepo: { <repo>: {...} }, _lastUsed: {...} }.
       // Loading priority: this-repo's saved settings → last-used (from any
       // model) as sensible first-run defaults → fall through to code defaults.
-      // Legacy flat state (pre-schema) is also accepted as a last-resort 回退.
+      // Legacy flat state (pre-schema) is also accepted as a last-resort fallback.
       let _allSs = {};
       try { _allSs = JSON.parse(localStorage.getItem(SERVE_STATE_KEY)) || {}; } catch {}
       const _byRepo = (_allSs && typeof _allSs === 'object' && _allSs._byRepo) || {};
@@ -1129,7 +1129,7 @@ function _rerenderCachedModels() {
       const dtypeOpts = ['auto','float16','bfloat16'].map(d => `<option value="${d}"${sv('dtype','auto')===d?' selected':''}>${d}</option>`).join('');
       // KV cache default — most models are fine on auto, but a few
       // (e.g. DeepSeek-V3/V4/R1 MoE) need fp8 explicitly or the launch
-      // OOMs. _detectModelOptimizations 随机种子s opts.kvCacheDtype for
+      // OOMs. _detectModelOptimizations seeds opts.kvCacheDtype for
       // those families; honour it unless the user has a saved override.
       const _kvOptsCheck = _detectModelOptimizations(repo);
       const _kvAutoDefault = (_kvOptsCheck && _kvOptsCheck.kvCacheDtype) || (_isMiniMaxMSeries ? 'fp8' : 'auto');
@@ -1156,18 +1156,18 @@ function _rerenderCachedModels() {
       const _savedModelPath = String(svm('model_path', _defaultServeModel) || '').trim();
       const _modelPathValue = _isMiniMaxM3 && (!_savedModelPath || _savedModelPath === repo) ? _minimaxM3Snapshot : _savedModelPath;
       const _defaultServedModelName = _isMiniMaxM3 ? repo : '';
-      // 构建 save slots
+      // Build save slots
       const _allPresets = _loadPresets();
       const _repoShort = repo.split('/').pop();
       const _modelPresets = _presetsForModel(_allPresets, repo);
       // Saved configs live in a single dropdown (used to be a row of squeezed
       // chips). The toggle shows the count; the menu lists each config (click to
-      // load, × to delete) plus a "保存 current config" row — see _showSavedConfigMenu.
-      // 分割 button: "Save" saves the current config directly; the arrow opens
+      // load, × to delete) plus a "Save current config" row — see _showSavedConfigMenu.
+      // Split button: "Save" saves the current config directly; the arrow opens
       // the dropdown of saved configs (load / delete). Arrow shows the count.
       // The arrow button shows just the saved-config count next to a "▾".
-      // Spell out what the number means in the 提示 so users don't have
-      // to click it to find out the 徽章 isn't a 通知 dot.
+      // Spell out what the number means in the tooltip so users don't have
+      // to click it to find out the badge isn't a notification dot.
       const _arrowLabel = _modelPresets.length > 0 ? `${_modelPresets.length} ▾` : '▾';
       const _arrowTitle = _modelPresets.length > 0
         ? `${_modelPresets.length} saved launch config${_modelPresets.length === 1 ? '' : 's'} for ${_repoShort} — click ▾ to load or delete`
@@ -1184,7 +1184,7 @@ function _rerenderCachedModels() {
       }
       // Runtime-readiness note pinned at the top of the serve area so the
       // user sees "vLLM ready on …" before scrolling into the configure
-      // form. Hidden until the 就绪探测 returns. The × button
+      // form. Hidden until the readiness probe returns. The × button
       // dismisses it for this panel only (re-shows on re-expand).
       panelHtml += `<div class="hwfit-serve-runtime-note" style="display:none;font-size:11px;line-height:1.35;color:var(--fg-muted);margin:0 0 8px;padding:6px 28px 6px 10px;border-radius:5px;background:color-mix(in srgb, var(--fg) 4%, transparent);border:1px solid color-mix(in srgb, var(--border) 60%, transparent);position:relative;"><span class="hwfit-serve-runtime-text"></span><button type="button" class="hwfit-serve-runtime-close" title="Dismiss" aria-label="Dismiss" style="position:absolute;top:-8px;right:5px;background:none;border:0;color:inherit;cursor:pointer;padding:2px 4px;line-height:1;font-size:13px;opacity:0.6;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`;
       // Warn when serving a model whose download hasn't fully completed —
@@ -1201,8 +1201,8 @@ function _rerenderCachedModels() {
       panelHtml += `<div class="hwfit-serve-row">`;
       const backendOpts = _backendChoices.map(([v,l]) => `<option value="${v}"${defaultBackend===v?' selected':''}>${l}</option>`).join('');
       // Custom Backend picker — native <select> can't host SVG inside
-      // options, so we render a button + menu that show the 后端 logo
-      // beside its name. The hidden <select.hwfit-sf data-field="后端">
+      // options, so we render a button + menu that show the backend logo
+      // beside its name. The hidden <select.hwfit-sf data-field="backend">
       // stays as the source-of-truth so every existing change handler
       // (updateBackendVisibility, runtime readiness, command builder)
       // still fires via dispatchEvent('change') on selection.
@@ -1210,16 +1210,16 @@ function _rerenderCachedModels() {
       panelHtml += `<input type="hidden" class="hwfit-sf" data-field="host" value="${esc(_es.remoteHost || '')}" />`;
       // Inference mode pill (llama.cpp only) — lives directly to the
       // RIGHT of Backend in Row 1 so the engine and the GPU/CPU choice
-      // are read together. .hwfit-后端-llamacpp visibility class
+      // are read together. .hwfit-backend-llamacpp visibility class
       // hides it when the user switches to vLLM/SGLang/Ollama.
       {
         // Default CPU — works on every host without GPU/wheel matching
         // hassle. User picks GPU explicitly if they have the right setup
-        // (avoids "click Launch → silent CPU 回退 because the wheel
+        // (avoids "click Launch → silent CPU fallback because the wheel
         // is CPU-only" surprises that ate hours of debugging).
         // Layout: CPU on left, GPU on right → mode-right triggers when
         // GPU is selected so the sliding pill animates rightward.
-        // Default to GPU mode when hwfit detected a GPU 后端 on the
+        // Default to GPU mode when hwfit detected a GPU backend on the
         // current target — CPU as a global default sent the user down a
         // 35GB-model-on-CPU rabbit hole (-ngl 0, no flash-attn, no GPU
         // offload). Falls back to CPU only when hwfit detected no GPU
@@ -1266,7 +1266,7 @@ function _rerenderCachedModels() {
       }
       // Row 2: Core settings — the handful you actually touch every launch.
       // TP / Context / GPU / GPU Mem / Max Seqs / Dtype. Everything else
-      // (Swap, KV Cache, Attention 后端, Env vars, llama.cpp batch/ubatch)
+      // (Swap, KV Cache, Attention backend, Env vars, llama.cpp batch/ubatch)
       // moved to the Advanced fold below to keep this row scannable.
       panelHtml += `<div class="hwfit-serve-row hwfit-serve-row-core hwfit-backend-vllm hwfit-backend-sglang hwfit-backend-llamacpp hwfit-backend-ollama">`;
       // Order: Dtype → TP → Context → Max Seqs → GPUs → GPU Mem.
@@ -1303,7 +1303,7 @@ function _rerenderCachedModels() {
       panelHtml += `<label class="hwfit-backend-vllm" style="grid-column:1 / -1;">${_l('Served Name','vLLM --served-model-name. Keeps the OpenAI model id stable when serving from a local snapshot path.')}<input type="text" class="hwfit-sf" data-field="served_model_name" value="${esc(svm('served_model_name', _defaultServedModelName))}" placeholder="${esc(repo)}" style="width:100%;" /></label>`;
       panelHtml += `<label class="hwfit-backend-vllm" style="grid-column:1 / -1;">${_l('Model Path','Argument passed after `vllm serve`. MiniMax M3 auto-fills the cached snapshot path because the nightly runtime needs the local repo files.')}<input type="text" class="hwfit-sf" data-field="model_path" value="${esc(_modelPathValue)}" placeholder="${esc(repo)}" style="width:100%;" /></label>`;
       panelHtml += `<label class="hwfit-backend-vllm">${_l('KV Cache','vLLM --kv-cache-dtype. auto uses the model/runtime default; fp8 reduces KV memory for long context.')}<select class="hwfit-sf" data-field="vllm_kv_cache_dtype" style="height:32px;">${vllmKvCacheOpts}</select></label>`;
-      // Attention 后端 selector — pin the kernel impl. Default `auto` lets
+      // Attention backend selector — pin the kernel impl. Default `auto` lets
       // vLLM pick FlashInfer (which JITs on first use and breaks on older
       // system nvcc) → FlashAttention → xformers. Forcing FLASH_ATTN skips
       // the JIT entirely, fixing the `nvcc fatal: Unsupported gpu
@@ -1333,7 +1333,7 @@ function _rerenderCachedModels() {
       // already exported so they expand correctly here.
       // grid-column: 1 / -1 makes Env span every column of the Advanced
       // row's CSS grid (the old flex:1 1 100% did nothing in a grid
-      // 容器 — left an empty trailing column gap on wide modals).
+      // container — left an empty trailing column gap on wide modals).
       panelHtml += `<label class="hwfit-backend-vllm hwfit-backend-sglang" style="grid-column:2 / -1;">${_l('Env','Extra KEY=VALUE env-var pairs prepended to the launch (space-separated). The Env Preset above covers the usual MiniMax M3 values; use this for additional overrides.')}<input type="text" class="hwfit-sf" data-field="extra_env" value="${esc(svm('extra_env', sv('extra_env','')))}" placeholder="NCCL_P2P_DISABLE=1" style="width:100%;" /></label>`;
       panelHtml += `</div>`;
       // Row 2b: Diffusers settings
@@ -1452,7 +1452,7 @@ function _rerenderCachedModels() {
       panelHtml += `<label>Harmonize GPU${_h('Separate GPU for img2img/harmonize. Leave empty to use same GPU')}<input type="text" class="hwfit-sf" data-field="diff_harmonize_gpu" value="${esc(sv('diff_harmonize_gpu', ''))}" placeholder="auto" style="width:50px;" /></label>`;
       panelHtml += `</div>`;
       // Model-specific optimizations. The checks row always renders for the
-      // vLLM 后端 so the Speculative (MTP) control is ALWAYS reachable —
+      // vLLM backend so the Speculative (MTP) control is ALWAYS reachable —
       // even for models the auto-detector doesn't recognize. Expert-parallel,
       // reasoning-parser and MoE-env still only appear when auto-detected.
       // Expert Parallel / Speculative / MoE Env moved into Row 3 above so
@@ -1487,7 +1487,7 @@ function _rerenderCachedModels() {
       panelHtml += `<span class="hwfit-serve-launch-group">`;
       panelHtml += `<button class="cookbook-btn hwfit-serve-launch"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;flex-shrink:0;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Launch</button>`;
       // Chevron points DOWN because the schedule form opens beneath the
-      // panel — the arrow 签名als the direction of motion, not menu state.
+      // panel — the arrow signals the direction of motion, not menu state.
       panelHtml += `<button class="cookbook-btn hwfit-serve-schedule-arrow" type="button" aria-haspopup="menu" aria-label="More launch actions" title="More launch actions"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`;
       panelHtml += `</span>`;
       panelHtml += `</div>`;
@@ -1500,7 +1500,7 @@ function _rerenderCachedModels() {
       const panel = item.querySelector('.hwfit-serve-panel');
       // Scroll the serve panel into view within its nearest scrollable ancestor
       requestAnimationFrame(() => panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
-      // Firefox-mobile 回退: the CSS that grows the cached-list and
+      // Firefox-mobile fallback: the CSS that grows the cached-list and
       // expanded card uses :has(.doclib-card-expanded), which Firefox
       // mobile doesn't support — so the panel stays collapsed and the
       // form is unusable. Pin explicit px heights here. On Chromium/
@@ -1516,7 +1516,7 @@ function _rerenderCachedModels() {
         } catch {}
       });
 
-      // 构建 command preview
+      // Build command preview
       function updateCmd() {
         const f = {};
         panel.querySelectorAll('.hwfit-sf').forEach(el => {
@@ -1543,7 +1543,7 @@ function _rerenderCachedModels() {
             ? `$({ find ${_ldir} -name '*-00001-of-*.gguf' 2>/dev/null | sort; find ${_ldir} -name '*.gguf' 2>/dev/null | sort; } | head -1)`
             : `$({ find ${dir} -name '*-00001-of-*.gguf' 2>/dev/null | sort; find ${dir} -name '*.gguf' 2>/dev/null | sort; } | head -1)`;
           // Vision: auto-find the mmproj (CLIP/projector) file in the same dir.
-          // 解析d at runtime so the toggle just works if an mmproj-*.gguf is
+          // Resolved at runtime so the toggle just works if an mmproj-*.gguf is
           // present (downloaded alongside the model). Empty if none → cmd omits it.
           const _vsearchdir = (m.is_local_dir && m.path) ? _ldir : dir;
           f._mmproj_path = `$(find ${_vsearchdir} -iname 'mmproj*.gguf' 2>/dev/null | sort | head -1)`;
@@ -1809,7 +1809,7 @@ function _rerenderCachedModels() {
       };
 
       // ── Custom Backend picker wiring ────────────────────────────────
-      // Reads the option list from the hidden <select.hwfit-后端-source>
+      // Reads the option list from the hidden <select.hwfit-backend-source>
       // so the canonical (value, label) pairs come from one place.
       const _backendPicker = panel.querySelector('[data-backend-picker]');
       const _backendSource = panel.querySelector('.hwfit-backend-source');
@@ -1886,11 +1886,11 @@ function _rerenderCachedModels() {
       function updateBackendVisibility() {
         const b = panel.querySelector('[data-field="backend"]')?.value || 'vllm';
         panel.querySelectorAll('[class*="hwfit-backend-"]').forEach(el => {
-          // Skip the entire 后端-picker subtree — the picker's own
-          // classes (`hwfit-后端-picker`, `-btn`, `-menu`, `-item`,
+          // Skip the entire backend-picker subtree — the picker's own
+          // classes (`hwfit-backend-picker`, `-btn`, `-menu`, `-item`,
           // `-btn-icon`, `-btn-label`, `-item-icon`, `-item-label`) all
           // match the wildcard and would get hidden as if they were
-          // "后端-specific form sections", which left the dropdown
+          // "backend-specific form sections", which left the dropdown
           // looking empty / collapsed.
           if (el.closest('.hwfit-backend-picker')) return;
           const show = el.classList.contains(`hwfit-backend-${b}`);
@@ -1952,7 +1952,7 @@ function _rerenderCachedModels() {
             note.style.borderColor = 'color-mix(in srgb, var(--red) 40%, transparent)';
             note.style.background = 'color-mix(in srgb, var(--red) 8%, transparent)';
             // Append an accent-color link straight to the Dependencies
-            // recipe panel for this 后端 so the user has one click
+            // recipe panel for this backend so the user has one click
             // to the fix instead of hunting for the right row.
             if (noteText) {
               const pkgName = pkg?.name || ({ vllm: 'vllm', sglang: 'sglang', llamacpp: 'llama_cpp', diffusers: 'diffusers' }[backend]);
@@ -1996,7 +1996,7 @@ function _rerenderCachedModels() {
         if (!p) return;
         const cmd = p.cmd || '';
         // Hoisted so the GPU/venv restore below can use it in BOTH branches —
-        // it used to be 权限范围d to the else branch, throwing a ReferenceError when
+        // it used to be scoped to the else branch, throwing a ReferenceError when
         // a preset had saved fields (which aborted GPU + env restoration).
         const _ex = (re) => { const m = cmd.match(re); return m ? m[1] : ''; };
         // Prefer saved field values; fall back to regex parsing of command string
@@ -2102,7 +2102,7 @@ function _rerenderCachedModels() {
         panel.querySelector(`.cookbook-slot-btn[data-slot="${slotIdx}"]`)?.classList.add('active');
       }
 
-      // Keep the arrow button's count + 提示 in sync with stored presets.
+      // Keep the arrow button's count + tooltip in sync with stored presets.
       function _updateSavedToggleLabel() {
         const n = _presetsForModel(_loadPresets(), repo).length;
         const t = panel.querySelector('.cookbook-saved-arrow');
@@ -2113,8 +2113,8 @@ function _rerenderCachedModels() {
           : `No saved launch configs for ${_repoShort} yet — click Save to add one`;
       }
 
-      // 保存 the current panel fields as a new named preset (shared by the menu's
-      // "保存 current config" row). 返回 true if a config was actually saved.
+      // Save the current panel fields as a new named preset (shared by the menu's
+      // "Save current config" row). Returns true if a config was actually saved.
       async function _saveCurrentConfig() {
         const presets = _loadPresets();
         const modelSlots = _presetsForModel(presets, repo);
@@ -2428,7 +2428,7 @@ function _rerenderCachedModels() {
             }
             menu.style.top = top + 'px';
           }
-          // Close on outside click or Escape (via the 仓库); also dismiss
+          // Close on outside click or Escape (via the registry); also dismiss
           // on scroll since the popup is fixed-positioned to the arrow.
           const _scrollClose = () => closeMenu();
           closeMenu = bindMenuDismiss(menu, () => { menu.remove(); window.removeEventListener('scroll', _scrollClose, true); }, (e) => !menu.contains(e.target) && e.target !== _splitArrow);
@@ -2589,7 +2589,7 @@ function _rerenderCachedModels() {
           panel._gpuProbe.host = remoteHost;
           // If the probe found more GPUs than the panel originally
           // rendered (e.g. host switched from a 1-iGPU local box to an
-          // 8-GPU remote), append buttons for the missing 索引es so the
+          // 8-GPU remote), append buttons for the missing indexes so the
           // user can actually toggle them. Reuse the parent <div> from
           // the first existing button as the insertion target.
           try {
@@ -2606,7 +2606,7 @@ function _rerenderCachedModels() {
                 _b.dataset.gpu = String(g.index);
                 _b.textContent = String(g.index);
                 _grp.appendChild(_b);
-                // Re-wire the 点击处理器 the same way the panel did
+                // Re-wire the click handler the same way the panel did
                 // on first render. Toggles active + rewrites the hidden
                 // gpus input from the live set of active buttons.
                 _b.addEventListener('click', () => {
@@ -2748,7 +2748,7 @@ function _rerenderCachedModels() {
         });
       }
 
-      // 更新 preview on input change
+      // Update preview on input change
       panel.querySelectorAll('.hwfit-sf').forEach(el => {
         el.addEventListener('input', updateCmd);
         el.addEventListener('change', (e) => {
@@ -2797,7 +2797,7 @@ function _rerenderCachedModels() {
               unified.dispatchEvent(new Event('change', { bubbles: true }));
             }
             // Hide every GPU-only control (chiclets, Tensor Split,
-            // 分割 Mode, Main GPU, Flash Attn, etc.)
+            // Split Mode, Main GPU, Flash Attn, etc.)
             // in CPU mode — `-ngl 0` ignores them and showing them
             // implies they matter.
             panel.classList.toggle('cookbook-llama-cpu-mode', want === 'cpu');
@@ -2887,9 +2887,9 @@ function _rerenderCachedModels() {
       // Launch button
       panel.querySelector('.hwfit-serve-launch').addEventListener('click', async (ev) => {
         const _launchBtn = ev.currentTarget;
-        // Immediate visual feedback. The GPU probe + 后端-warning prompt
+        // Immediate visual feedback. The GPU probe + backend-warning prompt
         // below can take ~1-2s before the task UI shows up, leaving the
-        // button looking dead. Drop in the same whirlpool 加载指示器 the rest of
+        // button looking dead. Drop in the same whirlpool spinner the rest of
         // the cookbook uses (Probe GPUs, dependency installs, etc.) right
         // away; restored on any early-return / failure path below.
         const _origBtnHtml = _launchBtn.innerHTML;
@@ -2924,7 +2924,7 @@ function _rerenderCachedModels() {
         if (!_cmdManuallyEdited) _clampCtx(true);
         if (!_cmdManuallyEdited) updateCmd();
         // Pasted commands often carry hidden newlines / CRs / tabs from copies
-        // out of 模型卡片s or wrapped help text. The 后端 cmd allowlist
+        // out of model cards or wrapped help text. The backend cmd allowlist
         // rejects \n / \r outright (`Invalid characters in cmd`), so collapse
         // all whitespace to single spaces before launch — same effect as the
         // user manually re-flowing the textarea, no behavior change.
@@ -2964,8 +2964,8 @@ function _rerenderCachedModels() {
               { title: 'Server already running', confirmText: 'Stop & launch', cancelText: 'Cancel' },
             );
             if (!_ok) { _restoreLaunchBtn(); return; }
-            // Kill each active serve; prefer the rendered 停止 button so
-            // endpoint 清理 + Ollama unload run normally. Fall back to
+            // Kill each active serve; prefer the rendered Stop button so
+            // endpoint cleanup + Ollama unload run normally. Fall back to
             // a raw tmux kill when the Active tab isn't in the DOM.
             for (const t of _active) {
               try {
@@ -2997,7 +2997,7 @@ function _rerenderCachedModels() {
           });
           return;
         }
-        // llama.cpp VRAM-fit preflight. Catches the silent-CPU-回退
+        // llama.cpp VRAM-fit preflight. Catches the silent-CPU-fallback
         // trap: when the model + KV cache exceed the selected GPUs' free
         // VRAM, llama-cpp-python doesn't error — it pushes layers/KV to
         // CPU and inference crawls at sub-1 tok/s. Off by default; can
@@ -3020,7 +3020,7 @@ function _rerenderCachedModels() {
             const _needGb = _modelGb + _kvGb;
             const _selStr = (serveState.gpus || '').trim();
             const _selIdx = _selStr ? _selStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n)) : [0];
-            // 获取 FRESH GPU data per-launch — the hwfit cache may be
+            // Fetch FRESH GPU data per-launch — the hwfit cache may be
             // stale or for a different host (e.g. user switched server
             // picker without scanning), which used to silently skip the
             // preflight and let the launch silently fall to CPU.
@@ -3066,7 +3066,7 @@ function _rerenderCachedModels() {
               const _recCtxRaw = Math.floor((_selFreeGb - _modelGb) / _kvGbPerToken);
               const _recCtx = Math.max(1024, Math.floor(_recCtxRaw / 1024) * 1024);
               // Custom modal — styledConfirm only takes 2 buttons; this
-              // surface needs up to 4 actions (Reduce / 添加 GPUs / Allow / Cancel).
+              // surface needs up to 4 actions (Reduce / Add GPUs / Allow / Cancel).
               const _action = await new Promise(resolve => {
                 const ov = document.createElement('div');
                 ov.className = 'modal';
@@ -3133,7 +3133,7 @@ function _rerenderCachedModels() {
         }
         // Pre-launch GPU probe — common failure pattern: vLLM/SGLang launched
         // on a host where no GPU is visible (driver missing, $CUDA_VISIBLE_DEVICES
-        // unset, 容器 without --gpus). Catch it BEFORE the user spends
+        // unset, container without --gpus). Catch it BEFORE the user spends
         // minutes watching the task fail.
         const _needsGpu = ['vllm', 'sglang'].includes(serveState.backend)
           || (serveState.backend === 'diffusers');
@@ -3167,7 +3167,7 @@ function _rerenderCachedModels() {
         // "Address already in use" because Ollama owns 11434, or a
         // previous vllm on the same port wasn't killed). The post-mortem
         // "Suggested action: Kill existing vLLM" came AFTER the failed
-        // launch — user wants to know BEFORE clicking Launch. 解析 the
+        // launch — user wants to know BEFORE clicking Launch. Parse the
         // port out of the cmd, ssh-check who owns it on the target host,
         // and offer to abort or proceed.
         try {
@@ -3211,13 +3211,13 @@ function _rerenderCachedModels() {
           // Probe failure — don't block. If the port check can't run we'd
           // rather let the launch try than silently refuse.
         }
-        // 保存 in the { _byRepo, _lastUsed } schema — no legacy flat keys at
+        // Save in the { _byRepo, _lastUsed } schema — no legacy flat keys at
         // the root so per-model state doesn't leak between models.
         // Stamp `_forceBackend: true` so the next open of this model defaults
         // to the launched configuration end-to-end, even when the detector
-        // would have picked a different 后端. Without this flag, the
+        // would have picked a different backend. Without this flag, the
         // `savedMatchesBackend` gate inside sv() throws away every saved
-        // value when the detected 后端 doesn't match — the user opens
+        // value when the detected backend doesn't match — the user opens
         // Serve again and the panel looks like a fresh form despite a
         // known-good prior launch.
         try {
@@ -3234,7 +3234,7 @@ function _rerenderCachedModels() {
         const venvVal = panel.querySelector('[data-field="venv"]')?.value?.trim();
         const gpusVal = panel.querySelector('[data-field="gpus"]')?.value?.trim();
         const origGpus = _envState.gpus;
-        // 解析 the target host from the visible Server dropdown — the reliable
+        // Resolve the target host from the visible Server dropdown — the reliable
         // source. Relying on _envState.remoteHost silently sent serves to Local
         // when that value was stale/empty. Pass it explicitly to the launcher.
         const serveHost = launchTarget.host || '';
@@ -3249,11 +3249,11 @@ function _rerenderCachedModels() {
         else if (_srvEnvPath) { _envState.env = (_srvEnv === 'conda' ? 'conda' : 'venv'); _envState.envPath = _srvEnvPath; }
         if (gpusVal) _envState.gpus = gpusVal;
         // Preflight: launching a GPU engine (llama.cpp / vLLM / SGLang)
-        // against the local-in-容器 target on a host whose hwfit
-        // scan reports no GPU 后端. That falls through to a CPU build
+        // against the local-in-container target on a host whose hwfit
+        // scan reports no GPU backend. That falls through to a CPU build
         // / CPU inference path and is usually NOT what the user wants —
         // they typically have a host-side GPU (AMD/Vulkan, NVIDIA on a
-        // different box) that the 容器 can't see. Surface this so
+        // different box) that the container can't see. Surface this so
         // the user can pick the host as a remote target instead, or
         // confirm they really meant CPU.
         try {
@@ -3298,7 +3298,7 @@ function _rerenderCachedModels() {
       // instead of swapping to text (which would also break the width).
       panel.querySelector('.hwfit-serve-copy').addEventListener('click', (e) => {
         // Without stopPropagation the click bubbles up to the
-        // .doclib-card 点击处理器 that toggles the expand state →
+        // .doclib-card click handler that toggles the expand state →
         // copying collapses the whole serve panel mid-flight.
         e.preventDefault();
         e.stopPropagation();
@@ -3315,9 +3315,9 @@ function _rerenderCachedModels() {
   });
 }
 
-// ── 删除 / 重试 cached model ──
+// ── Delete / retry cached model ──
 
-// 解析 the host the cached list was scanned from, mirroring
+// Resolve the host the cached list was scanned from, mirroring
 // _fetchCachedModels — so a delete targets the SAME machine the model
 // actually lives on, not just the globally-selected serve host.
 function _resolveCacheHost() {
@@ -3347,12 +3347,12 @@ function _resolveCacheHost() {
 
 async function _deleteCachedModel(repo, itemEl, skipConfirm = false, model = null) {
   const m = model || _cachedAllModels.find(x => x.repo_id === repo);
-  // 删除 the EXACT on-disk path the scan reported. Models in a custom
+  // Delete the EXACT on-disk path the scan reported. Models in a custom
   // model dir live at <path>/<repo>; HF-cache models at
   // <path>/models--<org>--<name>. The old code always rm'd the hardcoded
   // ~/.cache/huggingface/hub path, so models in a custom dir were never
   // removed and reappeared on the next scan. m.path is already absolute
-  // (os.path.expanduser ran on the host); only the bare 回退 uses ~.
+  // (os.path.expanduser ran on the host); only the bare fallback uses ~.
   let target;
   if (m && m.is_local_dir && m.path) {
     target = `${m.path}/${repo}`;
@@ -3394,7 +3394,7 @@ async function _deleteCachedModel(repo, itemEl, skipConfirm = false, model = nul
     }
   } else {
     // $HOME expands inside double quotes; ~ would not, so normalize the
-    // 回退. Quoting also handles spaces in custom model-dir paths.
+    // fallback. Quoting also handles spaces in custom model-dir paths.
     const unixTarget = target.startsWith('~') ? target.replace(/^~/, '$HOME') : target;
     if (deleteChoice.mode === 'files') {
       const targets = deleteChoice.files
@@ -3409,7 +3409,7 @@ async function _deleteCachedModel(repo, itemEl, skipConfirm = false, model = nul
     if (host) cmd = _sshCmd(host, cmd, _getPort(host));
   }
   // Deleting a large model (tens/hundreds of GB) can take a while, especially
-  // over SSH — show a whirlpool 加载指示器 on the row so it doesn't look frozen.
+  // over SSH — show a whirlpool spinner on the row so it doesn't look frozen.
   let _wp = null, _prevPos = '';
   if (itemEl) {
     _wp = spinnerModule.createWhirlpool(18);
@@ -3456,7 +3456,7 @@ async function _deleteCachedModel(repo, itemEl, skipConfirm = false, model = nul
   } catch (e) {
     uiModule.showError('Delete failed: ' + (e && e.message ? e.message : e));
   } finally {
-    // Tear down the 加载指示器. On success the row is already gone; on error the
+    // Tear down the spinner. On success the row is already gone; on error the
     // row survives, so restore it (remove overlay, re-enable interaction).
     if (_wp) { try { _wp.destroy(); } catch {} }
     if (itemEl && itemEl.isConnected) {
@@ -3509,14 +3509,14 @@ export async function openServePanelForRepo(repo, fields) {
       try { cur = JSON.parse(localStorage.getItem(SERVE_STATE_KEY)) || {}; } catch {}
       const byRepo = (cur && cur._byRepo && typeof cur._byRepo === 'object') ? cur._byRepo : {};
       // Mirror the launch-time save: stamp _forceBackend so the panel's
-      // sv() helper treats these 随机种子ed fields as authoritative, not as
+      // sv() helper treats these seeded fields as authoritative, not as
       // overridable defaults.
       const _seeded = { ...fields, _forceBackend: true };
       byRepo[repo] = _seeded;
       localStorage.setItem(SERVE_STATE_KEY, JSON.stringify(_redactServeStateForStorage({ _byRepo: byRepo, _lastUsed: _seeded })));
     } catch {}
   }
-  // Switch to the Serve tab (its 点击处理器 triggers _fetchCachedModels).
+  // Switch to the Serve tab (its click handler triggers _fetchCachedModels).
   const serveTab = document.querySelector('.cookbook-tab[data-backend="Serve"]');
   if (serveTab && !serveTab.classList.contains('active')) {
     serveTab.click();
@@ -3526,8 +3526,8 @@ export async function openServePanelForRepo(repo, fields) {
   }
   // Poll for the model's card to render, then expand it. Cached-model
   // fetch is async and we don't get a direct completion hook from the
-  // tab click, so 重试 for a few seconds.
-  // A 模型下载ed to a CUSTOM dir is scanned by its folder name (the short
+  // tab click, so retry for a few seconds.
+  // A model downloaded to a CUSTOM dir is scanned by its folder name (the short
   // name), while the download task carries the full HF repo id — so match by the
   // exact repo OR by the short (last-segment) name, else the card is never found.
   const _short = repo.split('/').pop();
@@ -3561,7 +3561,7 @@ export async function openServePanelForRepo(repo, fields) {
   return false;
 }
 
-// ── 获取 cached models from server ──
+// ── Fetch cached models from server ──
 
 export async function _fetchCachedModels() {
   const list = document.getElementById('hwfit-cached-list');
@@ -3647,7 +3647,7 @@ export async function _fetchCachedModels() {
     _dlWp.destroy();
 
     // CHANGELOG: 'ready' already excludes partial downloads; 
-    // show every complete model regardless of size/后端.
+    // show every complete model regardless of size/backend.
     const ready = data.models.filter(m => m.status === 'ready');
 
     const downloading = data.models.filter(m => m.status === 'downloading');
@@ -3697,7 +3697,7 @@ export async function _fetchCachedModels() {
       }
     }
 
-    // 渲染 tag chips
+    // Render tag chips
     const tagContainer = document.getElementById('serve-tags');
     if (tagContainer) {
       const tagOrder = ['llm', 'image', 'lora', 'embedding', 'tts', 'stt', 'other'];

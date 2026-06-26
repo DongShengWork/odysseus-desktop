@@ -1,20 +1,20 @@
 /**
- * 顶栏接线 — 撤销/重做/历史记录、保存下拉菜单、缩放按钮、
- * 保存/导出/下载/项目、边缘弹出菜单，以及跨下拉菜单
- * 协调（关闭其他菜单 + 全局外部点击关闭）。
+ * Topbar wiring — undo/redo/history, Save dropdown, zoom buttons,
+ * Save/Export/Download/Project, Edge popup, and the cross-dropdown
+ * coordination (close-others + global outside-click).
  *
  *   #ge-undo / #ge-redo / #ge-history-btn
- *   #ge-save-menu-btn + #ge-save-menu  (保存 / 另存为 / 下载 /
- *                                       保存项目 / 加载项目)
+ *   #ge-save-menu-btn + #ge-save-menu  (Save / Save as / Download /
+ *                                       Save project / Load project)
  *   #ge-zoom-out / #ge-zoom-in / #ge-zoom-fit / #ge-zoom-100
  *   #ge-export-gallery / #ge-download
  *   #ge-save-project / #ge-load-project
- *   #ge-edge-menu-btn + #ge-edge-menu (宽度输入 + 羽化 / 删除
- *                                      操作按钮)
+ *   #ge-edge-menu-btn + #ge-edge-menu (Width input + Feather / Delete
+ *                                      action buttons)
  *
- * 下拉菜单协调：每个菜单在打开时会隐藏所有同级菜单
- * (closeOtherTopbarMenus)，并且全局外部点击处理器
- * 在用户点击菜单之外的任何位置时关闭所有打开的菜单。
+ * Dropdown coordination: every menu hides any sibling menu when it
+ * opens (closeOtherTopbarMenus), and a global outside-click handler
+ * closes every open menu if the user clicks anywhere outside.
  *
  * @param {{
  *   undo:                 () => void,
@@ -40,9 +40,9 @@ const TOPBAR_MENU_IDS = ['ge-image-menu', 'ge-filter-menu', 'ge-resize-menu', 'g
 const TOPBAR_TRIGGER_IDS = ['ge-image-menu-btn', 'ge-filter-menu-btn', 'ge-resize-menu-btn', 'ge-save-menu-btn'];
 
 /**
- * 关闭每个顶栏下拉菜单，但保留一个可选的"保持打开"项。
- * 导出此函数，以便其他地方接线的图像 / 滤镜 / 调整大小菜单
- * 可以从其自身的打开处理程序中调用它。
+ * Close every topbar dropdown except an optional "keep open" one.
+ * Exported so the Image / Filter / Resize menus (wired elsewhere)
+ * can call it from their own open handlers.
  */
 export function closeOtherTopbarMenus(keepId) {
   for (const id of TOPBAR_MENU_IDS) {
@@ -61,13 +61,13 @@ export function wireTopbar(deps) {
     registerDocClickAway, uiModule,
   } = deps;
 
-  // 撤销 / 重做 / 历史记录。
+  // Undo / Redo / History.
   document.getElementById('ge-undo')?.addEventListener('click', undo);
   document.getElementById('ge-redo')?.addEventListener('click', redo);
   document.getElementById('ge-history-btn')?.addEventListener('click', toggleHistoryPanel);
 
-  // 保存 dropdown — "保存 ▾" toggles a small menu (保存 / Save-as /
-  // Download / 保存 project / 加载 project). Inner items keep their
+  // Save dropdown — "Save ▾" toggles a small menu (Save / Save-as /
+  // Download / Save project / Load project). Inner items keep their
   // original IDs so the standalone handlers below wire to them
   // unchanged.
   {
@@ -75,14 +75,14 @@ export function wireTopbar(deps) {
     const saveMenu = document.getElementById('ge-save-menu');
     if (saveBtn && saveMenu) {
       const saveTopbar = saveBtn.closest('.ge-topbar');
-      // 将菜单重新父级化到 <body>。如果不这样做，菜单会继承
-      // 画廊模态框的包含块（模态框应用了
-      // `transform: scale(...)` 用于其入场动画 — 而祖先上的任何
-      // 非 `none` 的 `transform` 都会使该祖先成为
-      // `position: fixed` 后代的包含块，即使在
-      // 动画落到 identity 之后）。下面的 JS 计算假设
-      // 使用视口相对坐标，因此如果没有重新父级化，菜单
-      // 在桌面上会"偏离"按钮很远。
+      // Reparent the menu to <body>. Without this, the menu inherits
+      // the gallery modal's containing block (the modal applies a
+      // `transform: scale(...)` for its enter animation — and any
+      // non-`none` transform on an ancestor makes that ancestor the
+      // containing block for `position: fixed` descendants, even after
+      // the animation lands on identity). The JS math below assumes
+      // viewport-relative coords, so without the reparent the menu
+      // ends up "way off" the button on desktop.
       if (saveMenu.parentNode !== document.body) {
         document.body.appendChild(saveMenu);
       }
@@ -112,13 +112,13 @@ export function wireTopbar(deps) {
     }
   }
 
-  // 缩放按钮。
+  // Zoom buttons.
   document.getElementById('ge-zoom-fit')?.addEventListener('click', fitZoom);
   document.getElementById('ge-zoom-100')?.addEventListener('click', () => { state.zoom = 1; applyZoom(); });
   document.getElementById('ge-zoom-in')?.addEventListener('click', () => { state.zoom = Math.min(5, state.zoom * 1.25); applyZoom(); });
   document.getElementById('ge-zoom-out')?.addEventListener('click', () => { state.zoom = Math.max(0.1, state.zoom / 1.25); applyZoom(); });
 
-  // 导出 / 下载 / 项目保存 / 项目加载。
+  // Export / Download / Project Save / Project Load.
   document.getElementById('ge-export-gallery')?.addEventListener('click', exportToGallery);
   document.getElementById('ge-download')?.addEventListener('click', downloadPNG);
   document.getElementById('ge-save-project')?.addEventListener('click', saveProject);
@@ -140,7 +140,7 @@ export function wireTopbar(deps) {
     }
   });
 
-  // 边缘弹出菜单 — 宽度输入 + 羽化 / 删除操作按钮。
+  // Edge popup — Width input + Feather / Delete action buttons.
   function applyEdgeAction(hardDelete) {
     const layer = activeLayer();
     if (!layer || layer.locked) { uiModule.showToast('Select an unlocked layer'); return; }
@@ -150,7 +150,7 @@ export function wireTopbar(deps) {
     saveState();
     applyEdgeFeather(layer, width, hardDelete);
     composite();
-    uiModule.showToast(hardDelete ? `Edges deleted ${width}px` : t('editor.edges_feathered', { width: width }));
+    uiModule.showToast(hardDelete ? `Edges deleted ${width}px` : `Edges feathered ${width}px`);
   }
   {
     const btn = document.getElementById('ge-edge-menu-btn');
@@ -162,7 +162,7 @@ export function wireTopbar(deps) {
         if (willOpen) closeOtherTopbarMenus('ge-edge-menu');
         menu.hidden = !menu.hidden;
         if (!menu.hidden) {
-          // 自动聚焦宽度输入框，使用户可以立即输入。
+          // Autofocus the width input so users can type immediately.
           setTimeout(() => document.getElementById('ge-edge-width')?.select(), 0);
         }
       });

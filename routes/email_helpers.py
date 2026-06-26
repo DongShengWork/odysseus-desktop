@@ -1,15 +1,15 @@
 """
 email_helpers.py
 
-`email_routes.py`（FastAPI 路由文件）和 `email_pollers.py`（后台循环）
-共同使用的低层级辅助函数：
+Lower-level helpers used by both `email_routes.py` (the FastAPI route file)
+and `email_pollers.py` (the background loops):
 
-    - 认证依赖（require_owner / require_user / _assert_owns_account）
-    - 账户配置 + 设置持久化（`_get_email_config`、`_list_email_accounts`）
-    - IMAP 连接辅助（`_imap_connect`、`_imap`、文件夹检测）
-    - 邮件解析（`_decode_header`、`_extract_html/text`、附件辅助）
-    - AI 摘要 / AI 回复管道中的发件人上下文检索
-    - Pydantic 模型、共享常量、定时数据库初始化
+    - auth dependencies (require_owner / require_user / _assert_owns_account)
+    - account config + settings persistence (`_get_email_config`, `_list_email_accounts`)
+    - IMAP connection helpers (`_imap_connect`, `_imap`, folder detection)
+    - message parsing (`_decode_header`, `_extract_html/text`, attachment helpers)
+    - sender context retrieval for the AI-summary / AI-reply pipelines
+    - Pydantic models, shared constants, scheduled-DB bootstrap
 """
 
 import os
@@ -347,7 +347,7 @@ def _assert_owns_account(account_id: str, owner: str) -> None:
         raise
     except Exception as e:
         # Fail closed — a DB hiccup must not let cross-tenant access slip
-        # through. 503 tells the caller to 重试; logs preserve detail.
+        # through. 503 tells the caller to retry; logs preserve detail.
         logger.error(f"Account-owner check failed: {e}")
         raise HTTPException(503, "Account check failed")
 
@@ -538,7 +538,7 @@ def _init_scheduled_db():
         )
     """)
     # Email summary cache. SECURITY: Message-IDs are global, so AI-derived
-    # cache rows must be owner-权限范围d just like email_tags.
+    # cache rows must be owner-scoped just like email_tags.
     _ensure_owner_scoped_email_cache_table(conn, "email_summaries", """
         CREATE TABLE IF NOT EXISTS email_summaries (
             message_id TEXT,
@@ -589,12 +589,12 @@ def _init_scheduled_db():
         )
     """)
     # Backfill migration: older installs created the table with
-    # message_id as a bare PK and no owner column. 添加 the column +
+    # message_id as a bare PK and no owner column. Add the column +
     # promote it into the PK by rebuild-copy-swap (SQLite can't ALTER PK).
     try:
         _cols = [r[1] for r in conn.execute("PRAGMA table_info(email_tags)")]
         if "owner" not in _cols:
-            # 添加 the column first so reads/writes don't break mid-migration.
+            # Add the column first so reads/writes don't break mid-migration.
             conn.execute("ALTER TABLE email_tags ADD COLUMN owner TEXT DEFAULT ''")
             # Rebuild with composite PK. Existing rows get owner='' (legacy
             # single-user); the urgency scanner will overwrite as it
@@ -684,10 +684,10 @@ def _init_scheduled_db():
         if "owner" not in cols:
             conn.execute("ALTER TABLE scheduled_emails ADD COLUMN owner TEXT DEFAULT ''")
         conn.execute("CREATE INDEX IF NOT EXISTS ix_scheduled_emails_owner_status ON scheduled_emails(owner, status)")
-        # Backfill owner on legacy rows from the owning 邮件账户 so the
-        # owner-权限范围d list/cancel routes surface pre-migration scheduled
+        # Backfill owner on legacy rows from the owning email account so the
+        # owner-scoped list/cancel routes surface pre-migration scheduled
         # sends to the right user (the poller already resolves these by
-        # account at s结束时间; this aligns the UI with that).
+        # account at send time; this aligns the UI with that).
         legacy_accounts = conn.execute(
             "SELECT DISTINCT account_id FROM scheduled_emails "
             "WHERE (owner IS NULL OR owner = '') AND account_id IS NOT NULL AND account_id != ''"
@@ -720,8 +720,8 @@ def _init_scheduled_db():
             conn.execute("ALTER TABLE email_boundaries ADD COLUMN turns_json TEXT")
     except Exception:
         pass
-    # Per-sender 签名ature cache. Populated by `learn_sender_签名atures`.
-    # Message sender addresses are global, so 签名atures must be 权限范围d to the
+    # Per-sender signature cache. Populated by `learn_sender_signatures`.
+    # Message sender addresses are global, so signatures must be scoped to the
     # mailbox owner before `/read` returns them to the renderer.
     _ensure_sender_signatures_table(conn)
     conn.commit()
@@ -829,7 +829,7 @@ def _get_email_config(account_id: str | None = None, owner: str = "") -> dict:
     except Exception as e:
         logger.debug(f"email_accounts lookup failed, falling back to settings.json: {e}")
 
-    # Legacy 回退 — flat keys in settings.json / env vars
+    # Legacy fallback — flat keys in settings.json / env vars
     settings = _load_settings()
     cfg = {
         "account_id": resolved_id,
@@ -921,12 +921,12 @@ def _open_imap_connection(host: str, port: int, *, starttls: bool, timeout: int 
 
 def _imap_connect(account_id: str | None = None, owner: str = "",
                   timeout: int = _IMAP_TIMEOUT_SECONDS):
-    # SECURITY: passing `owner` 权限范围s the 回退 config lookup so a brand
+    # SECURITY: passing `owner` scopes the fallback config lookup so a brand
     # new user doesn't get connected against another user's default mailbox
     # when they have no account configured.
     #
-    # `超时` is overridable so short-lived callers (e.g. the 服务-health
-    # probe) can impose a tighter budget than the default IMAP 超时.
+    # `timeout` is overridable so short-lived callers (e.g. the service-health
+    # probe) can impose a tighter budget than the default IMAP timeout.
     cfg = _get_email_config(account_id, owner=owner)
     # Connection mode:
     #   STARTTLS on → plain + upgrade
@@ -954,7 +954,7 @@ def _imap_connect(account_id: str | None = None, owner: str = "",
         # MFA-enabled tenant, #3174, or an expired/revoked OAuth token)
         # otherwise orphans the already-connected socket; close it before
         # propagating so a misconfigured account can't leak one descriptor
-        # per 重试 / background poller pass.
+        # per retry / background poller pass.
         try:
             conn.shutdown()
         except Exception:
@@ -966,7 +966,7 @@ def _imap_connect(account_id: str | None = None, owner: str = "",
 from contextlib import contextmanager
 
 
-# Filled in by setup_email_routes() once its closure-权限范围d pool helpers are
+# Filled in by setup_email_routes() once its closure-scoped pool helpers are
 # defined. Keyed so we can swap them out in tests.
 _POOL_HOOKS: dict = {"connect": None, "release": None}
 
@@ -988,11 +988,11 @@ def _imap(account_id: str | None = None, owner: str = ""):
     pool_release = _POOL_HOOKS.get("release")
     if pool_connect and pool_release:
         # SECURITY: forward owner so the pool slot is per-user and the
-        # fresh-connection 回退 runs through a 权限范围d config lookup.
+        # fresh-connection fallback runs through a scoped config lookup.
         try:
             conn, _reused = pool_connect(account_id, owner=owner)
         except TypeError:
-            # Older hook 签名ature without owner — fall back transparently.
+            # Older hook signature without owner — fall back transparently.
             conn, _reused = pool_connect(account_id)
         ok = True
         try:
@@ -1025,16 +1025,16 @@ def _decode_header(raw):
         return ""
     try:
         # make_header concatenates per RFC 2047: no spurious space between an
-        # 编码d-word and adjacent 纯文本 (plain runs keep their own
-        # whitespace), and the whitespace between two adjacent 编码d-words is
+        # encoded-word and adjacent plain text (plain runs keep their own
+        # whitespace), and the whitespace between two adjacent encoded-words is
         # dropped. The old " ".join produced "Re:  Jose"-style double spaces on
         # every non-ASCII subject or sender.
         return str(email.header.make_header(email.header.decode_header(raw)))
     except Exception:
         # Malformed header or unknown/invalid MIME charset (e.g. a spam header
         # like =?x-unknown-charset?B?...?=) makes make_header raise LookupError;
-        # fall back to a lossy per-part 解码. errors="replace" only covers
-        # byte-解码 errors, not codec lookup, hence the explicit utf-8 重试.
+        # fall back to a lossy per-part decode. errors="replace" only covers
+        # byte-decode errors, not codec lookup, hence the explicit utf-8 retry.
         decoded = []
         for data, charset in email.header.decode_header(raw):
             if isinstance(data, bytes):
@@ -1247,7 +1247,7 @@ def _list_attachments_from_msg(msg):
             if ct == "message/rfc822" and not re.search(r"\.[A-Za-z0-9]{1,8}$", filename):
                 filename = f"{filename}.eml"
         else:
-            # Inline 镜像s, etc. - generate a name
+            # Inline images, etc. - generate a name
             ext = "eml" if ct == "message/rfc822" else (ct.split("/")[-1] if "/" in ct else "bin")
             filename = f"attachment_{idx}.{ext}"
         payload = part.get_payload(decode=True)
@@ -1520,7 +1520,7 @@ def _pre_retrieve_context(
         sender_addr = email.utils.parseaddr(sender or "")[1].lower()
         # The CardDAV address book is global admin data backed by a single
         # Radicale instance, so only fold it into reply context for an admin /
-        # single-user owner. Non-admin owners still get their own (owner-权限范围d)
+        # single-user owner. Non-admin owners still get their own (owner-scoped)
         # IMAP history below, just not the shared contacts.
         try:
             from src.tool_security import owner_is_admin_or_single_user
@@ -1533,7 +1533,7 @@ def _pre_retrieve_context(
                 from routes.contacts_routes import _fetch_contacts
                 for c in _fetch_contacts() or []:
                     # Contacts are normalized to plural `emails` lists, but
-                    # keep the legacy singular key 回退 for older data.
+                    # keep the legacy singular key fallback for older data.
                     contact_emails = []
                     raw_emails = c.get("emails")
                     if isinstance(raw_emails, list):
@@ -1691,8 +1691,8 @@ class SendEmailRequest(BaseModel):
     bcc: Optional[str] = None
     subject: str
     body: str
-    # WYSIWYG compose sends the rendered HTML here; the server 净化s it and
-    # uses it for the text/html part (body stays the plain-text 回退). When
+    # WYSIWYG compose sends the rendered HTML here; the server sanitizes it and
+    # uses it for the text/html part (body stays the plain-text fallback). When
     # absent, the server renders markdown from `body` instead.
     body_html: Optional[str] = None
     in_reply_to: Optional[str] = None
@@ -1701,7 +1701,7 @@ class SendEmailRequest(BaseModel):
     attachments: Optional[List[str]] = None
     # Which account to send from. None = default account.
     account_id: Optional[str] = None
-    # Internal marker for Odysseus-generated mail (e.g. 提醒, scheduled).
+    # Internal marker for Odysseus-generated mail (e.g. reminder, scheduled).
     odysseus_kind: Optional[str] = None
     # If true, /send waits for SMTP + Sent append and returns the sent UID.
     wait_for_delivery: bool = False

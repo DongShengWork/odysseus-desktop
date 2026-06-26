@@ -100,7 +100,7 @@ function initOpenPromptModalLink() {
       if (modal) modal.classList.remove('hidden');
     }
     // Force the Persona tab (data-chartab="character") since the link's
-    // whole purpose is editing personas — not landing on 注入 by default.
+    // whole purpose is editing personas — not landing on Inject by default.
     const personaTab = document.querySelector('#custom-preset-modal .preset-tab[data-chartab="character"]');
     if (personaTab) personaTab.click();
   });
@@ -471,7 +471,7 @@ async function initDefaultChat() {
     renderFallbacks();
   }
 
-  // 渲染 the 回退 chain. Each row is endpoint + model + remove.
+  // Render the fallback chain. Each row is endpoint + model + remove.
   function renderFallbacks() {
     fbContainer.innerHTML = '';
     _fallbacks.forEach(function(fb, idx) {
@@ -609,7 +609,7 @@ async function initUtilityModel() {
     });
   } catch (e) { console.warn('Failed to load utility model settings', e); }
 
-  // Persist whatever's currently selected. Empty endpoint or model → 后端
+  // Persist whatever's currently selected. Empty endpoint or model → backend
   // transparently falls back to the chat model (mirrors the teacher panel:
   // no toggle, "—" means "unset, use chat").
   async function saveUtility() {
@@ -640,7 +640,7 @@ async function initUtilityModel() {
 /* ── Teacher Model ── */
 // SOTA model called automatically when a self-hosted student model
 // fails an agent-mode task. Stored as a single `teacher_model` string
-// in the form `model@endpoint_name` so the 后端's _resolve_model
+// in the form `model@endpoint_name` so the backend's _resolve_model
 // can dispatch directly. Master toggle is the separate
 // `teacher_enabled` flag so the user can pause the feature without
 // losing their endpoint+model selection.
@@ -684,7 +684,7 @@ async function initTeacherModel() {
     var res = await fetch('/api/auth/settings', { credentials: 'same-origin' });
     var settings = await res.json();
     if (enabledToggle) enabledToggle.checked = !!settings.teacher_enabled;
-    // teacher_model is stored as "model@endpoint_name". 分割 on the
+    // teacher_model is stored as "model@endpoint_name". Split on the
     // LAST `@` so model ids that contain @ aren't mangled.
     var spec = settings.teacher_model || '';
     var savedModel = spec;
@@ -716,7 +716,7 @@ async function initTeacherModel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teacher_enabled: enabled, teacher_model: spec })
       });
-      msg.textContent = enabled ? (spec ? 'Saved' : 'Pick an endpoint + model') : '已禁用';
+      msg.textContent = enabled ? (spec ? 'Saved' : 'Pick an endpoint + model') : 'Disabled';
       msg.style.color = enabled && !spec ? 'var(--red)' : 'var(--fg)';
       setTimeout(function() { msg.textContent = ''; }, 2000);
     } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
@@ -748,7 +748,7 @@ async function initImageSettings() {
   try {
     const modelsRes = await fetch('/api/models', { credentials: 'same-origin' });
     const modelsData = await modelsRes.json();
-    // Inpaint-compat allowlist — 镜像 gen here is 权限范围d to inpainting only,
+    // Inpaint-compat allowlist — image gen here is scoped to inpainting only,
     // so DALL-E / GPT-Image-1 (no inpaint API) are excluded. Currently:
     //   - any model with 'inpaint' in the id
     //   - Stable Diffusion 3.5 Medium (inpaint via diffusers pipeline)
@@ -766,7 +766,7 @@ async function initImageSettings() {
       });
     });
     sortModelIds(imageModels).forEach(mid => { const opt = document.createElement('option'); opt.value = mid; opt.textContent = mid; modelSel.appendChild(opt); });
-    // Hardcoded 回退s shown as "(not detected)" so users know what to
+    // Hardcoded fallbacks shown as "(not detected)" so users know what to
     // download/serve to enable inpaint here.
     ['stable-diffusion-3.5-medium', 'stable-diffusion-inpainting'].forEach(mid => {
       if (!imageModels.includes(mid)) { const opt = document.createElement('option'); opt.value = mid; opt.textContent = mid + ' (not detected)'; modelSel.appendChild(opt); }
@@ -829,7 +829,7 @@ async function initVisionSettings() {
       var opt = document.createElement('option'); opt.value = mid; opt.textContent = mid; vlSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load models for vision settings', e); }
-  // Also pull the raw endpoint list so the 回退 widget can resolve
+  // Also pull the raw endpoint list so the fallback widget can resolve
   // endpoint-id → models the same way the other cards do.
   try {
     _visionEndpoints = await _fetchModelEndpoints();
@@ -844,8 +844,8 @@ async function initVisionSettings() {
       containerId: 'set-visionFallbacks',
       addBtnId: 'set-visionAddFallback',
       endpoints: function() { return _visionEndpoints; },
-      // Vision 回退 list filters to vision-capable models (same heuristic
-      // as the primary select above — exclude audio/tts/嵌入/etc.).
+      // Vision fallback list filters to vision-capable models (same heuristic
+      // as the primary select above — exclude audio/tts/embedding/etc.).
       modelsFilter: function(mid) { return _isVisionModel(mid); },
       settingKey: 'vision_model_fallbacks',
       initial: Array.isArray(settings.vision_model_fallbacks)
@@ -978,7 +978,7 @@ async function initTtsSettings() {
   if (previewBtn) {
     var previewAudio = null;
     var previewPlaying = false;
-    function resetPreview() { previewPlaying = false; previewBtn.textContent = '预览'; previewBtn.style.borderColor = ''; }
+    function resetPreview() { previewPlaying = false; previewBtn.textContent = 'Preview'; previewBtn.style.borderColor = ''; }
 
     previewBtn.addEventListener('click', async function() {
       if (previewPlaying) {
@@ -1082,7 +1082,7 @@ async function initSttSettings() {
     return provSel.value;
   }
 
-  // 添加 API 端点s that might support STT
+  // Add API endpoints that might support STT
   try {
     var epRes = await fetch('/api/model-endpoints', { credentials: 'same-origin' });
     var endpoints = await epRes.json();
@@ -1092,7 +1092,7 @@ async function initSttSettings() {
     });
   } catch (e) { console.warn('Failed to load endpoints for STT', e); }
 
-  // 加载 saved settings
+  // Load saved settings
   try {
     var settingsRes = await fetch('/api/auth/settings', { credentials: 'same-origin' });
     var settings = await settingsRes.json();
@@ -1143,8 +1143,8 @@ var _searchProviderHints = {
 };
 var _searchNeedsKey = { brave: 1, google_pse: 1, tavily: 1, serper: 1 };
 var _searchLabels = {
-  searxng: 'SearXNG', duckduckgo: 'DuckDuckGo', brave: 'Brave 搜索',
-  google_pse: 'Google PSE', tavily: 'Tavily', serper: 'Serper', disabled: '已禁用',
+  searxng: 'SearXNG', duckduckgo: 'DuckDuckGo', brave: 'Brave Search',
+  google_pse: 'Google PSE', tavily: 'Tavily', serper: 'Serper', disabled: 'Disabled',
 };
 var _searchKeyFields = {
   brave: 'brave_api_key', google_pse: 'google_pse_key',
@@ -1330,7 +1330,7 @@ async function initSearchSettings() {
 
   // ── Fallback chain ──
   // Stored as an ordered array of provider IDs (primary not included).
-  // When the primary fails or hits rate-limit, the 后端 walks this
+  // When the primary fails or hits rate-limit, the backend walks this
   // list in order trying each one.
   var fbWrap = el('set-searchFallbackChain');
   function _availableFallbackOptions() {
@@ -1402,7 +1402,7 @@ async function initSearchSettings() {
 
       fbWrap.appendChild(row);
     });
-    // Add-回退 button: disabled when there are no remaining providers to add.
+    // Add-fallback button: disabled when there are no remaining providers to add.
     if (addBtn) {
       var hasMore = _availableFallbackOptions().length > 0;
       addBtn.style.display = hasMore ? '' : 'none';
@@ -1432,7 +1432,7 @@ async function initSearchSettings() {
     _renderFallbackChain();
   }
   _renderFallbackChain();
-  // Re-render whenever the primary changes (it gets filtered out of "添加").
+  // Re-render whenever the primary changes (it gets filtered out of "Add").
   provSel.addEventListener('change', _renderFallbackChain);
 
   // ── Test button ── runs a one-off query against the configured provider.
@@ -1583,7 +1583,7 @@ async function initResearchSettings() {
     if (ec && ec >= 1 && ec <= 12) payload.research_extraction_concurrency = ec;
     if (runTimeoutInput.value !== '') {
       var rt = parseInt(runTimeoutInput.value, 10);
-      // 0 = no limit (disables the hard 超时); otherwise 60s..86400s (24h)
+      // 0 = no limit (disables the hard timeout); otherwise 60s..86400s (24h)
       if (!isNaN(rt) && (rt === 0 || (rt >= 60 && rt <= 86400))) {
         payload.research_run_timeout_seconds = rt;
       }
@@ -1769,7 +1769,7 @@ function initAppearance() {
           ok = await (uiModule && uiModule.styledConfirm
             ? uiModule.styledConfirm(
                 'Hide the Settings cog?\n\nYou can re-open this panel any time by typing /settings in the chat input.',
-                { confirmText: 'Hide', cancelText: '取消' }
+                { confirmText: 'Hide', cancelText: 'Cancel' }
               )
             : Promise.resolve(window.confirm('Hide the Settings cog?\n\nYou can re-open this panel any time by typing /settings in the chat input.')));
         } catch (_) { ok = false; }
@@ -1800,7 +1800,7 @@ function initAppearance() {
   });
 
   // Per-section reset buttons (arrow-circle-back icon in each card's h2).
-  // 移除 only the keys belonging to this section from the persisted
+  // Removes only the keys belonging to this section from the persisted
   // visibility map so other sections keep their user settings.
   modalEl.querySelectorAll('[data-vis-reset]').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -1851,7 +1851,7 @@ const SHORTCUT_DEFAULTS = {
   settings:       'ctrl+,',
   focus_input:    'ctrl+/',
   // Open-tool shortcuts. Calendar is bound by default; the rest are
-  // unbound (empty) so the user can as签名 their own in the panel.
+  // unbound (empty) so the user can assign their own in the panel.
   open_calendar:  'ctrl+alt+c',
   open_compare:   '',
   open_cookbook:  '',
@@ -1954,7 +1954,7 @@ async function initShortcuts() {
   const resetBtn = el('shortcuts-reset-btn');
   if (!listEl) return;
 
-  // 加载 saved keybinds
+  // Load saved keybinds
   let keybinds = { ...SHORTCUT_DEFAULTS };
   try {
     const res = await fetch('/api/auth/settings', { credentials: 'same-origin' });
@@ -1989,7 +1989,7 @@ async function initShortcuts() {
         if (!(action in keybinds)) continue;
         const combo = keybinds[action];
         // Unbound shortcuts (empty combo) still render so the user can
-        // as签名 one \u2014 they show a "Set" affordance instead of keycaps.
+        // assign one \u2014 they show a "Set" affordance instead of keycaps.
         const label = SHORTCUT_LABELS[action] || action;
         const icon = SHORTCUT_ICONS[action] || '';
         const isCustom = combo !== (SHORTCUT_DEFAULTS[action] || '');
@@ -2003,7 +2003,7 @@ async function initShortcuts() {
           <div class="shortcut-controls">
             <span class="shortcut-hint" hidden></span>
             <button class="shortcut-key${combo ? '' : ' shortcut-key-unset'}" data-action="${action}" title="Click to rebind">${keyContent}</button>
-            <button class="shortcut-action-btn ${isCustom ? 'is-reset' : ''}" data-action="${action}" title="${isCustom ? 'Reset to default' : '确认'}" style="${isCustom ? '' : 'visibility:hidden'}">
+            <button class="shortcut-action-btn ${isCustom ? 'is-reset' : ''}" data-action="${action}" title="${isCustom ? 'Reset to default' : 'Confirm'}" style="${isCustom ? '' : 'visibility:hidden'}">
               ${isCustom
                 ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
                 : '\u2713'}
@@ -2034,7 +2034,7 @@ async function initShortcuts() {
     const actionBtn = row.querySelector('.shortcut-action-btn');
     const hintEl = row.querySelector('.shortcut-hint');
 
-    // 移除 any other active rebind
+    // Remove any other active rebind
     listEl.querySelectorAll('.shortcut-key.listening').forEach(b => {
       b.classList.remove('listening');
       b.innerHTML = _formatKeyCaps(keybinds[b.dataset.action]);
@@ -2049,8 +2049,8 @@ async function initShortcuts() {
     actionBtn.textContent = '\u2713';
     actionBtn.classList.remove('is-reset');
     actionBtn.style.visibility = 'visible';
-    actionBtn.title = '确认';
-    // Hint: tell the user how to 提交 / cancel the rebind.
+    actionBtn.title = 'Confirm';
+    // Hint: tell the user how to commit / cancel the rebind.
     if (hintEl) {
       hintEl.hidden = false;
       hintEl.textContent = 'press a key';
@@ -2087,8 +2087,8 @@ async function initShortcuts() {
         return;
       }
 
-      // Enter 提交s the previewed combo (same as clicking \u2713). Only acts
-      // as 提交 once a combo has been captured \u2014 otherwise it would just
+      // Enter commits the previewed combo (same as clicking \u2713). Only acts
+      // as commit once a combo has been captured \u2014 otherwise it would just
       // try to bind Enter itself.
       if (e.key === 'Enter' && pendingCombo) {
         confirmHandler();
@@ -2101,7 +2101,7 @@ async function initShortcuts() {
       // Preview the combo, wait for confirm
       pendingCombo = combo;
       btn.innerHTML = _formatKeyCaps(combo);
-      // Now that a combo is captured, prompt to 提交 with Enter.
+      // Now that a combo is captured, prompt to commit with Enter.
       if (hintEl) hintEl.textContent = '\u21B5 Enter to save';
     }
 
@@ -2122,7 +2122,7 @@ async function initShortcuts() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keybinds }),
       });
-      // 更新 global keybinds so they take effect immediately
+      // Update global keybinds so they take effect immediately
       window._odysseusKeybinds = keybinds;
       if (uiModule && uiModule.showToast) uiModule.showToast('Shortcut saved');
     } catch (e) {
@@ -2161,7 +2161,7 @@ function initAccount() {
       }
     }).catch(() => {});
 
-  // 更新 password placeholder and policy from server
+  // Update password placeholder and policy from server
   fetch('/api/auth/policy', { credentials: 'same-origin' })
     .then(r => r.ok ? r.json() : null)
     .then(policy => {
@@ -2253,7 +2253,7 @@ function initAccount() {
               if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed'); }
               const setup = await r.json();
               const qrCode = safeRasterDataUrl(setup.qr_code);
-              // Show QR code + manual secret + 验证 input
+              // Show QR code + manual secret + verify input
               tfaContent.innerHTML = `
                 <div style="text-align:center;margin-bottom:12px;">
                   ${qrCode ? `<img src="${esc(qrCode)}" alt="QR Code" style="border-radius:8px;max-width:200px;">` : ''}
@@ -2310,7 +2310,7 @@ function initAccount() {
     logoutBtn.addEventListener('click', async () => {
       try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
       // SECURITY: wipe all client-side state on logout so the next user that
-      // 签名s in on this browser doesn't inherit the previous account's
+      // signs in on this browser doesn't inherit the previous account's
       // session id, last-used model, draft chat input, or any cached lists.
       // Keep "odysseus-last-user" so the login form remembers the username
       // (if "Remember me" was on). Without this the chat composer pre-loaded
@@ -2422,7 +2422,7 @@ async function initReminderSettings() {
   }
   if (!channelSel || !llmToggle) return;
 
-  // Detect configured 邮件账户s. The legacy single-account
+  // Detect configured email accounts. The legacy single-account
   // `/api/email/config` endpoint was a no-op stub for most installs;
   // the real per-account list lives at `/api/email/accounts` and is
   // what the Integrations panel manages. Treat the email channel as
@@ -2572,7 +2572,7 @@ async function initReminderSettings() {
     syncChannelRows();
   }
 
-  // Populate the "发送 from" picker with all configured 邮件账户s.
+  // Populate the "Send from" picker with all configured email accounts.
   populateReminderEmailAccounts();
 
   function syncChannelRows() {
@@ -2585,7 +2585,7 @@ async function initReminderSettings() {
     if (webhookTemplateRow) webhookTemplateRow.style.display = isWebhook ? 'flex' : 'none';
   }
 
-  // Browser 通知s fire on EVERY 提醒 (see
+  // Browser notifications fire on EVERY reminder (see
   // routes/note_routes.py — the in-app notif is always queued
   // regardless of channel). The hint should make that clear so
   // users don't think they have to choose between channels.
@@ -2623,8 +2623,8 @@ async function initReminderSettings() {
     llmToggle.checked = !!s.reminder_llm_synthesis;
     // Persona dropdown — populate from built-in PROMPT_TEMPLATES (characters)
     // plus any custom character preset. Selected value persists to
-    // 提醒_llm_persona (后端 hook lives in src/notes.py once
-    // /api/notes/fire-提醒 lands).
+    // reminder_llm_persona (backend hook lives in src/notes.py once
+    // /api/notes/fire-reminder lands).
     const personaSel = el('set-reminder-llm-persona');
     if (personaSel) {
       try {
@@ -2666,7 +2666,7 @@ async function initReminderSettings() {
         if (tpl) { webhookTemplateIn.value = tpl; save({ reminder_webhook_payload_template: tpl }); }
       }
     }
-    // Restore the previously-picked 邮件账户 (if any), otherwise
+    // Restore the previously-picked email account (if any), otherwise
     // default to the account flagged is_default in the integrations
     // list. Falls through to the first option if neither exists.
     if (emailAcctSel) {
@@ -2695,7 +2695,7 @@ async function initReminderSettings() {
     if (hint) hint.textContent = CHANNEL_HINTS[channelSel.value] || '';
     syncChannelRows();
     save({ reminder_channel: channelSel.value });
-    // Email 提醒 bell visibility tracks this — broadcast so the
+    // Email reminder bell visibility tracks this — broadcast so the
     // email library can re-evaluate without waiting for a re-open.
     try { window.dispatchEvent(new CustomEvent('odysseus-reminder-channel-changed', { detail: { channel: channelSel.value } })); } catch (_) {}
   });
@@ -2768,7 +2768,7 @@ async function initReminderSettings() {
       } catch (_) {}
       const _stopTestSpin = () => { try { _testSpin && _testSpin.stop(); _testSpin && _testSpin.element.remove(); } catch (_) {} };
       try {
-        // Persona picker is in a different 权限范围 (Reminders init), look it up
+        // Persona picker is in a different scope (Reminders init), look it up
         // by id so we can pass whatever is currently selected on screen.
         const personaSel = el('set-reminder-llm-persona');
         const res = await fetch('/api/notes/fire-reminder', {
@@ -2809,7 +2809,7 @@ async function initReminderSettings() {
         if (data.ntfy_sent) status += ' — ntfy sent';
         if (data.webhook_sent) status += ' — webhook sent';
         if (testMsg) { testMsg.textContent = status; testMsg.style.color = 'var(--green, #50fa7b)'; }
-        // Also fire a browser 通知 so user can see it
+        // Also fire a browser notification so user can see it
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
             new Notification('Test Reminder', {
@@ -2901,7 +2901,7 @@ async function initEmailAccountsSettings() {
       });
       row.querySelector('.email-acc-del-btn')?.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!await window.styledConfirm(`Delete account "${accs.find(a => a.id === id)?.name}"?`, { confirmText: '删除', danger: true })) return;
+        if (!await window.styledConfirm(`Delete account "${accs.find(a => a.id === id)?.name}"?`, { confirmText: 'Delete', danger: true })) return;
         await fetch(`/api/email/accounts/${id}`, { method: 'DELETE', credentials: 'same-origin' });
         renderList();
       });
@@ -2913,7 +2913,7 @@ async function initEmailAccountsSettings() {
     const isEdit = !!existing;
     formEl.style.display = '';
     // Small `?` indicator next to each label. Hover/focus to read the
-    // hint via the native `title` 提示. tab索引 makes it
+    // hint via the native `title` tooltip. tabindex makes it
     // keyboard-focusable too.
     const _hint = (tip) =>
       `<span class="eaf-hint" title="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0" `
@@ -2966,7 +2966,7 @@ async function initEmailAccountsSettings() {
         <div class="settings-row" style="margin-top:10px;align-items:center;">
           <button class="admin-btn-add" id="eaf-save" style="background:var(--red);border-color:var(--red);color:#fff;display:inline-flex;align-items:center;gap:5px;font-weight:600;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-            ${isEdit ? '保存' : '创建'}
+            ${isEdit ? 'Save' : 'Create'}
           </button>
           <span id="eaf-msg" style="font-size:11px;flex:1;margin-left:8px;"></span>
           <button class="admin-btn-add" id="eaf-cancel" style="opacity:0.7;display:inline-flex;align-items:center;gap:5px;position:relative;top:1px;margin-left:auto;">
@@ -3026,7 +3026,7 @@ async function initEmailAccountsSettings() {
 
     // "Connect with Google" button — save the account first, then redirect to OAuth.
     el('eaf-oauth-btn').addEventListener('click', async () => {
-      // Must save the account first to get an account_id to pass to the OAuth 流程.
+      // Must save the account first to get an account_id to pass to the OAuth flow.
       const body = {
         name: el('eaf-name').value.trim() || el('eaf-from').value.trim(),
         from_address: el('eaf-from').value.trim(),
@@ -3122,7 +3122,7 @@ async function initEmailSettings() {
   const root = el('settings-modal');
   if (!root || !root.querySelector('[data-settings-panel="email"]')) return;
 
-  // 加载 current email config
+  // Load current email config
   try {
     const res = await fetch('/api/email/config');
     const cfg = await res.json();
@@ -3137,7 +3137,7 @@ async function initEmailSettings() {
     if (el('set-email-from')) el('set-email-from').value = cfg.from_address || '';
   } catch (_) {}
 
-  // 加载 contacts config
+  // Load contacts config
   try {
     const res = await fetch('/api/contacts/config');
     const cfg = await res.json();
@@ -3146,14 +3146,14 @@ async function initEmailSettings() {
     if (el('set-carddav-pass')) el('set-carddav-pass').value = '';
   } catch (_) {}
 
-  // 加载 writing style
+  // Load writing style
   try {
     const res = await fetch('/api/email/style');
     const data = await res.json();
     if (el('set-email-style')) el('set-email-style').value = data.style || '';
   } catch (_) {}
 
-  // 保存 email config
+  // Save email config
   el('set-email-save')?.addEventListener('click', async () => {
     const msg = el('set-email-msg');
     if (msg) msg.textContent = 'Saving...';
@@ -3184,7 +3184,7 @@ async function initEmailSettings() {
     }
   });
 
-  // 保存 CardDAV config
+  // Save CardDAV config
   el('set-carddav-save')?.addEventListener('click', async () => {
     const msg = el('set-carddav-msg');
     if (msg) msg.textContent = 'Saving...';
@@ -3208,13 +3208,13 @@ async function initEmailSettings() {
     }
   });
 
-  // 提取 writing style
+  // Extract writing style
   el('set-email-style-extract')?.addEventListener('click', async () => {
     const btn = el('set-email-style-extract');
     const msg = el('set-email-style-msg');
     btn.disabled = true;
-    // 渲染 whirlpool + label inside the status area (same pattern as
-    // the "Find" / network-discover button in 添加 Models).
+    // Render whirlpool + label inside the status area (same pattern as
+    // the "Find" / network-discover button in Add Models).
     let wp = null;
     if (msg) {
       msg.className = '';
@@ -3257,7 +3257,7 @@ async function initEmailSettings() {
     }
   });
 
-  // 保存 writing style manually
+  // Save writing style manually
   el('set-email-style-save')?.addEventListener('click', async () => {
     const msg = el('set-email-style-msg');
     if (msg) msg.textContent = 'Saving...';
@@ -3314,7 +3314,7 @@ async function initIntegrations() {
   }
   authTypeSel.addEventListener('change', syncAuthRow);
 
-  // 加载 presets
+  // Load presets
   try {
     const res = await fetch('/api/auth/integrations/presets', { credentials: 'same-origin' });
     if (res.ok) {
@@ -3340,7 +3340,7 @@ async function initIntegrations() {
     syncAuthRow();
   });
 
-  // 渲染 list
+  // Render list
   async function renderList() {
     try {
       const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
@@ -3370,11 +3370,11 @@ async function initIntegrations() {
 
   function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-  // 启动 editing
+  // Start editing
   async function startEdit(id) {
     editingId = id;
     formTitle.textContent = 'Edit Integration';
-    // 获取 full data (with unmasked key from a dedicated edit fetch — we'll just load what we have)
+    // Fetch full data (with unmasked key from a dedicated edit fetch — we'll just load what we have)
     try {
       const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
       const data = await res.json();
@@ -3468,7 +3468,7 @@ async function initIntegrations() {
 
   // Delete
   async function doDelete(id) {
-    if (!await window.styledConfirm('Delete this integration?', { confirmText: '删除', danger: true })) return;
+    if (!await window.styledConfirm('Delete this integration?', { confirmText: 'Delete', danger: true })) return;
     try {
       await fetch(`/api/auth/integrations/${id}`, { method: 'DELETE', credentials: 'same-origin' });
       if (editingId === id) { formCard.style.display = 'none'; editingId = null; }
@@ -3496,7 +3496,7 @@ const INTG_TYPES = {
 };
 
 // Config shared by the Codex Agent and Claude Agent forms. Both use the same
-// 权限范围-gated /api/codex/* 后端; this just parameterizes the UI label,
+// scope-gated /api/codex/* backend; this just parameterizes the UI label,
 // default token name, and the per-agent install commands.
 const AGENT_CONFIGS = {
   codex: {
@@ -3565,7 +3565,7 @@ async function initUnifiedIntegrations() {
   if (!listEl) return;
   let integrationNotice = '';
 
-  // Hide the "+ 添加 Integration" button whenever the per-type create form
+  // Hide the "+ Add Integration" button whenever the per-type create form
   // is open so it doesn't compete visually with the in-progress form.
   // Many call sites toggle formEl.style.display directly; observe instead
   // of patching every one of them.
@@ -3633,7 +3633,7 @@ async function initUnifiedIntegrations() {
       const detail = [acc.from_address || acc.imap_user, acc.imap_host].filter(Boolean).join(' — ');
       items.push({ type: 'email', id: acc.id, name: label, detail, enabled: acc.enabled !== false, data: acc });
     }
-    // MCP 服务器s
+    // MCP servers
     const mcpList = Array.isArray(mcpRes) ? mcpRes : (mcpRes.servers || []);
     for (const srv of mcpList) {
       const statusText = srv.needs_oauth ? 'needs auth' : srv.status === 'connected' ? `${srv.enabled_tool_count}/${srv.tool_count} tools` : srv.status === 'error' ? 'error' : 'disconnected';
@@ -3646,7 +3646,7 @@ async function initUnifiedIntegrations() {
       if (lowerName.startsWith('claude agent')) agentType = 'claude';
       else if (lowerName.startsWith('codex agent')) agentType = 'codex';
       else if (scopes.some(s => String(s || '').startsWith('todos:') || String(s || '').startsWith('email:') || String(s || '').startsWith('documents:'))) {
-        // Legacy / un-prefixed 权限范围d tokens fall back to Codex for backwards compat.
+        // Legacy / un-prefixed scoped tokens fall back to Codex for backwards compat.
         agentType = 'codex';
       }
       if (!agentType) continue;
@@ -3664,7 +3664,7 @@ async function initUnifiedIntegrations() {
     // removed earlier; this matches the API/CalDAV/MCP pattern.)
     const statusDot = item.enabled
       ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--color-success,#50fa7b);flex-shrink:0;--notif-glow:var(--color-success,#50fa7b);animation:cookbook-notif-pulse 2s ease-in-out infinite;" title="Active"></span>'
-      : '<span style="width:8px;height:8px;border-radius:50%;background:var(--fg);opacity:0.3;flex-shrink:0" title="已禁用"></span>';
+      : '<span style="width:8px;height:8px;border-radius:50%;background:var(--fg);opacity:0.3;flex-shrink:0" title="Disabled"></span>';
     return `<div class="intg-card" data-intg-id="${item.id}" data-intg-type="${item.type}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:color-mix(in srgb, var(--fg) 3%, transparent);margin-bottom:6px;cursor:pointer;transition:all 0.15s;" title="Click to edit">
       <span style="color:var(--accent, var(--red));flex-shrink:0">${t.icon}</span>
       <div style="flex:1;min-width:0">
@@ -3672,7 +3672,7 @@ async function initUnifiedIntegrations() {
         <div style="font-size:11px;opacity:0.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.detail || ''}</div>
       </div>
       ${statusDot}
-      <button class="admin-btn-sm intg-del-btn" data-intg-id="${item.id}" data-intg-type="${item.type}" data-intg-name="${(item.name || '').replace(/"/g, '&quot;')}" title="移除" style="background:none;border:none;padding:4px;cursor:pointer;color:var(--red);opacity:0.55;display:inline-flex;align-items:center;justify-content:center;">
+      <button class="admin-btn-sm intg-del-btn" data-intg-id="${item.id}" data-intg-type="${item.type}" data-intg-name="${(item.name || '').replace(/"/g, '&quot;')}" title="Remove" style="background:none;border:none;padding:4px;cursor:pointer;color:var(--red);opacity:0.55;display:inline-flex;align-items:center;justify-content:center;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
       </button>
     </div>`;
@@ -3713,7 +3713,7 @@ async function initUnifiedIntegrations() {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const intgName = btn.dataset.intgName || 'this integration';
-        if (!await window.styledConfirm(`Remove "${intgName}"?`, { confirmText: '移除', danger: true })) return;
+        if (!await window.styledConfirm(`Remove "${intgName}"?`, { confirmText: 'Remove', danger: true })) return;
         const type = btn.dataset.intgType;
         const id = btn.dataset.intgId;
         try {
@@ -3757,7 +3757,7 @@ async function initUnifiedIntegrations() {
       if (r.ok) { const d = await r.json(); presets = d.presets || {}; }
     } catch (_) {}
     const presetEntries = Object.entries(presets);
-    // Same `?` hint helper as the email form. Native title 提示,
+    // Same `?` hint helper as the email form. Native title tooltip,
     // tabbable for keyboard users. Inline-styled so it doesn't need
     // a CSS dependency.
     const _apiHint = (tip) =>
@@ -3868,7 +3868,7 @@ async function initUnifiedIntegrations() {
 
     const preset = el('uf-api-preset'), name = el('uf-api-name'), url = el('uf-api-url'), auth = el('uf-api-auth'), header = el('uf-api-header'), key = el('uf-api-key'), ntfyHint = el('uf-api-ntfy-hint');
     let _editId = editId && editId !== 'new' ? editId : null;
-    // 加载 existing
+    // Load existing
     if (_editId) {
       try {
         const r = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
@@ -3926,7 +3926,7 @@ async function initUnifiedIntegrations() {
         // immediately without needing a form reopen. The POST response
         // shape is {ok, integration: {id, ...}} — saved.id at the top
         // level would silently miss, leaving Test perpetually stuck on
-        // "保存 first" until the form was reopened.
+        // "Save first" until the form was reopened.
         if (!_editId && saved) _editId = saved.integration?.id || saved.id;
         el('uf-api-msg').textContent = 'Saved'; el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
         await renderList();
@@ -4093,7 +4093,7 @@ async function initUnifiedIntegrations() {
           <input type="file" id="cm-import-file" accept=".vcf,.csv,text/vcard,text/csv" multiple style="display:none">
         </div>
         <div id="cm-add-row" class="contacts-add-row" style="display:none;flex-direction:column;gap:4px;">
-          <input id="cm-add-name" class="settings-input" placeholder="名称">
+          <input id="cm-add-name" class="settings-input" placeholder="Name">
           <input id="cm-add-email" class="settings-input" placeholder="email@example.com">
           <input id="cm-add-phone" class="settings-input" placeholder="Phone (optional)">
           <input id="cm-add-address" class="settings-input" placeholder="Address (optional)">
@@ -4228,7 +4228,7 @@ async function initUnifiedIntegrations() {
     await _renderContactsManager();
   }
 
-  // 渲染 the contacts list inside the manager card with inline edit +
+  // Render the contacts list inside the manager card with inline edit +
   // delete. Each row: name + emails; pencil flips to editable inputs.
   async function _renderContactsManager() {
     const list = el('cm-list');
@@ -4248,7 +4248,7 @@ async function initUnifiedIntegrations() {
       list.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 2px;">No contacts yet.</div>';
       return;
     }
-    // 排序 by name for a stable list.
+    // Sort by name for a stable list.
     contacts.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     // Live filter — search across name/emails/phones/address.
@@ -4279,17 +4279,17 @@ async function initUnifiedIntegrations() {
               <div class="contact-name" style="font-size:12px;font-weight:600;">${esc(c.name || '(no name)')}</div>
               <div class="contact-sub" style="font-size:10px;opacity:0.55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(sub)}</div>
             </div>
-            <button class="admin-btn-sm contact-edit" title="编辑" style="display:inline-flex;align-items:center;gap:4px;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 35%, var(--border));">
+            <button class="admin-btn-sm contact-edit" title="Edit" style="display:inline-flex;align-items:center;gap:4px;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 35%, var(--border));">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Edit
             </button>
-            <button class="admin-btn-sm contact-del" title="删除" style="opacity:0.85;display:inline-flex;align-items:center;gap:4px;">
+            <button class="admin-btn-sm contact-del" title="Delete" style="opacity:0.85;display:inline-flex;align-items:center;gap:4px;">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               Delete
             </button>
           </div>
           <div class="contact-row-edit" style="display:none;flex-direction:column;gap:4px;">
-            <input class="settings-input contact-edit-name" value="${esc(c.name || '')}" placeholder="名称">
+            <input class="settings-input contact-edit-name" value="${esc(c.name || '')}" placeholder="Name">
             <input class="settings-input contact-edit-emails" value="${esc(emails)}" placeholder="email1, email2">
             <input class="settings-input contact-edit-phones" value="${esc(phones)}" placeholder="phone1, phone2">
             <input class="settings-input contact-edit-address" value="${esc(address)}" placeholder="Address">
@@ -4299,7 +4299,7 @@ async function initUnifiedIntegrations() {
       }).join('');
     }
 
-    // Wire the search input — 防抖d so we don't refetch on every key.
+    // Wire the search input — debounced so we don't refetch on every key.
     if (searchInput && !searchInput._wired) {
       searchInput._wired = true;
       let _t;
@@ -4337,7 +4337,7 @@ async function initUnifiedIntegrations() {
       });
       row.querySelector('.contact-del')?.addEventListener('click', async () => {
         const ok = uiModule.styledConfirm
-          ? await uiModule.styledConfirm('Delete this contact?', { confirmText: '删除', danger: true })
+          ? await uiModule.styledConfirm('Delete this contact?', { confirmText: 'Delete', danger: true })
           : window.confirm('Delete this contact?');
         if (!ok) return;
         try {
@@ -4363,7 +4363,7 @@ async function initUnifiedIntegrations() {
       } catch (_) {}
     }
     const placeholderPass = (isEdit && existing) ? '(leave blank to keep current)' : '';
-    // Small `?` indicator next to each label (native title 提示).
+    // Small `?` indicator next to each label (native title tooltip).
     const _hint = (tip) =>
       `<span class="uf-hint" title="${esc(tip)}" aria-label="${esc(tip)}" tabindex="0" `
       + `style="display:inline-block;width:13px;height:13px;border-radius:50%;`
@@ -4405,7 +4405,7 @@ async function initUnifiedIntegrations() {
     const _smtpSecurity = (acct) => acct?.smtp_security || ((parseInt(acct?.smtp_port || 465) === 587) ? 'starttls' : 'ssl');
     formEl.innerHTML = `
       <div class="admin-card" style="margin-top:8px">
-        <h2 style="font-size:13px">${isEdit ? '编辑' : '添加'} Email Account</h2>
+        <h2 style="font-size:13px">${isEdit ? 'Edit' : 'Add'} Email Account</h2>
         <div class="settings-col">
           <div class="settings-row"><label class="settings-label">Provider${_hint('Pick a known provider to auto-fill the IMAP and SMTP host/port. Choose Custom to type your own.')}</label>
             <div class="ufp-wrap" style="position:relative;flex:1;min-width:0;">
@@ -4453,7 +4453,7 @@ async function initUnifiedIntegrations() {
               <span class="uf-email-save-ico" style="display:inline-flex;width:11px;height:11px;align-items:center;justify-content:center;">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               </span>
-              <span class="uf-email-save-label">${isEdit ? '保存' : '创建'}</span>
+              <span class="uf-email-save-label">${isEdit ? 'Save' : 'Create'}</span>
             </button>
             <button class="admin-btn-add" id="uf-email-cancel" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -4467,7 +4467,7 @@ async function initUnifiedIntegrations() {
     // require an app-specific password (Gmail killed basic IMAP auth
     // in 2022; iCloud + Yahoo follow the same model). The Generate
     // button opens the right page in a new tab and copies the URL for
-    // mobile / cross-设备流程s.
+    // mobile / cross-device flows.
     const PROVIDER_NOTES = {
       gmail: {
         title: 'Gmail needs an App Password',
@@ -4711,7 +4711,7 @@ async function initUnifiedIntegrations() {
     });
 
     // Collect the current form values + apply the "Same as IMAP" mirror —
-    // shared by both 保存 and Test so they agree on what's being sent.
+    // shared by both Save and Test so they agree on what's being sent.
     const _collectBody = () => {
       const body = {
         name: el('uf-email-name').value.trim(),
@@ -4758,7 +4758,7 @@ async function initUnifiedIntegrations() {
       btn.style.color = '';
       btn.style.boxShadow = '';
       btn.style.animation = '';
-      // Use the canonical whirlpool 加载指示器 so this matches Probe / Test
+      // Use the canonical whirlpool spinner so this matches Probe / Test
       // elsewhere; fall back to the inline CSS ring if the module fails.
       try {
         const sp = window.spinnerModule || (await import('./spinner.js')).default;
@@ -4779,7 +4779,7 @@ async function initUnifiedIntegrations() {
         if (d.ok) {
           // Button becomes the indicator — green checkmark with the
           // cookbook-style halo + breathing animation. No status text;
-          // the glow is the 签名al.
+          // the glow is the signal.
           btn.style.background = 'var(--green, #50fa7b)';
           btn.style.borderColor = 'var(--green, #50fa7b)';
           btn.style.color = '#0b0';
@@ -4988,7 +4988,7 @@ async function initUnifiedIntegrations() {
 
   // ── MCP form — full management view ──
   async function showMcpForm(editId) {
-    // Toggle an in-flight 加载状态 on a button (disabled + dimmed + label).
+    // Toggle an in-flight loading state on a button (disabled + dimmed + label).
     function _setBtnLoading(btn, loading, label) {
       if (!btn) return;
       btn.disabled = loading;
@@ -5012,12 +5012,12 @@ async function initUnifiedIntegrations() {
         try {
           await fetch(`/api/mcp/oauth/exchange/${id}`, { method: 'POST', credentials: 'same-origin', body: pf });
         } finally {
-          _setBtnLoading(pasteGo, false, '提交');
+          _setBtnLoading(pasteGo, false, 'Submit');
         }
       });
     }
 
-    // Drives the OAuth 流程: waits for the auth_url (discovery+DCR may lag),
+    // Drives the OAuth flow: waits for the auth_url (discovery+DCR may lag),
     // opens it once, then resolves on connected/error.
     async function _handleMcpAuth(id, initialAuthUrl, tries = 90) {
       let opened = false;
@@ -5044,7 +5044,7 @@ async function initUnifiedIntegrations() {
           }
         } catch (e) {
           // Tolerate a single blip, but surface persistent failures instead of
-          // silently polling until 超时.
+          // silently polling until timeout.
           if (++fails >= 5 && msg) msg.textContent = `Status check failing (${e.message || 'network error'}) — still retrying…`;
         }
       }
@@ -5073,7 +5073,7 @@ async function initUnifiedIntegrations() {
               <span id="uf-mcp-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
               ${srv.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${srv.id}" target="_blank" class="admin-btn-add" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));text-decoration:none;font-weight:600;">Authorize</a>` : ''}
               <button class="admin-btn-add" id="uf-mcp-reconnect" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Reconnect</button>
-              <button class="admin-btn-add" id="uf-mcp-toggle" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">${srv.is_enabled ? '禁用' : '启用'}</button>
+              <button class="admin-btn-add" id="uf-mcp-toggle" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">${srv.is_enabled ? 'Disable' : 'Enable'}</button>
               <button class="admin-btn-add" id="uf-mcp-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Close</button>
             </div>
             <div id="uf-mcp-tools-panel"></div>
@@ -5097,7 +5097,7 @@ async function initUnifiedIntegrations() {
           showMcpForm(editId);
         });
         el('uf-mcp-cancel').addEventListener('click', () => { formEl.style.display = 'none'; });
-        // 加载 tools list
+        // Load tools list
         if (srv.status === 'connected' && srv.tool_count > 0) {
           const panel = el('uf-mcp-tools-panel');
           try {
@@ -5121,7 +5121,7 @@ async function initUnifiedIntegrations() {
         }
       } catch (_) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">Failed to load server</div>'; }
     } else {
-      // 添加 new MCP 服务器 form
+      // Add new MCP server form
       formEl.innerHTML = `
         <div class="admin-card" style="margin-top:8px">
           <h2 style="font-size:13px">Add MCP Server</h2>
@@ -5154,7 +5154,7 @@ async function initUnifiedIntegrations() {
       el('uf-mcp-cancel').addEventListener('click', () => { formEl.style.display = 'none'; });
       el('uf-mcp-save').addEventListener('click', async () => {
         const transport = el('uf-mcp-transport').value;
-        // routes/mcp_routes.py uses FastAPI Form(...) — send 多部分, not JSON.
+        // routes/mcp_routes.py uses FastAPI Form(...) — send multipart, not JSON.
         const fd = new FormData();
         fd.append('name', el('uf-mcp-name').value);
         fd.append('transport', transport);
@@ -5253,7 +5253,7 @@ async function initUnifiedIntegrations() {
     const setupForToken = (token) => cfg.buildSetup(origin, token);
 
     // Inline editor for the existing token the user clicked into (current).
-    // Shows the rename input, the prefix/last-used, and 权限范围 toggles that
+    // Shows the rename input, the prefix/last-used, and scope toggles that
     // PATCH /api/tokens/{id} on change. The integration row's trash button
     // handles revoke, so no Revoke button in here.
     const editExistingHtml = current ? `
@@ -5336,7 +5336,7 @@ async function initUnifiedIntegrations() {
       formEl.dataset.createdTokenId = String(current.id);
       const revokeBtn = el('uf-codex-revoke');
       if (revokeBtn) revokeBtn.style.display = 'inline-flex';
-      // Inline rename + per-权限范围 PATCH on change.
+      // Inline rename + per-scope PATCH on change.
       const renameInput = el('uf-codex-existing-rename');
       if (renameInput) {
         const original = renameInput.value;
@@ -5382,7 +5382,7 @@ async function initUnifiedIntegrations() {
 
     el('uf-codex-cancel')?.addEventListener('click', () => { formEl.style.display = 'none'; });
 
-    // 配置 access — collapsed by default so the reveal panel doesn't
+    // Configure access — collapsed by default so the reveal panel doesn't
     // dump 13 toggles at once. Click reveals + rotates the caret.
     el('uf-codex-toggle-config')?.addEventListener('click', () => {
       const body = el('uf-codex-config-body');
@@ -5447,7 +5447,7 @@ async function initUnifiedIntegrations() {
       const createBtn = el('uf-codex-create-btn');
       if (prompt) prompt.style.display = 'none';
       if (createBtn) createBtn.style.display = 'none';
-      // Whirlpool 加载指示器 while the POST is in flight.
+      // Whirlpool spinner while the POST is in flight.
       let _wp = null;
       if (pending) {
         pending.innerHTML = '';
@@ -5472,7 +5472,7 @@ async function initUnifiedIntegrations() {
         const base = name;
         while (existingNames.has(name)) { name = `${base} ${n++}`; }
       }
-      // Minimum 权限范围 on creation so the token isn't effectively saved
+      // Minimum scope on creation so the token isn't effectively saved
       // with everything granted before the user has clicked Save. The
       // UI toggles below are pre-checked as a preview of what *will*
       // be granted; nothing else is persisted server-side until Save.
@@ -5491,9 +5491,9 @@ async function initUnifiedIntegrations() {
         if (setupBtn) setupBtn.dataset.token = d.token || '';
         const setupCode = el('uf-codex-setup-code');
         if (setupCode) setupCode.textContent = setupForToken(d.token || '');
-        // Populate inline 权限范围 toggles for the just-created token with
-        // ALL 权限范围s pre-checked as a UI preview — the underlying token
-        // still only has 'chat' until the user clicks 保存 below.
+        // Populate inline scope toggles for the just-created token with
+        // ALL scopes pre-checked as a UI preview — the underlying token
+        // still only has 'chat' until the user clicks Save below.
         const uiToken = { id: d.id, scopes: ['chat'].concat(toolScopes.map(s => s.key)) };
         const inlineEl = el('uf-codex-inline-scopes');
         if (inlineEl) {
@@ -5502,12 +5502,12 @@ async function initUnifiedIntegrations() {
               ${scopeToggles(uiToken)}
               <div class="uf-codex-scope-msg" data-token-id="${esc(uiToken.id)}" style="font-size:11px;min-height:14px;"></div>
             </div>`;
-          // No auto-PATCH: 权限范围 toggles only persist on 保存 click below.
+          // No auto-PATCH: scope toggles only persist on Save click below.
         }
-        // Now that the token exists, surface the 保存 button.
+        // Now that the token exists, surface the Save button.
         const saveBtn = el('uf-codex-save');
         if (saveBtn) saveBtn.style.display = 'inline-flex';
-        // Remember the created token id so 保存 can PATCH its 权限范围s.
+        // Remember the created token id so Save can PATCH its scopes.
         formEl.dataset.createdTokenId = String(uiToken.id);
         if (msg) {
           msg.textContent = `Created "${name}".`;
@@ -5523,7 +5523,7 @@ async function initUnifiedIntegrations() {
         }
       }
     };
-    // Bind the explicit 创建 button; no auto-creation.
+    // Bind the explicit Create button; no auto-creation.
     el('uf-codex-create-btn')?.addEventListener('click', () => { _autoCreateCodex(); });
     const _copyCodexToken = async (text) => {
       const value = String(text || '');
@@ -5625,11 +5625,11 @@ async function initUnifiedIntegrations() {
     }
     // Note: don't call _wireScopeChange(formEl) here. The existing-token
     // editor (current) already wires its own change handler that PATCHes
-    // immediately. The inline 权限范围s for a *just-created* token should
-    // remain unwired so they only persist on 保存 click below.
+    // immediately. The inline scopes for a *just-created* token should
+    // remain unwired so they only persist on Save click below.
   }
 
-  // ── 添加 button now drops a type-picker menu directly anchored to itself ──
+  // ── Add button now drops a type-picker menu directly anchored to itself ──
   if (addBtn) {
     const _typeOptions = [
       ['api', 'API Service'],
@@ -5745,7 +5745,7 @@ export function close() {
   }
 }
 
-// 处理 redirect back from Google OAuth2 — open settings to integrations and show status.
+// Handle redirect back from Google OAuth2 — open settings to integrations and show status.
 (function _handleOauthRedirect() {
   const sp = new URLSearchParams(window.location.search);
   if (!sp.has('email_oauth_success') && !sp.has('email_oauth_error')) return;
@@ -5758,7 +5758,7 @@ export function close() {
   function _tryOpen() {
     if (window.settingsModule && typeof window.settingsModule.open === 'function') {
       window.settingsModule.open('integrations');
-      // Brief 提示条-style banner.
+      // Brief toast-style banner.
       const banner = document.createElement('div');
       banner.textContent = success
         ? '✓ Google account connected — email is ready'

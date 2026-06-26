@@ -1,4 +1,4 @@
-// compare/probe.js — 模型探测/检查系统
+// compare/probe.js — model probe/check system
 import state from './state.js';
 import { WAVE_FRAMES } from './icons.js';
 import uiModule from '../ui.js';
@@ -12,11 +12,11 @@ function _clearProbeWaves() {
 async function _checkUnprobed() {
   const unprobed = state._selectedModels.filter(m => !state._probed.has(m.model));
   if (unprobed.length === 0) {
-    if (uiModule) uiModule.showToast(t('compare.all_verified'));
+    if (uiModule) uiModule.showToast('All models verified');
     return;
   }
 
-  // 在检查运行期间，探测按钮上显示旋转加载动画。
+  // Whirlpool loader on the Probe button while the check runs.
   const _btn = document.getElementById('compare-check-btn');
   let _btnHTML = null, _wp = null;
   if (_btn) {
@@ -27,10 +27,10 @@ async function _checkUnprobed() {
       _wp = spinnerModule.createWhirlpool(14);
       _btn.innerHTML = '';
       _btn.appendChild(_wp.element);
-    } catch (_) { /* spinner 尽力而为 */ }
+    } catch (_) { /* spinner best-effort */ }
   }
 
-  // 快速内联探测 — 用 提示条 显示结果
+  // Quick inline probe — show toast with results
   const isBlind = state._blindMode;
   let ok = 0, fail = 0;
   try {
@@ -55,17 +55,17 @@ async function _checkUnprobed() {
       } else {
         fail++;
         const name = isBlind ? 'a model' : (m.name || m.model.split('/').pop());
-        if (uiModule) uiModule.showToast(t('compare.verify_failed', { name, error: result?.error || t('compare.unknown_error') }), 5000);
+        if (uiModule) uiModule.showToast(`${name} failed: ${result?.error || 'unknown'}`, 5000);
       }
     } catch (e) {
       fail++;
     }
   }
   if (fail === 0) {
-    if (uiModule) uiModule.showToast(t('compare.models_verified', { count: ok }));
+    if (uiModule) uiModule.showToast(`${ok} model${ok > 1 ? 's' : ''} verified`);
   }
   } finally {
-    // 恢复探测按钮（其标签/可见性将在下方刷新）。
+    // Restore the Probe button (its label/visibility is refreshed below).
     if (_btn) {
       _btn.disabled = false;
       _btn.style.opacity = '';

@@ -1,5 +1,5 @@
 /**
- * 日历模块 — 基于 CalDAV 的月/周/年日历。
+ * Calendar Module — CalDAV-backed month/week/year calendar.
  */
 
 import uiModule from './ui.js';
@@ -18,7 +18,7 @@ import {
 } from './calendar/utils.js';
 
 const API_BASE = window.location.origin;
-// 打开文件选择器，上传所选图片，返回 URL 字符串。
+// Open a file picker, upload the chosen image, return the URL string.
 function _pickCalBgImage() {
   return new Promise(resolve => {
     const input = document.createElement('input');
@@ -47,9 +47,9 @@ function _pickCalBgImage() {
 }
 
 let _open = false;
-// 在日历打开时设置，以便首次月视图渲染时将今天的
-// 单元格滚动到可视区域 — 在移动端网格可滚动，今天可能在
-// 视口下方，因此我们始终定位到当前日期。
+// Set when the calendar opens so the first month render scrolls today's
+// cell into view — the grid scrolls on mobile and today can sit below the
+// fold, so we always land on the current date.
 let _scrollToTodayOnOpen = false;
 let _currentDate = new Date();
 let _events = [];
@@ -57,10 +57,10 @@ let _allEvents = {};
 let _fetchedRanges = [];
 let _calendars = [];
 let _hiddenCals = new Set();
-let _hiddenTypes = new Set();   // 要隐藏的 event_type 值
-// "仅重要事件"筛选 — 为 true 时，只渲染 importance 为
-// high/critical 的事件，不论其类别。通过"!"标签切换；
-// 与 _hiddenTypes（处理 event_type 类别）相互独立。
+let _hiddenTypes = new Set();   // event_type values to hide
+// "Only important" filter — when true, only events with importance
+// high/critical render, regardless of their category. Toggled via the "!"
+// chip; orthogonal to _hiddenTypes (which deals with event_type categories).
 let _onlyImportant = false;
 
 let _filtersCollapsed = localStorage.getItem('cal-filters-collapsed') === '1';
@@ -74,14 +74,14 @@ let _modal = null;
 
 let _dragUid = null;
 let _sidebarWasOpen = false;
-let _slideDir = 0;  // -1 = 上一个, +1 = 下一个, 0 = 无
+let _slideDir = 0;  // -1 = prev, +1 = next, 0 = none
 
-// （单一撤销栈位于下方更远处的 `_calUndoStack`；此处之前
-// 保存的一层 `_lastUndo` 已合并到该栈中。）
+// (Single undo stack lives at `_calUndoStack` further below; this used to
+// hold a one-deep `_lastUndo` which has been collapsed into that stack.)
 
 function _showCalUndoToast(label, undoFn) {
-  // 推送到共享撤销栈（月份拖放也在使用），这样
-  // Cmd/Ctrl+Z 和提示按钮使用同一个数据源。
+  // Push onto the shared undo stack (also used by month drag-drop) so
+  // Cmd/Ctrl+Z and the toast button consume the same source of truth.
   _pushCalUndo({ label, run: undoFn });
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform || '') || /Mac/.test(navigator.userAgent || '');
   uiModule.showToast(label, {
@@ -95,7 +95,7 @@ function _showCalUndoToast(label, undoFn) {
 // ── API ──
 
 function _rangeIsCached(start, end) {
-  // 检查 [start, end] 是否完全被某个已获取的范围覆盖
+  // Check if [start, end] is fully covered by any single fetched range
   for (const [s, e] of _fetchedRanges) {
     if (s <= start && e >= end) return true;
   }
@@ -103,7 +103,7 @@ function _rangeIsCached(start, end) {
 }
 
 function _filterPool(start, end) {
-  // 返回事件池中与 [start, end) 重叠的所有事件
+  // Return all events in pool that overlap [start, end)
   return Object.values(_allEvents).filter(ev => {
     const evStart = ev.all_day ? ev.dtstart : _localDateOf(ev.dtstart);
     const evEnd = ev.all_day ? ev.dtend : _localDateOf(ev.dtend || ev.dtstart);
@@ -116,7 +116,7 @@ async function _fetchEvents(start, end, force) {
     _events = _filterPool(start, end);
     return;
   }
-  // 如果有缓存数据，立即从池中渲染
+  // Render from pool immediately if we have any cached data
   const hasCache = Object.keys(_allEvents).length > 0;
   if (hasCache) _events = _filterPool(start, end);
   const fetchPromise = fetch(`${API_BASE}/api/calendar/events?start=${start}&end=${end}`, { credentials: 'same-origin' })
@@ -125,39 +125,39 @@ async function _fetchEvents(start, end, force) {
       return r.json();
     })
     .then(data => {
-      // 缓存加载后的首次获取时，完全替换池以避免
-      // 来自之前后端的过期/重复 UID（如 CalDAV → SQLite）
+      // On first fetch after cache load, replace pool entirely to avoid
+      // stale/duplicate UIDs from a previous backend (e.g. CalDAV → SQLite)
       if (hasCache && _fetchedRanges.length === 0) _allEvents = {};
       (data.events || []).forEach(ev => { _allEvents[ev.uid] = ev; });
       _fetchedRanges.push([start, end]);
       _events = _filterPool(start, end);
       if (typeof _saveCache === 'function') _saveCache();
-      // 新数据到达时后台重新渲染（如果日历仍处于打开状态）
+      // Re-render in background when new data arrives (if calendar still open)
       if (_open && hasCache) _render();
     })
     .catch(e => { console.error('Calendar: failed to fetch events', e); });
-  // 如果有缓存，不阻塞请求 — 立即返回以便渲染即时完成
+  // If we have cache, don't block on fetch — return immediately so render is instant
   if (hasCache) return;
-  // 无缓存 — 必须等待请求完成
+  // No cache — must await the fetch
   await fetchPromise;
 }
 
-// 后台预取相邻月份 — 发射后不管，不阻塞
+// Prefetch surrounding months in background — fire-and-forget, no blocking
 function _prefetchAdjacent() {
   const ranges = [];
   if (_view === 'month' || _view === 'week') {
-    // 预取当前前后 ±2 个月
+    // Prefetch ±2 months around current
     for (let offset = -2; offset <= 2; offset++) {
       if (offset === 0) continue;
       const d = new Date(_currentDate.getFullYear(), _currentDate.getMonth() + offset, 1);
       ranges.push(_monthRange(d));
     }
   } else if (_view === 'year') {
-    // 预取上一年/下一年
+    // Prefetch prev/next year
     ranges.push([`${_currentDate.getFullYear() - 1}-01-01`, `${_currentDate.getFullYear()}-01-01`]);
     ranges.push([`${_currentDate.getFullYear() + 1}-01-01`, `${_currentDate.getFullYear() + 2}-01-01`]);
   }
-  // 并行发起所有预取，忽略失败
+  // Fire all prefetches in parallel, ignore failures
   for (const [s, e] of ranges) {
     if (_rangeIsCached(s, e)) continue;
     fetch(`${API_BASE}/api/calendar/events?start=${s}&end=${e}`, { credentials: 'same-origin' })
@@ -174,9 +174,9 @@ function _prefetchAdjacent() {
 }
 
 let _calendarsError = null;
-// 守卫变量，确保每页加载只触发一次打开时的 CalDAV 拉取 —
-// 每个列表/渲染路径都调用 _fetchCalendars，但我们只想
-// 在用户首次打开时惰性地访问远程服务器。
+// Guard so we only trigger an on-open CalDAV pull once per page load —
+// every list/render path calls _fetchCalendars, but we only want to
+// hit the remote server lazily on the first user open.
 let _caldavSyncedOnce = false;
 async function _fetchCalendars() {
   _calendarsError = null;
@@ -190,18 +190,18 @@ async function _fetchCalendars() {
     });
   } catch (e) { _calendars = []; _calendarsError = e.message || 'Connection failed'; }
 
-  // 首次打开：触发后台 CalDAV 拉取。我们不等待 —
-  // 初始渲染使用本地已缓存的内容，
-  // 同步的写入在解析后的下一次绘制时显示。
+  // First open: fire a background CalDAV pull. We don't await — the
+  // initial render uses whatever's already cached locally, and the
+  // sync's writes show up on the next paint after it resolves.
   if (!_caldavSyncedOnce) {
     _caldavSyncedOnce = true;
     _syncCaldav(false);
   }
 }
 
-// 触发 CalDAV 拉取。`interactive=true` 等待结果并
-// 刷新 UI；false 发射后不管（用于首次打开）。两者
-// 在 CalDAV 未配置时静默空操作。
+// Trigger a CalDAV pull. `interactive=true` waits for the result and
+// refreshes the UI; false fires-and-forgets (used on first open). Both
+// no-op silently if CalDAV isn't configured.
 async function _syncCaldav(interactive) {
   try {
     const res = await fetch(`${API_BASE}/api/calendar/sync`, {
@@ -209,8 +209,8 @@ async function _syncCaldav(interactive) {
     });
     const data = await res.json().catch(() => ({}));
     if (interactive) return data;
-    // 后台路径：如果拉取确实改变了什么，丢弃
-    // 本地缓存并重新渲染，以便新事件显示。
+    // Background path: if the pull actually changed anything, drop
+    // local caches and re-render so new events appear.
     const changed = (data.calendars || 0) > 0 && ((data.events || 0) > 0 || (data.deleted || 0) > 0);
     if (changed) {
       _allEvents = {}; _fetchedRanges = [];
@@ -236,17 +236,17 @@ function _optimisticEvent(data, uid) {
     rrule: data.rrule || '',
     calendar: cal?.name || '',
     calendar_href: data.calendar_href || cal?.href || '',
-    // 每个事件的颜色覆盖（包括自定义背景的 bg:<url> 标记，
-    // 优先级高于父日历的默认十六进制颜色。
+    // Per-event color override (including the bg:<url> sentinel for custom
+    // backgrounds) wins over the parent calendar's default hex.
     color: (data.color !== undefined && data.color !== null) ? data.color : (cal?.color || ''),
   };
 }
 
-// v2 回顾错误处理：此处之前的每个 fetch 都只检查
-// `.then(r => r.json())` 而没有 `r.ok` 测试。500/404 仍然
-// 会 resolve promise，乐观状态被当作成功。
-// 现在三个流程都检查 `r.ok` 并在失败路径上回滚
-// 乐观状态 + 显示提示信息。
+// v2 review error-handling MEDs: every fetch here previously checked
+// only `.then(r => r.json())` with no `r.ok` test. A 500/404 still
+// resolved the promise and the optimistic state got promoted to truth.
+// All three flows now inspect `r.ok` and roll back the optimistic
+// state + surface a toast on the failure path.
 async function _createEvent(data) {
   const tempUid = 'temp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
   _allEvents[tempUid] = _optimisticEvent(data, tempUid);
@@ -275,10 +275,10 @@ async function _updateEvent(uid, data) {
   const merged = { ...(_allEvents[uid] || {}), ...data };
   const _preMergeBackup = _allEvents[uid];
   _allEvents[uid] = _optimisticEvent(merged, uid);
-  // 对于重复事件，uid 是复合形式 "{base_uid}::{date}" —
-  // 后端将其解析为基础系列行。更新后，
-  // 同一系列的其他事件已过时。清除缓存以便
-  // 重新获取能拿到最新数据（下次渲染 + 预取会处理）。
+  // For recurring events the uid is a compound "{base_uid}::{date}" —
+  // the backend resolves it to the base series row. After the update,
+  // other occurrences of the same series are stale. Wipe the cache so
+  // a re-fetch picks up fresh data (next render + prefetch handles it).
   const isRecurring = uid.includes('::');
   fetch(`${API_BASE}/api/calendar/events/${encodeURIComponent(uid)}`, {
     method: 'PUT', credentials: 'same-origin',
@@ -301,16 +301,16 @@ async function _updateEvent(uid, data) {
 }
 
 async function _deleteEvent(uid) {
-  // 多个"兄弟"UID 可能需要乐观地消失：
-  //   1. 用户点击的确切 uid。
-  //   2. 如果用户点击了重复事件实例（uid 包含 "::"），
-  //      服务器删除主记录 + 所有实例 — 因此我们也从
-  //      客户端缓存中移除主 uid 和所有 "master::*" 扩展。
-  //      没有这个处理，删除多天重复任务的某一天只会
-  //      在视觉上删除那一天；其他天会继续渲染直到下次完全刷新。
-  //
-  //   3. 如果用户点击了主记录，同样移除所有 "master::*"
-  //      扩展（相同前缀扫描）。
+  // Multiple "sibling" UIDs may need to vanish optimistically:
+  //   1. The exact uid the user clicked.
+  //   2. If the user clicked a RECURRING occurrence (uid contains "::"),
+  //      the server deletes the master + every occurrence — so we strip
+  //      the master uid AND every "master::*" expansion from the
+  //      client-side caches too. Without this, deleting one day of a
+  //      multi-day recurring task only removed THAT day visually; the
+  //      other days kept rendering until the next full refresh.
+  //   3. If the user clicked the master, strip every "master::*"
+  //      expansion (same prefix scan).
   const masterUid = uid.includes('::') ? uid.split('::')[0] : uid;
   const backups = {};
   const _matches = (k) => k === uid || k === masterUid || k.startsWith(masterUid + '::');
@@ -330,10 +330,10 @@ async function _deleteEvent(uid) {
   fetch(`${API_BASE}/api/calendar/events/${encodeURIComponent(uid)}`, {
     method: 'DELETE', credentials: 'same-origin',
   }).then(r => {
-    // 404 = 事件已被其他会话/设备删除。这正是
-    // 我们想要的状态，因此视为成功 — 不要恢复
-    // 该行，否则用户永远无法清除那些在桌面端打开时
-    // 被移动端删除的过期缓存事件（反之亦然）。
+    // 404 = the event was already deleted by another session/device. That's
+    // exactly the state we want, so treat it as success — don't restore the
+    // row, otherwise the user can never clear stale cached events that were
+    // deleted from desktop while mobile was open (and vice versa).
     if (!r.ok && r.status !== 404) throw new Error('HTTP ' + r.status);
     if (isRecurring) {
       _fetchedRanges = [];
@@ -342,7 +342,7 @@ async function _deleteEvent(uid) {
       _saveCache && _saveCache();
     }
   }).catch((e) => {
-    // 服务器拒绝 — 恢复我们乐观移除的每个 uid。
+    // Server rejected — restore every uid we optimistically stripped.
     for (const [k, ev] of Object.entries(backups)) {
       _allEvents[k] = ev;
       if (Array.isArray(_events)) _events.push(ev);
@@ -353,9 +353,9 @@ async function _deleteEvent(uid) {
   return { ok: true };
 }
 
-// ── 日期工具 ──
-// _ds, _addDays, _shiftDT, _localDateOf, _tzOffset 位于 ./calendar/utils.js
-// _monthRange / _weekRange / _today 依赖 _ds，因此保留在这里。
+// ── Date helpers ──
+// _ds, _addDays, _shiftDT, _localDateOf, _tzOffset live in ./calendar/utils.js
+// _monthRange / _weekRange / _today depend on _ds so they stay here.
 
 function _today() { return _ds(new Date()); }
 
@@ -379,11 +379,11 @@ function _eventsForDay(dateStr) {
   return _events.filter(e => {
     if (!_eventVisible(e)) return false;
     if (e.all_day) {
-      // 零时长的全天事件（dtstart == dtend）是单日事件
+      // Zero-duration all-day event (dtstart == dtend) is a single-day event
       if (e.dtstart === e.dtend) return e.dtstart === dateStr;
       return e.dtstart <= dateStr && e.dtend > dateStr;
     }
-    // 多日定时事件：在其跨越的每一天显示
+    // Multi-day timed events: show on each day they span
     const startDate = _localDateOf(e.dtstart);
     const endDate = _localDateOf(e.dtend);
     if (startDate !== endDate) return startDate <= dateStr && endDate >= dateStr;
@@ -392,10 +392,10 @@ function _eventsForDay(dateStr) {
 }
 
 function _calColor(ev) {
-  // 自定义背景图片颜色在需要纯色的位置（圆点、多日条、周视图
-  // 边框等）回退到父日历的纯色十六进制值。
-  // 完整图片在合适的地方（事件项行）通过 _calItemBgStyle() 显示。
-  //
+  // Custom bg-image colors fall back to the parent calendar's solid hex
+  // in spots that need a plain color (dots, multi-day bars, week tile
+  // borders). The full image is shown via _calItemBgStyle() where it
+  // makes sense (event-item rows).
   if (_isCalBgImage(ev.color)) {
     const c = _calendars.find(c => c.href === ev.calendar_href);
     return c?.color || 'var(--accent)';
@@ -409,8 +409,8 @@ function _calEventFg(ev) {
   return _calReadableTextColor(_calColor(ev));
 }
 
-// 事件行有自定义背景图片时的额外内联样式。
-// 普通纯色事件返回空字符串。
+// Extra inline style for an event row when the event has a custom BG image.
+// Returns '' for normal solid-color events.
 function _calItemBgStyle(ev) {
   if (!_isCalBgImage(ev.color)) return '';
   const url = _calBgImageUrl(ev.color).replace(/'/g, "\\'").replace(/"/g, "%22");
@@ -429,7 +429,7 @@ function _todayCount() {
   }).length;
 }
 
-// 每个事件的 ⋮ 菜单：提醒我 / 删除
+// Per-event ⋮ menu: Remind me / Delete
 function _wireQuickDelete(body) {
   body.querySelectorAll('.cal-event-more').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -449,11 +449,11 @@ function _clampDropdown(dropdown, anchorRect) {
   const vh = window.innerHeight;
   const r = dropdown.getBoundingClientRect();
   const w = r.width, h = r.height;
-  // 水平方向：优先与锚点右对齐，限制在视口内
+  // Horizontal: prefer right-aligned with anchor, clamp to viewport
   let left = anchorRect.right - w;
   if (left + w > vw - margin) left = vw - margin - w;
   if (left < margin) left = margin;
-  // 垂直方向：如能容纳则放在锚点下方，否则放上方
+  // Vertical: below anchor if it fits, else above
   let top = anchorRect.bottom + 4;
   if (top + h > vh - margin) {
     const above = anchorRect.top - 4 - h;
@@ -490,7 +490,7 @@ function _showEventMoreMenu(ev, anchor) {
   dropdown.appendChild(_item(_trashIcon, 'Delete', async () => {
     closeMenu();
     const name = ev.summary ? `"${ev.summary}"` : 'this event';
-    const ok = await uiModule.styledConfirm(t('calendar.delete_event_confirm', { name: name }), { confirmText: t('common.delete'), danger: true });
+    const ok = await uiModule.styledConfirm(`Delete ${name}?`, { confirmText: 'Delete', danger: true });
     if (!ok) return;
     try { await _deleteEvent(ev.uid); setTimeout(() => _render(), 100); } catch (_) {}
   }, true));
@@ -502,13 +502,13 @@ function _showEventMoreMenu(ev, anchor) {
   closeMenu = bindMenuDismiss(dropdown, () => dropdown.remove(), (ev2) => !dropdown.contains(ev2.target) && ev2.target !== anchor);}
 
 async function _createEventReminder(ev, dueDate) {
-  // Store the 提醒 as an absolute UTC instant (with the Z suffix) so the
-  // 通知 poller fires at the right wall-clock moment regardless of:
-  //   - the event's source 时区 (CalDAV/import may carry a TZID),
-  //   - the user's current local 时区 differing from when the 提醒
+  // Store the reminder as an absolute UTC instant (with the Z suffix) so the
+  // notification poller fires at the right wall-clock moment regardless of:
+  //   - the event's source timezone (CalDAV/import may carry a TZID),
+  //   - the user's current local timezone differing from when the reminder
   //     was created,
   //   - any naive ISO mis-interpretation downstream.
-  // notes.js 和日历轮询都已使用 `new Date(due_date)`，
+  // Both notes.js and the calendar poller already use `new Date(due_date)`,
   // which handles Z-suffixed ISO correctly and converts back to local time
   // when displayed.
   const iso = new Date(dueDate).toISOString();
@@ -525,9 +525,9 @@ async function _createEventReminder(ev, dueDate) {
     label: 'calendar',
     due_date: iso,
     source: 'calendar',
-    // Persist the EVENT'S absolute start so the 通知 body can be
-    // computed live at fire time ("启动 in 5 min") instead of using a
-    // stale string baked at 日程安排 time.
+    // Persist the EVENT'S absolute start so the notification body can be
+    // computed live at fire time ("Starts in 5 min") instead of using a
+    // stale string baked at scheduling time.
     event_dtstart: new Date(ev.dtstart).toISOString(),
   };
   try {
@@ -538,7 +538,7 @@ async function _createEventReminder(ev, dueDate) {
     });
     if (!res.ok) throw new Error('Failed');
     const fmt = dueDate.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-    if (uiModule.showToast) uiModule.showToast(t('calendar.reminder_set_for', { time: fmt }));
+    if (uiModule.showToast) uiModule.showToast(`Reminder set for ${fmt}`);
     try { window.notesModule?.refreshDueBadge?.({ force: true }); } catch {}
     if ('Notification' in window && Notification.permission === 'default') {
       try { Notification.requestPermission(); } catch {}
@@ -548,14 +548,14 @@ async function _createEventReminder(ev, dueDate) {
   }
 }
 
-// ── 侧边栏折叠 ──
+// ── Sidebar collapse ──
 
 function _collapseSidebar() {
   const sb = document.getElementById('sidebar');
   if (sb && !sb.classList.contains('hidden')) {
-    // 仅在桌面端记住之前的状态。在移动端侧边栏是
-    // 一种覆盖层，用户打开工具时会主动滑动/点击关闭 —
-    // 关闭时再弹回来是不期望的行为。
+    // Only remember the prior state on desktop. On mobile the sidebar is an
+    // overlay that the user intentionally swipes/taps away when the tool
+    // opens — popping it back on close is unwanted.
     if (window.innerWidth >= 700) _sidebarWasOpen = true;
     sb.classList.add('hidden');
     if (window.syncRailSide) window.syncRailSide();
@@ -570,7 +570,7 @@ function _restoreSidebar() {
   }
 }
 
-// ── 角标 ──
+// ── Badge ──
 
 const BADGE_SEEN_KEY = 'odysseus-calendar-badge-seen';
 
@@ -594,11 +594,11 @@ function _updateBadge() {
   const count = _todayCount();
   if (count > 0 && !_isBadgeSeenToday()) {
     if (!badge) { badge = document.createElement('span'); badge.className = 'cal-badge'; btn.appendChild(badge); }
-    badge.title = `${t('calendar.events_today', { n: count })}`;
+    badge.title = `${count} event${count > 1 ? 's' : ''} today`;
   } else if (badge) badge.remove();
 }
 
-// ── 模态框 ──
+// ── Modal ──
 
 function _getModal() {
   if (_modal) return _modal;
@@ -617,9 +617,9 @@ function _getModal() {
   document.body.appendChild(_modal);
   _modal.querySelector('#cal-close').addEventListener('click', closeCalendar);
   _modal.addEventListener('click', (e) => { if (e.target === _modal) closeCalendar(); });
-  // 使可拖动 — 用一次共享工具函数调用替代了约 50 行内联
-  // 拖放/停靠代码。日历不支持全屏吸附，因此此处无需
-  // fsClass / enter/exit 回调。
+  // Make draggable — replaced ~50 lines of inline drag/dock plumbing with
+  // a single call to the shared helper. Calendar doesn't support fullscreen
+  // snap so no fsClass / enter/exit callbacks here.
   {
     const content = _modal.querySelector('.modal-content');
     const header = _modal.querySelector('.modal-header');
@@ -630,7 +630,7 @@ function _getModal() {
   return _modal;
 }
 
-// ── 渲染调度 ──
+// ── Render dispatch ──
 
 // Quick-add hint examples — the placeholder cycles through these every few
 // seconds so users see different prompt shapes (events, deadlines, recurring).
@@ -654,9 +654,9 @@ function _initQuickAddHintCycle() {
   span.textContent = _QA_HINT_EXAMPLES[idx];
 }
 
-// 在重新渲染前保存快速添加输入框的状态（焦点 + 光标 + 值），
-// 这样后台获取不会在用户输入中途打断。新 DOM
-// 落地后由 _wireAll 恢复。
+// Stash the quick-add input's state (focus + caret + value) before a
+// re-render so background fetches don't kick the user out mid-type. Picked
+// up by _wireAll after the new DOM lands.
 let _qaPendingRestore = null;
 function _saveQuickAddState() {
   const el = document.getElementById('cal-quickadd');
@@ -668,10 +668,10 @@ function _saveQuickAddState() {
   };
 }
 
-// 用户正在快速添加输入框中时为 true。在移动端，
-// DOM 重建后的编程式重新聚焦无法重新打开软键盘，因此
-// 我们绝对不能在有活跃的快速添加时替换日历主体 —
-// 我们推迟渲染并在失焦时刷新数据。
+// True while the user is actively in the quick-add field. On mobile a
+// programmatic re-focus after a DOM rebuild can't reopen the soft keyboard, so
+// we must NOT swap the calendar body out from under an active quick-add — we
+// defer the render and flush it on blur instead.
 let _renderPending = false;
 let _qaSubmitting = false;
 function _qaTyping() {
@@ -679,32 +679,32 @@ function _qaTyping() {
   return !!el && document.activeElement === el;
 }
 
-// 仅更新日详情面板的搜索结果部分，保持
-// 搜索输入框元素本身在 DOM 中，这样屏幕键盘
-// 不会在每次按键间收起。由搜索输入的 `input`
-// 监听器使用，而非完整的 _render()。
+// Update only the search-results portion of the day-detail panel, keeping
+// the search input element itself in the DOM so the on-screen keyboard
+// doesn't dismiss between keystrokes. Used by the search input's `input`
+// listener instead of a full _render().
 function _updateDaySearchResults() {
   const dayDetail = document.querySelector('.cal-day-detail');
   if (!dayDetail) { _render(); return; }
-  // 搜索会强制选择一个日期，这样面板始终可用
-  // （与 _render 中的逻辑匹配）。
+  // Searching forces a selected day so the panel is always available
+  // (matches the logic in _render).
   if (_searchQuery && !_selectedDay) _selectedDay = _today();
   const ds = _selectedDay || _today();
-  // 在分离的节点中构建日详情 HTML，以便提取其
-  // 子元素（结果、标题等），而不触碰活跃的输入框。
+  // Build the day-detail HTML in a detached node so we can extract its
+  // children (results, header, etc.) without touching the live input.
   const tmp = document.createElement('div');
   tmp.innerHTML = _dayDetailHTML(ds);
   const fresh = tmp.querySelector('.cal-day-detail');
   if (!fresh) return;
-  // 移除活跃日详情中除 search-wrap 外的所有子元素。
+  // Remove every child of the live day-detail except the search-wrap.
   const keep = dayDetail.querySelector('.cal-search-wrap');
   [...dayDetail.children].forEach(c => { if (c !== keep) c.remove(); });
-  // 将新构建的子元素移到活跃面板中，跳过
-  // 重复的 search-wrap。
+  // Move children from the fresh build into the live panel, skipping
+  // the duplicate search-wrap.
   [...fresh.children].forEach(c => {
     if (!c.classList.contains('cal-search-wrap')) dayDetail.appendChild(c);
   });
-  // 重新绑定新插入的事件行的点击处理。
+  // Re-wire click handlers on the newly-inserted event rows.
   dayDetail.querySelectorAll('.cal-event-item').forEach(it => {
     it.addEventListener('click', (e) => {
       if (e.target.closest('.cal-event-more')) return;
@@ -716,8 +716,8 @@ function _updateDaySearchResults() {
   _wireQuickDelete(dayDetail);
 }
 
-// 按"缩放级别"在日历视图间切换 — 捏合放大是 year→month→week，
-// 捏合缩小则相反。Agenda 是独立的视图，因此被排除在外。
+// Step between calendar views by "zoom level" — pinch IN goes year→month→week,
+// pinch OUT goes the other way. Agenda is its own thing so it's excluded.
 function _zoomView(direction) {
   const chain = ['year', 'month', 'week'];
   const idx = chain.indexOf(_view);
@@ -728,26 +728,26 @@ function _zoomView(direction) {
   _render();
 }
 
-// 每次 _render() 调用自增的单调计数器。每个视图的异步
-// 渲染函数在入口处记录该值，如果更新的渲染已经开始，
-// 则在绘制 DOM 前退出，防止快速的上一页/下一页/今天点击
-// 让慢速的数据获取覆盖最新布局。
+// Monotonic counter bumped on every _render() call. The async per-view
+// render functions snapshot this at entry and bail before painting DOM if
+// a newer render has already started. Stops fast prev/next/today clicks
+// from letting a slow fetch clobber the latest layout.
 let _renderToken = 0;
 function _isStaleRender(t) { return t !== _renderToken; }
 
 function _render() {
-  // 用户正在快速添加中输入时不要重建 DOM — 推迟它。
+  // Don't rebuild the DOM while the user is typing in quick-add — defer it.
   if (_qaTyping()) { _renderPending = true; return; }
-  // 空状态：没有配置日历或连接失败
+  // Empty state: no calendars configured or connection failed
   if (!_calendars.length) {
     _renderEmpty();
     return;
   }
   _renderToken++;
-  // 搜索现在在日详情面板内并进行就地筛选，
-  // 因此查询活跃时不替换整个日历主体。
-  // 在月/周视图中强制选择一个日期，确保面板（及其搜索框）
-  // 始终可用。
+  // Search now lives inside the day-detail panel and filters in place,
+  // so we don't replace the whole calendar body when a query is active.
+  // Force a selected day in month/week so the panel (and its search box)
+  // is always available.
   if (_searchQuery && (_view === 'month' || _view === 'week') && !_selectedDay) {
     _selectedDay = _today();
   }
@@ -755,7 +755,7 @@ function _render() {
   else if (_view === 'year') _renderYear();
   else if (_view === 'week') _renderWeek();
   else _renderMonth();
-  // 短暂延迟后在后台预取相邻数据
+  // Prefetch adjacent in background after a short delay
   setTimeout(() => _prefetchAdjacent(), 200);
 }
 
@@ -774,13 +774,13 @@ function _renderEmpty() {
       <div class="cal-empty-title">${hasError ? 'Calendar unavailable' : 'No calendars yet'}</div>
       <div class="cal-empty-msg">${hasError ? _e(_calendarsError) : 'Create a local calendar, import an .ics file, or sync via CalDAV.'}</div>
       ${hasError ? `
-        <button class="cal-btn cal-btn-primary" id="cal-goto-settings">${t('calendar.open_settings')}</button>
+        <button class="cal-btn cal-btn-primary" id="cal-goto-settings">Open Settings</button>
       ` : `
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px;">
-          <button class="cal-btn cal-btn-primary" id="cal-empty-new">${t('calendar.new_calendar')}</button>
+          <button class="cal-btn cal-btn-primary" id="cal-empty-new">New calendar</button>
           <button class="cal-btn" id="cal-empty-import">Import .ics</button>
         </div>
-        <div style="margin-top:10px;font-size:11px;opacity:0.55;">Or <a href="#" id="cal-empty-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">${t('calendar.setup_caldav')}</a>.</div>
+        <div style="margin-top:10px;font-size:11px;opacity:0.55;">Or <a href="#" id="cal-empty-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">set up CalDAV sync</a>.</div>
       `}
     </div>`;
   document.getElementById('cal-goto-settings')?.addEventListener('click', () => {
@@ -792,9 +792,9 @@ function _renderEmpty() {
       if (tab) tab.click();
     }
   });
-  // 新建 / 导入打开日历设置面板；面板已有
-  // "新建日历"按钮和 .ics 文件选择器。导入
-  // 会立即触发文件选择器，实现一键流程。
+  // New / Import open the calendar settings panel; the panel already
+  // has the "New calendar" button and the .ics file picker. Import
+  // triggers the file picker immediately so it's a one-click flow.
   document.getElementById('cal-empty-new')?.addEventListener('click', () => {
     _showCalSettings();
     setTimeout(() => document.getElementById('cal-settings-add')?.click(), 50);
@@ -806,11 +806,11 @@ function _renderEmpty() {
   document.getElementById('cal-empty-caldav')?.addEventListener('click', (e) => {
     e.preventDefault();
     closeCalendar();
-    // 集成是管理员选项卡 — settingsModule.open() 仅设置
-    // 管理员选项卡的 .active 类；实际面板通过
-    //
-    // 模态框会显示为集成被高亮但显示的是上一个
-    // 面板，用户需要再次点击选项卡才能到达目标。
+    // Integrations is an admin tab — settingsModule.open() only sets
+    // the .active class for admin tabs; the actual panel renders via
+    // adminModule.open(). Without the admin-first branch the modal
+    // appears with Integrations highlighted but showing the previous
+    // panel, so the user has to click the tab again to land there.
     if (window.adminModule && typeof window.adminModule.open === 'function') {
       try { window.adminModule.open('integrations'); return; } catch (_) {}
     }
@@ -826,12 +826,12 @@ function _renderEmpty() {
   });
 }
 
-// ── 标题 + 筛选器（共享） ──
+// ── Header + Filters (shared) ──
 
 function _isoWeekNumber(d) {
-  // ISO 8601：周从星期一开始；第 1 周包含该年的第一个星期四。
+  // ISO 8601: weeks start Monday; week 1 contains the year's first Thursday.
   const tgt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  // 移到本周的星期四（以便正确确定年份）。
+  // Move to Thursday of this week (so the year is determined correctly).
   tgt.setDate(tgt.getDate() + 3 - ((tgt.getDay() + 6) % 7));
   const yearStart = new Date(tgt.getFullYear(), 0, 1);
   return Math.ceil(((tgt - yearStart) / 86400000 + 1) / 7);
@@ -857,7 +857,7 @@ function _headerHTML() {
       <button class="cal-nav" id="cal-settings" title="Calendar settings" style="position:relative;top:-3px;"><svg width="13" height="13" style="position:relative;top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.68 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <button class="cal-nav${window._calSyncing ? ' cal-syncing' : ''}${window._calSyncDone ? ' cal-sync-done' : ''}" id="cal-sync" title="Refresh from database" style="position:relative;top:-3px;">${window._calSyncDone ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>'}</button>
       ${_filtersToggleHTML()}
-      <button class="cal-add-btn cal-add-btn-text" id="cal-add" title="New event"><span class="cal-add-plus">+</span><span class="cal-add-label">${t('calendar.new_event')}</span></button>
+      <button class="cal-add-btn cal-add-btn-text" id="cal-add" title="New event"><span class="cal-add-plus">+</span><span class="cal-add-label">New</span></button>
     </div>
   </div>
   <div class="cal-quickadd-row" id="cal-quickadd-row">
@@ -874,7 +874,7 @@ function _headerHTML() {
 }
 
 function _filtersData() {
-  // 构建一次标签 HTML；被工具栏切换 + 标签行渲染器复用。
+  // Build chip HTML once; reused by toolbar toggle + chip-row renderers.
   let calFilters = '';
   if (_calendars.length > 1) {
     calFilters = _calendars.map(c => {
@@ -900,20 +900,20 @@ function _filtersData() {
   if (hasUntagged) {
     const off = _hiddenTypes.has('__untagged__');
     typeFilters += `<label class="cal-filter-item${off ? ' cal-filter-off' : ''}" data-type="__untagged__">
-      <span class="cal-filter-dot" style="background:${_TYPE_PALETTE.untagged}"></span>${t('calendar.untagged')}</label>`;
+      <span class="cal-filter-dot" style="background:${_TYPE_PALETTE.untagged}"></span>untagged</label>`;
   }
   return { calFilters, typeFilters };
 }
 
 function _filtersToggleHTML() {
-  // 仅内联工具栏按钮。标签行在下方单独渲染。
+  // Inline toolbar button only. The chip row renders separately below.
   const { calFilters, typeFilters } = _filtersData();
   if (!calFilters && !typeFilters) return '';
   return `<button class="cal-filter-toggle" id="cal-filter-toggle" title="${_filtersCollapsed ? 'Show filters' : 'Hide filters'}">${_filtersCollapsed ? '+ tags' : '− tags'}</button>`;
 }
 
 function _filtersRowHTML() {
-  // 工具栏下方的标签行 — 折叠时为空。
+  // Chip row beneath the toolbar — empty when collapsed.
   if (_filtersCollapsed) return '';
   const { calFilters, typeFilters } = _filtersData();
   if (!calFilters && !typeFilters) return '';
@@ -923,8 +923,8 @@ function _filtersRowHTML() {
 
 function _eventVisible(e) {
   if (_hiddenCals.has(e.calendar_href)) return false;
-  // "仅重要事件"模式会使类别筛选器短路：不关心其他因素
-  // 只关心事件本身是否为 high/critical。
+  // "Only important" mode short-circuits category filters: nothing else
+  // matters except whether the event itself is high/critical.
   if (_onlyImportant) {
     return e.importance === 'high' || e.importance === 'critical';
   }
@@ -936,7 +936,7 @@ function _eventVisible(e) {
   return true;
 }
 
-// ── 月视图 ──
+// ── Month View ──
 
 async function _renderMonth() {
   const body = document.getElementById('cal-body');
@@ -944,7 +944,7 @@ async function _renderMonth() {
   const _tk = _renderToken;
   const [rs, re] = _monthRange(_currentDate);
   await _fetchEvents(rs, re);
-  if (_isStaleRender(_tk)) return; // 更新的渲染已在运行中
+  if (_isStaleRender(_tk)) return; // newer render already in flight
   const today = _today();
   const y = _currentDate.getFullYear(), m = _currentDate.getMonth();
 
@@ -966,17 +966,17 @@ async function _renderMonth() {
   });
   const multiUids = new Set(multiDay.map(e => e.uid));
 
-  // 渲染 6 个周行。每行是一个定位容器，包含
-  // 7 个日单元格以及任何跨越该行的多日条，作为
-  // 绝对定位覆盖层绘制在单元格上方。这避免了旧的"每个
-  // 条位于其起始单元格内且在单元格边缘被裁剪"
-  // 的问题，使多日事件在覆盖的每一天显示为
-  // 一条连续的线。
+  // Render 6 week rows. Each row is a positioned container that holds
+  // 7 day cells AND any multi-day bars that span the row, drawn as an
+  // absolute overlay on top of the cells. This avoids the old "each
+  // bar lives inside its start cell and gets clipped at the cell edge"
+  // problem so a multi-day event reads as one continuous line across
+  // every day it covers.
   for (let row = 0; row < 6; row++) {
-    // 统计本行有多少多日条与任何列重叠，以便
-    // 单元格可以为它们预留顶部内边距 — 否则这些条
-    // （作为绝对覆盖层绘制）会覆盖在日期数字和
-    // 下方单事件行之上。
+    // Count how many multi-day bars overlap any column in this row so
+    // cells can reserve top padding for them — otherwise the bars
+    // (drawn as absolute overlays) sit on top of the day-number and
+    // single-event rows below.
     const rowStartCd0 = new Date(gs); rowStartCd0.setDate(gs.getDate() + row * 7);
     const rowEndCd0 = new Date(gs); rowEndCd0.setDate(gs.getDate() + row * 7 + 6);
     const rowStart0 = _ds(rowStartCd0);
@@ -987,7 +987,7 @@ async function _renderMonth() {
       return !(mdEnd < rowStart0 || mdStart > rowEnd0);
     }).length;
     h += `<div class="cal-week-row" style="--bars:${barsInRow}">`;
-    // 本行的日单元格
+    // Day cells for this row
     for (let col = 0; col < 7; col++) {
       const i = row * 7 + col;
       const cd = new Date(gs); cd.setDate(gs.getDate() + i);
@@ -995,8 +995,8 @@ async function _renderMonth() {
       const isOther = cd.getMonth() !== m;
       const cls = 'cal-day' + (isOther ? ' cal-other' : '') + (d === today ? ' cal-today' : '') + (d === _selectedDay ? ' cal-selected' : '');
       h += `<div class="${cls}" data-date="${d}"><span class="cal-day-num">${cd.getDate()}</span>`;
-      // 单日事件 — 最多显示 3 个内联行（多日事件
-      // 在下方作为覆盖层单独绘制）。
+      // Single events — show up to 3 inline rows (multi-day events are
+      // drawn separately as an overlay below).
       const singles = _eventsForDay(d).filter(e => !multiUids.has(e.uid));
       if (singles.length) {
         const maxInline = window.innerWidth <= 768 ? 2 : 3;
@@ -1017,30 +1017,30 @@ async function _renderMonth() {
       }
       h += '</div>';
     }
-    // 本行的多日覆盖条。每条条堆叠在前一条下方一个槽位，
-    // 这样同行两个事件不会重叠。
+    // Multi-day overlay bars for this row. Stack each bar one slot below
+    // the previous so two events on the same row don't overlap.
     let barSlot = 0;
     for (const md of multiDay) {
       const mdStart = _localDateOf(md.dtstart);
       const mdEnd = _localDateOf(md.dtend);
-      // 计算行的日期范围
+      // Compute the row's date range
       const rowStartCd = new Date(gs); rowStartCd.setDate(gs.getDate() + row * 7);
       const rowEndCd = new Date(gs); rowEndCd.setDate(gs.getDate() + row * 7 + 6);
       const rowStart = _ds(rowStartCd);
       const rowEnd = _ds(rowEndCd);
-      if (mdEnd < rowStart || mdStart > rowEnd) continue; // 不在本行
-      // 条在行内起始的列以及跨越的天数
+      if (mdEnd < rowStart || mdStart > rowEnd) continue; // not in this row
+      // Column within the row where the bar starts and how many days it spans
       const startCol = mdStart < rowStart ? 0 : ((new Date(mdStart + 'T00:00:00') - rowStartCd) / 86400000);
       const endCol   = mdEnd > rowEnd     ? 6 : ((new Date(mdEnd   + 'T00:00:00') - rowStartCd) / 86400000);
       const startColInt = Math.round(startCol);
       const endColInt = Math.round(endCol);
       const span = endColInt - startColInt + 1;
-      // 跨越午夜的分时段事件的按比例偏移
-      // （例如 周一 8 PM → 周二 5 AM）。没有这个处理，
-      // 过夜时段会视觉上填满整个第二天，即使实际上
-      // 只占几个小时。全天事件保持满日形状。
-      // 条在视觉上从列 (col+startFrac) 延伸到 (col+span-1+endFrac)，
-      // 所以 8 PM→5 AM 显示第 1 天的 ~17% + 第 2 天的 ~21%，而非 200%。
+      // Proportional offsets for timed events that span across midnight
+      // (e.g. 8 PM Mon → 5 AM Tue). Without this, an overnight serve
+      // window visually fills the ENTIRE next day even when it only
+      // covers a few hours. All-day events keep the full-day shape.
+      // Bar visually spans from column (col+startFrac) to (col+span-1+endFrac),
+      // so a 8 PM→5 AM run shows ~17% of day 1 + ~21% of day 2, not 200%.
       let startFrac = 0;
       let endFrac = 1;
       if (!md.all_day) {
@@ -1049,9 +1049,9 @@ async function _renderMonth() {
           const eIso = md.dtend || '';
           const sDate = sIso ? new Date(sIso) : null;
           const eDate = eIso ? new Date(eIso) : null;
-          // 首日可见比例（0 = 午夜开始）。当事件在本行之前
-          // 开始时限制为 0，这样条仍然从
-          // 行的左边缘开始。
+          // First-visible-day fraction (0 = midnight start). Clamp to 0
+          // when the event started before this row, so the bar still
+          // starts at the row's left edge.
           if (sDate && !isNaN(sDate) && mdStart >= rowStart) {
             const midnight = new Date(sDate); midnight.setHours(0, 0, 0, 0);
             startFrac = Math.max(0, Math.min(1, (sDate - midnight) / 86400000));
@@ -1059,10 +1059,10 @@ async function _renderMonth() {
           if (eDate && !isNaN(eDate) && mdEnd <= rowEnd) {
             const midnight = new Date(eDate); midnight.setHours(0, 0, 0, 0);
             endFrac = Math.max(0, Math.min(1, (eDate - midnight) / 86400000));
-            // CalDAV 结束时间是排他的：在 N 日 00:00 结束
-            // 的事件实际上在 N-1 日结束时结束，因此 endFrac=0
-            // 会在视觉上绘制零宽度线段。设置为一个小
-            // 可见最小值（一天的 5%）以便条仍然可见。
+            // CalDAV end-times are exclusive: an event ending at exactly
+            // 00:00 on day N really ended at end-of-day N-1, so endFrac=0
+            // would visually paint a zero-width slice. Snap to a small
+            // visible minimum (5% of a day) so the bar still registers.
             if (endFrac === 0) endFrac = 1;
           }
         } catch (_) { startFrac = 0; endFrac = 1; }
@@ -1074,19 +1074,19 @@ async function _renderMonth() {
   }
   h += '</div>';
   if (_selectedDay) h += _dayDetailHTML(_selectedDay);
-  // 在 innerHTML 清除之前捕获网格的滚动位置 —
-  // 选择某一天不应该让用户跳回月份顶部，
-  // 那会隐藏他们刚点击的行。
+  // Capture the grid's scroll position before innerHTML wipes it —
+  // selecting a day shouldn't jump the user back to the top of the
+  // month, that hides the row they just clicked.
   const _prevGrid = body.querySelector('.cal-grid');
   const _prevScroll = _prevGrid ? _prevGrid.scrollTop : 0;
-  // 如果用户在请求进行中时抓住了快速添加字段，跳过替换（这
-  // 会销毁焦点输入框 + 收起键盘）并推迟到失焦时处理。
+  // If the user grabbed the quick-add field mid-fetch, skip the swap (which
+  // would destroy the focused input + drop the keyboard) and defer until blur.
   if (_qaTyping()) { _renderPending = true; return; }
   body.innerHTML = h;
   const _newGrid = body.querySelector('.cal-grid');
   if (_newGrid && _prevScroll) _newGrid.scrollTop = _prevScroll;
-  // 打开时，将今天的单元格滚动到可视区域，以便当前日期始终
-  // 可见，即使其行在视口下方（移动端滚动网格）。
+  // On open, scroll today's cell into view so the current date is always
+  // visible even when its row sits below the fold (mobile scrolls the grid).
   if (_scrollToTodayOnOpen) {
     _scrollToTodayOnOpen = false;
     const todayCell = body.querySelector('.cal-day.cal-today');
@@ -1101,22 +1101,22 @@ async function _renderMonth() {
   _updateBadge();
 }
 
-// ── 周视图 ──
+// ── Week View ──
 
-// 小时网格周视图。每列是一天；左侧的垂直时间轨
-// 标记 6AM–11PM。事件渲染为绝对定位的块。
-// 在空单元格上拖动以创建该时段的新事件。
-// 渲染完整的 24 小时以便任何时间的事件都能访问。
-// 首次打开时网格自动滚动到 ~7 AM，以保持默认
-// "早上可见"的行为；后续
-// 渲染保留用户当前的 scrollTop 位置。
+// Hour-grid week view. Each column is a day; a vertical hour rail on the
+// left labels 6am–11pm. Events render as absolute-positioned blocks.
+// Drag on an empty cell to scaffold a new event for that range.
+// Render the full 24-hour day so events at any hour are reachable.
+// On first open the grid auto-scrolls to ~7 AM so the default landing
+// still matches the old "morning is visible" behaviour; subsequent
+// renders preserve whatever scrollTop the user is on.
 const WEEK_HOUR_START = 0;
 const WEEK_HOUR_END   = 24;
 const WK_DEFAULT_SCROLL_HOUR = 7;
-let _wkScrollY = null;       // 跨渲染记住的滚动位置
-let _wkScrolledOnce = false; // 追踪首次自动滚动到早上的状态
-// 每小时像素高度 — 用户可缩放，持久化在 localStorage 中以便
-// 偏好设置在重新加载后保持不变。边界限制确保布局合理。
+let _wkScrollY = null;       // remembered scroll position across renders
+let _wkScrolledOnce = false; // tracks the first auto-scroll-to-morning
+// pixel height per hour — user-zoomable, persisted in localStorage so the
+// preference sticks across reloads. Bounds keep the layout sane.
 const WK_PX_MIN = 28;
 const WK_PX_MAX = 120;
 const WK_PX_DEFAULT = 64;
@@ -1125,9 +1125,9 @@ let WEEK_HOUR_PX = (() => {
   return (saved >= WK_PX_MIN && saved <= WK_PX_MAX) ? saved : WK_PX_DEFAULT;
 })();
 function _wkSetZoom(px) {
-  // 捕获当前视口顶部的时间以便缩放引发的重新渲染
-  // 后相同的时间保持原位 — 否则保存的
-  // 像素 scrollTop 会在新的像素/小时比例下错位。
+  // Capture the hour currently at the top of the viewport so the same
+  // hour stays put across the zoom-induced re-render — otherwise the
+  // saved pixel scrollTop misaligns at the new px/hour.
   const wrap = document.querySelector('.cal-wk-wrap');
   let _hourAtTop = null;
   if (wrap && WEEK_HOUR_PX) _hourAtTop = wrap.scrollTop / WEEK_HOUR_PX;
@@ -1139,8 +1139,8 @@ function _wkSetZoom(px) {
 function _wkZoomBy(delta) { _wkSetZoom(WEEK_HOUR_PX + delta); }
 function _wkHours() { return WEEK_HOUR_END - WEEK_HOUR_START; }
 
-// 将 Y 偏移（距网格顶部的像素）四舍五入到最接近的 15 分钟槽位，
-// 返回距 WEEK_HOUR_START 的分钟数。
+// Round a Y offset (px from top of grid) to the nearest 15-minute slot,
+// returns minutes-from-WEEK_HOUR_START.
 function _wkPxToMin(y) {
   const totalMin = (y / WEEK_HOUR_PX) * 60;
   return Math.max(0, Math.round(totalMin / 15) * 15);
@@ -1158,22 +1158,22 @@ function _wkFormatHourLabel(h) {
   return `${hh} ${ampm}`;
 }
 function _wkEventTopHeight(ev, dayStr) {
-  // 将事件开始/结束（本地时间）转换为相对于该日网格原点的
-  // 顶部/高度的像素值。限制在可见窗口内。
-  // dtstart/dtend 字符串格式如 "2026-05-11T09:00:00"（无时区），因此
-  // 直接提取时间部分以避免时区数学漂移；如果字符串格式
-  // 不符合预期则回退到日期数学运算。
+  // Convert event start/end (local) into top/height in px relative to the
+  // day's grid origin. Clamp to visible window.
+  // The dtstart/dtend strings are like "2026-05-11T09:00:00" (no tz), so
+  // pull the time portion directly to avoid TZ math drift; falls back to
+  // Date math if the string isn't shaped as expected.
   const _toMin = (iso, fallbackDate) => {
     if (!iso) return null;
     const mins = _timeToMin(iso);
     if (mins !== null && iso.includes('T')) {
-      // 如果事件跨越到前一天/后一天，限制在今天的时间范围内。
+      // If the event spans into a previous/next day, clamp to today's bounds.
       const evDate = _localDateOf(iso);
-      if (evDate < fallbackDate) return 0;             // 事件在今天之前开始
-      if (evDate > fallbackDate) return 24 * 60;       // 事件在今天之后结束
+      if (evDate < fallbackDate) return 0;             // event started before today
+      if (evDate > fallbackDate) return 24 * 60;       // event ends after today
       return mins;
     }
-    // 全天或仅日期 — 视作当天开始。
+    // All-day or date-only — treat as start of day.
     return 0;
   };
   const startMin = _toMin(ev.dtstart, dayStr);
@@ -1191,8 +1191,8 @@ async function _renderWeek() {
   const body = document.getElementById('cal-body');
   if (!body) return;
   const _tk = _renderToken;
-  // 保存当前滚动以便在重新渲染后恢复（缩放、拖放
-  // 等都会重建内容）。
+  // Stash current scroll so we can restore after re-render (zoom, drag,
+  // etc. all rebuild the body).
   const _prevWrap = body.querySelector('.cal-wk-wrap');
   if (_prevWrap) _wkScrollY = _prevWrap.scrollTop;
   const [rs, re] = _weekRange(_currentDate);
@@ -1201,15 +1201,15 @@ async function _renderWeek() {
   const today = _today();
   const ws = new Date(rs + 'T00:00:00');
 
-  // 一次性构建日期列表（供全天条和网格两者使用）。
+  // Build day list once (used for both all-day strip and grid).
   const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(ws); d.setDate(ws.getDate() + i);
     days.push({ d, ds: _ds(d), idx: i });
   }
 
-  // 左侧的时间轨。顶部的间距区域放置缩放控件
-  // （工具栏已经很拥挤 — 这个空闲的 56px 角落是个好位置）。
+  // Hour rail on the left. The spacer up top hosts the zoom controls
+  // (toolbar is already crowded — this empty 56-px corner is a free home).
   let railHtml = `<div class="cal-wk-rail">
     <div class="cal-wk-rail-spacer">
       <button class="cal-wk-zoom" id="cal-wk-zoom-out" title="Zoom out (–)" aria-label="Zoom out">−</button>
@@ -1220,7 +1220,7 @@ async function _renderWeek() {
   }
   railHtml += '</div>';
 
-  // 日列
+  // Day columns
   let colsHtml = '<div class="cal-wk-cols">';
   for (const { d, ds, idx } of days) {
     const isToday = ds === today;
@@ -1230,19 +1230,19 @@ async function _renderWeek() {
     const isSun = d.getDay() === 0;
     colsHtml += `<div class="cal-wk-col${isToday ? ' cal-wk-today' : ''}${isSun && !_weekStartSun ? ' cal-wk-sun' : ''}" data-date="${ds}">`;
     colsHtml += `<div class="cal-wk-col-head"><span class="cal-wk-dn">${(_weekStartSun ? WEEKDAYS_SUN : WEEKDAYS)[idx]}</span><span class="cal-wk-dt">${d.getDate()}</span></div>`;
-    // 全天条
+    // All-day strip
     colsHtml += `<div class="cal-wk-allday">`;
     for (const ev of allDayEvents) {
       colsHtml += `<div class="cal-wk-allday-event" data-uid="${_e(ev.uid)}" style="background:${_calColor(ev)};--cal-event-fg:${_calEventFg(ev)};" title="${_e(ev.summary)}">${_e(ev.summary)}</div>`;
     }
     colsHtml += `</div>`;
-    // 小时网格主体
+    // Hour-grid body
     colsHtml += `<div class="cal-wk-grid" data-date="${ds}" style="height:${_wkHours() * WEEK_HOUR_PX}px;">`;
-    // 小时单元格线
+    // Hour cell lines
     for (let h = WEEK_HOUR_START; h < WEEK_HOUR_END; h++) {
       colsHtml += `<div class="cal-wk-cell" data-hour="${h}" style="height:${WEEK_HOUR_PX}px;"></div>`;
     }
-    // 当前时间线指示器（仅在今天显示）
+    // Now-line indicator (only on today)
     if (isToday) {
       const now = new Date();
       const minSinceStart = (now.getHours() - WEEK_HOUR_START) * 60 + now.getMinutes();
@@ -1251,13 +1251,13 @@ async function _renderWeek() {
         colsHtml += `<div class="cal-wk-now" style="top:${top}px;"></div>`;
       }
     }
-    // 分时段事件块。每个块带有一个 6px 底部边缘手柄
-    // 用于拖放调整大小（延长持续时间而无需打开表单）。
+    // Timed event blocks. Each block carries a 6-px bottom-edge handle
+    // for drag-to-resize (extend duration without opening the form).
     for (const ev of timedEvents) {
       const { top, height } = _wkEventTopHeight(ev, ds);
       const t = _fmtTime(ev.dtstart) + '–' + _fmtTime(ev.dtend);
-      // 自定义背景事件使用图片作为瓷片背景；纯色
-      // 事件保持原来的着色效果。
+      // Custom-bg events get the image as the tile background; solid-color
+      // events keep the original tinted treatment.
       let bgDecl;
       if (_isCalBgImage(ev.color)) {
         const _url = _calBgImageUrl(ev.color).replace(/'/g, "\\'").replace(/"/g, "%22");
@@ -1271,22 +1271,22 @@ async function _renderWeek() {
       colsHtml += `<div class="cal-wk-block-resize" title="Drag to resize"></div>`;
       colsHtml += `</div>`;
     }
-    colsHtml += `</div></div>`;  // 闭合 /cal-wk-grid /cal-wk-col
+    colsHtml += `</div></div>`;  // /cal-wk-grid /cal-wk-col
   }
   colsHtml += '</div>';
 
   let h = _headerHTML() + _filtersRowHTML();
   h += `<div class="cal-wk-wrap">${railHtml}${colsHtml}</div>`;
   if (_selectedDay) h += _dayDetailHTML(_selectedDay);
-  // 如果用户在请求进行中时抓住了快速添加字段，跳过替换（这
-  // 会销毁焦点输入框 + 收起键盘）并推迟到失焦时处理。
+  // If the user grabbed the quick-add field mid-fetch, skip the swap (which
+  // would destroy the focused input + drop the keyboard) and defer until blur.
   if (_qaTyping()) { _renderPending = true; return; }
   body.innerHTML = h;
   _wireAll(body);
 
-  // 单击（轻点）事件块 → 打开编辑表单。拖放移动或
-  // 拖放调整大小在其 mouseup 中设置 `justResized`，这样后续
-  // 的点击不会也打开表单；底部边缘调整大小手柄也被忽略。
+  // Single click (tap) an event block → open edit form. A drag-to-move or
+  // drag-to-resize sets `justResized` in its mouseup so the trailing click
+  // doesn't also open the form; the bottom-edge resize handle is ignored too.
   body.querySelectorAll('.cal-wk-block, .cal-wk-allday-event').forEach(el => {
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('cal-wk-block-resize')) return;
@@ -1297,13 +1297,13 @@ async function _renderWeek() {
     });
   });
 
-  // 拖动块主体来重新安排（不同日期或时间）。
-  // 底部边缘手柄有自己的手势（调整大小）并在此停止，
-  // 因此两者不会冲突。保持相同的持续时间。
+  // Drag the body of a block to reschedule (different day or time). The
+  // bottom-edge handle has its own gesture (resize) and stops here, so
+  // the two never fight. Same duration is preserved.
   body.querySelectorAll('.cal-wk-block').forEach(block => {
     block.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
-      if (e.target.classList.contains('cal-wk-block-resize')) return; // 调整大小优先
+      if (e.target.classList.contains('cal-wk-block-resize')) return; // resize wins
       e.preventDefault();
       const uid = block.dataset.uid;
       const ev = _events.find(x => x.uid === uid);
@@ -1322,17 +1322,17 @@ async function _renderWeek() {
       }
       durationMin = Math.max(15, durationMin);
 
-      // 光标抓取块的哪个位置？（距块顶部的像素偏移）
+      // Where did the cursor grab the block? (offset from block-top in px)
       const blockRect = block.getBoundingClientRect();
       const grabOffsetPx = e.clientY - blockRect.top;
 
-      // 跟随光标跨列的幽灵块。
+      // Ghost that follows the cursor across columns.
       const ghost = block.cloneNode(true);
       ghost.classList.add('cal-wk-block-ghost');
       ghost.style.pointerEvents = 'none';
       ghost.style.opacity = '0.85';
       ghost.querySelector('.cal-wk-block-resize')?.remove();
-      // 拖动时将原始块静音（淡化）。
+      // Mute the original while dragging.
       block.style.opacity = '0.25';
 
       let nextDs = null;
@@ -1346,10 +1346,10 @@ async function _renderWeek() {
       };
       const onMove = (mv) => {
         moved = true;
-        // 选择光标下的列。如果光标落在列间
-        // （间隙/边框）或刚好在网格水平外侧，
-        // 吸附到最近的列而不是放弃 — 这正是
-        // 之前水平跨日拖放可能感觉卡住的原因。
+        // Pick the column under the cursor. If the cursor lands between
+        // columns (gutter/border) or just outside the grid horizontally,
+        // snap to the nearest column instead of giving up — that's why
+        // horizontal cross-day drag could feel stuck before.
         let cur = cols.find(c => {
           const r = c.getBoundingClientRect();
           return mv.clientX >= r.left && mv.clientX <= r.right;
@@ -1368,8 +1368,8 @@ async function _renderWeek() {
         _attachGhost(cur);
         const r = cur.getBoundingClientRect();
         const yIn = Math.max(0, Math.min(cur.clientHeight, mv.clientY - r.top));
-        // 减去抓取偏移，使光标在拖动时
-        // 保持在块内的相同位置。
+        // Subtract the grab offset so the cursor stays at the same spot
+        // inside the block as you drag it around.
         const blockTopY = yIn - grabOffsetPx;
         const snapMin = Math.max(0, Math.round(_wkPxToMin(blockTopY) / 15) * 15);
         nextStartMin = WEEK_HOUR_START * 60 + snapMin;
@@ -1390,14 +1390,14 @@ async function _renderWeek() {
         document.removeEventListener('mouseup', onUp);
         ghost.remove();
         block.style.opacity = '';
-        // 仅在用户确实拖动时才抑制后续的点击打开 —
-        // 普通点击（无移动）仍然必须打开事件。
+        // Only suppress the trailing click-open if the user actually dragged —
+        // a plain click (no movement) must still open the event.
         if (moved) block.dataset.justResized = '1';
-        // 判断是否真的有任何移动。
+        // Decide whether anything actually moved.
         const oldDs = _localDateOf(ev.dtstart);
         if (!nextDs) return;
         if (nextDs === oldDs && nextStartMin === startMin0) return;
-        // 快照原始时间以便提供撤销功能。
+        // Snapshot the original times so we can offer an Undo.
         const prevDtstart = ev.dtstart;
         const prevDtend = ev.dtend;
         const newEndMin = nextStartMin + durationMin;
@@ -1425,8 +1425,8 @@ async function _renderWeek() {
     });
   });
 
-  // 拖动分时段块的底部边缘来延长/缩短事件。
-  // 吸附到 15 分钟增量；释放时通过 PUT 到 /api/calendar/events 提交。
+  // Drag the bottom edge of a timed block to extend / shrink the event.
+  // Snaps to 15-min increments; releases with a PUT to /api/calendar/events.
   body.querySelectorAll('.cal-wk-block .cal-wk-block-resize').forEach(handle => {
     handle.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
@@ -1446,7 +1446,7 @@ async function _renderWeek() {
       const onMove = (mv) => {
         resized = true;
         const y = Math.max(0, Math.min(grid.clientHeight, mv.clientY - gridRect.top));
-        // 吸附到 15 分钟增量；强制最小持续时间为 15 分钟。
+        // Snap to 15-min increments; enforce a 15-min minimum duration.
         newEndMin = Math.max(startMin + 15, Math.round(_wkPxToMin(y) / 15) * 15);
         const newHeight = Math.max(18, (newEndMin - startMin) * (WEEK_HOUR_PX / 60));
         block.style.height = newHeight + 'px';
@@ -1475,7 +1475,7 @@ async function _renderWeek() {
             } catch (err) { console.error('Undo failed:', err); }
           });
         } catch (err) {
-          // 失败时回滚视觉效果
+          // Roll back the visual on failure
           _render();
         }
       };
@@ -1484,10 +1484,10 @@ async function _renderWeek() {
     });
   });
 
-  // 在空格上拖放创建：在单元格上按下鼠标，向下拖动，释放。
+  // Drag-to-create on empty grid: mousedown on a cell, drag down, release.
   body.querySelectorAll('.cal-wk-grid').forEach(grid => {
     grid.addEventListener('mousedown', (e) => {
-      // 当按下位置落在已有事件上时不要开始拖放创建。
+      // Don't start a drag-create when the press lands on an existing event.
       if (e.target.closest('.cal-wk-block')) return;
       if (e.button !== 0) return;
       e.preventDefault();
@@ -1516,7 +1516,7 @@ async function _renderWeek() {
         const endHHMM = ghost.dataset.end;
         ghost.remove();
         if (!startHHMM || !endHHMM) return;
-        // 打开预填此时段的自定义事件表单。
+        // Open the bespoke event form pre-filled with this slot.
         _showEventFormForRange(ds, startHHMM, endHHMM);
       };
       onMove(e);
@@ -1525,8 +1525,8 @@ async function _renderWeek() {
     });
   });
 
-  // 恢复滚动。首次打开周视图时默认定位在 WK_DEFAULT_SCROLL_HOUR，
-  // 之后保持用户上次的位置。
+  // Restore scroll. Default-land at WK_DEFAULT_SCROLL_HOUR the first time
+  // week view opens; afterwards keep the user's last position.
   const _wrap = body.querySelector('.cal-wk-wrap');
   if (_wrap) {
     if (_wkScrollY != null) {
@@ -1537,12 +1537,12 @@ async function _renderWeek() {
     }
   }
 
-  // 时间轨间距角落的缩放按钮。
+  // Zoom buttons in the rail-spacer corner.
   document.getElementById('cal-wk-zoom-in')?.addEventListener('click', (e) => { e.stopPropagation(); _wkZoomBy(+12); });
   document.getElementById('cal-wk-zoom-out')?.addEventListener('click', (e) => { e.stopPropagation(); _wkZoomBy(-12); });
 
-  // 键盘缩放（`+` / `-`），Ctrl/Cmd + 滚轮缩放 — 仅当
-  // 处于周视图且没有文本输入框获得焦点时触发。
+  // Keyboard zoom (`+` / `-`), Ctrl/Cmd-wheel zoom — both only fire while
+  // we're in week view and no text input has focus.
   if (!body._wkZoomKeysWired) {
     body._wkZoomKeysWired = true;
     document.addEventListener('keydown', (e) => {
@@ -1564,8 +1564,8 @@ async function _renderWeek() {
 }
 
 function _showEventFormForRange(ds, startHHMM, endHHMM) {
-  // 打开新建事件表单，然后用拖出的时段预填时间输入框，
-  // 并强制打开详情面板以便用户查看/调整。
+  // Open the new-event form, then seed the time inputs with the dragged
+  // range and force the details panel open so the user can see/adjust.
   _showEventForm(null, ds, ds);
   requestAnimationFrame(() => {
     const startEl = document.getElementById('cal-f-start');
@@ -1573,34 +1573,34 @@ function _showEventFormForRange(ds, startHHMM, endHHMM) {
     if (startEl) startEl.value = startHHMM;
     if (endEl)   endEl.value   = endHHMM;
     startEl?.dispatchEvent(new Event('input'));
-    // 自动展开详情，以便通过拖放创建（而非 +New 按钮）
-    // 到达此处时时间字段可见。
+    // Auto-expand details so the time fields are visible when someone
+    // arrived here via drag-to-create rather than the +New button.
     document.querySelector('.cal-form-bespoke')?.classList.add('is-expanded');
     const details = document.getElementById('cal-form-details');
     if (details) details.setAttribute('aria-hidden', 'false');
   });
 }
 
-// ── 日程视图 ──
+// ── Agenda View ──
 
 async function _renderAgenda() {
   const body = document.getElementById('cal-body');
   if (!body) return;
   const _tk = _renderToken;
-  // 从当前日期向前获取 3 个月
+  // Fetch 3 months forward from current date
   const s = _ds(_currentDate);
   const eDate = new Date(_currentDate); eDate.setMonth(eDate.getMonth() + 3);
   const e = _ds(eDate);
   await _fetchEvents(s, e);
   if (_isStaleRender(_tk)) return;
 
-  // 按日期筛选 + 分组
+  // Filter + group by date
   const visible = _events.filter(ev => !!_eventVisible(ev))
     .sort((a, b) => a.dtstart < b.dtstart ? -1 : 1);
 
   let h = _headerHTML() + _filtersRowHTML() + '<div class="cal-agenda">';
-  // 按本地日期分组事件，然后始终显示今天（当它在日程
-  // 窗口范围内时），即使没有事件，这样用户可以看清"今天"。
+  // Group events by local date, then always surface today (when it's inside
+  // the agenda window) even if it has no events, so the user can see "today".
   const byDate = new Map();
   for (const ev of visible) {
     const d = _localDateOf(ev.dtstart);
@@ -1612,8 +1612,8 @@ async function _renderAgenda() {
   const dates = [...byDate.keys()].sort();
 
   if (!dates.length) {
-    // 空状态镜像邮件面板：简短消息 + 设置 ›
-    // 集成链接来设置 CalDAV，或者快速"创建事件"操作。
+    // Empty-state mirrors the email panel: short message + a Settings ›
+    // Integrations link to set up CalDAV, OR a quick "Create event" action.
     h += '<div class="cal-empty" style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">' +
       '<span>No upcoming events</span>' +
       '<span style="opacity:0.7;font-size:11px;">' +
@@ -1628,7 +1628,7 @@ async function _renderAgenda() {
       const todayBadge = (date === today) ? ' <span class="cal-agenda-today-badge">Today</span>' : '';
       h += `<div class="cal-agenda-day${date === today ? ' is-today' : ''}"><div class="cal-agenda-date">${_fmtDate(date)}${todayBadge}</div>`;
       if (!evs.length) {
-        h += '<div class="cal-agenda-empty">${t('calendar.no_events')}</div>';
+        h += '<div class="cal-agenda-empty">No events</div>';
       }
       for (const ev of evs) {
         const t = ev.all_day ? 'All day' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
@@ -1650,8 +1650,8 @@ async function _renderAgenda() {
     }
   }
   h += '</div>';
-  // 如果用户在请求进行中时抓住了快速添加字段，跳过替换（这
-  // 会销毁焦点输入框 + 收起键盘）并推迟到失焦时处理。
+  // If the user grabbed the quick-add field mid-fetch, skip the swap (which
+  // would destroy the focused input + drop the keyboard) and defer until blur.
   if (_qaTyping()) { _renderPending = true; return; }
   body.innerHTML = h;
   _wireAll(body);
@@ -1661,7 +1661,7 @@ async function _renderAgenda() {
     const ev = _events.find(e => e.uid === el.dataset.uid);
     if (ev) _showEventForm(ev);
   }));
-  // 空状态链接：设置 › 集成 + 创建事件。
+  // Empty-state links: Settings › Integrations + Create event.
   body.querySelector('[data-cal-open-settings]')?.addEventListener('click', (e) => {
     e.preventDefault();
     closeCalendar();
@@ -1679,12 +1679,12 @@ async function _renderAgenda() {
   _updateBadge();
 }
 
-// ── 搜索视图 ──
+// ── Search View ──
 
 async function _renderSearch() {
   const body = document.getElementById('cal-body');
   if (!body) return;
-  // 在池中所有事件中搜索（无需获取 — 使用已有数据）
+  // Search across all events in pool (no fetch needed — use what we have)
   const q = _searchQuery.toLowerCase();
   const results = Object.values(_allEvents)
     .filter(ev => !!_eventVisible(ev))
@@ -1698,7 +1698,7 @@ async function _renderSearch() {
   let h = _headerHTML() + _filtersRowHTML() + '<div class="cal-search-results">';
   h += `<div class="cal-search-count">${results.length} result${results.length !== 1 ? 's' : ''} for "${_e(_searchQuery)}"</div>`;
   if (!results.length) {
-    h += '<div class="cal-empty">${t('calendar.no_events_match')}</div>';
+    h += '<div class="cal-empty">No events match your search</div>';
   } else {
     for (const ev of results) {
       const evDate = _localDateOf(ev.dtstart);
@@ -1714,8 +1714,8 @@ async function _renderSearch() {
     }
   }
   h += '</div>';
-  // 如果用户在请求进行中时抓住了快速添加字段，跳过替换（这
-  // 会销毁焦点输入框 + 收起键盘）并推迟到失焦时处理。
+  // If the user grabbed the quick-add field mid-fetch, skip the swap (which
+  // would destroy the focused input + drop the keyboard) and defer until blur.
   if (_qaTyping()) { _renderPending = true; return; }
   body.innerHTML = h;
   _wireAll(body);
@@ -1725,7 +1725,7 @@ async function _renderSearch() {
     const ev = _allEvents[el.dataset.uid];
     if (ev) _showEventForm(ev);
   }));
-  // 重新渲染后聚焦搜索输入框
+  // Focus search input after re-render
   const searchInput = document.getElementById('cal-search');
   if (searchInput && document.activeElement !== searchInput) {
     searchInput.focus();
@@ -1733,7 +1733,7 @@ async function _renderSearch() {
   }
 }
 
-// ── 年视图 ──
+// ── Year View ──
 
 async function _renderYear() {
   const body = document.getElementById('cal-body');
@@ -1765,12 +1765,12 @@ async function _renderYear() {
     h += '</div></div>';
   }
   h += '</div>';
-  // 如果用户在请求进行中时抓住了快速添加字段，跳过替换（这
-  // 会销毁焦点输入框 + 收起键盘）并推迟到失焦时处理。
+  // If the user grabbed the quick-add field mid-fetch, skip the swap (which
+  // would destroy the focused input + drop the keyboard) and defer until blur.
   if (_qaTyping()) { _renderPending = true; return; }
   body.innerHTML = h;
   _wireAll(body);
-  // 月份框点击 → 跳转到月视图（但点击具体日期时不跳转）
+  // Month box click → jump to month view (but not when clicking a specific day)
   body.querySelectorAll('.cal-year-month').forEach(el => {
     el.addEventListener('click', (e) => {
       if (e.target.closest('.cal-year-day')) return;
@@ -1780,7 +1780,7 @@ async function _renderYear() {
       _render();
     });
   });
-  // 年视图中日期点击 → 跳转到月视图
+  // Day click in year view → jump to month
   body.querySelectorAll('.cal-year-day').forEach(el => {
     el.addEventListener('click', () => {
       const d = el.dataset.date;
@@ -1793,23 +1793,23 @@ async function _renderYear() {
   _updateBadge();
 }
 
-// ── 共享 HTML 构建器 ──
+// ── Shared HTML builders ──
 
 function _dayDetailHTML(dateStr) {
   const isToday = dateStr === _today();
-  // 搜索现在在日面板内 — 输入过滤面板
-  // 内容为全局搜索结果，而不仅仅当天的活动。
-  // 通过包裹元素 + padding-left 在搜索框内显示放大镜图标。
+  // Search lives inside the day panel now — typing filters the panel
+  // body to global search results instead of just this day's events.
+  // Magnifying-glass icon inside the search field via a wrapper + padding-left.
   const searchInput = `<div class="cal-search-wrap">
     <svg class="cal-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="search" class="cal-search-input cal-day-search" id="cal-search" placeholder=t('calendar.search_events') value="${_e(_searchQuery)}" />
+    <input type="search" class="cal-search-input cal-day-search" id="cal-search" placeholder="Search all events…" value="${_e(_searchQuery)}" />
   </div>`;
   let h = `<div class="cal-splitter" role="separator" aria-orientation="horizontal" tabindex="0" title="Drag to resize"><div class="cal-splitter-grip"></div></div>
     <div class="cal-day-detail">
     ${searchInput}
     <div class="cal-detail-header">
       <span>${_fmtDate(dateStr)}${isToday ? ' <span style="color:var(--accent, var(--red));font-weight:600;">(Today)</span>' : ''}</span>
-      <button class="cal-add-btn cal-add-btn-text cal-add-btn-sm" id="cal-add-day" title="New event"><span class="cal-add-plus">+</span><span class="cal-add-label">${t('calendar.new_event')}</span></button>
+      <button class="cal-add-btn cal-add-btn-text cal-add-btn-sm" id="cal-add-day" title="New event"><span class="cal-add-plus">+</span><span class="cal-add-label">New</span></button>
     </div>`;
   if (_searchQuery) {
     const q = _searchQuery.toLowerCase();
@@ -1823,7 +1823,7 @@ function _dayDetailHTML(dateStr) {
       .sort((a, b) => (a.dtstart || '').localeCompare(b.dtstart || ''));
     h += `<div class="cal-day-search-meta">${results.length} result${results.length !== 1 ? 's' : ''}</div>`;
     if (!results.length) {
-      h += '<div class="cal-empty">${t('calendar.no_events_match_short')}</div>';
+      h += '<div class="cal-empty">No events match</div>';
     } else {
       results.forEach(ev => {
         const date = ev.all_day ? ev.dtstart : _localDateOf(ev.dtstart);
@@ -1843,7 +1843,7 @@ function _dayDetailHTML(dateStr) {
     return h + '</div>';
   }
   const evs = _eventsForDay(dateStr);
-  if (!evs.length) h += '<div class="cal-empty">${t('calendar.no_events')}</div>';
+  if (!evs.length) h += '<div class="cal-empty">No events</div>';
   else evs.forEach(ev => {
     const t = ev.all_day ? 'All day' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
     const _bgStyle = _calItemBgStyle(ev);
@@ -1852,22 +1852,22 @@ function _dayDetailHTML(dateStr) {
   return h + '</div>';
 }
 
-// ── 绑定所有通用监听器 ──
+// ── Wire all common listeners ──
 
 function _wireAll(body) {
-  // ── 日详情分割器（拖放调整大小） ────────────────────────
-  // 每次渲染恢复保存的高度，以便用户的设置在
-  // 月/周导航间保留。拖动调整 #cal-body 上的
-  // 单个 CSS 变量 — 网格限制其高度，日详情面板
-  // 通过 CSS 规则相应地扩展/收缩。
+  // ── Day-detail splitter (drag to resize) ────────────────────────
+  // Restores the saved height each render so the user's choice survives
+  // navigation between months/weeks. Drag adjusts a single CSS variable
+  // on #cal-body — the grid clamps its height and the day-detail expands
+  // / contracts accordingly via CSS rules.
   try {
     const calBody = document.getElementById('cal-body');
     const splitter = body.querySelector('.cal-splitter');
     if (calBody && splitter) {
-  // 仅在首次绑定从 localStorage 获取初始值。后续
-  // 渲染（搜索中用户每次按键时的重渲染）
-  // 否则会覆盖正在进行的焦点展开，导致
-  // 日详情面板在每次按键时上下跳动。
+      // Only seed from localStorage on the first wire-up. Subsequent
+      // renders (every keystroke when the user is typing in search)
+      // would otherwise clobber an in-progress focus-expand and bounce
+      // the day-detail pane up and down on every character.
       const alreadySet = calBody.style.getPropertyValue('--cal-detail-h');
       if (!alreadySet) {
         const saved = parseInt(localStorage.getItem('odysseus.cal.detailH') || '0', 10);
@@ -1877,10 +1877,10 @@ function _wireAll(body) {
       const onMove = (ev) => {
         if (!dragging) return;
         const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
-  // 向上拖（较小的 y）→ 更大的日详情面板。允许面板扩展到
-  // 可见视口的顶部，以便用户可以
-  // 完全隐藏日历。我们留出约 24px 空间，以便
-  // 分割器手柄本身保持可抓取，可以向下拖回。
+        // Drag UP (smaller y) → bigger day-detail. Allow the pane to grow
+        // all the way to the top of the visible viewport so the user can
+        // hide the calendar entirely. We leave ~24px headroom so the
+        // splitter handle itself stays grabbable to drag back down.
         const vh = (window.visualViewport?.height) || window.innerHeight;
         const newH = Math.max(40, Math.min(vh - 24, startH + (startY - y)));
         calBody.style.setProperty('--cal-detail-h', newH + 'px');
@@ -1912,8 +1912,8 @@ function _wireAll(body) {
       splitter.addEventListener('pointerdown', onDown);
       splitter.addEventListener('touchstart', onDown, { passive: false });
 
-  // 双击分割器可将日详情面板重置
-  // 为其 CSS 默认高度。
+      // Double-tap (or double-click) the splitter to reset the day-detail
+      // pane to its CSS default height.
       let _lastTap = 0;
       const resetSplit = () => {
         calBody.style.removeProperty('--cal-detail-h');
@@ -1932,7 +1932,7 @@ function _wireAll(body) {
     }
   } catch {}
 
-  // ── 快速添加输入框 ─────────────────────────────────────────────
+  // ── Quick-add input ─────────────────────────────────────────────
   const _qaInput = document.getElementById('cal-quickadd');
   const _qaStatus = document.getElementById('cal-quickadd-status');
   _initQuickAddHintCycle();
@@ -1941,12 +1941,12 @@ function _wireAll(body) {
     const _submitQA = async () => {
       const text = _qaInput.value.trim();
       if (!text || _qaSubmitting) return;
-  // 使用标志位而非 `disabled` 来阻止重复提交 — 禁用
-  // 输入框会使其失焦，这会触发延迟渲染并清空
-  // 解析中的加载动画容器。
+      // Use a flag rather than `disabled` to block double-submit — disabling
+      // the input blurs it, which would flush a deferred render and wipe the
+      // spinner's container mid-parse.
       _qaSubmitting = true;
-  // 文本后的漩涡加载动画 — 但仅在解析运行时间足够长
-  // （~250ms）时才显示，快速解析不会闪烁。
+      // Whirlpool spinner after the text — but only once parsing has run long
+      // enough to be worth showing (~250ms), so fast parses don't flash it.
       let _qaSpin = null;
       let _qaSpinTimer = null;
       if (_qaStatus) {
@@ -1977,7 +1977,7 @@ function _wireAll(body) {
           uiModule.showError('Quick-add: ' + (data.error || data.detail || `HTTP ${res.status}`));
           return;
         }
-        // 打开自定义事件表单，然后将解析的字段填入。
+        // Open the bespoke event form, then push the parsed fields in.
         const ev = data.event;
         const ds = (ev.dtstart || '').slice(0, 10);
         const de = (ev.dtend   || '').slice(0, 10) || ds;
@@ -1997,14 +1997,14 @@ function _wireAll(body) {
             if (t2) set('cal-f-end', t2);
             document.getElementById('cal-f-start')?.dispatchEvent(new Event('input'));
           }
-          // 确保详情面板已打开，以便用户确认时间。
+          // Make sure the details panel is open so the user can verify time.
           document.querySelector('.cal-form-bespoke')?.classList.add('is-expanded');
           const det = document.getElementById('cal-form-details');
           if (det) det.setAttribute('aria-hidden', 'false');
-          // 触发 Apple Maps 链接同步，因为位置已填入。
+          // Trigger Apple-Maps link sync now that location is filled in.
           document.getElementById('cal-f-loc')?.dispatchEvent(new Event('input'));
         });
-        // 重置以便下次快速添加。
+        // Reset for next quick add.
         _qaInput.value = '';
       } catch (e) {
         uiModule.showError('Quick-add failed: ' + e.message);
@@ -2019,13 +2019,13 @@ function _wireAll(body) {
       if (e.key === 'Enter') { e.preventDefault(); _submitQA(); }
       else if (e.key === 'Escape') { _qaInput.value = ''; _qaInput.blur(); }
     });
-  // 刷新在字段获得焦点时推迟的任何渲染。
+    // Flush any render we deferred while the field was focused.
     _qaInput.addEventListener('blur', () => {
       if (_renderPending) { _renderPending = false; _render(); }
     });
   }
-  // 后台重新渲染后（例如 /events 请求返回），恢复
-  // 焦点 + 光标位置 + 值，让用户可以继续不间断输入。
+  // After a background re-render (e.g. /events fetch returning), restore
+  // focus + caret + value so the user can keep typing uninterrupted.
   if (_qaInput && _qaPendingRestore) {
     _qaInput.value = _qaPendingRestore.value;
     _qaInput.focus();
@@ -2034,7 +2034,7 @@ function _wireAll(body) {
     } catch {}
     _qaPendingRestore = null;
   }
-  // 在页面任意位置按 Q（当不在其他地方输入时）聚焦快速添加框。
+  // Q anywhere on the page (when not typing elsewhere) focuses quick-add.
   if (!body._qaShortcutWired) {
     body._qaShortcutWired = true;
     document.addEventListener('keydown', (e) => {
@@ -2047,11 +2047,11 @@ function _wireAll(body) {
     });
   }
 
-  // 在日历主体上捏合缩放改变视图粒度：
-  // year ⇆ month ⇆ week。捏合放大切换到更近的视图，捏合缩小
-  // 切换到更远的视图。每次手势仅触发一次，避免强力捏合直接从
-  // year 跳到 week（用户每次得到一个步骤，
-  // 可以释放后再捏合）。
+  // Pinch zoom on the calendar body changes the view granularity:
+  // year ⇆ month ⇆ week. Pinch IN zooms to a tighter view, pinch OUT
+  // zooms out. Fires once per gesture so a strong pinch doesn't skip
+  // straight from year to week (the user gets one step at a time and
+  // can release-and-pinch again).
   if (body && !body._pinchZoomWired) {
     body._pinchZoomWired = true;
     let pinchStart = 0, pinchActive = false, pinchFired = false;
@@ -2074,10 +2074,10 @@ function _wireAll(body) {
     }, { passive: true });
   }
 
-  // 在日历主体上触控滑动 ← → 切换月/周等。仅在
-  // 滑动明显是水平方向时触发，避免劫持
-  // 长事件列表内的垂直滚动。每次渲染通过 _wireAll
-  // 重新绑定 → 现有的上一页/下一页处理器执行实际导航。
+  // Touch swipe ← → on the calendar body switches months/weeks/etc. Only
+  // fires when the swipe is clearly horizontal so vertical scrolling inside
+  // long event lists isn't hijacked. Attached fresh on each render via
+  // _wireAll → existing prev/next handlers do the actual navigation.
   if (body && !body._swipeWired) {
     body._swipeWired = true;
     let _sx = 0, _sy = 0, _t0 = 0, _tracking = false;
@@ -2096,8 +2096,8 @@ function _wireAll(body) {
       const dx = t.clientX - _sx;
       const dy = t.clientY - _sy;
       const dt = Date.now() - _t0;
-  // 阈值：至少 50px 水平移动，主轴是水平方向，
-  // 并且速度合理（600ms 内）以确保意图明确。
+      // Threshold: at least 50px horizontal, dominant axis is horizontal,
+      // and reasonably quick (under 600ms) so it feels intentional.
       if (Math.abs(dx) < 50) return;
       if (Math.abs(dx) < Math.abs(dy) * 1.3) return;
       if (dt > 600) return;
@@ -2112,8 +2112,8 @@ function _wireAll(body) {
     else if (_view === 'week') _currentDate.setDate(_currentDate.getDate() - 7);
     else if (_view === 'agenda') _currentDate.setDate(_currentDate.getDate() - 30);
     else _currentDate = new Date(_currentDate.getFullYear(), _currentDate.getMonth() - 1, 1);
-  // 在月/周视图中保持一个日期被选中，这样托管搜索框的
-  // 日详情面板保持可用（否则浏览会隐藏搜索）。
+    // Keep a day selected in month/week so the day-detail panel — which hosts
+    // the search box — stays available (otherwise browsing hides search).
     _selectedDay = (_view === 'month' || _view === 'week') ? _ds(_currentDate) : null;
     _render();
   });
@@ -2129,12 +2129,12 @@ function _wireAll(body) {
   document.getElementById('cal-today')?.addEventListener('click', () => { _currentDate = new Date(); _selectedDay = _today(); _render(); });
   document.getElementById('cal-settings')?.addEventListener('click', () => _showCalSettings());
   document.getElementById('cal-sync')?.addEventListener('click', async () => {
-  // 可见反馈：在按钮上切换 CSS 类，以便旋转动画
-  // 运行即使网络往返太快无法感知。我们至少保持
-  // 700ms（一个完整旋转周期）并且在实际请求进行期间
-  // 保持，然后清除。之前 `await _render()`
-  // 立刻 resolve 因为 _render 是同步的，所以加载动画
-  // 在同一 tick 内设置→清除，用户看不到任何变化。
+    // Visible feedback: toggle a CSS class on the button so the spin runs
+    // even if the network round-trip is too fast to perceive. We hold it
+    // for at least 700ms (one full rotation) AND for as long as the actual
+    // fetch is in flight, then clear. Previously `await _render()`
+    // resolved instantly because _render is synchronous, so the spinner
+    // was set→cleared in the same tick and you saw nothing.
     const btn = document.getElementById('cal-sync');
     btn?.classList.add('cal-syncing');
     window._calSyncing = true;
@@ -2142,9 +2142,9 @@ function _wireAll(body) {
     _fetchedRanges = [];
     localStorage.removeItem(LS_KEY);
 
-  // 计算可见范围并强制重新获取 — _render() 会触发
-  // 内部 fetch 但不返回 promise，因此我们等待自己
-  // 的来实际在网络层面序列化。
+    // Compute the visible range and force-refetch — _render() kicks off
+    // a fetch internally but doesn't return a promise, so we await our
+    // own one to actually serialize on the network.
     const _range = (_view === 'year')
       ? [`${_currentDate.getFullYear()}-01-01`, `${_currentDate.getFullYear() + 1}-01-01`]
       : (_view === 'week') ? _weekRange(_currentDate) : _monthRange(_currentDate);
@@ -2156,10 +2156,10 @@ function _wireAll(body) {
       ]);
     } finally {
       window._calSyncing = false;
-  // 闪现对勾约 900ms。通过工具栏模板读取的
-  // 标志驱动（不是在按钮上一次性设置 innerHTML），这样偶然的
-  // _render() — 日历中途重渲染 — 无法清除它。同样
-  // 原因，旋转动画也是标志驱动的。
+      // Flash a checkmark for ~900ms. Drive it through a flag the toolbar
+      // template reads (not a one-off innerHTML on the button), so a stray
+      // _render() — the calendar re-renders mid-flow — can't wipe it. Same
+      // reason the spin is flag-driven.
       window._calSyncDone = true;
       _render();
       setTimeout(() => {
@@ -2169,9 +2169,9 @@ function _wireAll(body) {
       if (uiModule?.showToast) uiModule.showToast('Calendar refreshed');
     }
   });
-  // 新建事件表单打开前"+"符号短暂旋转。
-  // 该符号在桌面端悬停时已会旋转。移动端没有
-  // 悬停效果，因此在点击时播放旋转作为快速可供性提示。
+  // Brief spin on the "+" glyph before the new-event form opens. The
+  // glyph already rotates on hover (desktop). On mobile there's no
+  // hover, so play the rotation on tap as a quick affordance.
   const _addClick = (e, openFn) => {
     if (window.innerWidth <= 768) {
       const plus = e.currentTarget.querySelector('.cal-add-plus');
@@ -2184,9 +2184,9 @@ function _wireAll(body) {
       openFn();
     }
   };
-  // 如果用户在快速添加中输入但按了"+ New"而非回车，将其
-  // 视为快速添加（解析文本）而非打开空白事件 — 因为
-  // 两个控件并排放置，这是常见的混淆操作。
+  // If the user typed in quick-add but pressed "+ New" instead of Enter, treat
+  // it as a quick-add (parse the text) rather than opening a blank event — a
+  // common mix-up since the two controls sit side by side.
   const _tryQuickAddFromButton = () => {
     const qa = document.getElementById('cal-quickadd');
     if (qa && qa.value.trim()) {
@@ -2196,14 +2196,14 @@ function _wireAll(body) {
     return false;
   };
   document.getElementById('cal-add')?.addEventListener('click', (e) => _addClick(e, () => { if (!_tryQuickAddFromButton()) _showEventForm(null, _selectedDay || _today()); }));
-  // 日详情标题中的独立"+"：不旋转（小圆形按钮
-  // 原地旋转不好看 — 立即打开表单）。
+  // Solo "+" on the day-detail header: no spin (the small round button
+  // doesn't look good rotating in place — open the form immediately).
   document.getElementById('cal-add-day')?.addEventListener('click', () => { if (!_tryQuickAddFromButton()) _showEventForm(null, _selectedDay); });
 
-  // 移动端：重新定位工具栏的 +New 胶囊按钮，使其位于
-  // 快速添加行旁边（不在内部 — 该行有自己的边框/背景
-  // 使嵌入的按钮看起来像输入框的一部分）。
-  // 将行和按钮包裹在 flex 容器中，使它们共享一行。
+  // Mobile: relocate the toolbar's +New pill so it sits NEXT TO the
+  // quick-add row (not inside it — the row has its own border/background
+  // that makes embedded buttons look like part of the input field).
+  // Wrap the row and button in a flex container so they share one line.
   if (window.innerWidth <= 768) {
     const addBtn = document.getElementById('cal-add');
     const qaRow = document.getElementById('cal-quickadd-row');
@@ -2219,39 +2219,39 @@ function _wireAll(body) {
     }
   }
 
-  // 搜索输入 — 每次按键重渲染都会重建日详情 DOM，
-  // 因此重新聚焦并恢复光标位置以保持输入流畅。
+  // Search input — re-render rebuilds the day-detail DOM on each keystroke,
+  // so refocus and restore caret position to keep typing smooth.
   const searchInput = document.getElementById('cal-search');
   if (searchInput) {
     if (document.activeElement?.id === 'cal-search') {
-  // 重渲染后的首次调用：重新聚焦并将光标放在末尾。
+      // First call after a re-render: refocus and place caret at end.
       searchInput.focus();
       const len = searchInput.value.length;
       try { searchInput.setSelectionRange(len, len); } catch {}
     }
     searchInput.addEventListener('input', (e) => {
       _searchQuery = e.target.value.trim();
-  // 部分更新：仅替换日详情面板内的搜索结果，
-  // 保留搜索输入框元素本身。完整的
-  // _render() 通过 innerHTML 销毁输入框，在 iOS 上
-  // 即使全新的输入框同步获得焦点键盘也会收起。
-  //
-  // 跨按键保持同一输入框元素是保持键盘打开的唯一方式。
+      // Partial update: swap only the search results inside the day-detail
+      // panel, leaving the search input element itself in place. A full
+      // _render() destroys the input via innerHTML, and on iOS the
+      // keyboard dismisses even if a brand-new input is focused
+      // synchronously after. Keeping the same input element across
+      // keystrokes is the only way to keep the keyboard up.
       _updateDaySearchResults();
     });
-    // 移动端：当搜索输入框获得焦点时，屏幕键盘
-    // 弹出。将日详情面板扩展到（接近）可见视口
-    // 高度，使搜索栏位于屏幕顶部，远在
-    // 键盘上方，而不是被挤压在键盘后面。
+    // Mobile: when the search input gains focus the on-screen keyboard
+    // pops up. Expand the day-detail pane to (near) the visible viewport
+    // height so the search bar sits at the top of the screen, well above
+    // the keyboard, instead of staying squashed behind it.
     searchInput.addEventListener('focus', () => {
       if (window.innerWidth > 768) return;
       const calBody = document.getElementById('cal-body');
       if (!calBody) return;
       const vh = (window.visualViewport?.height) || window.innerHeight;
       const target = vh - 24;
-      // 如果已经展开则跳过 — 每次按键都会触发重渲染
-      // 重新聚焦输入框。在每次按键时重复运行此操作
-      // 会在用户输入时推动布局变化。
+      // Skip if already expanded — every keystroke triggers a re-render
+      // which re-focuses the input. Re-running this on each keystroke
+      // would shove the layout around as the user types.
       const cur = parseInt(calBody.style.getPropertyValue('--cal-detail-h'), 10) || 0;
       if (cur >= target - 24) return;
       calBody.style.setProperty('--cal-detail-h', target + 'px');
@@ -2262,8 +2262,8 @@ function _wireAll(body) {
     _view = b.dataset.view;
     _searchQuery = '';
     _selectedDay = null;
-    // 切换到日程视图时始终定位到今天，这样你看到的是"接下来
-    // 有什么"而非你碰巧浏览到的地方。
+    // Switching to Agenda always lands on today so you see "what's coming
+    // up" rather than wherever you happened to be browsing.
     if (_view === 'agenda') _currentDate = new Date();
     _render();
   }));
@@ -2276,8 +2276,8 @@ function _wireAll(body) {
     const href = it.dataset.href;
     const type = it.dataset.type;
     if (href) {
-  // 单独筛选：点击 = 仅显示此日历；再次点击 = 显示全部。
-  // Shift/Ctrl+点击 = 单独切换（传统隐藏/显示）。
+      // Solo-filter: click = show only this calendar; click again = show all.
+      // Shift/Ctrl+click = toggle individually (legacy hide/show).
       const allHrefs = Array.from(body.querySelectorAll('.cal-filter-item[data-href]')).map(el => el.dataset.href);
       if (e.shiftKey || e.ctrlKey || e.metaKey) {
         _hiddenCals.has(href) ? _hiddenCals.delete(href) : _hiddenCals.add(href);
@@ -2291,18 +2291,18 @@ function _wireAll(body) {
         }
       }
     } else if (type) {
-  // "!"标签切换独立的"仅重要事件"轴 — 点击它
-  // 不会像普通类型标签那样单独隐藏其他类别。
+      // "!" chip toggles a separate "only important" axis — clicking it
+      // doesn't solo-hide other categories the way a normal type chip does.
       if (type === '!') {
         _onlyImportant = !_onlyImportant;
-  // 清除类别隐藏，使重要性成为活跃筛选条件。
+        // Clear category hides so importance becomes the active filter.
         if (_onlyImportant) _hiddenTypes.clear();
       } else {
         const allTypes = Array.from(body.querySelectorAll('.cal-filter-item[data-type]'))
           .map(el => el.dataset.type)
           .filter(t => t !== '!');
-  // 使用类别筛选器会取消"仅重要事件"模式，以免其
-  // 静默地继续叠加筛选。
+        // Engaging a category filter cancels "only important" so it doesn't
+        // silently keep filtering on top.
         _onlyImportant = false;
         if (e.shiftKey || e.ctrlKey || e.metaKey) {
           _hiddenTypes.has(type) ? _hiddenTypes.delete(type) : _hiddenTypes.add(type);
@@ -2322,8 +2322,8 @@ function _wireAll(body) {
   body.querySelectorAll('.cal-day[data-date]').forEach(cell => cell.addEventListener('click', (e) => {
     if (e.target.closest('.cal-event-item,.cal-multiday')) return;
     const d = cell.dataset.date;
-  // 首次点击某日：选中。再次点击同一已选中
-  // 的日期：打开预填该日期的新建事件表单。
+    // First click on a day: select it. Second click on the same already-
+    // selected day: open the new-event form pre-filled with that date.
     if (_selectedDay === d) {
       _showEventForm(null, d);
       return;
@@ -2338,7 +2338,7 @@ function _wireAll(body) {
   }));
   _wireQuickDelete(body);
 
-  // 拖放
+  // Drag
   body.querySelectorAll('[draggable="true"][data-uid]').forEach(el => {
     el.addEventListener('dragstart', (e) => {
       _dragUid = el.dataset.uid;
@@ -2351,17 +2351,17 @@ function _wireAll(body) {
       body.querySelectorAll('.cal-drag-over').forEach(d => d.classList.remove('cal-drag-over'));
     });
   });
-  // 辅助函数 — 找到光标在 (x,y) 正下方的日单元格。从
-  // 光标读取比信任触发 `drop` 事件的任何单元格更可靠：
-  // 如果用户在嵌套的事件项或多日条上释放，
-  // drop 事件在内部元素上触发，调用
-  // 单元格的 `data-date` 可能是错误的行。
+  // Helper — find the day cell directly under the cursor at (x,y). Reading
+  // it from the cursor is more reliable than trusting whichever cell fired
+  // the `drop` event: if the user releases over a nested event item or
+  // multi-day bar, the drop fires on the inner element and the calling
+  // cell's `data-date` may be the wrong row.
   const _cellAtPoint = (x, y) => {
     const stack = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [document.elementFromPoint(x, y)];
     for (const el of stack) {
       if (!el || !el.closest) continue;
-  // 优先月视图日单元格，回退到任意 data-date 目标
-  //（例如周视图列），使周视图拖放仍然有效。
+      // Prefer the month-view day cell, fall back to any data-date target
+      // (e.g. week-view column) so week-view drag still works.
       const dayCell = el.closest('.cal-day[data-date]');
       if (dayCell) return dayCell;
       const anyCell = el.closest('[data-date]');
@@ -2373,8 +2373,8 @@ function _wireAll(body) {
     cell.addEventListener('dragover', (e) => {
       if (!_dragUid) return;
       e.preventDefault();
-  // 仅高亮光标真正下方的单元格 — 防止光标
-  // 越过边界时两个相邻单元格闪烁。
+      // Only highlight the cell genuinely under the cursor — prevents two
+      // adjacent cells flashing as the cursor crosses a border.
       const target = _cellAtPoint(e.clientX, e.clientY);
       body.querySelectorAll('.cal-drag-over').forEach(c => {
         if (c !== target) c.classList.remove('cal-drag-over');
@@ -2382,8 +2382,8 @@ function _wireAll(body) {
       if (target) target.classList.add('cal-drag-over');
     });
     cell.addEventListener('dragleave', (e) => {
-  // 仅在光标确实离开此单元格时才清除（dragleave 在进入
-  // 子元素时也会触发 — 那是闪烁 bug）。
+      // Only clear if the cursor really left this cell (dragleave fires when
+      // entering a child too — that's the flicker bug).
       const target = _cellAtPoint(e.clientX, e.clientY);
       if (target !== cell) cell.classList.remove('cal-drag-over');
     });
@@ -2392,8 +2392,8 @@ function _wireAll(body) {
       e.stopPropagation();
       body.querySelectorAll('.cal-drag-over').forEach(c => c.classList.remove('cal-drag-over'));
       if (!_dragUid) return;
-  // 释放目标 = 释放时光标实际所在的单元格，
-  // 而不是冒泡目标。修复"在错误日期上释放"的反馈。
+      // Drop target = whichever cell is actually under the cursor at release,
+      // not the bubbling target. Fixes "drops on wrong day" reports.
       const target = _cellAtPoint(e.clientX, e.clientY) || cell;
       const nd = target.dataset.date;
       const ev = _events.find(e => e.uid === _dragUid);
@@ -2401,7 +2401,7 @@ function _wireAll(body) {
       const od = _localDateOf(ev.dtstart);
       if (od === nd) return;
       const diff = Math.round((new Date(nd + 'T00:00:00') - new Date(od + 'T00:00:00')) / 86400000);
-  // 在变更之前快照原始时间以便撤销。
+      // Snapshot the original times for undo BEFORE we mutate.
       const undoSnap = { uid: ev.uid, dtstart: ev.dtstart, dtend: ev.dtend };
       _pushCalUndo({ label: 'move', run: () => _updateEvent(undoSnap.uid, { dtstart: undoSnap.dtstart, dtend: undoSnap.dtend || undefined }).then(_render) });
       await _updateEvent(ev.uid, { dtstart: _shiftDT(ev.dtstart, diff), dtend: ev.dtend ? _shiftDT(ev.dtend, diff) : undefined });
@@ -2411,7 +2411,7 @@ function _wireAll(body) {
   });
 }
 
-// ── 撤销栈（日历） ──
+// ── Undo stack (calendar) ──
 const _calUndoStack = [];
 function _pushCalUndo(entry) {
   _calUndoStack.push(entry);
@@ -2423,12 +2423,12 @@ function _popAndRunCalUndo() {
     try { entry.run(); } catch {}
   }
 }
-// 在日历模态框内任意位置按 Ctrl/Cmd+Z 撤销最后一次拖放移动。
+// Ctrl/Cmd+Z anywhere inside the calendar modal undoes the last drag-move.
 if (typeof window !== 'undefined' && !window._calUndoBound) {
   window._calUndoBound = true;
   document.addEventListener('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.key !== 'z' || e.shiftKey) return;
-  // 如果用户正在实际字段中输入则跳过 — 让浏览器的文本撤销运行。
+    // Skip if the user's typing in a real field — let the browser's text undo run.
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     const modal = document.getElementById('calendar-modal');
@@ -2438,7 +2438,7 @@ if (typeof window !== 'undefined' && !window._calUndoBound) {
   });
 }
 
-// ── 日历设置 ──
+// ── Calendar Settings ──
 
 async function _showCalSettings() {
   const existing = document.getElementById('cal-settings-panel');
@@ -2455,12 +2455,12 @@ async function _showCalSettings() {
   overlay.innerHTML = `
     <div class="modal-content" style="width:420px;max-width:92vw;">
       <div class="modal-header">
-        <h4>${t('calendar.calendar_settings')}</h4>
+        <h4>Calendar Settings</h4>
         <button class="close-btn" id="cal-settings-close">\u2716</button>
       </div>
       <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:16px;">
         <div>
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">${t('calendar.your_calendars')}</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Your calendars</div>
           <div id="cal-settings-list" style="display:flex;flex-direction:column;gap:4px;">
             ${cals.map(c => `
               <div class="cal-settings-row" data-id="${_e(c.href)}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:color-mix(in srgb, var(--fg) 4%, transparent);">
@@ -2476,7 +2476,7 @@ async function _showCalSettings() {
           </button>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">${t('calendar.import_calendar')}</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Import calendar</div>
           <div style="display:flex;gap:8px;align-items:center;">
             <label class="memory-toolbar-btn" style="cursor:pointer;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:5px;margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -2488,7 +2488,7 @@ async function _showCalSettings() {
           <div style="font-size:10px;opacity:0.4;margin-top:4px;">Upload a .ics file to import events. Google Calendar, Apple Calendar, and Outlook all export .ics files.</div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">${t('calendar.export_calendar')}</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Export calendar</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             ${cals.map(c => `
               <button class="memory-toolbar-btn cal-s-export-chip" data-id="${_e(c.href)}" title="Download ${_e(c.name)}.ics" style="cursor:pointer;">
@@ -2507,11 +2507,11 @@ async function _showCalSettings() {
           </div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">${t('calendar.sync_calendars')}</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Sync</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <button class="memory-toolbar-btn" id="cal-settings-sync-now" style="cursor:pointer;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:2px;margin-right:3px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              <span style="position:relative;top:1px;">${t('calendar.sync_now')}</span>
+              <span style="position:relative;top:1px;">Sync now</span>
             </button>
             <span id="cal-settings-sync-status" style="font-size:11px;opacity:0.6;"></span>
           </div>
@@ -2548,8 +2548,8 @@ async function _showCalSettings() {
     if (_open) _render();
   });
 
-  // 创建新（本地）日历。默认名称 + 下一个调色板颜色，然后
-  // 重新打开面板，以便用户内联重命名并选择颜色。
+  // Create a new (local) calendar. Defaults the name + next palette color, then
+  // reopens the panel so the user can rename it inline and pick a color.
   overlay.querySelector('#cal-settings-add')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
@@ -2563,7 +2563,7 @@ async function _showCalSettings() {
       _render();
       cleanup();
       _showCalSettings();
-  // 聚焦新行的名称字段以便重命名。
+      // Focus the new row's name field so it's ready to rename.
       setTimeout(() => {
         const rows = document.querySelectorAll('#cal-settings-list .cal-settings-row');
         const last = rows[rows.length - 1];
@@ -2577,7 +2577,7 @@ async function _showCalSettings() {
     }
   });
 
-  // 颜色 + 名称更改
+  // Color + name changes
   overlay.querySelectorAll('.cal-settings-row').forEach(row => {
     const id = row.dataset.id;
     const colorInput = row.querySelector('.cal-s-color');
@@ -2589,11 +2589,11 @@ async function _showCalSettings() {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(async () => {
         await fetch(`${API_BASE}/api/calendar/calendars/${id}?name=${encodeURIComponent(nameInput.value)}&color=${encodeURIComponent(colorInput.value)}`, { method: 'PUT' });
-        if (uiModule?.showToast) uiModule.showToast(t('calendar.saved_calendar', { name: nameInput.value || t('calendar.default_calendar_name') }));
-  // 更新本地日历列表
+        if (uiModule?.showToast) uiModule.showToast(`Saved “${nameInput.value || 'calendar'}”`);
+        // Update local calendar list
         const c = _calendars.find(c => c.href === id);
         if (c) { c.name = nameInput.value; c.color = colorInput.value; }
-  // 更新缓存事件的颜色
+        // Update colors on cached events
         for (const uid of Object.keys(_allEvents)) {
           if (_allEvents[uid].calendar_href === id) {
             _allEvents[uid].color = colorInput.value;
@@ -2607,12 +2607,12 @@ async function _showCalSettings() {
     };
     colorInput.addEventListener('input', save);
     nameInput.addEventListener('change', save);
-  // 将原生颜色框升级为应用主题颜色选择器。
+    // Upgrade the native color box into the app's themed color picker.
     try { attachColorPicker(colorInput); } catch (_) {}
 
     delBtn.addEventListener('click', async () => {
       const name = nameInput.value;
-      if (!await window.styledConfirm(t('calendar.delete_calendar_confirm', { name: name }), { confirmText: t('common.delete'), danger: true })) return;
+      if (!await window.styledConfirm(`Delete calendar "${name}" and all its events?`, { confirmText: 'Delete', danger: true })) return;
       await fetch(`${API_BASE}/api/calendar/calendars/${id}`, { method: 'DELETE' });
       row.remove();
       _allEvents = {}; _fetchedRanges = []; localStorage.removeItem(LS_KEY);
@@ -2621,7 +2621,7 @@ async function _showCalSettings() {
     });
   });
 
-  // ICS 导入
+  // ICS import
   overlay.querySelector('#cal-import-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -2631,38 +2631,38 @@ async function _showCalSettings() {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch(`${API_BASE}/api/calendar/import`, { method: 'POST', body: fd, credentials: 'same-origin' });
-  // 先尝试 JSON；回退到文本，以便 HTML 认证墙和裸
-  // 500 状态码能展示用户可操作的信息，而非
-  // 通用的"导入失败"。
+      // Try JSON first; fall back to text so HTML auth-walls and bare
+      // 500s surface something the user can act on instead of the
+      // generic "Import failed".
       let data = null, raw = '';
       try { data = await res.clone().json(); } catch (_) { raw = await res.text().catch(() => ''); }
       if (res.ok && data && data.ok) {
-        status.textContent = `${t('calendar.events_imported', { n: data.imported })} "${data.calendar}"` + (data.skipped ? ` (${data.skipped} skipped)` : '');
+        status.textContent = `${data.imported} events imported to "${data.calendar}"` + (data.skipped ? ` (${data.skipped} skipped)` : '');
         _allEvents = {}; _fetchedRanges = []; localStorage.removeItem(LS_KEY);
         await _fetchCalendars();
         _render();
       } else {
-  // FastAPI HTTPException → {detail}；某些路由使用 {error}。
+        // FastAPI HTTPException → {detail}; some routes use {error}.
         const reason = (data && (data.detail || data.error)) || raw.slice(0, 200) || `HTTP ${res.status}`;
-        status.textContent = t('calendar.import_failed', { reason: reason });
+        status.textContent = `Import failed: ${reason}`;
         console.error('Calendar import failed', res.status, data || raw);
       }
     } catch (err) {
-      status.textContent = t('calendar.import_failed', { reason: err.message || err });
+      status.textContent = `Import failed: ${err.message || err}`;
       console.error('Calendar import threw', err);
     }
     e.target.value = '';
   });
 
-  // 导出标签 — 每个日历一个；下载该日历的 .ics 文件。
+  // Export chips — one per calendar; downloads that calendar's .ics.
   overlay.querySelectorAll('.cal-s-export-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       window.open(`${API_BASE}/api/calendar/export/${chip.dataset.id}`, '_blank');
     });
   });
 
-  // 立即同步 — 同步触发 CalDAV 拉取，以便显示
-  // 内联结果，然后刷新面板 + 日历网格。
+  // Sync now — fires the CalDAV pull synchronously so we can show the
+  // result inline, then refreshes the panel + calendar grid.
   overlay.querySelector('#cal-settings-sync-now')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     const status = overlay.querySelector('#cal-settings-sync-status');
@@ -2670,7 +2670,7 @@ async function _showCalSettings() {
     status.textContent = 'Syncing…';
     const data = await _syncCaldav(true) || {};
     if (data.errors && data.errors.length) {
-      status.textContent = t('calendar.sync_failed', { error: data.errors[0] });
+      status.textContent = `Sync failed: ${data.errors[0]}`;
     } else {
       const parts = [];
       if (data.events) parts.push(`${data.events} events`);
@@ -2680,7 +2680,7 @@ async function _showCalSettings() {
       try { localStorage.removeItem(LS_KEY); } catch (_) {}
       await _fetchCalendars();
       _render();
-  // 重新打开面板，使日历列表反映任何新增的日历。
+      // Reopen the panel so the calendars list reflects any new ones.
       const reopenWith = !!document.getElementById('cal-settings-panel');
       cleanup();
       if (reopenWith) _showCalSettings();
@@ -2688,7 +2688,7 @@ async function _showCalSettings() {
     btn.disabled = false;
   });
 
-  // 集成链接 — 关闭此覆盖层并打开设置 → 集成。
+  // Integrations link — close this overlay and open Settings → Integrations.
   overlay.querySelector('#cal-settings-open-caldav')?.addEventListener('click', (e) => {
     e.preventDefault();
     cleanup();
@@ -2704,14 +2704,14 @@ async function _showCalSettings() {
   });
 }
 
-// ── 事件表单 ──
+// ── Event Form ──
 
-  // 从自由文本标题中提取明确的时钟时间，以便覆盖
-  // 保存时的时间选择器（例如标题"Standup 10am"胜过 9pm 的选择器）。
-  // 返回 24 小时制的 {h, m}，标题无明确时间时返回 null。
+// Pull an explicit clock time out of a free-text title so it can overrule the
+// time pickers on save (e.g. title "Standup 10am" wins over a 9pm picker).
+// Returns {h, m} in 24h, or null when the title has no unambiguous time.
 function _parseTitleTime(text) {
   if (!text) return null;
-  // 12 小时制 含 am/pm — "10am"、"10:30 pm"、"at 7 p.m."
+  // 12-hour with am/pm — "10am", "10:30 pm", "at 7 p.m."
   let m = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?\b/i);
   if (m) {
     let h = parseInt(m[1], 10);
@@ -2722,8 +2722,8 @@ function _parseTitleTime(text) {
     if (!pm && h === 12) h = 0;
     return { h, m: mm };
   }
-  // 24 小时制 HH:MM — "15:00"、"at 9:30"（需要冒号以避免匹配
-  // 裸数字，如"room 5"或年份）。
+  // 24-hour HH:MM — "15:00", "at 9:30" (needs the colon to avoid matching
+  // bare numbers like "room 5" or years).
   m = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
   if (m) return { h: parseInt(m[1], 10), m: parseInt(m[2], 10) };
   return null;
@@ -2738,18 +2738,18 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   const isMultiDay = ds !== de;
   const st = existing && !existing.all_day ? _fmtTime(existing.dtstart) : '09:00';
   const et = existing && !existing.all_day && existing.dtend ? _fmtTime(existing.dtend) : '10:00';
-  // 跨多日拖放时默认设为全天
+  // Default to all-day when dragging across multiple days
   const ad = existing ? existing.all_day : (defaultEndDate && defaultEndDate !== defaultDate);
 
   let calOpts = _calendars.filter(c => !_hiddenCals.has(c.href)).map(c =>
     `<option value="${_e(c.href)}" ${existing && existing.calendar_href === c.href ? 'selected' : ''}>${_e(c.name)}</option>`
   ).join('');
 
-  // "自定义"事件表单：一个大钟面主区域（时间 + 日期）和一个
-  // 标题输入框。其他所有内容（位置、描述、重复、
-  // 提醒、颜色、日历）都隐藏在点击后 — 聚焦
-  // 标题或点击"添加详情"展开。空白草稿感觉像
-  // 便利贴；完整详情编辑只需一次按键。
+  // "Bespoke" event form: a big clock-face hero (time + date) and a single
+  // title input. Everything else (location, description, recurrence,
+  // reminder, color, calendar) is folded behind a click — focusing the
+  // title or clicking "Add details" reveals it. Empty drafts feel like a
+  // sticky-note; full-detail editing is one keystroke away.
   const _hasDetails = !!(existing && (
     existing.location || existing.description || existing.rrule ||
     (existing.color && existing.color.length) ||
@@ -2781,7 +2781,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         <span style="opacity:0.3">to</span>
         <input type="date" id="cal-f-date-end" value="${de}" class="cal-input" />
         <div class="cal-allday-ctrl">
-          <span class="cal-allday-label">${t('calendar.all_day')}</span>
+          <span class="cal-allday-label">All day</span>
           <label class="admin-switch cal-allday-switch"><input type="checkbox" id="cal-f-allday" ${ad ? 'checked' : ''} /><span class="admin-slider"></span></label>
         </div>
       </div>
@@ -2791,26 +2791,26 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         <input type="time" id="cal-f-end" value="${et}" class="cal-input cal-input-time" />
       </div>
       <div class="cal-loc-row">
-        <input type="text" id="cal-f-loc" placeholder=t('calendar.location_label') value="${_e(existing?.location || '')}" class="cal-input" />
+        <input type="text" id="cal-f-loc" placeholder="Location" value="${_e(existing?.location || '')}" class="cal-input" />
         <a id="cal-f-loc-map" class="cal-loc-map" href="#" target="_blank" rel="noopener noreferrer" title="Open in Maps" aria-label="Open in Apple Maps" tabindex="-1">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         </a>
       </div>
       <select id="cal-f-rrule" class="cal-input">
-        <option value="" ${!existing?.rrule ? 'selected' : ''}>${t('calendar.does_not_repeat')}</option>
-        <option value="FREQ=DAILY" ${existing?.rrule === 'FREQ=DAILY' ? 'selected' : ''}>${t('calendar.daily')}</option>
-        <option value="FREQ=WEEKLY" ${existing?.rrule === 'FREQ=WEEKLY' ? 'selected' : ''}>${t('calendar.weekly')}</option>
-        <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" ${existing?.rrule === 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' ? 'selected' : ''}>${t('calendar.weekdays')}</option>
-        <option value="FREQ=MONTHLY" ${existing?.rrule === 'FREQ=MONTHLY' ? 'selected' : ''}>${t('calendar.monthly')}</option>
-        <option value="FREQ=YEARLY" ${existing?.rrule === 'FREQ=YEARLY' ? 'selected' : ''}>${t('calendar.yearly')}</option>
+        <option value="" ${!existing?.rrule ? 'selected' : ''}>Does not repeat</option>
+        <option value="FREQ=DAILY" ${existing?.rrule === 'FREQ=DAILY' ? 'selected' : ''}>Daily</option>
+        <option value="FREQ=WEEKLY" ${existing?.rrule === 'FREQ=WEEKLY' ? 'selected' : ''}>Weekly</option>
+        <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" ${existing?.rrule === 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' ? 'selected' : ''}>Weekdays</option>
+        <option value="FREQ=MONTHLY" ${existing?.rrule === 'FREQ=MONTHLY' ? 'selected' : ''}>Monthly</option>
+        <option value="FREQ=YEARLY" ${existing?.rrule === 'FREQ=YEARLY' ? 'selected' : ''}>Yearly</option>
       </select>
-      <textarea id="cal-f-desc" placeholder=t('calendar.description_label') class="cal-input" rows="2">${_e(existing?.description || '')}</textarea>
+      <textarea id="cal-f-desc" placeholder="Description" class="cal-input" rows="2">${_e(existing?.description || '')}</textarea>
       ${(() => {
-  // Cookbook 任务反链接。当描述包含
-  // "cookbook_task_id: <id>"标记（由 cookbookSchedule.js
-  // 在用户勾选"在日历中创建事件"时设置），渲染一个
-  // 打开任务按钮，以便用户直接跳转到
-  // 任务页签中的源任务。
+        // Cookbook-task back-link. When the description carries a
+        // "cookbook_task_id: <id>" marker (set by cookbookSchedule.js
+        // when the user ticks "Create event in calendar"), render an
+        // Open-task button so the user can jump straight to the
+        // source task in the Tasks tab.
         const _ct = (existing?.description || '').match(/cookbook_task_id:\s*([A-Za-z0-9_-]+)/);
         if (!_ct) return '';
         return `<div class="cal-form-row cal-form-cookbook-link" style="align-items:center;gap:8px;">
@@ -2822,29 +2822,29 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
               <path d="M9 11l3 3L22 4"/>
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
-            <span>${t('calendar.open_in_tasks')}</span>
+            <span>Open in Tasks</span>
           </button>
           <span style="font-size:11px;opacity:0.5;">Linked to a Cookbook scheduled task</span>
         </div>`;
       })()}
       <div class="cal-form-row" style="align-items:center;gap:8px;">
-        <label style="font-size:11px;display:flex;align-items:center;gap:4px;"><svg class="cal-remind-bell" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent, var(--red))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span style="opacity:0.5;">${t('calendar.reminder')}</span></label>
+        <label style="font-size:11px;display:flex;align-items:center;gap:4px;"><svg class="cal-remind-bell" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent, var(--red))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span style="opacity:0.5;">Reminder</span></label>
         <select id="cal-f-remind" class="cal-input" style="flex:1;">
-          <option value="" ${isEdit ? 'selected' : ''}>${t('calendar.no_reminder')}</option>
-          <option value="0">${t('calendar.at_event_time')}</option>
-          <option value="5">${t('calendar.n_minutes_before')}</option>
-          <option value="10">${t('calendar.n_minutes_before')}</option>
-          <option value="15" ${!isEdit ? 'selected' : ''}>${t('calendar.n_minutes_before')}</option>
-          <option value="30">${t('calendar.n_minutes_before')}</option>
-          <option value="60">${t('calendar.one_hour_before')}</option>
-          <option value="120">${t('calendar.n_hours_before')}</option>
-          <option value="1440">${t('calendar.one_day_before')}</option>
+          <option value="" ${isEdit ? 'selected' : ''}>No reminder</option>
+          <option value="0">At event time</option>
+          <option value="5">5 minutes before</option>
+          <option value="10">10 minutes before</option>
+          <option value="15" ${!isEdit ? 'selected' : ''}>15 minutes before</option>
+          <option value="30">30 minutes before</option>
+          <option value="60">1 hour before</option>
+          <option value="120">2 hours before</option>
+          <option value="1440">1 day before</option>
           <option value="custom">Exact time...</option>
         </select>
         <input type="datetime-local" id="cal-f-remind-custom" class="cal-input" style="flex:1;display:none;" />
       </div>
       <div class="cal-form-row" style="align-items:center;gap:8px;">
-        <label style="font-size:11px;opacity:0.5;">${t('calendar.color_label')}</label>
+        <label style="font-size:11px;opacity:0.5;">Color</label>
         <div class="note-color-picker" id="cal-f-colors">
           ${CAL_COLORS.map(c => {
             const cur = existing?.color || '';
@@ -2865,8 +2865,8 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     </div>
 
     <div class="cal-form-actions">
-      ${isEdit ? `<button id="cal-f-del" class="cal-btn cal-btn-danger" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>${t('common.delete')}</button>` : ''}
-      <button id="cal-f-cancel" class="cal-btn" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>${t('common.cancel')}</button>
+      ${isEdit ? `<button id="cal-f-del" class="cal-btn cal-btn-danger" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>Delete</button>` : ''}
+      <button id="cal-f-cancel" class="cal-btn" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Cancel</button>
       <button id="cal-f-save" class="cal-btn cal-btn-primary" style="display:inline-flex;align-items:center;gap:5px;">${isEdit
         ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Save'
         : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create'}</button>
@@ -2876,9 +2876,9 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   document.getElementById('cal-f-allday')?.addEventListener('change', (e) => {
     document.getElementById('cal-time-row').style.display = e.target.checked ? 'none' : '';
   });
-  // 打开任务反链接按钮 — 动态导入任务模块，
-  // 以便即使用户在当前会话中打开日历之前
-  // 尚未访问过任务页签，链接也能正常工作。
+  // Open-task back-link button — dynamically imports the tasks module
+  // so the linkage works even if the user is opening the calendar
+  // before they've touched the Tasks tab in this session.
   document.getElementById('cal-f-open-task')?.addEventListener('click', async (e) => {
     e.preventDefault();
     const taskId = e.currentTarget?.dataset?.taskId || '';
@@ -2889,17 +2889,17 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     } catch (_) {}
     document.getElementById('tool-tasks-btn')?.click();
   });
-  // 保持结束日期 >= 开始日期
+  // Keep end date >= start date
   document.getElementById('cal-f-date')?.addEventListener('change', () => {
     const s = document.getElementById('cal-f-date').value;
     const eEl = document.getElementById('cal-f-date-end');
     if (eEl && eEl.value < s) eEl.value = s;
   });
-  // 颜色圆点选择器 — 也会实时为表单卡片着色（边框、焦点
-  // 环、主按钮），让用户立即看到选择效果。
+  // Color dot picker — also live-tints the form card (border, focus
+   // rings, primary button) so the user sees the choice immediately.
   const _formCard = document.querySelector('.cal-form-bespoke');
-  // 在单行文本框中按 Enter 收起键盘 —
-  // 标题旁的 ↵ 符号提示此操作。
+  // Dismiss the keyboard by pressing Enter in a single-line text field — the
+  // ↵ glyph next to the title hints at this.
   if (_formCard) {
     _formCard.querySelectorAll('input[type="text"]').forEach(inp => {
       inp.addEventListener('keydown', (e) => {
@@ -2907,14 +2907,14 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       });
     });
   }
-  // 用所选日历的颜色着色日历选择器下拉框，以便
-  // 清楚地看到事件属于哪个日历。
+  // Tint the calendar-picker select with the chosen calendar's colour so it's
+  // clear which calendar the event lands in.
   const _calSel = document.getElementById('cal-f-cal');
   if (_calSel) {
     const _tintCalSel = () => {
       const c = _calendars.find(x => x.href === _calSel.value);
       const col = (c && c.color && !_isCalBgImage(c.color)) ? c.color : 'var(--accent, var(--red))';
-  // 仅柔和的全宽背景着色 — 无侧边栏/边框高亮。
+      // Soft full-width background tint only — no side bar/border highlight.
       _calSel.style.background = `color-mix(in srgb, ${col} 16%, var(--bg))`;
     };
     _calSel.addEventListener('change', _tintCalSel);
@@ -2923,9 +2923,9 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   const _applyFormTint = (hex) => {
     if (!_formCard) return;
     if (_isCalBgImage(hex)) {
-  // 用上传的图片绘制表单卡片（镜像笔记表单
-  // 预览自定义背景笔记的方式），加上半透明覆盖层使文本
-  // 保持可读。Chrome 强调色回退到主题强调色。
+      // Paint the form card with the uploaded image (mirrors how the notes
+      // form previews a custom-bg note), plus a translucent overlay so text
+      // stays readable. Chrome accent falls back to the theme accent.
       const url = _calBgImageUrl(hex);
       _formCard.style.setProperty('--ev-color', 'var(--accent)');
       _formCard.style.backgroundImage = `linear-gradient(color-mix(in srgb, var(--panel) 65%, transparent), color-mix(in srgb, var(--panel) 65%, transparent)), url('${url.replace(/'/g, "\\'")}')`;
@@ -2934,7 +2934,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       _formCard.classList.add('cal-form-bg-image');
       return;
     }
-  // 清除之前任何自定义背景样式。
+    // Clear any prior custom-bg styling.
     _formCard.classList.remove('cal-form-bg-image');
     _formCard.style.backgroundImage = '';
     _formCard.style.backgroundSize = '';
@@ -2944,7 +2944,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   };
   document.querySelectorAll('#cal-f-colors .note-color-dot').forEach(dot => {
     dot.addEventListener('click', async () => {
-  // 自定义圆点：提示上传图片。空输入 → 无操作。
+      // Custom dot: prompt for an image upload. Empty input → no-op.
       if (dot.dataset.color === 'custom') {
         const url = await _pickCalBgImage();
         if (!url) return;
@@ -2961,13 +2961,13 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       _applyFormTint(dot.dataset.color || '');
     });
   });
-  // 编辑已有事件时的初始着色，使卡片在表单打开时
-  // 已经反映已保存的颜色。
+  // Initial tint for edit-an-existing-event so the card already reflects
+  // the saved color when the form opens.
   _applyFormTint(existing?.color || '');
-  // 当用户更改开始时间时，用相同偏移量调整结束时间，
-  // 保持事件原有持续时间（如果开始==结束则默认 1 小时）。
-  // 如果用户已经在打开表单后调整了结束输入框，
-  // 则跳过 — 我们不想覆盖有意的编辑。
+  // When the user changes the start time, shift the end time by the same
+  // delta so the event keeps its original duration (or a 1-hour default if
+  // start == end). Skipped if the user has already nudged the end input
+  // since opening the form — we don't want to clobber a deliberate edit.
   (function _wireStartShiftsEnd() {
     const startEl = document.getElementById('cal-f-start');
     const endEl = document.getElementById('cal-f-end');
@@ -3036,12 +3036,12 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       _autoAdvanceEndDate();
     });
   })();
-  // 自定义提醒选择器
+  // Custom reminder picker
   document.getElementById('cal-f-remind')?.addEventListener('change', (e) => {
     const customInput = document.getElementById('cal-f-remind-custom');
     if (e.target.value === 'custom') {
       customInput.style.display = '';
-  // 默认为事件前 1 小时
+      // Default to 1 hour before event
       const dv = document.getElementById('cal-f-date')?.value || _today();
       const st = document.getElementById('cal-f-start')?.value || '09:00';
       const eventDt = new Date(`${dv}T${st}:00`);
@@ -3052,8 +3052,8 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     } else {
       customInput.style.display = 'none';
     }
-  // 选择非空提醒时摇铃。CSS 处理
-  // 动画；我们只是切换类名使其在每次变更时重新触发。
+    // Jingle the bell whenever a non-empty reminder is picked. CSS handles the
+    // animation; we just toggle the class so it re-fires on every change.
     const _bell = document.querySelector('.cal-remind-bell');
     if (_bell && e.target.value) {
       _bell.classList.remove('jingling');
@@ -3071,8 +3071,8 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     const dv = document.getElementById('cal-f-date').value;
     const dvEnd = document.getElementById('cal-f-date-end').value || dv;
     const isAD = document.getElementById('cal-f-allday').checked;
-  // 标题优先：如果标题说明了时间，应用到开始时间
-  // （保持当前持续时间），使选择器不会静默不一致。
+    // Title overrules: if the title states a time, apply it to the start
+    // (keeping the current duration) so the picker can't silently disagree.
     if (!isAD) {
       const tt = _parseTitleTime(summary);
       const startEl = document.getElementById('cal-f-start');
@@ -3090,9 +3090,9 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     }
     const activeDot = document.querySelector('#cal-f-colors .note-color-dot.active');
     const colorVal = activeDot?.dataset.color || '';
-  // 附加用户当前的 UTC 偏移，使后端将事件存储为
-  // 正确的 UTC 时刻（is_utc=True）。没有此处理，天真的"10:00"会
-  // 在其他地方被重新解释为本地时间 — 时区误伤 bug。
+    // Append the user's current UTC offset so the backend stores events as
+    // proper UTC instants (is_utc=True). Without this, naive "10:00" gets
+    // re-interpreted as local elsewhere — the timezone-misfire bug.
     const _tz = _tzOffset();
     
     if (!isAD) {
@@ -3122,7 +3122,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     try {
       if (isEdit) await _updateEvent(existing.uid, payload);
       else await _createEvent(payload);
-  // 如果已选择则创建提醒
+      // Create reminder if selected
       const remindVal = document.getElementById('cal-f-remind')?.value;
       if (remindVal) {
         let remindAt;
@@ -3142,12 +3142,12 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   });
   document.getElementById('cal-f-del')?.addEventListener('click', async () => {
     const name = existing && existing.summary ? `"${existing.summary}"` : 'this event';
-    const ok = await uiModule.styledConfirm(t('calendar.delete_event_confirm', { name: name }), { confirmText: t('common.delete'), danger: true });
+    const ok = await uiModule.styledConfirm(`Delete ${name}?`, { confirmText: 'Delete', danger: true });
     if (!ok) return;
     try { await _deleteEvent(existing.uid); _render(); }
     catch (e) { uiModule.showToast('Failed to delete'); }
   });
-  // ── 自定义表单行为 ──────────────────────────────────────────
+  // ── Bespoke-form behavior ──────────────────────────────────────────
   const formEl = body.querySelector('.cal-form');
   const detailsEl = document.getElementById('cal-form-details');
   const titleInput = document.getElementById('cal-f-sum');
@@ -3158,8 +3158,8 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     if (detailsEl) detailsEl.setAttribute('aria-hidden', on ? 'false' : 'true');
   };
 
-  // 聚焦标题输入框会展开详情（新建事件）。编辑模式
-  // 当有详情内容可看时打开已展开状态。
+  // Focusing the title input unfolds the details once (new events). Edit
+  // mode opens already expanded when there's any detail content to see.
   titleInput?.addEventListener('focus', () => setExpanded(true), { once: true });
 
   // Live time parse: typing a time like "11pm" or "15:30" into the title
@@ -3185,10 +3185,10 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     });
   }
 
-  // 位置 → Apple Maps。输入框旁边的图钉按钮仅在
-  // 位置非空时启用，其 href 实时跟踪
-  // 输入值。Apple 通用 URL 在 iOS/macOS 上打开原生地图应用，
-  // 在其他平台上回退到网页视图。
+  // Location → Apple Maps. The pin button next to the input is enabled
+  // only when there's a non-empty location, and its href tracks the live
+  // input value. Apple's universal URL opens the native Maps app on
+  // iOS/macOS and falls back to a web view on everything else.
   const locInput = document.getElementById('cal-f-loc');
   const locMap = document.getElementById('cal-f-loc-map');
   const _syncLocMap = () => {
@@ -3209,10 +3209,10 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   locInput?.addEventListener('input', _syncLocMap);
   _syncLocMap();
 
-  // 主区域可点击 — 点击时间或日期打开匹配的
-  // 原生选择器。先展开详情面板，使输入框在
-  // 布局后可见（在某些浏览器中 showPicker 在 display:none /
-  // 0 高度输入框上会失败）。
+  // Hero is clickable — clicking the time or date opens the matching
+  // native picker. Expands the details panel first so the input has been
+  // laid out (showPicker fails on display:none / 0-height inputs in some
+  // browsers).
   const _openPicker = (inputId, { uncheckAllDay = false } = {}) => {
     setExpanded(true);
     const input = document.getElementById(inputId);
@@ -3225,22 +3225,22 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         _syncHero();
       }
     }
-  // 等待一帧以使显示布局稳定。
+    // Wait one frame for the reveal layout to settle.
     requestAnimationFrame(() => {
       input.focus();
       try { if (typeof input.showPicker === 'function') input.showPicker(); } catch {}
     });
   };
   document.getElementById('cal-hero-time')?.addEventListener('click', (e) => {
-  // 检测可视时钟的哪个部分被点击（hh、mm 或
-  // 其他位置），以便点击分钟数字时光标定位到
-  // 选择器的分钟字段。
+    // Detect which segment of the visible clock was clicked (hh, mm, or
+    // somewhere else) so clicking the minutes digits puts the caret right
+    // on the minute field of the picker.
     const seg = e.target?.closest('[data-seg]')?.dataset?.seg;
     _openPicker('cal-f-start', { uncheckAllDay: true });
     if (seg === 'mm') {
-  // `<input type="time">` 在 Chromium 中接受 setSelectionRange
-  // 来选择分钟段；Firefox/Safari 是空操作但
-  // 选择器仍然会打开，因此不会丢失任何功能。
+      // `<input type="time">` accepts setSelectionRange in Chromium for
+      // selecting the minute segment; Firefox/Safari are no-ops but the
+      // picker still opens, so nothing is lost.
       requestAnimationFrame(() => {
         const inp = document.getElementById('cal-f-start');
         if (!inp) return;
@@ -3252,8 +3252,8 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     _openPicker('cal-f-date');
   });
 
-  // 实时主区域时钟 — 保持大号时间/日期与详情面板中
-  // 用户仍可调整的输入框同步。
+  // Live hero clock — keep the big time/date in sync with the inputs the
+  // user can still tweak inside the details panel.
   const _syncHero = () => {
     const allday = document.getElementById('cal-f-allday')?.checked;
     const startVal = document.getElementById('cal-f-start')?.value || '';
@@ -3261,7 +3261,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     const clockEl = document.getElementById('cal-hero-clock');
     const ampmEl = document.getElementById('cal-hero-ampm');
     const dateEl = document.getElementById('cal-hero-date');
-    if (clockEl) clockEl.innerHTML = allday ? '<span class="cal-hero-clock-allday">${t('calendar.all_day')}</span>' : _clockFace(startVal);
+    if (clockEl) clockEl.innerHTML = allday ? '<span class="cal-hero-clock-allday">All day</span>' : _clockFace(startVal);
     if (ampmEl) ampmEl.textContent = allday ? '' : _clockAmpm(startVal);
     if (dateEl) dateEl.textContent = _clockDate(dateVal);
   };
@@ -3270,13 +3270,13 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   document.getElementById('cal-f-date')?.addEventListener('change', _syncHero);
   _syncHero();
 
-  // 新建事件：预先展开详情（不依赖标题的 focus
-  // 事件 — 编程式的 .focus() 在移动端通常是空操作，会留下
-  // 仅显示标题 + 按钮的表单），然后聚焦标题。
+  // New events: expand the details up front (don't rely on the title's focus
+  // event — programmatic .focus() is often a no-op on mobile, which would leave
+  // the form showing only the title + buttons), then focus the title.
   if (!isEdit) { setExpanded(true); titleInput?.focus(); }
 
-  // 实时"今天是 …"计时器。每 30 秒更新一次；当标题元素消失时
-  // 自动停止（任何 _render() 调用都会替换 #cal-body 的 HTML）。
+  // Live "Today is …" tick. Updates every 30s; auto-stops the moment the
+  // header element disappears (any _render() call swaps #cal-body's HTML).
   const _todayTextEl = document.getElementById('cal-form-today-text');
   if (_todayTextEl) {
     const _tick = () => {
@@ -3288,18 +3288,18 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   }
 }
 
-// ── 辅助函数 ──
+// ── Helpers ──
 
 function _fmtDate(s) { return new Date(s + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }); }
 
-// 主区域时钟辅助函数 — 供自定义事件表单使用。
-// _clockFace 返回冒号分隔的数字（"HH : MM"），_clockAmpm
-// 返回 "AM"/"PM"/""（全天事件为空），_clockDate 是长格式
-// "周六 · 5月10日, 2026"。24 小时制无 AM/PM 标记。
+// Hero clock helpers — used by the bespoke event form.
+// _clockFace returns the colon-separated digits ("HH : MM"), _clockAmpm
+// returns "AM"/"PM"/"" (empty for all-day), _clockDate is a long form
+// "Sat · May 10, 2026". 24-h time stays without an AM/PM marker.
 function _clockFace(hhmm) {
-  // 返回拆分为 hh / 分隔符 / mm 子 span 的时钟，使每个
-  // 部分可单独点击。包裹的 #cal-hero-clock 的
-  // innerHTML 由 _syncHero 重新设置，因此 span 可以干净地往返。
+  // Return the clock split into hh / separator / mm sub-spans so each
+  // segment is individually clickable. The wrapping #cal-hero-clock has
+  // its innerHTML re-set by _syncHero, so the spans round-trip cleanly.
   if (!hhmm) {
     return '<span class="cal-hero-clock-hh" data-seg="hh">—</span><span class="cal-hero-sep"> : </span><span class="cal-hero-clock-mm" data-seg="mm">—</span>';
   }
@@ -3322,15 +3322,15 @@ function _clockDate(ds) {
   return new Date(ds + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 function _nowClock() {
-  // "今天是 …"标题的实时墙上时钟字符串。支持区域设置，
-  // 24 小时制用户看不到 AM/PM。
+  // Live wall-clock string for the "Today is …" header. Locale-aware so
+  // 24-h users don't see AM/PM.
   return new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 function _fmtTime(s) {
   if (!s || s.length < 16) return '';
-  // 来自 CalDAV/导入的时区感知时间戳存储为 UTC 时刻，
-  // 序列化时带有 Z/偏移。在浏览器本地时区显示；
-  // 遗留的朴素时间戳保持其书写的墙上时钟时间。
+  // Tz-aware timestamps from CalDAV/import are stored as UTC instants and
+  // serialized with Z/offset. Display them in the browser's local timezone;
+  // legacy naive timestamps keep their written wall-clock time.
   if (/[Zz]$|[+\-]\d{2}:?\d{2}$/.test(s)) {
     const d = new Date(s);
     if (!isNaN(d)) {
@@ -3372,7 +3372,7 @@ function _addMinutesToLocalIso(baseIso, addMinutes) {
 
 function _e(s) { return uiModule.esc ? uiModule.esc(s || '') : (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
-// 将位置字符串链接化：URL 变得可点击，普通地址获得地图链接。
+// Linkify a location string: URLs become clickable, plain addresses get a Maps link.
 function _locHTML(loc) {
   if (!loc) return '';
   const urlRe = /(https?:\/\/[^\s]+)/gi;
@@ -3382,17 +3382,17 @@ function _locHTML(loc) {
       return `<a href="${safe}" target="_blank" rel="noopener" onclick="event.stopPropagation();">${safe}</a>`;
     }).replace(/\n/g, '<br>');
   }
-  // 无 URL — 将整个文本链接到 OpenStreetMap。
+  // No URL — link the whole thing to OpenStreetMap.
   const mapUrl = 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(loc);
   return `<a href="${mapUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="Open in OpenStreetMap">${_e(loc)}</a>`;
 }
 
-// ── 打开 / 关闭 ──
+// ── Open / Close ──
 
 let _wheelDebounce = 0;
 function _wheelNav(e) {
   if (!_open) return;
-  // 不拦截日详情面板或任何其他内部滚动区域内的滚动
+  // Don't intercept scroll inside the day-detail panel or any other inner scroll area
   if (e.target.closest('.cal-day-detail') || e.target.closest('.cal-form')) return;
   const body = document.getElementById('cal-body');
   if (!body) return;
@@ -3418,7 +3418,7 @@ function _wheelNav(e) {
 
 function openCalendar() {
   if (_open) return;
-  // 如果当前已最小化 — 原地恢复，保留所有状态
+  // If currently minimized — restore in place, preserve all state
   if (Modals.isMinimized('calendar-modal')) {
     Modals.restore('calendar-modal');
     _open = true;
@@ -3428,7 +3428,7 @@ function openCalendar() {
   if (_todayCount() > 0) { _markBadgeSeen(); _updateBadge(); }
   _collapseSidebar();
   const modal = _getModal();
-  // 清理之前滑动关闭留下的任何状态
+  // Clean up any leftover state from a previous swipe-dismiss
   modal.classList.remove('hidden', 'modal-minimized');
   const _content = modal.querySelector('.modal-content');
   if (_content) {
@@ -3446,13 +3446,13 @@ function openCalendar() {
     restoreFn: () => {},
   });
   _currentDate = new Date();
-  _selectedDay = _today();  // 打开时自动显示今天的事件
+  _selectedDay = _today();  // auto-show today's events on open
   _view = 'month';
-  _scrollToTodayOnOpen = true;  // 首次渲染定位到今天所在的行
+  _scrollToTodayOnOpen = true;  // first render lands on today's row
   _escHandler = (e) => {
     if (e.key === 'Escape') {
-  // 分层 Esc：先关闭最顶层的日历界面，只有在没有
-  // 其他界面在最顶层时才进一步关闭整个日历。
+      // Layer Esc: close the topmost calendar surface first, only fall through
+      // to closing the whole calendar when nothing else is on top.
       const settings = document.getElementById('cal-settings-panel');
       if (settings) { settings.remove(); return; }
       if (document.querySelector('.cal-form')) { _render(); return; }
@@ -3461,8 +3461,8 @@ function openCalendar() {
     else if (e.key === 'ArrowLeft') document.getElementById('cal-prev')?.click();
     else if (e.key === 'ArrowRight') document.getElementById('cal-next')?.click();
     else if (e.key === 't' || e.key === 'T') document.getElementById('cal-today')?.click();
-  // Cmd/Ctrl+Z 由模块级 `_calUndoBound` 监听器处理，
-  // 它消费共享的 `_calUndoStack`。不要在此处重复。
+    // Cmd/Ctrl+Z is handled by the module-level `_calUndoBound` listener,
+    // which consumes the shared `_calUndoStack`. Don't duplicate here.
   };
   document.addEventListener('keydown', _escHandler);
   const body = document.getElementById('cal-body');
@@ -3476,21 +3476,21 @@ function openCalendar() {
   _fetchCalendars().then(() => _render());
 }
 
-// 打开日历并定位到特定事件（通过 uid）或日期。
-// 由聊天锚点链接委托使用，使 `[Wake up](#event-<uid>)`
-// 打开日历到那一天并高亮该事件。
+// Open the calendar focused on a specific event (by uid) or date.
+// Used by the chat anchor-link delegate so `[Wake up](#event-<uid>)`
+// opens the calendar on that day with the event highlighted.
 async function openCalendarTo(target) {
   openCalendar();
   if (!target) return;
   try {
     await _fetchCalendars();
-  // 如果目标看起来像 ISO 日期（YYYY-MM-DD...），直接跳转。
+    // If target looks like an ISO date (YYYY-MM-DD...), go straight there.
     let dt = null;
     const isoMatch = /^\d{4}-\d{2}-\d{2}/.test(String(target));
     if (isoMatch) {
       dt = new Date(target);
     } else {
-  // 视为事件 uid — 在已加载的事件中查找。
+      // Treat as an event uid — find it among loaded events.
       const ev = (_events || []).find(e => e.uid === target || (e.uid || '').startsWith(target));
       if (ev && ev.dtstart) dt = new Date(ev.dtstart);
       if (ev) _highlightEventUid = ev.uid;
@@ -3501,7 +3501,7 @@ async function openCalendarTo(target) {
       _view = 'month';
       _render();
     }
-  } catch (e) { /* 尽力定位 */ }
+  } catch (e) { /* best-effort focus */ }
 }
 
 let _highlightEventUid = null;
@@ -3514,9 +3514,9 @@ function _doCloseCalendar() {
     _modal.classList.add('hidden');
   }
   if (_escHandler) { document.removeEventListener('keydown', _escHandler); _escHandler = null; }
-  // 丢弃任何待处理的撤销 — 闭包捕获的事件 uid/状态可能
-  // 在用户重新打开时已不再有效。重新打开日历
-  // 以干净状态开始。
+  // Drop any pending undo — closures captured event uids/state that may
+  // no longer be valid by the time the user reopens. A reopened calendar
+  // starts with a clean slate.
   _calUndoStack.length = 0;
 }
 
@@ -3530,14 +3530,14 @@ function closeCalendar() {
 }
 
 function isCalendarOpen() {
-  // 将最小化状态视为"未打开"，使切换处理器通过 Modals.toggle 恢复
+  // Treat minimized as "not open" so toggle handler will restore via Modals.toggle
   if (Modals.isMinimized('calendar-modal')) return false;
   return _open;
 }
 
-// ── 持久化缓存（localStorage） ──
+// ── Persistent cache (localStorage) ──
 const LS_KEY = 'odysseus-calendar-cache';
-const LS_TTL = 10 * 60 * 1000; // 10 分钟
+const LS_TTL = 10 * 60 * 1000; // 10 min
 
 function _saveCache() {
   try {
@@ -3559,13 +3559,13 @@ function _loadCache() {
     if (!data.ts || Date.now() - data.ts > LS_TTL) return false;
     if (data.calendars) _calendars = data.calendars;
     if (data.events) data.events.forEach(ev => { _allEvents[ev.uid] = ev; });
-  // 不恢复 _fetchedRanges — 始终从 API 重新获取以接收
-  // 外部变更（例如 TimeTree 同步添加事件）
+    // Don't restore _fetchedRanges — always re-fetch from API to pick up
+    // external changes (e.g. TimeTree sync adding events)
     return true;
   } catch (e) { return false; }
 }
 
-// 启动：加载缓存，刷新角标，预取当月数据
+// Boot: load cache, refresh badge, prefetch current month
 (async () => {
   _loadCache();
   _updateBadge();
@@ -3579,10 +3579,10 @@ function _loadCache() {
   } catch (e) {}
 })();
 
-// AI 代理添加/编辑/删除事件时实时刷新。chat.js 分发
-// `calendar-refresh` 在 manage_calendar 工具调用后，使新事件
-// 在无需用户硬刷新的情况下显示。丢弃缓存（使添加/编辑/删除
-// 全部反映），重新获取可见范围，如果已打开则重新渲染，并更新角标。
+// Live-refresh when the AI agent adds/edits/deletes events. chat.js dispatches
+// `calendar-refresh` after a manage_calendar tool call, so a new event shows up
+// without the user hard-refreshing. Drop the cache (so adds/edits/deletes all
+// reflect), refetch the visible range, re-render if open, and update the badge.
 window.addEventListener('calendar-refresh', () => {
   _allEvents = {};
   _fetchedRanges = [];
@@ -3594,15 +3594,15 @@ window.addEventListener('calendar-refresh', () => {
     .catch(() => {});
 });
 
-// 跨会话同步：当标签页/应用再次可见时（你按 Alt+Tab
-// 切回、移动应用回到前台或从另一个浏览器会话
-// 切换回来），丢弃范围缓存并重新获取。没有此处理，
-// 桌面端的删除或添加永远不会传到仍然打开的移动标签页
-// 直到用户进行完全重新加载 — 因此过期事件在那里无法删除
-// （它们在服务器上 404）。每次可见性变化时触发，但
-// fetch 开销很小且已被第 ~120 行的 _fetchPromise 去重。
+// Cross-session catch-up: when the tab/app becomes visible again (you alt-tab
+// back, the mobile app comes to the foreground, or you switch back from
+// another browser session), drop the range cache and re-fetch. Without this,
+// a delete or add on desktop never propagates to the still-open mobile tab
+// until the user does a full reload — so stale events sit there undeletable
+// (they 404 on the server). Triggers on every visibility change but the
+// fetch is cheap and already de-duped by _fetchPromise on line ~120.
 let _lastVisRefetchAt = 0;
-const _VIS_REFETCH_MIN_MS = 10 * 1000;  // 如果用户快速切换标签页则节流
+const _VIS_REFETCH_MIN_MS = 10 * 1000;  // throttle if user is rapidly tab-flipping
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   const now = Date.now();
@@ -3617,8 +3617,8 @@ document.addEventListener('visibilitychange', () => {
     .catch(() => {});
 });
 
-// 窗口级焦点同理 — 覆盖桌面 Alt+Tab 切回一个
-// 标签页已可见的浏览器（visibilitychange 不会触发）。
+// Same idea for window-level focus — covers desktop alt-tabbing back to a
+// browser that already had the tab visible (visibilitychange won't fire).
 window.addEventListener('focus', () => {
   const now = Date.now();
   if (now - _lastVisRefetchAt < _VIS_REFETCH_MIN_MS) return;
@@ -3632,8 +3632,8 @@ window.addEventListener('focus', () => {
     .catch(() => {});
 });
 
-// 日历提醒存储为笔记。笔记提醒循环负责
-// 通知分发，因此日历提醒不会重复触发。
+// Calendar reminders are stored as Notes. The Notes reminder loop owns
+// notification dispatch so calendar reminders do not fire twice.
 
 const calendarModule = { openCalendar, closeCalendar, isCalendarOpen };
 export { openCalendar, openCalendarTo, closeCalendar, isCalendarOpen };

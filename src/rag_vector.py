@@ -1,9 +1,9 @@
 """
 rag_vector.py
 
-使用 ChromaDB 存储和基于 API 的嵌入的向量 RAG 系统。
-特性：持久化存储、混合搜索（向量 + 关键词）、句子感知分块、
-可通过 EMBEDDING_URL 环境变量配置的嵌入端点。
+Vector-based RAG using ChromaDB for storage and API-based embeddings.
+Features: persistent storage, hybrid search (vector + keyword), sentence-aware chunking,
+configurable embedding endpoint via EMBEDDING_URL env var.
 """
 
 import os
@@ -41,11 +41,11 @@ COLLECTION_NAME = "odysseus_rag"
 
 
 def _generate_doc_id(text: str, owner: str = "") -> str:
-    # 以 owner 为作用域的 ID，这样两个所有者可以索引完全相同的块，
-    # 而第二个的添加不会因为第一个的 ID 已存在而提前返回，
-    # 在其 owner 过滤的搜索结果中被静默丢弃。
-    # 空的 owner 还原到旧版仅文本 ID，因此无所有者/基础索引保持其现有 ID，
-    # 而不会被重新搅动。
+    # Owner-scope the id so two owners can index byte-identical chunks
+    # without the second one's add early-returning on the first's id and
+    # being silently dropped from their owner-filtered search results.
+    # Empty owner reproduces the legacy text-only id so the unowned/base
+    # index keeps its existing ids and isn't re-churned.
     key = f"{owner}\x00{text}" if owner else text
     return f"doc_{hashlib.sha256(key.encode('utf-8')).hexdigest()[:16]}"
 
@@ -68,7 +68,7 @@ def _rewrite_owner_path(value: str, path_map: Dict[str, str], path_prefixes: Lis
 
 
 class VectorRAG:
-    """使用 ChromaDB 向量存储的 RAG 系统，支持混合搜索。"""
+    """RAG system using ChromaDB vector storage with hybrid search."""
 
     def __init__(self, persist_directory: str = CHROMA_DIR):
         self.persist_directory = persist_directory
@@ -81,7 +81,7 @@ class VectorRAG:
         self._initialize_system()
 
     # ------------------------------------------------------------------
-    # 初始化
+    # Initialization
     # ------------------------------------------------------------------
 
     def _initialize_system(self) -> bool:
@@ -114,7 +114,7 @@ class VectorRAG:
         return np.array(self._lanes[0].encode(texts), dtype=np.float32).tolist()
 
     # ------------------------------------------------------------------
-    # 属性
+    # Properties
     # ------------------------------------------------------------------
 
     @property
@@ -125,7 +125,7 @@ class VectorRAG:
 
     @property
     def collection(self):
-        """暴露 ChromaDB 集合供 personal_routes 等直接访问。"""
+        """Expose the ChromaDB collection for direct access by personal_routes etc."""
         return self._collection
 
     def _active_collections(self):
@@ -171,7 +171,7 @@ class VectorRAG:
         return collections
 
     # ------------------------------------------------------------------
-    # 文档操作
+    # Document operations
     # ------------------------------------------------------------------
 
     def add_document(self, text: str, metadata: Dict[str, Any]) -> bool:
@@ -337,7 +337,7 @@ class VectorRAG:
         }
 
     # ------------------------------------------------------------------
-    # 搜索 — 混合：向量相似度 + 关键词重叠
+    # Search — hybrid: vector similarity + keyword overlap
     # ------------------------------------------------------------------
 
     def search(self, query: str, k: int = 5, owner: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -434,7 +434,7 @@ class VectorRAG:
             return []
 
     # ------------------------------------------------------------------
-    # 索引管理
+    # Index management
     # ------------------------------------------------------------------
 
     def rebuild_index(self) -> bool:
@@ -453,8 +453,8 @@ class VectorRAG:
                     client.delete_collection(name)
                 except Exception:
                     pass
-            # 重建意味着清空当前通道。同时也清除旧版未加后缀的
-            # 集合，使得启动迁移无法复活过时的文档。
+            # Rebuild means empty current lanes. Clear the legacy unsuffixed
+            # collection too so startup migration cannot resurrect stale docs.
             self._lanes = build_embedding_lanes(COLLECTION_NAME)
             self._collection = next(
                 (lane.collection for lane in self._lanes if lane.name == LANE_FASTEMBED),
@@ -484,7 +484,7 @@ class VectorRAG:
             return {"error": str(e), "healthy": False}
 
     # ------------------------------------------------------------------
-    # 目录索引
+    # Directory indexing
     # ------------------------------------------------------------------
 
     def index_personal_documents(
@@ -544,18 +544,18 @@ class VectorRAG:
             return {'success': False, 'indexed_count': indexed, 'failed_count': failed, 'message': str(e)}
 
     def remove_directory(self, directory: str) -> Dict[str, Any]:
-        """移除 ``directory`` 下（递归）的所有块，除此之外不删除任何内容。
+        """Remove all chunks under ``directory`` (recursively), and nothing else.
 
-        选择基于每个块存储的 ``source`` 完整路径的 Python 端路径边界匹配，
-        而非 Chroma 元数据 ``where`` 过滤器。没有 Chroma
-        元数据操作符可以按路径前缀选择标量字符串（``$contains``
-        针对文档内容/列表成员，而非 ``source`` 子串），
-        而纯子串匹配会过度删除 — 移除 ``/docs``
-        不能触碰 ``/docs2`` 或 ``/docs_personal``。因此我们匹配
-        ``source == directory`` 或 ``source`` 以 ``directory + os.sep`` 开头，
-        与 add_directory 用于排除的边界规则相同。``directory``
-        经过 abspath 规范化，因此与索引用绝对路径存储的 ``source`` 匹配，
-        无论调用方如何传入。
+        Selection is a Python-side path-boundary match on each chunk's stored
+        ``source`` full path, NOT a Chroma metadata ``where`` filter. No Chroma
+        metadata operator selects a scalar string by path prefix (``$contains``
+        targets document content / list membership, not a ``source`` substring),
+        and a plain substring would over-delete siblings — removing ``/docs``
+        must not touch ``/docs2`` or ``/docs_personal``. We therefore match
+        ``source == directory`` or ``source`` startswith ``directory + os.sep``,
+        the same boundary rule add_directory uses for exclusions. ``directory``
+        is abspath-normalized so it matches the absolute ``source`` that indexing
+        always stores, regardless of how the caller passed it in.
         """
         if not self.healthy:
             return {"success": False, "message": "Collection not initialized"}
@@ -603,7 +603,7 @@ class VectorRAG:
         }
 
     # ------------------------------------------------------------------
-    # 句子边界感知分块
+    # Sentence-boundary-aware chunking
     # ------------------------------------------------------------------
 
     def _split_into_chunks(
@@ -614,7 +614,7 @@ class VectorRAG:
         if len(text) <= chunk_size:
             return [text]
 
-        # 先按句子分割
+        # Split into sentences first
         sentences = re.split(r'(?<=[.!?])\s+|\n{2,}', text)
         sentences = [s.strip() for s in sentences if s.strip()]
 
@@ -625,22 +625,22 @@ class VectorRAG:
         for sentence in sentences:
             sent_len = len(sentence)
 
-            # 如果单个句子超过 数据块_size，按字符分割
+            # If a single sentence exceeds chunk_size, split it by character
             if sent_len > chunk_size:
-                # 先清空当前块
+                # Flush current chunk first
                 if current_chunk:
                     chunks.append(' '.join(current_chunk))
                     current_chunk = []
                     current_len = 0
 
-                # 硬分割长句子
+                # Hard-split the long sentence
                 for start in range(0, sent_len, chunk_size - overlap):
                     chunks.append(sentence[start:start + chunk_size])
                 continue
 
             if current_len + sent_len + 1 > chunk_size and current_chunk:
                 chunks.append(' '.join(current_chunk))
-                # 保留最后几句用作重叠
+                # Keep last few sentences for overlap
                 overlap_sentences: List[str] = []
                 overlap_len = 0
                 for s in reversed(current_chunk):
@@ -660,12 +660,12 @@ class VectorRAG:
         return chunks if chunks else [text]
 
     # ------------------------------------------------------------------
-    # 按元数据删除
+    # Delete by metadata
     # ------------------------------------------------------------------
 
     def delete_by_source(self, source: str) -> int:
-        """移除所有 metadata['source'] 匹配 *source* 的块。
-        返回删除的块数量。"""
+        """Remove all chunks whose metadata['source'] matches *source*.
+        Returns the number of removed chunks."""
         if not self.healthy:
             return 0
         try:
@@ -686,7 +686,7 @@ class VectorRAG:
             return 0
 
     # ------------------------------------------------------------------
-    # 便捷方法
+    # Convenience
     # ------------------------------------------------------------------
 
     def retrieve(self, query: str, k: int = 5) -> List[str]:

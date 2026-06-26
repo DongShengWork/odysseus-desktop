@@ -1,4 +1,4 @@
-"""统一的服务健康/降级状态报告。
+"""Consolidated service health / degraded-state reporting.
 
 ROADMAP: "Better degraded-state reporting for ChromaDB, SearXNG, email, ntfy,
 and provider probes." There was no single readout of which subsystems are
@@ -85,7 +85,7 @@ def _svc(name: str, status: str, detail: str, **meta: Any) -> Dict[str, Any]:
 
 
 def _safe_url(url: Optional[str]) -> str:
-    """从 URL 中剥离凭据（userinfo）、查询和片段。
+    """Strip credentials (userinfo), query, and fragment from a URL.
 
     Keeps scheme / host / port / path so the report is still useful, but never
     echoes `user:pass@`, `?api_key=…`, or `#…` back to the caller. Returns
@@ -108,7 +108,7 @@ def _safe_url(url: Optional[str]) -> str:
 
 
 def _classify_error(exc: BaseException) -> str:
-    """将异常映射到受控的、无密钥的类别标记。
+    """Map an exception to a controlled, secret-free category token.
 
     Never returns `str(exc)` — httpx/imaplib exception text can embed the target
     URL (which may carry credentials) or server-supplied detail.
@@ -313,7 +313,7 @@ def email_health(accounts: List[Dict[str, Any]],
         return _svc("email", DISABLED, "No email accounts configured.")
     if connect is None:
         from routes.email_helpers import _imap_connect
-        # Impose the 服务-health budget on the IMAP connect itself.
+        # Impose the service-health budget on the IMAP connect itself.
         connect = lambda aid: _imap_connect(aid, timeout=_PROBE_TIMEOUT)  # noqa: E731
 
     def _label(acc: Dict[str, Any]) -> str:

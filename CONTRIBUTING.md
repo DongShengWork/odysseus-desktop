@@ -1,4 +1,4 @@
-# 贡献 Odysseus
+# Contributing to Odysseus
 
 Thanks for helping. The project is moving quickly, so the best contributions are focused, easy to review, and easy to test.
 

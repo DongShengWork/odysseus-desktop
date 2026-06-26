@@ -1,5 +1,5 @@
-# routes/嵌入_routes.py
-"""管理本地 fastembed 嵌入模型和自定义端点的路由。"""
+# routes/embedding_routes.py
+"""Routes for managing local fastembed embedding models and custom endpoints."""
 import os
 import json
 import shutil
@@ -66,7 +66,7 @@ def _is_downloaded(hf_source: str) -> bool:
         return False
     if not model_dir.is_dir():
         return False
-    # 检查 for actual model files (not just empty dir)
+    # Check for actual model files (not just empty dir)
     snapshots = model_dir / "snapshots"
     if snapshots.is_dir():
         return any(snapshots.iterdir())
@@ -159,7 +159,7 @@ def setup_embedding_routes():
         except ImportError:
             raise HTTPException(503, "fastembed is not installed")
 
-        # 验证 model exists
+        # Validate model exists
         catalog = {m["model"]: m for m in TextEmbedding.list_supported_models()}
         if model_name not in catalog:
             raise HTTPException(404, f"Unknown model: {model_name}")
@@ -173,7 +173,7 @@ def setup_embedding_routes():
 
         _downloading[model_name] = True
         try:
-            # 运行 in thread to not block the 事件循环
+            # Run in thread to not block the event loop
             loop = asyncio.get_running_loop()
             cache = _cache_dir()
             await loop.run_in_executor(
@@ -262,7 +262,7 @@ def setup_embedding_routes():
         # SSRF hardening: validate the user-supplied URL before any outbound
         # request. Local-first means loopback/LAN endpoints are allowed by
         # default; non-HTTP(S) schemes and the cloud metadata range are always
-        # rejected. 设置 EMBEDDING_BLOCK_PRIVATE_IPS=true for full lockdown.
+        # rejected. Set EMBEDDING_BLOCK_PRIVATE_IPS=true for full lockdown.
         from src.url_safety import check_outbound_url
         ok, reason = check_outbound_url(
             url,
@@ -271,7 +271,7 @@ def setup_embedding_routes():
         if not ok:
             raise HTTPException(400, f"Rejected endpoint URL: {reason}")
 
-        # Quick 健康检查
+        # Quick health check
         try:
             import httpx
             resp = httpx.post(
@@ -304,8 +304,8 @@ def setup_embedding_routes():
         _rs.rag_instance = None
         _rs._last_attempt = 0
 
-        # Clear the HTTP-嵌入 "down" latch so the new endpoint is re-probed
-        # instead of staying on the FastEmbed 回退 for the process lifetime.
+        # Clear the HTTP-embedding "down" latch so the new endpoint is re-probed
+        # instead of staying on the FastEmbed fallback for the process lifetime.
         try:
             from src.embeddings import reset_http_embed_state
             reset_http_embed_state()
@@ -322,7 +322,7 @@ def setup_embedding_routes():
         except Exception:
             pass
 
-        # Reset ChromaDB client (collections will be recreated with new 嵌入s)
+        # Reset ChromaDB client (collections will be recreated with new embeddings)
         try:
             from src.chroma_client import reset_client
             reset_client()
@@ -338,7 +338,7 @@ def setup_embedding_routes():
         if os.path.exists(_ENDPOINT_FILE):
             os.remove(_ENDPOINT_FILE)
 
-        # 移除 from environment
+        # Remove from environment
         os.environ.pop("EMBEDDING_URL", None)
         os.environ.pop("EMBEDDING_MODEL", None)
         os.environ.pop("EMBEDDING_API_KEY", None)

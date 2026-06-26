@@ -1,4 +1,4 @@
-"""用户偏好设置 API — 基于 JSON 文件的每用户键值存储。"""
+"""User preferences API — per-user key/value store backed by a JSON file."""
 import json
 import os
 from typing import Optional
@@ -47,7 +47,7 @@ def _save_for_user(user: Optional[str], prefs: dict):
     all_prefs = _load()
     if user is None:
         # Auth disabled. If the store is already multi-user (e.g. auth was
-        # turned off on a 部署 that previously ran multi-user), writing
+        # turned off on a deployment that previously ran multi-user), writing
         # `prefs` flat would overwrite the whole `_users` map and destroy every
         # other user's preferences. Instead write back into the same (first)
         # slot _load_for_user(None) reads from, preserving the others.

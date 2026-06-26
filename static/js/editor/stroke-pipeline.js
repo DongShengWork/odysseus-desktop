@@ -1,16 +1,16 @@
 /**
- * 笔画管道 — 将一个笔画段（上一位置 → 当前位置）
- * 绘制到活动图层（或其活动遮罩子图层）上。
+ * Stroke pipeline — paints one segment (last-position → current
+ * position) onto the active layer (or its active mask sub-layer).
  *
- * `strokeTo` 按工具分发：
- *   - clone  → cloneStrokeTo（基于印章的自定义绘制循环）
- *   - brush  → 带不透明度 × 流量 + 柔和度模糊的 source-over
- *   - eraser → 带不透明度 × 流量 + 柔和度模糊的 destination-out
- *   - inpaint → 遮罩画布上使用完整 alpha 的 source-over（绘制）或
- *               destination-out（擦除）
+ * `strokeTo` dispatches by tool:
+ *   - clone  → cloneStrokeTo (custom stamp-based paint loop)
+ *   - brush  → source-over with opacity × flow + softness blur
+ *   - eraser → destination-out with opacity × flow + softness blur
+ *   - inpaint → source-over (paint) or destination-out (erase) with
+ *               full alpha on the mask canvas
  *
- * 如果活动父图层有活动遮罩子图层，则 brush / eraser / inpaint
- * 绘制到遮罩画布而非图层的像素画布。
+ * If the active parent has an active mask sub-layer, brush / eraser /
+ * inpaint target the mask canvas instead of the layer's pixel canvas.
  *
  * @param {{
  *   activeLayer:          () => object | null,
@@ -30,8 +30,8 @@ export function createStrokePipeline({ activeLayer, getActiveMaskLayer, composit
     const srcY = state.cloneSourceY + dy;
     const ctx = layer.ctx;
     const radius = Math.max(1, state.brushSize / 2);
-    // 以大约半个画笔大小的步长遍历上一位置 → 当前位置，
-    // 使印章重叠形成连续的笔画轨迹。
+    // Walk last → current in roughly half-brush steps so stamps
+    // overlap into a continuous brush trail.
     const lastSrcX = state.cloneSourceX + (state.lastX - state.cloneStrokeStartX);
     const lastSrcY = state.cloneSourceY + (state.lastY - state.cloneStrokeStartY);
     const dist = Math.hypot(x - state.lastX, y - state.lastY);
@@ -101,8 +101,8 @@ export function createStrokePipeline({ activeLayer, getActiveMaskLayer, composit
 
     if (state.tool === 'eraser') {
       ctx.globalCompositeOperation = 'destination-out';
-      // 有效 alpha = 不透明度 × 流量。不透明度 = 笔画能达到的最大强度；
-      // 流量 = 每次擦除多少。
+      // Effective alpha = opacity × flow. Opacity = max strength a
+      // stroke can reach; flow = how much erases per pass.
       ctx.globalAlpha = (state.eraserOpacity / 100) * (state.eraserFlow / 100);
       ctx.strokeStyle = 'rgba(0,0,0,1)';
       if (state.eraserSoftness > 0) {
@@ -131,8 +131,8 @@ export function createStrokePipeline({ activeLayer, getActiveMaskLayer, composit
         ctx.strokeStyle = 'rgba(0,0,0,1)';
       } else {
         ctx.globalCompositeOperation = 'source-over';
-        // 扩散服务器期望白色 = 修复区域。红色叠加在 composite() 中
-        // 为用户单独渲染。
+        // Diffusion server expects white = inpaint area. The red
+        // overlay is rendered separately in composite() for the user.
         ctx.strokeStyle = 'rgba(255,255,255,1)';
       }
     } else {
@@ -140,9 +140,9 @@ export function createStrokePipeline({ activeLayer, getActiveMaskLayer, composit
       ctx.strokeStyle = state.color;
     }
 
-    // Mask canvases are always full-镜像 (no per-layer offset), so
+    // Mask canvases are always full-image (no per-layer offset), so
     // painting onto a mask uses canvas-coord origin too — same as
-    // 也使用画布坐标原点 — 与 inpaint 相同。
+    // inpaint.
     const onMaskOrInpaint = paintingMask || state.tool === 'inpaint';
     const drawX = onMaskOrInpaint ? 0 : off.x;
     const drawY = onMaskOrInpaint ? 0 : off.y;

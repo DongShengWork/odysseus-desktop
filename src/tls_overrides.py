@@ -1,39 +1,39 @@
-"""私有 CA 的 LLM 提供商的扩展 TLS 信任存储。
+"""Extended TLS trust store for private-CA LLM providers.
 
-一些上游 LLM 提供商通过由私有根 CA 签名的 TLS 证书
-提供其 API，该根 CA 不属于标准系统证书包：
+Some upstream LLM providers serve their API over TLS certificates that are
+signed by a private root CA which is not part of the standard system bundle:
 
-  - GigaChat（Sber）使用俄罗斯可信根 CA，不包含在
-    OpenSSL/certifi/大多数非俄罗斯安装的系统信任中。
-    证书链对 Python 而言看起来是自签名的，端点被标记为离线，
-    并显示 `CERTIFICATE_VERIFY_FAILED: self-signed certificate in
-    certificate chain`（参见 issue #722）。
-  - 本地企业 LLM 网关通常呈现未导入到运行时
-    信任存储中的企业 CA。
+  - GigaChat (Sber) uses the Russian Trusted Root CA, not bundled with
+    OpenSSL / certifi / system trust on most non-Russian installs. The
+    chain looks self-signed to Python and the endpoint is marked offline
+    with `CERTIFICATE_VERIFY_FAILED: self-signed certificate in
+    certificate chain` (see issue #722).
+  - On-premise enterprise LLM gateways often present a corporate CA that
+    has not been imported into the runtime's trust store.
 
-运维人员将 `LLM_CA_BUNDLE` 指向包含额外 CA
-证书的 PEM 文件。首先加载默认系统/certifi 信任存储，然后
-在其之上叠加运维人员的 PEM，因此验证仍然发生——
-只是信任集合变大了。我们有意不提供
-"verify=off" 开关：全局（或按主机）禁用验证会
-使这些端点面临中间人攻击，而运维人员提供的证书包是
-合法的私有 CA 提供商的正确解决方案。
+Operators point `LLM_CA_BUNDLE` at a PEM file containing the extra CA
+cert(s). The default system / certifi trust store is loaded first, then
+the operator's PEM is layered on top, so verification still happens —
+the trust set just gets larger. We deliberately do not provide a
+"verify=off" knob: weakening verification globally (or per-host) would
+expose those endpoints to MITM, and the operator-supplied bundle is the
+correct fix for legitimate private-CA providers.
 
-示例（GigaChat）：
-    # Sber 在以下地址发布证书链
+Example (GigaChat):
+    # Sber publishes the chain at
     # https://www.gosuslugi.ru/crt/rootca_ssl_rsa2022.cer
-    # 转换为 PEM 并将环境变量指向它。
+    # Convert to PEM and point the env var at it.
     LLM_CA_BUNDLE=/etc/odysseus/ca/russian-trusted-root.pem
 
-范围：
-    `llm_verify()` 有意只被两个调用点使用——`src/llm_core.py`
-    中的共享异步客户端和 `routes/model_routes.py` 中的端点探测。
-    两者都访问 LLM 提供商 URL。该覆盖
-    不会传入 web_fetch、搜索提供商、图库下载、
-    embedding、webhook 投递或任何访问任意 URL 的操作，
-    也不影响应用自身的面向浏览器的 TLS。该
-    边界由 `tests/test_tls_overrides_scope.py` 固定——扩展
-    它需要在白名单中更新，并附上书面理由。
+Scope:
+    `llm_verify()` is intentionally consumed by only two call sites — the
+    shared async client in `src/llm_core.py` and the endpoint probes in
+    `routes/model_routes.py`. Both reach LLM provider URLs. The override
+    is NOT threaded into web_fetch, search providers, gallery downloads,
+    embeddings, webhook delivery, or anything else that hits arbitrary
+    URLs, and it does NOT affect the app's own browser-facing TLS. That
+    boundary is pinned by `tests/test_tls_overrides_scope.py` — extending
+    it requires updating the allowlist there with a written justification.
 """
 
 import logging
@@ -48,9 +48,9 @@ _extra_bundle_path: Optional[str] = (os.environ.get("LLM_CA_BUNDLE") or "").stri
 
 
 def _build_ssl_context() -> Optional[ssl.SSLContext]:
-    """构建使用默认信任存储并同时信任
-    运维人员提供的 PEM 包的 SSLContext。未配置额外包时返回 None，
-    此时调用者回退到 httpx 的默认 verify=True。"""
+    """Build an SSLContext that uses the default trust store and ALSO trusts
+    the operator-supplied PEM bundle. Returns None when no extra bundle is
+    configured, so callers fall through to httpx's default verify=True."""
     if not _extra_bundle_path:
         return None
     if not os.path.isfile(_extra_bundle_path):
@@ -77,14 +77,14 @@ def _build_ssl_context() -> Optional[ssl.SSLContext]:
     return ctx
 
 
-# 在导入时解析一次。src/llm_core.py 中的 httpx 客户端是
-# 长寿的（进程范围内），因此编辑 LLM_CA_BUNDLE 需要重启——
-# 这与 LLM_HOST、SEARXNG_INSTANCE 等的现有语义一致。
+# Resolved once at import time. The httpx clients in src/llm_core.py are
+# long-lived (process-wide), so editing LLM_CA_BUNDLE requires a restart —
+# matching the existing semantics of LLM_HOST, SEARXNG_INSTANCE, etc.
 _SHARED_SSL_CONTEXT: Optional[ssl.SSLContext] = _build_ssl_context()
 
 
 def llm_verify():
-    """返回传递给 httpx.get / httpx.Client /
+    """Return the value to pass as `verify=` on httpx.get / httpx.Client /
     httpx.AsyncClient. Returns the extended-trust SSLContext when
     LLM_CA_BUNDLE is set and loaded; otherwise True (httpx default — system
     / certifi bundle, verification fully on)."""

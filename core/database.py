@@ -13,7 +13,7 @@ from src.runtime_paths import get_app_root
 
 logger = logging.getLogger(__name__)
 
-# 创建 base class for declarative models
+# Create base class for declarative models
 Base = declarative_base()
 
 
@@ -32,7 +32,7 @@ class TimestampMixin:
     def updated_at(cls):
         return Column(DateTime, default=utcnow_naive, onupdate=utcnow_naive, nullable=False)
 
-# Ensure the writable 数据目录 exists before SQLite connects.
+# Ensure the writable data directory exists before SQLite connects.
 from src.constants import DATA_DIR, AUTH_FILE, MEMORY_FILE, USER_PREFS_FILE, SETTINGS_FILE
 Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
@@ -50,23 +50,23 @@ def _normalize_sqlite_url(url: str) -> str:
     return f"sqlite:///{(Path(get_app_root()) / db_path).resolve().as_posix()}"
 
 
-# 获取 data基础地址 from environment, default to SQLite in DATA_DIR
+# Get database URL from environment, default to SQLite in DATA_DIR
 DATABASE_URL = _normalize_sqlite_url(os.getenv("DATABASE_URL", _default_database_url()))
 
-# 创建 engine
+# Create engine
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 )
 
-# 创建 会话工厂
+# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 # Listening on the Engine class ensures this listener fires for all Engine
 # instances created within the process, not just the primary application engine.
 # The isinstance(sqlite3.Connection) check ensures that this PRAGMA foreign_keys=ON
-# configuration remains a no-op when using non-SQLite database 后端s.
+# configuration remains a no-op when using non-SQLite database backends.
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if isinstance(dbapi_connection, sqlite3.Connection):
@@ -128,9 +128,9 @@ class Session(TimestampMixin, Base):
     
     # Timestamps are provided by TimestampMixin
     last_accessed = Column(DateTime, default=func.now(), onupdate=func.now())
-    # Timestamp of the last actual MESSAGE in this session. 设置 explicitly
+    # Timestamp of the last actual MESSAGE in this session. Set explicitly
     # only when a message is persisted (NOT onupdate) — so it's a clean
-    # "last conversation" 签名al, immune to renames / model swaps / merely
+    # "last conversation" signal, immune to renames / model swaps / merely
     # opening the chat (all of which bump updated_at and last_accessed).
     # The "Last active" sort uses this.
     last_message_at = Column(DateTime, nullable=True, default=None)
@@ -228,7 +228,7 @@ class Document(TimestampMixin, Base):
     # Library + search. Owning the row directly is robust against that.
     owner           = Column(String, nullable=True, index=True)
     tidy_verdict    = Column(String, nullable=True)        # "keep", "junk", or None (not yet reviewed)
-    # Provenance: if this document was created by opening an 邮件附件,
+    # Provenance: if this document was created by opening an email attachment,
     # these point back to the source email so the "Sign and reply" flow can
     # thread a response on the original conversation.
     source_email_uid         = Column(String, nullable=True)
@@ -346,7 +346,7 @@ class EmailAccount(TimestampMixin, Base):
     from_address   = Column(String, default="")
     display_name   = Column(String, nullable=True)   # "Hriday Ranka" — used in From: header
 
-    # OAuth2 (Google / Google Workspace). Tokens stored 加密ed via secret_storage.
+    # OAuth2 (Google / Google Workspace). Tokens stored encrypted via secret_storage.
     oauth_provider      = Column(String, nullable=True)   # "google" or None
     oauth_access_token  = Column(String, nullable=True)   # encrypted
     oauth_refresh_token = Column(String, nullable=True)   # encrypted
@@ -373,7 +373,7 @@ class ModelEndpoint(TimestampMixin, Base):
     # auto = classify by URL; local = self-hosted server; api/proxy = external
     # OpenAI-compatible API even when reachable through a private/tailnet IP.
     endpoint_kind = Column(String, nullable=True, default="auto")
-    # auto = background refresh with TTL/退避; manual/disabled = cached-first
+    # auto = background refresh with TTL/backoff; manual/disabled = cached-first
     # only unless an explicit endpoint probe is requested.
     model_refresh_mode = Column(String, nullable=True, default="auto")
     model_refresh_interval = Column(Integer, nullable=True, default=None)
@@ -389,7 +389,7 @@ class ModelEndpoint(TimestampMixin, Base):
     # the endpoint to that user (admins always see everything).
     owner = Column(String, nullable=True, index=True)
     # Optional OAuth/session-backed credential row. Used by subscription-backed
-    # providers that need 刷新令牌s instead of a static API key.
+    # providers that need refresh tokens instead of a static API key.
     provider_auth_id = Column(String, nullable=True, index=True)
 
 
@@ -693,7 +693,7 @@ class Memory(Base):
     # Reference to session (nullable)
     session_id = Column(String, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)
 
-    # Timestamp as Unix 时间戳
+    # Timestamp as Unix timestamp
     timestamp = Column(Integer, default=lambda: int(utcnow_naive().timestamp()))
 
     # Relationship to Session
@@ -722,7 +722,7 @@ def _migrate_add_last_message_at_column():
         columns = [row[1] for row in cursor.fetchall()]
         if "last_message_at" not in columns:
             conn.execute("ALTER TABLE sessions ADD COLUMN last_message_at DATETIME")
-        # Backfill any NULL rows: newest message 时间戳, else last_accessed,
+        # Backfill any NULL rows: newest message timestamp, else last_accessed,
         # else created_at. Only fills NULLs so it's safe on every startup.
         conn.execute(
             """
@@ -1399,7 +1399,7 @@ def _migrate_add_task_automation_columns():
                 if col_name not in col_names:
                     conn.execute(text(f"ALTER TABLE scheduled_tasks ADD COLUMN {col_name} {col_def}"))
 
-            # 检查 if prompt/schedule/scheduled_time are still NOT NULL — need table rebuild
+            # Check if prompt/schedule/scheduled_time are still NOT NULL — need table rebuild
             notnull_map = {r[1]: r[3] for r in cols_info}
             needs_rebuild = (
                 notnull_map.get("prompt", 0) == 1 or
@@ -1627,7 +1627,7 @@ class Note(TimestampMixin, Base):
     repeat     = Column(String, default="none")     # none, daily, weekly, monthly, yearly
     # Auto-AI fields — populated by /api/notes/{id}/classify. The classification
     # JSON shape is { kind, solvable, confidence, task_prompt, tools, items?: [...] }.
-    # Content 哈希 gates re-classification (avoid LLM spend on every save).
+    # Content hash gates re-classification (avoid LLM spend on every save).
     ai_classification = Column(Text, nullable=True)
     ai_content_hash   = Column(String, nullable=True)
     # Chat session spawned by the note's "Agent" button (solve-this-todo).
@@ -1667,7 +1667,7 @@ class CalendarEvent(TimestampMixin, Base):
     all_day     = Column(Boolean, default=False)
     # True when dtstart/dtend are stored as UTC instants (set on import paths
     # that preserve the source TZID). False = legacy naive-local. Drives the
-    # `Z`-suffix on serialization so the 前端 interprets correctly.
+    # `Z`-suffix on serialization so the frontend interprets correctly.
     is_utc      = Column(Boolean, default=False, nullable=False)
     rrule       = Column(String, default="")
     color       = Column(String, nullable=True)  # per-event color override
@@ -2258,7 +2258,7 @@ def get_detailed_stats():
     """Get comprehensive database statistics including file size"""
     stats = get_session_stats()  # Use existing function
     
-    # 添加 database 文件大小
+    # Add database file size
     db_size_mb = 0.0
     if "sqlite" in DATABASE_URL:
         db_path = DATABASE_URL.replace("sqlite:///", "")
@@ -2350,7 +2350,7 @@ def archive_session(session_id: str):
             return True
     return False
 
-# 初始化 the database by creating all tables
+# Initialize the database by creating all tables
 
 
 init_db()

@@ -140,7 +140,7 @@ def _default_endpoint_needs_assignment(current_default_id: str, enabled_endpoint
 
 
 # Loopback hosts a user might type for a local model server (LM Studio,
-# llama.cpp, vLLM, …). Inside Docker these point at the *容器*, not the
+# llama.cpp, vLLM, …). Inside Docker these point at the *container*, not the
 # host the server actually runs on.
 _ANY_BIND_HOSTS = {"0.0.0.0", "::"}
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", *_ANY_BIND_HOSTS}
@@ -350,7 +350,7 @@ def _curate_models(model_ids, provider):
             curated.append(mid)
         else:
             extra.append(mid)
-    # 排序 curated models by their priority order in the curated list
+    # Sort curated models by their priority order in the curated list
     curated.sort(key=lambda mid: (_best_match_idx(mid), mid))
     return curated, extra
 
@@ -408,7 +408,7 @@ def _endpoint_refresh_timeout(ep: Any, category: str) -> float:
     if val > 0:
         return float(max(1, min(60, val)))
     # llama.cpp and other local OpenAI-compatible servers can block briefly
-    # while warming/loading. A 2s local 超时 makes working endpoints flicker
+    # while warming/loading. A 2s local timeout makes working endpoints flicker
     # offline before /v1/models is ready.
     return 10.0 if category == "local" else 2.0
 
@@ -502,7 +502,7 @@ _NON_CHAT_PREFIXES = (
     "dall-e", "tts-", "whisper", "text-embedding", "embedding",
     "davinci", "babbage", "moderation", "omni-moderation",
     "sora", "gpt-image", "chatgpt-image",
-    # 嵌入 / retrieval / non-chat models (common across providers)
+    # embedding / retrieval / non-chat models (common across providers)
     "snowflake/arctic-embed", "nvidia/nv-embed", "embed",
 )
 _NON_CHAT_CONTAINS = (
@@ -618,7 +618,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Say OK"},
     ]
-    # Simple 工具定义 to test tool support
+    # Simple tool definition to test tool support
     _test_tools = [{"type": "function", "function": {"name": "test", "description": "Test tool", "parameters": {"type": "object", "properties": {}}}}] if with_tools else None
 
     if provider == "anthropic":
@@ -642,7 +642,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         from src.llm_core import _uses_max_completion_tokens, _restricts_temperature
         _max_key = "max_completion_tokens" if _uses_max_completion_tokens(model_id) else "max_tokens"
         payload = {"model": model_id, "messages": messages, _max_key: 5}
-        # Reasoning models (o1/o3/o4/gpt-5) reject an explicit 温度, so a
+        # Reasoning models (o1/o3/o4/gpt-5) reject an explicit temperature, so a
         # probe that hardcodes one falsely reports a working endpoint as failing.
         if not _restricts_temperature(model_id):
             payload["temperature"] = 0.0
@@ -656,7 +656,7 @@ def _probe_single_model(base: str, api_key: str, model_id: str, timeout: int = 1
         if r.is_success:
             return {"status": "ok", "latency_ms": latency}
         else:
-            # 提取 error detail from 回复体
+            # Extract error detail from response body
             error_msg = f"HTTP {r.status_code}"
             try:
                 body = r.json()
@@ -845,7 +845,7 @@ def _ping_endpoint(base_url: str, api_key: str = None, timeout: float = 1.5) -> 
 
     # Ollama exposes /v1/models (OpenAI-compatible) AND native /api/version,
     # /api/tags. Probe native paths for Ollama-style endpoints, but avoid using
-    # /models as a generic 健康检查 because large proxy catalogs can be slow.
+    # /models as a generic health check because large proxy catalogs can be slow.
     parsed_base = urlparse(base)
     looks_like_ollama = (
         parsed_base.port == 11434
@@ -1251,14 +1251,14 @@ def setup_model_routes(model_discovery):
         for ep in endpoints:
             base = _normalize_base(ep.base_url)
             provider = _safe_detect_provider(base)
-            # 合并 cached + pinned models, then filter out hidden ones
+            # Merge cached + pinned models, then filter out hidden ones
             ep_model_type = getattr(ep, "model_type", None) or "llm"
             model_ids = _visible_models(
                 _cached_model_ids(ep),
                 ep.hidden_models,
                 getattr(ep, "pinned_models", None),
             )
-            # 构建 correct URL based on provider
+            # Build correct URL based on provider
             chat_url = build_chat_url(base)
             kind = _effective_endpoint_kind(ep, base)
             category = _classify_endpoint(base, kind)
@@ -1322,7 +1322,7 @@ def setup_model_routes(model_discovery):
                     raise HTTPException(403, "API token has no owner")
             owner = effective_user(request) or ""
 
-            # Reject anonymous in configured 部署s — no leaking the model
+            # Reject anonymous in configured deployments — no leaking the model
             # list to unauthenticated callers.
             auth_mgr = getattr(request.app.state, "auth_manager", None)
             if not owner and not _auth_disabled() and auth_mgr is not None and getattr(auth_mgr, "is_configured", False):
@@ -1333,7 +1333,7 @@ def setup_model_routes(model_discovery):
             logger.error("Auth gate error in GET /api/models, failing closed: %s", e)
             raise HTTPException(status_code=500, detail="Internal error")
         # Admins see every endpoint (they manage the global pool); regular
-        # users get the owner-权限范围d view.
+        # users get the owner-scoped view.
         _is_admin = False
         try:
             auth_mgr = getattr(request.app.state, "auth_manager", None)
@@ -1343,7 +1343,7 @@ def setup_model_routes(model_discovery):
             _is_admin = False
         now = _time.time()
         # Cache key includes the admin flag so a demotion / promotion doesn't
-        # serve the wrong 权限范围d view from cache.
+        # serve the wrong scoped view from cache.
         _cache_key = (owner, _is_admin)
         cache_entry = _models_cache.get(_cache_key)
         if not refresh and cache_entry is not None and (now - cache_entry["time"]) < _MODELS_CACHE_TTL:
@@ -1355,7 +1355,7 @@ def setup_model_routes(model_discovery):
         return result
 
     # Brief cache for local-probe results so picker-open doesn't hammer
-    # endpoint 健康检查s every time. 8s TTL — long enough to amortize cost,
+    # endpoint health checks every time. 8s TTL — long enough to amortize cost,
     # short enough that a freshly-killed local server shows as offline
     # within ~8s of the user noticing.
     _LOCAL_PROBE_TTL = 8.0
@@ -1545,7 +1545,7 @@ def setup_model_routes(model_discovery):
             for ep in ep_data:
                 base = _normalize_base(ep["base_url"])
                 all_models = _probe_endpoint(base, ep.get("api_key"))
-                # 更新 cached_models in DB
+                # Update cached_models in DB
                 if all_models:
                     db2 = SessionLocal()
                     try:
@@ -1601,7 +1601,7 @@ def setup_model_routes(model_discovery):
         require_admin(request)
         return model_discovery.discover_models()
 
-    # ---- Admin: 模型端点s CRUD ----
+    # ---- Admin: model endpoints CRUD ----
 
     @router.get("/model-endpoints")
     def list_model_endpoints(request: Request) -> List[Dict[str, Any]]:
@@ -1622,7 +1622,7 @@ def setup_model_routes(model_discovery):
                 # When cached_models is empty, do a quick reachability probe.
                 # Bumped 1.0s → 3.5s because the user reported endpoints they
                 # were ACTIVELY chatting with showed "offline" — the previous
-                # 1s 超时 was clipping live cloud endpoints (DeepSeek can
+                # 1s timeout was clipping live cloud endpoints (DeepSeek can
                 # take 1.5–2.5s on /v1/models when their region is under load,
                 # vLLM on a remote GPU box behind SSH can also push past 1s).
                 # 3.5s still keeps the picker render snappy in the common
@@ -1721,19 +1721,19 @@ def setup_model_routes(model_discovery):
         container_local: str = Form("false"),
         # Default `shared=true` → endpoints are visible to all users (the
         # app's historical behaviour). Admins can pass `shared=false` to
-        # 权限范围 a new endpoint to their own account only.
+        # scope a new endpoint to their own account only.
         shared: str = Form("true"),
     ):
         require_admin(request)
         base_url = _normalize_base(base_url)
         if not base_url:
             raise HTTPException(400, "Base URL is required")
-        # 解析 hostname via Tailscale if DNS fails
+        # Resolve hostname via Tailscale if DNS fails
         from src.endpoint_resolver import resolve_url
         base_url = resolve_url(base_url)
         # In Docker, manually added loopback URLs usually point at a host-local
         # server. Cookbook local serves are launched inside Odysseus itself, so
-        # keep those 容器-local when the 前端 marks them as such.
+        # keep those container-local when the frontend marks them as such.
         base_url = _rewrite_loopback_for_docker(base_url, container_local=_truthy(container_local))
 
         # Auto-generate name from URL if not provided
@@ -1884,7 +1884,7 @@ def setup_model_routes(model_discovery):
             # nothing is configured, or the configured default points at an
             # endpoint that is now missing/disabled (#3586). Seed the first CHAT
             # model (not raw model_ids[0]) so we don't pin the global default to
-            # an 嵌入/tts/etc. entry a provider happens to list first.
+            # an embedding/tts/etc. entry a provider happens to list first.
             settings = _load_settings()
             enabled_ids = {
                 e.id
@@ -1902,7 +1902,7 @@ def setup_model_routes(model_discovery):
         finally:
             db.close()
 
-        # 返回 immediately — probing happens via the separate /probe SSE endpoint
+        # Return immediately — probing happens via the separate /probe SSE endpoint
         return {
             "id": ep_id,
             "name": name.strip(),
@@ -1982,7 +1982,7 @@ def setup_model_routes(model_discovery):
                     failed.append(mid)
                 yield f"data: {json.dumps(result)}\n\n"
 
-            # 更新 hidden_models and cached_models in DB
+            # Update hidden_models and cached_models in DB
             db2 = SessionLocal()
             try:
                 ep_obj = db2.query(ModelEndpoint).filter(ModelEndpoint.id == ep_id).first()
@@ -2092,7 +2092,7 @@ def setup_model_routes(model_discovery):
         # global `default_model` / `default_endpoint_id` in settings.json
         # for authenticated users — that's what was leaking the previous
         # admin's pick into every new account's composer. If the user has
-        # no per-user default yet, we resolve via the owner-权限范围d endpoint
+        # no per-user default yet, we resolve via the owner-scoped endpoint
         # lookup below (last-resort: first enabled endpoint THIS user owns).
         # Unauthenticated single-user mode keeps the old behavior.
         from src.auth_helpers import get_current_user as _gcu
@@ -2101,8 +2101,8 @@ def setup_model_routes(model_discovery):
         except Exception:
             _user = ""
         # Admins resolve via the global defaults (they own them, and the
-        # 权限范围d resolution was making the picker disappear for them).
-        # Regular users get per-user prefs with NO global 回退 for the
+        # scoped resolution was making the picker disappear for them).
+        # Regular users get per-user prefs with NO global fallback for the
         # model/endpoint values — that's what was leaking the previous
         # admin's pick into every new account's composer.
         settings = _load_settings()
@@ -2130,19 +2130,19 @@ def setup_model_routes(model_discovery):
                 ep_q = db.query(ModelEndpoint).filter(
                     ModelEndpoint.id == ep_id, ModelEndpoint.is_enabled == True
                 )
-                # Honor the same owner-权限范围 rule as /api/models — a per-user
+                # Honor the same owner-scope rule as /api/models — a per-user
                 # default that points at an endpoint owned by a different user
                 # mustn't silently resolve. Admins are exempt (they manage the
                 # global pool).
                 if _user and not _is_admin:
                     ep_q = owner_filter(ep_q, ModelEndpoint, _user)
                 ep = ep_q.first()
-            # Configured 回退 chain — when the chosen default endpoint is
-            # gone/disabled, honor the user's configured `default_model_回退s`
+            # Configured fallback chain — when the chosen default endpoint is
+            # gone/disabled, honor the user's configured `default_model_fallbacks`
             # in order BEFORE arbitrarily grabbing the first enabled endpoint.
             # (Previously this jumped straight to "first enabled", which is why
-            # deleting/changing the main endpoint silently reas签名ed the default
-            # chat to some unrelated endpoint instead of the 回退.)
+            # deleting/changing the main endpoint silently reassigned the default
+            # chat to some unrelated endpoint instead of the fallback.)
             if not ep:
                 for entry in _fallbacks:
                     if not isinstance(entry, dict):
@@ -2158,10 +2158,10 @@ def setup_model_routes(model_discovery):
                     cand = cand_q.first()
                     if cand:
                         ep = cand
-                        # Use the 回退 entry's model. Reset even when empty
+                        # Use the fallback entry's model. Reset even when empty
                         # so we don't carry the prior endpoint's stale model onto
-                        # this 回退 — the cached-models lookup below then
-                        # fills it from the 回退 endpoint.
+                        # this fallback — the cached-models lookup below then
+                        # fills it from the fallback endpoint.
                         model = (entry.get("model") or "").strip()
                         break
             # Last resort: first enabled endpoint owned by THIS user. Do not
@@ -2233,7 +2233,7 @@ def setup_model_routes(model_discovery):
                 # Rotating an API key used to require DELETE+POST, which wiped
                 # endpoint_url/model from every session referencing the old base
                 # URL. Allow in-place updates so the admin can change the key
-                # (or correct a typo'd 基础地址) without nuking session state.
+                # (or correct a typo'd base URL) without nuking session state.
                 if "api_key" in body and isinstance(body["api_key"], str):
                     _new_key = body["api_key"].strip()
                     # Empty string means "clear it" (e.g. local Ollama no longer needs a key).

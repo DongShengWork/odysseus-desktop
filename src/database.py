@@ -1,7 +1,7 @@
-# 从规范的 core.database 模块重新导出所有内容
-# 以便 `from src.database import X` 在所有地方继续可用。
+# Re-export everything from the canonical core.database module
+# so that `from src.database import X` continues to work everywhere.
 from core.database import *  # noqa: F401,F403
-from core.database import (  # 显式重新导出，供 IDE/类型检查器可见性
+from core.database import (  # explicit re-exports for IDE/type-checker visibility
     Base,
     TimestampMixin,
     DATABASE_URL,

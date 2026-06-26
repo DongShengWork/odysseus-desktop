@@ -1,17 +1,17 @@
 /**
- * 将图层像素的亮度直方图绘制到给定的画布上。
- * 采样上限约为 400×400，使调用在
- * 非常大的图像上保持高效。
+ * Draw a luminance histogram of a layer's pixels onto the given
+ * canvas. Sampling is capped at ~400×400 so the call stays cheap on
+ * very large images.
  *
- * 如果图层有暂存的色阶调整
- * （`layer._stagedAdj.params` 带有 `inBlack` / `inWhite`），
- * 两个端点标记会绘制在柱状图上方。
+ * If the layer has a staged Levels adjustment
+ * (`layer._stagedAdj.params` with `inBlack` / `inWhite`), the two
+ * endpoint markers are drawn over the bars.
  *
- * @param {HTMLCanvasElement} canvas  要渲染直方图的画布。
+ * @param {HTMLCanvasElement} canvas  The histogram canvas to render into.
  * @param {{
  *   canvas: HTMLCanvasElement,
  *   _stagedAdj?: {params?: {inBlack?: number, inWhite?: number}}
- * }} layer                            源图层。
+ * }} layer                            Source layer.
  */
 export function drawHistogram(canvas, layer) {
   if (!canvas) return;
@@ -19,8 +19,8 @@ export function drawHistogram(canvas, layer) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, w, h);
 
-  // 对超大图像进行降采样，使直方图在 8k+
-  // 照片上保持交互性能。~400×400 足以表征分布。
+  // Down-sample huge images so the histogram stays interactive on 8k+
+  // photos. ~400×400 is enough to characterise the distribution.
   const src = layer.canvas;
   const sw = src.width, sh = src.height;
   const maxSamples = 400;
@@ -34,20 +34,20 @@ export function drawHistogram(canvas, layer) {
 
   const hist = new Uint32Array(256);
   for (let i = 0; i < img.length; i += 4) {
-    if (img[i + 3] < 8) continue; // 跳过接近透明的像素
-    // Rec. 709 亮度 — 照片编辑器中直方图的常见选择。
+    if (img[i + 3] < 8) continue; // skip near-transparent
+    // Rec. 709 luminance — common choice for histograms in photo editors.
     const Y = (0.2126 * img[i] + 0.7152 * img[i + 1] + 0.0722 * img[i + 2]) | 0;
     hist[Math.min(255, Y)]++;
   }
   let peak = 1;
   for (let i = 0; i < 256; i++) if (hist[i] > peak) peak = hist[i];
 
-  // 背景。
+  // Background.
   ctx.fillStyle = 'rgba(255,255,255,0.05)';
   ctx.fillRect(0, 0, w, h);
 
-  // 柱状条。使用平方根缩放，使长尾
-  // （高光、深阴影）在中心质量占主导时仍然可见。
+  // Bars. sqrt-scaled so the long tails (specular highlights, deep
+  // shadows) stay visible even when the central mass dominates.
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   for (let i = 0; i < 256; i++) {
     const x = (i / 256) * w;
@@ -55,8 +55,8 @@ export function drawHistogram(canvas, layer) {
     ctx.fillRect(x, h - bh, w / 256 + 0.5, bh);
   }
 
-  // 端点标记（输入黑点 / 输入白点）来自暂存的色阶
-  // 调整（如果正在进行中）。
+  // Endpoint markers (input black / input white) from a staged Levels
+  // adjustment, if one is in flight.
   const p = layer._stagedAdj?.params;
   if (p) {
     ctx.fillStyle = 'rgba(0,0,0,0.9)';

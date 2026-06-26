@@ -1,7 +1,7 @@
 """
 document_actions.py
 
-可复用的文档操作，既可从 REST 路由也可从任务调度器调用。
+Reusable document actions callable from both REST routes and the task scheduler.
 """
 
 import logging
@@ -21,13 +21,13 @@ _JUNK_TITLES = {
 
 
 def _norm_title(t: str) -> str:
-    """规范化标题用于分组：去除空白、压缩空白、转小写。"""
+    """Normalize a title for grouping: trim, collapse whitespace, lowercase."""
     t = t if isinstance(t, str) else ""
     return re.sub(r"\s+", " ", t.strip()).lower()
 
 
 def _content_fingerprint(content: str) -> str:
-    """用于重复检测的稳定文档内容指纹。
+    """A stable fingerprint of document content for duplicate detection.
 
     Strips bits that differ between otherwise-identical copies — chiefly the
     `upload_id` of a re-imported PDF and the random `id=` of annotations — so
@@ -35,14 +35,14 @@ def _content_fingerprint(content: str) -> str:
     collapsed and the result lowercased.
     """
     c = content if isinstance(content, str) else ""
-    c = re.sub(r'upload_id="[^"]*"', "upload_id", c)          # pdf_source 重新导入
-    c = re.sub(r"\bid=ann-[A-Za-z0-9_-]+", "id=ann", c)        # 注释 ID
+    c = re.sub(r'upload_id="[^"]*"', "upload_id", c)          # pdf_source re-imports
+    c = re.sub(r"\bid=ann-[A-Za-z0-9_-]+", "id=ann", c)        # annotation ids
     c = re.sub(r"\s+", " ", c).strip().lower()
     return c
 
 
 def _real_len(content: str) -> int:
-    """去除 markdown 噪声后的内容长度 — '完整性'代理指标。"""
+    """Length of content with markdown noise stripped — a 'completeness' proxy."""
     content = content if isinstance(content, str) else ""
     stripped = re.sub(r"^#{1,6}\s+", "", content, flags=re.MULTILINE)
     stripped = re.sub(r"[*_`>\-=]+", "", stripped)
@@ -51,24 +51,24 @@ def _real_len(content: str) -> int:
 
 
 async def run_document_tidy(owner: str) -> str:
-    """为所有者删除明显垃圾的文档和冗余重复项。
+    """Remove clearly-junk documents and redundant duplicates for an owner.
 
-    保守规则（不基于长度的删除 — 短笔记是合法的）：
-    - 空/纯空白/占位符（"# Untitled"）
-    - 标题是随意起的名字（test、asdf 等）或内容本身是随意起的
-    - 无原始内容的邮件回复链
-    - 重复项：共享相同规范化标题和相同内容指纹的文档
-      （忽略易变的 upload/annotation ID）。保留最完整的副本
-      （最长真实内容，然后最最近的）；其余删除。
+    Conservative rules (no length-based deletion — short notes are valid):
+    - Empty / whitespace-only / placeholder ("# Untitled")
+    - Title is a throwaway name (test, asdf, …) or the content itself is one
+    - Email reply-chain with no original content
+    - Duplicates: docs sharing the same normalized title AND the same content
+      fingerprint (ignoring volatile upload/annotation ids). The most complete
+      copy (longest real content, then most recent) is kept; the rest deleted.
     """
     from core.database import SessionLocal, Document, Session as DbSession
 
     db = SessionLocal()
     try:
         if owner:
-            # 文档现在带有自己的 owner 列（即使 session 被删除也可靠）。
-            # 直接匹配它；孤立的旧数据行在启动时被归到管理员名下，
-            # 因此它们也有归属。
+            # Documents now carry their own owner column (robust to a deleted
+            # session). Match on it directly; orphaned legacy rows are swept
+            # to the admin at boot so they're attributed too.
             docs = db.query(Document).filter(Document.owner == owner).all()
         else:
             docs = db.query(Document).all()
@@ -76,19 +76,19 @@ async def run_document_tidy(owner: str) -> str:
         deleted_examples = []
         deleted = 0
         kept = 0
-        survivors = []  # 通过垃圾规则的文档，考虑用于去重
+        survivors = []  # docs that pass the junk rules, considered for dedup
 
         for doc in docs:
             content = (doc.current_content or "").strip()
             title = (doc.title or "").strip().lower()
 
-            # 去除 markdown 噪声以获得"真实"字符数
-            stripped = re.sub(r"^#{1,6}\s+", "", content, flags=re.MULTILINE)  # 标题
-            stripped = re.sub(r"[*_`>\-=]+", "", stripped)  # markdown 字符
+            # Strip markdown noise to get "real" character count
+            stripped = re.sub(r"^#{1,6}\s+", "", content, flags=re.MULTILINE)  # headers
+            stripped = re.sub(r"[*_`>\-=]+", "", stripped)  # markdown chars
             stripped = re.sub(r"\s+", " ", stripped).strip()
             real_len = len(stripped)
 
-            # 检测保存为文档的邮件（无原始内容的引用链）
+            # Detect emails-saved-as-documents (quote chains with no original content)
             lines = [ln for ln in content.split("\n") if ln.strip()]
             quoted_lines = [ln for ln in lines if ln.lstrip().startswith(">")]
             header_lines = [ln for ln in lines if re.match(r"^On .+ wrote:?\s*$", ln.strip())]
@@ -106,15 +106,15 @@ async def run_document_tidy(owner: str) -> str:
                 should_delete = True
                 reason = "empty"
             elif title in _JUNK_TITLES:
-                # 如果你把它命名为 "test" 或 "asdf" 等，你不关心它
+                # If you named it "test" or "asdf" etc, you don't care about it
                 should_delete = True
                 reason = f"junk title '{title}'"
             elif stripped.lower() in _JUNK_TITLES:
                 should_delete = True
                 reason = "throwaway content"
-            # 不基于长度删除：短笔记是合法内容。
+            # No length-based deletion: short notes are legitimate content.
             elif (quoted_lines or header_lines) and len(non_quote_content) < 50 and quote_ratio > 0.4:
-                # 无原始内容的邮件回复链
+                # Email reply chain with no original content
                 should_delete = True
                 reason = "email quote-chain only"
 
@@ -127,8 +127,8 @@ async def run_document_tidy(owner: str) -> str:
             else:
                 survivors.append(doc)
 
-        # --- 去重阶段：按 (规范化标题, 内容指纹) 分组幸存者，
-        # 仅保留每个组中最完整的副本。 ---
+        # --- Duplicate pass: group survivors by (normalized title, content
+        # fingerprint) and keep only the most complete copy of each group. ---
         groups: dict = {}
         for doc in survivors:
             key = (_norm_title(doc.title), _content_fingerprint(doc.current_content))
@@ -138,15 +138,15 @@ async def run_document_tidy(owner: str) -> str:
             if len(members) < 2:
                 kept += 1
                 continue
-            # 保留最完整的（最长真实内容），然后最近更新的。
+            # Keep the most complete (longest real content), then most recent.
             def _updated(d):
                 return d.updated_at or d.created_at
-            # 排序 key must be total-order safe: a document with both
-            # created_at NULL，Python 会在真实长度平局时将 None 与
+            # Sort key must be total-order safe: a document with both
+            # updated_at and created_at NULL would otherwise make Python
             # compare None against a datetime on a real-length tie, raising
             # TypeError and aborting the whole tidy run. Rank "has a
-            # 时间戳" before the 时间戳 itself so a None is never
-            # 与 datetime 比较。
+            # timestamp" before the timestamp itself so a None is never
+            # compared against a datetime.
             members.sort(
                 key=lambda d: (
                     _real_len(d.current_content),
@@ -169,7 +169,7 @@ async def run_document_tidy(owner: str) -> str:
             db.commit()
 
         if deleted == 0:
-            # 使用哨兵值，以便调度器可以完全删除运行行。
+            # Use sentinel so the scheduler can drop the run row entirely.
             from src.builtin_actions import TaskNoop
             raise TaskNoop(f"scanned {len(docs)} document(s), no junk")
         preview = "; ".join(deleted_examples)

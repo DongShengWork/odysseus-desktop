@@ -1,23 +1,23 @@
-// skills.js — 记忆弹窗中的“技能”标签页。
+// skills.js — Skills tab in the Memory modal.
 //
-// 技能是 data/skills/ 目录下的 SKILL.md 文件（frontmatter + 正文）。
-// 本 UI 支持：列表、搜索、查看（阅读 SKILL.md）、编辑（替换
-// 内容）、发布/草稿切换、删除，以及通过 /<skill-name> 路径
-// “作为斜指令运行”。
+// Skills are SKILL.md files (frontmatter + body) under data/skills/.
+// This UI supports: list, search, view (read SKILL.md), edit (replace
+// content), publish/draft toggle, delete, and "run as slash" via the
+// /<skill-name> path.
 
 import uiModule from './ui.js';
 import * as spinnerModule from './spinner.js';
 
 const API = window.location.origin;
 let skills = [];
-let builtinSkills = [];   // 只读的代理工具能力 (TOOL_SECTIONS)
+let builtinSkills = [];   // read-only agent tool capabilities (TOOL_SECTIONS)
 let loaded = false;
 let _loadPromise = null;
 
 function esc(s) { return uiModule.esc(String(s ?? '')); }
 
 let _pendingFocusSkill = null;
-let _cascadeNext = false;   // 设为 true 以在下次渲染时播放多米诺入场动画
+let _cascadeNext = false;   // set true to play the domino-in entrance on the next render
 
 function _playSkillsCascade(container = document.getElementById('skills-list')) {
   if (!container || !container.querySelector('.skill-card')) return false;
@@ -28,9 +28,9 @@ function _playSkillsCascade(container = document.getElementById('skills-list')) 
   return true;
 }
 
-// 按技能名称缓存 SKILL.md 文本，使展开时立即显示（无异步
-// 获取 + 内容跳动）。展开时懒加载，同时在渲染后
-// 后台预加载所有可见卡片的内容。
+// Cache of SKILL.md text by skill name, so expanding is instant (no async
+// fetch + content-settle jump). Populated lazily on expand AND eagerly in
+// the background for all visible cards right after render.
 const _mdCache = new Map();
 async function _fetchSkillMarkdown(name) {
   if (_mdCache.has(name)) return _mdCache.get(name);
@@ -41,8 +41,8 @@ async function _fetchSkillMarkdown(name) {
   _mdCache.set(name, md);
   return md;
 }
-// 后台预加载所有已渲染的技能卡片的 markdown 内容，使其
-// 在用户展开之前就已就绪（在卡片的 <pre> + _mdLoaded 中）。
+// Background-load the markdown for every currently-rendered skill card so it
+// is ready (in the card's <pre> + _mdLoaded) before the user expands it.
 function _preloadVisibleMarkdown() {
   document.querySelectorAll('#skills-list .skill-card[data-skill-name]').forEach(card => {
     const name = card.dataset.skillName;
@@ -54,9 +54,9 @@ function _preloadVisibleMarkdown() {
   });
 }
 
-// 折叠的技能分区（“用户” / “内置”），持久化以便
-// 选择在重新加载后保持。内置区默认折叠（它是
-// 参考信息，不是用户自己的技能）。
+// Collapsed skills sections ("user" / "builtin"), persisted so the
+// choice survives reloads. Built-in defaults to collapsed (it's
+// reference info, not the user's own skills).
 const _collapsedSections = (() => {
   try {
     const raw = localStorage.getItem('skillsSectionsCollapsed');
@@ -78,8 +78,8 @@ function _applySectionCollapse(container) {
 }
 
 export async function loadSkills(cascade = false) {
-  // 在此次加载时播放多米诺入场动画（在标签页打开时设置，
-  // 编辑/删除后的静默重新加载不会触发）。
+  // Play the domino-in entrance on this load (set when the tab is opened,
+  // not for the silent re-loads after an edit/delete).
   if (cascade) _cascadeNext = true;
   if (cascade && loaded && !_loadPromise && _playSkillsCascade()) {
     _cascadeNext = false;
@@ -104,7 +104,7 @@ export async function loadSkills(cascade = false) {
       return true;
     });
     _loadSkillApprovalThreshold();
-    // 内置能力不再在技能菜单中显示。
+    // Built-in capabilities are no longer surfaced in the Skills menu.
     loaded = true;
     renderSkillsList();
     updateCount();
@@ -112,7 +112,7 @@ export async function loadSkills(cascade = false) {
       _focusSkillRow(_pendingFocusSkill);
       _pendingFocusSkill = null;
     }
-    // 如果后台审计正在运行，重新显示其进度面板。
+    // If a background audit is running, re-show its progress panel.
     if (!_auditPoll) {
       _fetchAuditStatus().then(st => {
         if (st.status === 'running') _auditAllSkills();
@@ -134,30 +134,30 @@ function _focusSkillRow(name) {
     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     card.classList.add('skill-row-flash');
     setTimeout(() => card.classList.remove('skill-row-flash'), 2000);
-    // 展开它以便链接的技能直接打开其 SKILL.md。
+    // Expand it so the linked skill opens to its SKILL.md directly.
     _expandSkillCard(card, name);
   }, 200);
 }
 
-// 打开“记忆”弹窗 → “技能”标签页 → 聚焦特定技能行。
-// 由聊天锚点链接委派（[name](#skill-<name>)）使用。
+// Open the Memory modal → Skills tab → focus a specific skill row.
+// Used by the chat anchor-link delegate ([name](#skill-<name>)).
 export function openSkill(name) {
   _pendingFocusSkill = name || null;
-  // 如果“记忆”弹窗尚未打开，则打开它。
+  // Open the memory modal if not already open.
   const memBtn = document.getElementById('tool-memory-btn');
   if (memBtn) memBtn.click();
-  // 切换到“技能”标签页（触发懒加载 loadSkills()）。
+  // Switch to the skills tab (triggers lazy loadSkills()).
   setTimeout(() => {
     const tab = document.querySelector('.memory-tab[data-memory-tab="skills"]');
     if (tab) tab.click();
-    else loadSkills();  // 如果标签页结构不同时的回退方案
+    else loadSkills();  // fallback if tab structure differs
   }, 120);
 }
 
 let _skillsSort = 'confidence';
 let _showDraftsOnly = false;
 let _showPublishedOnly = false;
-let _confMax = null;   // 置信度上限过滤器（%，例如 90 = 显示≤90% 的）；null = 关闭
+let _confMax = null;   // confidence ceiling filter (%, e.g. 90 = show ≤90%); null = off
 let _selectMode = false;
 const _selectedNames = new Set();
 let _skillApprovalThreshold = 0.85;
@@ -201,10 +201,10 @@ function _statusPill(sk) {
   return `<span class="memory-cat-badge skill-status-pill" data-status="${esc(s)}" style="opacity:0.6">${esc(s)}</span>`;
 }
 
-// 为自动升级教师循环编写的技能显示“教师”徽章。让用户一眼就能区分
-// 哪些流程是手动编写的、哪些是自动生成的，以便在信任之前
-// 进行审计（并降级/
-// 编辑/发布）。
+// Show a "teacher" badge for skills written by the auto-escalation
+// teacher loop. Lets the user tell at-a-glance which procedures were
+// hand-authored vs auto-generated so they can audit (and demote /
+// edit / publish) before trusting them.
 function _sourcePill(sk) {
   if (sk.source !== 'teacher-escalation') return '';
   const teacher = sk.teacher_model || 'teacher';
@@ -346,9 +346,9 @@ function _duplicatePriorityPill(sk) {
   return `<span class="memory-cat-badge skill-duplicate-lower" title="Lower-priority duplicate. Suggested keeper: ${esc(sk._duplicateKeepName || '')}">lower-priority</span>`;
 }
 
-// 在置信度% 旁显示的“已通过测试验证”指示器。当测试/审计运行通过时显示勾号；
-// 当教师模型需要重写技能以使其通过时显示学士帽图标。
-// SVG 图标（非 Unicode 表情符号）。
+// Verified-by-test indicators shown next to the confidence %. A check when a
+// test/audit run passed; a graduation-cap when the teacher model had to
+// rewrite the skill to make it pass. SVG (no Unicode emoji).
 function _auditMarks(sk) {
   let html = '';
   if (sk.audit_verdict === 'pass') {
@@ -361,21 +361,21 @@ function _auditMarks(sk) {
   return html;
 }
 
-// 审计结果圆点 — 应用户要求已移除。置信度% 旁边的 ✓ 勾号
-// 仍然表示通过。占位函数返回空字符串，以便周围的
-// 头部 HTML 组成时不会改变其他布局。
+// Audit verdict dot — removed at user request. The ✓ check-mark next to the
+// confidence % still indicates a pass. Stub returns empty so the surrounding
+// header HTML still composes without changing other layout.
 function _auditDot(sk) { return ''; }
 
 function _isDraftsFilter() { return !!_showDraftsOnly; }
 
-// 置信度 → 颜色。90%+ 为坚实的绿色，递减经过
-// 黄色/橙色到 50% 及以下为红色（色相 120→0 在 90→50 范围内）。
+// Confidence → colour. 90%+ is solidly green, scaling down through
+// yellow/orange to red at 50% and below (hue 120→0 over 90→50).
 function _confColor(conf) {
   const hue = Math.max(0, Math.min(120, ((conf - 50) / 40) * 120));
   return `hsl(${Math.round(hue)}, 70%, 42%)`;
 }
 
-// 共享操作图标（折叠的 kebab 菜单 + 展开的底部栏使用相同的图标）。
+// Shared action icons (collapsed kebab menu + expanded footer use the same).
 const _ICON = {
   del:   '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
   edit:  '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
@@ -388,8 +388,8 @@ function _svg(paths, { fill = 'none', size = 13 } = {}) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${fill}" ${stroke} style="vertical-align:-2px;flex-shrink:0;">${paths}</svg>`;
 }
 
-// 折叠技能卡片的 kebab 下拉菜单 — 与展开的底部栏相同的操作 + 图标
-// （发布/取消发布 · 编辑 · 删除）。
+// Kebab dropdown for a collapsed skill card — same actions + icons as the
+// expanded footer (Publish/Unpublish · Edit · Delete).
 function _openSkillMenu(btn, card, sk, name, isPublished) {
   document.querySelectorAll('.skill-kebab-menu').forEach(m => m.remove());
   const menu = document.createElement('div');
@@ -422,13 +422,13 @@ function _openSkillMenu(btn, card, sk, name, isPublished) {
     _toggleSkillEdit(card, name);
   });
   mk(_ICON.test, 'Test', {}, () => _testSkill(card, name));
-  // 审计触发批量审计-all 循环（测试 → 评分 → 修复 → 重试 → 降级）。
+  // Audit kicks off the bulk audit-all loop (test → judge → fix → retry → demote).
   mk(_ICON.test, 'Audit', {}, () => _auditAllSkills());
   mk(_ICON.del, 'Delete', { danger: true }, () => _deleteSkill(name, card));
 
-  // 仅移动端的“取消”按钮 — 镜像邮件/文档/大脑弹窗模式。
-  // 在桌面端通过 CSS 隐藏 `.dropdown-cancel-mobile`，因为在桌面端
-  // 点击外部就可以干净地关闭。
+  // Mobile-only Cancel — mirrors the email/documents/brain popup pattern.
+  // CSS hides `.dropdown-cancel-mobile` on desktop where outside-click
+  // already dismisses cleanly.
   const cancelItem = document.createElement('button');
   cancelItem.className = 'skill-kebab-item dropdown-cancel-mobile';
   cancelItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span>Cancel</span>';
@@ -439,8 +439,8 @@ function _openSkillMenu(btn, card, sk, name, isPublished) {
   const r = btn.getBoundingClientRect();
   menu.style.top = (r.bottom + 4) + 'px';
   menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
-  // 保持在屏幕内（移动端）：如果会溢出底部则翻转到按钮上方，
-  // 限制左边缘，并作为最后手段限制高度。
+  // Keep it on-screen (mobile): flip above the button if it would overflow the
+  // bottom, clamp the left edge, and cap the height as a last resort.
   const mr = menu.getBoundingClientRect();
   if (mr.bottom > window.innerHeight - 6) {
     menu.style.top = Math.max(6, r.top - mr.height - 4) + 'px';
@@ -457,10 +457,10 @@ function _openSkillMenu(btn, card, sk, name, isPublished) {
   setTimeout(() => document.addEventListener('click', close, true), 0);
 }
 
-// 代理的内置工具能力卡片（来自
-// /api/skills/builtin → TOOL_SECTIONS）。可展开预览
-// 指令块；可编辑，带警告 + 还原到默认值的按钮
-// （覆盖存储在设置中，应用到提示词）。
+// Cards for the agent's built-in tool capabilities (from
+// /api/skills/builtin → TOOL_SECTIONS). Expandable to preview the
+// instruction block; editable with a warning + a revert-to-default
+// button (overrides stored in settings, applied to the prompt).
 function _buildBuiltinCards() {
   return builtinSkills.map(b => {
     const card = document.createElement('div');
@@ -485,29 +485,29 @@ function _buildBuiltinCards() {
 
     const preview = document.createElement('div');
     preview.className = 'doclib-card-preview skill-card-preview';
-    // 警告横幅 — 编辑内置能力会改变助手使用原生工具的方式。
+    // Warning banner — editing a built-in changes how the assistant uses a native tool.
     const warn = document.createElement('div');
     warn.className = 'skill-builtin-warn';
     warn.innerHTML = '⚠ This is a built-in capability. Editing changes how the assistant is instructed to use this native tool — it can break or alter core behaviour. Use Revert to restore the shipped default.';
     preview.appendChild(warn);
     const pre = document.createElement('pre');
     pre.className = 'skill-md-pre';
-    pre.textContent = '';  // 展开时填充
+    pre.textContent = '';  // filled on expand
     preview.appendChild(pre);
 
-    // 底部栏：还原（左侧，仅在被覆盖时有意义）· 编辑/保存（右侧）。
+    // Footer: Revert (left, only meaningful when overridden) · Edit/Save (right).
     const actions = document.createElement('div');
     actions.className = 'doclib-card-expanded-actions';
 
     const revertBtn = document.createElement('button');
     revertBtn.className = 'doclib-card-text-btn doclib-card-action-btn doclib-card-text-btn-danger';
-    revertBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>' + t('skills.revert');
-    revertBtn.title = t('skills.restore_original');
+    revertBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Revert';
+    revertBtn.title = 'Restore the original shipped instructions';
     revertBtn.addEventListener('click', (e) => { e.stopPropagation(); _revertBuiltin(b.name); });
 
     const editBtn = document.createElement('button');
     editBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
-    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' + t('skills.edit');
+    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit';
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); _toggleBuiltinEdit(card, b.name); });
 
     const rightGroup = document.createElement('div');
@@ -586,7 +586,7 @@ async function _saveBuiltinEdit(card, name) {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     uiModule.showToast('Built-in capability updated');
-    builtinSkills = [];  // 强制重新加载内置列表（刷新“已编辑”徽章）
+    builtinSkills = [];  // force reload of built-in list (refreshes "edited" badge)
     await loadSkills();
   } catch (e) { uiModule.showError('Save failed: ' + e.message); }
 }
@@ -612,7 +612,7 @@ function _getFilteredSkills() {
     filtered = filtered.filter(sk => (sk.status || 'draft') === 'published');
   }
   if (_confMax != null) {
-    // "≤ X%" — 显示可能需要审查的低置信度技能。
+    // "≤ X%" — surface the lower-confidence skills that may need review.
     filtered = filtered.filter(sk => Math.round((sk.confidence || 0) * 100) <= _confMax);
   }
   return _sortSkills(filtered);
@@ -621,15 +621,15 @@ function _getFilteredSkills() {
 function renderSkillsList() {
   const container = document.getElementById('skills-list');
   if (!container) return;
-  // 重新渲染会重建卡片（无展开的卡片），所以清除展开标志
-  // 否则会在没有扩展内容时保持工具栏隐藏。
+  // Re-render rebuilds the cards (none expanded), so clear the expand flag
+  // on the admin-card or it would keep the toolbar hidden with nothing open.
   container.closest('.admin-card')?.classList.remove('skills-has-expanded');
 
   const sorted = _getFilteredSkills();
-  // 内置能力作为其自己的只读分区显示（当用户过滤到草稿时跳过，
-  // 因为内置能力不是草稿）。
-  // 技能菜单仅显示用户自己的技能（内置能力
-  // 故意不在此处显示）。
+  // Built-in capabilities show as their own read-only section (skipped when
+  // the user is filtering to drafts, since built-ins aren't drafts).
+  // Skills menu shows the user's own skills only (built-in capabilities
+  // are intentionally not surfaced here).
   const showBuiltin = false;
 
   if (!sorted.length && !showBuiltin) {
@@ -643,16 +643,16 @@ function renderSkillsList() {
   const selectBtn = document.getElementById('skills-select-btn');
   if (selectBtn) selectBtn.disabled = false;
 
-  // 库风格的卡片：紧凑的横条在原地展开以显示
-  // SKILL.md，带有底部栏（删除在左；编辑/运行/批准在右）。
-  // 复用已验证的 .doclib-card / .doclib-card-preview /
-  // .doclib-card-expanded-actions 标记，使桌面端+移动端展开 +
-  // 底部栏行为与文档/聊天库完全一致。
+  // Library-style cards: a compact bar that expands in-place to show the
+  // SKILL.md, with a footer (Delete left; Edit / Run / Approve right).
+  // Reuses the proven .doclib-card / .doclib-card-preview /
+  // .doclib-card-expanded-actions markup so the desktop+mobile expand +
+  // footer behaviour matches the document/chat library exactly.
   //
-  // #skills-list 本身变成 .doclib-grid（而非嵌套的网格），
-  // 以便全局规则“当卡片展开时隐藏非网格子元素”
-  // (.admin-card:has(.doclib-card-expanded) > *:not(.doclib-grid))
-  // 不会将列表容器一起隐藏。
+  // #skills-list itself becomes the .doclib-grid (rather than a nested
+  // grid) so the global "hide non-grid children when a card is expanded"
+  // rule (.admin-card:has(.doclib-card-expanded) > *:not(.doclib-grid))
+  // doesn't hide the list container along with everything else.
   container.classList.add('doclib-grid');
   const cards = [];
   const dupeMeta = _duplicateMeta(sorted);
@@ -686,7 +686,7 @@ function renderSkillsList() {
       ? `<input type="checkbox" class="memory-select-cb skill-select-cb" data-name="${esc(name)}" ${checked} style="margin-right:6px;flex-shrink:0;cursor:pointer;" />`
       : '';
 
-    // 折叠的头部栏：圆点 · 名称（换行）· [徽章（右侧）· 统计 · 菜单]。
+    // Collapsed header bar: dot · name (wraps) · [pills (right) · stats · menu].
     const header = document.createElement('div');
     header.className = 'doclib-card-header skill-card-header';
     header.innerHTML = `
@@ -709,22 +709,22 @@ function renderSkillsList() {
     `;
     card.appendChild(header);
 
-    // Kebab 下拉菜单（折叠栏快捷操作：与展开的底部栏
-    // 相同的操作 + 图标）。点击 kebab 打开它；不会展开卡片。
+    // Kebab dropdown (collapsed-bar quick actions: same set + icons as the
+    // expanded footer). Clicking the kebab opens it; it doesn't expand.
     header.querySelector('.skill-kebab-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       _openSkillMenu(e.currentTarget, card, sk, name, isPublished);
     });
 
-    // 预览（展开前隐藏）— SKILL.md 放在这里 + 底部栏。
+    // Preview (hidden until expanded) — SKILL.md goes here + footer.
     const preview = document.createElement('div');
     preview.className = 'doclib-card-preview skill-card-preview';
     const pre = document.createElement('pre');
     pre.className = 'skill-md-pre';
-    pre.textContent = '';  // 展开时填充
+    pre.textContent = '';  // filled on expand
     preview.appendChild(pre);
 
-    // 底部栏：左侧为批准/取消发布，右侧为破坏性删除。
+    // Footer: Approve/Unpublish on the left, destructive delete on the right.
     const actions = document.createElement('div');
     actions.className = 'doclib-card-expanded-actions';
 
@@ -735,7 +735,7 @@ function renderSkillsList() {
 
     const editBtn = document.createElement('button');
     editBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
-    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' + t('skills.edit');
+    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit';
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); _toggleSkillEdit(card, name); });
 
     const pubBtn = document.createElement('button');
@@ -751,27 +751,27 @@ function renderSkillsList() {
       pubBtn.addEventListener('click', (e) => { e.stopPropagation(); _setSkillStatus(name, 'published'); });
     }
 
-    // 测试/审计这一个技能 — 与 kebab 中相同的操作，放在
-    // 底部栏中以免被埋在“⋯”菜单下。
+    // Test/audit this one skill — same action that's in the kebab, surfaced in
+    // the footer too so it's not buried under the "⋯" menu.
     const testBtn = document.createElement('button');
     testBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
     testBtn.innerHTML = _svg(_ICON.test, { size: 11 }) + 'Test';
     testBtn.title = 'Test this skill — run it + AI judge';
     testBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // 即时视觉反馈：之前点击后看起来像没反应，因为
-      // _testSkill 在等待状态获取才覆盖预览 —
-      // 所以用户会再点一次。立即将按钮标记为
-      // “等待中”以确保第一次点击被明确注册。
-      if (testBtn.dataset.busy === '1') return;  // 同时防止双击
+      // Immediate visual feedback: previously the click looked like nothing
+      // happened because _testSkill awaits a status fetch before overwriting
+      // the preview — so users would tap a second time. Mark the button as
+      // pending right away so the first tap is obviously registered.
+      if (testBtn.dataset.busy === '1') return;  // also dedupe rapid double-tap
       testBtn.dataset.busy = '1';
       testBtn.disabled = true;
       const _origHTML = testBtn.innerHTML;
       testBtn.innerHTML = _svg(_ICON.test, { size: 11 }) + 'Starting…';
       Promise.resolve(_testSkill(card, name)).finally(() => {
-        // 预览被 _testSkill 覆盖，它会移除 testBtn 从 DOM。
-        // 下面的清理仅在按钮仍存在时有意义
-        // （例如 _testSkill 提早退出时）。
+        // The preview gets overwritten by _testSkill, which removes the
+        // testBtn from the DOM. The cleanup below only matters if the
+        // button still exists (e.g. _testSkill bailed early).
         if (document.body.contains(testBtn)) {
           testBtn.disabled = false;
           testBtn.dataset.busy = '';
@@ -794,7 +794,7 @@ function renderSkillsList() {
     preview.appendChild(actions);
     card.appendChild(preview);
 
-    // 点击展开/折叠（除非在选择模式下 → 切换复选框）。
+    // Click to expand/collapse (unless in select mode → toggle checkbox).
     card.addEventListener('click', (e) => {
       if (card._suppressNextClick) { card._suppressNextClick = false; return; }
       if (e.target.closest('button, input, textarea')) return;
@@ -810,9 +810,9 @@ function renderSkillsList() {
       _expandSkillCard(card, name);
     });
 
-    // 在卡片任意位置长按打开 kebab 下拉菜单 — 镜像
-    // 文档库 + 大脑记忆模式。当触摸从按钮/输入框开始时跳过，
-    // 以便各控件处理程序继续工作。
+    // Long-press anywhere on the card opens the kebab dropdown — mirrors the
+    // documents library + brain memory pattern. Skip when touch starts on a
+    // button/input so per-control handlers keep working.
     {
       const kebab = header.querySelector('.skill-kebab-btn');
       let hold = null;
@@ -841,11 +841,11 @@ function renderSkillsList() {
   }
   container.innerHTML = '';
 
-  // 两个可折叠的分区 — “你的技能”和“内置能力”。标题和
-  // 卡片都是网格的直接子元素（卡片带有 data-skill-section 标签），
-  // 以便全局展开规则 — 通过直接子选择器隐藏兄弟元素 —
-  // 继续正常工作。
-  // 折叠只是切换带标签卡片的显示状态。
+  // Two collapsible sections — "Your skills" and "Built-in". Headers and
+  // cards are all DIRECT children of the grid (cards tagged with
+  // data-skill-section) so the global expand rule — which hides sibling
+  // .doclib-card elements by direct-child selector — keeps working.
+  // Collapse just toggles display on the tagged cards.
   const _mkSectionHeader = (sectionId, title, count) => {
     const collapsed = _collapsedSections.has(sectionId);
     const hdr = document.createElement('div');
@@ -864,14 +864,14 @@ function renderSkillsList() {
     return hdr;
   };
 
-  // “你的技能”分区 — 仅在也有内置分区时显示标题，
-  // 以便区分（否则只是一个列表）。
+  // "Your skills" section — show the header only when there's also a
+  // built-in section to distinguish from (otherwise it's just the list).
   if (cards.length) {
     if (showBuiltin) container.appendChild(_mkSectionHeader('user', 'Your skills', cards.length));
     cards.forEach(c => { c.dataset.skillSection = 'user'; container.appendChild(c); });
   }
 
-  // 内置能力 — 只读卡片（代理的原生工具）。
+  // Built-in capabilities — read-only cards (the agent's native tools).
   if (showBuiltin) {
     const builtinCards = _buildBuiltinCards();
     container.appendChild(_mkSectionHeader('builtin', 'Built-in capabilities', builtinCards.length));
@@ -880,17 +880,17 @@ function renderSkillsList() {
 
   _applySectionCollapse(container);
 
-  // 当技能标签页（重新）打开时的多米诺入场动画 — 与文档/聊天库
-  // 使用的同样精致的错开入场动画（.doclib-just-opened
-  // → 每个 .doclib-card 子元素上的 section-domino-in）。仅消耗在
-  // 标签页打开时设置的标志，使搜索/排序/编辑重新渲染时保持即时。
+  // Domino-in cascade when the Skills tab is (re)opened — same sleek
+  // staggered entrance the document/chat library uses (.doclib-just-opened
+  // → section-domino-in on each .doclib-card child). Only consumes the flag
+  // set on tab-open, so search/sort/edit re-renders stay instant.
   if (_cascadeNext && cards.length) {
     _cascadeNext = false;
     _playSkillsCascade(container);
   }
 
-  // 选择模式复选框配线（card-body 点击在卡片
-  // 自己的点击监听器中处理）。
+  // Select-mode checkbox wiring (card-body click is handled in the card's
+  // own click listener above).
   if (_selectMode) {
     container.querySelectorAll('.skill-select-cb').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -906,17 +906,17 @@ function renderSkillsList() {
     });
   }
 
-  // 不要急切加载所有可见的 SKILL.md。在大型技能库中，这会
-  // 在应用启动时创建数十个同时的 /api/skills/<name>/markdown 请求，
-  // 可能会压跨 uvicorn。Markdown 在卡片展开时懒加载。
-  // 展开时懒加载。
+  // Do not eager-load every visible SKILL.md. On large skill libraries this
+  // creates dozens of simultaneous /api/skills/<name>/markdown requests during
+  // app startup and can peg uvicorn. Markdown is fetched lazily when a card is
+  // expanded.
 }
 
-// ---- 卡片展开 / 编辑 / 操作 ----
+// ---- Card expand / edit / actions ----
 
-// 折叠已展开的技能卡片：移除类名并清除内联
-// 高度（否则折叠的卡片会保持
-// 完整的展开高度）并移除其 resize 监听器。
+// Collapse an expanded skill card: drop the class AND clear the inline
+// heights skills.js pinned on the card/preview/<pre> (otherwise a collapsed
+// card keeps its full expanded height) and detach its resize listener.
 function _collapseSkillCardEl(c) {
   c.classList.remove('doclib-card-expanded', 'skill-expand-instant');
   c.style.removeProperty('height');
@@ -930,32 +930,32 @@ function _collapseSkillCardEl(c) {
 async function _expandSkillCard(card, name) {
   const grid = card.closest('.doclib-grid');
   const adminCard = card.closest('.admin-card');
-  // 如果已打开则切换折叠。
+  // Toggle collapse if already open.
   if (card.classList.contains('doclib-card-expanded')) {
     _collapseSkillCardEl(card);
     if (adminCard) adminCard.classList.remove('skills-has-expanded');
     return;
   }
-  // 我们是否已经显示了另一张已展开的卡片？如果是，这是一个切换，
-  // 而非新开启 — 跳过淡入动画。淡入会显示叠在
-  // 新卡片后面折叠的旧卡片（半透明），看起来像跳跃。
+  // Were we already showing another expanded card? If so this is a SWITCH,
+  // not a fresh open — skip the fade-in. The fade reveals the previous card
+  // collapsing behind the new (semi-transparent) one, which read as a jump.
   const switching = !!(grid && grid.querySelector('.doclib-card-expanded'));
-  // 折叠任何其他已展开的兄弟元素（完整清理，不仅是类名）。
+  // Collapse any other expanded sibling (full cleanup, not just the class).
   if (grid) grid.querySelectorAll('.doclib-card-expanded').forEach(_collapseSkillCardEl);
   card.classList.add('doclib-card-expanded');
   if (switching) card.classList.add('skill-expand-instant');
-  // 在 admin-card 上显式设置类名，使 CSS 不依赖 :has()
-  // （Firefox 移动端版本没有 :has 支持，导致展开只有约 50%）。
+  // Explicit class on the admin-card so CSS doesn't depend on :has()
+  // (Firefox mobile builds without :has left the expand at ~50%).
   if (adminCard) adminCard.classList.add('skills-has-expanded');
   if (grid) grid.scrollTop = 0;
 
-  // Firefox 不会将绝对定位卡片的拉伸高度（inset:0）
-  // 或 height:100% 视为确定的，所以 grid/flex 子元素不会填充。
-  // 钉住显式的 px 高度 = 卡片已渲染的高度。px 值
-  // 是明确确定的，所以预览 + <pre> 最终能填充。
+  // Firefox doesn't treat the absolutely-positioned card's stretched height
+  // (inset:0) or height:100% as DEFINITE, so grid/flex children won't fill.
+  // Pin an explicit px height = the card's already-rendered height. A px
+  // value is unambiguously definite, so the preview + <pre> finally fill.
   card._fillH = () => {
-    // 重置任何之前的内联高度，以便我们先测量自然盒子
-    // （并且切换桌面端<→移动端时不会留下过时的 px 值）。
+    // Reset any prior inline heights so we measure the natural box first
+    // (and so switching desktop<->mobile never leaves stale px values).
     card.style.removeProperty('height');
     const preview = card.querySelector('.doclib-card-preview');
     const header = card.querySelector('.skill-card-header');
@@ -963,10 +963,10 @@ async function _expandSkillCard(card, name) {
     if (preview) { preview.style.removeProperty('height'); preview.style.removeProperty('flex'); preview.style.removeProperty('max-height'); }
     if (pre) { pre.style.removeProperty('height'); pre.style.removeProperty('flex'); }
 
-    // px 钉住仅适用于移动端布局（position:absolute fill，
-    // Firefox 无法传播确定的高度）。在桌面端，卡片
-    // 通过正常的 flex/flow 展开 — 在那里钉住测量的高度只会
-    // 导致尺寸过小。所以在桌面端退出，让 CSS 处理。
+    // The px-pinning is ONLY for the mobile layout (position:absolute fill,
+    // where Firefox won't propagate a definite height). On desktop the card
+    // expands via normal flex/flow — pinning measured heights there just
+    // under-sizes it. So bail on desktop and let the CSS handle it.
     if (!window.matchMedia('(max-width: 768px)').matches) return;
 
     const cardH = card.getBoundingClientRect().height;
@@ -978,14 +978,14 @@ async function _expandSkillCard(card, name) {
     const headerH = header ? header.getBoundingClientRect().height : 0;
     const cardPad = px(card, 'paddingTop') + px(card, 'paddingBottom');
     const previewH = Math.max(0, cardH - headerH - cardPad);
-    // 强制预览使用显式高度（flex:none 以便没有东西与之冲突）。
-    // 之前的 max-height（约 335px，由 % 规则解析）限制了它 — 清除它。
+    // Force the preview to an explicit height (flex:none so nothing fights it).
+    // A max-height (~335px, resolved from a % rule) was capping it — clear it.
     preview.style.setProperty('flex', '0 0 auto', 'important');
     preview.style.setProperty('max-height', 'none', 'important');
     preview.style.setProperty('height', previewH + 'px', 'important');
 
     if (pre) {
-      // Pre = 预览高度减去其非 pre 兄弟元素（底部栏、警告横幅）。
+      // Pre = preview height minus its non-pre siblings (footer, warn banner).
       const prevPad = px(preview, 'paddingTop') + px(preview, 'paddingBottom');
       let siblings = 0;
       for (const child of preview.children) {
@@ -996,17 +996,17 @@ async function _expandSkillCard(card, name) {
       pre.style.setProperty('flex', '0 0 auto', 'important');
     }
   };
-  // 同步尺寸调整（不是 rAF）以便钉住的高度在浏览器第一帧
-  // 绘制展开卡片之前就就位。在一帧之后运行会
-  // 让第一帧以内容高度绘制，然后突变 — 这就是
-  // 第一次展开时出现的“爆炸”效果（当 SKILL.md 还在加载时）。
+  // Size SYNCHRONOUSLY (not in rAF) so the pinned heights are in place before
+  // the browser's first paint of the expanded card. Running it a frame later
+  // let the first frame paint at content-height, then snap — the "explosion"
+  // that showed on the first expand (when the SKILL.md was still loading).
   card._fillH();
   window.addEventListener('resize', card._fillH);
 
   const pre = card.querySelector('.skill-md-pre');
   if (pre && !card._mdLoaded) {
-    // 如果缓存可用则使用它（后台预加载通常已经有了），
-    // 以便内容同步就位 — 无异步稳定/跳跃。
+    // Use the cache when available (the bg preload usually has it already),
+    // so the content is in place synchronously — no async settle/jump.
     if (_mdCache.has(name)) {
       const md = _mdCache.get(name);
       pre.textContent = md || '(empty)';
@@ -1026,14 +1026,14 @@ async function _expandSkillCard(card, name) {
   }
 }
 
-// 将只读的 <pre> 替换为可编辑的 <textarea>（以及反向操作）。
-// “编辑”按钮切换；“保存”按钮通过 markdown 端点提交。
+// Swap the read-only <pre> for an editable <textarea> (and back). The
+// Edit button toggles; a Save button commits via the markdown endpoint.
 function _toggleSkillEdit(card, name) {
   const preview = card.querySelector('.skill-card-preview');
   if (!preview) return;
   const existing = preview.querySelector('.skill-md-editor');
   if (existing) {
-    // 已在编辑中 — 将“编辑”视为“保存”。
+    // Already editing — treat Edit as Save.
     _saveSkillEdit(card, name);
     return;
   }
@@ -1046,7 +1046,7 @@ function _toggleSkillEdit(card, name) {
   if (pre) pre.style.display = 'none';
   preview.insertBefore(ta, preview.querySelector('.doclib-card-expanded-actions'));
   ta.focus();
-  // 将“编辑”按钮标签改为“保存”。
+  // Flip the Edit button label to "Save".
   const editBtn = [...preview.querySelectorAll('.doclib-card-action-btn')].find(b => /Edit|Save/.test(b.textContent));
   if (editBtn) editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save';
 }
@@ -1062,10 +1062,10 @@ async function _saveSkillEdit(card, name) {
       body: JSON.stringify({ markdown: ta.value }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    // 刷新缓存的 markdown 以便预加载/展开显示新文本。
+    // Refresh the cached markdown so the preload/expand show the new text.
     _mdCache.set(name, ta.value);
     uiModule.showToast('Saved');
-    await loadSkills();  // 重新渲染（frontmatter 变化如名称/状态可能已经改变）
+    await loadSkills();  // re-render (frontmatter changes like name/status may have changed)
   } catch (e) {
     uiModule.showError('Save failed: ' + e.message);
   }
@@ -1073,9 +1073,9 @@ async function _saveSkillEdit(card, name) {
 
 async function _deleteSkill(name, card = null) {
   if (!(await uiModule.styledConfirm(`Delete skill "${name}"? This removes the SKILL.md.`, { confirmText: 'Delete', danger: true }))) return;
-  // 如果调用者没有传递卡片，则定位卡片，以便我们可以
-  // 优雅地折叠它（与文档库相同的 fade+shrink 效果），
-  // 而不是重新渲染整个列表。
+  // Locate the card if the caller didn't hand one over, so we can collapse it
+  // away gracefully (same fade+shrink as the document library) instead of
+  // re-rendering the whole list.
   if (!card) {
     card = [...document.querySelectorAll('.skill-card')]
       .find(c => { const n = c.querySelector('.skill-card-name'); return n && n.textContent === name; }) || null;
@@ -1107,7 +1107,7 @@ async function _setSkillStatus(name, status) {
   } catch (e) { uiModule.showError('Update failed: ' + e.message); }
 }
 
-// ---- 测试技能（沙盒代理运行 + AI 评估） ----
+// ---- Test a skill (sandbox agent run + AI eval) ----
 
 async function _fetchTestStatus(name) {
   try {
@@ -1135,7 +1135,7 @@ function _renderTestLog(logEl, verdictEl, job, card, name) {
   else if (verdictEl) verdictEl.innerHTML = '';
 }
 
-// `force` = 即使已有完成的结果也启动全新运行（重试）。
+// `force` = start a fresh run even if a finished result already exists (Retry).
 async function _testSkill(card, name, force = false) {
   if (!card.classList.contains('doclib-card-expanded')) await _expandSkillCard(card, name);
   const preview = card.querySelector('.skill-card-preview');
@@ -1147,7 +1147,7 @@ async function _testSkill(card, name, force = false) {
   const verdictEl = preview.querySelector('.skill-test-verdict');
   if (card._testPoll) { clearInterval(card._testPoll); card._testPoll = null; }
 
-  // 附加到现有任务，除非强制重新运行。
+  // Attach to an existing job unless forcing a fresh run.
   let job = force ? { status: 'none' } : await _fetchTestStatus(name);
 
   if (job.status === 'none') {
@@ -1173,17 +1173,17 @@ async function _testSkill(card, name, force = false) {
 
   if (job.status === 'running') {
     card._testPoll = setInterval(async () => {
-      // 即使卡片已折叠也继续轮询（测试在服务器端运行）；
-      // 只有当卡片本身从 DOM 中消失时才停止。
+      // Keep polling even if the card is collapsed (the test runs server-side);
+      // only stop once the card itself is gone from the DOM.
       if (!document.body.contains(card)) { clearInterval(card._testPoll); card._testPoll = null; _setCardRunning(card, false); return; }
       const s = await _fetchTestStatus(name);
-      // 仅在日志仍在屏幕上时更新展开的日志。
+      // Update the expanded log only while it's still on screen.
       if (document.body.contains(logEl)) _renderTestLog(logEl, verdictEl, s, card, name);
       if (s.status !== 'running') {
         clearInterval(card._testPoll); card._testPoll = null;
         _setCardRunning(card, false);
-        // 如果日志不可见（卡片已折叠），仍然更新
-        // 头部圆点/% 以便结果显示在折叠的卡片上。
+        // If the log isn't visible (card was collapsed), still update the
+        // header dot/% so the result shows on the folded card.
         if (!document.body.contains(logEl) && s.verdict && s.verdict.verdict) {
           _applyVerdictToHeader(card, s.verdict.verdict);
         }
@@ -1192,9 +1192,9 @@ async function _testSkill(card, name, force = false) {
   }
 }
 
-// 在测试进行时，在技能名称旁显示/隐藏应用级的漩涡加载图标。
-// 在折叠的头部上也能工作，因为我们注入的是真实的 DOM
-// 元素而非 CSS 伪类。
+// Show/hide the app-wide whirlpool spinner next to the skill name while a test
+// is in flight. Works on the collapsed header too, since we inject a real DOM
+// element rather than a CSS pseudo on a class.
 function _setCardRunning(card, on) {
   if (!card) return;
   card.classList.toggle('skill-test-running', !!on);
@@ -1204,9 +1204,9 @@ function _setCardRunning(card, on) {
     if (!nameEl) return;
     const wp = spinnerModule.createWhirlpool(12);
     wp.element.style.cssText = 'display:inline-flex;width:12px;height:12px;margin:0 0 0 7px;vertical-align:middle;flex-shrink:0;';
-    // 追加到 <code> 名称内部（inline-flow），而非其后面。textcol
-    // 是 flex column，所以后面的兄弟元素会独占一行 —
-    // 将 加载指示器 放在内联 code 内使其保持在标题行上。
+    // Append INSIDE the <code> name (inline-flow), not after it. The textcol
+    // is a flex column, so a sibling-after lands on its own line — putting
+    // the spinner inside the inline code keeps it on the title row.
     nameEl.appendChild(wp.element);
     card._testSpinner = wp;
   } else if (card._testSpinner) {
@@ -1218,10 +1218,10 @@ function _setCardRunning(card, on) {
   }
 }
 
-// 在（可能已折叠的）卡片头部上反映测试/审计结果，无需
-// 完整重新加载：发光的审计圆点、置信度% 和通过勾号。
-// 无论卡片是展开还是折叠都能工作，以便在你折叠后完成的测试
-// 仍然能更新卡片。
+// Reflect a test/audit verdict on the (possibly collapsed) card header without
+// a full reload: the glowing audit dot, the confidence %, and the pass check.
+// Works whether the card is expanded or folded so a test that finishes after
+// you collapse still updates the card.
 function _applyVerdictToHeader(card, verdict) {
   if (!card || !verdict) return;
   const dotColor = {
@@ -1230,8 +1230,8 @@ function _applyVerdictToHeader(card, verdict) {
     inconclusive: 'var(--color-warning, #f0ad4e)',
     fail: 'var(--color-danger, #e06c75)',
   }[verdict];
-  // 应用户要求已移除审计圆点 — 删除任何既存的，以便
-  // 审计后的实时更新不会留下旧渲染的过时圆点。
+  // Audit dot removed at user request — strip any pre-existing one so the
+  // post-audit live update doesn't leave a stale dot from an old render.
   const header = card.querySelector('.skill-card-header');
   if (header) {
     header.querySelectorAll('.skill-audit-dot').forEach(n => n.remove());
@@ -1242,38 +1242,38 @@ function _applyVerdictToHeader(card, verdict) {
     const confEl = statsEl.querySelector('.skill-conf');
     if (confEl) { confEl.textContent = newConf + '%'; confEl.style.color = _confColor(newConf); }
   }
-  // 将结果折叠到状态（草稿/已发布）徽章中 — 着色
-  // 徽章本身并附加小型勾号/警告/叉号图标，以便审计结果
-  // 位于标签旁边而非悬挂在统计行中。
+  // Fold the verdict into the status (draft / published) pill — colour the
+  // pill itself and append a tiny check/warn/cross glyph so the audit result
+  // lives next to the label instead of dangling in the stats row.
   const pill = card.querySelector('.skill-status-pill');
   if (pill) {
-    // 每个结果徽章的内联图标 — 显示在“已检查”
-    // 标签旁边，使结果看起来像真实的徽章。
+    // Inline glyphs for the per-verdict pill — appear next to the "checked"
+    // label so the verdict reads as a real badge.
     const ICON = {
       pass: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="20 6 9 17 4 12"/></svg>',
       needs_work: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17"/></svg>',
       inconclusive: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17"/></svg>',
       fail: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
     }[verdict];
-    // 洗刧徽章背景 + 着色文本，使一眼就能从徽章看出
-    // 通过/需修改/失败，无需展开卡片。
+    // Wash the pill's bg + tint the text so a glance at the badge tells you
+    // pass/needs-work/fail without expanding the card.
     const tint = {
       pass:       { bg: 'color-mix(in srgb, var(--color-success, #4ade80) 30%, transparent)', fg: 'var(--color-success, #4ade80)' },
       needs_work: { bg: 'color-mix(in srgb, var(--color-warning, #f0ad4e) 30%, transparent)', fg: 'var(--color-warning, #f0ad4e)' },
       inconclusive: { bg: 'color-mix(in srgb, var(--color-warning, #f0ad4e) 30%, transparent)', fg: 'var(--color-warning, #f0ad4e)' },
       fail:       { bg: 'color-mix(in srgb, var(--color-danger, #e06c75) 30%, transparent)',  fg: 'var(--color-danger, #e06c75)' },
     }[verdict];
-    // 状态徽章（草稿/已发布）现在保持其自己的颜色 —
-    // 结果位于插入在其旁边的单独“已检查”徽章中。
-    // 移除任何之前的审计图标（之前是插入在徽章内部的；
-    // 现在每次刷新都清除徽章内部和兄弟位置的图标）。
+    // The status pill (draft / published) keeps its own colours now — the
+    // verdict lives in a separate "checked" pill that's inserted next to it.
+    // Remove any prior audit glyph (was previously inserted inside the pill;
+    // now scrub both the in-pill and sibling locations on every refresh).
     pill.querySelectorAll('.skill-pill-verdict').forEach(n => n.remove());
     if (pill.parentElement) {
       pill.parentElement.querySelectorAll(':scope > .skill-pill-verdict').forEach(n => n.remove());
     }
     if (ICON) {
-      // 完整的“已检查”徽章 — 位于草稿/已发布徽章左侧，
-      // 样式与其他 memory-cat-徽章s 一致，看起来像真实的芯片。
+      // Full "checked" pill badge — sits LEFT of the draft/published pill,
+      // styled like the other memory-cat-badges so it reads as a real chip.
       const span = document.createElement('span');
       span.className = 'memory-cat-badge skill-pill-verdict';
       span.title = 'Audited: ' + verdict.replace(/_/g, ' ');
@@ -1289,9 +1289,9 @@ function _applyVerdictToHeader(card, verdict) {
       }
     }
   }
-  // 旧的浮动式 .skill-verified 勾号（在置信度% 旁边）不再
-  // 添加 — 现在徽章承载了结果图标。删除旧版本
-  // 渲染的过时徽章，以防卡片是由早期版本渲染的。
+  // Old free-floating .skill-verified check (next to confidence %) is no
+  // longer added — the pill carries the verdict glyph now. Remove a stale
+  // one in case the card was rendered by an earlier build.
   card.querySelectorAll('.skill-verified').forEach(n => n.remove());
 }
 
@@ -1302,8 +1302,8 @@ function _renderTestVerdict(el, v, card, name) {
   const label = { pass: 'PASS', needs_work: 'NEEDS WORK', fail: 'FAIL', inconclusive: 'INCONCLUSIVE', unknown: 'UNCLEAR' }[verdict] || 'UNCLEAR';
   const conf = v && typeof v.confidence === 'number' ? Math.round(v.confidence * 100) + '%' : '';
   const issues = Array.isArray(v && v.issues) ? v.issues : [];
-  // 反映技能的当前状态：如果已经发布，按钮
-  // 表示“已批准”（点击取消发布），而非提供批准选项。
+  // Reflect the skill's current state: if it's already published, the button
+  // confirms "Approved" (click to unpublish) rather than offering to approve.
   const isPub = card && card.dataset && card.dataset.skillStatus === 'published';
   const approveLabel = isPub ? 'Approved' : 'Approve';
   const approveCls = 'skill-eval-approve' + (isPub ? ' is-approved' : (verdict === 'pass' ? ' suggested' : ''));
@@ -1346,13 +1346,13 @@ function _renderTestVerdict(el, v, card, name) {
     const issuesTxt = issues.length ? '\nIssues:\n- ' + issues.join('\n- ') : '';
     const text = (logEl ? logEl.innerText.trim() + '\n\n' : '') +
       '=== Eval: ' + label + (conf ? ' (' + conf + ')' : '') + ' ===\n' + ((v && v.summary) || '') + issuesTxt;
-    // 共享辅助函数在纯 HTTP 环境下回退到 execCommand（navigator.clipboard
-    // 在非安全上下文中不可用，这就是原始调用失败的原因）。
+    // Shared helper falls back to execCommand on plain HTTP (navigator.clipboard
+    // is unavailable in non-secure contexts, which is why the raw call failed).
     uiModule.copyToClipboard(text);
   });
 }
 
-// ---- 审计所有技能（自主：测试 → 修正 → 重试 → 教师 → 标记） ----
+// ---- Audit all skills (autonomous: test → fix → retry → teacher → flag) ----
 
 let _auditPoll = null;
 let _auditSeenResults = 0;
@@ -1422,7 +1422,7 @@ function _confirmAuditSkills(label) {
 async function _auditAllSkills(opts = {}) {
   const panel = document.getElementById('skills-audit-panel');
   if (!panel) return;
-  // 如果已有运行在进行，只需（重新）附加到它。
+  // If a run is already going, just (re)attach to it.
   let st = await _fetchAuditStatus();
   if (st.status !== 'running') {
     const explicitNames = Array.isArray(opts.names) ? opts.names.filter(Boolean) : null;
@@ -1528,8 +1528,8 @@ function _applyAuditResults(st) {
   _auditSeenResults = results.length;
 }
 
-// 使当前正在审计的卡片发光，以便清楚地看到
-// "立即审计"运行正在处理哪个。传入 null 清除所有高亮。
+// Make the card currently being audited glow, so it's obvious which one the
+// "Audit now" run is processing. Pass null to clear all highlights.
 function _highlightAuditCard(name) {
   document.querySelectorAll('.skill-card.skill-audit-active')
     .forEach(c => { c.classList.remove('skill-audit-active'); _setCardRunning(c, false); });
@@ -1575,7 +1575,7 @@ function _renderAuditPanel(panel, st) {
     '<div class="skills-audit-bar"><div class="skills-audit-fill" style="width:' + pct + '%"></div></div>' +
     (summary ? '<div class="skills-audit-summary">' + esc(summary) + (st.teacher ? ' · teacher: ' + esc(st.teacher) : '') + '</div>' : '') +
     '<div class="skills-audit-log">' + (st.log || []).slice(-40).map(l => '<div>' + esc(l) + '</div>').join('') + '</div>';
-  // 审计实际运行时，漩涡图标显示在标题旁边。
+  // Whirlpool sits next to the title while the audit is actually running.
   if (running) {
     const titleWrap = panel.querySelector('.skills-audit-title-wrap');
     if (titleWrap) {
@@ -1605,7 +1605,7 @@ function _renderAuditPanel(panel, st) {
   if (logEl) logEl.scrollTop = logEl.scrollHeight;
 }
 
-// ---- 选择模式 / 批量操作 ----
+// ---- Select mode / bulk actions ----
 
 const _SKILLS_SELECT_BTN_DOT_SVG = '<svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>';
 const _SKILLS_SELECT_BTN_X_SVG = '<svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:3px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
@@ -1649,7 +1649,7 @@ function _updateBulkBar() {
       ? `Delete ${count} selected non-passing ${count === 1 ? 'skill' : 'skills'}`
       : 'No selected non-passing skills';
   }
-  // 仅当至少有一个选中的技能仍是草稿时，批准才有意义。
+  // Approve is only meaningful when at least one selected skill is still a draft.
   const anyDraft = [..._selectedNames].some(n => {
     const sk = skills.find(s => (s.name || s.id) === n);
     return sk && (sk.status || 'draft') !== 'published';
@@ -1797,7 +1797,7 @@ async function _showSkillSource(name) {
     return;
   }
 
-  // 轻量级弹窗 — 复用应用其他部分使用的 .modal CSS。
+  // Lightweight modal — reuses the .modal CSS the rest of the app uses.
   const wrap = document.createElement('div');
   wrap.className = 'modal';
   wrap.style.display = 'block';
@@ -1824,7 +1824,7 @@ async function _showSkillSource(name) {
     try {
       // We use the manage_skills-style edit by going through PUT with a
       // single 'content' field. The route doesn't accept that yet — use the
-      // 工具调用 instead. We have a /api/skills/{name} PUT for fields, but
+      // tool call instead. We have a /api/skills/{name} PUT for fields, but
       // a full SKILL.md replace is simpler via the parsed-then-PUT approach
       // below: parse client-side by uploading via the tool route.
       const res = await fetch(`${API}/api/skills/${encodeURIComponent(name)}/markdown`, {
@@ -1926,8 +1926,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('add-skill-btn')?.addEventListener('click', addSkill);
   document.getElementById('skills-search')?.addEventListener('input', renderSkillsList);
   document.getElementById('skills-sort')?.addEventListener('change', (e) => {
-    // 下拉菜单包含两个选项组：排序（sort:<key>）和过滤（filter:<key>）。
-    // 选择排序选项不会影响过滤设置，反之亦然。
+    // Dropdown holds two optgroups: Sort (sort:<key>) and Filter (filter:<key>).
+    // Picking a sort option leaves the filter alone, and vice-versa.
     const v = e.target.value || '';
     if (v.startsWith('sort:')) {
       _skillsSort = v.slice(5);
@@ -1960,6 +1960,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 export default { loadSkills, openSkill };
 
-// 在首次加载时填充"技能"徽章，以便在用户点击标签页之前
-// 计数已经正确。轻量获取 — 与懒加载路径相同。
+// Populate the Skills badge on first load so the count is right before the
+// user clicks into the tab. Cheap fetch — same as the lazy path.
 document.addEventListener('DOMContentLoaded', () => { loadSkills(); });

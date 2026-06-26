@@ -1,6 +1,6 @@
 /**
- * emailInbox.js — 侧边栏中的电子邮件收件箱列表。
- * 遵循会话列表模式：列表项、点击作为文档打开、归档等。
+ * emailInbox.js — Email inbox list in sidebar.
+ * Follows the session list pattern: list items, click to open as document, archive, etc.
  */
 
 import spinnerModule from './spinner.js';
@@ -17,7 +17,7 @@ const _acct = () => window.__odysseusActiveEmailAccount
 
 const _emailSetupHint = () => '<div style="margin-top:6px;opacity:0.72;font-size:11px;">Setup: <span style="color:var(--accent,var(--red));">Settings &rsaquo; Integrations</span></div>';
 
-// 与 sessions.js 下拉菜单风格匹配的 SVG 图标
+// SVG icons matching sessions.js dropdown style
 const _replyIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
 const _archiveIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>';
 const _deleteIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';
@@ -62,9 +62,9 @@ let _currentFolder = 'INBOX';
 let _offset = 0;
 let _total = 0;
 
-// 回复邮件会在服务端标记源邮件为 \Answered 并触发
-// `email-answered` 事件。在收件箱列表中实时反映，以便立即显示
-// 为已完成（无需手动刷新）。
+// Replying to an email marks the source \Answered server-side and fires
+// `email-answered`. Reflect it live in the inbox list so it shows as done
+// immediately (no manual refresh needed).
 window.addEventListener('email-answered', (e) => {
   const uid = e.detail && e.detail.uid;
   if (uid == null) return;
@@ -85,13 +85,13 @@ let _loading = false;
 let _expanded = false;
 let _docModule = null;
 let _listSpinner = null;
-let _senderFilter = null;       // 要过滤的电子邮件地址（小写），或 null
-let _senderFilterLabel = null;  // 活动过滤芯片的显示标签
+let _senderFilter = null;       // email address (lowercased) to filter by, or null
+let _senderFilterLabel = null;  // display label for the active filter chip
 
 export function init(documentModule) {
   _docModule = documentModule;
   _bindEvents();
-  // 使用打开邮件的回调初始化库弹窗
+  // Init the library popup with a callback to open emails
   initEmailLibrary({
     documentModule,
     onEmailClick: async (opts) => {
@@ -101,7 +101,7 @@ export function init(documentModule) {
       //  - Mobile: there's no room for a split, so minimize the email modal;
       //    the draft comes to the front and the inbox stays a tap away as a
       //    minimized chip.
-      // 此处永远不要调用 closeEmailLibrary() — 那样会销毁状态。
+      // Never call closeEmailLibrary() here — that destroys state.
       try {
         if (Modals.isRegistered('email-lib-modal')) {
           const emailModal = document.getElementById('email-lib-modal');
@@ -109,7 +109,7 @@ export function init(documentModule) {
             applyEdgeDock(emailModal, 'left');
           }
           // Mobile: do NOT pre-mount the pane here. The load path (open/inject)
-          // mounts it exactly once when the doc is ready; the doc-view z-索引
+          // mounts it exactly once when the doc is ready; the doc-view z-index
           // rule slides it up OVER the email (which stays behind). Pre-mounting
           // here caused a double-mount — the early pane was torn down by the
           // compose session-switch, then remounted, which looked like a doc
@@ -152,13 +152,13 @@ function _watchDocOpenToReDockEmail() {
       if (window.innerWidth > 768) {
         const emailModal = document.getElementById('email-lib-modal');
         if (emailModal && !emailModal.classList.contains('hidden')) {
-          // 已经左停靠 → 无需操作（modalSnap 自行重新锚定）。
+          // Already left-docked → nothing to do (modalSnap re-anchors on its own).
           if (!emailModal.classList.contains('modal-left-docked')) {
             try { applyEdgeDock(emailModal, 'left'); } catch (_) {}
           }
         }
-        // 同样处理打开的邮件阅读器模态框（单独打开特定邮件 —
-        // 典型的"点击邮件，点击文档"流程）。
+        // Same treatment for an open email-reader modal (one specific email
+        // open standalone — typical "click email, click doc" flow).
         document.querySelectorAll('.modal[id^="email-reader-"]').forEach(m => {
           if (m.classList.contains('hidden')) return;
           if (m.classList.contains('modal-left-docked')) return;
@@ -172,8 +172,8 @@ function _watchDocOpenToReDockEmail() {
 }
 
 function _bindEvents() {
-  // 点击邮件节标题的任意位置打开弹窗
-  //（撰写按钮除外，它有自己的处理程序）
+  // Clicking anywhere in the email section header opens the popup
+  // (except the compose button which has its own handler)
   const section = document.getElementById('email-section');
   const header = section?.querySelector('.section-header-flex');
   if (header) {
@@ -185,7 +185,7 @@ function _bindEvents() {
     });
   }
 
-  // 撰写按钮创建新的电子邮件文档
+  // Compose button creates a new email document
   const composeBtn = document.getElementById('email-compose-btn');
   if (composeBtn) {
     composeBtn.addEventListener('click', (e) => {
@@ -194,12 +194,12 @@ function _bindEvents() {
     });
   }
 
-  // 初始未读计数检查，每 60 秒刷新
+  // Initial unread count check, refresh every 60s
   _refreshUnreadCount();
   setInterval(_refreshUnreadCount, 60000);
   prewarmEmailLibrary({ delay: 3000 });
 
-  // 深度链接: #email=<folder>:<uid> 打开库并展开该卡片
+  // Deep-link: #email=<folder>:<uid> opens the library and expands that card
   _maybeOpenFromHash();
   window.addEventListener('hashchange', _maybeOpenFromHash);
 }
@@ -211,26 +211,26 @@ function _maybeOpenFromHash() {
   const folder = decodeURIComponent(m[1]);
   const uid = m[2];
   try { openEmailLibrary({ folder, uid }); } catch (e) { console.error(e); }
-  // 清除哈希值以防止重新加载时重新打开
+  // Clear the hash so reloads don't reopen
   try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (_) {}
 }
 
-// 色调辅助函数 — 将紧急邮件扫描器的 max_score 转换为圆点颜色。
-// 当扫描器关闭或无紧急邮件时，回退到默认值（蓝色 / 未设置）。
+// Tint helper — turns the urgent-email-scanner's max_score into a dot color.
+// Falls back to the default (blue / unset) when scanner is off or no urgent.
 function _urgencyColor(score) {
-  if (score >= 3) return 'var(--color-error, #e06c75)';   // 红色 — 立即紧急
-  if (score === 2) return '#f0ad4e';                       // 橙色 — 尽快回复
-  return '';                                                // 默认（蓝色 / 主题）
+  if (score >= 3) return 'var(--color-error, #e06c75)';   // red — urgent now
+  if (score === 2) return '#f0ad4e';                       // orange — reply soon
+  return '';                                                // default (blue / theme)
 }
 
 async function _refreshUnreadCount() {
-  // 默认将圆点设为隐藏 — 只有下方验证过的"阈值以上新邮件"
-  // 路径才应将其打开。否则，fetch 错误或后端返回格式错误的数据
-  // 会保留来自上一个账户/会话的过期圆点。
+  // Default the dot to hidden — only the verified "new mail above threshold"
+  // path below should turn it on. Without this, a fetch error or a backend
+  // returning malformed data left a stale dot from a previous account/session.
   const dot = document.getElementById('email-unread-dot');
   if (dot && !dot._stickyState) dot.style.display = 'none';
   try {
-    // 并行：未读列表 + 紧急状态。
+    // Parallel: unread list + urgency state.
     const [listRes, urgRes] = await Promise.all([
       fetch(`${API_BASE}/api/email/list?folder=INBOX&limit=50&filter=unread${_acct()}`),
       fetch(`${API_BASE}/api/email/urgency-state`, { credentials: 'same-origin' }).catch(() => null),
@@ -245,15 +245,15 @@ async function _refreshUnreadCount() {
       return;
     }
 
-    // 将最高未读 UID 与 localStorage 中最后看到的阈值进行比对
+    // Compare highest unread UID to the last-seen threshold in localStorage
     const lastSeen = parseInt(localStorage.getItem('odysseus-email-last-seen-uid') || '0', 10);
     const maxUid = Math.max(...emails.map(e => parseInt(e.uid, 10) || 0));
 
-    // 仅当有超过阈值的新邮件时才显示圆点
+    // Only show dot if there's a new email above the threshold
     dot.style.display = maxUid > lastSeen ? '' : 'none';
 
-    // 按紧急级别为圆点着色。缓存每个 UID 的映射以便每行渲染器
-    // 可以复用它而无需第二次 fetch。
+    // Color the dot by urgency tier. Cache the per-uid map so the per-row
+    // renderer can reuse it without a second fetch.
     if (dot.style.display !== 'none' && urgRes && urgRes.ok) {
       try {
         const ud = await urgRes.json();
@@ -266,15 +266,15 @@ async function _refreshUnreadCount() {
       dot.style.backgroundColor = '';
     }
   } catch (e) {
-    // 网络/解析错误 — 保持圆点隐藏（顶部默认值）。
+    // Network/parse error — keep the dot hidden (default at the top).
     if (dot) dot.style.display = 'none';
   }
 }
 
 export function markInboxAsSeen() {
-  // 当用户打开收件箱弹窗时调用 — 清除通知圆点
+  // Called when the user opens the inbox popup — clears the notif dot
   try {
-    // 找出当前最大 UID，以便后续到达的邮件触发圆点
+    // Find current max UID so subsequent arrivals trigger the dot
     fetch(`${API_BASE}/api/email/list?folder=INBOX&limit=1${_acct()}`)
       .then(r => r.json())
       .then(data => {
@@ -299,7 +299,7 @@ export async function loadEmails(append = false) {
 
   if (!append) {
     list.innerHTML = '';
-    // 显示漩涡旋转器
+    // Show whirlpool spinner
     if (_listSpinner) { _listSpinner.destroy(); _listSpinner = null; }
     const sp = spinnerModule.createWhirlpool(20);
     _listSpinner = sp;
@@ -316,7 +316,7 @@ export async function loadEmails(append = false) {
     _emails.push(...(data.emails || []));
     _total = data.total || 0;
 
-    // 移除旋转器
+    // Remove spinner
     if (_listSpinner) { _listSpinner.destroy(); _listSpinner = null; }
 
     _renderList();
@@ -421,7 +421,7 @@ function _renderList() {
   if (_senderFilter) {
     const chip = document.createElement('div');
     chip.className = 'email-filter-chip';
-    chip.innerHTML = `<span class="email-filter-chip-label">From: ${_esc(_senderFilterLabel || _senderFilter)}</span><button class="email-filter-chip-clear" title="${t('email.clear_filter')}">&times;</button>`;
+    chip.innerHTML = `<span class="email-filter-chip-label">From: ${_esc(_senderFilterLabel || _senderFilter)}</span><button class="email-filter-chip-clear" title="Clear filter">&times;</button>`;
     chip.querySelector('.email-filter-chip-clear').addEventListener('click', () => _clearSenderFilter());
     list.appendChild(chip);
   }
@@ -486,10 +486,10 @@ function _createEmailItem(em) {
     ? '<span title="Has attachments" style="opacity:0.6;display:inline-flex;flex-shrink:0;margin-left:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>'
     : '';
 
-  // 每行圆点色调：如果紧急扫描器标记了此 UID，则用红色 (3) / 橙色 (2)
-  // 覆盖每个发件人的柔和色。通过以 `:<uid>` 结尾的任何缓存键查找，
-  // 因为 per_uid 映射的键是 `<account_id>:<uid>`，
-  // 而收件箱列表每行不显示账户 ID。
+  // Per-row dot tint: if the urgency scanner flagged this UID, override the
+  // per-sender pastel with red (3) / orange (2). Look up by any cached key
+  // ending in `:<uid>` since the per_uid map is keyed `<account_id>:<uid>`
+  // and the inbox list doesn't surface the account id per row.
   let _unreadColor = color;
   let _unreadTitle = 'Unread';
   try {
@@ -532,7 +532,7 @@ function _createEmailItem(em) {
     </div>
   `;
 
-  // 点击发件人姓名 → 按该发件人过滤列表
+  // Click sender name → filter list to that sender
   const senderEl = item.querySelector('.email-sender-clickable');
   if (senderEl) {
     senderEl.addEventListener('click', (e) => {
@@ -543,7 +543,7 @@ function _createEmailItem(em) {
     });
   }
 
-  // 连接"非垃圾邮件"按钮
+  // Wire the "not spam" button
   const unflagBtn = item.querySelector('.email-spam-unflag');
   if (unflagBtn) {
     unflagBtn.addEventListener('click', async (e) => {
@@ -560,17 +560,17 @@ function _createEmailItem(em) {
     });
   }
 
-  // 点击打开 — 不要关闭侧边栏
+  // Click to open — do NOT close sidebar
   item.addEventListener('click', (e) => {
     if (item.dataset.swipeBlock === '1') return;
     _openEmail(em, item);
   });
 
-  // 向左滑动归档（移动端）。镜像 sidebar-layout.js 的滑动模式。
+  // Swipe left to archive (mobile). Mirrors sidebar-layout.js swipe pattern.
   if ('ontouchstart' in window) {
     let startX = 0, startY = 0, dx = 0, dy = 0, swiping = false, swiped = false;
-    const HORIZ_THRESHOLD = 70; // 触发归档的像素阈值
-    const VERT_CANCEL = 30;     // 垂直移动像素数取消滑动（视为滚动）
+    const HORIZ_THRESHOLD = 70; // px to trigger archive
+    const VERT_CANCEL = 30;     // px vertical motion cancels swipe (treat as scroll)
 
     item.addEventListener('touchstart', (e) => {
       const t = e.touches[0];
@@ -585,13 +585,13 @@ function _createEmailItem(em) {
       dx = t.clientX - startX;
       dy = t.clientY - startY;
       if (Math.abs(dy) > VERT_CANCEL) {
-        // 垂直滚动 — 取消滑动
+        // Vertical scroll — cancel swipe
         swiping = false;
         item.style.transform = '';
         return;
       }
       if (dx < 0) {
-        // 仅向左滑动进行归档；限制在 -160 以避免飞出屏幕
+        // Only swipe-left for archive; clamp at -160 so it doesn't fly off
         const offset = Math.max(dx, -160);
         item.style.transform = `translateX(${offset}px)`;
         item.style.background = `linear-gradient(to right, transparent, transparent ${100 + offset/1.6}%, var(--red) ${100 + offset/1.6}%)`;
@@ -603,7 +603,7 @@ function _createEmailItem(em) {
       swiping = false;
       item.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
       if (dx <= -HORIZ_THRESHOLD) {
-        // 触发归档 — 动画移出屏幕，抑制下一次点击
+        // Trigger archive — animate off-screen, suppress next click
         swiped = true;
         item.dataset.swipeBlock = '1';
         item.style.transform = 'translateX(-100%)';
@@ -613,7 +613,7 @@ function _createEmailItem(em) {
           delete item.dataset.swipeBlock;
         }, 200);
       } else {
-        // 弹回原位
+        // Snap back
         item.style.transform = '';
         item.style.background = '';
       }
@@ -633,7 +633,7 @@ function _createEmailItem(em) {
 async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', noteHint = '', prefilledBody = '') {
   const aiReplyMode = mode === 'ai-reply-fast' ? 'fast' : (mode === 'ai-reply-full' ? 'full' : '');
   const wantsAiReply = mode === 'ai-reply' || !!aiReplyMode;
-  // Body pre-fill from the agent's open_email_reply 工具调用 takes the
+  // Body pre-fill from the agent's open_email_reply tool call takes the
   // same insertion slot as an AI-suggested body — both land just before
   // the quoted-original block.
   let aiSuggestedBody = (typeof prefilledBody === 'string' && prefilledBody.trim()) ? prefilledBody.trim() : null;
@@ -644,7 +644,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
     // no one else to CC.
     mode = 'reply-all';
   }
-  // 在项目右侧显示漩涡旋转器（仅当从侧边栏打开时）
+  // Show whirlpool spinner on the right side of the item (only if from sidebar)
   let spinner = null;
   if (itemEl) {
     const sp = spinnerModule.createWhirlpool(16);
@@ -718,9 +718,9 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
     em.is_read = true;
     if (itemEl) itemEl.classList.remove('email-unread');
 
-    // 要在回复全部时排除的地址。优先使用完整配置的账户集合
-    //（这样多账户用户的其他邮箱也会被排除），
-    // 回退到单个活动地址。空 ⇒ 不排除。
+    // Addresses to exclude from Reply All. Prefer the full set of configured
+    // accounts (so a multi-account user's other mailboxes are excluded too),
+    // falling back to the single active address. Empty ⇒ no exclusion.
     const myAddresses = (Array.isArray(window._myEmailAddresses) && window._myEmailAddresses.length)
       ? window._myEmailAddresses
       : (window._myEmailAddress ? [window._myEmailAddress] : []);
@@ -730,16 +730,16 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
     let subjectPrefix = 'Re: ';
 
     if (mode === 'reply-all') {
-      // 构建回复全部：TO = 原始发件人，CC = 其他人（To + Cc 减去自己）
+      // Build reply-all: TO = original sender, CC = everyone else (To + Cc minus me)
       ccAddresses = buildReplyAllCc(data, myAddresses);
     } else if (mode === 'forward') {
       toAddress = '';
       subjectPrefix = 'Fwd: ';
     }
 
-    // 当主题已以 Re:/Fwd: 开头时，不要重复添加前缀。
-    // 回复的回复会产生 `Re: Re: Re: …`，这也可能破坏
-    // 某些 IMAP 服务器对很长主题行的头部解析。
+    // Don't double-prefix `Re:` / `Fwd:` when the subject already starts with one.
+    // Replies to replies were producing `Re: Re: Re: …` which can also break
+    // some IMAP servers' header parsing on very long subject lines.
     let _baseSubject = (data.subject || '').trim();
     if (subjectPrefix === 'Re: ' && /^re\s*:/i.test(_baseSubject)) subjectPrefix = '';
     else if (subjectPrefix === 'Fwd: ' && /^fwd?\s*:/i.test(_baseSubject)) subjectPrefix = '';
@@ -755,7 +755,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
     }
     content += '\n---\n';
 
-    // 以人类可读的方式格式化原始日期用于引用头部
+    // Format the original date in a human-readable way for the quote header
     let niceDate = data.date || '';
     try {
       if (data.date) {
@@ -769,9 +769,9 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
       }
     } catch (_) {}
 
-    // 纯文本正文，若无文本部分则使用剥离后的 HTML 回退。
-    // 否则，纯 HTML 邮件会导致 data.body === null/undefined，
-    // 回复文档会打开为空（data.body.split 抛出异常）。
+    // Plain-text body, with HTML fallback stripped if no text part exists.
+    // Without this, an HTML-only email gives data.body === null/undefined
+    // and the reply doc opens empty (data.body.split throws).
     let _origBody = (typeof data.body === 'string' && data.body.length) ? data.body : '';
     if (!_origBody && typeof data.body_html === 'string' && data.body_html) {
       _origBody = data.body_html
@@ -798,9 +798,9 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
       content += `\n${_origBody}`;
     } else {
       const quotedBody = _origBody.split('\n').map(l => '> ' + l).join('\n');
-      // 如果有 AI 建议正文则注入。不要前导换行 — 头部块已经以
-      // "---\n" 结尾，因此回复必须从第一行正文开始，
-      // 而不是向下空一行。
+      // Inject AI-suggested body if present. No leading newline — the header
+      // block already ends with "---\n", so the reply must start on the very
+      // first body line, not one row down.
       if (aiSuggestedBody) {
         content += `${aiSuggestedBody}\n\n`;
       } else {
@@ -824,23 +824,23 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         await _docModule.loadDocument(existingDocId);
       } else {
-        // 如果用户已有一个打开的聊天会话，则复用它，
-        // 而不是生成新会话。用户明确要求 — 在对话中打开回复
-        // 不应将他们从上下文中拉出来。
+        // If the user already has a chat session open, reuse it instead of
+        // spawning a new one. They asked for this explicitly — opening reply
+        // mid-conversation shouldn't whip them out of context.
         let activeSid = '';
         try { activeSid = sessionModule?.getCurrentSessionId?.() || ''; } catch {}
         if (!activeSid) {
-          // No chat in flight — keep the old behavior of creating a 权限范围d
+          // No chat in flight — keep the old behavior of creating a scoped
           // email-thread chat, then RE-READ the now-current session id. The
-          // POST below requires a session_id (后端 400s without one), and
+          // POST below requires a session_id (backend 400s without one), and
           // the freshly-created chat is what should own the reply draft.
           await _createEmailChat(data);
           try { activeSid = sessionModule?.getCurrentSessionId?.() || ''; } catch {}
         }
-        // 保证有一个会话 — 当没有启用的默认聊天端点时，
-        // _createEmailChat 无法创建会话，这会导致回复 POST 发送
-        // null session_id → 400。创建一个裸会话，这样无论
-        // 聊天/端点配置如何，草稿始终有归属地。
+        // Guarantee a session — _createEmailChat can't make one when there's
+        // no enabled default-chat endpoint, which left the reply POSTing a
+        // null session_id → 400. Create a bare session so the draft always
+        // has a home regardless of chat/endpoint config.
         if (!activeSid) {
           try {
             const _fd = new FormData();
@@ -862,9 +862,9 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            // 如果有的话，重用用户当前的聊天会话（这样回复草稿
-            // 属于他们刚才的聊天）；否则为 null，
-            // 由新创建的邮件聊天（上面创建的）接管。
+            // Reuse the user's current chat session if there is one (so the
+            // reply draft lives in the chat they were just in); otherwise
+            // null and the new email-chat (created above) takes over.
             session_id: activeSid || null,
             title: data.subject,
             content: content,
@@ -874,10 +874,10 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
         if (!docRes.ok) {
           const errText = await docRes.text();
           console.error('[reply-debug] POST /api/document failed', docRes.status, errText);
-          // uiModule 没有在这里静态导入 — 使用此文件其他地方
-          // 使用的动态导入模式。（之前这里引用了裸 `uiModule`，
-          // 抛出 ReferenceError，被外部 catch 吞掉了 →
-          // 回复静默地什么都没做。）
+          // uiModule isn't statically imported here — use the dynamic
+          // import pattern the rest of this file uses. (Previously this
+          // referenced a bare `uiModule`, throwing a ReferenceError that
+          // the outer catch swallowed → reply silently did nothing.)
           import('./ui.js').then(m => m.showError && m.showError('Failed to create reply draft (' + docRes.status + ')')).catch(() => {});
           return;
         }
@@ -888,8 +888,8 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
           await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
           // Use the doc dict from the POST directly — avoids a 404 race
           // when the GET fires before the new row is visible to the read
-          // connection (or when 缓存 is interfering). loadDocument's
-          // GET path can still be used as a 回退.
+          // connection (or when caching is interfering). loadDocument's
+          // GET path can still be used as a fallback.
           if (_docModule.injectFreshDoc) {
             _docModule.injectFreshDoc(doc);
           } else {
@@ -900,9 +900,9 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
     }
   } catch (e) {
     console.error('Failed to open email:', e);
-    // 显示失败信息，避免回复流程中的静默异常看起来像
-    // "什么都没发生"。动态导入 — uiModule 不是此文件中的
-    // 静态导入。
+    // Surface the failure so a silent throw in the reply flow doesn't
+    // look like "nothing happened". Dynamic import — uiModule isn't a
+    // static import in this file.
     const msg = e && e.message ? e.message : String(e);
     import('./ui.js').then(m => m.showError && m.showError('Reply failed: ' + msg)).catch(() => {});
   } finally {
@@ -955,10 +955,10 @@ function _showEmailMenu(em, anchor, itemEl) {
   setTimeout(() => document.addEventListener('click', close, true), 10);
 }
 
-// ---- 提醒子菜单（为此邮件创建带提醒的笔记）----
+// ---- Reminder submenu (creates a Note with a reminder for this email) ----
 
 function _showRemindSubmenu(em, parentDropdown) {
-  // 用时间预设替换父下拉菜单的内容
+  // Replace content of parent dropdown with time presets
   parentDropdown.innerHTML = '';
   const header = document.createElement('div');
   header.className = 'dropdown-item-compact';
@@ -1030,8 +1030,8 @@ function _showRemindSubmenu(em, parentDropdown) {
       _cleanup();
     });
     document.addEventListener('keydown', _onKey);
-    // 延迟点击外部监听器，以便打开此输入框的点击
-    // 不会立即关闭它。
+    // Defer the click-outside listener so the click that opened this
+    // input doesn't immediately close it.
     setTimeout(() => document.addEventListener('mousedown', _onDocClick, true), 50);
   });
   parentDropdown.appendChild(customItem);
@@ -1059,7 +1059,7 @@ async function _createReplyReminder(em, dueDate) {
     const { showToast } = await import('./ui.js');
     const fmt = dueDate.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     showToast(`Reminder set for ${fmt}`);
-    // 如果需要，请求通知权限
+    // Request notification permission if needed
     if ('Notification' in window && Notification.permission === 'default') {
       try { Notification.requestPermission(); } catch {}
     }
@@ -1096,11 +1096,11 @@ async function _deleteEmail(em) {
 async function _toggleDone(em, itemEl) {
   const newState = !em.is_answered;
   em.is_answered = newState;
-  if (newState) em.is_read = true; // 标记完成意味着标记已读
+  if (newState) em.is_read = true; // mark-done implies mark-read
   if (itemEl) {
     if (newState) {
       itemEl.classList.remove('email-unread');
-      // 同时删除渲染器可能添加的任何内联未读指示圆点
+      // Also drop any inline unread indicator dots the renderer may have added
       itemEl.querySelectorAll('.email-unread-dot, [data-unread-dot]').forEach(n => n.remove());
     }
     const check = itemEl.querySelector('.email-done-check');
@@ -1120,7 +1120,7 @@ async function _toggleDone(em, itemEl) {
 
 async function _createEmailChat(emailData) {
   try {
-    // 优先尝试当前会话的端点
+    // Try current session's endpoint first
     const current = sessionModule.getSessions?.().find(s => s.id === sessionModule.getCurrentSessionId?.());
     let url, model, endpointId;
     if (current && current.endpoint_url && current.model) {
@@ -1128,7 +1128,7 @@ async function _createEmailChat(emailData) {
       model = current.model;
       endpointId = current.endpoint_id;
     } else {
-      // 回退到默认聊天配置
+      // Fall back to default chat config
       const dcRes = await fetch(`${API_BASE}/api/default-chat`);
       const dc = await dcRes.json();
       url = dc.endpoint_url;
@@ -1138,9 +1138,9 @@ async function _createEmailChat(emailData) {
 
     if (url && model) {
       await sessionModule.createDirectChat(url, model, endpointId);
-      // 在聊天元数据中设置有用的标题
+      // Set a helpful title in the chat meta
       const meta = document.getElementById('current-meta');
-      if (meta) meta.textContent = t('email.email_meta_label', { subject: (emailData.subject || '').slice(0, 60) });
+      if (meta) meta.textContent = `Email: ${(emailData.subject || '').slice(0, 60)}`;
     }
   } catch (e) {
     console.error('Failed to create email chat:', e);
@@ -1149,14 +1149,14 @@ async function _createEmailChat(emailData) {
 
 async function _composeNew() {
   if (!_docModule) return;
-  // 注意：不要在此处打开面板。下面创建邮件作用域聊天可能
-  // 会切换会话，这会拆除面板 — 因此提前打开会挂载窗格，
-  // 然后被关闭，然后 injectFreshDoc 重新挂载它：可见的闪烁
-  //（文档显示一帧，然后再次滑起）。
-  // 在 injectFreshDoc 处，会话 + 文档存在之后挂载一次。
+  // NOTE: don't open the panel here. Creating the email-scoped chat below can
+  // switch sessions, which tears the panel down — so an early open would mount
+  // the pane, get closed, then injectFreshDoc remounts it: a visible flash
+  // (doc shows for a frame, then slides up again). Mount once, at injectFreshDoc,
+  // after the session + doc exist.
   try {
-    // /api/document 需要 session_id（如果为 null 返回 400），因此如果有活动聊天则复用 —
-    // the active chat if there is one — otherwise spin up an email-权限范围d
+    // /api/document requires a session_id (returns 400 if null), so reuse
+    // the active chat if there is one — otherwise spin up an email-scoped
     // chat first, same pattern the reply path uses.
     let sid = '';
     try { sid = sessionModule?.getCurrentSessionId?.() || ''; } catch (_) {}
@@ -1164,10 +1164,10 @@ async function _composeNew() {
       await _createEmailChat({ subject: 'New Email' });
       try { sid = sessionModule?.getCurrentSessionId?.() || ''; } catch (_) {}
     }
-    // 保证有一个会话 — 当没有启用的默认聊天端点时，
-    // _createEmailChat 无法创建会话，这导致撰写 POST 发送 null
-    // session_id → 400（草稿静默地从未出现）。与回复流程使用的
-    // 裸会话回退相同。
+    // Guarantee a session — _createEmailChat can't make one when there's no
+    // enabled default-chat endpoint, which left compose POSTing a null
+    // session_id → 400 (the draft silently never appeared). Same bare-session
+    // fallback the reply flow uses.
     if (!sid) {
       try {
         const _fd = new FormData();
@@ -1178,7 +1178,7 @@ async function _composeNew() {
           const _sdata = await _sres.json();
           if (_sdata && _sdata.id) {
             sid = _sdata.id;
-            // 注意：故意不在此处调用 loadSessions()/selectSession()。
+            // NOTE: intentionally do NOT loadSessions()/selectSession() here.
             // Re-selecting the (empty) session re-renders the chat and flashes
             // the welcome splash for a frame before the draft opens — the
             // "splash flickers like crazy then email opens" bug. The doc only
@@ -1210,8 +1210,8 @@ async function _composeNew() {
     const doc = await res.json();
     if (doc.id) {
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-      // 直接使用 POST 返回的 doc 字典，避免在单独读连接上
-      // 访问刚创建的文档时遇到的 GET 404 竞态。
+      // Use the doc dict from POST directly to avoid the GET 404 race that
+      // hits a freshly-created doc on a separate read connection.
       if (_docModule.injectFreshDoc) {
         _docModule.injectFreshDoc(doc);
       } else {

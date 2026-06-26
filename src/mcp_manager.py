@@ -1,8 +1,8 @@
 """
 mcp_manager.py
 
-管理 MCP（模型上下文协议）工具服务器的连接。
-每个服务器暴露的工具可供 agent loop 使用。
+Manages connections to MCP (Model Context Protocol) tool servers.
+Each server exposes tools that are made available to the agent loop.
 """
 
 import json
@@ -16,7 +16,7 @@ from src.runtime_paths import get_app_root
 logger = logging.getLogger(__name__)
 
 def _format_mcp_connection_error(name: str, command: str = "", args: Optional[List[str]] = None, error: Exception = None) -> str:
-    """返回面向用户的 MCP 连接错误消息。"""
+    """Return a user-actionable MCP connection error message."""
     args = args or []
     raw_error = str(error) if error else "Unknown error"
     command_line = " ".join([command or "", *args]).strip()
@@ -33,20 +33,20 @@ def _format_mcp_connection_error(name: str, command: str = "", args: Optional[Li
     return raw_error
 
 
-# 将不受信任的 MCP 工具 schema 渲染到 agent 提示词中的上限（issue #2660）。
-# MCP 服务器是第三方/用户添加的，因此字段名和参数数量是
-# 不受信任的输入 — 限制它们以防异常或恶意 schema 扭曲提示词。
-_MCP_PARAM_MAX = 12   # 每个工具最多渲染的参数数
-_MCP_TOKEN_MAX = 40   # 每个渲染的名称/类型 token 的最大字符数
-_MCP_HINT_MAX = 300   # 整个提示的总长度上限
+# Caps for rendering untrusted MCP tool schemas into the agent prompt (issue #2660).
+# MCP servers are third-party/user-added, so field names and parameter counts are
+# untrusted input — bound them so an odd or hostile schema cannot distort the prompt.
+_MCP_PARAM_MAX = 12   # max params rendered per tool
+_MCP_TOKEN_MAX = 40   # max chars per rendered name / type token
+_MCP_HINT_MAX = 300   # total-length backstop for the whole hint
 
 
 def _sanitize_schema_token(value: Any, limit: int = _MCP_TOKEN_MAX) -> str:
-    """使不受信任的 JSON-Schema token 可以安全拼接到提示词中。
+    """Make an untrusted JSON-Schema token safe to splice into the prompt.
 
-    将控制字符/换行符替换为空格，压缩空白，并对结果进行长度限制，
-    以防止异常的字段名或类型注入换行符或无限延伸。
-    正常的短标识符保持不变。
+    Replaces control chars / newlines with a space, collapses whitespace, and
+    length-caps the result, so a weird field name or type cannot inject newlines
+    or run on. Normal short identifiers pass through unchanged.
     """
     text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value))
     text = re.sub(r"\s+", " ", text).strip()
@@ -56,16 +56,16 @@ def _sanitize_schema_token(value: Any, limit: int = _MCP_TOKEN_MAX) -> str:
 
 
 def _format_mcp_params(input_schema: Any) -> str:
-    """将 MCP 工具的 JSON-Schema 输入渲染为紧凑的提示文本。
+    """Render an MCP tool's JSON-Schema inputs as a compact prompt hint.
 
     Without this the agent only sees a tool's name + description and has to
     guess its arguments (issue #2509). Produces e.g.
-    ` Args (JSON): {"path": string (required), "limit": integer}` — 名称、
+    ` Args (JSON): {"path": string (required), "limit": integer}` — names,
     coarse types, and required-ness, kept short so it stays prompt-friendly.
     Returns "" when there are no parameters.
 
-    MCP 服务器是第三方的，因此名称/类型经过清理，且参数
-    数量和总长度有上限 (issue #2660)；普通 schema 不受影响。
+    MCP servers are third-party, so names/types are sanitized and the parameter
+    count + total length are capped (issue #2660); normal schemas are unaffected.
     """
     if not isinstance(input_schema, dict):
         return ""
@@ -92,10 +92,10 @@ def _format_mcp_params(input_schema: Any) -> str:
     return hint
 
 
-# 表示只读/检查操作的工具名前缀。当服务器未提供 readOnlyHint 时，
-# 用于在计划模式下分类 MCP 工具。这些是前缀而非完整单词（通过
-# str.startswith 匹配），因此像 "summar" 这样的词干可以
-# 覆盖 "summarise"/"summarize"/"summary"。
+# Tool-name prefixes that denote a read-only/inspection operation. Used to
+# classify MCP tools for plan mode when the server provides no readOnlyHint.
+# These are PREFIXES, not whole words (matched via str.startswith below), so a
+# stem like "summar" intentionally covers "summarise"/"summarize"/"summary".
 _MCP_READONLY_VERBS = (
     "list", "get", "read", "search", "fetch", "query", "find", "describe",
     "show", "view", "lookup", "count", "status", "info", "inspect", "summar",
@@ -103,15 +103,15 @@ _MCP_READONLY_VERBS = (
 
 
 def mcp_tool_is_readonly(tool: Dict) -> bool:
-    """判断 MCP 工具是否安全（非修改操作），用于计划模式。
+    """Classify an MCP tool as safe (non-mutating) for plan mode.
 
-    优先使用服务器自身的标注（readOnlyHint / destructiveHint）。缺失时，
+    Prefer the server's own annotations (readOnlyHint / destructiveHint). When
     absent, fall back to a tool-name verb heuristic, and FAIL CLOSED (treat as
     write) for anything that doesn't clearly read — plan mode must not run a
     write tool just because its intent is ambiguous.
     """
     ann = tool.get("annotations")
-    # annotations 可能是 dict 或 pydantic model
+    # annotations may be a dict or a pydantic model
     read_hint = None
     destructive = None
     if ann is not None:
@@ -125,26 +125,26 @@ def mcp_tool_is_readonly(tool: Dict) -> bool:
         return True
     if read_hint is False or destructive is True:
         return False
-    # 无可用的 hint — 基于工具名称前缀的启发式规则。
+    # No usable hint — heuristic on the tool name's leading verb.
     name = (tool.get("name") or "").lower()
     return name.startswith(_MCP_READONLY_VERBS)
 
 
 class McpManager:
-    """管理 MCP 服务器连接和工具路由。"""
+    """Manages MCP server connections and tool routing."""
 
     def __init__(self):
-        # server_id -> 连接状态
+        # server_id -> connection state
         self._connections: Dict[str, Dict[str, Any]] = {}
-        # server_id -> 工具 schema 列表
+        # server_id -> list of tool schemas
         self._tools: Dict[str, List[Dict]] = {}
         # server_id -> MCP ClientSession
         self._sessions: Dict[str, Any] = {}
-        # server_id -> 退出栈（用于清理）
+        # server_id -> exit stack (for cleanup)
         self._stacks: Dict[str, Any] = {}
-        # server_id -> 后台连接任务（HTTP 传输 / OAuth）
+        # server_id -> background connect task (HTTP transport / OAuth)
         self._connect_tasks: Dict[str, Any] = {}
-        # 跟踪工具/连接更新，用于 RAG 索引 / 提示词缓存
+        # Tracking updates to tools/connections for RAG indexing / prompt cache
         self._generation = 0
 
     async def connect_server(
@@ -157,7 +157,7 @@ class McpManager:
         env: Optional[Dict[str, str]] = None,
         url: Optional[str] = None,
     ) -> bool:
-        """通过 stdio、SSE 或 Streamable HTTP 传输连接到 MCP 服务器。"""
+        """Connect to an MCP server via stdio, SSE, or Streamable HTTP transport."""
         try:
             if transport == "stdio":
                 res = await self._connect_stdio(server_id, name, command, args or [], env or {})
@@ -179,7 +179,7 @@ class McpManager:
             return False
 
     async def _connect_stdio(self, server_id: str, name: str, command: str, args: List[str], env: Dict[str, str]) -> bool:
-        """通过 stdio 传输连接到 MCP 服务器。"""
+        """Connect to an MCP server via stdio transport."""
         try:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
@@ -199,7 +199,7 @@ class McpManager:
 
                 await session.initialize()
 
-                # 发现工具
+                # Discover tools
                 tools_result = await session.list_tools()
             except Exception:
                 await stack.aclose()
@@ -210,18 +210,18 @@ class McpManager:
                     "name": tool.name,
                     "description": tool.description or "",
                     "input_schema": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
-                    # MCP 工具标注（readOnlyHint / destructiveHint）驱动
-                    # 计划模式的只读门控。许多服务器不提供此标注，因此
-                    # 我们在 mcp_tool_is_readonly() 中回退到名称启发式规则。
+                    # MCP tool annotations (readOnlyHint / destructiveHint) drive
+                    # plan-mode read-only gating. Absent on many servers, so we
+                    # fall back to a name heuristic in mcp_tool_is_readonly().
                     "annotations": getattr(tool, 'annotations', None),
                 })
 
             self._sessions[server_id] = session
             self._stacks[server_id] = stack
             self._tools[server_id] = tools
-            # 从环境变量中提取身份提示（例如邮箱地址、API 名称），
-            # 以便工具描述能够区分同一 MCP 服务器的多个实例
-            # （例如两个邮箱账户）。
+            # Extract identity hints from env vars (e.g. email address, API name)
+            # so tool descriptions can distinguish between multiple instances of
+            # the same MCP server (e.g. two email accounts).
             identity_hints = []
             for k, v in (env or {}).items():
                 k_lower = k.lower()
@@ -246,7 +246,7 @@ class McpManager:
             return False
 
     async def _connect_sse(self, server_id: str, name: str, url: str) -> bool:
-        """通过 SSE 传输连接到 MCP 服务器。"""
+        """Connect to an MCP server via SSE transport."""
         try:
             from mcp import ClientSession
             from mcp.client.sse import sse_client
@@ -260,7 +260,7 @@ class McpManager:
 
                 await session.initialize()
 
-                # 发现工具
+                # Discover tools
                 tools_result = await session.list_tools()
             except Exception:
                 await stack.aclose()
@@ -271,9 +271,9 @@ class McpManager:
                     "name": tool.name,
                     "description": tool.description or "",
                     "input_schema": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
-                    # MCP 工具标注（readOnlyHint / destructiveHint）驱动
-                    # 计划模式的只读门控。许多服务器不提供此标注，因此
-                    # 我们在 mcp_tool_is_readonly() 中回退到名称启发式规则。
+                    # MCP tool annotations (readOnlyHint / destructiveHint) drive
+                    # plan-mode read-only gating. Absent on many servers, so we
+                    # fall back to a name heuristic in mcp_tool_is_readonly().
                     "annotations": getattr(tool, 'annotations', None),
                 })
 
@@ -296,9 +296,9 @@ class McpManager:
             return False
 
     async def _start_http_connect(self, server_id: str, name: str, url: str, wait: float = 8.0) -> bool:
-        """在后台启动 Streamable HTTP 连接。在 `wait` 秒内返回：
-        如果连接成功（缓存 token 路径）返回 True，否则
-        流程正在等待浏览器授权，状态变为 'needs_auth'。"""
+        """Begin a Streamable HTTP connect in the background. Returns within
+        `wait` seconds: True if it connected (cached-token path), otherwise the
+        flow is awaiting browser authorization and status becomes 'needs_auth'."""
         import asyncio
         self._connections[server_id] = {"status": "connecting", "name": name, "transport": "http"}
         task = asyncio.create_task(self._connect_http(server_id, name, url))
@@ -310,9 +310,9 @@ class McpManager:
             except Exception as e:
                 self._connections[server_id] = {"status": "error", "error": str(e), "name": name}
                 return False
-        # 仍在运行 → 要么等待授权，要么 discovery/DCR 仍在进行中。
-        # 如果 _on_redirect 已经发布了 needs_auth+auth_url，保持不变；
-        # 否则标记 needs_auth（auth_url 在触发后填入）。
+        # Still running → either awaiting authorization, or discovery/DCR is
+        # still in flight. If _on_redirect already published needs_auth+auth_url,
+        # leave it; otherwise mark needs_auth (auth_url filled in once it fires).
         from src.mcp_oauth import pop_auth_url
         cur = self._connections.get(server_id, {})
         if cur.get("status") != "needs_auth":
@@ -323,7 +323,7 @@ class McpManager:
         return False
 
     async def _connect_http(self, server_id: str, name: str, url: str) -> bool:
-        """连接到 Streamable HTTP MCP 服务器（含自动 OAuth）。"""
+        """Connect to a Streamable HTTP MCP server (with automatic OAuth)."""
         try:
             from mcp import ClientSession
             from mcp.client.streamable_http import streamablehttp_client
@@ -331,8 +331,8 @@ class McpManager:
             from src.mcp_oauth import build_provider, clear_auth_url
 
             def _on_redirect(auth_url):
-                # 一旦 URL 已知就发布 needs_auth，与 discovery/DCR 耗时无关
-                # （可能超出有界启动等待时间）。
+                # Publish needs_auth the moment the URL is known, independent of
+                # how long discovery/DCR took (may exceed the bounded start wait).
                 self._connections[server_id] = {
                     "status": "needs_auth", "name": name, "transport": "http",
                     "auth_url": auth_url,
@@ -363,7 +363,7 @@ class McpManager:
             }
             clear_auth_url(server_id)
             # Tools changed (this can complete after connect_server already
-            # returned, via the background OAuth 流程), so bump the generation
+            # returned, via the background OAuth flow), so bump the generation
             # to invalidate the tool-prompt cache.
             self._generation += 1
             logger.info(f"MCP server connected: {name} ({server_id}) - {len(tools)} tools via http")
@@ -378,9 +378,9 @@ class McpManager:
             return False
 
     async def disconnect_server(self, server_id: str):
-        """断开 MCP 服务器连接。"""
-        # 取消任何正在进行的 HTTP/OAuth 后台连接，阻止其
-        # 为可能正在被删除的服务器发布状态。
+        """Disconnect from an MCP server."""
+        # Cancel any in-flight HTTP/OAuth background connect so it stops
+        # publishing status for a server that may be getting deleted.
         task = self._connect_tasks.pop(server_id, None)
         if task is not None and not task.done():
             task.cancel()
@@ -404,13 +404,13 @@ class McpManager:
         logger.info(f"MCP server disconnected: {server_id}")
 
     async def disconnect_all(self):
-        """断开所有 MCP 服务器连接。"""
+        """Disconnect from all MCP servers."""
         ids = list(self._sessions.keys())
         for sid in ids:
             await self.disconnect_server(sid)
 
     async def connect_all_enabled(self):
-        """连接数据库中所有已启用的 MCP 服务器。"""
+        """Connect to all enabled MCP servers from the database."""
         from src.database import McpServer, SessionLocal
 
         db = SessionLocal()
@@ -432,9 +432,9 @@ class McpManager:
             db.close()
 
     async def call_tool(self, qualified_name: str, arguments: Dict) -> Dict:
-        """通过限定名称 (mcp__{server_id}__{tool_name}) 调用 MCP 工具。
+        """Call an MCP tool by its qualified name (mcp__{server_id}__{tool_name}).
 
-        返回与 agent_tools 格式兼容的结果字典。
+        Returns a result dict compatible with agent_tools format.
         """
         parts = qualified_name.split("__", 2)
         if len(parts) != 3 or parts[0] != "mcp":
@@ -450,7 +450,7 @@ class McpManager:
         try:
             result = await self._do_call(session, tool_name, arguments)
         except Exception as e:
-            # 为子进程可能已崩溃的内置服务器自动重连
+            # Auto-reconnect for builtin servers whose subprocess may have died
             if self.is_builtin(server_id):
                 logger.warning(f"MCP call failed for {qualified_name}, attempting reconnect: {e}")
                 reconnected = await self._reconnect_builtin(server_id)
@@ -474,7 +474,7 @@ class McpManager:
         return result
 
     async def _do_call(self, session, tool_name: str, arguments: Dict) -> Dict:
-        """执行单个 MCP 工具调用并返回结果字典。"""
+        """Execute a single MCP tool call and return result dict."""
         result = await session.call_tool(tool_name, arguments)
         output_parts = []
         images = []
@@ -482,7 +482,7 @@ class McpManager:
             if hasattr(content, 'text'):
                 output_parts.append(content.text)
             elif getattr(content, 'type', '') == 'image' and hasattr(content, 'data'):
-                # 图像内容（例如 Playwright 截图）
+                # Image content (e.g. Playwright screenshots)
                 mime = getattr(content, 'mimeType', 'image/png')
                 images.append({"data": content.data, "mimeType": mime})
                 output_parts.append(f"[Screenshot captured ({mime})]")
@@ -502,7 +502,7 @@ class McpManager:
         return result_dict
 
     async def _reconnect_builtin(self, server_id: str) -> bool:
-        """销毁并重新连接已崩溃的内置 MCP 服务器。"""
+        """Tear down and reconnect a crashed builtin MCP server."""
         import sys
         from src.builtin_mcp import _BUILTIN_SERVERS
 
@@ -513,7 +513,7 @@ class McpManager:
         base_dir = get_app_root()
         script_path = os.path.join(base_dir, script_rel)
 
-        # 清理旧连接
+        # Clean up old connection
         await self.disconnect_server(server_id)
 
         try:
@@ -533,15 +533,15 @@ class McpManager:
             return False
 
     def get_all_openai_schemas(self, disabled_map: Optional[Dict[str, set]] = None) -> List[Dict]:
-        """以 OpenAI 函数调用格式返回所有 MCP 工具。
+        """Return all MCP tools in OpenAI function-calling format.
 
-        工具名以 mcp__{server_id}__{tool_name} 命名空间命名。
-        disabled_map: 可选的 {server_id: set_of_disabled_tool_names} 用于过滤。
+        Tool names are namespaced as mcp__{server_id}__{tool_name}.
+        disabled_map: optional {server_id: set_of_disabled_tool_names} to filter out.
         """
         schemas = []
         for server_id, tools in self._tools.items():
-            # 跳过内置 Python 服务器 — 它们使用 code-block 工具格式
-            # 但包含基于 NPX 的内置服务器（如 browser），它们需要函数调用
+            # Skip builtin Python servers — they use the code-block tool format
+            # But include NPX-based builtins (like browser) which need function calling
             if self.is_builtin(server_id) and server_id != "builtin_browser":
                 continue
             conn = self._connections.get(server_id, {})
@@ -568,7 +568,7 @@ class McpManager:
         return schemas
 
     def get_all_tools(self, disabled_map: Optional[Dict[str, set]] = None) -> List[Dict]:
-        """返回包含服务器信息的所有已发现工具的扁平列表。"""
+        """Return a flat list of all discovered tools with server info."""
         result = []
         for server_id, tools in self._tools.items():
             conn = self._connections.get(server_id, {})
@@ -586,13 +586,13 @@ class McpManager:
         return result
 
     def plan_mode_blocked_mcp(self) -> Tuple[Dict[str, Set[str]], Set[str]]:
-        """计划模式：阻止所有非明确只读的 MCP 工具。
+        """Plan mode: block every MCP tool that isn't clearly read-only.
 
-        返回 (disabled_map, qualified_names):
-          - disabled_map: {server_id: {tool_name, ...}} 隐藏写入工具不让其
-            出现在提示词/schema 中（合并到现有的 mcp_disabled_map）。
-          - qualified_names: {"mcp__<server>__<tool>", ...} 用于在
-            execute_tool_block 中进行运行时拒绝（匹配限定名称）。
+        Returns (disabled_map, qualified_names):
+          - disabled_map: {server_id: {tool_name, ...}} to hide write tools from
+            the prompt/schemas (merged into the existing mcp_disabled_map).
+          - qualified_names: {"mcp__<server>__<tool>", ...} for runtime rejection
+            in execute_tool_block (which matches the qualified name).
         """
         disabled_map: Dict[str, Set[str]] = {}
         qualified: Set[str] = set()
@@ -604,7 +604,7 @@ class McpManager:
         return disabled_map, qualified
 
     def is_builtin(self, server_id: str) -> bool:
-        """检查服务器是否为内置（自动注册）服务器。"""
+        """Check if a server is a built-in (auto-registered) server."""
         return server_id.startswith("builtin_") or server_id in {
             "image_gen",
             "memory",
@@ -613,18 +613,18 @@ class McpManager:
         }
 
     def get_server_status(self, server_id: str) -> Dict:
-        """获取服务器的连接状态。"""
+        """Get connection status for a server."""
         return self._connections.get(server_id, {"status": "disconnected"})
 
     def get_all_statuses(self) -> Dict[str, Dict]:
-        """获取所有服务器的连接状态。"""
+        """Get connection statuses for all servers."""
         return dict(self._connections)
 
     _cached_prompt_desc = None
     _cached_prompt_desc_key = None
 
     def get_tool_descriptions_for_prompt(self, disabled_map: Optional[Dict[str, set]] = None) -> str:
-        """生成用于 agent 系统提示词的 MCP 工具描述文本。已缓存。"""
+        """Generate text describing MCP tools for the agent system prompt. Cached."""
         cache_key = (
             frozenset((k, frozenset(v)) for k, v in (disabled_map or {}).items()),
             len(self._tools),
@@ -639,8 +639,8 @@ class McpManager:
         lines = ["\n\nYou also have access to external MCP tool servers. These tools are called via native function calling:"]
         by_server = {}
         for t in tools:
-            # 跳过内置 Python 服务器 — 它们已在 agent 提示词中
-            # 但包含基于 NPX 的内置服务器（如 browser），它们不是硬编码的
+            # Skip builtin Python servers — they're already in the agent prompt
+            # But include NPX-based builtins (like browser) which aren't hardcoded
             if self.is_builtin(t["server_id"]) and t["server_id"] != "builtin_browser":
                 continue
             if t.get("is_disabled"):
@@ -654,17 +654,17 @@ class McpManager:
             return ""
 
         for server_name, server_tools in by_server.items():
-            # 包含身份信息（如邮箱地址），如果可用
+            # Include identity (e.g. email address) if available
             sid = server_tools[0]["server_id"] if server_tools else ""
             identity = self._connections.get(sid, {}).get("identity", "")
             label = f"{server_name} ({identity})" if identity else server_name
             lines.append(f"\n**{label}:**")
             for t in server_tools:
-                # 截断过长的描述
+                # Truncate long descriptions
                 desc = t['description'][:120] + '...' if len(t['description']) > 120 else t['description']
                 # Include the tool's declared inputs so the model calls it with
                 # real argument names instead of guessing from the description
-                # 而不是仅根据描述猜测 (issue #2509)。
+                # alone (issue #2509).
                 args_hint = _format_mcp_params(t.get("input_schema"))
                 lines.append(f"  - {t['qualified_name']}: {desc}{args_hint}")
 

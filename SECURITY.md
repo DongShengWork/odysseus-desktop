@@ -1,8 +1,8 @@
-# 安全策略
+# Security Policy
 
 Odysseus is a self-hosted AI workspace with privileged local capabilities. Please do not run it as a public, unauthenticated service.
 
-## 支持的版本
+## Supported Versions
 
 Security fixes are handled on the default branch until formal releases are cut.
 

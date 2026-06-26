@@ -1,16 +1,16 @@
 # src/visual_report.py
 """
-从深度研究结果生成自包含、带样式的 HTML 页面。
+Generate a self-contained, styled HTML page from deep research results.
 
-将 DeepResearcher 生成的 markdown 报告、来源和统计数据
-包装成一个具有编辑质量的 HTML 文档，包含：
-- 系统/本地字体，不使用远程字体提供商
-- 通过 prefers-color-scheme 实现深色/浅色主题
-- 带有动画渐变的 Hero 区域 + 可选的 Hero 图片
-- 章节之间的内联 OG 图片
-- 从标题自动生成目录
-- 可折叠的紧凑来源列表
-- 打印/分享工具栏
+Takes the markdown report, sources, and stats produced by DeepResearcher
+and wraps them in an editorial-quality HTML document with:
+- System/local typography, no remote font provider
+- Dark/light theme via prefers-color-scheme
+- Hero section with animated gradient + optional hero image
+- Inline OG images between sections
+- Auto-generated table of contents from headings
+- Collapsible compact sources list
+- Print/Share toolbar
 """
 import html
 import json
@@ -29,12 +29,12 @@ import nh3
 
 logger = logging.getLogger(__name__)
 
-# 在研究报告 HTML 中允许的标签/属性。从 nh3 的
-# 安全默认值开始（丢弃 <script>、内联事件处理程序和 javascript:
-# URL），并仅添加回报告本身发出的格式化标签：
-# 可折叠的原始发现块（<details>/<summary>）、
-# 目录的标题锚点（id）、代码高亮类、表格对齐，以及
-# _md_to_html 放在外部链接上的 target/rel。
+# Tags/attributes permitted in rendered research-report HTML. Starts from nh3's
+# safe defaults (which drop <script>, inline event handlers, and javascript:
+# URLs) and adds back only the formatting the report itself emits: the
+# collapsible raw-findings block (<details>/<summary>), heading anchors for the
+# table of contents (id), codehilite classes, table alignment, and the
+# target/rel that _md_to_html puts on external links.
 _REPORT_ALLOWED_TAGS = set(nh3.ALLOWED_TAGS) | {"details", "summary"}
 _REPORT_ALLOWED_ATTRS = {k: set(v) for k, v in nh3.ALLOWED_ATTRIBUTES.items()}
 for _h in ("h1", "h2", "h3", "h4", "h5", "h6"):
@@ -47,17 +47,17 @@ _REPORT_ALLOWED_ATTRS.setdefault("a", set()).update({"href", "title", "target", 
 _REPORT_ALLOWED_ATTRS.setdefault("img", set()).update({"src", "alt", "title"})
 
 # ---------------------------------------------------------------------------
-# 辅助函数
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _autolink_urls(md_text: str) -> str:
-    """处理前将裸 URL 转换为 markdown 链接。
+    """Convert bare URLs to markdown links before processing.
 
-    跳过已经在 markdown 链接语法 [text](url) 中的 URL。
+    Skips URLs already inside markdown link syntax [text](url).
     """
     if not isinstance(md_text, str):
         return md_text
-    # 匹配不在 ](...) 中的裸 URL
+    # Match bare URLs not already inside ](...)
     return re.sub(
         r'(?<!\]\()(?<!\()(https?://[^\s\)<>]+)',
         r'[\1](\1)',
@@ -66,11 +66,11 @@ def _autolink_urls(md_text: str) -> str:
 
 
 def _md_to_html(md_text: str) -> str:
-    """将 markdown 转换为支持常用扩展的 HTML。
+    """Convert markdown to HTML with common extensions.
 
     Research-report markdown is assembled from LLM output over crawled web
     pages (untrusted content), and report pages are served under a relaxed
-    报告页面在宽松的 `script-src 'unsafe-inline'` CSP 下提供服务。
+    `script-src 'unsafe-inline'` CSP. python-markdown passes raw HTML through
     verbatim, so the rendered output is allowlist-sanitized to strip any
     <script>/inline-event-handler/javascript: markup before it reaches the page.
     """
@@ -83,14 +83,14 @@ def _md_to_html(md_text: str) -> str:
             "toc": {"marker": "", "toc_depth": "2-3"},
         },
     )
-    # 使外部链接在新标签页中打开
+    # Make external links open in new tab
     result = re.sub(
         r'<a href="(https?://)',
         r'<a target="_blank" rel="noopener noreferrer" href="\1',
         result,
     )
-    # 净化：报告内容不受信任，且报告 CSP 允许内联
-    # 脚本，因此剥离活动内容但保留上述格式。
+    # Sanitize: report content is untrusted and the report CSP allows inline
+    # scripts, so strip active content while keeping the formatting above.
     result = nh3.clean(
         result,
         tags=_REPORT_ALLOWED_TAGS,
@@ -101,7 +101,7 @@ def _md_to_html(md_text: str) -> str:
 
 
 def _extract_headings(md_text: str) -> List[Dict[str, str]]:
-    """从 markdown 中提取 h2/h3 标题用于目录。"""
+    """Pull h2/h3 headings from markdown for table of contents."""
     if not isinstance(md_text, str):
         return []
     headings = []
@@ -143,7 +143,7 @@ def _extract_headings(md_text: str) -> List[Dict[str, str]]:
 
 
 def _apply_heading_ids(report_html: str, headings: List[Dict[str, str]]) -> str:
-    """强制渲染的 h2/h3 ID 与生成的侧边栏链接匹配。"""
+    """Force rendered h2/h3 IDs to match the generated sidebar links."""
     if not headings:
         return report_html
 
@@ -167,9 +167,9 @@ def _apply_heading_ids(report_html: str, headings: List[Dict[str, str]]) -> str:
     return str(soup)
 
 
-# Overlay buttons shown on each 镜像: reroll (swap for the next unused
-# scraped 镜像) + hide (remove and skip on future renders). Reroll is
-# wired up in the page script using the embedded spare-镜像 pool.
+# Overlay buttons shown on each image: reroll (swap for the next unused
+# scraped image) + hide (remove and skip on future renders). Reroll is
+# wired up in the page script using the embedded spare-image pool.
 _IMG_OVERLAY_BTNS = (
     '<button class="img-reroll-btn" type="button" title="Swap for another image">'
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>'
@@ -181,10 +181,10 @@ _IMG_OVERLAY_BTNS = (
 
 
 def _inject_images(report_html: str, images: List[str]) -> Tuple[str, int]:
-    """在 h2 章节之间插入 OG 图片作为 figure。
+    """Insert OG images between h2 sections as figures.
 
-    返回 (html, consumed)，其中 ``consumed`` 是 ``images`` 中
-    实际被放置的数量 — 其余成为 reroll 的备用池。
+    Returns (html, consumed) where ``consumed`` is how many of ``images``
+    were actually placed — the rest become the spare pool for reroll.
     """
     if not images:
         return report_html, 0
@@ -194,7 +194,7 @@ def _inject_images(report_html: str, images: List[str]) -> Tuple[str, int]:
     if not h2_positions:
         return report_html, 0
 
-    # Insert an 镜像 after every 2nd heading (skip first heading = title)
+    # Insert an image after every 2nd heading (skip first heading = title)
     img_idx = 0
     insert_after = h2_positions[1::2]  # every 2nd h2
     # Work backwards to preserve positions
@@ -1651,7 +1651,7 @@ body.category-product .content h3 + table {
 """,
     }
     # Always emit the per-category palette block when ANY category is set —
-    # it contains body.category-X 权限范围d rules so it only re-skins the page
+    # it contains body.category-X scoped rules so it only re-skins the page
     # for the matching category. The legacy `styles[category]` block adds
     # structural CSS specific to that one type.
     return palettes + styles.get(category, "")
@@ -1745,7 +1745,7 @@ def generate_visual_report(
     headings = _extract_headings(report_markdown)
     report_html = _apply_heading_ids(report_html, headings)
 
-    # Collect all OG 镜像s from sources (skip icons, tiny 镜像s, known junk)
+    # Collect all OG images from sources (skip icons, tiny images, known junk)
     _IMAGE_BLOCKLIST = {
         "cdn.shopify.com/s/files/1/0179/4388/7926/files/icon.png",
     }
@@ -1762,7 +1762,7 @@ def generate_visual_report(
             _seen_images.add(img)
             all_images.append(img)
 
-    # Hero 镜像 = first available. data-img-url drives the per-镜像 hide
+    # Hero image = first available. data-img-url drives the per-image hide
     # button rendered by the script at the bottom of the page.
     hero_image_html = ""
     if all_images:
@@ -1785,14 +1785,14 @@ def generate_visual_report(
             )
             report_html = f'<div class="quick-links-bar">{pills}</div>\n' + report_html
 
-    # 注入 remaining 镜像s between sections. Whatever isn't placed (hero
+    # Inject remaining images between sections. Whatever isn't placed (hero
     # took [0], sections took the next `consumed`) becomes the spare pool the
-    # reroll button draws from to swap out an irrelevant 镜像 in-page.
+    # reroll button draws from to swap out an irrelevant image in-page.
     section_pool = all_images[1:]
     report_html, _consumed = _inject_images(report_html, section_pool)
     spare_images = section_pool[_consumed:]
 
-    # 构建 TOC
+    # Build TOC
     toc_lines = []
     for h in headings:
         depth_class = f"depth-{h['level']}"
@@ -1801,7 +1801,7 @@ def generate_visual_report(
         )
     toc_html = "\n      ".join(toc_lines) if toc_lines else ""
 
-    # 构建 stats bar
+    # Build stats bar
     stat_items = []
     for key, label in [("Duration", "Duration"), ("Rounds", "Rounds"), ("Queries", "Queries"), ("URLs", "URLs Analyzed"), ("Model", "Model"), ("Search", "Search")]:
         val = stats.get(key)
@@ -1811,7 +1811,7 @@ def generate_visual_report(
             )
     stats_html = "\n  ".join(stat_items)
 
-    # 构建 sources panel — compact collapsible list
+    # Build sources panel — compact collapsible list
     sources_html = ""
     if sources:
         items = []
@@ -1843,7 +1843,7 @@ def generate_visual_report(
 
     timestamp = datetime.now().strftime("%B %d, %Y at %H:%M")
 
-    # 构建 description for OG/meta tags (first 160 chars of 纯文本)
+    # Build description for OG/meta tags (first 160 chars of plain text)
     desc_text = re.sub(r'[#*_\[\]()]', '', report_markdown)[:160].strip()
     og_image_meta = ""
     if all_images:
@@ -1866,8 +1866,8 @@ def generate_visual_report(
             '</div>'
         )
 
-    # "Restore hidden 镜像s" toolbar button — only render if there are any
-    # hidden 镜像s on this research AND we have a session_id (needed for
+    # "Restore hidden images" toolbar button — only render if there are any
+    # hidden images on this research AND we have a session_id (needed for
     # the POST endpoint).
     restore_btn_html = ""
     if session_id and hidden_images_set:

@@ -1,4 +1,4 @@
-"""诊断路由 — /api/db/stats、/api/rag/stats、/api/test/youtube、/api/test-research。"""
+"""Diagnostics routes — /api/db/stats, /api/rag/stats, /api/test/youtube, /api/test-research."""
 
 import logging
 import os
@@ -38,7 +38,7 @@ def setup_diagnostics_routes(
             if not os.path.exists(log_file):
                 return {"status": "success", "logs": []}
 
-            # Safe tail read of the 日志文件 (max 5MB via rotation)
+            # Safe tail read of the log file (max 5MB via rotation)
             with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
 

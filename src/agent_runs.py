@@ -1,4 +1,4 @@
-"""独立的 agent-run 管理器。
+"""Detached agent-run manager.
 
 Keeps an agent/chat stream running server-side after the SSE client disconnects
 (tab close, navigate away, refresh). The streaming generator is drained by a
@@ -11,8 +11,8 @@ completion, so reopening the session shows the finished result even if nobody
 was connected when it finished. Reconnecting mid-run replays the buffer + streams
 live (pick up where it is).
 
-持久化范围：内存内，只要服务端进程在运行就存活（标签页关闭/导航/刷新）。
-不能承受服务端重启。
+Durability scope: in-memory, survives as long as the server process runs (tab
+close / navigation / refresh). It does NOT survive a server restart.
 """
 import asyncio
 import json
@@ -43,7 +43,7 @@ _EVICT_GRACE_S = 180
 
 
 def _publish(run: _Run, ev: str) -> None:
-    """追加一条 SSE 事件并扇出给每个直播订阅者。"""
+    """Append one SSE event and fan it out to every live subscriber."""
     run.buffer.append(ev)
     seq = len(run.buffer) - 1
     for q in list(run.subscribers):
@@ -110,8 +110,8 @@ async def _drain(session_id: str, agen: AsyncGenerator[str, None],
             run.status = "done"
     except asyncio.CancelledError:
         run.status = "stopped"
-            # 让包装生成器自己的 CancelledError 处理器运行（它保存
-            # 部分响应到 session）。
+        # Let the wrapped generator's own CancelledError handler run (it saves
+        # the partial response to the session).
         try:
             await agen.aclose()
         except Exception:
@@ -132,15 +132,15 @@ async def _drain(session_id: str, agen: AsyncGenerator[str, None],
                 q.put_nowait((None, None))
             except Exception:
                 pass
-        # 运行 is terminal — arm the grace timer so it (and its buffer) is
+        # Run is terminal — arm the grace timer so it (and its buffer) is
         # eventually freed even if nobody ever reconnects. subscribe() cancels
         # this on connect and re-arms on disconnect.
         _schedule_evict(session_id)
 
 
 def start(session_id: str, agen: AsyncGenerator[str, None]) -> _Run:
-    """启动一个独立的 run，为 session 排空 agen。如果此 session 已有
-    在进行的 run（例如快速双击发送），则先取消它。"""
+    """Start a detached run draining `agen` for a session. If a run is already in
+    flight for this session (e.g. a rapid double-send), it's cancelled first."""
     prev = _RUNS.get(session_id)
     prev_task: Optional[asyncio.Task] = None
     if prev:
@@ -156,8 +156,8 @@ def start(session_id: str, agen: AsyncGenerator[str, None]) -> _Run:
 
 
 async def subscribe(session_id: str) -> AsyncGenerator[str, None]:
-    """从头重放 run 的缓冲区，然后直播直到结束。可以重复调用（重连），
-    也可以同时从多个客户端调用。"""
+    """Replay the run's buffer from the start, then stream live until it ends.
+    Safe to call repeatedly (reconnect) and from multiple clients at once."""
     run = _RUNS.get(session_id)
     if run is None:
         return
@@ -205,7 +205,7 @@ async def subscribe(session_id: str) -> AsyncGenerator[str, None]:
 
 
 def stop(session_id: str) -> bool:
-    """取消正在进行的 run（包装的生成器保存其部分结果）。"""
+    """Cancel an in-flight run (the wrapped generator saves its partial)."""
     run = _RUNS.get(session_id)
     if run and run.task and not run.task.done():
         run.task.cancel()

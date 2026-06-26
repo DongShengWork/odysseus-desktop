@@ -1,4 +1,4 @@
-"""文档路由 — 带版本历史的活跃文档 CRUD 操作。"""
+"""Document routes — CRUD for living documents with version history."""
 
 import uuid
 import logging
@@ -104,7 +104,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
 
             # If no language was supplied (e.g. cloning a doc whose language
             # was never set), detect it from the content rather than storing
-            # NULL — which made the editor fall back to 纯文本. Defaults
+            # NULL — which made the editor fall back to plain text. Defaults
             # to markdown for prose.
             language = req.language
             if not language:
@@ -575,7 +575,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
 
             _assert_pdf_marker_upload_owned(request, req.content, user, upload_handler)
 
-            # 检查 if we can coalesce with the latest version
+            # Check if we can coalesce with the latest version
             latest_ver = db.query(DocumentVersion).filter(
                 DocumentVersion.document_id == doc_id,
             ).order_by(DocumentVersion.version_number.desc()).first()
@@ -588,7 +588,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
                     ver_time = ver_time.replace(tzinfo=timezone.utc)
                 age = (now - ver_time).total_seconds()
                 if age < VERSION_COALESCE_SECONDS:
-                    # 更新 the existing version in-place
+                    # Update the existing version in-place
                     latest_ver.content = req.content
                     latest_ver.created_at = now
                     if req.summary:
@@ -877,7 +877,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
         finally:
             db.close()
 
-    # ---- POST /api/documents/ai-tidy — AI-powered 清理 of junk/test documents ----
+    # ---- POST /api/documents/ai-tidy — AI-powered cleanup of junk/test documents ----
     @router.post("/api/documents/ai-tidy")
     async def ai_tidy_documents(request: Request) -> Dict[str, Any]:
         """Use AI to judge if documents are junk/test/accidental, then delete them.
@@ -910,7 +910,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
             if not to_review:
                 return {"deleted": 0, "reviewed": 0, "message": "All documents already reviewed"}
 
-            # 构建 a batch prompt — review up to 30 at a time
+            # Build a batch prompt — review up to 30 at a time
             batch = to_review[:30]
             doc_list = []
             for i, doc in enumerate(batch):
@@ -935,7 +935,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
                 timeout=30,
             )
 
-            # 解析 verdicts
+            # Parse verdicts
             import re
             match = re.search(r'\[.*?\]', response, re.DOTALL)
             if not match:
@@ -1186,7 +1186,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
         finally:
             db.close()
 
-        # 解析 VL model (admin-configured or auto-detected vision-capable)
+        # Resolve VL model (admin-configured or auto-detected vision-capable)
         settings = _load_vl_settings()
         vl_model = settings.get("vision_model", "")
         try:
@@ -1360,7 +1360,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
                 ann_signature_pngs: dict[str, bytes] = {}
                 if ann_sig_ids:
                     # SECURITY: filter by owner so a caller can't reference
-                    # someone else's 签名ature ID from doc markdown and have
+                    # someone else's signature ID from doc markdown and have
                     # it stamped/exported.
                     _sig_q = db.query(Signature).filter(Signature.id.in_(ann_sig_ids))
                     if user:
@@ -1436,7 +1436,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
             sig_field_names = {f["name"] for f in schema if f.get("type") == "signature"}
 
             all_values = parse_markdown_to_values(doc.current_content or "")
-            # Split: 签名ature fields go to stamps, everything else to fill_fields
+            # Split: signature fields go to stamps, everything else to fill_fields
             text_values: dict = {}
             sig_ids: dict[str, str] = {}
             for name, raw in all_values.items():
@@ -1484,7 +1484,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
             # Burn freeform annotations (Text/Check/Sign drops) on top.
             annotations = parse_markdown_annotations(doc.current_content or "")
             if annotations:
-                # 解析 any 签名ature annotations to their PNG bytes.
+                # Resolve any signature annotations to their PNG bytes.
                 ann_sig_ids = [
                     a["value"][len("signature:"):].strip()
                     for a in annotations
@@ -1495,7 +1495,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
                 ann_signature_pngs: dict[str, bytes] = {}
                 if ann_sig_ids:
                     # SECURITY: filter by owner so a caller can't reference
-                    # someone else's 签名ature ID from doc markdown and have
+                    # someone else's signature ID from doc markdown and have
                     # it stamped/exported.
                     _sig_q = db.query(Signature).filter(Signature.id.in_(ann_sig_ids))
                     if user:
@@ -1524,7 +1524,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
         finally:
             db.close()
 
-    # ---- POST /api/document/{doc_id}/prepare-签名ed-reply ----
+    # ---- POST /api/document/{doc_id}/prepare-signed-reply ----
     @router.post("/api/document/{doc_id}/prepare-signed-reply")
     async def prepare_signed_reply(doc_id: str, request: Request):
         """Bake the current PDF state (form fields + signature stamps +
@@ -1564,7 +1564,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
             if not (doc.source_email_uid and doc.source_email_folder):
                 raise HTTPException(400, "Document has no source email — cannot reply")
 
-            # 1) 构建 the flattened PDF (same pipeline as export_pdf)
+            # 1) Build the flattened PDF (same pipeline as export_pdf)
             upload_id = find_source_upload_id(doc.current_content or "")
             if not upload_id:
                 raise HTTPException(400, "Document is not linked to a source PDF")
@@ -1627,7 +1627,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
                 ann_signature_pngs: dict[str, bytes] = {}
                 if ann_sig_ids:
                     # SECURITY: filter by owner so a caller can't reference
-                    # someone else's 签名ature ID from doc markdown and have
+                    # someone else's signature ID from doc markdown and have
                     # it stamped/exported.
                     _sig_q = db.query(Signature).filter(Signature.id.in_(ann_sig_ids))
                     if user:
@@ -1662,7 +1662,7 @@ def setup_document_routes(session_manager, upload_handler=None) -> APIRouter:
                 except Exception as _e:
                     logger.warning(f"Could not unlink temp PDF {_p}: {_e}")
 
-            # 3) 获取 the source email's headers so we can build a clean reply
+            # 3) Fetch the source email's headers so we can build a clean reply
             #    context (To/Subject/In-Reply-To/References).
             try:
                 from routes.email_routes import _imap, _decode_header

@@ -1,6 +1,6 @@
 # routes/tts_routes.py
 """
-TTS API 路由 — 多提供商（本地 Kokoro、API 端点、浏览器）。
+TTS API routes — multi-provider (local Kokoro, API endpoint, browser).
 """
 
 from fastapi import APIRouter, HTTPException

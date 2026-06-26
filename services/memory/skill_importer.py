@@ -1,4 +1,4 @@
-"""从公开 GitHub（或 skills.sh → GitHub）URL 导入 SKILL.md 包。"""
+"""Import SKILL.md bundles from public GitHub (or skills.sh → GitHub) URLs."""
 from __future__ import annotations
 
 import logging
@@ -69,12 +69,12 @@ def _is_text_file(name: str) -> bool:
 
 
 def parse_skill_source(url: str) -> ResolvedSource:
-    """将 skills.sh / GitHub Web URL 规范化为 owner/repo/ref/path。"""
+    """Normalize skills.sh / GitHub web URLs into owner/repo/ref/path."""
     raw = (url or "").strip()
     if not raw:
         raise SkillImportError("URL is required")
 
-    # skills.sh 经常链接到 GitHub；稍后尝试解包 ?url= 或重定向目标。
+    # skills.sh often links to GitHub; try to unwrap ?url= or redirect target later.
     if "skills.sh" in raw and "github.com" not in raw:
         ok, reason = check_outbound_url(raw)
         if not ok:
@@ -85,7 +85,7 @@ def parse_skill_source(url: str) -> ResolvedSource:
                 raise _github_response_error(r)
             final = str(r.url)
             _assert_github_url(final, context="redirect target")
-            # 页面可能嵌入一个 github 链接；如果最终 URL 已重定向到 GitHub，优先使用它。
+            # Page may embed a github link; prefer final URL if redirected.
             if "github.com" in final:
                 raw = final
             else:
@@ -141,7 +141,7 @@ def _api_contents_url(src: ResolvedSource, rel_path: str = "") -> str:
 
 
 def _github_response_error(response: httpx.Response) -> SkillImportError:
-    """将失败的 GitHub HTTP 响应转换为用户可见的导入错误。"""
+    """Turn a failed GitHub HTTP response into a user-visible import error."""
     status = response.status_code
     detail = ""
     try:
@@ -228,7 +228,7 @@ def _list_github_dir(src: ResolvedSource, rel_dir: str, out: Dict[str, str], *, 
 
 
 def fetch_skill_bundle(url: str) -> Tuple[Dict[str, str], ResolvedSource]:
-    """下载 SKILL.md 及相关文本资源。返回 relative_path → content。"""
+    """Download SKILL.md and sibling text assets. Returns relative_path → content."""
     src = parse_skill_source(url)
     files: Dict[str, str] = {}
 
@@ -262,7 +262,7 @@ def fetch_skill_bundle(url: str) -> Tuple[Dict[str, str], ResolvedSource]:
         _list_github_dir(src, "", files)
 
     if not any(p.lower().endswith("skill.md") for p in files):
-        # 仓库根目录仅有 SKILL.md 的扁平结构
+        # Flat repo root with SKILL.md only
         try:
             files["SKILL.md"] = _fetch_text(_raw_url(src, "SKILL.md"))
         except Exception as e:

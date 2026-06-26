@@ -1,6 +1,6 @@
 """
-YouTube 处理 — 字幕提取、评论获取（yt-dlp），
-以及用于 LLM 注入的上下文格式化。由 chat_handler.py 使用。
+YouTube handling — transcript extraction, comment fetching (yt-dlp),
+and context formatting for LLM injection. Used by chat_handler.py.
 """
 
 import asyncio
@@ -15,7 +15,7 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# 常量
+# Constants
 # ---------------------------------------------------------------------------
 
 YOUTUBE_INSTRUCTION_PROMPT = """When the user shares a YouTube video, respond with a structured breakdown:
@@ -28,16 +28,16 @@ YOUTUBE_INSTRUCTION_PROMPT = """When the user shares a YouTube video, respond wi
 Keep it conversational and concise. Do NOT web search for this video — use only the transcript and comments provided."""
 
 # ---------------------------------------------------------------------------
-# 初始化 / 辅助函数
+# Init / helpers
 # ---------------------------------------------------------------------------
 
-# 将在启动时由 init_youtube() 设置
+# Will be set at startup by init_youtube()
 YouTubeTranscriptApi = None
 YOUTUBE_AVAILABLE = False
 
 
 def _find_ytdlp() -> str:
-    """查找 yt-dlp 二进制文件：先搜索 venv bin 目录，然后系统 PATH。"""
+    """Find the yt-dlp binary: venv bin first, then system PATH."""
     venv_bin = Path(sys.executable).parent / "yt-dlp"
     if venv_bin.exists():
         return str(venv_bin)
@@ -46,7 +46,7 @@ def _find_ytdlp() -> str:
 
 
 def init_youtube():
-    """导入并缓存 YouTube 字幕 API。"""
+    """Import and cache the YouTube transcript API."""
     global YouTubeTranscriptApi, YOUTUBE_AVAILABLE
     try:
         from youtube_transcript_api import YouTubeTranscriptApi as _Api
@@ -162,7 +162,7 @@ def format_transcript_for_context(
     transcript_data: Dict[str, Any], url: str,
     title: str = "", channel: str = ""
 ) -> str:
-    """为 LLM 上下文格式化字幕数据。"""
+    """Format transcript data for inclusion in LLM context."""
     if not transcript_data.get("success"):
         header = ""
         if title:
@@ -186,14 +186,14 @@ def format_transcript_for_context(
     ctx += f"Language: {language}\n"
     ctx += f"Source: {'Auto-generated' if is_generated else 'Manual'}\n"
     ctx += f"URL: {url}\n\n"
-    # 为 LLM 包含带时间戳的片段以便引用
+    # Include timestamped segments for the LLM to reference
     if segments:
         ctx += "Timestamped Transcript:\n"
         for seg in segments:
             if not isinstance(seg, dict):
                 continue
             ctx += f"[{seg['timestamp']}] {seg['text']}\n"
-        # 检查长度 — 太长则回退到纯文本
+        # Check length — fall back to plain text if too long
         if len(ctx) > 12000:
             ctx = ctx[:ctx.index("Timestamped Transcript:\n")]
             ctx += "Transcript:\n"
@@ -208,7 +208,10 @@ def format_transcript_for_context(
 async def fetch_youtube_comments(
     video_id: str, max_comments: int = 25, timeout: int = 30
 ) -> Dict[str, Any]:
-    """使用 yt-dlp 获取 YouTube 视频的热门评论。"""
+    """Fetch top comments for a YouTube video using yt-dlp.
+
+    Returns dict with 'success', 'comments' list, 'error'.
+    """
     try:
         cmd = [
             _find_ytdlp(),
@@ -228,7 +231,7 @@ async def fetch_youtube_comments(
         )
         # Bound the wait on the process actually finishing, not on spawning it.
         # create_subprocess_exec returns as soon as the child starts, so wrapping
-        # it in wait_for never enforces the 超时 — proc.communicate() is the
+        # it in wait_for never enforces the timeout — proc.communicate() is the
         # blocking step. Kill and reap the child if it overruns so it does not
         # linger after we return.
         try:
@@ -259,7 +262,7 @@ async def fetch_youtube_comments(
                 "likes": c.get("like_count", 0),
             })
 
-        # 按点赞数降序排列 — 最热门的评论优先
+        # Sort by likes descending — most popular comments first
         comments.sort(key=lambda x: x.get("likes", 0), reverse=True)
 
         return {"success": True, "comments": comments, "count": len(comments),
@@ -277,7 +280,7 @@ async def fetch_youtube_comments(
 
 
 def format_comments_for_context(comments_data: Dict[str, Any], url: str) -> str:
-    """为 LLM 上下文格式化 YouTube 评论。"""
+    """Format YouTube comments for inclusion in LLM context."""
     if not comments_data.get("success") or not comments_data.get("comments"):
         return ""
 

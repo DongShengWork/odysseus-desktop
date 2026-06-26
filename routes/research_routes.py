@@ -1,4 +1,4 @@
-"""研究后台任务路由 — /api/research/*。"""
+"""Research background task routes — /api/research/*."""
 
 import asyncio
 import json
@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 # Model-name substrings that are NOT chat/generation models — research must
 # never pick these as its model. An OpenAI-style endpoint often lists
-# `text-嵌入-ada-002` etc. first in its model list, which is why research
-# was failing with "Cannot reach model 'text-嵌入-ada-002'".
+# `text-embedding-ada-002` etc. first in its model list, which is why research
+# was failing with "Cannot reach model 'text-embedding-ada-002'".
 _NON_CHAT_MODEL = (
     "text-embedding", "embedding", "tts-", "whisper", "dall-e",
     "moderation", "rerank", "reranker", "clip", "stable-diffusion",
@@ -353,7 +353,7 @@ def setup_research_routes(research_handler, session_manager=None) -> APIRouter:
         json_path = data_dir / f"{session_id}.json"
         deleted = False
         if json_path.exists():
-            # SECURITY: 验证 ownership before letting the caller delete it.
+            # SECURITY: verify ownership before letting the caller delete it.
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
                 if data.get("owner") != user:
@@ -407,8 +407,8 @@ def setup_research_routes(research_handler, session_manager=None) -> APIRouter:
             from src.database import SessionLocal
             db = SessionLocal()
             try:
-                # Owner-权限范围d: never resolve another user's private endpoint
-                # (and its 解密ed api_key / internal base_url). A 权限范围d miss
+                # Owner-scoped: never resolve another user's private endpoint
+                # (and its decrypted api_key / internal base_url). A scoped miss
                 # reads as 404 so the endpoint's existence isn't revealed.
                 ep = _owned_enabled_endpoint(db, user, body.endpoint_id)
                 if not ep:
@@ -435,10 +435,10 @@ def setup_research_routes(research_handler, session_manager=None) -> APIRouter:
                 from src.database import SessionLocal
                 db = SessionLocal()
                 try:
-                    # Owner-权限范围d first-enabled 回退: the caller's own rows
+                    # Owner-scoped first-enabled fallback: the caller's own rows
                     # + legacy null-owner shared rows only — never borrow another
                     # user's private endpoint/api_key. Same fix as the
-                    # /api/v1/chat 回退 (Webhook_routes._first_enabled_endpoint).
+                    # /api/v1/chat fallback (webhook_routes._first_enabled_endpoint).
                     ep = _owned_enabled_endpoint(db, user)
                     if ep:
                         resolved = _resolve_endpoint_runtime(ep, owner=user)
@@ -547,7 +547,7 @@ def setup_research_routes(research_handler, session_manager=None) -> APIRouter:
         if session_manager is None:
             raise HTTPException(500, "session_manager not configured")
 
-        # 加载 research data — prefer in-memory result, fall back to disk
+        # Load research data — prefer in-memory result, fall back to disk
         result = research_handler.get_result(session_id)
         sources = research_handler.get_sources(session_id) or []
         query = ""
@@ -621,7 +621,7 @@ def setup_research_routes(research_handler, session_manager=None) -> APIRouter:
         if not ep_url or not ep_model:
             raise HTTPException(400, "No endpoint configured — add one in Settings first")
 
-        # 创建 new session
+        # Create new session
         new_sid = str(uuid.uuid4())
 
         title_query = (query or "research").strip()
@@ -646,7 +646,7 @@ def setup_research_routes(research_handler, session_manager=None) -> APIRouter:
         except Exception:
             logger.debug("session_created event dispatch failed", exc_info=True)
 
-        # 构建 the priming system message — report only, no sources injected.
+        # Build the priming system message — report only, no sources injected.
         # The user can open the visual report for source details; keeping sources
         # out of the chat context saves tokens and avoids the AI fabricating
         # citations.

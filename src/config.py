@@ -75,7 +75,7 @@ class SearchConfig(BaseSettings):
     web_search_max_pages: int = Field(default=6, description="Maximum number of pages to search")
     web_search_max_workers: int = Field(default=4, description="Maximum number of worker threads for web search")
     
-    # Research 服务
+    # Research service
     research_service_url: str = Field(
         default="http://localhost:8003/research", 
         description="URL for research service"
@@ -135,16 +135,16 @@ class AppConfig(BaseSettings):
     @field_validator("data", mode="before")
     def set_data_paths(cls, v, info):
         """Set data paths relative to base_dir."""
-        # 获取 the base_dir from the field values or use default
+        # Get the base_dir from the field values or use default
         if isinstance(v, dict) and "base_dir" in v:
             base_dir = v["base_dir"]
         else:
             base_dir = Path(get_app_root())
         
-        # 转换 string paths to Path objects relative to base_dir
+        # Convert string paths to Path objects relative to base_dir
         data_dir = Path(_DATA_DIR_CONST)
         
-        # 获取 values from the input dict or use defaults
+        # Get values from the input dict or use defaults
         max_upload_size = v.get("max_upload_size", 10 * 1024 * 1024) if isinstance(v, dict) else 10 * 1024 * 1024
         allowed_extensions = v.get("allowed_extensions", [
             '.txt', '.py', '.html', '.md', '.json', '.csv',
@@ -174,10 +174,10 @@ class AppConfig(BaseSettings):
     
     model_config = SettingsConfigDict()
 
-# 创建 global config instance
+# Create global config instance
 config = AppConfig()
 
-# 创建 directories if they don't exist
+# Create directories if they don't exist
 def create_directories():
     """Create required directories if they don't exist."""
     directories = [
@@ -190,21 +190,21 @@ def create_directories():
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
 
-# 验证 configuration on startup
+# Validate configuration on startup
 def validate_config():
     """Validate the application configuration."""
-    # 检查 if LLM host is reachable if specified
+    # Check if LLM host is reachable if specified
     if config.llm.default_host and config.llm.default_host.startswith("192.168."):
         # This is a local IP, assume it's valid
         pass
     
-    # 检查 if API keys are set when needed
+    # Check if API keys are set when needed
     if not config.llm.openai_api_key:
         # OpenAI API key not set, that's OK if not using OpenAI
         pass
     
-    # 创建 directories
+    # Create directories
     create_directories()
 
-# 初始化 configuration
+# Initialize configuration
 validate_config()

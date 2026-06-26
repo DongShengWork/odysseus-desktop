@@ -1,4 +1,4 @@
-"""核心搜索编排器：searxng_search_results、comprehensive_web_search、配置、缓存失效。"""
+"""Core search orchestrators: searxng_search_results, comprehensive_web_search, config, cache invalidation."""
 
 import json
 import logging
@@ -43,23 +43,23 @@ from .content import (
 
 logger = logging.getLogger(__name__)
 
-# ========= 配置 =========
+# ========= CONFIG =========
 SEARCH_CONFIG: Dict[str, Any] = {
     "primary_provider": "searxng",
 }
 
 
 def _is_secret_key(name: str) -> bool:
-    """对于保存凭据的配置键返回 True（例如 ``brave_api_key``）。"""
+    """True for config keys that hold a credential (e.g. ``brave_api_key``)."""
     return name.endswith(("_api_key", "_key", "_token", "_secret"))
 
 
 def get_search_config() -> Dict[str, Any]:
-    """获取当前搜索配置，包括活跃服务商信息。
+    """Get current search configuration including active provider info.
 
-    永远不返回存储的 API 密钥：调用者——包括未认证的
-    ``GET /api/search/config`` 路由——只需要通过
-    ``has_api_key`` 知道密钥的 *存在*，而非秘密本身（#1661）。
+    Never returns stored API keys: callers — including the unauthenticated
+    ``GET /api/search/config`` route — only need key *presence* via
+    ``has_api_key``, not the secret itself (#1661).
     """
     config = SEARCH_CONFIG.copy()
     settings = _get_search_settings()
@@ -70,8 +70,8 @@ def get_search_config() -> Dict[str, Any]:
     if provider == "searxng":
         from .providers import _get_search_instance
         config["search_url"] = _get_search_instance()
-    # 剥离所有字符串类型凭据，确保秘密不泄露到响应中；
-    # 布尔 has_api_key 标记（仅存在性）被保留。
+    # Strip any string-valued credential so secrets never reach the response;
+    # the boolean has_api_key flag (presence only) is preserved.
     return {
         k: v for k, v in config.items()
         if not (isinstance(v, str) and _is_secret_key(k))
@@ -79,14 +79,14 @@ def get_search_config() -> Dict[str, Any]:
 
 
 def update_search_config(api_key: str = None, **kwargs):
-    """将非密钥搜索配置合并到 SEARCH_CONFIG 中。
+    """Merge non-secret search config into SEARCH_CONFIG.
 
-    服务商 API 密钥有意 *不* 在此处缓存。它们按需从
-    settings/env 通过 ``_get_provider_key``（例如 ``brave_search``）读取，
-    因此之前的 ``SEARCH_CONFIG["brave_api_key"] = api_key`` 缓存从未
-    被用于搜索，只通过 ``get_search_config`` /
-    ``GET /api/search/config`` 泄露了解密后的密钥（#1661）。
-    ``api_key`` 参数为向后兼容而接受，但不再存储。
+    Provider API keys are intentionally NOT cached here. They are read on demand
+    from settings/env via ``_get_provider_key`` (e.g. ``brave_search``), so the
+    previous ``SEARCH_CONFIG["brave_api_key"] = api_key`` cache was never used
+    for search and only leaked the decrypted key through ``get_search_config`` /
+    ``GET /api/search/config`` (#1661). ``api_key`` is accepted for backward
+    compatibility but no longer stored.
     """
     for k, v in kwargs.items():
         if not _is_secret_key(k):
@@ -94,7 +94,7 @@ def update_search_config(api_key: str = None, **kwargs):
 
 
 def _call_provider(provider_name: str, query: str, count: int, time_filter: str = None) -> List[dict]:
-    """按名称调用搜索服务商。返回结果列表或空列表。"""
+    """Call a search provider by name. Returns list of results or empty list."""
     if provider_name == "searxng":
         return searxng_search_api(query, count, time_filter=time_filter)
     elif provider_name == "brave":
@@ -110,14 +110,14 @@ def _call_provider(provider_name: str, query: str, count: int, time_filter: str 
     return []
 
 
-# 如果自托管 SearXNG 实例已启动但所有启用的引擎返回空结果，
-# 回退到免密钥服务商，确保初次安装时 "search X" 仍然可用。
-# 用户可通过 `search_回退_chain` 覆盖/禁用。
+# If the self-hosted SearXNG instance is up but all enabled engines return
+# empty, fall back to the no-key provider so "search X" still works on fresh
+# installs. Users can override/disable with `search_fallback_chain`.
 _FALLBACK_ORDER = ["duckduckgo"]
 
 
 def _build_provider_chain(primary: str) -> List[str]:
-    """构建有序列表：主服务商优先，然后是可配置/默认的回退服务商。"""
+    """Build ordered list: primary first, then configured/default fallbacks."""
     chain = [primary]
     settings = _get_search_settings()
     user_chain = settings.get("search_fallback_chain") or []
@@ -131,21 +131,21 @@ def _build_provider_chain(primary: str) -> List[str]:
 
 
 # ----------------------------------------------------------------------
-# 带缓存和重试的统一搜索
+# Unified search with caching and retry
 # ----------------------------------------------------------------------
 def searxng_search_results(query: str, count: int = 10, time_filter: str = None) -> list[dict]:
-    """使用配置的服务商执行网页搜索，支持缓存和重试。"""
+    """Perform a web search using configured provider with caching and retry."""
     settings = _get_search_settings()
     search_provider = settings.get("search_provider", "searxng")
     result_count = _get_result_count()
-    # 如果调用者使用默认值，则使用配置的结果数量
+    # Use configured count if caller used default
     if count == 10:
         count = result_count
 
     cache_key = generate_cache_key(f"{query}|{count}|{time_filter}")
     cache_file = SEARCH_CACHE_DIR / f"{cache_key}.cache"
 
-    # 检查缓存
+    # Check cache
     if cache_file.exists():
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
@@ -215,10 +215,10 @@ def searxng_search_results(query: str, count: int = 10, time_filter: str = None)
 
 
 # ----------------------------------------------------------------------
-# 缓存失效
+# Cache invalidation
 # ----------------------------------------------------------------------
 def invalidate_search_cache(query: Optional[str] = None) -> None:
-    """使缓存的搜索结果失效。None 清除全部，否则只清除指定查询。"""
+    """Invalidate cached search results. None clears all, otherwise just the given query."""
     if query is None:
         for file in SEARCH_CACHE_DIR.glob("*.cache"):
             try:
@@ -228,9 +228,9 @@ def invalidate_search_cache(query: Optional[str] = None) -> None:
         search_cache_index.clear()
         logger.info("All search cache entries have been cleared.")
     else:
-        # 匹配写入路径存储的键：searxng_search_results 会将
-        # 调用者的默认 count 替换为配置的 _get_result_count()
-        # （默认 5），因此硬编码的 "|10|None" 从未匹配过真实条目。
+        # Match the key the write path stores: searxng_search_results replaces
+        # the caller's default count with the configured _get_result_count()
+        # (default 5), so a hardcoded "|10|None" never matched a real entry.
         cache_key = generate_cache_key(f"{query}|{_get_result_count()}|None")
         cache_file = SEARCH_CACHE_DIR / f"{cache_key}.cache"
         if cache_file.exists():
@@ -245,7 +245,7 @@ def invalidate_search_cache(query: Optional[str] = None) -> None:
 
 
 # ----------------------------------------------------------------------
-# 全面网页搜索（含高级过滤）
+# Comprehensive web search (with advanced filtering)
 # ----------------------------------------------------------------------
 def comprehensive_web_search(
     query: str,
@@ -259,7 +259,7 @@ def comprehensive_web_search(
     min_content_length: int = 0,
     return_sources: bool = False,
 ):
-    """执行全面网页搜索，包含内容抓取和高级过滤。"""
+    """Perform comprehensive web search with content fetching and advanced filtering."""
     logger.info(f"Starting comprehensive search for: {query}")
     if time_filter:
         logger.info(f"Applying time filter: {time_filter}")
@@ -273,7 +273,7 @@ def comprehensive_web_search(
         msg = "Web search is disabled by the administrator."
         return (msg, []) if return_sources else msg
 
-    # 使用配置的结果数量（至少 max_pages 用于内容抓取）
+    # Use configured result count (at least max_pages for content fetching)
     fetch_count = max(result_count, max_pages)
 
     provider_chain = _build_provider_chain(search_provider)
@@ -317,7 +317,7 @@ def comprehensive_web_search(
 
     search_results = rank_search_results(query, search_results)
 
-    # URL 过滤辅助函数
+    # URL filter helper
     def url_passes_filters(url: str) -> bool:
         try:
             netloc = urlparse(url).netloc.lower()
@@ -350,19 +350,19 @@ def comprehensive_web_search(
         msg = "No suitable results after applying filters."
         return (msg, []) if return_sources else msg
 
-    # 在抓取内容前构建前端来源列表
+    # Build sources list for the frontend (before content fetching)
     _source_list = [
         {"url": r.get("url", ""), "title": r.get("title", "")}
         for r in search_results if r.get("url")
     ]
 
-    # 将每个 URL 映射到来源列表中的索引号，以便抓取后的内容
-    # 块可以用与模型引用的相同索引进行标注。
+    # Map each URL to its [i] number in the sources list so fetched content
+    # blocks can be labeled with the SAME index the model cites.
     _url_index = {
         r["url"]: i for i, r in enumerate(search_results, 1) if r.get("url")
     }
 
-    # 并行抓取内容
+    # Fetch content in parallel
     fetched_content = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_url = {
@@ -374,9 +374,9 @@ def comprehensive_web_search(
             try:
                 result = future.result()
                 if result["success"] and result["content"] and len(result["content"]) >= min_content_length:
-                    # 记住此抓取对应哪个来源：重定向
-                    # 可能改变 result["url"]，且完成顺序是
-                    # 任意的，因此后续无法重新计算块标签。
+                    # Remember which source this fetch belongs to: redirects
+                    # can change result["url"] and completion order is
+                    # arbitrary, so the block label cannot be recomputed later.
                     result["source_index"] = _url_index.get(url)
                     fetched_content.append(result)
             except Exception as e:
@@ -384,7 +384,7 @@ def comprehensive_web_search(
 
     logger.info(f"Successfully fetched content from {len(fetched_content)} pages")
 
-    # 格式化结果
+    # Format results
     output_parts = []
 
     if search_results:
@@ -418,10 +418,10 @@ def comprehensive_web_search(
         output_parts.append("FETCHED PAGE CONTENT:")
         output_parts.append("-" * 50)
 
-        # 按来源顺序输出块，使用与来源列表相同的索引编号，
-        # 因此 [CONTENT 2] 确实来自来源 [2] 的内容。
-        # 在此之前，块按抓取完成顺序编号为 1..N，
-        # 既与来源列表不匹配，不同运行顺序也不一致。
+        # Emit blocks in source order, numbered with the same [i] as the
+        # sources list, so [CONTENT 2] really is content from source [2].
+        # Before this, blocks were numbered 1..N in fetch COMPLETION order,
+        # which matched neither the sources list nor each other run to run.
         fetched_content.sort(key=lambda c: c.get("source_index") or len(search_results) + 1)
         for content in fetched_content:
             _idx = content.get("source_index")

@@ -1,5 +1,5 @@
 // static/js/tts-ai.js
-// AI 文字转语音模块 — 支持服务器 TTS 和浏览器 Web Speech API
+// AI Text-to-Speech Module — supports server TTS and browser Web Speech API
 
 class AITTSManager {
     constructor() {
@@ -11,26 +11,26 @@ class AITTSManager {
         this.playbackSpeed = 1;
         this._provider = 'disabled';
         this.autoPlay = false;
-        this.cache = new Map(); // 客户端音频缓存
+        this.cache = new Map(); // Client-side audio cache
 
-        // 顺序自动播放队列
-        this._queue = [];       // { text, button, resetFn } 数组
+        // Queue for sequential auto-play
+        this._queue = [];       // Array of { text, button, resetFn }
         this._processing = false;
 
-        // 逐句流式 TTS 状态
-        this._streamSentencesSent = 0;  // 已排队的纯文本字符数
+        // Streaming sentence-by-sentence TTS state
+        this._streamSentencesSent = 0;  // chars of plain text already queued
         this._streamActive = false;
         this._streamButton = null;
         this._streamResetFn = null;
         this._streamDebounceTimer = null;
 
-        // 检查 TTS 服务是否可用
+        // Check if TTS service is available
         this.checkAvailability();
     }
 
     async checkAvailability() {
         try {
-            // 先检查用户设置 — 如果设置中禁用了 TTS，不显示按钮
+            // Check user setting first — if TTS is disabled in settings, don't show buttons
             try {
                 const settingsRes = await fetch('/api/auth/settings', { credentials: 'same-origin' });
                 const settings = await settingsRes.json();
@@ -52,48 +52,48 @@ class AITTSManager {
                 this.browserVoice = stats.voice || '';
                 this.available = 'speechSynthesis' in window;
                 if (!this.available) {
-                    console.warn('TTS：已选择浏览器模式，但 speechSynthesis 不受支持');
+                    console.warn('TTS: browser mode selected but speechSynthesis not supported');
                 }
             } else if (this.available) {
                 this.useBrowserTTS = false;
             } else {
-                console.warn('TTS：不可用');
+                console.warn('TTS: not available');
             }
         } catch (error) {
-            console.error('检查 TTS 可用性失败：', error);
+            console.error('Failed to check TTS availability:', error);
             this.available = false;
         }
     }
 
     extractPlainText(content) {
-        // 去除 <think>/<thinking> 块（模型推理过程）
+        // Strip <think>/<thinking> blocks (model reasoning)
         let cleaned = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
 
-        // 创建一个临时 div 来解析 HTML/markdown
+        // Create a temporary div to parse HTML/markdown
         const temp = document.createElement('div');
         temp.innerHTML = cleaned;
 
-        // 移除代码块
+        // Remove code blocks
         temp.querySelectorAll('pre, code').forEach(el => el.remove());
 
-        // 获取文本内容
+        // Get text content
         let text = temp.textContent || temp.innerText || '';
 
-        // 清理 markdown 语法
+        // Clean up markdown syntax
         text = text
-            .replace(/#{1,6}\s/g, '') // 移除标题
-            .replace(/\*\*(.+?)\*\*/g, '$1') // 移除粗体
-            .replace(/\*(.+?)\*/g, '$1') // 移除斜体
-            .replace(/\[(.+?)\]\(.+?\)/g, '$1') // 移除链接
-            .replace(/`(.+?)`/g, '$1') // 移除内联代码
-            .replace(/\n{3,}/g, '\n\n') // 规范化换行
+            .replace(/#{1,6}\s/g, '') // Remove headers
+            .replace(/\*\*(.+?)\*\*/g, '$1') // Remove bold
+            .replace(/\*(.+?)\*/g, '$1') // Remove italic
+            .replace(/\[(.+?)\]\(.+?\)/g, '$1') // Remove links
+            .replace(/`(.+?)`/g, '$1') // Remove inline code
+            .replace(/\n{3,}/g, '\n\n') // Normalize line breaks
             .trim();
 
         return text;
     }
 
     getCacheKey(text) {
-        // 简单的哈希函数用于缓存键
+        // Simple hash function for cache key
         let hash = 0;
         for (let i = 0; i < text.length; i++) {
             const char = text.charCodeAt(i);
@@ -105,23 +105,23 @@ class AITTSManager {
 
     async synthesize(text, onProgress = null) {
         if (!this.available) {
-            throw new Error('AI TTS 服务不可用');
+            throw new Error('AI TTS service not available');
         }
 
         const plainText = this.extractPlainText(text);
 
         if (!plainText) {
-            throw new Error('没有可合成的文本');
+            throw new Error('No text to synthesize');
         }
 
-        // 浏览器 TTS 不使用 synthesize — 直接在 play() 中处理
+        // Browser TTS doesn't use synthesize — handled directly in play()
         if (this.useBrowserTTS) {
             return '__browser_tts__';
         }
 
         const cacheKey = this.getCacheKey(plainText);
 
-        // 先检查缓存
+        // Check cache first
         if (this.cache.has(cacheKey)) {
             return this.cache.get(cacheKey);
         }
@@ -142,13 +142,13 @@ class AITTSManager {
 
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.detail?.message || '合成失败');
+                throw new Error(error.detail?.message || 'Synthesis failed');
             }
 
             const audioBlob = await response.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
 
-            // 缓存结果
+            // Cache the result
             this.cache.set(cacheKey, audioUrl);
 
             if (onProgress) onProgress('complete');
@@ -165,14 +165,14 @@ class AITTSManager {
         if (!this.browserVoice) return null;
         const voices = window.speechSynthesis.getVoices();
         const target = this.browserVoice.toLowerCase();
-        // 先精确匹配，再部分匹配
+        // Try exact match first, then partial
         return voices.find(v => v.name.toLowerCase() === target) ||
                voices.find(v => v.name.toLowerCase().includes(target)) ||
                null;
     }
 
     async play(text) {
-        // 如果正在播放则停止当前音频
+        // Stop current audio if playing
         this.stop();
 
         const plainText = this.extractPlainText(text);
@@ -188,11 +188,11 @@ class AITTSManager {
             this.currentAudio = new Audio(audioUrl);
             await this.currentAudio.play();
             this.isPlaying = true;
-            // 注意：onended 应由调用者（addAITTSButton）设置，在音频播放
-            // 完成时重置按钮状态
+            // Note: onended should be set by the caller (addAITTSButton)
+            // to reset button state when audio finishes
 
         } catch (error) {
-            console.error('播放音频失败：', error);
+            console.error('Failed to play audio:', error);
             throw error;
         }
     }
@@ -210,7 +210,7 @@ class AITTSManager {
             };
             utterance.onerror = (e) => {
                 this.isPlaying = false;
-                reject(new Error('浏览器 TTS 错误：' + e.error));
+                reject(new Error('Browser TTS error: ' + e.error));
             };
 
             window.speechSynthesis.speak(utterance);
@@ -219,7 +219,7 @@ class AITTSManager {
     }
 
     stop() {
-        // 取消流式 TTS
+        // Cancel streaming TTS
         this._streamActive = false;
         if (this._streamDebounceTimer) {
             clearTimeout(this._streamDebounceTimer);
@@ -227,7 +227,7 @@ class AITTSManager {
         }
         this._streamSentencesSent = 0;
 
-        // 清空整个队列并重置所有排队按钮
+        // Clear the entire queue and reset all queued buttons
         for (const item of this._queue) {
             if (item.resetFn) item.resetFn();
         }
@@ -247,8 +247,8 @@ class AITTSManager {
     }
 
     /**
-     * 将消息加入自动播放队列。按顺序播放 — 每条消息
-     * 播放完毕后再开始下一条。停止任何消息会清空队列。
+     * Enqueue a message for auto-play. Plays sequentially — each message
+     * finishes before the next starts. Stopping any message clears the queue.
      */
     enqueue(text, button, resetFn) {
         this._queue.push({ text, button, resetFn });
@@ -266,7 +266,7 @@ class AITTSManager {
             try {
                 await this._playQueueItem(item);
             } catch (err) {
-                console.error('TTS 队列项错误：', err);
+                console.error('TTS queue item error:', err);
             }
             if (this._queue.length > 0 && this._queue[0] === item) {
                 this._queue.shift();
@@ -285,7 +285,7 @@ class AITTSManager {
         button.innerHTML = ICON_LOADING;
         button.classList.add('loading');
         button.style.color = '#ccc';
-        button.title = '加载中…';
+        button.title = 'Loading...';
 
         try {
             if (!this._processing) return;
@@ -297,7 +297,7 @@ class AITTSManager {
             button.innerHTML = ICON_STOP;
             button.classList.remove('loading');
             button.classList.add('playing');
-            button.title = '停止';
+            button.title = 'Stop';
 
             if (this.useBrowserTTS) {
                 const plainText = this.extractPlainText(text);
@@ -322,7 +322,7 @@ class AITTSManager {
                     audio.onerror = (e) => {
                         this.isPlaying = false;
                         if (this.currentAudio === audio) this.currentAudio = null;
-                        reject(new Error('音频播放错误'));
+                        reject(new Error('Audio playback error'));
                     };
                     audio.onpause = () => {
                         if (this.currentAudio !== audio) {
@@ -339,7 +339,7 @@ class AITTSManager {
         }
     }
 
-    // ── 流式 TTS（逐句播放） ──
+    // ── Streaming TTS (sentence-by-sentence) ──
 
     streamingStart() {
         this._streamSentencesSent = 0;
@@ -452,10 +452,10 @@ class AITTSManager {
     }
 }
 
-// 创建全局 AI TTS 管理器实例
+// Create global AI TTS manager instance
 window.aiTTSManager = new AITTSManager();
 
-// 向消息元素的操作栏添加 AI TTS 按钮的函数
+// Function to add AI TTS button to a message element's action bar
 export function addAITTSButton(messageElement, text) {
     if (!window.aiTTSManager.available || window.aiTTSManager._provider === 'disabled') {
         return;
@@ -465,7 +465,7 @@ export function addAITTSButton(messageElement, text) {
         return;
     }
 
-    // 在页脚中查找 msg-actions 容器
+    // Find the msg-actions container in the footer
     const actions = messageElement.querySelector('.msg-actions');
     if (!actions) return;
 
@@ -476,7 +476,7 @@ export function addAITTSButton(messageElement, text) {
     const playButton = document.createElement('button');
     playButton.className = 'ai-tts-button';
     playButton.type = 'button';
-    playButton.title = '朗读';
+    playButton.title = 'Read aloud';
     playButton.innerHTML = ICON_PLAY;
     playButton.style.cssText = 'background:none;border:none;color:#6b7280;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .15s;line-height:1;display:inline-flex;align-items:center;';
 
@@ -489,7 +489,7 @@ export function addAITTSButton(messageElement, text) {
         playButton.innerHTML = ICON_PLAY;
         playButton.classList.remove('playing', 'loading');
         playButton.style.color = '#6b7280';
-        playButton.title = '朗读';
+        playButton.title = 'Read aloud';
     }
 
     playButton.addEventListener('click', async (e) => {
@@ -508,7 +508,7 @@ export function addAITTSButton(messageElement, text) {
     actions.appendChild(playButton);
 }
 
-// 导航离开时停止音频
+// Stop audio when navigating away
 window.addEventListener('beforeunload', () => {
     if (window.aiTTSManager) {
         window.aiTTSManager.stop();

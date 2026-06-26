@@ -1,7 +1,7 @@
 // static/js/storage.js
-// 集中式 localStorage 访问模块，含键常量定义与 JSON 安全解析
+// Centralized localStorage access with key constants and JSON parse safety
 
-// ── 键常量 ──
+// ── Key constants ──
 export const KEYS = {
   THEME: 'odysseus-theme',
   TOGGLES: 'odysseus-toggles',
@@ -28,8 +28,8 @@ export const KEYS = {
 };
 
 /**
- * 安全地从 localStorage 读取并解析 JSON 值。
- * 发生任何错误时返回降级值。
+ * Safely get and parse a JSON value from localStorage.
+ * Returns fallback on any error.
  */
 export function getJSON(key, fallback) {
   try {
@@ -37,24 +37,24 @@ export function getJSON(key, fallback) {
     if (raw === null) return fallback !== undefined ? fallback : null;
     return JSON.parse(raw);
   } catch (e) {
-    console.warn('[Storage] 解析键 "' + key + '" 失败：', e.message);
+    console.warn('[Storage] Failed to parse key "' + key + '":', e.message);
     return fallback !== undefined ? fallback : null;
   }
 }
 
 /**
- * 将值以 JSON 序列化格式存入 localStorage。
+ * Set a JSON-serialized value in localStorage.
  */
 export function setJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
-    console.warn('[Storage] 设置键 "' + key + '" 失败：', e.message);
+    console.warn('[Storage] Failed to set key "' + key + '":', e.message);
   }
 }
 
 /**
- * 从 localStorage 获取原始字符串值。
+ * Get a raw string value from localStorage.
  */
 export function get(key, fallback) {
   try {
@@ -66,28 +66,28 @@ export function get(key, fallback) {
 }
 
 /**
- * 将原始字符串值存入 localStorage。
+ * Set a raw string value in localStorage.
  */
 export function set(key, value) {
   try {
     localStorage.setItem(key, value);
   } catch (e) {
-    console.warn('[Storage] 设置键 "' + key + '" 失败：', e.message);
+    console.warn('[Storage] Failed to set key "' + key + '":', e.message);
   }
 }
 
 /**
- * 从 localStorage 中删除指定键。
+ * Remove a key from localStorage.
  */
 export function remove(key) {
   try {
     localStorage.removeItem(key);
   } catch (e) {
-    // 忽略删除错误
+    // Ignore removal errors
   }
 }
 
-// ── 开关状态辅助函数 ──
+// ── Toggle state helpers ──
 
 export function loadToggleState() {
   return getJSON(KEYS.TOGGLES, {});

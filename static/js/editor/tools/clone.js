@@ -4,9 +4,9 @@
  * active layer. The source point moves WITH the brush so the offset
  * stays constant across the stroke.
  *
- * begin() 处理源选取和笔划开始分支；
- * 实际的逐采样点绘制通过共享的笔划管线（`_strokeTo`）继续，
- * 该管线内部了解克隆模式。
+ * begin() handles the source-pick and stroke-start branches; the
+ * actual per-sample stamping continues through the shared stroke
+ * pipeline (`_strokeTo`) which knows about clone-mode internally.
  *
  * @param {{
  *   activeLayer: () => object | null,
@@ -23,9 +23,9 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
     begin(e) {
       const layer = activeLayer();
       const coords = canvasCoords(e, state.mainCanvas);
-      // 移动端等效于 Alt-点击：屏幕像素中的双击。
-      // 比桌面端更宽松的容差（500 毫秒，40 像素），
-      // 因为手指点击比鼠标点击漂移更多。
+      // Mobile equivalent of Alt-click: double-tap in screen pixels.
+      // Wider tolerances (500 ms, 40 px) than desktop because finger
+      // taps drift more than mouse clicks.
       const isTouchEvt = e.type && e.type.startsWith('touch');
       let isDoubleTap = false;
       if (isTouchEvt) {
@@ -38,7 +38,7 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
         const dy = cy - state.cloneLastTapY;
         if (dt < 500 && Math.hypot(dx, dy) < 40) {
           isDoubleTap = true;
-          state.cloneLastTapTime = 0; // 消费该双击对
+          state.cloneLastTapTime = 0; // consume the pair
         } else {
           state.cloneLastTapTime = now;
           state.cloneLastTapX = cx;
@@ -49,7 +49,7 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
         state.cloneSourceX = coords.x;
         state.cloneSourceY = coords.y;
         state.cloneSourceLayerId = (layer && layer.id) || state.activeLayerId;
-        state.cloneSourceSnapshot = null; // 在第一次笔划时捕获
+        state.cloneSourceSnapshot = null; // captured at first stroke
         showToast('Clone source set');
         return;
       }

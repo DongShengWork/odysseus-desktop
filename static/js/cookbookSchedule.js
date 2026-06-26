@@ -1,19 +1,19 @@
 // Cookbook Schedule — opens a small inline form (styled with the app's
-// 创建一个 action=cookbook_serve 的 ScheduledTask。从两个入口挂载：
-// 创建一个 action=cookbook_serve 的 ScheduledTask。从两个入口挂载：
+// existing .cookbook-* classes) that creates a ScheduledTask with
+// action=cookbook_serve. Mounted from two places:
 //
 //   1. The ^ button next to Launch in a serve panel.
-//   2. The "Schedule…" entry in the cached-model ⋯ 下拉菜单 (which
+//   2. The "Schedule…" entry in the cached-model ⋯ dropdown menu (which
 //      programmatically clicks the ^ button so this module owns the
 //      single source of truth).
 //
-// Feedback uses uiModule.showToast() — the same 提示条 the rest of the
+// Feedback uses uiModule.showToast() — the same toast the rest of the
 // app uses for "Saved", "Favorited", etc. — so the success message
-// doesn't introduce a parallel 通知 style.
+// doesn't introduce a parallel notification style.
 //
-// To remove: delete this file + the <script> tag in 索引.html + the
+// To remove: delete this file + the <script> tag in index.html + the
 // ^ button in cookbookServe.js + the "cookbook_serve" entry in
-// src/cookbook_serve_lifecycle.py + app.py 中对应的注册行。
+// BUILTIN_ACTIONS + src/cookbook_serve_lifecycle.py + its
 // registration line in app.py.
 
 try { (function () {
@@ -41,7 +41,7 @@ try { (function () {
     } catch (_) { _toastFn = null; }
     return _toastFn;
   }
-  // 可选参数 opts: {action, onAction, duration, leadingIcon}
+  // Optional opts: {action, onAction, duration, leadingIcon}
   async function toast(msg, opts) {
     const fn = await _getToast();
     if (fn) {
@@ -50,7 +50,7 @@ try { (function () {
     try { console.log("[toast]", msg); } catch (_) {}
   }
 
-  // Cached handle to the tasks module so the success 提示条's "Open"
+  // Cached handle to the tasks module so the success toast's "Open"
   // action can jump straight to the new task in the Tasks tab.
   let _tasksMod = null;
   async function _getTasksMod() {
@@ -63,7 +63,7 @@ try { (function () {
     if (m && typeof m.openTasks === "function") {
       try { m.openTasks(taskId); return; } catch (_) {}
     }
-    // 最后的回退方案：点击侧边栏 Tasks 按钮。
+    // Last-resort fallback: click the sidebar Tasks button.
     document.getElementById("tool-tasks-btn")?.click();
   }
 
@@ -78,14 +78,14 @@ try { (function () {
   ];
   const WEEKDAYS = new Set(["MO","TU","WE","TH","FR"]);
 
-  // 解析 the model identity from the closest .memory-item card —
-  // that's the canonical 容器 the cookbook serve UI uses, with
+  // Resolve the model identity from the closest .memory-item card —
+  // that's the canonical container the cookbook serve UI uses, with
   // the model repo on data-repo. We do NOT grab the title via
   // textContent, because the title row also contains inline status
-  // 因为标题行也包含内联状态标签（"running"、"downloading"）和 "HF ↗" 链接 ——
+  // pills ("running", "downloading") and an "HF ↗" link — pulling all
   // of it in turns a clean preset name like "Qwen3.5-397B-A17B-AWQ"
-  // "Qwen3.5-397B-A17B-AWQ running HF ↗"，这会在 action_cookbook_serve 中
-  // "Qwen3.5-397B-A17B-AWQ running HF ↗"，这会在 action_cookbook_serve 中
+  // into "Qwen3.5-397B-A17B-AWQ running HF ↗", which then fails the
+  // preset lookup in action_cookbook_serve.
   function readPanelConfig(arrowBtn) {
     const item = arrowBtn.closest(".memory-item") || arrowBtn.closest(".hwfit-cached-item");
     const panel = arrowBtn.closest(".hwfit-serve-panel");
@@ -94,8 +94,8 @@ try { (function () {
       || "";
     // Title = last segment of the repo (after the final /), which is
     // exactly what the cookbook UI renders in the card title and what
-    // the preset 仓库 uses as its short name. e.g.
-    //   cyankiwi/Qwen3.5-397B-A17B-AWQ → Qwen3.5-397B-A17B-AWQ
+    // the preset registry uses as its short name. e.g.
+    //   cyankiwi/Qwen3.5-397B-A17B-AWQ  →  Qwen3.5-397B-A17B-AWQ
     // Falls back to data-modelName or the bare repo for ollama-style
     // entries that don't have a slash.
     let title = "";
@@ -173,7 +173,7 @@ try { (function () {
       toast("Couldn't find a panel to mount the schedule form");
       return;
     }
-    // 切换：如果已存在表单则关闭。
+    // Toggle.
     const existing = anchor.querySelector(".hwfit-schedule-form");
     if (existing) { existing.remove(); return; }
     const tmp = document.createElement("div");
@@ -216,11 +216,11 @@ try { (function () {
       let dur = (eh * 60 + em) - (sh * 60 + sm);
       if (dur <= 0) dur += 24 * 60;
 
-      // 后端将 scheduled_time 存储为 UTC。用户选择的是本地时间。
+      // The backend stores scheduled_time as UTC. The user picks
       // wall-clock LOCAL time. Without converting, "09:55" in a UTC+9
-      // 如果不转换，UTC+9 时区的 "09:55" 会存储为 09:55 UTC = 18:55 本地时间 →
+      // timezone gets stored as 09:55 UTC = 18:55 local → next-run
       // shows ~9 hours later instead of "in 5 min". Mirror what
-      // 与 tasks.js 通过 _localTimeToUtc 辅助函数相同的转换方式。
+      // tasks.js does via its _localTimeToUtc helper.
       const _localHHMMToUtc = (hhmm) => {
         const [h, m] = hhmm.split(":").map(Number);
         const d = new Date();
@@ -253,8 +253,8 @@ try { (function () {
         sched.cron_expression = `${smUtc} ${shUtc} * * ${dayNum.join(",")}`;
       }
 
-      // 名称："Serve: <完整模型名称>" —— 从 .memory-item-title 获取，确保是用户看到的显示名称
-      // （例如 "Qwen3.5-397B-A17B-AWQ"），而非像 "model" 这样的占位符。
+      // Name: "Serve: <full model name>" — pulled from .memory-item-title
+      // so it's the user's display name (e.g. "Qwen3.5-397B-A17B-AWQ")
       // not a placeholder like "model".
       const fullName = (cfg.title || cfg.repo_id || "").trim() || "model";
       const payload = {
@@ -302,13 +302,13 @@ try { (function () {
               });
               if (mk.ok) {
                 const mkData = await mk.json();
-                // 创建端点返回 {ok, id, name, color}；列表端点返回
-                // {href, name, color}。两者一一对应（href === id），因此我们合成相同的结构。
+                // The create endpoint returns {ok, id, name, color}; the
+                // list endpoint returns {href, name, color}. The two map
                 // 1:1 (href === id) so we synthesize the same shape.
                 cookbookCal = { href: mkData.id, name: mkData.name, color: mkData.color };
               }
             }
-            // `cookbook_task_id:` 标记独占一行，让 calendar.js 的事件表单代码
+            // The `cookbook_task_id:` marker on its own line lets
             // calendar.js's event-form code detect that this event was
             // created from a Cookbook schedule and render an
             // "Open task" button alongside the description, so the user
@@ -334,9 +334,9 @@ try { (function () {
               body: JSON.stringify(evBody),
             });
             const evData = evRes.ok ? await evRes.json() : null;
-            // 将事件 uid + 日历 href 存储到任务的 prompt JSON 中，以便任务删除钩子
+            // Stash the event uid + calendar href on the task's prompt
             // JSON so the task-delete hook can cascade the calendar
-            // 清理. PATCH the task with an updated prompt.
+            // cleanup. PATCH the task with an updated prompt.
             if (evData && (evData.uid || evData.id)) {
               const eventUid = evData.uid || evData.id;
               try {
@@ -345,9 +345,9 @@ try { (function () {
                   cookbook_event_uid: eventUid,
                   cookbook_event_calendar: cookbookCal?.href || "",
                 });
-                // /api/tasks/{id} 支持 PUT 而非 PATCH —— 在此发送 PATCH
+                // /api/tasks/{id} accepts PUT, not PATCH — sending PATCH
                 // here silently failed (no such method on that route), so
-                // cookbook_event_uid 标记，服务器端的删除级联在用户之后
+                // the task never got the cookbook_event_uid marker and the
                 // server-side delete-cascade had nothing to follow when the
                 // user later deleted the task.
                 await fetch(`/api/tasks/${encodeURIComponent(data.id)}`, {

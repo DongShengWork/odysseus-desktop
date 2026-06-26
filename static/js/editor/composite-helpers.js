@@ -1,6 +1,6 @@
 /**
- * 纯合成辅助函数 — 将图层列表展平为单个画布，
- * 用于缩略图 / 合并蒙版。
+ * Pure composite helpers — flatten a layer list into a single canvas
+ * for thumbnails / merged-mask use.
  *
  * Both helpers are stateless: the caller passes everything they need
  * (layer list, canvas dimensions, an offsets lookup). The legacy
@@ -9,15 +9,15 @@
  */
 
 /**
- * 从所有可见图层合成的低成本缩小预览。
- * 返回 JPEG dataURL，当没有内容可绘制时返回 null。
+ * Cheap downscaled preview composited from all visible layers.
+ * Returns a JPEG dataURL, or null when there's nothing to draw.
  *
  * @param {Array<{visible: boolean, opacity: number, id: string, canvas: HTMLCanvasElement}>} layers
- * @param {number} imgW            文档宽度，单位为画布像素。
- * @param {number} imgH            文档高度，单位为画布像素。
- * @param {Map<string,{x:number,y:number}>} offsets  图层偏移，按 id 索引。
- * @param {number} maxDim          最长边目标尺寸，单位为 CSS 像素。
- * @param {number} quality         JPEG 质量 0..1。
+ * @param {number} imgW            Document width in canvas pixels.
+ * @param {number} imgH            Document height in canvas pixels.
+ * @param {Map<string,{x:number,y:number}>} offsets  Layer offsets, keyed by id.
+ * @param {number} maxDim          Longest-edge target in CSS pixels.
+ * @param {number} quality         JPEG quality 0..1.
  * @returns {string|null}
  */
 export function buildThumbnail(layers, imgW, imgH, offsets, maxDim, quality = 0.6) {
@@ -48,13 +48,13 @@ export function buildThumbnail(layers, imgW, imgH, offsets, maxDim, quality = 0.
 
 
 /**
- * 所有可见蒙版子图层在整个 `layers` 中的并集，
- * 渲染为与文档尺寸相同的二值白色画布。
+ * Union of every visible mask sub-layer across `layers`, rendered as a
+ * binary white canvas the size of the document.
  *
- * `lighter` 合成模式 = 叠加 — 重叠像素保持在
- * 255 上限，因此任何蒙版绘制过的地方，结果都是纯白色。
- * 当没有蒙版图层贡献任何像素时返回 null（以便调用者可以
- * 干净地提前退出）。
+ * `lighter` composite = additive — overlapping pixels stay clamped at
+ * 255, so wherever any mask painted, the result is solid white.
+ * Returns null when no mask layer contributed any pixels (so the caller
+ * can early-out cleanly).
  *
  * @param {Array<{masks?: Array<{visible: boolean, canvas: HTMLCanvasElement}>}>} layers
  * @param {number} imgW

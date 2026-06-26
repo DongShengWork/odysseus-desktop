@@ -1,4 +1,4 @@
-"""定时任务的 CRUD 路由。"""
+"""CRUD routes for scheduled tasks."""
 
 import json
 import logging
@@ -110,7 +110,7 @@ def _maybe_cascade_calendar_event(task) -> None:
             events = (ev_r.json() or {}).get("events", [])
             # Match by exact summary. Tasks named "Serve: <model>" are
             # created from the schedule modal; the event's summary mirrors
-            # the task name 1:1 by de签名.
+            # the task name 1:1 by design.
             target = (task.name or "").strip()
             uids_to_delete = set()
             for ev in events:
@@ -509,7 +509,7 @@ def setup_task_routes(task_scheduler) -> APIRouter:
                 cron_expression=req.cron_expression,
             )
 
-        # 生成 Webhook token if needed
+        # Generate webhook token if needed
         webhook_token = None
         if req.trigger_type == "webhook":
             webhook_token = secrets.token_urlsafe(32)
@@ -523,7 +523,7 @@ def setup_task_routes(task_scheduler) -> APIRouter:
                 else bool(req.notifications_enabled) if req.notifications_enabled is not None
                 else True
             )
-            # 验证 chained task belongs to same owner
+            # Validate chained task belongs to same owner
             if req.then_task_id:
                 chain_target = db.query(ScheduledTask).filter(
                     ScheduledTask.id == req.then_task_id
@@ -698,7 +698,7 @@ def setup_task_routes(task_scheduler) -> APIRouter:
             if req.endpoint_url is not None:
                 task.endpoint_url = req.endpoint_url or None
             if req.trigger_type is not None:
-                # 生成 Webhook token when switching to Webhook trigger
+                # Generate webhook token when switching to webhook trigger
                 if req.trigger_type == "webhook" and not task.webhook_token:
                     task.webhook_token = secrets.token_urlsafe(32)
                 task.trigger_type = req.trigger_type
@@ -769,8 +769,8 @@ def setup_task_routes(task_scheduler) -> APIRouter:
             if user and task.owner != user:
                 raise HTTPException(403, "Access denied")
             # Cascade: cookbook_serve tasks may have a linked calendar
-            # event (created via the "创建 event in calendar" toggle
-            # in the schedule modal). If so, delete the 日历事件
+            # event (created via the "Create event in calendar" toggle
+            # in the schedule modal). If so, delete the calendar event
             # too so the calendar doesn't end up holding a phantom event
             # for a task that no longer exists.
             _maybe_cascade_calendar_event(task)
@@ -903,17 +903,17 @@ def setup_task_routes(task_scheduler) -> APIRouter:
                 ScheduledTask, TaskRun.task_id == ScheduledTask.id
             )
             if user:
-                # Strict owner 权限范围 — was previously OR'ing in `owner IS NULL`
+                # Strict owner scope — was previously OR'ing in `owner IS NULL`
                 # rows for "legacy single-user" back-compat, but that leaks any
                 # legacy/migrated task's full result text to every authenticated
-                # user. _migrate_as签名_legacy_owner runs on startup to claim
+                # user. _migrate_assign_legacy_owner runs on startup to claim
                 # legacy rows for the admin, so the OR-NULL path is no longer
                 # needed for any sane deploy.
                 q = q.filter(ScheduledTask.owner == user)
             # Pull a little extra before de-duping. When auth is bypassed on a
             # local browser session, legacy/default tasks from multiple owners
             # can be visible together; the built-in urgent-email scanner then
-            # produces several identical "no 邮件账户s configured" rows in
+            # produces several identical "no email accounts configured" rows in
             # the same minute. Keep the task records intact, but collapse those
             # duplicate Activity rows for display.
             rows = q.order_by(TaskRun.started_at.desc()).limit(limit * 3).all()
@@ -944,7 +944,7 @@ def setup_task_routes(task_scheduler) -> APIRouter:
                         "session_id": t.session_id or "",
                         "research_id": _run_research_id(t),
                         # Where the task delivered its result — the Activity tab
-                        # uses this to filter 通知 rows in/out.
+                        # uses this to filter notification rows in/out.
                         "output_target": t.output_target or "session",
                     }
                     for r, t in deduped
@@ -1134,7 +1134,7 @@ def setup_task_routes(task_scheduler) -> APIRouter:
             draft = _json.loads(m.group(0) if m else text)
             if not isinstance(draft, dict):
                 raise ValueError("not an object")
-            # Whitelist + light validation so the 前端 gets clean fields.
+            # Whitelist + light validation so the frontend gets clean fields.
             out: Dict[str, Any] = {}
             if draft.get("task_type") in ("llm", "research"):
                 out["task_type"] = draft["task_type"]

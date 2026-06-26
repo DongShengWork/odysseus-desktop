@@ -15,7 +15,7 @@ from .query import build_enhanced_query
 
 logger = logging.getLogger(__name__)
 
-# Provider 仓库 — maps setting value to (label, needs_key, needs_url)
+# Provider registry — maps setting value to (label, needs_key, needs_url)
 PROVIDER_INFO = {
     "searxng":  ("SearXNG",           False, True),
     "brave":    ("Brave Search",      True,  False),
@@ -61,7 +61,7 @@ def _get_provider_key(provider: str) -> str:
         val = (settings.get(field) or "").strip()
         if val:
             return val
-    # Legacy 回退: old shared search_api_key field
+    # Legacy fallback: old shared search_api_key field
     legacy = (settings.get("search_api_key") or "").strip()
     if legacy:
         return legacy
@@ -128,7 +128,7 @@ _NEWS_HINTS = ("news", "nyheter", "headlines", "breaking", "latest", "today", "i
 # Default general engines (google/duckduckgo/brave/startpage/wikipedia) are
 # routinely rate-limited / CAPTCHA-blocked on this instance and return nothing.
 # Pin engines that actually respond so non-news queries get results without any
-# third-party API 回退. Override via SEARXNG_GENERAL_ENGINES.
+# third-party API fallback. Override via SEARXNG_GENERAL_ENGINES.
 _GENERAL_ENGINES = os.environ.get("SEARXNG_GENERAL_ENGINES", "bing,mojeek,presearch")
 
 

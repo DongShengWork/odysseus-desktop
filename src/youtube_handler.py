@@ -16,8 +16,8 @@ the single source of truth so module state and behavior can't diverge again.
 import importlib
 import sys
 
-# Import the canonical module directly (服务s.youtube.youtube_handler)
-# without triggering the heavy 服务s/__init__.py top-level imports.
+# Import the canonical module directly (services.youtube.youtube_handler)
+# without triggering the heavy services/__init__.py top-level imports.
 _youtube_handler = importlib.import_module("services.youtube.youtube_handler")
 
 sys.modules[__name__] = _youtube_handler

@@ -25,9 +25,9 @@ class LLMConfig:
     STREAM_TIMEOUT = 300
     # TCP+TLS connect budget for a SINGLE attempt. The old hard-coded 3.0s
     # assumed LAN/Tailscale peers ('SYN in <100ms'); it is too tight for public
-    # cloud endpoints (offshore APIs take ~0.5-1.5s cold, with 抖动), so a
+    # cloud endpoints (offshore APIs take ~0.5-1.5s cold, with jitter), so a
     # brief blip on the first connect of an idle chat surfaced as a 503 on the
-    # 流式传输 path (which, unlike llm_call, does not 重试 the connect). A
+    # streaming path (which, unlike llm_call, does not retry the connect). A
     # genuinely dead upstream stays bounded by the dead-host cooldown. Override
     # with env LLM_CONNECT_TIMEOUT (seconds).
     CONNECT_TIMEOUT = float(os.getenv('LLM_CONNECT_TIMEOUT', '10') or '10')
@@ -65,7 +65,7 @@ _response_cache = {}
 
 # Dead-host cooldown: maps host (scheme://host:port) -> unix ts when cooldown expires.
 # When a connect to a host fails, we mark it dead for DEAD_HOST_COOLDOWN seconds so
-# subsequent calls fail instantly instead of waiting on the connect 超时. Keeps
+# subsequent calls fail instantly instead of waiting on the connect timeout. Keeps
 # one unreachable upstream from jamming chat across the rest of the app.
 #
 # But a SINGLE transient blip (local model briefly busy, a momentary
@@ -80,7 +80,7 @@ _dead_hosts: Dict[str, float] = {}
 _host_fails: Dict[str, int] = {}
 # Guards the two maps above. The synchronous llm_call() runs inside FastAPI's
 # threadpool (sync routes such as /sessions/auto-sort) while llm_call_async()
-# runs on the 事件循环, so these maps are mutated from multiple OS threads.
+# runs on the event loop, so these maps are mutated from multiple OS threads.
 # Without the lock the get()+1+set on _host_fails is a read-modify-write that
 # loses failure counts under concurrent connect errors (issue #659).
 _host_health_lock = threading.Lock()
@@ -245,7 +245,7 @@ def _clear_host_dead(url: str) -> None:
 
 # Shared async HTTP client. Reusing one client keeps connections warm:
 # repeat calls to api.anthropic.com / api.openai.com / openrouter skip the
-# 100-500ms TCP+TLS handshake. Lazy init so we bind to the running 事件循环.
+# 100-500ms TCP+TLS handshake. Lazy init so we bind to the running event loop.
 _http_client: Optional[httpx.AsyncClient] = None
 _http_limits = httpx.Limits(max_connections=100, max_keepalive_connections=30, keepalive_expiry=30.0)
 
@@ -449,7 +449,7 @@ def _host_match(url: str, *domains: str) -> bool:
 
 # Kimi Code subscription keys (api.kimi.com/coding/v1) require a whitelisted
 # coding-agent User-Agent; otherwise the API returns 403 access_terminated_error.
-# Tried in order; first success is cached per 基础地址 for later requests.
+# Tried in order; first success is cached per base URL for later requests.
 KIMI_CODE_USER_AGENTS: tuple[str, ...] = (
     "claude-code/0.1.0",
     "claude-code/1.0.0",
@@ -848,12 +848,12 @@ def _uses_max_completion_tokens(model: str) -> bool:
     return any(m.startswith(p) or f"/{p}" in m for p in _MAX_COMPLETION_TOKENS_MODELS)
 
 # OpenAI reasoning models (o1, o3, o4, gpt-5 families) only accept the default
-# 温度. Sending any explicit value — even 0.0 — returns HTTP 400
+# temperature. Sending any explicit value — even 0.0 — returns HTTP 400
 # ("Only the default (1) value is supported"). That otherwise breaks chat when a
-# preset sets a non-default 温度, and makes endpoint probing report a
+# preset sets a non-default temperature, and makes endpoint probing report a
 # perfectly good model as failing. For these models we omit the field and let
 # the API use its required default. (gpt-4.5 is intentionally excluded — it is
-# not a reasoning model and accepts 温度 normally.)
+# not a reasoning model and accepts temperature normally.)
 _FIXED_TEMPERATURE_MODELS = ("o1", "o3", "o4", "gpt-5", "kimi-for-coding")
 
 def _restricts_temperature(model: str) -> bool:
@@ -864,11 +864,11 @@ def _restricts_temperature(model: str) -> bool:
     return any(m.startswith(p) or f"/{p}" in m for p in _FIXED_TEMPERATURE_MODELS)
 
 
-# The official Moonshot API fixes 温度 at 1.0 in thinking mode and 0.6
+# The official Moonshot API fixes temperature at 1.0 in thinking mode and 0.6
 # when thinking is explicitly disabled for Kimi K2.5/K2.6. Any other explicit
 # value returns HTTP 400. Odysseus does not currently send the `thinking` mode
-# control, so omit 温度 and let Moonshot use its default thinking mode.
-# Keep the gate provider-specific: self-hosted Kimi 部署s may accept
+# control, so omit temperature and let Moonshot use its default thinking mode.
+# Keep the gate provider-specific: self-hosted Kimi deployments may accept
 # custom sampling values, and older Moonshot models have different defaults.
 def _moonshot_rejects_custom_temperature(provider: str, model: str) -> bool:
     """Check if the official Moonshot API fixes temperature for this model."""
@@ -885,10 +885,10 @@ def _omit_temperature(provider: str, model: str) -> bool:
     )
 
 
-# Anthropic removed the 采样参数 (温度, top_p, top_k) starting
-# with Claude Opus 4.7. On Opus 4.7 and later, sending `温度` at all —
+# Anthropic removed the sampling parameters (temperature, top_p, top_k) starting
+# with Claude Opus 4.7. On Opus 4.7 and later, sending `temperature` at all —
 # even 0.0 — returns HTTP 400. Earlier Claude models (Opus 4.6 and below, every
-# Sonnet/Haiku) still accept 温度 in [0.0, 1.0], so the omission must be
+# Sonnet/Haiku) still accept temperature in [0.0, 1.0], so the omission must be
 # version-gated rather than applied to all `claude-*` models.
 def _anthropic_rejects_temperature(model: str) -> bool:
     """Check if a native-Anthropic model rejects the temperature field (Opus 4.7+)."""
@@ -896,7 +896,7 @@ def _anthropic_rejects_temperature(model: str) -> bool:
         return False
     # `(?<![a-z])` anchors "opus" to a word boundary so a substring match like
     # `oct-opus`/`octopus-4-8` can't be read as Opus (it would otherwise strip
-    # 温度). Cap the minor at 1-2 digits and forbid a trailing digit so a
+    # temperature). Cap the minor at 1-2 digits and forbid a trailing digit so a
     # dated id like `claude-opus-4-20250514` (Opus 4.0) parses as major-only (no
     # minor match, kept) instead of reading the date `20250514` as a giant minor
     # that would falsely test >= 4.7. Dated 4.7+ snapshots (`claude-opus-4-7-
@@ -934,7 +934,7 @@ def _convert_openai_content_to_anthropic(content):
             continue
         if block.get("type") == "image_url":
             url = (block.get("image_url") or {}).get("url", "")
-            # 解析 data URI: data:镜像/<fmt>;base64,<data>
+            # Parse data URI: data:image/<fmt>;base64,<data>
             if url.startswith("data:"):
                 try:
                     header, b64_data = url.split(",", 1)
@@ -970,7 +970,7 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
         if m.get("role") == "system":
             system_parts.append(m.get("content") or "")
         elif m.get("role") == "tool":
-            # 转换 OpenAI 工具结果 to Anthropic format
+            # Convert OpenAI tool result to Anthropic format
             chat_messages.append({
                 "role": "user",
                 "content": [{
@@ -980,7 +980,7 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
                 }],
             })
         elif m.get("role") == "assistant" and isinstance(m.get("tool_calls"), list):
-            # 转换 OpenAI assistant tool_calls to Anthropic format
+            # Convert OpenAI assistant tool_calls to Anthropic format
             content = []
             if m.get("content"):
                 content.append({"type": "text", "text": m["content"]})
@@ -999,10 +999,10 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
                 })
             chat_messages.append({"role": "assistant", "content": content})
         else:
-            # 转换 multimodal content (镜像_url → 镜像) for Anthropic
+            # Convert multimodal content (image_url → image) for Anthropic
             content = _convert_openai_content_to_anthropic(m["content"])
             chat_messages.append({"role": m["role"], "content": content})
-    # Anthropic only accepts 温度 in [0.0, 1.0] and 400s on anything above
+    # Anthropic only accepts temperature in [0.0, 1.0] and 400s on anything above
     # 1.0. Clamp here (in the Anthropic builder only) so presets/sliders that use
     # the wider OpenAI 0.0-2.0 range — e.g. the shipped "Nietzsche" preset at 1.2
     # — don't hard-break every Claude request. OpenAI's own path is left untouched.
@@ -1013,16 +1013,16 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
         "messages": chat_messages,
         "max_tokens": max_tokens if max_tokens and max_tokens > 0 else 4096,
     }
-    # Opus 4.7+ removed the 采样参数 — sending `温度` (even 0.0)
+    # Opus 4.7+ removed the sampling parameters — sending `temperature` (even 0.0)
     # returns HTTP 400. Omit it for those models; older Claude models still take it.
     if not _anthropic_rejects_temperature(model):
         payload["temperature"] = temperature
     if system_parts:
         system_text = "\n\n".join(system_parts)
-        # 发送 `system` as a structured text block so we can attach a prompt-cache
-        # breakpoint. The 智能体循环 re-sends this same large prefix every round;
-        # 缓存 it makes Anthropic re-read it from cache (~90% cheaper, lower TTFB)
-        # instead of re-billing it. Skip 缓存 tiny one-off prompts, where the
+        # Send `system` as a structured text block so we can attach a prompt-cache
+        # breakpoint. The agent loop re-sends this same large prefix every round;
+        # caching it makes Anthropic re-read it from cache (~90% cheaper, lower TTFB)
+        # instead of re-billing it. Skip caching tiny one-off prompts, where the
         # cache-WRITE premium wouldn't pay back (no reuse). Presence of `tools`
         # means an agentic/multi-round call, where the prefix is always reused.
         system_block = {"type": "text", "text": system_text}
@@ -1031,7 +1031,7 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
         payload["system"] = [system_block]
     if stream:
         payload["stream"] = True
-    # 转换 OpenAI-format tools to Anthropic format
+    # Convert OpenAI-format tools to Anthropic format
     if tools:
         anthropic_tools = []
         for t in tools:
@@ -1043,7 +1043,7 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
                     "input_schema": fn.get("parameters", {"type": "object", "properties": {}}),
                 })
         if anthropic_tools:
-            # Cache the 工具模式s too — they're stable for the whole agent run.
+            # Cache the tool schemas too — they're stable for the whole agent run.
             # The breakpoint caches all tool defs preceding it in the request.
             anthropic_tools[-1]["cache_control"] = {"type": "ephemeral"}
             payload["tools"] = anthropic_tools
@@ -1137,7 +1137,7 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
         role = msg.get("role")
 
         if role == "tool":
-            # Orphan 工具结果. There is no valid assistant tool_calls parent
+            # Orphan tool result. There is no valid assistant tool_calls parent
             # immediately before this batch, so it cannot be sent.
             logger.debug("Dropping orphan tool message before provider request")
             i += 1
@@ -1191,7 +1191,7 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
             logger.debug("Pruned unanswered assistant tool_calls before provider request")
         i = j
 
-    # 合并 consecutive user messages to satisfy strict role alternation
+    # Merge consecutive user messages to satisfy strict role alternation
     # requirements after invalid tool-call fragments have been removed.
     merged: List[Dict] = []
     for item in repaired:
@@ -1205,9 +1205,9 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
             lc = last_copy.get("content")
             ic = item.get("content")
             if isinstance(lc, list) or isinstance(ic, list):
-                # Preserve multimodal content blocks (e.g. an 镜像 part) by
+                # Preserve multimodal content blocks (e.g. an image part) by
                 # concatenating the block lists. str()-ing a list turned an
-                # 镜像 message into its Python repr and dropped the 镜像.
+                # image message into its Python repr and dropped the image.
                 merged_blocks = _as_content_blocks(lc) + _as_content_blocks(ic)
                 if merged_blocks:
                     last_copy["content"] = merged_blocks
@@ -1384,7 +1384,7 @@ def llm_call(url: str, model: str, messages: List[Dict], temperature: float = LL
     """Synchronous LLM call with optional prompt type enhancement."""
     h = _provider_headers(_detect_provider(url))
     # Tolerate headers that arrive as a JSON string (some sessions stored them
-    # double-编码d) — otherwise h.update() throws "dictionary update sequence
+    # double-encoded) — otherwise h.update() throws "dictionary update sequence
     # element #0 has length 1; 2 is required".
     if isinstance(headers, str):
         try:
@@ -1565,7 +1565,7 @@ async def llm_call_async(
 
     if provider == "chatgpt-subscription":
         # ChatGPT/Codex requires streamed Responses requests even for callers
-        # that want a plain string (auto-title, 记忆提取, etc.).
+        # that want a plain string (auto-title, memory extraction, etc.).
         # Reuse stream_llm's validated Codex SSE path and collect deltas.
         parts: List[str] = []
         async for chunk in stream_llm(
@@ -1757,7 +1757,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
         if tools:
             payload["tools"] = tools
         # For Ollama's OpenAI-compat /v1 endpoint with thinking models (qwen3,
-        # gemma4, etc.), suppress thinking so 工具调用s aren't swallowed inside
+        # gemma4, etc.), suppress thinking so tool calls aren't swallowed inside
         # <think> blocks. Ollama /v1 accepts "think": false as a top-level param.
         if _is_ollama_openai_compat_url(url) and _supports_thinking(model):
             payload["think"] = False
@@ -1771,7 +1771,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
     # The dead-host cooldown still bounds a genuinely unreachable upstream, so a
     # wider connect budget only affects first contact and stops a brief cold
     # connect blip (offshore/public endpoints) surfacing as a 503 on this stream
-    # path, which -- unlike llm_call -- does not 重试 the connect.
+    # path, which -- unlike llm_call -- does not retry the connect.
     stream_timeout = _stream_timeout(timeout)
 
     if _is_host_dead(target_url):
@@ -1779,7 +1779,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
         return
     note_model_activity(target_url, model)
 
-    # ── ChatGPT Subscription / Codex Responses 流式传输 ──
+    # ── ChatGPT Subscription / Codex Responses streaming ──
     if provider == "chatgpt-subscription":
         event_name = ""
         input_tokens = 0
@@ -1841,7 +1841,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
             yield f'event: error\ndata: {json.dumps({"error": str(e), "status": 502})}\n\n'
         return
 
-    # ── Native Ollama 流式传输 ──
+    # ── Native Ollama streaming ──
     if provider == "ollama":
         _ollama_tool_calls: List[Dict] = []
         _harmony_router = _HarmonyStreamRouter()
@@ -1903,11 +1903,11 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
             yield f'event: error\ndata: {json.dumps({"error": str(e), "status": 502})}\n\n'
         return
 
-    # ── Anthropic 流式传输 ──
+    # ── Anthropic streaming ──
     if provider == "anthropic":
         _anth_input_tokens = 0
         _anth_output_tokens = 0
-        # Track tool_use blocks: {索引: {id, name, arguments_json}}
+        # Track tool_use blocks: {index: {id, name, arguments_json}}
         _anth_tool_blocks: Dict[int, Dict] = {}
         _anth_block_idx = -1
         _anth_block_type = ""
@@ -1974,7 +1974,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                         elif evt == "message_delta":
                             _anth_output_tokens = j.get("usage", {}).get("output_tokens", 0)
                         elif evt == "message_stop":
-                            # Emit accumulated 工具调用s in OpenAI-compatible format
+                            # Emit accumulated tool calls in OpenAI-compatible format
                             if _anth_tool_blocks:
                                 calls = []
                                 for idx in sorted(_anth_tool_blocks):
@@ -2010,11 +2010,11 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
             yield f'event: error\ndata: {json.dumps({"error": str(e), "status": 502})}\n\n'
         return
 
-    # ── OpenAI-compatible 流式传输 ──
-    # Accumulate native tool_calls across 流式传输 数据块s
+    # ── OpenAI-compatible streaming ──
+    # Accumulate native tool_calls across streaming chunks
     _tc_acc: Dict[int, Dict] = {}  # index -> {id, name, arguments}
     _tc_last_idx = [-1]  # most-recently-touched slot, for providers that omit `index`
-    # For thinking models: prepend <think> to first content delta so 前端
+    # For thinking models: prepend <think> to first content delta so frontend
     # can detect thinking-in-progress (some models output </think> but no <think>)
     _thinking_model = _supports_thinking(model)
     _first_content_sent = False
@@ -2039,7 +2039,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
             if is_thinking:
                 events.append(_stream_delta_event(part, thinking=True))
                 continue
-            # Some thinking 后端s start normal content with a stray closing
+            # Some thinking backends start normal content with a stray closing
             # tag. Repair only that shape; do not wrap every first token for
             # model families like MiniMax, which often stream ordinary answers.
             if _thinking_model and not _first_content_sent and part.lstrip().lower().startswith("</think"):
@@ -2090,10 +2090,10 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                     ):
                                         _actual_model_announced = True
                                         yield f'data: {json.dumps({"type": "model_actual", "requested_model": model, "model": _actual_model})}\n\n'
-                                # Usage 数据块 (from stream_options)
+                                # Usage chunk (from stream_options)
                                 _choices = j.get("choices") or []
                                 _delta0 = _choices[0].get("delta") if (_choices and _choices[0] is not None) else None
-                                # Capture usage whenever the 数据块 carries it and
+                                # Capture usage whenever the chunk carries it and
                                 # the delta has no actual output. Some gateways /
                                 # local servers attach usage to the FINAL delta,
                                 # which also carries role/finish_reason (so it is
@@ -2110,7 +2110,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                     u = j["usage"] or {}
                                     _usage_data = {"input_tokens": u.get("prompt_tokens", 0), "output_tokens": u.get("completion_tokens", 0)}
                                     # llama.cpp puts a `timings` block alongside `usage` with the
-                                    # TRUE generation speed (predicted_per_second) — pure 解码,
+                                    # TRUE generation speed (predicted_per_second) — pure decode,
                                     # excluding prefill/network. Pass it through so the UI shows the
                                     # real gen t/s instead of recomputing tokens/wall-clock (which
                                     # includes prefill and reads ~20-40% low). Prefill speed too.
@@ -2162,7 +2162,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                                         # Split: up-to-</think> → thinking, remainder → content
                                                         think_part = content[:close_idx]
                                                         if not _think_open_stripped:
-                                                            # Strip the opening <think[...] > from the first 数据块.
+                                                            # Strip the opening <think[...] > from the first chunk.
                                                             # Use a dedicated flag — _first_content_sent stays False
                                                             # throughout the think block, so it must not be reused.
                                                             tag_end = think_part.lower().find(">")
@@ -2179,7 +2179,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                                     else:
                                                         # Still inside <think>: route to thinking channel
                                                         if not _think_open_stripped:
-                                                            # Strip the opening <think[...] > tag (first 数据块 only)
+                                                            # Strip the opening <think[...] > tag (first chunk only)
                                                             tag_end = stripped.lower().find(">")
                                                             if tag_end != -1:
                                                                 content = stripped[tag_end + 1:]
@@ -2187,7 +2187,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                                         if content:
                                                             yield f'data: {json.dumps({"delta": content, "thinking": True})}\n\n'
                                                 else:
-                                                    # Some thinking 后端s start normal content with a
+                                                    # Some thinking backends start normal content with a
                                                     # stray closing tag. Repair only that shape; do not
                                                     # wrap every first token for model families like
                                                     # MiniMax, which often stream ordinary answers.
@@ -2195,16 +2195,16 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                                         content = "<think>" + content
                                                     _first_content_sent = True
                                                     yield f'data: {json.dumps({"delta": content})}\n\n'
-                                        # Native 工具调用s — accumulate across 数据块s
+                                        # Native tool calls — accumulate across chunks
                                         for tc in delta.get("tool_calls") or []:
                                             if tc is None:
                                                 continue
                                             func = tc.get("function") or {}
                                             raw_idx = tc.get("index")
                                             if raw_idx is None:
-                                                # Gemini's OpenAI-compat layer omits `索引` on
-                                                # 并行工具调用 (every delta arrives as
-                                                # 索引=None) and sends each call complete in one
+                                                # Gemini's OpenAI-compat layer omits `index` on
+                                                # parallel tool calls (every delta arrives as
+                                                # index=None) and sends each call complete in one
                                                 # delta. Without this, all parallel calls collide
                                                 # into slot 0 — later calls overwrite the first's
                                                 # name and CORRUPT its arguments by concatenation,
@@ -2215,7 +2215,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                                 if func.get("name") or _tc_last_idx[0] < 0:
                                                     # Next free slot ABOVE any existing key (not
                                                     # len()), so a provider mixing integer indices
-                                                    # with 索引=None can never collide.
+                                                    # with index=None can never collide.
                                                     idx = max(_tc_acc, default=-1) + 1
                                                 else:
                                                     idx = _tc_last_idx[0]
@@ -2226,11 +2226,11 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                                 _tc_acc[idx] = {"id": "", "name": "", "arguments": ""}
                                             if tc.get("id"):
                                                 _tc_acc[idx]["id"] = tc["id"]
-                                            # Gemini 3 returns an opaque thought_签名ature in
+                                            # Gemini 3 returns an opaque thought_signature in
                                             # extra_content on the function-call delta. It MUST be
                                             # echoed back on the assistant tool_call next round or the
                                             # follow-up request 400s ("Function call is missing a
-                                            # thought_签名ature"). Preserve it verbatim; other
+                                            # thought_signature"). Preserve it verbatim; other
                                             # providers never send it, so this is a no-op for them.
                                             if tc.get("extra_content"):
                                                 _tc_acc[idx]["extra_content"] = tc["extra_content"]
@@ -2240,7 +2240,7 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                                 # Guard against a null arguments delta: `func` can be
                                                 # {"arguments": None} (JSON null), and a raw `+= None`
                                                 # raises TypeError that the broad except swallows,
-                                                # silently dropping the rest of the 数据块. Matches the
+                                                # silently dropping the rest of the chunk. Matches the
                                                 # Anthropic accumulator (`partial = ... or ""`) above.
                                                 _tc_acc[idx]["arguments"] += func["arguments"] or ""
                                                 # Stream tool arg deltas for doc tools
@@ -2325,7 +2325,7 @@ async def stream_llm_with_fallback(candidates, messages, **kwargs):
         async for chunk in stream_llm(url, model, messages, headers=headers, **kwargs):
             if chunk.startswith("event: error"):
                 if not emitted and not is_last:
-                    # Pre-content failure with 回退s left — swallow and
+                    # Pre-content failure with fallbacks left — swallow and
                     # move to the next candidate.
                     last_error = chunk
                     retried = True
@@ -2336,7 +2336,7 @@ async def stream_llm_with_fallback(candidates, messages, **kwargs):
                     break
                 yield chunk
                 continue
-            # Any data 数据块 other than the terminal [DONE] means real output.
+            # Any data chunk other than the terminal [DONE] means real output.
             if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
                 try:
                     event_data = json.loads(chunk[6:])
@@ -2347,7 +2347,7 @@ async def stream_llm_with_fallback(candidates, messages, **kwargs):
                     continue
                 # First real output from a NON-primary candidate: tell the client
                 # the selected model failed and another answered. Without this the
-                # 回退 is invisible — a misconfigured provider looks like it
+                # fallback is invisible — a misconfigured provider looks like it
                 # works because the reply is shown under the originally selected
                 # model's name (e.g. a Bedrock/Claude endpoint that 400s every
                 # request but appears fine because another model silently answered).

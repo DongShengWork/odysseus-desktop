@@ -1,8 +1,8 @@
 # src/settings.py
-"""集中式设置和功能管理。
+"""Centralized settings and features management.
 
-读写 data/settings.json 和 data/features.json 的唯一真实来源。
-所有模块都应从这里导入，而不是直接访问文件。
+Single source of truth for reading/writing data/settings.json and data/features.json.
+All modules should import from here instead of accessing files directly.
 """
 
 import json
@@ -14,9 +14,9 @@ from src.constants import SETTINGS_FILE, FEATURES_FILE
 
 logger = logging.getLogger(__name__)
 
-# 设置/功能的小型 TTL 缓存。get_setting() 在热路径上被调用
-#（每次聊天、每次预处理）；没有缓存时每次调用都会重新解析 JSON。
-# 在 _CACHE_TTL 秒内会拾取到编辑，对于人工编辑的配置来说这是可以接受的。
+# Tiny TTL cache for settings/features. get_setting() is called on hot paths
+# (every chat, every preprocess); without this it re-parses the JSON each call.
+# Picks up edits within _CACHE_TTL seconds, which is fine for human-edited config.
 _CACHE_TTL = 2.0
 _settings_cache: tuple[float, dict] | None = None
 _features_cache: tuple[float, dict] | None = None
@@ -34,7 +34,7 @@ DEFAULT_SETTINGS = {
     # scheduled_emails table with status='agent_draft' and return a
     # pending_id + the rendered email so the user can review and approve
     # (or cancel) before it actually goes out. Default ON because models
-    # have been observed inventing 签名atures and sending to real
+    # have been observed inventing signatures and sending to real
     # recipients without confirmation.
     "agent_email_confirm": True,
     "image_gen_enabled": False,
@@ -42,10 +42,10 @@ DEFAULT_SETTINGS = {
     "image_quality": "medium",
     "vision_model": "",
     "vision_enabled": True,
-    # Vision 模型的有序回退链（图像分析、OCR、标签）。
+    # Ordered fallback chain for the Vision model (image analysis, OCR, tagging).
     "vision_model_fallbacks": [],
-    # 用于构建外发告警（如紧急告警邮件）中可点击深度链接的公开基础 URL。
-    # 示例："https://chat.example.com"
+    # Public base URL used to build clickable deep-links in outgoing alerts
+    # (e.g., urgency alert email). Example: "https://chat.example.com"
     "app_public_url": "",
     "tts_enabled": True,
     "tts_provider": "disabled",
@@ -57,31 +57,31 @@ DEFAULT_SETTINGS = {
     "stt_model": "base",
     "stt_language": "",
     "search_provider": "searxng",
-    # 默认回退链——当主服务商失败或被限速时，
-    # 接下来尝试 DuckDuckGo。免费，无需 API key，因此
-    # 可以安全地对每个用户默认开启。
+    # Default fallback chain — when the primary provider fails or
+    # rate-limits, we try DuckDuckGo next. Free, no API key required, so
+    # safe to ship on by default for every user.
     "search_fallback_chain": ["duckduckgo"],
     "search_url": "",
     "search_result_count": 5,
-    # 应用于每个支持该设置的服务商的 SafeSearch 级别。
-    # "strict"   — 屏蔽成人/露骨内容（默认；符合用户对研究工具的
-    #              期望，且避免无关的 NSFW URL 通过服务商
-    #              "相关"/垃圾推荐混入）
-    # "moderate" — 服务商默认行为（过滤露骨但允许
-    #              暗示性内容）
-    # "off"      — 完全禁用过滤（仅限高级用户）
+    # SafeSearch level applied to every provider that exposes one.
+    # "strict"   — block adult / explicit results (default; matches what users
+    #              expect from a research tool and avoids unrelated NSFW URLs
+    #              bleeding in via provider "related" / spam recommendations)
+    # "moderate" — provider-default behavior (filter explicit but allow
+    #              suggestive content)
+    # "off"      — disable filtering entirely (advanced users only)
     #
-    # 遵循此设置的服务商（在 src/search/providers.py:_safesearch_for 中
-    # 转换为各服务商的原生参数）：
-    #     SearXNG       safesearch=0/1/2（JSON API、HTML 抓取、新闻回退）
+    # Providers that honor this setting (translated to each provider's native
+    # param in src/search/providers.py:_safesearch_for):
+    #     SearXNG       safesearch=0/1/2 (JSON API, HTML scrape, news fallback)
     #     Brave Search  safesearch=off/moderate/strict
-    #     DuckDuckGo    safesearch=off/moderate/on（库 + HTML kp 参数）
-    #     Google PSE    safe=active（"off" 时省略；PSE 没有中间级别）
-    #     Serper.dev    safe=active（"off" 时省略；代理 Google 的 `safe`）
-    # 不受影响的服务商：Tavily（没有 SafeSearch 开关；在索引时过滤）
-    # 以及通过 search_url 访问的任何自定义后端——它们保持后端自身
-    # 决定的设置，因此运维人员保持对自托管/
-    # 小众搜索实例的控制。
+    #     DuckDuckGo    safesearch=off/moderate/on (library + HTML kp param)
+    #     Google PSE    safe=active (omitted for "off"; PSE has no middle tier)
+    #     Serper.dev    safe=active (omitted for "off"; proxies Google's `safe`)
+    # Providers NOT touched: Tavily (no SafeSearch knob; filters at index time)
+    # and any custom backend reached via search_url — they keep whatever the
+    # backend itself decides, so operators stay in control of self-hosted /
+    # niche search instances.
     "search_safesearch": "strict",
     "brave_api_key": "",
     "google_pse_key": "",
@@ -93,25 +93,25 @@ DEFAULT_SETTINGS = {
     "research_search_provider": "",
     "research_max_tokens": 16384,
     "research_extraction_timeout_seconds": 90,
-    # 轻量级的规划/查询 LLM 调用在任何搜索开始之前发生。
-    # 保持它们可独立调节，以免慢速本地后端受到
-    # 旧的 30s/60s 每次调用默认值的限制。
+    # Lightweight planning/query LLM calls happen before any search starts.
+    # Keep them separately tunable so slow local backends are not capped by
+    # the old 30s/60s per-call defaults.
     "research_planning_timeout_seconds": 90,
     "research_query_timeout_seconds": 90,
     "research_extraction_concurrency": 3,
-    # 单次深度研究运行的硬性墙钟时间上限。之前的 600s
-    #（10 分钟）默认值会在合成中途截断慢速本地/边缘 LLM；1800s
-    #（30 分钟）对大多数本地设置足够舒适，同时仍然限制
-    # 失控的作业。设置为 0 完全禁用上限（无限）——仅用于
-    # 非常长的深度研究运行，因为停滞的作业会无限期地
-    # 产生模型/API 费用。其他值被限制在 [60, 86400] 范围内。
-    # 通过设置或编辑 data/settings.json 进行调整。
+    # Hard wall-clock cap on a single deep-research run. The previous 600s
+    # (10 min) default cut off slow local / edge LLMs mid-synthesis; 1800s
+    # (30 min) is comfortable for most local setups while still bounding
+    # runaway jobs. Set to 0 to disable the cap entirely (unlimited) — only
+    # for very long deep-research runs, since a stalled job then runs an
+    # unbounded model/API bill. Other values are bounded to [60, 86400].
+    # Tune via Settings or by editing data/settings.json.
     "research_run_timeout_seconds": 1800,
     "agent_max_tool_calls": 0,
-    "agent_max_rounds": 20,  # 每条消息的 agent 步数上限（限制在 1..200）
-    # Soft input-token budget for the 智能体循环. The DEFAULT value (6000) is the
-    # "auto" sentinel: it means "scale the budget to the model's 上下文窗口"
-    # (#1230) — so long-context models aren't capped at 6000. 设置 ANY OTHER value
+    "agent_max_rounds": 20,  # per-message agent step cap (clamped 1..200)
+    # Soft input-token budget for the agent loop. The DEFAULT value (6000) is the
+    # "auto" sentinel: it means "scale the budget to the model's context window"
+    # (#1230) — so long-context models aren't capped at 6000. Set ANY OTHER value
     # to enforce an explicit cap (clamped to the window only — hard_max does not
     # apply to explicit budgets, #1230); set 0 to disable soft-trimming. The
     # default is treated as auto because the settings-save path materializes
@@ -123,38 +123,38 @@ DEFAULT_SETTINGS = {
     # — a deliberate value is honoured (#1230). Default matches
     # `src.context_budget.DEFAULT_HARD_MAX`; lower this for
     # cost-paranoid setups, raise it on premium APIs with very large windows you
-    #（例如 900_000 以填充 1M 上下文的模型）提高该值。参见
+    # want to actually use (e.g. 900_000 to fill a 1M-context model). See
     # `compute_input_token_budget`.
     "agent_input_token_hard_max": 200_000,
     "agent_stream_timeout_seconds": 300,
-    # read_file / write_file 可以访问的额外目录根，在
-    # 内置的 data/ 和系统临时目录之外。每个
-    # 条目是绝对路径。敏感子路径（.ssh、.gnupg、shell
-    # rc 文件、SSH key 文件）无论根目录如何，始终被阻止。
+    # Extra directory roots that read_file / write_file may access, in
+    # addition to the built-in project data/ and system temp dirs. Each
+    # entry is an absolute path. Sensitive subpaths (.ssh, .gnupg, shell
+    # rc files, SSH key files) are always blocked regardless of roots.
     "tool_path_extra_roots": [],
     "task_endpoint_id": "",
     "task_model": "",
     "default_endpoint_id": "",
     "default_model": "",
-    # 默认聊天模型的有序回退链。每个条目是
-    # {"endpoint_id": "...", "model": "..."}。如果主模型在
-    # 产生输出之前失败（端点离线/出错），聊天
-    # 调度会按顺序重试下一个条目。
+    # Ordered fallback chain for the default chat model. Each entry is
+    # {"endpoint_id": "...", "model": "..."}. If the primary model fails
+    # before producing output (endpoint offline / errors), the chat
+    # dispatch retries the next entry in order.
     "default_model_fallbacks": [],
     "utility_endpoint_id": "",
     "utility_model": "",
-    # 实用模型的有序回退链（摘要、命名、
-    # 整理操作等）。
+    # Ordered fallback chain for the Utility model (summarization, naming,
+    # tidy actions, etc.).
     "utility_model_fallbacks": [],
     "teacher_model": "",
     "teacher_enabled": False,
-    # 技能：自动编写（LLM 创作）的草稿技能能被注入到 agent 提示中的
-    # 最低自报置信度。已发布的技能始终
-    # 合格。保持低置信度的自动技能在审核/发布前不进入上下文。
-    # 0 禁用此门控。
+    # Skills: minimum self-reported confidence for an auto-written (LLM-authored)
+    # DRAFT skill to be injected into the agent prompt. Published skills always
+    # qualify. Keeps low-confidence auto-skills out of context until they're
+    # vetted/published. 0 disables the gate.
     "skill_autosave_min_confidence": 0.85,
-    # 单次请求中被注入到提示中的最大相关技能数。技能
-    # 库可以超过此数量；清理/废弃是显式的审核流程。
+    # Max relevant skills injected into the prompt for one request. The skills
+    # library can grow beyond this; cleanup/retirement is an explicit review flow.
     "skill_max_injected": 3,
     # Reminders
     "reminder_channel": "browser",   # "browser" | "email" | "ntfy" | "webhook"
@@ -162,15 +162,15 @@ DEFAULT_SETTINGS = {
     "reminder_llm_persona": "",
     "reminder_ntfy_topic": "Reminders",
     "reminder_email_to": "",
-    # 通用外发 Webhook 渠道：选择任何已保存的集成作为
-    # 目标，并提供 JSON 负载模板。使用 {{title}} 和 {{message}}
-    # 作为占位符——它们在替换前进行 JSON 转义，因此
-    # 渲染后的字符串始终是有效的 JSON。适用于 Discord、Slack、Teams、
-    # ntfy（JSON 模式）或任何接受 JSON 请求体的 POST 服务。
+    # Generic outbound webhook channel: pick any saved Integration as the
+    # target and supply a JSON payload template. Use {{title}} and {{message}}
+    # as placeholders — they are JSON-escaped before substitution, so the
+    # rendered string is always valid JSON. Works with Discord, Slack, Teams,
+    # ntfy (JSON mode), or any service that accepts a POST with a JSON body.
     "reminder_webhook_integration_id": "",
     "reminder_webhook_payload_template": "",
-    # 邮件分类扫描规则。运行/暂停状态和计划在
-    # 任务中，通过内置的 `check_email_urgency` 任务管理。
+    # Email triage scanner rules. Running/paused state and schedule live in
+    # Tasks via the built-in `check_email_urgency` task.
     "urgent_email_prompt": (
         "Flag as urgent: explicit deadlines, time-sensitive requests, "
         "work-blocking issues, messages from people I report to, or anything "
@@ -179,7 +179,7 @@ DEFAULT_SETTINGS = {
         "Newsletters, marketing, automated digests, and FYI-only updates are "
         "NOT urgent."
     ),
-    # 键盘快捷键（操作：按键组合）
+    # Keyboard shortcuts (action: key combination)
     "keybinds": {
         "search": "ctrl+k",
         "toggle_sidebar": "ctrl+b",
@@ -206,7 +206,7 @@ DEFAULT_FEATURES = {
 # ── Settings (data/settings.json) ──
 
 def load_settings() -> dict:
-    """加载与默认值合并后的设置。始终返回完整的字典。"""
+    """Load settings merged with defaults. Always returns a complete dict."""
     global _settings_cache
     now = time.monotonic()
     if _settings_cache and (now - _settings_cache[0]) < _CACHE_TTL:
@@ -224,22 +224,22 @@ def load_settings() -> dict:
 
 
 def save_settings(settings: dict):
-    """将设置持久化到磁盘（原子操作；参见 core.atomic_io）。"""
+    """Persist settings to disk (atomic; see core.atomic_io)."""
     from core.atomic_io import atomic_write_json
     atomic_write_json(SETTINGS_FILE, settings, indent=2)
     _invalidate_caches()
 
 
 def get_setting(key: str, default: Any = None) -> Any:
-    """读取单个设置值。"""
+    """Read a single setting value."""
     return load_settings().get(key, default)
 
 
 def is_setting_overridden(key: str) -> bool:
-    """如果 ``key`` 在已保存的设置文件中显式存在，返回 True。
+    """True if ``key`` is explicitly present in the saved settings file.
 
-    ``load_settings`` 将 DEFAULT_SETTINGS 与已保存文件合并，因此等于
-    默认值的值无法通过 get_setting 与"从未设置"区分。
+    ``load_settings`` merges DEFAULT_SETTINGS with the saved file, so a value
+    equal to its default is indistinguishable from "never set" via get_setting.
     Callers that must distinguish an explicit user choice from a default read
     the raw saved file via this. (Note: a materialized default is also "present",
     so value-sensitive callers should compare against the default — see
@@ -253,16 +253,16 @@ def is_setting_overridden(key: str) -> bool:
         return False
 
 
-# 每用户设置（用户偏好会覆盖全局管理员默认值）。用于
-# 允许用户单独选择的键——目前是 vision
-# 模型 + 图像生成模型。owner 参数是 FastAPI 依赖项解析的已认证用户名；
-# 空/None owner 回退到全局设置。
+# Per-user settings (user prefs override the global admin default). Used for
+# keys that a user is allowed to choose individually — currently the vision
+# model + image-generation model. The owner argument is the authed username
+# resolved by FastAPI deps; an empty/None owner falls through to the global.
 _PER_USER_KEYS = {
     "vision_model", "vision_enabled", "vision_model_fallbacks",
     "image_model", "image_gen_enabled", "image_quality",
-    # 默认聊天端点/模型——没有每用户解析时，每个新
-    # 账号都继承最近管理员选择的配置，这会
-    # 在首次打开时注入到聊天编辑器中。
+    # Default chat endpoint / model — without per-user resolution every new
+    # account inherited whatever the most-recent admin picked, which then
+    # got injected into the chat composer on first open.
     "default_endpoint_id", "default_model", "default_model_fallbacks",
     "utility_endpoint_id", "utility_model", "utility_model_fallbacks",
     "research_endpoint_id", "research_model",
@@ -270,12 +270,12 @@ _PER_USER_KEYS = {
 
 
 def get_user_setting(key: str, owner: str = "", default: Any = None) -> Any:
-    """从调用者的每用户偏好中先解析 `key`，然后回退到
-    全局设置。只有在 `_PER_USER_KEYS` 中的小白名单内
-    才适用——对于其他任何键，此函数等同于 `get_setting(key)`。
+    """Resolve `key` from the caller's per-user prefs first, falling back to
+    the global setting. Only the small whitelist in `_PER_USER_KEYS` is
+    eligible — for any other key this is equivalent to `get_setting(key)`.
 
-    如果偏好模块无法导入（循环/早期启动），则优雅回退——
-    管理员全局设置保持正常运作。
+    Falls back gracefully if the prefs module can't be imported (cycle/early
+    boot) — admin-global settings keep working.
     """
     if owner and key in _PER_USER_KEYS:
         try:
@@ -291,7 +291,7 @@ def get_user_setting(key: str, owner: str = "", default: Any = None) -> Any:
 # ── Features (data/features.json) ──
 
 def load_features() -> dict:
-    """加载与默认值合并后的功能开关。"""
+    """Load feature flags merged with defaults."""
     global _features_cache
     now = time.monotonic()
     if _features_cache and (now - _features_cache[0]) < _CACHE_TTL:
@@ -309,7 +309,7 @@ def load_features() -> dict:
 
 
 def save_features(features: dict):
-    """将功能开关持久化到磁盘（原子操作）。"""
+    """Persist feature flags to disk (atomic)."""
     from core.atomic_io import atomic_write_json
     atomic_write_json(FEATURES_FILE, features, indent=2)
     _invalidate_caches()

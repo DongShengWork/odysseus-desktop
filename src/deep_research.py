@@ -1,10 +1,10 @@
 # src/deep_research.py
 """
-IterResearch 风格的深度研究引擎。
+IterResearch-style deep research engine.
 
-实现一个迭代式 思考→搜索→提取→综合 循环，其中 LLM
-驱动每个决策：搜索什么、什么是相关的、缺少什么，以及
-何时停止。受阿里巴巴 IterResearch 方法启发。
+Implements an iterative Think→Search→Extract→Synthesize loop where the LLM
+drives every decision: what to search, what's relevant, what's missing, and
+when to stop.  Inspired by Alibaba's IterResearch approach.
 """
 import asyncio
 import json
@@ -36,7 +36,7 @@ def current_date_context() -> str:
     )
 
 # ---------------------------------------------------------------------------
-# 提示词
+# Prompts
 # ---------------------------------------------------------------------------
 RESEARCH_PLAN_PROMPT = """\
 You are a research strategist. Before searching, analyze this question and create a research plan.
@@ -183,10 +183,10 @@ CATEGORY_PROMPTS = {
 # ---------------------------------------------------------------------------
 class DeepResearcher:
     """
-    Iterative 研究引擎，遵循 IterResearch 模式。
+    Iterative research engine following the IterResearch pattern.
 
-    每轮：LLM 生成查询 → SearXNG 搜索 → LLM 从顶部页面提取 →
-    LLM 综合到不断演进的报告中 → LLM 决定继续/停止。
+    Each round: LLM generates queries → SearXNG search → LLM extracts from
+    top pages → LLM synthesizes into evolving report → LLM decides continue/stop.
     """
 
     def __init__(
@@ -536,9 +536,9 @@ class DeepResearcher:
         if self._cancelled or self._time_exceeded():
             return all_findings
 
-        # 获取 and extract URLs with backpressure. Local model servers often
+        # Fetch and extract URLs with backpressure. Local model servers often
         # serialize requests behind one GPU; flooding them makes every request
-        # slower and can trip the extraction 超时.
+        # slower and can trip the extraction timeout.
         semaphore = asyncio.Semaphore(self.extraction_concurrency)
 
         async def _bounded_extract(result: Dict) -> Optional[Dict]:
@@ -574,7 +574,7 @@ class DeepResearcher:
                 logger.info("Search is disabled for research")
                 return []
 
-            # Try primary provider, then 回退s
+            # Try primary provider, then fallbacks
             chain = _build_provider_chain(provider)
             raised = False
             for prov in chain:
@@ -593,7 +593,7 @@ class DeepResearcher:
             # raised, record an actionable reason here — otherwise this empty
             # path leaves `_last_search_error` unset and the caller surfaces a
             # bare "unknown error" (issue #344). This is exactly the SearXNG
-            # case where the 服务 is reachable but all its engines fail, so
+            # case where the service is reachable but all its engines fail, so
             # each provider returns [] without throwing.
             if not raised:
                 self._last_search_error = (
@@ -671,7 +671,7 @@ class DeepResearcher:
     async def _synthesize(self, question: str, findings: List[Dict],
                           current_report: str) -> str:
         """LLM synthesizes all findings into an updated report."""
-        # 格式化 findings for the prompt
+        # Format findings for the prompt
         window = findings[-self.synthesis_window:]
         if len(findings) > self.synthesis_window:
             logger.info(f"Synthesis using last {self.synthesis_window} of {len(findings)} findings")
@@ -817,7 +817,7 @@ class DeepResearcher:
         except json.JSONDecodeError:
             pass
 
-        # 处理 truncated arrays — e.g. '["query one", "query two", "query thr'
+        # Handle truncated arrays — e.g. '["query one", "query two", "query thr'
         # Repair from the LAST array start so an echoed example array earlier
         # in the reply is not harvested into the real query set.
         last_start = text.rfind('[')

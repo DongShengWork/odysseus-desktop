@@ -1,5 +1,5 @@
-# 服务s/memory/服务.py
-"""记忆服务 — 持久化记忆存储与检索。"""
+# services/memory/service.py
+"""Memory service — persistent memory storage and retrieval."""
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
@@ -13,7 +13,7 @@ from src.constants import DATA_DIR
 
 @dataclass
 class Memory:
-    """一条已存储的记忆。"""
+    """A stored memory."""
     id: str
     text: str
     timestamp: int
@@ -23,7 +23,7 @@ class Memory:
 
 @dataclass
 class MemorySearchResult:
-    """记忆搜索结果。"""
+    """Result of memory search."""
     memories: List[Memory]
     query: str
     total: int
@@ -31,12 +31,12 @@ class MemorySearchResult:
 
 class MemoryService:
     """
-    记忆存储与检索服务。
+    Memory storage and retrieval service.
 
-    用法：
+    Usage:
         service = MemoryService()
-        await service.remember("用户偏好深色模式")
-        results = await service.recall("偏好设置")
+        await service.remember("User prefers dark mode")
+        results = await service.recall("preferences")
     """
 
     def __init__(self, data_dir: str = DATA_DIR):
@@ -74,14 +74,14 @@ class MemoryService:
 
     async def remember(self, text: str, session_id: Optional[str] = None) -> Memory:
         """
-        存储一条新的记忆。
+        Store a new memory.
 
         Args:
-            text: 记忆内容
-            session_id: 可选的会话关联
+            text: Memory content
+            session_id: Optional session association
 
         Returns:
-            已创建的 Memory 对象
+            Created Memory object
         """
         self._sync_provider()
         record = await self.provider.remember(text, session_id=session_id)
@@ -89,14 +89,14 @@ class MemoryService:
 
     async def recall(self, query: str, top_k: int = 5) -> MemorySearchResult:
         """
-        搜索记忆。
+        Search memories.
 
         Args:
-            query: 搜索查询
-            top_k: 最大结果数
+            query: Search query
+            top_k: Max results
 
         Returns:
-            包含匹配记忆的 MemorySearchResult
+            MemorySearchResult with matching memories
         """
         self._sync_provider()
         results = await self.provider.recall(query, top_k=top_k)
@@ -109,12 +109,12 @@ class MemoryService:
         return MemorySearchResult(memories=memories, query=query, total=len(memories))
 
     def get_all(self, limit: int = 100) -> List[Memory]:
-        """获取所有记忆。"""
+        """Get all memories."""
         records = self.manager.load_all()[:limit]
         return [self._to_memory(m) for m in records]
 
     def delete(self, memory_id: str) -> bool:
-        """按 ID 删除一条记忆。"""
+        """Delete a memory by ID."""
         memories = self.manager.load_all()
         remaining = [m for m in memories if m.get("id") != memory_id]
         if len(remaining) == len(memories):

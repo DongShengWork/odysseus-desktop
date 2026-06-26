@@ -1,5 +1,5 @@
 # routes/compare_routes.py
-"""模型 A/B 对比路由。"""
+"""Model A/B comparison routes."""
 import json
 import uuid
 import random
@@ -23,14 +23,14 @@ def _owned_endpoint_by_url(db, base_url, owner):
     """ModelEndpoint whose base_url == `base_url` and is VISIBLE to `owner`
     (their own rows + legacy null-owner "shared" rows); None otherwise.
 
-    有意按 owner 限定范围。ModelEndpoint 是每个用户私有的（core/database.py：非空
+    Owner-scoped on purpose. ModelEndpoint is per-user (core/database.py: non-null
     owner = private, "the model picker only shows the endpoint to that user") and
-    且持有解密后的 `api_key`。start_comparison 会将匹配行的 api_key
+    holds a decrypted `api_key`. start_comparison copies the matched row's api_key
     into the caller-owned [CMP] session's headers, which then drives that session's
-    /api/chat_stream 调用 — 因此如果 base_url 匹配不做 owner 限定，
+    /api/chat_stream calls — so an UNSCOPED base_url match would let a user mint a
     comparison bound to ANOTHER user's private endpoint and spend that owner's
     api_key / reach whatever base_url they configured. Mirrors
-    session_routes._owned_endpoint。空 owner 视为无操作（单用户/历史模式）。
+    session_routes._owned_endpoint. A null/empty owner is a no-op (single-user /
     legacy mode).
     """
     from core.database import ModelEndpoint
@@ -49,7 +49,7 @@ def _owned_endpoint_by_id(db, endpoint_id, owner):
     sorts first, so it can copy the WRONG owner-scoped key into the [CMP] session.
     An id pins the exact registered endpoint, so /api/compare/start prefers it and
     only falls back to URL matching for legacy / admin raw-URL callers. Owner
-    URL 匹配。Owner 限定逻辑与 _owned_endpoint_by_url 相同（空 owner 视为无操作）。
+    scoping is identical to _owned_endpoint_by_url (a null/empty owner is a no-op).
     """
     from core.database import ModelEndpoint
     from src.auth_helpers import owner_filter
@@ -60,12 +60,12 @@ def _owned_endpoint_by_id(db, endpoint_id, owner):
 class RecordVoteRequest(BaseModel):
     prompt: str
     models: List[str]
-    winner: str           # 模型名称或 "tie"
+    winner: str           # model name or "tie"
     is_blind: bool = True
 
 
 def setup_compare_routes(session_manager: SessionManager):
-    """设置对比路由。"""
+    """Setup comparison routes."""
 
     @router.post("/start")
     def start_comparison(
@@ -79,17 +79,17 @@ def setup_compare_routes(session_manager: SessionManager):
         endpoint_b_id: str = Form(""),
         is_blind: str = Form("true"),
     ):
-        """创建两个临时会话和一个对比记录。
+        """Create two ephemeral sessions and a comparison record.
 
         Returns the comparison ID and the two session IDs so the client
-        返回对比 ID 和两个会话 ID，客户端可以据此发起两个独立的 SSE 流到 /api/chat_stream。
+        can fire two independent SSE streams to /api/chat_stream.
         """
         user = getattr(request.state, 'current_user', None)
         comp_id = str(uuid.uuid4())
         sid_a = str(uuid.uuid4())
         sid_b = str(uuid.uuid4())
 
-        # 盲测映射：随机分配左/右
+        # Blind mapping: randomly assign left/right
         blind = str(is_blind).lower() == "true"
         if blind:
             mapping = {"left": "a", "right": "b"}
@@ -98,7 +98,7 @@ def setup_compare_routes(session_manager: SessionManager):
         else:
             mapping = {"left": "a", "right": "b"}
 
-        # 基于盲测映射将会话 ID 映射到左/右
+        # Map session IDs to left/right based on blind mapping
         session_left = sid_a if mapping["left"] == "a" else sid_b
         session_right = sid_a if mapping["right"] == "a" else sid_b
 
@@ -109,10 +109,10 @@ def setup_compare_routes(session_manager: SessionManager):
         slot_name = {session_left: "Model A", session_right: "Model B"}
 
         # SECURITY: resolve and validate BOTH endpoints before creating any
-        # Compare 会将已注册 endpoint 的 Authorization header 复制到 [CMP] 会话中，
+        # session. Compare copies a registered endpoint's Authorization header
         # into the [CMP] session, so validating one endpoint while creating its
         # session, then rejecting the other, would leave a partial compare
-        # session behind with that header attached. Doing all the owner-权限范围
+        # session behind with that header attached. Doing all the owner-scope
         # resolution + raw-URL rejection up front means a 403 on either endpoint
         # aborts the whole request with nothing created and no header copied.
         from src.endpoint_resolver import build_chat_url, build_headers, normalize_base
@@ -124,8 +124,8 @@ def setup_compare_routes(session_manager: SessionManager):
                 (sid_b, model_b, endpoint_b, endpoint_b_id),
             ]:
                 # Prefer an explicit endpoint id: it pins the EXACT registered
-                # endpoint（及其 api_key），即使调用者可见的两个 endpoint
-                # 共享相同的 base_url 但持有不同的 key —— 仅 URL 匹配
+                # endpoint (and its api_key), even when two endpoints visible to
+                # the caller share a base_url with different keys — a URL-only
                 # match would copy whichever row sorts first, i.e. possibly the
                 # wrong key. Fall back to URL resolution only for legacy / admin
                 # raw-URL callers that don't send an id.
@@ -133,55 +133,55 @@ def setup_compare_routes(session_manager: SessionManager):
                 if eid:
                     ep = _owned_endpoint_by_id(db, eid, user)
                     if ep is None:
-                        # 调用者看不到的 id（错误的 owner / 已删除）必须
-                        # 不能静默回退到相同 URL 但持有不同 key 的行
-                        # —— 这正是 id 机制要防止的混淆情况。
+                        # An id the caller can't see (wrong owner / deleted) must
+                        # NOT silently fall back to a same-URL row with a different
+                        # key — that's exactly the mix-up ids exist to prevent.
                         raise HTTPException(404, "Model endpoint not found")
-                    # 该 id 已解析了 endpoint；忽略调用者也传入的原始 URL，
-                    # 改用存储的配置进行拨号。
+                    # The id already resolved the endpoint; ignore any raw URL the
+                    # caller also sent and dial the stored config instead.
                     endpoint = ep.base_url
                 elif not endpoint:
                     raise HTTPException(
                         422, "endpoint_a/endpoint_b or endpoint_a_id/endpoint_b_id is required"
                     )
                 else:
-                    # 将传入的 URL 解析为调用者拥有的 ModelEndpoint
-                    # （自己的行 + 历史空 owner 的共享行），限定范围以防止
-                    # 对比借用其他用户的私有 endpoint key。
+                    # Resolve the supplied URL to a ModelEndpoint the caller owns
+                    # (their own rows + legacy null-owner shared rows), scoped so a
+                    # comparison can't borrow another user's private endpoint key.
                     base = normalize_base(endpoint)
                     ep = _owned_endpoint_by_url(db, base, user)
-                # Reject *unregistered* raw URLs for 签名ed-in non-admins; a
-                # endpoint_id。镜像 gallery 的 inpaint/harmonize 检查。
-                # endpoint_id。镜像 gallery 的 inpaint/harmonize 检查。
-                # endpoint_id。镜像 gallery 的 inpaint/harmonize 检查。
-                # 锁定了非管理员的对比功能，因为 compare 依赖 URL 解析 endpoint 而无
-                # endpoint_id。镜像 gallery 的 inpaint/harmonize 检查。
+                # Reject *unregistered* raw URLs for signed-in non-admins; a
+                # matched registered endpoint supplies an id so the caller can
+                # still compare endpoints they own. Blanket-rejecting here (the
+                # earlier `endpoint_id=None` call) locked non-admins out of
+                # compare entirely, since compare resolves endpoints by URL with
+                # no endpoint_id. Mirrors the gallery inpaint/harmonize checks.
                 # Raised here (phase 1), before any session exists.
                 _reject_raw_endpoint_url_for_non_admin(
                     request, user, str(ep.id) if ep is not None else None, endpoint
                 )
-                # 镜像 session_routes 中已注册 endpoint 的处理路径。
+                # Bind the [CMP] session to the RESOLVED endpoint, not the raw
                 # caller-supplied string. When the URL matches a registered
                 # endpoint visible to the caller, use that row's own normalized
-                # 基础地址（与 owner 限定的 endpoint 验证相同的值）以便会话精确地拨号到
+                # base URL (the same value owner scoping + endpoint validation
                 # already vetted) so the session dials exactly where the stored
                 # config points. The raw `endpoint` only survives for callers
                 # allowed to pass one — admins / single-user mode, where
-                # `_reject_raw_endpoint_url_for_non_admin` 为无操作且 `ep` 为 None。
+                # `_reject_raw_endpoint_url_for_non_admin` is a no-op and `ep`
                 # is None. Mirrors the registered-endpoint path in session_routes.
                 session_endpoint_url = (
                     build_chat_url(normalize_base(ep.base_url)) if ep is not None else endpoint
                 )
-                # Headers 仅来自匹配到的 endpoint 的 key；当
-                # `ep` 为 None（管理员原始 URL 或无匹配）时为 None，因此对比
-                # 绝不会继承其他用户的 key/headers。
+                # Headers come only from a matched endpoint's key; None when
+                # `ep` is None (raw admin URL or no match), so a comparison can
+                # never inherit another user's key/headers.
                 headers = build_headers(ep.api_key, ep.base_url) if (ep and ep.api_key) else None
                 resolved.append((sid, model, session_endpoint_url, headers))
         finally:
             db.close()
 
-        # 两个 endpoint 均已验证 — 现在才创建临时 [CMP]
-        # 会话并复制已解析的 headers。
+        # Both endpoints validated — only now create the ephemeral [CMP]
+        # sessions and copy any resolved headers.
         for sid, model, session_endpoint_url, headers in resolved:
             name = f"[CMP] {slot_name[sid]}" if blind else f"[CMP] {model.split('/')[-1]}"
             session_manager.create_session(
@@ -197,7 +197,7 @@ def setup_compare_routes(session_manager: SessionManager):
                 if s:
                     s.headers = headers
 
-        # 存储对比记录
+        # Store comparison record
         db = SessionLocal()
         try:
             comp = Comparison(
@@ -205,10 +205,10 @@ def setup_compare_routes(session_manager: SessionManager):
                 prompt=prompt,
                 model_a=model_a,
                 model_b=model_b,
-                # 记录会话实际拨号的 URL。对于 URL 调用者，这是他们的原始输入；
-                # 对于只传 id 的调用者（endpoint_a/_b 为空），
-                # 回退到已解析的 端点地址，以确保该列有实际意义且非空。
-                # resolved 的顺序为 [a, b]。
+                # Record the URL the session actually dials. For URL callers this
+                # is their raw input; for id-only callers (empty endpoint_a/_b)
+                # fall back to the resolved endpoint URL so the column stays
+                # meaningful and non-null. resolved is in [a, b] order.
                 endpoint_a=endpoint_a or resolved[0][2],
                 endpoint_b=endpoint_b or resolved[1][2],
                 is_blind=blind,
@@ -220,10 +220,10 @@ def setup_compare_routes(session_manager: SessionManager):
         finally:
             db.close()
 
-        # 在盲测模式下，不在响应中返回模型标识和左/右
-        # 映射。客户端已经知道 model_a/model_b（它自己传的），
-        # 所以返回任意一个都会破坏盲测模式。这些信息会在
-        # 用户投票后通过 POST /api/compare/{id}/vote 揭示 (#1285)。
+        # In blind mode, withhold the model identities AND the left/right
+        # mapping from the response. The client already knows model_a/model_b
+        # (it sent them), so returning either would defeat blind mode. They are
+        # revealed by POST /api/compare/{id}/vote once the user has voted (#1285).
         return {
             "id": comp_id,
             "session_left": session_left,
@@ -238,17 +238,17 @@ def setup_compare_routes(session_manager: SessionManager):
     def vote_comparison(
         request: Request,
         comp_id: str,
-        winner: str = Form(...),  # "left"、"right" 或 "tie"
+        winner: str = Form(...),  # "left", "right", or "tie"
     ):
-        """记录用户的投票，如果是盲测模式则揭示模型名称。"""
+        """Record the user's vote and reveal model names if blind."""
         user = get_current_user(request)
         db = SessionLocal()
         try:
             comp = db.query(Comparison).filter(Comparison.id == comp_id).first()
             if not comp:
                 raise HTTPException(404, "Comparison not found")
-            # 安全：严格的 ownership 检查 — 空 owner 的 Comparison 之前
-            # 对所有用户都可见。
+            # SECURITY: strict ownership — null-owner Comparisons were
+            # accessible to every user.
             if user and comp.owner != user:
                 raise HTTPException(404, "Comparison not found")
             if comp.winner:
@@ -282,14 +282,14 @@ def setup_compare_routes(session_manager: SessionManager):
 
     @router.post("/record")
     def record_comparison(request: Request, body: RecordVoteRequest):
-        """从前端记录对比投票的轻量端点。"""
+        """Lightweight endpoint to record a comparison vote from the frontend."""
         user = get_current_user(request)
         comp_id = str(uuid.uuid4())
 
         model_a = body.models[0] if len(body.models) > 0 else ""
         model_b = body.models[1] if len(body.models) > 1 else ""
 
-        # 对于超过 2 个模型的情况，将完整列表以 JSON 存储在 blind_mapping 中
+        # For N>2 models, store the full list as JSON in blind_mapping
         if len(body.models) > 2:
             blind_mapping = json.dumps({"models": body.models})
         else:
@@ -319,7 +319,7 @@ def setup_compare_routes(session_manager: SessionManager):
 
     @router.get("/history")
     def list_comparisons(request: Request):
-        """列出历史对比记录。"""
+        """List past comparisons."""
         user = get_current_user(request)
         db = SessionLocal()
         try:
@@ -345,15 +345,15 @@ def setup_compare_routes(session_manager: SessionManager):
 
     @router.delete("/{comp_id}")
     def delete_comparison(request: Request, comp_id: str):
-        """删除对比及其临时会话。"""
+        """Delete a comparison and its ephemeral sessions."""
         user = get_current_user(request)
         db = SessionLocal()
         try:
             comp = db.query(Comparison).filter(Comparison.id == comp_id).first()
             if not comp:
                 raise HTTPException(404, "Comparison not found")
-            # 安全：严格的 ownership 检查 — 空 owner 的 Comparison 之前
-            # 对所有用户都可见。
+            # SECURITY: strict ownership — null-owner Comparisons were
+            # accessible to every user.
             if user and comp.owner != user:
                 raise HTTPException(404, "Comparison not found")
             db.delete(comp)

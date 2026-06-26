@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""将所有者为空的数据全部认领到指定用户。
+"""Claim all ownerless data for a specific user.
 
-在启用多用户认证后运行一次，将现有数据分配给管理员。
+Run once after enabling multi-user auth to assign existing data to the admin.
 
 Usage:
     python scripts/claim_ownerless.py admin@example.com
@@ -35,7 +35,7 @@ def main():
     owner = sys.argv[1]
     print(f"Claiming all ownerless data for: {owner}\n")
 
-    # 1. 记忆（JSON 文件）
+    # 1. Memories (JSON files)
     for label, path in [
         ("memory.json", MEMORY_FILE),
         ("skills.json", SKILLS_FILE),
@@ -51,7 +51,7 @@ def main():
                 json.dump(entries, f, ensure_ascii=False, indent=2)
         print(f"  {label}: claimed {count} entries")
 
-    # 2. 数据库表（sessions, gallery, comparisons, documents）
+    # 2. Database tables (sessions, gallery, comparisons, documents)
     from core.database import SessionLocal, Session, Document
     try:
         from core.database import GalleryImage
@@ -68,10 +68,10 @@ def main():
         count = db.query(Session).filter(Session.owner == None).update({"owner": owner})
         print(f"  sessions: claimed {count}")
 
-        # Documents（有自己的 owner 列；认领所有者为空的行，
-        # 与 sessions/gallery/comparisons 块保持一致）。旧查询将
-        # session_id 设为自身 — 一个无操作 — 且从未设置 owner，因此
-        # 所有者为空文档始终保持为空且在用户的资料库中不可见。
+        # Documents (have their own owner column; claim the ownerless ones,
+        # mirroring the sessions/gallery/comparisons blocks). The old query set
+        # session_id to itself — a no-op — and never set owner, so ownerless
+        # documents stayed ownerless and invisible in the user's Library.
         count = db.query(Document).filter(Document.owner == None).update({"owner": owner})
         print(f"  documents: claimed {count}")
 

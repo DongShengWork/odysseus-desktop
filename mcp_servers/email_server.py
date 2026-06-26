@@ -82,8 +82,8 @@ def _account_visible_to_owner(row: dict, owner: str) -> bool:
         return True
     if row_owner:
         return False
-    # Legacy ownerless accounts are only visible to a 权限范围d caller when the
-    # mailbox itself matches the owner, mirroring the HTTP email route 回退.
+    # Legacy ownerless accounts are only visible to a scoped caller when the
+    # mailbox itself matches the owner, mirroring the HTTP email route fallback.
     owner_l = owner.lower()
     return owner_l in {
         str(row.get("imap_user") or "").strip().lower(),
@@ -290,8 +290,8 @@ def _load_config(account: str | None = None) -> dict:
         cfg["imap_host"] = row["imap_host"] or cfg["imap_host"]
         cfg["imap_port"] = int(row["imap_port"] or cfg["imap_port"])
         cfg["imap_user"] = row["imap_user"] or cfg["imap_user"]
-        # Passwords in email_accounts are stored 加密ed via
-        # src.secret_storage.加密 — 解密 before handing to IMAP
+        # Passwords in email_accounts are stored encrypted via
+        # src.secret_storage.encrypt — decrypt before handing to IMAP
         # (same path email_helpers.py:369 uses). Falling back to the raw
         # ciphertext is what produced AUTHENTICATIONFAILED previously.
         try:
@@ -310,7 +310,7 @@ def _load_config(account: str | None = None) -> dict:
         cfg["smtp_password"] = _decrypt(row["smtp_password"]) if row["smtp_password"] else cfg["smtp_password"]
         cfg["from_address"] = row["from_address"] or row["imap_user"] or cfg["from_address"]
     else:
-        # Legacy 回退: settings.json flat keys
+        # Legacy fallback: settings.json flat keys
         try:
             settings_path = Path(_SETTINGS_FILE)
             if settings_path.exists():
@@ -469,13 +469,13 @@ def _decode_header(raw):
         return ""
     try:
         # make_header concatenates per RFC 2047: no spurious space between an
-        # 编码d-word and adjacent 纯文本 (plain runs keep their own
-        # whitespace), and whitespace between two adjacent 编码d-words is
+        # encoded-word and adjacent plain text (plain runs keep their own
+        # whitespace), and whitespace between two adjacent encoded-words is
         # dropped. The old " ".join produced "Re:  Jose" style double spaces
         # on every non-ASCII subject or sender.
         return str(email.header.make_header(email.header.decode_header(raw)))
     except Exception:
-        # Malformed header or unknown charset: lossy per-part 解码
+        # Malformed header or unknown charset: lossy per-part decode
         decoded = []
         for data, charset in email.header.decode_header(raw):
             if isinstance(data, bytes):
@@ -588,11 +588,11 @@ def _list_emails(folder="INBOX", max_results=20, unresponded_only=False,
                 date_str = msg.get("Date", "")
                 message_id = msg.get("Message-ID", "")
 
-                # 解析 sender name
+                # Parse sender name
                 sender_name, sender_addr = email.utils.parseaddr(sender)
                 sender_display = sender_name or sender_addr
 
-                # 检查 cache for summary
+                # Check cache for summary
                 cached = cache.get(subject, {})
                 summary = cached.get("summary", "")
 
@@ -966,7 +966,7 @@ def _stash_agent_draft(*, to, subject, body, in_reply_to=None, references=None,
     try:
         conn = sqlite3.connect(SCHEDULED_EMAILS_DB)
         # Touch the schema in case the email-routes init hasn't run yet
-        # (MCP 服务器 can boot independently).
+        # (MCP server can boot independently).
         conn.execute("""
             CREATE TABLE IF NOT EXISTS scheduled_emails (
                 id TEXT PRIMARY KEY,
@@ -1653,7 +1653,7 @@ def _download_attachment(uid, index, folder="INBOX", account=None):
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     # The user may have multiple IMAP accounts configured. Every tool accepts an
-    # optional `account` param — match by name (e.g. "work"), 邮件地址,
+    # optional `account` param — match by name (e.g. "work"), email address,
     # or account id. Leave it out to use the default account.
     ACCOUNT_PROP = {
         "account": {
@@ -2011,7 +2011,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             max_results = arguments.get("max_results", arguments.get("limit", 20))
             unresponded_only = arguments.get("unresponded_only", False)
             unread_only = arguments.get("unread_only", False)
-            # 构建 a header note so the LLM always knows which account was hit
+            # Build a header note so the LLM always knows which account was hit
             # AND what other accounts exist. Prevents "I can see emails" →
             # user: "I have 2 inboxes" → "which one?" loop.
             all_accounts = _list_accounts_raw()

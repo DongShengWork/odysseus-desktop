@@ -154,11 +154,11 @@ def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 
         if not _public_http_url(current):
             raise httpx.RequestError("Blocked private/internal URL", request=httpx.Request("GET", current))
         # Force identity transfer-encoding. With gzip/deflate the wire bytes
-        # (and Content-Length) can be a small fraction of the 解码d body, so
+        # (and Content-Length) can be a small fraction of the decoded body, so
         # a tiny compressed response could pass the hard-cap preflight and then
-        # expand past the ceiling in a single 解码d 数据块 before the streamed
+        # expand past the ceiling in a single decoded chunk before the streamed
         # cap below can slice it. Identity makes Content-Length the true body
-        # size and keeps each streamed 数据块 bounded by the network read.
+        # size and keeps each streamed chunk bounded by the network read.
         req_headers = dict(headers or {})
         req_headers["Accept-Encoding"] = "identity"
         with httpx.stream("GET", current, headers=req_headers, timeout=timeout,
@@ -172,8 +172,8 @@ def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 
                 continue
 
             # A server can ignore the identity request and still return a
-            # compressed body; httpx.iter_bytes would then 解码 it, and a tiny
-            # gzip can balloon into one 解码d 数据块 far past the cap before we
+            # compressed body; httpx.iter_bytes would then decode it, and a tiny
+            # gzip can balloon into one decoded chunk far past the cap before we
             # slice. Refuse a compressed Content-Encoding so the streamed cap
             # stays a real memory bound (Content-Length is the compressed wire
             # length here, so the preflight and size metadata are unreliable too).
@@ -199,7 +199,7 @@ def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 
             read = 0
             truncated = False
             # We requested identity above, so iter_bytes yields the raw body in
-            # network-read-sized 数据块s (no decompression expansion); the cap
+            # network-read-sized chunks (no decompression expansion); the cap
             # therefore bounds what we actually buffer.
             for chunk in response.iter_bytes():
                 read += len(chunk)
@@ -349,7 +349,7 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0,
     cache_key = generate_cache_key(f"{url}#cap={effective_cap}")
     cache_file = CONTENT_CACHE_DIR / f"{cache_key}.cache"
 
-    # 检查 cache
+    # Check cache
     if cache_file.exists():
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
@@ -373,7 +373,7 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             # identity so the streamed size cap in _get_public_url stays honest
-            # (a compressed body can 解码 to far more than Content-Length).
+            # (a compressed body can decode to far more than Content-Length).
             "Accept-Encoding": "identity",
             "Connection": "keep-alive",
         }
@@ -448,12 +448,12 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0,
 
     # Plain-text / Markdown / JSON handling. Sources like
     # raw.githubusercontent.com serve Markdown as `text/plain`, JSON APIs and
-    # raw 配置文件s serve `application/json`, and a lot of code and tool
+    # raw config files serve `application/json`, and a lot of code and tool
     # docs live in `.md` / `.txt`. These have no HTML structure, so the HTML
     # branch below would extract nothing and report "no readable text content".
-    # 返回 the body verbatim instead. The `is_html` guard keeps real HTML
+    # Return the body verbatim instead. The `is_html` guard keeps real HTML
     # (including `application/xhtml+xml`) on the parsing path; the `json` check
-    # covers `application/json` and `+json` suffixes; the URL-suffix 回退
+    # covers `application/json` and `+json` suffixes; the URL-suffix fallback
     # catches servers that mislabel text files as `application/octet-stream`.
     is_html = "html" in content_type
     is_json = "json" in content_type
@@ -498,7 +498,7 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0,
     js_message = "Page appears to be rendered by a JavaScript framework; content may be incomplete." if js_rendered else ""
 
     # Main textual content (heuristic): prefer semantic / "content"-classed
-    # 容器s to skip nav/footer/boilerplate; tuned for article pages.
+    # containers to skip nav/footer/boilerplate; tuned for article pages.
     main_content = ""
     content_areas = soup.find_all(
         ["main", "article", "section", "div"],

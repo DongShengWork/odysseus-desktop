@@ -1,4 +1,4 @@
-"""搜索服务 — 基于 SearXNG 的网页搜索。"""
+"""Search service — web search with SearXNG."""
 
 from .core import (
     comprehensive_web_search,
@@ -13,11 +13,11 @@ from .analytics import get_search_stats, SearchEngineError, NetworkError, ParseE
 from .service import SearchService, SearchResult, SearchResponse
 
 __all__ = [
-    # 服务接口（推荐方式）
+    # Service interface (preferred)
     "SearchService",
     "SearchResult",
     "SearchResponse",
-    # 低级函数（向后兼容）
+    # Low-level functions (for backwards compat)
     "comprehensive_web_search",
     "fetch_webpage_content",
     "get_search_config",

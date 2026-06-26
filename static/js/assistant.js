@@ -1,4 +1,4 @@
-// 个人助手 — 侧边栏入口、设置弹窗和聊天头部扩展。
+// Personal Assistant — sidebar entry, settings modal, and chat-header extras.
 //
 // The Assistant is just a specially-flagged CrewMember whose pinned Session
 // lives alongside normal chats. The sidebar button resolves the per-user
@@ -11,7 +11,7 @@ import { sortModelIds } from './modelSort.js';
 
 const API = '/api/assistant';
 
-let _cachedSettings = null;   // 最近一次的 GET /api/assistant/settings 响应
+let _cachedSettings = null;   // most recent GET /api/assistant/settings payload
 let _modalEl = null;
 
 async function _fetchJSON(url, opts = {}) {
@@ -28,7 +28,7 @@ export async function openAssistantChat() {
       return;
     }
     await selectSession(info.session_id);
-    // 刷新设置缓存，以便 header 按钮/齿轮操作获取最新数据。
+    // Refresh settings cache so the header buttons / gear act on fresh data.
     _cachedSettings = null;
   } catch (e) {
     console.error('openAssistantChat failed:', e);
@@ -76,7 +76,7 @@ async function _runCheckInNow(taskId) {
   }
 }
 
-// ── 设置弹窗 ─────────────────────────────────────────────────────────
+// ── Settings modal ─────────────────────────────────────────────────────────
 
 function _closeModal() {
   if (_modalEl) {
@@ -118,7 +118,7 @@ function _esc(s) {
   }[c]));
 }
 
-// 工具选择器 UI 的工具分组
+// Tool groups for the tool selector UI
 const TOOL_GROUPS = {
   'Email': ['list_emails', 'read_email', 'send_email', 'reply_to_email', 'archive_email', 'delete_email', 'mark_email_read'],
   'Calendar & Notes': ['manage_calendar', 'manage_notes', 'manage_tasks'],
@@ -147,11 +147,11 @@ function _renderSettingsBody(body, data, tzList) {
     <div class="assistant-checkin-row" data-task-id="${_esc(c.id)}">
       <div class="assistant-checkin-head">
         <input type="checkbox" class="assistant-checkin-enabled" ${c.enabled ? 'checked' : ''} title="Enable this check-in" />
-        <input type="text" class="assistant-checkin-name" value="${_esc(c.name)}" placeholder=t('assistant.name_placeholder') />
+        <input type="text" class="assistant-checkin-name" value="${_esc(c.name)}" placeholder="Name" />
         <input type="time" class="assistant-checkin-time" value="${_esc(c.scheduled_time || '')}" />
         <button type="button" class="assistant-checkin-run" title="Run now">Run now</button>
       </div>
-      <textarea class="assistant-checkin-prompt" rows="3" placeholder=t('assistant.prompt_placeholder')>${_esc(c.prompt || '')}</textarea>
+      <textarea class="assistant-checkin-prompt" rows="3" placeholder="Prompt for this check-in">${_esc(c.prompt || '')}</textarea>
       <div class="assistant-checkin-meta">
         ${c.next_run ? `next run: ${_esc(c.next_run)}` : ''}
         ${c.last_run ? ` · last run: ${_esc(c.last_run)}` : ''}
@@ -159,7 +159,7 @@ function _renderSettingsBody(body, data, tzList) {
       </div>
     </div>`).join('');
 
-  // 按类别分组的工具选择器
+  // Tool selector grouped by category
   let toolsHTML = '';
   for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
     toolsHTML += `<div class="assistant-tool-group"><span class="assistant-tool-group-label">${_esc(group)}</span>`;
@@ -175,7 +175,7 @@ function _renderSettingsBody(body, data, tzList) {
     <div class="assistant-settings-form">
       <label class="assistant-field">
         <span>Name</span>
-        <input type="text" id="assistant-name" value="${_esc(crew.name)}" placeholder=t('assistant.assistant_placeholder') />
+        <input type="text" id="assistant-name" value="${_esc(crew.name)}" placeholder="Assistant" />
       </label>
       <div class="assistant-field">
         <span style="display:flex;align-items:center;gap:8px;">Personality
@@ -183,7 +183,7 @@ function _renderSettingsBody(body, data, tzList) {
             <option value="">-- pick from persona --</option>
           </select>
         </span>
-        <textarea id="assistant-personality" rows="6" placeholder=t('assistant.describe_placeholder')>${_esc(crew.personality || '')}</textarea>
+        <textarea id="assistant-personality" rows="6" placeholder="Describe the assistant's personality, tone, and behavior...">${_esc(crew.personality || '')}</textarea>
       </div>
       <div class="assistant-field-row">
         <label class="assistant-field">
@@ -228,7 +228,7 @@ function _renderSettingsBody(body, data, tzList) {
     </div>
   `;
 
-  // ── 填充模型/端点下拉框 ──
+  // ── Populate model/endpoint dropdowns ──
   const epSelect = body.querySelector('#assistant-endpoint');
   const modelSelect = body.querySelector('#assistant-model');
   _fetchEndpoints().then(endpoints => {
@@ -241,7 +241,7 @@ function _renderSettingsBody(body, data, tzList) {
       epHTML += `<option value="${_esc(url)}"${sel}>${_esc(name)}</option>`;
     }
     epSelect.innerHTML = epHTML;
-    // 当端点变更时，加载其模型列表
+    // When endpoint changes, load its models
     epSelect.addEventListener('change', async () => {
       const url = epSelect.value;
       if (!url) { modelSelect.innerHTML = '<option value="">(default)</option>'; return; }
@@ -259,11 +259,11 @@ function _renderSettingsBody(body, data, tzList) {
         modelSelect.innerHTML = mHTML || '<option value="">(no models)</option>';
       } catch { modelSelect.innerHTML = '<option value="">(failed)</option>'; }
     });
-    // 如果端点已预选，则触发初始模型加载
+    // Trigger initial model load if endpoint is pre-selected
     if (epSelect.value) epSelect.dispatchEvent(new Event('change'));
   });
 
-  // ── 工具切换按钮 ──
+  // ── Tool toggle buttons ──
   body.querySelector('#assistant-tools-all')?.addEventListener('click', () => {
     body.querySelectorAll('.assistant-tool-cb').forEach(cb => { cb.checked = true; });
   });
@@ -271,7 +271,7 @@ function _renderSettingsBody(body, data, tzList) {
     body.querySelectorAll('.assistant-tool-cb').forEach(cb => { cb.checked = false; });
   });
 
-  // ── 角色选择器 — 从预设和模板中填充 ──
+  // ── Character picker — populate from presets + templates ──
   const charPick = body.querySelector('#assistant-character-pick');
   const personalityEl = body.querySelector('#assistant-personality');
   if (charPick && personalityEl) {
@@ -281,7 +281,7 @@ function _renderSettingsBody(body, data, tzList) {
           _fetchJSON('/api/presets').catch(() => ({})),
           _fetchJSON('/api/presets/templates').catch(() => []),
         ]);
-        // Presets API 返回的是以预设 ID 为键的字典，不是数组
+        // Presets API returns a dict keyed by preset ID, not an array
         const allPresets = [];
         if (presetsRaw && typeof presetsRaw === 'object' && !Array.isArray(presetsRaw)) {
           for (const [key, val] of Object.entries(presetsRaw)) {
@@ -337,7 +337,7 @@ function _renderSettingsBody(body, data, tzList) {
     });
   }
 
-  // ── 事件绑定 ──
+  // ── Event wiring ──
   body.querySelector('#assistant-settings-cancel').addEventListener('click', _closeModal);
   body.querySelector('#assistant-settings-save').addEventListener('click', async () => {
     const selectedTools = [];
@@ -376,7 +376,7 @@ function _renderSettingsBody(body, data, tzList) {
       btn.textContent = 'Running...';
       await _runCheckInNow(taskId);
       _closeModal();
-      // 轮询直到完成，然后导航到助手聊天
+      // Poll until done, then navigate to assistant chat
       const sid = _cachedSettings?.crew?.session_id;
       const _poll = setInterval(async () => {
         try {
@@ -385,7 +385,7 @@ function _renderSettingsBody(body, data, tzList) {
           const data = await res.json();
           if (data.status === 'done' || data.status === 'error') {
             clearInterval(_poll);
-            // 硬导航以强制完全重新加载会话
+            // Hard navigate to force full reload of the session
             if (sid) {
               window.location.href = window.location.pathname + '#' + sid;
               window.location.reload();
@@ -413,11 +413,11 @@ export async function openAssistantSettings() {
   }
 }
 
-// 侧边栏接线已移除 — 助手聊天 + 设置现在作为
-// 任务弹窗（见 tasks.js）中的活动 / 设置标签页展示。
-// 以下导出仍被 tasks.js 用于展示这些视图。
+// Sidebar wiring removed — Assistant chat + settings now live as
+// Activity / Settings tabs inside the Tasks modal (see tasks.js). The
+// exports below are still used by tasks.js to surface those views.
 
-// ── 助手会话激活时的聊天头部入口 ───────────
+// ── Chat-header affordances when the assistant session is active ───────────
 
 async function _ensureHeaderAffordances(sessionId) {
   try {
@@ -439,8 +439,8 @@ async function _ensureHeaderAffordances(sessionId) {
   headerRight.appendChild(gear);
 }
 
-// 在会话加载后运行一个简短的轮询检查，以便在聊天头部 DOM
-// 就位后添加齿轮按钮。发射后不管。
+// Run a short polling check after session loads so we can add the gear button
+// once the chat header DOM is in place. Fire-and-forget.
 function _watchForAssistantActivation() {
   let retries = 0;
   const interval = setInterval(async () => {
@@ -451,11 +451,11 @@ function _watchForAssistantActivation() {
     if (activeSessionId) {
       await _ensureHeaderAffordances(activeSessionId);
     }
-    if (retries > 120) clearInterval(interval); // ~2 分钟
+    if (retries > 120) clearInterval(interval); // ~2 minutes
   }, 1000);
 }
 
-// ── 启动 ───────────────────────────────────────────────────────────────────
+// ── Boot ───────────────────────────────────────────────────────────────────
 
 function _boot() {
   _watchForAssistantActivation();

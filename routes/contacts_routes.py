@@ -1,8 +1,8 @@
 """
 contacts_routes.py
 
-CardDAV 通讯录集成。读取本地 Radicale，支持
-搜索和添加新联系人。
+CardDAV contacts integration. Reads from local Radicale, supports
+search and adding new contacts.
 """
 
 import re
@@ -148,7 +148,7 @@ def _vunesc(value: str) -> str:
 
 
 def _parse_vcards(text: str) -> List[Dict]:
-    """将 vCard 流解析为包含 name、email、phone 的字典。"""
+    """Parse a stream of vCards into dicts with name, email, phone."""
     contacts = []
     for block in re.split(r"BEGIN:VCARD", text):
         if not block.strip():
@@ -156,17 +156,17 @@ def _parse_vcards(text: str) -> List[Dict]:
         contact = {"name": "", "emails": [], "phones": [], "uid": "", "address": ""}
         for line in block.split("\n"):
             line = line.strip()
-            # 去除可选的 RFC 6350 组前缀（如 "item1.EMAIL;..."）
-            # Apple 通讯录 / iCloud / 许多 CardDAV 服务器默认发出此前缀 —
-            # 不处理此则下面的属性名检查会遗漏这些行
-            # 并静默丢弃邮件/电话。组标记仅出现在属性名之前，
-            # 所以在匹配和值提取时去除是安全的，
-            # 对非分组行是无操作。
+            # Strip an optional RFC 6350 group prefix (e.g. "item1.EMAIL;...")
+            # that Apple Contacts / iCloud / many CardDAV servers emit by
+            # default — without this the property-name checks below miss those
+            # lines and silently drop the email / phone. The group token only
+            # precedes the property name, so it is safe to strip for matching
+            # and value extraction, and a no-op for non-grouped lines.
             name_part = re.sub(r"^[A-Za-z0-9-]+\.", "", line, count=1)
             if name_part.startswith("FN:") or name_part.startswith("FN;"):
                 contact["name"] = _vunesc(name_part.split(":", 1)[1]) if ":" in name_part else ""
             elif name_part.startswith("EMAIL"):
-                # 处理 EMAIL:foo@bar 或 EMAIL;TYPE=...:foo@bar 或 EMAIL;PREF=1:foo@bar
+                # Handle EMAIL:foo@bar OR EMAIL;TYPE=...:foo@bar OR EMAIL;PREF=1:foo@bar
                 if ":" in name_part:
                     email_addr = _vunesc(name_part.split(":", 1)[1])
                     if email_addr and email_addr not in contact["emails"]:
@@ -211,16 +211,16 @@ def _build_vcard(name: str, email: str, uid: Optional[str] = None,
                  emails: Optional[List[str]] = None,
                  phones: Optional[List[str]] = None,
                  address: Optional[str] = None) -> str:
-    """构建 vCard。接受单个 `email`（旧调用者）或完整的
-    `emails`/`phones` 列表（编辑路径）。第一个邮件标记为
-    PREF=1。所有值均按 RFC-6350 转义。"""
+    """Build a vCard. Accepts either a single `email` (legacy callers) or
+    full `emails`/`phones` lists (edit path). The first email is marked
+    PREF=1. All values are RFC-6350-escaped."""
     if not uid:
         uid = str(uuid.uuid4())
-    # 标准化邮件列表 — `email` 参数是单邮件创建的便捷参数；
-    # `emails`（如提供）为权威列表。
+    # Normalize email lists — `email` arg is a convenience for single-email
+    # creation; `emails` (if given) is authoritative.
     email_list = [e.strip() for e in (emails if emails is not None else ([email] if email else [])) if e and e.strip()]
     phone_list = [p.strip() for p in (phones or []) if p and p.strip()]
-    # 尝试将名称拆分为姓/名
+    # Try to split name into first/last
     parts = name.strip().split()
     if len(parts) >= 2:
         first = parts[0]
@@ -228,7 +228,7 @@ def _build_vcard(name: str, email: str, uid: Optional[str] = None,
     else:
         first = name
         last = ""
-    # N field is structured (5 components separated by ';') — 转义 each
+    # N field is structured (5 components separated by ';') — escape each
     # component individually so a comma in the name doesn't split it.
     n_field = f"{_vesc(last)};{_vesc(first)};;;"
     lines = [
@@ -239,7 +239,7 @@ def _build_vcard(name: str, email: str, uid: Optional[str] = None,
         f"N:{n_field}",
     ]
     for i, em in enumerate(email_list):
-        # 第一个邮件为首选邮件。
+        # First email is the preferred one.
         lines.append(f"EMAIL;PREF=1:{_vesc(em)}" if i == 0 else f"EMAIL:{_vesc(em)}")
     for ph in phone_list:
         lines.append(f"TEL:{_vesc(ph)}")
@@ -317,7 +317,7 @@ def _fetch_via_report(cfg, auth):
             out.append(c)
         # If the REPORT parsed to ZERO contacts, don't trust it — some
         # CardDAV servers treat an empty <filter/> as "match nothing" and
-        # return a valid-but-empty 207. 返回 None so the caller falls
+        # return a valid-but-empty 207. Return None so the caller falls
         # back to the plain GET (which lists everything). A genuinely empty
         # address book just costs one extra GET that also returns nothing.
         if not out:
@@ -377,7 +377,7 @@ def _resolve_resource_url(uid: str) -> str:
     found = _lookup()
     if found:
         return found
-    # Not in cache (or no href) — refresh once and 重试 before guessing.
+    # Not in cache (or no href) — refresh once and retry before guessing.
     try:
         _fetch_contacts(force=True)
     except Exception:
@@ -466,7 +466,7 @@ def _import_vcards(text: str) -> Dict:
         logger.warning("CardDAV import URL rejected: %s", e)
         return {"imported": 0, "failed": 0, "total": 0, "error": str(e)}
     auth = (cfg["username"], cfg["password"]) if cfg["username"] else None
-    # 分割 into individual cards. re.split drops the BEGIN line, so we
+    # Split into individual cards. re.split drops the BEGIN line, so we
     # re-add it. Normalize CRLF.
     raw = (text or "").replace("\r\n", "\n").replace("\r", "\n")
     blocks = []
@@ -481,11 +481,11 @@ def _import_vcards(text: str) -> Dict:
     imported = 0
     failed = 0
     for block in blocks:
-        # 提取 or as签名 a UID.
+        # Extract or assign a UID.
         m = re.search(r"^UID:(.+)$", block, re.MULTILINE)
         uid = (m.group(1).strip() if m else "") or str(uuid.uuid4())
         if not m:
-            # 注入 a UID right after the VERSION line (or after BEGIN).
+            # Inject a UID right after the VERSION line (or after BEGIN).
             if re.search(r"^VERSION:", block, re.MULTILINE):
                 block = re.sub(r"(^VERSION:.*$)", r"\1\nUID:" + uid, block, count=1, flags=re.MULTILINE)
             else:
@@ -744,7 +744,7 @@ def setup_contacts_routes():
         address = (data.get("address") or "").strip()
         if not email:
             return {"success": False, "error": "Email required"}
-        # 检查 if already exists by email
+        # Check if already exists by email
         if email:
             contacts = _fetch_contacts()
             for c in contacts:
@@ -758,7 +758,7 @@ def setup_contacts_routes():
         else:
             ok = _create_contact(name, email)
         # If a phone was provided, do an immediate update to thread it
-        # through (the simple _create_contact 签名ature only takes name +
+        # through (the simple _create_contact signature only takes name +
         # email + address; phones happen via update).
         if ok and phone:
             try:

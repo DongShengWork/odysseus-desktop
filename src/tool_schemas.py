@@ -18,7 +18,7 @@ from src.tool_parsing import _TOOL_NAME_MAP
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# OpenAI-compatible function 工具模式s
+# OpenAI-compatible function tool schemas
 # ---------------------------------------------------------------------------
 FUNCTION_TOOL_SCHEMAS = [
     {
@@ -1207,7 +1207,7 @@ FUNCTION_TOOL_SCHEMAS = [
 
 
 # ---------------------------------------------------------------------------
-# Converter: native 函数调用 -> ToolBlock
+# Converter: native function call -> ToolBlock
 # ---------------------------------------------------------------------------
 
 def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock]:
@@ -1227,7 +1227,7 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
 
     # Some models emit valid JSON that isn't an object (e.g. a bare array
     # ["ls -la"], string, or number) as function arguments. Most local tools keep
-    # the legacy empty-object coercion for stream robustness, but email MCP 工具s
+    # the legacy empty-object coercion for stream robustness, but email MCP tools
     # must fail closed so a malformed call cannot read the default mailbox.
     if not isinstance(args, dict):
         if tool_type.startswith("mcp__email__") or name in _BUILTIN_EMAIL_TOOLS:
@@ -1236,7 +1236,7 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
         logger.warning(f"Non-object function call arguments for {name}: {args!r}; treating as empty")
         args = {}
 
-    # Allow MCP 工具s through (namespaced as mcp__serverid__toolname)
+    # Allow MCP tools through (namespaced as mcp__serverid__toolname)
     if tool_type.startswith("mcp__"):
         content = json.dumps(args) if args else "{}"
         return ToolBlock(tool_type, content)
@@ -1247,7 +1247,7 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
         logger.warning(f"Unknown function call: {name}")
         return None
 
-    # 转换 structured args back to the text format each tool expects
+    # Convert structured args back to the text format each tool expects
     if tool_type == "bash":
         content = args.get("command", "")
     elif tool_type == "python":
@@ -1262,7 +1262,7 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
             content = args.get("query", "")
         # Preserve the model-requested freshness filter — the web_search schema
         # advertises time_filter and the executor parses {"query","time_filter"},
-        # but a bare 查询字符串 dropped it. Mirrors the read_file JSON idiom.
+        # but a bare query string dropped it. Mirrors the read_file JSON idiom.
         tf = args.get("time_filter")
         if content and isinstance(tf, str) and tf in ("day", "week", "month", "year"):
             content = json.dumps({"query": content, "time_filter": tf})

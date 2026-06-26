@@ -1,10 +1,10 @@
-// static/js/calendar/提醒s.js
+// static/js/calendar/reminders.js
 //
-// 日历提醒笔记的浏览器通知轮询器。自包含：
-// 模块私有的 `_notifFired` 设置 跟踪哪些笔记 ID 我们已经
-// 通知过，持久化到 localStorage。每 60 秒轮询 `/api/notes?label=calendar`
-// 并对于任何 `due_date` 已过去但在过期窗口内的笔记
-// 触发 Notification + 提示条 通知。
+// Browser-notification poller for calendar reminder notes. Self-contained:
+// module-private `_notifFired` Set tracks which note IDs we've already
+// notified, persisted to localStorage. Polls `/api/notes?label=calendar`
+// every 60 seconds and fires a Notification + toast for any note whose
+// `due_date` is in the past but within the staleness window.
 //
 // `start()` kicks off the poll loop + permission request. Call once from
 // the calendar's entry module.
@@ -15,10 +15,10 @@ const API_BASE = window.location.origin;
 
 let _notifFired = new Set(JSON.parse(localStorage.getItem('cal-notif-fired') || '[]'));
 
-// 计算一个基于系统时钟精确的通知正文。优先尝试
-// 笔记的 `event_dtstart`（由 _createEventReminder 设置）；回退到
-// 清理 items[0].text 中的过时时间标记，使旧版
-// 提醒不会在晚上 9 点显示“in 29 min”。
+// Compute a fresh, system-clock-accurate notification body. Tries the
+// note's `event_dtstart` first (set by _createEventReminder); falls back
+// to scrubbing stale time tokens out of items[0].text so legacy
+// reminders don't show "in 29 min" at 9pm.
 function _formatReminderBody(note) {
   const dtstartRaw = note.event_dtstart || note.eventDtstart || null;
   if (dtstartRaw) {
@@ -40,7 +40,7 @@ function _formatReminderBody(note) {
       return `Was scheduled for ${when}${when2}`;
     }
   }
-  // 旧版笔记（无 event_dtstart）。清理过时的相对时间字符串。
+  // Legacy notes (no event_dtstart). Scrub stale relative-time strings.
   let body = (note.items || []).map(i => i.text).join('\n') || note.content || '';
   body = body.replace(/\bin\s+\d+\s*(min|minute|hour|hr|day)s?\b/gi, '').trim();
   body = body.replace(/\(\s*\d{1,2}:\d{2}\s*\)/g, '').trim();
@@ -48,10 +48,10 @@ function _formatReminderBody(note) {
   return body;
 }
 
-// 仅当 `due` 在当前时间前这么多分钟内才触发提醒。
-// 防止新浏览器（空 `cal-notif-fired` localStorage）在首次轮询时
-// 对每个两周前的提醒都发送垃圾通知。任何更旧的内容会被静默
-// 标记为已触发，防止其被持续拾取。
+// Only fire a reminder if `due` was within this many minutes BEFORE now.
+// Stops a fresh browser (empty `cal-notif-fired` localStorage) from spamming
+// every 2-week-old reminder on first poll. Anything older is silently
+// marked fired so it doesn't keep getting picked up.
 const _REMINDER_STALENESS_MIN = 5;
 
 async function _pollReminders() {
@@ -65,10 +65,10 @@ async function _pollReminders() {
       if (!note.due_date || _notifFired.has(note.id)) continue;
       const due = new Date(note.due_date);
       if (isNaN(due)) continue;
-      if (due > now) continue; // 尚未到期
+      if (due > now) continue; // not yet due
       const ageMs = now - due;
       if (ageMs > stalenessMs) {
-        // 太旧而无法触发 — 标记为已见，不每分钟重新检查。
+        // Too old to fire — mark as seen so we don't recheck every minute.
         _notifFired.add(note.id);
         continue;
       }
@@ -93,7 +93,7 @@ async function _pollReminders() {
       }
       if (uiModule.showToast) uiModule.showToast((note.title || 'Calendar Reminder') + (body ? ' — ' + body : ''));
     }
-    // 持久化已触发集合（保留最近 200 条）
+    // Persist fired set (keep last 200)
     const arr = [..._notifFired].slice(-200);
     localStorage.setItem('cal-notif-fired', JSON.stringify(arr));
   } catch (_) {}
@@ -101,8 +101,8 @@ async function _pollReminders() {
 
 let _started = false;
 
-// 幂等：多次调用安全。首次调用时启动权限请求
-// 和 60 秒轮询循环。
+// Idempotent: safe to call multiple times. Kicks off permission request
+// and the 60s poll loop on first call.
 export function startReminderPoll() {
   if (_started) return;
   _started = true;

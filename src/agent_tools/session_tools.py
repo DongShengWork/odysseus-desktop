@@ -90,15 +90,15 @@ async def list_sessions(content: str, session_id: Optional[str] = None, owner: O
 
         # Pull every session's last_accessed from the DB so we can sort
         # by recency. In-memory sessions hold name + model + msg_count;
-        # the DB row holds the 时间戳s.
+        # the DB row holds the timestamps.
         db = SessionLocal()
         try:
             db_rows = {r.id: r for r in db.query(DbSession).all()}
         finally:
             db.close()
 
-        # SECURITY: 权限范围 to the caller's sessions. Passing None returned
-        # every user's sessions, which the 智能体工具 then exposed via the
+        # SECURITY: scope to the caller's sessions. Passing None returned
+        # every user's sessions, which the agent tool then exposed via the
         # "list my chats" reply.
         sessions = _session_manager.get_sessions_for_user(owner)
         rows = []
@@ -112,7 +112,7 @@ async def list_sessions(content: str, session_id: Optional[str] = None, owner: O
                 ts = getattr(db_row, 'last_accessed', None) or getattr(db_row, 'updated_at', None) or getattr(db_row, 'created_at', None)
             rows.append((ts, sid, sess))
 
-        # 排序 by 时间戳 DESC; rows without a 时间戳 sink to the bottom.
+        # Sort by timestamp DESC; rows without a timestamp sink to the bottom.
         rows.sort(key=lambda r: r[0] or datetime.min, reverse=True)
 
         def _rel(ts):
@@ -181,7 +181,7 @@ async def send_to_session(content: str, session_id: Optional[str] = None, owner:
     if not sess:
         return {"error": f"Session '{target_sid}' not found"}
 
-    # Owner-权限范围: reject access to another user's session
+    # Owner-scope: reject access to another user's session
     if owner and getattr(sess, "owner", None) and sess.owner != owner:
         return {"error": f"Session '{target_sid}' not found"}
 
@@ -189,7 +189,7 @@ async def send_to_session(content: str, session_id: Optional[str] = None, owner:
         return {"error": "No message provided"}
 
     try:
-        # 构建 context from session history
+        # Build context from session history
         context = sess.get_context_messages()
         context.append({"role": "user", "content": message})
 
@@ -199,11 +199,11 @@ async def send_to_session(content: str, session_id: Optional[str] = None, owner:
             timeout=AI_CHAT_TIMEOUT,
         )
 
-        # 保存 both messages to session
+        # Save both messages to session
         sess.add_message(ChatMessage("user", message))
         sess.add_message(ChatMessage("assistant", response))
 
-        # Truncate for 工具输出
+        # Truncate for tool output
         if len(response) > 10000:
             response = response[:10000] + "\n... (truncated)"
 
@@ -230,7 +230,7 @@ async def manage_session(content: str, session_id: Optional[str] = None, owner: 
 
     from src.database import SessionLocal, Session as DbSession
 
-    # Accept BOTH the structured JSON args the 工具模式 advertises
+    # Accept BOTH the structured JSON args the tool schema advertises
     # ({action, session_id, value}) AND the legacy line-based format
     # (line1=action, line2=session_id, line3=value). Native function-calling
     # models send JSON; fenced-block callers send lines. Previously only the
@@ -284,7 +284,7 @@ async def manage_session(content: str, session_id: Optional[str] = None, owner: 
     # these when the user asks to "open" or "switch to" a session.
     # There's no server-side way to make the browser navigate, so we
     # just return a clickable anchor link the user can click. The
-    # 前端's chat-history click delegate routes `#session-<id>`
+    # frontend's chat-history click delegate routes `#session-<id>`
     # to selectSession(). The agent's reply naturally embeds this
     # result so the user sees a single clickable line.
     def _session_query(db):

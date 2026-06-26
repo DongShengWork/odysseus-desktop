@@ -1,4 +1,4 @@
-# src/tts_服务.py
+# src/tts_service.py
 """Multi-provider TTS service — dispatches to local Kokoro, OpenAI-compatible API, or browser."""
 
 import io
@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_speed(value, default: float = 1.0) -> float:
-    """防御性地解析存储的 tts_speed。设置层容忍
-    损坏/agent 写入的配置，因此非数字或空值（例如 agent
-    将 "speech speed" 设为 "fast"，或手动编辑的 settings.json）不能
-    以 ValueError 导致合成或状态端点崩溃。"""
+    """Parse the stored tts_speed defensively. The settings layer tolerates
+    corrupt/agent-written config, so a non-numeric or empty value (e.g. an agent
+    setting "speech speed" = "fast", or a hand-edited settings.json) must not
+    crash synthesis or the stats endpoint with a ValueError."""
     try:
         speed = float(value)
     except (TypeError, ValueError):
@@ -27,22 +27,22 @@ def _safe_speed(value, default: float = 1.0) -> float:
 
 
 class TTSService:
-    """多提供商 TTS 服务。
+    """Multi-provider TTS service.
 
-    每次调用时从 data/settings.json 读取提供商配置。
-    提供商：
-      "disabled"        — 无 TTS
-      "browser"         — 客户端 Web Speech API（无服务端合成）
-      "local"           — Kokoro-82M（GPU）
-      "endpoint:<id>"   — 通过 ModelEndpoint 的 OpenAI 兼容 /audio/speech
+    Reads provider config from data/settings.json on each call.
+    Providers:
+      "disabled"        — no TTS
+      "browser"         — client-side Web Speech API (no server synthesis)
+      "local"           — Kokoro-82M on GPU
+      "endpoint:<id>"   — OpenAI-compatible /audio/speech via ModelEndpoint
     """
 
     def __init__(self, cache_dir: str = TTS_CACHE_DIR):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self._kokoro = None  # 延迟初始化
+        self._kokoro = None  # lazy-init
 
-    # ── 设置 ──
+    # ── Settings ──
 
     def _load_settings(self) -> dict:
         from src.settings import load_settings
@@ -64,15 +64,15 @@ class TTSService:
         if provider == "disabled":
             return False
         if provider == "browser":
-            return True  # 由客户端处理
+            return True  # handled client-side
         if provider == "local":
             kokoro = self._get_kokoro()
             return kokoro is not None and kokoro.available
         if provider.startswith("endpoint:"):
-            return True  # 假定可连接；错误在合成时暴露
+            return True  # assume reachable; errors surface at synthesis time
         return False
 
-    # ── 缓存 ──
+    # ── Cache ──
 
     def _cache_key(self, text: str, provider: str, model: str, voice: str, speed: float = 1.0) -> str:
         raw = f"{provider}|{model}|{voice}|{speed}|{text}"
@@ -96,14 +96,14 @@ class TTSService:
             count += 1
         logger.info(f"Cleared {count} cached TTS files")
 
-    # ── Kokoro（本地）──
+    # ── Kokoro (local) ──
 
     def _get_kokoro(self):
         if self._kokoro is None:
             self._kokoro = _KokoroPipeline()
         return self._kokoro
 
-    # ── API 端点 ──
+    # ── API endpoint ──
 
     def _synthesize_api(self, text: str, endpoint_id: str, model: str, voice: str, speed: float = 1.0) -> Optional[bytes]:
         from src.database import SessionLocal, ModelEndpoint
@@ -141,7 +141,7 @@ class TTSService:
             logger.error(f"API TTS synthesis failed: {e}")
             return None
 
-    # ── 公共接口 ──
+    # ── Public interface ──
 
     def synthesize(self, text: str, use_cache: bool = True) -> Optional[bytes]:
         settings = self._load_settings()
@@ -195,7 +195,7 @@ class TTSService:
         return None
 
     def set_voice(self, voice: str):
-        """遗留空操作 — 语音现在通过管理员设置管理。"""
+        """Legacy no-op — voice is now managed via admin settings."""
 
     def get_stats(self) -> Dict[str, Any]:
         settings = self._load_settings()
@@ -229,7 +229,7 @@ class TTSService:
 
 
 class _KokoroPipeline:
-    """封装 Kokoro-82M 的本地 GPU 处理流程。"""
+    """Encapsulates the Kokoro-82M local GPU pipeline."""
 
     def __init__(self):
         self.pipeline = None
@@ -287,7 +287,7 @@ class _KokoroPipeline:
             return None
 
 
-# 模块级单例
+# Module-level singleton
 _tts_service = None
 
 def get_tts_service() -> TTSService:

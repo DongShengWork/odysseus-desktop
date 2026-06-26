@@ -1,4 +1,4 @@
-"""可选 PDF 运行时依赖的小型辅助函数。"""
+"""Small helpers for optional PDF runtime dependencies."""
 
 PDF_VIEWER_PYMUPDF_MISSING = (
     "PDF viewer requires PyMuPDF. Install optional PDF dependencies with "
@@ -7,9 +7,9 @@ PDF_VIEWER_PYMUPDF_MISSING = (
 
 
 def load_pymupdf_for_pdf_viewer():
-    """返回 PyMuPDF 模块，或抛出面向用户的安装提示。"""
+    """Return the PyMuPDF module, or raise a user-facing setup hint."""
     try:
-        import fitz  # PyMuPDF, 可选
+        import fitz  # PyMuPDF, optional
     except ImportError as exc:
         raise RuntimeError(PDF_VIEWER_PYMUPDF_MISSING) from exc
     return fitz

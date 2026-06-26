@@ -1,7 +1,7 @@
 """
 rag_manager.py
 
-一个围绕 VectorRAG 的薄包装器，用于向后兼容和附加功能。
+A thin wrapper around VectorRAG for backward compatibility and additional features.
 """
 
 import logging
@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 
 from src.constants import CHROMA_DIR
 
-# 尝试从不同的可能位置导入
+# Try to import from different possible locations
 try:
     from rag_vector import VectorRAG
 except ImportError:
@@ -22,18 +22,18 @@ logger = logging.getLogger(__name__)
 
 class RAGManager:
     """
-    包装 VectorRAG 以提供向后兼容的管理器类。
-    大多数方法直接委托给 VectorRAG。
+    A manager class that wraps VectorRAG for backward compatibility.
+    Most methods delegate directly to VectorRAG.
     """
     
     def __init__(self, persist_directory: str = CHROMA_DIR):
-        """使用 VectorRAG 初始化 RAGManager。"""
+        """Initialize the RAGManager with VectorRAG."""
         self.vector_rag = VectorRAG(persist_directory=persist_directory)
         logger.info("RAGManager initialized as wrapper for VectorRAG")
     
-    # 将所有方法委托给 VectorRAG
+    # Delegate all methods to VectorRAG
     def search(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
-        """搜索文档 — 委托给 VectorRAG。"""
+        """Search for documents - delegates to VectorRAG."""
         return self.vector_rag.search(query, k)
     
     def index_personal_documents(
@@ -42,7 +42,7 @@ class RAGManager:
         file_extensions: Optional[set] = None,
         owner: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """索引文档 — 委托给 VectorRAG。"""
+        """Index documents - delegates to VectorRAG."""
         return self.vector_rag.index_personal_documents(
             directory,
             file_extensions=file_extensions,
@@ -50,21 +50,21 @@ class RAGManager:
         )
     
     def retrieve(self, query: str, k: int = 5) -> List[str]:
-        """检索相关块 — 委托给 VectorRAG。"""
+        """Retrieve relevant chunks - delegates to VectorRAG."""
         return self.vector_rag.retrieve(query, k)
     
     def rebuild_index(self) -> bool:
-        """重建索引 — 委托给 VectorRAG。"""
+        """Rebuild index - delegates to VectorRAG."""
         return self.vector_rag.rebuild_index()
     
     def get_stats(self) -> Dict[str, Any]:
-        """获取统计信息 — 委托给 VectorRAG。"""
+        """Get stats - delegates to VectorRAG."""
         return self.vector_rag.get_stats()
     
     def add_document(self, text: str, metadata: Dict[str, Any]) -> bool:
-        """添加单个文档 — 委托给 VectorRAG。"""
+        """Add single document - delegates to VectorRAG."""
         return self.vector_rag.add_document(text, metadata)
     
     def add_documents_batch(self, docs: List[tuple]) -> Dict[str, Any]:
-        """批量添加文档 — 委托给 VectorRAG。"""
+        """Add documents in batch - delegates to VectorRAG."""
         return self.vector_rag.add_documents_batch(docs)

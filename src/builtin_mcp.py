@@ -1,8 +1,8 @@
 """
 builtin_mcp.py
 
-启动时自动注册内置 MCP 服务器。
-每个服务器作为 stdio 子进程运行，由 McpManager 管理。
+Auto-registration of built-in MCP servers on startup.
+Each server runs as a stdio subprocess managed by McpManager.
 """
 
 import asyncio
@@ -20,16 +20,16 @@ logger = logging.getLogger(__name__)
 
 
 def _find_npx() -> str:
-    """查找 npx 二进制文件，如果不在 PATH 中则检查常见位置。
+    """Find the npx binary, checking common locations if not on PATH.
 
-    在 Windows 上 shim 是 `npx.cmd`，`which_tool` 通过 PATHEXT 解析。
+    On Windows the shim is `npx.cmd`, which `which_tool` resolves via PATHEXT.
     """
     npx = which_tool("npx")
     if npx:
         return npx
     if IS_WINDOWS:
-        # 最小 PATH 回退：npm 的全局 bin 在 %APPDATA%\npm 下，
-        # node 的安装目录在 node.exe 旁边带有 npx.cmd。
+        # Minimal-PATH fallbacks: npm's global bin lives under %APPDATA%\npm,
+        # and node's installer dir carries npx.cmd alongside node.exe.
         appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
         for candidate in (
             os.path.join(appdata, "npm", "npx.cmd"),
@@ -42,8 +42,8 @@ def _find_npx() -> str:
             cand = os.path.join(os.path.dirname(node), "npx.cmd")
             if os.path.isfile(cand):
                 return cand
-        return "npx.cmd"  # 回退，会以清晰的错误失败
-    # PATH 最小化时的常见 POSIX 位置（例如 systemd）
+        return "npx.cmd"  # fallback, will fail with a clear error
+    # Common POSIX locations when PATH is minimal (e.g. systemd)
     for candidate in [
         os.path.expanduser("~/.npm-global/bin/npx"),
         os.path.expanduser("~/.local/bin/npx"),
@@ -52,21 +52,21 @@ def _find_npx() -> str:
     ]:
         if os.path.isfile(candidate):
             return candidate
-    # 尝试查找 node 并使用相同目录下的 npx
+    # Try to find node and use npx from same dir
     node = shutil.which("node")
     if node:
         npx_candidate = os.path.join(os.path.dirname(node), "npx")
         if os.path.isfile(npx_candidate):
             return npx_candidate
-    return "npx"  # 回退，会以清晰的错误失败
+    return "npx"  # fallback, will fail with a clear error
 
-# 服务器定义：id -> (相对于项目根的脚本路径, 显示名称)
+# Server definitions: id -> (script path relative to project root, display name)
 #
-# bash / python / filesystem / web_search 已折叠到原生进程内
-# 执行（src/tool_execution.py:_direct_回退）。这些简单的子进程
-# 包装器已移除。
+# bash / python / filesystem / web_search were folded into native in-process
+# execution (src/tool_execution.py:_direct_fallback). Those trivial subprocess
+# wrappers are gone.
 #
-# 镜像_gen / memory / rag / email 仍然作为 stdio MCP 服务器运行 — 每个
+# image_gen / memory / rag / email still run as stdio MCP servers — each
 # carries hundreds of LOC of unique IMAP / HTTP / manager logic not worth
 # duplicating into the native path right now.
 _BUILTIN_SERVERS = {
@@ -76,7 +76,7 @@ _BUILTIN_SERVERS = {
     "email":      ("mcp_servers/email_server.py",      "Built-in: Email"),
 }
 
-# 基于 NPX 的内置服务器（通过 npx 运行，不是 Python）
+# NPX-based built-in servers (run via npx, not Python)
 _BUILTIN_NPX_SERVERS = {
     "builtin_browser": {
         "name": "Built-in: Browser",
@@ -85,12 +85,12 @@ _BUILTIN_NPX_SERVERS = {
     }
 }
 
-# 全局标志，如果存在兼容性问题则禁用 MCP
+# Global flag to disable MCP if there are compatibility issues
 MCP_DISABLED = os.environ.get("ODYSSEUS_DISABLE_MCP", "").lower() in ("1", "true", "yes")
 
 
 async def register_builtin_servers(mcp_manager):
-    """将所有内置 MCP 服务器连接到管理器。"""
+    """Connect all built-in MCP servers to the manager."""
     if MCP_DISABLED:
         logger.info("Built-in MCP servers disabled via ODYSSEUS_DISABLE_MCP")
         return
@@ -125,21 +125,21 @@ async def register_builtin_servers(mcp_manager):
             continue
         asyncio.create_task(_connect_python_server(server_id, script_path, name))
 
-    # 在后台注册基于 NPX 的服务器（它们启动需要更长时间）
+    # Register NPX-based servers in the background (they take longer to start)
     npx_path = _find_npx()
     logger.info(f"NPX binary resolved to: {npx_path}")
 
     async def _start_npx_servers():
-        await asyncio.sleep(3)  # 让 Python 服务器先完成
+        await asyncio.sleep(3)  # let Python servers finish first
         for server_id, cfg in _BUILTIN_NPX_SERVERS.items():
             # Skip the server if its npx package isn't cached. Without this
             # check, npx would try to download/install the package on first
             # use, which can take minutes (or hang) on fresh installs without
-            # 将其包装在 asyncio.wait_for 中以限制等待时间听起来合理，
-            # 但 mcp.client.stdio 使用内部 anyio 任务组，该组无法
+            # Playwright system deps. Wrapping that in asyncio.wait_for to
+            # bound the wait sounds reasonable, but mcp.client.stdio uses an
             # internal anyio task group that can't survive the resulting
-            # "Attempted to exit cancel 权限范围 in a different task than
-            # "Attempted to exit cancel 权限范围 in a different task than
+            # cross-task cancellation: it raises "Attempted to exit cancel
+            # scope in a different task than it was entered in" in a sibling
             # task, which cascades cancellations into the rest of the event
             # loop and downs the app. Detecting installed-state up-front lets
             # us bail with a useful warning before we ever touch stdio_client.
@@ -179,16 +179,17 @@ async def register_builtin_servers(mcp_manager):
 
 
 def _npx_package_from_args(args):
-    """从形如 ['-y', '<package@version>', ...flags] 的 npx args
-    列表中提取包规格。如果格式不匹配则返回 None
-    （此时跳过缓存检查直接尝试连接）。"""
+    """Pick the package spec out of an npx args list shaped like
+    ['-y', '<package@version>', ...flags]. Returns None if the
+    convention doesn't match (we then skip the cache check and just
+    try the connect)."""
     if not args:
         return None
     if "-y" in args:
         idx = args.index("-y") + 1
         if idx < len(args) and not args[idx].startswith("-"):
             return args[idx]
-    # 没有 -y 前缀：第一个非标志参数就是包
+    # No -y prefix: first non-flag arg is the package
     for a in args:
         if not a.startswith("-"):
             return a
@@ -196,7 +197,7 @@ def _npx_package_from_args(args):
 
 
 async def _is_npx_package_cached(npx_path, package_spec, timeout_s=5):
-    """探测 npx 包是否已在本地缓存中。
+    """Probe whether an npx package is already in the local cache.
 
     First checks the local `_npx` cache for an installed package. If the
     package is not found there, falls back to `npx --no-install <pkg>

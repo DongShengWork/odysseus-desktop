@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 # Model-name substrings that are NOT chat/generation models. When an endpoint
 # has no explicit model configured we pick the first CHAT model from its list —
-# never an 嵌入/tts/etc. (an OpenAI-style endpoint often lists
-# `text-嵌入-ada-002` first, which silently broke email-summarize and
+# never an embedding/tts/etc. (an OpenAI-style endpoint often lists
+# `text-embedding-ada-002` first, which silently broke email-summarize and
 # other resolve_endpoint callers with "Cannot reach model").
 _NON_CHAT_MODEL = (
     "text-embedding", "embedding", "tts-", "whisper", "dall-e",
@@ -229,7 +229,7 @@ def build_models_url(base: str) -> Optional[str]:
         return _append_endpoint_path(_ollama_api_root(base), "/tags")
     if provider == "chatgpt-subscription":
         return None
-    # Generic OpenAI-compatible 回退: local model servers with no explicit
+    # Generic OpenAI-compatible fallback: local model servers with no explicit
     # path conventionally expose `/v1/models` (LM Studio, llama.cpp, vLLM).
     # For non-local unknown hosts, do not invent `/v1`; append `/models` to the
     # caller's base so look-alike provider hosts stay generic.
@@ -305,13 +305,13 @@ def resolve_endpoint(
         model = _stg("utility_model")
 
     # If the endpoint is STILL not configured, but the caller provided a
-    # valid 回退 (e.g. the active session model), use that immediately.
-    # This prevents 后台任务s from jumping to the global default_model
+    # valid fallback (e.g. the active session model), use that immediately.
+    # This prevents background tasks from jumping to the global default_model
     # when the user is mid-conversation with a different model.
     if not ep_id and fallback_url and fallback_model:
         return fallback_url, fallback_model, fallback_headers
 
-    # Unset Utility (or anything else that didn't have a 回退) means "same as Default Chat Model".
+    # Unset Utility (or anything else that didn't have a fallback) means "same as Default Chat Model".
     if not ep_id:
         ep_id = _stg("default_endpoint_id")
         model = _stg("default_model")

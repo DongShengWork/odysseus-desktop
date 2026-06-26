@@ -77,9 +77,9 @@ function _stampReaderContext(reader, em, folder, account) {
   }
 }
 
-// 返回 { uid, folder, account, subject, from } for the email the user
+// Returns { uid, folder, account, subject, from } for the email the user
 // is most likely referring to — the last reader they interacted with, then
-// any open reader-modal as a 回退. 返回 null when no email reader
+// any open reader-modal as a fallback. Returns null when no email reader
 // is open. Exported below for chat.js to read on submit.
 function _getActiveEmailContext() {
   const candidates = [];
@@ -382,7 +382,7 @@ async function _loadEmailReminderBellVisibility() {
     _syncEmailReminderBellVisibility(false);
   }
 }
-// Live-update the bell when the 提醒 channel changes in Settings,
+// Live-update the bell when the reminder channel changes in Settings,
 // so the user doesn't have to reopen Email to see the change apply.
 window.addEventListener('odysseus-reminder-channel-changed', (e) => {
   const ch = e?.detail?.channel;
@@ -567,7 +567,7 @@ async function _deleteEmailAndAdvance(em, card, opts = {}) {
   if (!em || em.uid == null) return;
   if (opts.confirm !== false) {
     const subject = em.subject || '(no subject)';
-    const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: '删除', cancelText: '取消', danger: true });
+    const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
     if (!ok) return;
   }
   const wasExpanded = !!card?.classList?.contains('doclib-card-expanded');
@@ -629,7 +629,7 @@ function _animateEmailCardRemoval(uids, opts = {}) {
 // Every email route call in this file goes through here so switching accounts
 // is a single-variable flip.
 // Open the Settings modal and activate a specific tab. Used by empty-state
-// "设置 up at: Settings › X" links across email/calendar/etc.
+// "Set up at: Settings › X" links across email/calendar/etc.
 function _openSettingsTab(tab) {
   if (tab === 'integrations' && window.adminModule && typeof window.adminModule.open === 'function') {
     window.adminModule.open('integrations');
@@ -670,10 +670,10 @@ function _acct() {
 // Per-(account, folder, filter, attachments) cache of the most recent
 // first-page list response. Lets reopen-after-close paint the previous
 // list instantly while the network refresh runs behind it — the modal
-// used to wipe its DOM and 加载指示器-from-empty on every open, even when
+// used to wipe its DOM and spinner-from-empty on every open, even when
 // the same view was just visible a second ago.
 //
-// Session-only (lives in module 权限范围, cleared on hard reload). Search
+// Session-only (lives in module scope, cleared on hard reload). Search
 // results and __scheduled__ are deliberately not cached.
 const _libListCache = new Map();
 const _LIB_CACHE_MAX = 24;
@@ -746,7 +746,7 @@ async function _prewarmDefaultEmailView() {
   if (_libCacheGet(ck)) return;
 
   // The accounts request is cheap and warms the account strip for first open.
-  // Then the list request warms both the client cache and the 后端 IMAP/read
+  // Then the list request warms both the client cache and the backend IMAP/read
   // cache. Failure stays silent: no configured mail should not nag on app boot.
   try {
     const accountsRes = await fetch(`${API_BASE}/api/email/accounts`, { credentials: 'same-origin' });
@@ -915,7 +915,7 @@ export function openEmailLibrary(opts = {}) {
                 <div class="email-filter-menu" id="email-filter-menu" role="listbox" hidden></div>
               </div>
               <button class="memory-toolbar-btn email-filter-select-btn" id="email-lib-select-btn"><svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>Select</button>
-              <button class="memory-toolbar-btn email-filter-refresh-btn" id="email-lib-refresh-btn" title="刷新">
+              <button class="memory-toolbar-btn email-filter-refresh-btn" id="email-lib-refresh-btn" title="Refresh">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
               </button>
               <button class="memory-toolbar-btn email-reminders-clear-btn hidden" id="email-reminders-clear-btn" title="Permanently delete Odysseus reminder emails">
@@ -965,7 +965,7 @@ export function openEmailLibrary(opts = {}) {
   // Make modal background non-blocking so user can interact with rest of the app
   modal.style.cssText += 'pointer-events:none;background:transparent;';
 
-  // 注册 so the chip carries the right label/icon. restoreFn left
+  // Register so the chip carries the right label/icon. restoreFn left
   // empty — just unminimizing the modal is enough; whatever email was
   // expanded inside stays expanded.
   try {
@@ -1086,8 +1086,8 @@ export function openEmailLibrary(opts = {}) {
   });
   document.getElementById('email-reminders-clear-btn')?.addEventListener('click', async () => {
     const ok = await styledConfirm('Permanently delete all Odysseus reminder emails?', {
-      confirmText: '删除',
-      cancelText: '取消',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
       danger: true,
     });
     if (!ok) return;
@@ -1151,7 +1151,7 @@ export function openEmailLibrary(opts = {}) {
   });
   // The old "sort" dropdown (Latest / Unread first / Favorites first) was merged
   // into the filter dropdown above — "Favorites" is now a filter (server-side
-  // \Flagged search). _lib排序 stays at its 'recent' default so the grid keeps
+  // \Flagged search). _libSort stays at its 'recent' default so the grid keeps
   // the API's newest-first order.
 
   // Chip-bar search: pills represent contact + free-text filters; the live
@@ -1238,7 +1238,7 @@ export function openEmailLibrary(opts = {}) {
       window.visualViewport.addEventListener('scroll', _positionFab);
     }
     window.addEventListener('resize', _positionFab);
-    // 运行 after layout settles (modal opens with an animation).
+    // Run after layout settles (modal opens with an animation).
     requestAnimationFrame(() => requestAnimationFrame(_positionFab));
     setTimeout(_positionFab, 300);
 
@@ -1291,7 +1291,7 @@ export function openEmailLibrary(opts = {}) {
   const _setSelectBtnState = (on) => {
     const btn = document.getElementById('email-lib-select-btn');
     if (!btn) return;
-    if (on) { btn.classList.add('active'); btn.innerHTML = _SELECT_BTN_X_SVG + '取消'; }
+    if (on) { btn.classList.add('active'); btn.innerHTML = _SELECT_BTN_X_SVG + 'Cancel'; }
     else { btn.classList.remove('active'); btn.innerHTML = _SELECT_BTN_DOT_SVG + 'Select'; }
   };
   document.getElementById('email-lib-select-btn').addEventListener('click', () => {
@@ -1346,7 +1346,7 @@ export function openEmailLibrary(opts = {}) {
     return _selectEmailReaderContents(reader);
   };
 
-  // ESC to close + Arrow nav + 删除 on the selected / currently-expanded email.
+  // ESC to close + Arrow nav + Delete on the selected / currently-expanded email.
   state._libEscHandler = (e) => {
     const modal = document.getElementById('email-lib-modal');
     if (!modal || modal.classList.contains('hidden')) return;
@@ -1377,7 +1377,7 @@ export function openEmailLibrary(opts = {}) {
     // Don't hijack arrows / delete while the user is typing somewhere.
     const t = e.target;
     if (_isEmailTypingTarget(t)) return;
-    const isDeleteKey = e.key === '删除' || e.key === 'Backspace';
+    const isDeleteKey = e.key === 'Delete' || e.key === 'Backspace';
     if (isDeleteKey && state._selectMode && state._selectedUids.size > 0) {
       e.preventDefault();
       _bulkAction('delete');
@@ -1402,7 +1402,7 @@ export function openEmailLibrary(opts = {}) {
   _renderAccountsLoading();
   // Await accounts before loading emails so the list request carries the
   // right account_id from the very first fetch (now that we auto-select
-  // an explicit account instead of relying on a '默认' chip).
+  // an explicit account instead of relying on a 'Default' chip).
   (async () => {
     await _loadAccounts();
     _loadFolders();
@@ -1418,7 +1418,7 @@ async function _loadAccounts() {
     const d = await r.json();
     state._libAccounts = d.accounts || [];
   } catch (_) { state._libAccounts = []; }
-  // The '默认' chip is gone — pick an explicit account so the email
+  // The 'Default' chip is gone — pick an explicit account so the email
   // list and any per-email actions (open in new tab, mark read, etc.)
   // always carry an account_id and can't desync from the server's
   // is_default state.
@@ -1435,12 +1435,12 @@ function _renderAccountsStrip() {
   if (!strip) return;
   strip.style.display = 'flex';
   const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-  // The '默认' chip caused desync bugs (changing the server-side
+  // The 'Default' chip caused desync bugs (changing the server-side
   // default via the dot while still on the cached 'default' view would
   // open the wrong account's emails). Each account renders as its own
   // chip; the active one is selected explicitly via _loadAccounts.
   let html = '';
-  // 6px dot — matches the sidebar 通知-dot size.
+  // 6px dot — matches the sidebar notification-dot size.
   const _dotFilled = '<svg width="6" height="6" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>';
   const _dotHollow = '<svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9"/></svg>';
   for (const a of state._libAccounts) {
@@ -1750,7 +1750,7 @@ let _libSuggestionFocusIdx = 0;
 
 async function _buildSuggestionSource() {
   // Combine the contacts list with senders/recipients visible in the
-  // loaded email list. Dedup by lowercased 邮件地址; prefer
+  // loaded email list. Dedup by lowercased email address; prefer
   // contact-supplied display names where present.
   const map = new Map();
   const _add = (name, email) => {
@@ -1794,10 +1794,10 @@ function _scoreSuggestion(s, needle) {
   return 0;
 }
 
-// 过滤 / attachment suggestions surfaced inside the same chip-bar
+// Filter / attachment suggestions surfaced inside the same chip-bar
 // dropdown. Typing 'attachment', 'unread', 'urgent' etc. surfaces the
 // corresponding filter row with its icon; picking it pins a filter
-// pill that drives state._lib过滤 or the has-attachments toggle.
+// pill that drives state._libFilter or the has-attachments toggle.
 const _LIB_FILTER_OPTIONS = [
   { value: 'filter:has-attachments', label: 'Has attachments', keywords: ['attachment', 'attachments', 'has attachment', 'attach'] },
   { value: 'filter:unread',          label: 'Unread',          keywords: ['unread', 'new', 'unseen'] },
@@ -1834,7 +1834,7 @@ function _scoreFilterOption(opt, needle) {
 function _filterSuggestions(needle, limit = 10) {
   const n = String(needle || '').trim().toLowerCase();
   if (!n) return [];
-  // 过滤 / attachment matches first — typing 'unread' should surface
+  // Filter / attachment matches first — typing 'unread' should surface
   // the filter row before contact suggestions, since 'unread' isn't a
   // person.
   const filterMatches = _LIB_FILTER_OPTIONS
@@ -1875,7 +1875,7 @@ function _emailMatchesPill(em, pill) {
     return false;
   }
   if (pill.type === 'filter') {
-    // 过滤 pills delegate to the server-side filter (state._libFilter)
+    // Filter pills delegate to the server-side filter (state._libFilter)
     // or the has-attachments toggle. The list is already pre-filtered by
     // those when this runs, so the pill is effectively always-true here
     // — it lives in the pill bar purely as a visible affordance.
@@ -1924,7 +1924,7 @@ function _applyPillFilter() {
   }
   const source = _libPreSearchEmails || state._libEmails || [];
   // If the active server search covers a piece of text (either the live
-  // draft OR an Enter-提交ted text pill), skip the local re-filter for
+  // draft OR an Enter-committed text pill), skip the local re-filter for
   // it — _emailMatchesPill only checks subject/from_name/from_address/
   // snippet (no BODY), so it was dropping legitimate server hits where
   // the match was in body text. Real pills (contact, filter chips) still
@@ -1932,7 +1932,7 @@ function _applyPillFilter() {
   const libSearchLower = (_libSearchHadResults ? (state._libSearch || '').trim().toLowerCase() : '');
   const serverHandledDraft = !!(libSearchLower && draft && libSearchLower === draft.toLowerCase());
   const draftPill = (!serverHandledDraft && draft.length >= 1) ? { type: 'text', text: draft } : null;
-  // 过滤 out text pills whose text matches the active server search —
+  // Filter out text pills whose text matches the active server search —
   // those were the trigger for the IMAP query and don't need re-checking.
   const effectiveBasePills = libSearchLower
     ? pills.filter(p => !(p.type === 'text' && (p.text || '').toLowerCase() === libSearchLower))
@@ -1950,7 +1950,7 @@ function _localSearchFilter(query) {
   _applyPillFilter();
 }
 
-// 渲染 the active pills inside the chip bar. Each pill carries a × to
+// Render the active pills inside the chip bar. Each pill carries a × to
 // remove individually. Backspace on empty input also pops the last one.
 function _renderSearchPills() {
   const wrap = document.getElementById('email-lib-pills');
@@ -1958,19 +1958,19 @@ function _renderSearchPills() {
   const pills = state._libSearchPills || [];
   const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   wrap.innerHTML = pills.map((p, i) => {
-    // 过滤 pills render as icon-only (the icon is the affordance);
+    // Filter pills render as icon-only (the icon is the affordance);
     // contact + text pills carry their label as text.
     if (p.type === 'filter') {
       const titleAttr = `${(p.label || p.value).replace(/"/g, '&quot;')}`;
       return `<span class="email-lib-pill" data-pill-idx="${i}" title="${titleAttr}" style="display:inline-flex;align-items:center;gap:2px;padding:0 4px 0 6px;border-radius:999px;background:color-mix(in srgb, var(--accent, var(--red)) 14%, transparent);color:var(--accent, var(--red));line-height:18px;height:18px;flex-shrink:0;">
         <span style="display:inline-flex;align-items:center;width:11px;height:11px;flex-shrink:0;">${_libFilterIconFor(p.value)}</span>
-        <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="移除" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
+        <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="Remove" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
       </span>`;
     }
     const label = p.type === 'contact' ? (p.name || p.email || '?') : (p.text || '');
     return `<span class="email-lib-pill" data-pill-idx="${i}" style="display:inline-flex;align-items:center;gap:3px;padding:0 4px 0 6px;border-radius:999px;background:color-mix(in srgb, var(--accent, var(--red)) 14%, transparent);color:var(--accent, var(--red));font-size:10px;line-height:18px;height:18px;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;">
       <span style="overflow:hidden;text-overflow:ellipsis;">${esc(label)}</span>
-      <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="移除" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
+      <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="Remove" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
     </span>`;
   }).join('');
   wrap.querySelectorAll('.email-lib-pill-x').forEach(btn => {
@@ -1983,7 +1983,7 @@ function _renderSearchPills() {
 }
 
 function _applyFilterPillSideEffect(pill) {
-  // 过滤 pills drive the existing has-attachments toggle / filter
+  // Filter pills drive the existing has-attachments toggle / filter
   // dropdown so the server returns the right list. Only one filter
   // pill is active at a time (see _addSearchPill).
   const sel = document.getElementById('email-lib-filter');
@@ -2071,7 +2071,7 @@ function _removeSearchPillAt(idx) {
   _applyPillFilter();
 }
 
-// 渲染 the autocomplete dropdown below the input. focusIdx highlights
+// Render the autocomplete dropdown below the input. focusIdx highlights
 // the active row; Tab autocompletes / Enter accepts that row.
 function _renderSearchSuggestions(items) {
   const menu = document.getElementById('email-lib-suggest');
@@ -2168,7 +2168,7 @@ async function _initEmailSearchChipBar() {
     _libSuggestionCache = await _buildSuggestionSource();
   };
 
-  // Click anywhere in the bar lands the cursor in the 输入字段.
+  // Click anywhere in the bar lands the cursor in the input field.
   bar.addEventListener('click', (e) => {
     if (e.target.closest('.email-lib-pill-x')) return;
     input.focus();
@@ -2180,7 +2180,7 @@ async function _initEmailSearchChipBar() {
     _itemsRef = _filterSuggestions(input.value);
     // Default to no focused suggestion — text typing should feel like
     // regular search; the user has to ArrowDown / Tab explicitly to
-    // pick a contact. Enter without a focused row 提交s as text.
+    // pick a contact. Enter without a focused row commits as text.
     _libSuggestionFocusIdx = -1;
     _renderSearchSuggestions(_itemsRef);
   };
@@ -2195,7 +2195,7 @@ async function _initEmailSearchChipBar() {
   // snippet but never body, so intermediate text like "sam" reduced the
   // 61 server results to whatever matched just those four fields (often
   // 0). User saw "no emails" while typing. So local filter is gone from
-  // the typing path — 防抖d server search drives the grid. Pill
+  // the typing path — debounced server search drives the grid. Pill
   // add/remove still re-runs the local filter through _applyPillFilter
   // directly.
   let _libSearchTypingTimer = null;
@@ -2265,7 +2265,7 @@ async function _initEmailSearchChipBar() {
     }
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Only 提交 a contact if the user explicitly focused one. Plain
+      // Only commit a contact if the user explicitly focused one. Plain
       // Enter should default to a text pill so regular text search works
       // without forcing a contact pick.
       if (menuOpen && _libSuggestionFocusIdx >= 0 && _itemsRef[_libSuggestionFocusIdx]) {
@@ -2358,8 +2358,8 @@ async function _doSearch() {
   }
   const accountAtStart = state._libAccountId || '';
   const folderAtStart = state._libFolder || 'INBOX';
-  // No grid-blanking 加载指示器 — the local filter already painted something
-  // useful. Surface progress in the stats 徽章 instead so the user knows
+  // No grid-blanking spinner — the local filter already painted something
+  // useful. Surface progress in the stats badge instead so the user knows
   // the server search is still grinding.
   const stats = document.getElementById('email-lib-stats');
   const originalStatsText = stats?.textContent || '';
@@ -2372,7 +2372,7 @@ async function _doSearch() {
   const accountQS = accountAtStart ? `&account_id=${encodeURIComponent(accountAtStart)}` : '';
   try {
     // Single fast fetch — limit=100 so the IMAP fetch loop doesn't spend
-    // 60 s pulling 500 headers serially. We can wire "加载 more" later
+    // 60 s pulling 500 headers serially. We can wire "Load more" later
     // off `state._libTotal` if needed.
     const res = await fetch(`${API_BASE}/api/email/search?folder=${encodeURIComponent(folderAtStart)}${accountQS}&q=${encodeURIComponent(q)}&limit=100`);
     const data = await res.json();
@@ -2469,7 +2469,7 @@ function _initFilterPicker() {
   if (!sel || !picker || !btn || !menu || picker._wired) return;
   picker._wired = true;
 
-  // 构建 menu from the hidden <select> contents (preserves optgroup labels).
+  // Build menu from the hidden <select> contents (preserves optgroup labels).
   const items = [];
   for (const child of sel.children) {
     if (child.tagName === 'OPTGROUP') {
@@ -2546,7 +2546,7 @@ function _renderEmailLoading(grid) {
 // pill flips to show the total-emails count + "all" label, because clicking
 // it would toggle the filter off — so the label needs to advertise the
 // action, not the now-current view. Two tiny side-fetches (limit=1, total
-// only); silent on failure — the 徽章 just stays hidden if the request errors.
+// only); silent on failure — the badge just stays hidden if the request errors.
 async function _refreshUnreadBadge() {
   const badge = document.getElementById('email-lib-unread-badge');
   if (!badge) return;
@@ -2595,9 +2595,9 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
   if (!grid) { if (seq === _libLoadSeq) state._libLoading = false; return; }
 
   // SWR: when loading the first page of a real folder with no search,
-  // paint the cached list immediately (no 加载指示器, no blank grid) and
+  // paint the cached list immediately (no spinner, no blank grid) and
   // then quietly refetch behind it. Pagination, search, and the
-  // scheduled virtual folder skip the cache and use the old 加载指示器
+  // scheduled virtual folder skip the cache and use the old spinner
   // path. `force` (Refresh button) can still consult the cache for
   // perceptual continuity, but adds a cache-buster so the server's 8s
   // list cache is bypassed too. Account/folder/filter changes pass
@@ -2616,7 +2616,7 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
     // Suppress the open-cascade animation when we're painting from
     // cache — the data was already on screen a moment ago, so sliding
     // each card in fresh feels janky. Also prevents the cascade from
-    // re-firing when the bg refetch lands within the 900ms 清理
+    // re-firing when the bg refetch lands within the 900ms cleanup
     // window and appends new card nodes into the still-classed grid.
     state._libJustOpened = false;
     const grid2 = document.getElementById('email-lib-grid');
@@ -2766,7 +2766,7 @@ function _renderGrid() {
   if (filtered.length === 0) {
     // Active search — don't flash "No emails": the IMAP fetch is still
     // running. Show a "Searching…" placeholder until _doSearch resolves
-    // and renders again. Without this the user saw an 空状态
+    // and renders again. Without this the user saw an empty state
     // smiley for ~500ms between the optimistic pill-filter clear and
     // the server response landing.
     if (_libSearchInFlight) {
@@ -2775,8 +2775,8 @@ function _renderGrid() {
       wrap.className = 'email-loading';
       wrap.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:24px;opacity:0.75;';
       grid.appendChild(wrap);
-      // Whirlpool 加载指示器 for parity with the rest of the cookbook /
-      // doclib loaders. Falls back to 纯文本 if the import fails.
+      // Whirlpool spinner for parity with the rest of the cookbook /
+      // doclib loaders. Falls back to plain text if the import fails.
       import('./spinner.js').then(sp => {
         if (!wrap.isConnected) return;
         const w = sp.default.createWhirlpool(20);
@@ -2791,11 +2791,11 @@ function _renderGrid() {
       return;
     }
     // Inbox-zero is a win — pair the message with a small smiley so the
-    // 空状态 reads as "all caught up", not "something's broken".
+    // empty state reads as "all caught up", not "something's broken".
     const _smileyIco = '<span style="vertical-align:-3px;margin-left:6px;">' + emptyStateIcon('smiley') + '</span>';
-    // Only show the "设置 up at Settings › Integrations" hint when the inbox
+    // Only show the "Set up at Settings › Integrations" hint when the inbox
     // is TRULY empty — no filter, no search, no source emails. A sub-filter
-    // (提醒s, unread, etc.) that happens to be empty isn't a setup
+    // (reminders, unread, etc.) that happens to be empty isn't a setup
     // problem; the link there reads as nonsense.
     const _isTrulyEmpty = (
       state._libEmails.length === 0
@@ -2921,7 +2921,7 @@ function _createCard(em) {
   titleEl.className = 'memory-item-title';
   titleEl.textContent = em.subject || '(no subject)';
   // Hover preview: surface the cached AI summary directly on the title via
-  // a native browser 提示 — no need to open the email to skim it.
+  // a native browser tooltip — no need to open the email to skim it.
   if (em.cached_summary) {
     titleEl.title = em.cached_summary;
     titleEl.classList.add('email-card-has-summary');
@@ -3223,7 +3223,7 @@ async function _toggleCardPreview(card, em) {
   }
   modal?.classList.add('email-reading');
 
-  // Show loading reader with whirlpool 加载指示器
+  // Show loading reader with whirlpool spinner
   const reader = document.createElement('div');
   reader.className = 'email-card-reader email-card-reader-loading';
   reader.style.minHeight = `${Math.max(180, Math.round(stableOpenHeight - 70))}px`;
@@ -3257,13 +3257,13 @@ async function _toggleCardPreview(card, em) {
     _prefetchAdjacentEmails(card);
     _stampReaderContext(reader, { ...em, ...data }, state._libFolder, state._libAccountId);
 
-    // 构建 the attachments wrap using the shared helper so the 签名ature-
-    // 镜像 filter (small inline PNGs/JPGs, Outlook 镜像001 placeholders,
+    // Build the attachments wrap using the shared helper so the signature-
+    // image filter (small inline PNGs/JPGs, Outlook image001 placeholders,
     // logo/banner files) is applied here too. Falls back to '' when every
     // attachment is filtered out.
     const attsHtml = _buildAttsHtmlFor(em.uid, data);
 
-    // 格式化 date nicely (compact): "Mar 21, 2026 14:32"
+    // Format date nicely (compact): "Mar 21, 2026 14:32"
     let dateDisplay = data.date || '';
     try {
       if (data.date) {
@@ -3277,7 +3277,7 @@ async function _toggleCardPreview(card, em) {
       }
     } catch (_) {}
 
-    // 构建 recipient chip group from a comma-separated address list
+    // Build recipient chip group from a comma-separated address list
     const buildRecipients = (str) => {
       if (!str) return '';
       const addrs = _splitRecipientList(str);
@@ -3288,7 +3288,7 @@ async function _toggleCardPreview(card, em) {
       }).join('');
     };
 
-    // 构建 the From chip too — single chip with name, click reveals address
+    // Build the From chip too — single chip with name, click reveals address
     const fromChip = _recipientChipHtml(`${data.from_name || ''} <${data.from_address || ''}>`, data.from_name || data.from_address, 'from-chip');
 
     reader.innerHTML = `
@@ -3391,8 +3391,8 @@ async function _toggleCardPreview(card, em) {
 
     // Horizontal swipe on the reader switches to prev/next email — but
     // only when the underlying content can't scroll further in the swipe
-    // direction. If the 邮件正文 is wider than the viewport (HTML 邮件s
-    // with tables, embedded 镜像s), normal horizontal scroll wins; nav
+    // direction. If the email body is wider than the viewport (HTML emails
+    // with tables, embedded images), normal horizontal scroll wins; nav
     // only fires once the user has reached an edge.
     {
       let _sx = 0, _sy = 0, _swiping = false, _intent = null;
@@ -3495,9 +3495,9 @@ async function _toggleCardPreview(card, em) {
  * detectors. The plain-body branch is always preferred when boundaries
  * exist because the offsets are computed against plain text.
  */
-// Global 转义 hatch — when the server's thread parser misfires (it
+// Global escape hatch — when the server's thread parser misfires (it
 // occasionally splits a single reply into two bogus "turns" by treating a
-// 签名ature/disclaimer as its own message), the user can flip this off to
+// signature/disclaimer as its own message), the user can flip this off to
 // fall back to plain rendering. Survives reloads.
 const _BUBBLES_DISABLED_KEY = 'odysseus.email.bubblesDisabled';
 // Threaded chat-bubble email view is DISABLED for now — too buggy to
@@ -3615,7 +3615,7 @@ function _safeRenderEmailBody(data) {
   }
 }
 
-// ── Chat-bubble rendering for 邮件线程s ──
+// ── Chat-bubble rendering for email threads ──
 // Each parsed turn renders as a chat bubble. Bubbles for the active
 // account's outgoing replies align right; everyone else aligns left.
 // Order is reversed so the oldest message sits at the top of the
@@ -3657,9 +3657,9 @@ function _renderTurnsAsBubbles(turns, data) {
   });
   const anyMine = turnIdentity.some(x => x.email && mineSet.has(x.email));
   // When the user isn't a participant in this thread (forwarded chains,
-  // historical archives, etc.), as签名 the two most frequent senders to
+  // historical archives, etc.), assign the two most frequent senders to
   // opposite sides so the conversation still reads side-to-side. Third+
-  // parties fall back to 哈希 mod 2.
+  // parties fall back to hash mod 2.
   const sideForKey = (() => {
     if (anyMine) return null;
     const freq = new Map();
@@ -3678,7 +3678,7 @@ function _renderTurnsAsBubbles(turns, data) {
       if (!key) return 'theirs';
       if (key === leftKey)  return 'theirs';
       if (key === rightKey) return 'mine';
-      // Stable 哈希 for 3rd+ parties.
+      // Stable hash for 3rd+ parties.
       let h = 0;
       for (let i = 0; i < key.length; i++) h = ((h << 5) - h + key.charCodeAt(i)) | 0;
       return (h & 1) ? 'mine' : 'theirs';
@@ -3697,7 +3697,7 @@ function _renderTurnsAsBubbles(turns, data) {
       author = p.author || (t.meta || 'Earlier reply');
       date = p.date;
     }
-    // No-self 回退: route by per-sender side mapping.
+    // No-self fallback: route by per-sender side mapping.
     if (sideForKey) {
       const id = turnIdentity[i];
       const key = (id.email || id.author || '').toLowerCase();
@@ -3794,7 +3794,7 @@ function _renderTurnsFromServer(turns) {
 //   github.com/crisp-oss/email-reply-parser (locale list)
 //
 // _TALON_* / _SIG_BLOAT_MIN_CHARS live in ./emailLibrary/utils.js
-// _SIG_ICON / _QUOTE_ICON live in ./emailLibrary/签名atureFold.js
+// _SIG_ICON / _QUOTE_ICON live in ./emailLibrary/signatureFold.js
 
 function _renderThreadStructure(html) {
   if (!html || typeof html !== 'string' || html.length > 200000) return null;
@@ -3810,7 +3810,7 @@ function _renderThreadStructure(html) {
   );
   if (!tops.length) return null;
 
-  // 构建 the current-message body: everything in root up to the first
+  // Build the current-message body: everything in root up to the first
   // top-level blockquote, minus the "On <date>, <author> wrote:" attribution
   // line that introduces it.
   const head = doc.createElement('div');
@@ -3829,16 +3829,16 @@ function _renderThreadStructure(html) {
   for (let i = 0; i < tops.length; i++) {
     const bq = tops[i];
     // The blockquote may have an Outlook-style "From: / Sent: / Subject:"
-    // header inside as the first text. 提取 that as the turn meta.
+    // header inside as the first text. Extract that as the turn meta.
     const meta = _extractTurnMetaFromBlockquote(bq) || attribution || _extractQuoteMeta(bq.innerHTML);
     const innerHtml = bq.innerHTML;
 
     // Heuristic: if a blockquote has no detectable attribution (no "From:",
-    // no "On <date>... wrote:") AND its content matches 签名ature-style
+    // no "On <date>... wrote:") AND its content matches signature-style
     // patterns (corporate disclaimer, "registered in", legal notices, just
     // a name + title), treat it as a Signature fold instead of an Earlier
-    // Reply. This stops mail clients that wrap 签名atures in <blockquote>
-    // from making the 签名ature appear as a phantom prior email.
+    // Reply. This stops mail clients that wrap signatures in <blockquote>
+    // from making the signature appear as a phantom prior email.
     if (!meta && _looksLikeSignature(innerHtml)) {
       turnsHtml.push(
         '<details class="email-sig-fold">'
@@ -3869,13 +3869,13 @@ function _renderThreadStructure(html) {
   return head.innerHTML + turnsHtml.join('');
 }
 
-// Looks like a 签名ature / corporate disclaimer rather than a quoted email.
+// Looks like a signature / corporate disclaimer rather than a quoted email.
 // Used to demote attribution-less blockquotes that some senders wrap their
 // sig+disclaimer in (Outlook, EY, big firms) from "Earlier reply" to a
 // proper Signature fold. Conservative — only fires when there's no quoted
 // reply markers AND it matches strong corporate-noise phrases.
 // _looksLikeSignature / _harvestAttribution / _extractTurnMetaFromBlockquote
-// live in ./emailLibrary/签名atureFold.js
+// live in ./emailLibrary/signatureFold.js
 
 /**
  * Wrap any quoted reply chain in a collapsed <details> so deep email threads
@@ -3992,7 +3992,7 @@ function _renderPlaintextThread(text) {
 }
 
 // _foldSummary / _extractQuoteMeta / _SIG_ICON / _QUOTE_ICON
-// live in ./emailLibrary/签名atureFold.js
+// live in ./emailLibrary/signatureFold.js
 
 function _foldQuotedReplies(html) {
   if (!html || typeof html !== 'string') return html;
@@ -4016,7 +4016,7 @@ function _foldQuotedReplies(html) {
         for (const bq of tops) {
           const det = doc.createElement('details');
           det.className = 'email-quote-fold';
-          // 构建 the summary as raw HTML — easier than building DOM by hand.
+          // Build the summary as raw HTML — easier than building DOM by hand.
           const summary = _foldSummary('Earlier thread', _QUOTE_ICON, _extractQuoteMeta(bq.innerHTML));
           det.innerHTML = summary;
           bq.parentNode.insertBefore(det, bq);
@@ -4047,7 +4047,7 @@ function _foldQuotedReplies(html) {
   const m = html.match(outlookRe);
   if (m) {
     const idx = html.lastIndexOf(m[0]);
-    // Outlook 回退 only ever produces ONE fold, so tag it as last.
+    // Outlook fallback only ever produces ONE fold, so tag it as last.
     html = html.slice(0, idx) + m[1]
       + '<details class="email-quote-fold last-fold">'
       + _foldSummary('Earlier thread', _QUOTE_ICON, _extractQuoteMeta(m[2]))
@@ -4155,7 +4155,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
       <button type="button" class="from-sender-toggle" data-toggle="attachments" title="Show only emails with attachments" aria-pressed="false">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
       </button>
-      <button type="button" class="from-sender-close" title="关闭" aria-label="Close sender panel">&times;</button>
+      <button type="button" class="from-sender-close" title="Close" aria-label="Close sender panel">&times;</button>
     </div>
     <div class="from-sender-search-wrap">
       <input type="text" class="from-sender-search" placeholder="Search ${_esc(firstName)}…" autocomplete="off" />
@@ -4183,11 +4183,11 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   }
 
   const listEl = panel.querySelector('.from-sender-list');
-  // Hoisted so panel._originalEmails (as签名ed later, outside the try) can see it.
+  // Hoisted so panel._originalEmails (assigned later, outside the try) can see it.
   let emails = [];
 
   // Multi-tag model — the header is now a list of {name, address} chips.
-  // 过滤 logic: an email matches when EVERY tag's address appears in
+  // Filter logic: an email matches when EVERY tag's address appears in
   // from/to/cc (case-insensitive substring on the joined header strings).
   panel._tags = [{ name: displayName, address: fromAddr }];
   panel._attachmentsOnly = false;
@@ -4201,7 +4201,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     chipsContainer.innerHTML = panel._tags.map((t, i) => `
       <span class="from-sender-chip" title="${_esc(t.address)}" data-tag-index="${i}">
         <span class="from-sender-chip-name">${_esc(t.name || t.address)}</span>
-        <button class="from-sender-chip-x" type="button" title="移除" aria-label="Remove ${_esc(t.name || t.address)}">&times;</button>
+        <button class="from-sender-chip-x" type="button" title="Remove" aria-label="Remove ${_esc(t.name || t.address)}">&times;</button>
       </span>
     `).join('');
     if (emptyLabel) emptyLabel.hidden = panel._tags.length > 0;
@@ -4216,7 +4216,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
       });
     });
   };
-  // 过滤 loaded emails (or recents) by every active tag.
+  // Filter loaded emails (or recents) by every active tag.
   const _matchesTags = (em) => {
     if (!panel._tags.length) return true;
     const haystack = [
@@ -4330,7 +4330,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     }
   };
 
-  // 添加 a contact as a tag, clears input, refreshes the list.
+  // Adds a contact as a tag, clears input, refreshes the list.
   const _addTag = (contact) => {
     if (!contact || !contact.address) return;
     const addr = String(contact.address).toLowerCase();
@@ -4392,7 +4392,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
       else _loadRecentAcross();
     };
 
-    // Contact suggestions — fetched from /api/email/contacts. 渲染 a
+    // Contact suggestions — fetched from /api/email/contacts. Renders a
     // small absolutely-positioned dropdown under the input. Up/Down/Enter/
     // Esc handled in the keydown listener below.
     const _renderSuggestions = (items) => {
@@ -4556,14 +4556,14 @@ function _renderFromSenderRows(emails, listEl, reader, opts = {}) {
   });
 }
 
-// Wire 点击处理器s for attachment chips + "open in editor" sub-buttons
+// Wire click handlers for attachment chips + "open in editor" sub-buttons
 // inside a reader. Safe to call multiple times — uses dataset.wired flag to
 // skip nodes that already have listeners.
 function _wireAttachmentHandlers(reader, folder) {
   const useFolder = folder || state._libFolder;
   // Detect mobile here so the attachment-chip handler doesn't blow up with
   // a ReferenceError when this fn is called from contexts that don't have
-  // _isMobileUA in 权限范围 (e.g. _openEmailAsTab, _openEmailWindow).
+  // _isMobileUA in scope (e.g. _openEmailAsTab, _openEmailWindow).
   const _isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   reader.querySelectorAll('.email-attachment-open').forEach(openBtn => {
     if (openBtn.dataset.wired === '1') return;
@@ -4640,7 +4640,7 @@ function _wireAttachmentHandlers(reader, folder) {
         window.open(url, '_blank');
         return;
       }
-      // Swap the paperclip icon for a whirlpool 加载指示器 while the
+      // Swap the paperclip icon for a whirlpool spinner while the
       // download is in flight, so large attachments give a clear cue
       // they're loading. Restore on completion.
       const iconSvg = chip.querySelector(':scope > svg');
@@ -4691,9 +4691,9 @@ function _wireAttachmentHandlers(reader, folder) {
   });
 }
 
-// Heuristic: skip "attachments" that are clearly inline 镜像s used by
-// 签名atures / quoted-reply headers (small 镜像 files, Outlook-style
-// 镜像001.png placeholders, logo*.png, etc.). They aren't real user-
+// Heuristic: skip "attachments" that are clearly inline images used by
+// signatures / quoted-reply headers (small image files, Outlook-style
+// image001.png placeholders, logo*.png, etc.). They aren't real user-
 // shared attachments and adding them to the chips makes every email look
 // like it has content the user needs to act on.
 function _isLikelySignatureImage(a) {
@@ -4702,16 +4702,16 @@ function _isLikelySignatureImage(a) {
   const isImage = /\.(png|jpe?g|gif|bmp|svg|webp)$/i.test(name);
   if (!isImage) return false;
   const size = Number(a.size) || 0;
-  // Outlook / Gmail inline 镜像 placeholders always look like this.
+  // Outlook / Gmail inline image placeholders always look like this.
   if (/^image\d{3,}\.(png|jpe?g|gif)$/i.test(name)) return true;
   if (/^(signature|logo|sig|footer|banner)[-_\d]*\.(png|jpe?g|gif|svg)$/i.test(name)) return true;
-  // Most 签名ature logos / inline thumbnails are < 30 KB. Real user-
-  // shared 镜像s (screenshots, photos) are typically 50 KB+.
+  // Most signature logos / inline thumbnails are < 30 KB. Real user-
+  // shared images (screenshots, photos) are typically 50 KB+.
   if (size > 0 && size < 30 * 1024) return true;
   return false;
 }
 
-// 构建 the attachments header+chips HTML for an email read response. Pulled
+// Build the attachments header+chips HTML for an email read response. Pulled
 // out so both the initial-open and the swap-reader paths can render it.
 function _buildAttsHtmlFor(uid, data) {
   if (!data) return '';
@@ -4787,7 +4787,7 @@ function _freeReaderSlot(modalId) {
 }
 
 // JS-driven gate: sets [data-email-tabs="N"] on <body> so CSS can show
-// the per-chip number 徽章 only when 2+ tabs exist.
+// the per-chip number badge only when 2+ tabs exist.
 function _syncEmailTabsCount() {
   const tabs = document.querySelectorAll('.minimized-dock-chip[data-modal-id^="email-view-"]');
   document.body.dataset.emailTabs = String(tabs.length);
@@ -4797,7 +4797,7 @@ function _syncEmailTabsCount() {
 // change. Counts "email-view-*" chips both inside #minimized-dock and
 // at body level (free-positioned chips on mobile). Result is written to
 // the email-lib-modal chip's data-tab-count attribute; CSS reads it via
-// attr() to render the 徽章.
+// attr() to render the badge.
 function _syncEmailTabBadge() {
   const readers = document.querySelectorAll('.minimized-dock-chip[data-modal-id^="email-reader-"]');
   document.body.dataset.emailReaders = String(readers.length);
@@ -4816,7 +4816,7 @@ function _ensureEmailTabObserver() {
   _emailTabObserverWired = true;
   // Debounce so a burst of mutations (e.g. _renderDock rebuilding the
   // whole dock in one pass) collapses to a single sync per animation
-  // frame. Without this the chip 徽章 could flicker as the observer
+  // frame. Without this the chip badge could flicker as the observer
   // fires repeatedly during dock rerenders.
   const handler = () => {
     if (_badgeSyncScheduled) return;
@@ -4833,7 +4833,7 @@ function _ensureEmailTabObserver() {
     const obs = new MutationObserver(handler);
     obs.observe(dock, { childList: true });
     // Watch the library grid so toggling a card expanded/collapsed
-    // updates the lib chip's "has-expanded" 徽章 in real time.
+    // updates the lib chip's "has-expanded" badge in real time.
     const wireGridObs = () => {
       const grid = document.getElementById('email-lib-grid');
       if (!grid) { setTimeout(wireGridObs, 500); return; }
@@ -4851,14 +4851,14 @@ function _ensureEmailTabObserver() {
 //   - Each "Open in new tab" creates a separate per-email reader modal
 //     (id "email-reader-{uid}-{seq}") with the SAME structure & classes
 //     as the library's inline reader, so they look identical. Each
-//     reader registers its own dock chip with a number 徽章.
+//     reader registers its own dock chip with a number badge.
 async function _openEmailAsTab(em, folder) {
   const useFolder = folder || state._libFolder || 'INBOX';
   _emailTabSeq += 1;
   const modalId = `email-reader-${em.uid}-${_emailTabSeq}`;
   _allocReaderSlot(modalId);
 
-  // 构建 the modal shell. Uses the same doclib-modal-content sizing
+  // Build the modal shell. Uses the same doclib-modal-content sizing
   // as the email library so it feels like a sibling window. The reader
   // body inside uses the exact same email-card-reader / email-reader-*
   // classes the inline reader uses → identical styling.
@@ -4872,7 +4872,7 @@ async function _openEmailAsTab(em, folder) {
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:8px;">${_esc(em.subject || '(no subject)')}</span>
         </h4>
         <button class="minimize-btn" type="button" title="Minimize">_</button>
-        <button class="close-btn" type="button" title="关闭">&#x2716;</button>
+        <button class="close-btn" type="button" title="Close">&#x2716;</button>
       </div>
       <div class="modal-body email-reader-tab-body" style="display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:0;padding:0;">
         <div class="email-card-reader email-card-expanded" style="flex:1;min-height:0;display:flex;flex-direction:column;">
@@ -4882,8 +4882,8 @@ async function _openEmailAsTab(em, folder) {
     </div>
   `;
   document.body.appendChild(modal);
-  // Inherit display from .modal (flex-center). z-索引 above the library
-  // (which uses default .modal z-索引 250) so the new tab sits on top.
+  // Inherit display from .modal (flex-center). z-index above the library
+  // (which uses default .modal z-index 250) so the new tab sits on top.
   modal.style.zIndex = '270';
   // Opened last → email windows in front of any open doc (alternation flag).
   document.body.classList.add('email-front');
@@ -4920,7 +4920,7 @@ async function _openEmailAsTab(em, folder) {
     },
   });
   // Wire the `_` minimize button via modalManager (it sees our .minimize-btn
-  // already exists and just binds the 点击处理器).
+  // already exists and just binds the click handler).
   try { Modals.injectMinimizeButton(modal, modalId); } catch {}
   // X button fully closes the tab (tears down and unregisters).
   modal.querySelector('.close-btn')?.addEventListener('click', (ev) => {
@@ -4990,7 +4990,7 @@ async function _openEmailAsTab(em, folder) {
   _ensureEmailTabObserver();
   _syncEmailTabBadge();
 
-  // 获取 + render the 邮件正文 using the exact same template as
+  // Fetch + render the email body using the exact same template as
   // _toggleCardPreview so the visuals match perfectly.
   const reader = modal.querySelector('.email-card-reader');
   _markEmailReaderActive(reader);
@@ -5089,7 +5089,7 @@ async function _openEmailAsTab(em, folder) {
 // "Open in new window" — spawns a floating draggable modal that shows just
 // the email content. Multiple windows can stack; each has its own DOM id
 // and close button. Uses `_makeDraggable` so dragging the header pans the
-// window around. 渲染 the body via _renderEmailBody for parity with the
+// window around. Renders the body via _renderEmailBody for parity with the
 // expanded reader.
 let _emailWindowSeq = 0;
 async function _openEmailWindow(em, folder) {
@@ -5107,7 +5107,7 @@ async function _openEmailWindow(em, folder) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           <span class="email-window-subject" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(em.subject || '(no subject)')}</span>
         </h4>
-        <button class="close-btn" type="button" title="关闭">&#x2716;</button>
+        <button class="close-btn" type="button" title="Close">&#x2716;</button>
       </div>
       <div class="modal-body email-window-body" style="overflow:auto;padding:14px 16px;flex:1;min-height:0;">
         <div class="email-window-loading" style="display:flex;justify-content:center;padding:24px;"></div>
@@ -5139,7 +5139,7 @@ async function _openEmailWindow(em, folder) {
   modal.querySelector('.close-btn')?.addEventListener('click', () => modal.remove());
   try { _makeDraggable(content, modal, 'email-window-fullscreen'); } catch {}
 
-  // 加载 + render
+  // Load + render
   const bodyEl = modal.querySelector('.email-window-body');
   const loading = modal.querySelector('.email-window-loading');
   try {
@@ -5154,7 +5154,7 @@ async function _openEmailWindow(em, folder) {
     _syncEmailReadState(em.uid, true);
     const subjEl = modal.querySelector('.email-window-subject');
     if (subjEl && data.subject) subjEl.textContent = data.subject;
-    // 构建 recipient chips the same way the inline reader does so the
+    // Build recipient chips the same way the inline reader does so the
     // standalone viewer looks/feels exactly like a real email view.
     const _chipsFor = (addrs) => {
       if (!addrs) return '';
@@ -5245,7 +5245,7 @@ async function _openEmailWindow(em, folder) {
   }
 }
 
-// 获取 a new email's content and replace the current reader body with it
+// Fetch a new email's content and replace the current reader body with it
 // (preserving the from-sender panel). Used for in-place navigation between
 // emails of the same sender — `folder` defaults to the library's current
 // folder but is overridable so cross-folder search results can open the
@@ -5268,7 +5268,7 @@ async function _swapReaderToUid(reader, uid, folder) {
       return;
     }
     _syncEmailReadState(uid, true);
-    // 更新 the header meta (From/To/Subject) so it matches the new email.
+    // Update the header meta (From/To/Subject) so it matches the new email.
     const headerMeta = reader.querySelector('.email-reader-meta');
     if (headerMeta) {
       const subj = data.subject || '(no subject)';
@@ -5290,7 +5290,7 @@ async function _swapReaderToUid(reader, uid, folder) {
       `;
       _wireRecipientChips(reader);
     }
-    // Refresh the attachments block to match the new email. 构建 fresh HTML
+    // Refresh the attachments block to match the new email. Build fresh HTML
     // and either replace the existing block, remove it (if the new email has
     // none), or insert one before the body (if the previous email had none
     // but the new one does).
@@ -5325,7 +5325,7 @@ async function _swapReaderToUid(reader, uid, folder) {
     }
     body.innerHTML = _safeRenderEmailBody(data);
     body.classList.toggle('html-body', !!data.body_html);
-    // Wire 点击处理器s for the newly-rendered attachment chips. Without
+    // Wire click handlers for the newly-rendered attachment chips. Without
     // this, after swapping to a different email via the sidebar, clicking
     // an attachment chip would do nothing.
     _wireAttachmentHandlers(reader, useFolder);
@@ -5429,7 +5429,7 @@ async function _generateSummary(reader, data, btn) {
         body: data.body,
         subject: data.subject,
         from: `${data.from_name} <${data.from_address}>`,
-        // 发送 identifiers so the 后端 can fetch the raw message and
+        // Send identifiers so the backend can fetch the raw message and
         // pull attachment text for the summary (PDFs, invoices, etc.).
         uid: data.uid || '',
         folder: state._libFolder || 'INBOX',
@@ -5552,8 +5552,8 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
   const _contactIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>';
   // Three groups separated by dividers:
   //   1. Open / Mark Unread / Remind — the per-email view actions
-  //   2. 保存 sender / Not Done / Archive — non-destructive state changes
-  //   3. Move to Spam / Move to Trash / 删除 — destructive
+  //   2. Save sender / Not Done / Archive — non-destructive state changes
+  //   3. Move to Spam / Move to Trash / Delete — destructive
   const actions = [
     {
       label: 'Open in new tab',
@@ -5635,7 +5635,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      // 保存 the sender to CardDAV contacts. Pulls name + address off the
+      // Save the sender to CardDAV contacts. Pulls name + address off the
       // list-item (em); falls back to splitting the local-part for a name.
       label: 'Save sender to contacts',
       icon: _contactIcon,
@@ -5693,7 +5693,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
         const subject = em.subject || '(no subject)';
         const ok = await styledConfirm(
           `Permanently delete "${subject}"? This cannot be undone.`,
-          { confirmText: '删除', cancelText: '取消', danger: true }
+          { confirmText: 'Delete', cancelText: 'Cancel', danger: true }
         );
         if (!ok) return;
         try {
@@ -5797,7 +5797,7 @@ function _showCardMenu(em, anchor) {
     const _checkForLabel = _cardForLabel ? _cardForLabel.querySelector('.email-card-done') : null;
     const _currentlyDone = _checkForLabel ? _checkForLabel.classList.contains('active') : !!em.is_answered;
     actions.push({
-      label: _currentlyDone ? 'Not Done' : '完成',
+      label: _currentlyDone ? 'Not Done' : 'Done',
       icon: _checkIcon,
       action: async () => {
         const card = anchor.closest('.doclib-card');
@@ -5895,9 +5895,9 @@ function _showCardMenu(em, anchor) {
   });
 
   actions.push(
-    { label: '删除', icon: _delIcon, danger: true, action: async () => {
+    { label: 'Delete', icon: _delIcon, danger: true, action: async () => {
       const subject = em.subject || '(no subject)';
-      const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: '删除', cancelText: '取消', danger: true });
+      const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
       if (!ok) return;
       await fetch(`${API_BASE}/api/email/delete/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
       await _animateEmailCardRemoval([em.uid]);
@@ -5949,7 +5949,7 @@ function _showCardMenu(em, anchor) {
   setTimeout(() => document.addEventListener('click', close, true), 10);
 }
 
-// Bulk "Actions" dropdown for select mode — 删除 is a separate visible button.
+// Bulk "Actions" dropdown for select mode — Delete is a separate visible button.
 function _showBulkActionsMenu(anchor) {
   document.querySelectorAll('.email-card-dropdown').forEach(d => d.remove());
   const dropdown = document.createElement('div');
@@ -5960,7 +5960,7 @@ function _showBulkActionsMenu(anchor) {
   const _unreadIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
   const _doneIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
   const items = [
-    { label: '完成', icon: _doneIco, action: () => _bulkAction('done') },
+    { label: 'Done', icon: _doneIco, action: () => _bulkAction('done') },
     { label: 'Mark Read', icon: _readIco, action: () => _bulkAction('read') },
     { label: 'Mark Unread', icon: _unreadIco, action: () => _bulkAction('unread') },
   ];
@@ -6003,7 +6003,7 @@ function _updateBulkBar() {
   const selectBtn = document.getElementById('email-lib-select-btn');
   if (bar) bar.classList.toggle('hidden', !state._selectMode);
   if (selectBtn) {
-    selectBtn.textContent = state._selectMode ? '取消' : 'Select';
+    selectBtn.textContent = state._selectMode ? 'Cancel' : 'Select';
     selectBtn.classList.toggle('active', state._selectMode);
   }
   const count = document.getElementById('email-lib-selected-count');
@@ -6025,7 +6025,7 @@ async function _bulkAction(action) {
   if (action === 'delete') {
     const ok = await styledConfirm(
       `Delete ${uids.length} selected email${uids.length === 1 ? '' : 's'}?`,
-      { confirmText: '删除', cancelText: '取消', danger: true },
+      { confirmText: 'Delete', cancelText: 'Cancel', danger: true },
     );
     if (!ok) return;
   }
@@ -6041,7 +6041,7 @@ async function _bulkAction(action) {
   // Loading state for every bulk action, not just delete — large
   // selections (e.g. 90+ Dones) used to silently hammer the server
   // with sequential requests and the user got zero feedback. Now the
-  // Actions button (or 删除 button) shows a whirlpool + verb-ing
+  // Actions button (or Delete button) shows a whirlpool + verb-ing
   // label, and the count surfaces progress.
   const verbing = {
     delete: 'Deleting',
@@ -6077,7 +6077,7 @@ async function _bulkAction(action) {
       } else if (action === 'delete') {
         await fetch(`${API_BASE}/api/email/delete/${uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
       } else if (action === 'done') {
-        // uid may come back from the 设置 as a string while em.uid is
+        // uid may come back from the Set as a string while em.uid is
         // numeric (or vice versa) — coerce both sides so the in-memory
         // state actually flips and the post-loop re-render shows the
         // done checkmark.
@@ -6103,7 +6103,7 @@ async function _bulkAction(action) {
   };
 
   try {
-    // 运行 in parallel with a concurrency cap so 92 emails don't take
+    // Run in parallel with a concurrency cap so 92 emails don't take
     // 30 seconds sequentially but we also don't open 92 simultaneous
     // connections.
     const CONCURRENCY = 6;
@@ -6298,7 +6298,7 @@ function _handleAiReplyButton(ev, em, data) {
   ev.stopPropagation();
   const btn = ev.currentTarget;
   // First click on a cached email surfaces the cached draft. Second
-  // click clears the cache and opens the Fast/Full + 右键菜单 so
+  // click clears the cache and opens the Fast/Full + context menu so
   // the user can ask for a fresh draft (with new steering).
   if (data?.cached_ai_reply && !btn.dataset.shownOnce) {
     btn.dataset.shownOnce = '1';
@@ -6314,7 +6314,7 @@ function _handleAiReplyButton(ev, em, data) {
 
 function _hasMultipleRecipients(data) {
   // Count distinct addresses in To + Cc (minus the current user). Empty
-  // 回退 when the user's address isn't yet known — no exclusion.
+  // fallback when the user's address isn't yet known — no exclusion.
   const myAddress = (window._myEmailAddress || '').toLowerCase();
   const extractEmails = (str) => {
     if (!str) return [];
@@ -6395,7 +6395,7 @@ function _showLibRemindSubmenu(em, parentDropdown) {
   });
   parentDropdown.appendChild(customItem);
   // "Note" — prompts for free-text and saves it as a note without a
-  // due_date, so no timer/提醒 fires.
+  // due_date, so no timer/reminder fires.
   const noteItem = document.createElement('div');
   noteItem.className = 'dropdown-item-compact';
   noteItem.innerHTML = '<span>Note</span>';
@@ -6446,7 +6446,7 @@ async function _createEmailReplyReminder(em, dueDate, customText = '') {
     ? `${dueDate.getFullYear()}-${pad(dueDate.getMonth()+1)}-${pad(dueDate.getDate())}T${pad(dueDate.getHours())}:${pad(dueDate.getMinutes())}`
     : null;
   const fullFrom = em.from || em.sender || '';
-  // 提取 just the first name from "First Last <email@x>" or fall back to email local part
+  // Extract just the first name from "First Last <email@x>" or fall back to email local part
   let from = 'someone';
   if (fullFrom) {
     const fullName = _extractName(fullFrom);
@@ -6494,11 +6494,11 @@ async function _createEmailReplyReminder(em, dueDate, customText = '') {
   }
 }
 
-// Sanitize untrusted HTML 邮件 bodies before injecting via innerHTML.
+// Sanitize untrusted HTML email bodies before injecting via innerHTML.
 //
-// Denylist 净化r — has to block every well-known XSS sink:
+// Denylist sanitizer — has to block every well-known XSS sink:
 //   - <script>, <iframe>, <object>, <embed>, <form>, <style>, <link>
-//   - SVG entirely (事件处理器s, <use href="javascript:">, <foreignObject>,
+//   - SVG entirely (event handlers, <use href="javascript:">, <foreignObject>,
 //     <animate>, <set>, etc.). Email clients don't need SVG.
 //   - <math> (MathML can carry handlers).
 //   - <base href="...">, <meta http-equiv="refresh">, <noscript>, <frame>,
@@ -6507,4 +6507,4 @@ async function _createEmailReplyReminder(em, dueDate, customText = '') {
 //     formaction/action/background/poster/data attributes.
 //   - srcdoc (defensive — iframe is already nuked).
 //   - inline `style` declarations containing javascript: or expression().
-// _净化Html / _escLinkify live in ./emailLibrary/utils.js
+// _sanitizeHtml / _escLinkify live in ./emailLibrary/utils.js

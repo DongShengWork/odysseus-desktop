@@ -1,4 +1,4 @@
-"""ChatGPT Subscription 设备流设置路由。"""
+"""ChatGPT Subscription device-flow setup routes."""
 
 import json
 import logging

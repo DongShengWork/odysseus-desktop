@@ -1,4 +1,4 @@
-"""服务端工具安全策略。"""
+"""Server-side tool safety policy."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from typing import Optional, Set
 logger = logging.getLogger(__name__)
 
 
-# 普通/公开用户不得直接执行的工具。这些要么暴露了
-# 服务器/运行时访问、敏感用户数据、外部消息传递、持久化
-# 状态更改或通用的环回/集成接口。
+# Tools regular/public users must not execute directly. These either expose
+# server/runtime access, sensitive user data, external messaging, persistent
+# state changes, or generic loopback/integration surfaces.
 NON_ADMIN_BLOCKED_TOOLS = {
     "bash",
     "python",
@@ -53,16 +53,16 @@ NON_ADMIN_BLOCKED_TOOLS = {
 }
 
 
-# Plan 模式：agent 可以调查但不得修改任何内容。只有这些
-# 只读/检查工具保持启用；其他所有工具（写入、发送、
-# manage_*、模型服务、MCP 等）被阻止。使用白名单而非黑名单，
-# 以便任何新添加的工具在 plan 模式下默认被阻止——安全失败。
+# Plan mode: the agent may investigate but must not mutate anything. Only these
+# read-only/inspection tools stay enabled; everything else (writes, sends,
+# manage_*, model serving, MCP, etc.) is blocked. Allowlist rather than blocklist
+# so any newly added tool defaults to BLOCKED in plan mode — fail safe.
 #
-# bash/python 刻意不在此列表：shell 可以修改（写入文件、访问
-# 网络）且无法在工具层面限制为只读，因此 plan
-# 模式直接阻止它，而不是依赖提示来保持其行为良好。
-# 代码/文件发现由下面的专用只读工具
-#（read_file、grep、glob、ls）覆盖，而不是自由使用 shell。
+# bash/python are deliberately NOT here: the shell can mutate (write files, hit
+# the network) and can't be constrained to read-only at the tool layer, so plan
+# mode blocks it outright rather than relying on a prompt to keep it well-behaved.
+# Code/file discovery is covered by the dedicated read-only tools below
+# (read_file, grep, glob, ls) instead of freestyle shell.
 PLAN_MODE_READONLY_TOOLS = {
     "read_file",
     "grep",
@@ -88,19 +88,19 @@ PLAN_MODE_READONLY_TOOLS = {
 }
 
 
-# Agent 的工具门控采用 DENYLIST：execute_tool_block 阻止
-# 名称在 `disabled_tools` 中的任何工具。Plan 模式的策略则相反——白名单
-#（PLAN_MODE_READONLY_TOOLS）。要通过拒绝列表应用白名单，plan 模式
-# 返回其逆：每个已知工具名称减去白名单。
+# The agent's tool gate is a DENYLIST: execute_tool_block blocks any tool whose
+# name is in `disabled_tools`. Plan mode's policy is the opposite — an allowlist
+# (PLAN_MODE_READONLY_TOOLS). To apply an allowlist through a denylist, plan mode
+# returns the inverse: every known tool name minus the allowlist.
 #
-# 已知工具名称来自 FUNCTION_TOOL_SCHEMAS，但该来源不完善：
-# 一些工具仅可通过 XML 调用（例如 manage_notes、generate_镜像）且从不
-# 出现在其中，导入也可能完全失败。无论是哪种空缺都会让变异工具
-# 从减集中漏掉并默默保持启用。此集合是两者的静态
-# 后备：将其合并进去，使已知突变者始终被减去，且导入
-# 失败时仍会阻止它们（失败关闭，绝不开放）。只有突变者属于
-# 此处——只读工具由白名单覆盖。添加新
-# 突变工具时保持同步。
+# Known tool names come from FUNCTION_TOOL_SCHEMAS, but that source is imperfect:
+# some tools are only XML-invocable (e.g. manage_notes, generate_image) and never
+# appear there, and the import can fail outright. Either gap would drop a mutating
+# tool from the subtraction and silently leave it enabled. This set is the static
+# backstop for both: union it in so known mutators are always subtracted, and so a
+# failed import still blocks them (fail closed, never open). Only mutators belong
+# here — read-only tools are covered by the allowlist. Keep in sync when adding
+# new mutating tools.
 _PLAN_MODE_KNOWN_MUTATORS = {
     "write_file", "create_document", "edit_document", "update_document",
     "suggest_document", "manage_documents", "create_session", "manage_session",
@@ -112,8 +112,8 @@ _PLAN_MODE_KNOWN_MUTATORS = {
     "archive_email", "mark_email_read", "download_model", "serve_model",
     "stop_served_model", "cancel_download", "adopt_served_model", "serve_preset",
     "generate_image", "edit_image", "trigger_research", "manage_research",
-    # Shell 永远不是只读安全的；显式阻止它，这样即使
-    # schema 列表加载失败，它也不会进入 plan 模式。
+    # Shell is never read-only-safe; block it explicitly so it stays out of plan
+    # mode even if the schema list fails to load.
     "bash", "python",
     # Controls shell processes (kill); plan mode can't run bash anyway.
     "manage_bg_jobs",
@@ -121,19 +121,19 @@ _PLAN_MODE_KNOWN_MUTATORS = {
 
 
 def plan_mode_disabled_tools() -> Set[str]:
-    """Plan 模式下要添加到拒绝列表的工具名称。
+    """Tool names to add to the denylist in plan mode.
 
-    Plan 模式只允许 PLAN_MODE_READONLY_TOOLS。门控是拒绝列表，因此
-    返回其逆：每个已知工具名称减去白名单。已知名称
-    来自函数工具 schema，后备为 _PLAN_MODE_KNOWN_MUTATORS
-    （见上文），以便仅 XML 的工具和失败的 schema 导入不会让突变者
-    保持启用。MCP 工具单独处理——plan 模式下循环
-    完全丢弃 MCP 管理器。"""
+    Plan mode allows only PLAN_MODE_READONLY_TOOLS. The gate is a denylist, so
+    return the inverse: every known tool name minus the allowlist. Known names
+    come from the function-tool schemas, backstopped by _PLAN_MODE_KNOWN_MUTATORS
+    (see above) so XML-only tools and a failed schema import can't leave a mutator
+    enabled. MCP tools are handled separately — the loop drops the MCP manager
+    entirely in plan mode."""
     try:
-    # agent_tools / tool_parsing / tool_schemas 构成一个互相循环的
-    # 集群，只有通过 agent_tools 入口才能干净解析。
-    # 先导入它，以便延迟 schema 导入即使在冷导入下也能工作
-    #（例如测试）——不仅是当应用已经连接好一切之后。
+        # agent_tools / tool_parsing / tool_schemas form a mutually-circular
+        # cluster that only resolves cleanly when entered via agent_tools.
+        # Import it first so the lazy schema import works even from a cold
+        # import (e.g. tests) — not just after the app has wired everything up.
         import src.agent_tools  # noqa: F401
         from src.tool_schemas import FUNCTION_TOOL_SCHEMAS
 
@@ -145,19 +145,19 @@ def plan_mode_disabled_tools() -> Set[str]:
     except Exception as exc:
         logger.warning("Unable to load tool schemas for plan-mode gating: %s", exc)
         all_names = set()
-    # 从所有已知工具名称（schema 派生的加上
-    # 静态突变后备）中减去白名单。失败关闭：如果上述 schema 导入失败，
-    # 仅后备本身仍然阻止已知的突变工具。
+    # Subtract the allowlist from all known tool names (schema-derived plus the
+    # static mutator backstop). Fail closed: if the schema import failed above,
+    # the backstop alone still blocks known mutators.
     return (all_names | _PLAN_MODE_KNOWN_MUTATORS) - PLAN_MODE_READONLY_TOOLS
 
 
 def is_public_blocked_tool(tool_name: Optional[str]) -> bool:
-    """当非管理员/公开用户不得执行此工具时返回 True。
+    """Return True when a non-admin/public user must not execute this tool.
 
-    这是一个安全门控，因此它失败关闭：格式错误的非字符串工具
-    名称无法与阻止列表或 ``mcp__`` 命名空间匹配，因此
-    被视为已阻止，而不是默默允许通过。``None`` /
-    空字符串表示没有可以门控的工具。
+    This is a security gate, so it fails CLOSED: a malformed non-string tool
+    name can't be matched against the blocklist or the ``mcp__`` namespace, so
+    it is treated as blocked rather than silently allowed through. ``None`` /
+    empty string means there is no tool to gate.
     """
     if tool_name is None or tool_name == "":
         return False
@@ -197,7 +197,7 @@ def owner_is_admin_or_single_user(owner: Optional[str]) -> bool:
 
 
 def blocked_tools_for_owner(owner: Optional[str]) -> Set[str]:
-    """根据公开用户策略，为此所有者隐藏/禁用的工具。"""
+    """Tools to hide/disable for this owner under public-user policy."""
     if owner_is_admin_or_single_user(owner):
         return set()
     return set(NON_ADMIN_BLOCKED_TOOLS)

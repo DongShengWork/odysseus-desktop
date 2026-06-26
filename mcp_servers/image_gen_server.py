@@ -1,7 +1,7 @@
 """
 image_gen_server.py
 
-MCP 服务器，通过 OpenAI 兼容 API 暴露图像生成功能。
+MCP server exposing image generation via OpenAI-compatible APIs.
 """
 
 import asyncio
@@ -69,7 +69,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if quality == "medium" and _settings.get("image_quality"):
             quality = _settings["image_quality"]
 
-        # 自动检测最佳可用图像模型
+        # Auto-detect best available image model
         if not model_spec:
             for candidate in ("gpt-image-1.5", "gpt-image-1", "dall-e-3"):
                 try:
@@ -117,7 +117,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
             img = images[0]
             image_url = None
-            # Prefix the instance's public 基础地址 (existing app_public_url setting) so the
+            # Prefix the instance's public base URL (existing app_public_url setting) so the
             # link is fully-qualified and clickable when the model echoes it. Empty = relative
             # same-origin path (unchanged default).
             _pub_base = (get_setting("app_public_url", "") or "").rstrip("/")
@@ -130,7 +130,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 img_path.write_bytes(base64.b64decode(img["b64_json"]))
                 image_url = f"{_pub_base}/api/generated-image/{filename}"
 
-                # 保存到画廊
+                # Save to gallery
                 try:
                     from src.database import SessionLocal, GalleryImage
                     db = SessionLocal()
@@ -152,8 +152,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             else:
                 return [TextContent(type="text", text="Error: Unexpected image API response format")]
 
-            # "Direct link:" 而非 "镜像_url:" 标签 — 小型模型会将
-            # 标签标记 ("镜像_url") 复制到链接 href 中，产生损坏的链接。
+            # "Direct link:" rather than an "image_url:" label — small models copied the
+            # label token ("image_url") into the link href, producing a broken link.
             result = (
                 f"Generated image for: {prompt[:100]}\n"
                 f"Direct link: {image_url}\n"

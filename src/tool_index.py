@@ -1,5 +1,5 @@
 """
-基于 RAG 的 tool 选择，用于 agent 模式。
+RAG-based tool selection for agent mode.
 
 Instead of injecting all tool descriptions into the system prompt,
 embed them in a ChromaDB collection and retrieve only the top-K
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Tools that are ALWAYS included regardless of retrieval results.
 # Keep this deliberately tiny. Domain tools (web, documents, email,
-# cookbook/模型服务, files, settings, etc.) are injected by retrieval or
+# cookbook/model serving, files, settings, etc.) are injected by retrieval or
 # keyword intent so a trivial agent prompt like "test" does not carry every
 # domain's schemas and rules.
 ALWAYS_AVAILABLE = frozenset({
@@ -63,9 +63,9 @@ ASSISTANT_ALWAYS_AVAILABLE = frozenset({
 
 COLLECTION_NAME = "odysseus_tool_index"
 
-# ── Tool description 仓库 ──
+# ── Tool description registry ──
 # Each tool gets a searchable description that helps retrieval.
-# These are richer than the 系统提示 one-liners — they're for 嵌入.
+# These are richer than the system prompt one-liners — they're for embedding.
 BUILTIN_TOOL_DESCRIPTIONS: Dict[str, str] = {
     "bash": "Run shell commands on the server. Install packages, git operations, builds, system info, process management. Prefer a dedicated tool whenever one fits the job (file read/write/edit, search, listing); use bash only for what no dedicated tool covers. Do not use for web lookup/search; use web_search or web_fetch when web tools are available.",
     "python": "Execute Python code for computation, data processing, math, scripting, and parsing. Not for writing code for the user. Prefer a dedicated tool for reading, writing, or searching files; use python only for what no dedicated tool covers. Do not use for web lookup/search; use web_search or web_fetch when web tools are available.",
@@ -184,7 +184,7 @@ class ToolIndex:
             return
 
         # Drop any stale builtin_* entries that aren't in the current
-        # 仓库 (e.g. removed tools like the old vault_* set).
+        # registry (e.g. removed tools like the old vault_* set).
         # Without this, upsert leaves them in place and RAG keeps
         # surfacing tools that no longer exist.
         indexed = False
@@ -222,12 +222,12 @@ class ToolIndex:
         if not mcp_mgr:
             return
 
-        # 获取 current MCP generation to avoid redundant re索引ing
+        # Get current MCP generation to avoid redundant reindexing
         gen = getattr(mcp_mgr, '_generation', 0)
         if gen == self._mcp_generation:
             return
 
-        # 移除 old MCP entries
+        # Remove old MCP entries
         for lane in self._lanes:
             try:
                 existing = lane.collection.get(where={"tool_type": "mcp"})
@@ -236,7 +236,7 @@ class ToolIndex:
             except Exception:
                 pass
 
-        # 获取 current MCP 工具s
+        # Get current MCP tools
         try:
             all_tools = mcp_mgr.get_tool_descriptions_for_prompt(disabled_map or {})
         except Exception:
@@ -246,7 +246,7 @@ class ToolIndex:
             self._mcp_generation = gen
             return
 
-        # 解析 MCP 工具 descriptions from the prompt text
+        # Parse MCP tool descriptions from the prompt text
         docs = []
         ids = []
         metadatas = []
@@ -262,7 +262,7 @@ class ToolIndex:
                 if len(name_desc) == 2:
                     name = name_desc[0].strip()
                     desc = name_desc[1].strip()
-                    # Include server identity in the 索引ed text so RAG can
+                    # Include server identity in the indexed text so RAG can
                     # distinguish "list_emails for server-a" from "list_emails for server-b"
                     server_ctx = f" (server: {current_server})" if current_server else ""
                     doc_text = f"Tool: {name}{server_ctx}\n{desc}"
@@ -361,7 +361,7 @@ class ToolIndex:
         # Chat/session management. "rename" alone maps to documents below, so a
         # request like "rename the last 12 sessions/chats" needs these session
         # keywords to surface the right tools (NOT app_api — /api/sessions is
-        # owner-filtered and returns empty for 工具调用s).
+        # owner-filtered and returns empty for tool calls).
         frozenset({"sessions", "my chats", "these chats", "those chats",
                    "chat history", "rename chat", "rename session",
                    "rename the chat", "rename my chat", "rename the session",
@@ -390,7 +390,7 @@ class ToolIndex:
                    # word 'contact'. Catches the address/phone-paste pattern.
                    "save this for", "save it for", "save for",
                    "save this one for", "save that for",
-                   # Postal-address-like 签名als
+                   # Postal-address-like signals
                    "postal code", "zip code", "street address",
                    "mailing address", "their address"}):
             {"manage_contact"},
@@ -424,8 +424,8 @@ class ToolIndex:
             {"manage_settings", "ui_control"},
         # API-integration intent → the api_call tool. Mirrors the agent-loop
         # "integrations" domain so api_call still surfaces on the retrieval and
-        # keyword-回退 paths (not just the deterministic domain 随机种子) when a
-        # user names a connected 服务.
+        # keyword-fallback paths (not just the deterministic domain seed) when a
+        # user names a connected service.
         frozenset({"api_call", "api call", "integration", "integrations",
                    "home assistant", "homeassistant", "miniflux", "gitea",
                    "linkding", "jellyfin"}):
@@ -458,7 +458,7 @@ class ToolIndex:
                    "make it light", "make the ui", "switch theme", "change theme",
                    "dark mode", "light mode", "toggle"}):
             {"ui_control"},
-        # Cookbook / 模型服务 intent — user says "kill cookbook",
+        # Cookbook / model serving intent — user says "kill cookbook",
         # "stop the model", "what's running", etc.
         frozenset({"cookbook", "kill cookbook", "stop cookbook",
                    "stop the model", "kill the model", "kill my model",
@@ -523,14 +523,14 @@ class ToolIndex:
         for keywords, tools in self._KEYWORD_HINTS.items():
             if any(re.search(rf"\b{re.escape(kw)}\b", ql) for kw in keywords):
                 base.update(tools)
-        # Structural 日程安排-intent detection — typo-resilient (the literal
+        # Structural scheduling-intent detection — typo-resilient (the literal
         # keyword "every day" misses "every dya"). Catches "every <word>",
         # daily/nightly/etc., or a clock time like "at 7:30 am" / "7am", which
-        # all 签名al a recurring/定时任务. Force-include manage_tasks so
+        # all signal a recurring/scheduled task. Force-include manage_tasks so
         # the agent can actually create the cron job instead of fumbling.
         if self._SCHEDULE_RE.search(ql):
             base.add("manage_tasks")
-        # URL/site requests need web tools even when 嵌入 retrieval is
+        # URL/site requests need web tools even when embedding retrieval is
         # stubbed/unavailable. Keep this structural, not always-on, so trivial
         # prompts do not drag web schemas into the agent context.
         if self._WEB_RE.search(query):
@@ -561,8 +561,8 @@ class ToolIndex:
         # "to my contacts", "into my contacts", "in my address book", etc.
         to_contacts = re.search(r"\b(?:to|in|into)\s+(?:my\s+)?(?:contacts|address\s+book)\b", ql)
         # Possessive: "save (his|her|their) (address|phone|email|number) ..."
-        # — strong contact 签名al even without "for <name>". Force-include
-        # manage_contact here too since the keyword 回退 misses this
+        # — strong contact signal even without "for <name>". Force-include
+        # manage_contact here too since the keyword fallback misses this
         # construction.
         possessive_contact = re.search(
             r"\bsave\b(?:\s+\w+){0,2}\s+(?:his|her|their)\s+(?:address|phone|number|email|contact|details)",

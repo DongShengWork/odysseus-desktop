@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""创建/移除 Odysseus 中可切换的非默认 'Demo' EmailAccount。
+"""Create/remove the switchable, non-default 'Demo' EmailAccount in Odysseus.
 
-镜像现有的本地 Dovecot 账户（localhost:31143, STARTTLS），但指向
-一次性 demo@odysseus.local 邮箱。密码通过应用的 secret_storage 进行
-Fernet 加密存储，与真实账户完全一致。
+Mirrors the existing local-Dovecot account (localhost:31143, STARTTLS) but points
+at the throwaway demo@odysseus.local mailbox. Password is stored Fernet-encrypted
+via the app's own secret_storage, exactly like real accounts.
 
-    python demo_account.py setup     # 添加（或更新）'Demo' 账户
-    python demo_account.py teardown  # 移除它
+    python demo_account.py setup     # add (or update) the 'Demo' account
+    python demo_account.py teardown  # remove it
 
-从仓库根目录运行，以便应用的模块能正常导入。
+Run from the repo root so the app's modules import cleanly.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import sys
 import uuid
 from pathlib import Path
 
-# 无论当前工作目录如何，使仓库根目录可导入。
+# Make repo root importable regardless of CWD.
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -42,15 +42,15 @@ def setup() -> int:
             acct = EmailAccount(id=uuid.uuid4().hex, name=NAME)
             db.add(acct)
         acct.owner = OWNER
-        acct.is_default = False          # 永远不作为默认 — 用户切换到它
+        acct.is_default = False          # never default — user switches to it
         acct.enabled = True
         acct.imap_host = "localhost"
         acct.imap_port = 31143
         acct.imap_user = IMAP_USER
         acct.imap_password = encrypt(IMAP_PASSWORD)
         acct.imap_starttls = True
-        # 仅本地：没有真实的 SMTP。指向一个死的本地端口，使演示期间的
-        # 意外 "Send" 只在本地失败而不是发送给任何人。
+        # Local-only: no real SMTP. Point at a dead local port so an accidental
+        # "Send" during the demo fails locally instead of mailing anyone.
         acct.smtp_host = "localhost"
         acct.smtp_port = 2525
         acct.smtp_user = IMAP_USER

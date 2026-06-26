@@ -1,4 +1,4 @@
-"""活动排名模块的兼容性重导出垫片。
+"""Compatibility re-export shim for the live ranking module.
 
 The real implementation lives in :mod:`services.search.ranking`, which is what
 the search runtime (services/search/core.py) imports. This module used to hold a

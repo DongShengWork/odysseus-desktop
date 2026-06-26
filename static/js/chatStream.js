@@ -1,6 +1,6 @@
 // static/js/chatStream.js
-// 从 chat.js handleChatSubmit 中提取的 SSE 事件处理器
-// 处理：ui_control 事件、后台流管理
+// SSE event handlers extracted from chat.js handleChatSubmit
+// Handles: ui_control events, background stream management
 
 import uiModule from './ui.js';
 import Storage from './storage.js';
@@ -9,8 +9,8 @@ import markdownModule from './markdown.js';
 import sessionModule from './sessions.js';
 
 /**
- * 处理 ui_control SSE 事件 — AI 驱动的 UI 操作。
- * 从重复的 ui_control + tool_output.ui_event 处理器中提取。
+ * Handle a ui_control SSE event — AI-driven UI manipulation.
+ * Extracted from the duplicated ui_control + tool_output.ui_event handlers.
  */
 export function handleUIControl(uiData) {
   var uiEvent = uiData.ui_event || uiData;
@@ -66,7 +66,7 @@ export function handleUIControl(uiData) {
       var tm = themeModule;
       if (tm && tm.THEMES && tm.applyColors && tm.save) {
         var themeName = uiData.theme_name;
-        if (themeName === 'chatgpt') themeName = 'gpt';  // 已重命名的预设主题
+        if (themeName === 'chatgpt') themeName = 'gpt';  // renamed preset
         var customThemes = tm.getCustomThemes ? tm.getCustomThemes() : {};
         var colors = tm.THEMES[themeName] || customThemes[themeName] || uiData.colors;
         if (colors) {
@@ -128,7 +128,7 @@ export function handleUIControl(uiData) {
     } else if (uiEvent === 'research_started' || uiData.ui_event === 'research_started') {
       // Agent kicked off deep research — adopt the session into the
       // sidebar immediately so the user sees it without waiting for
-      // 用户无需等待 12 秒的 active-poll 即可看到。
+      // the 12s active-poll.
       var rsid = uiData.research_session_id || uiData.session_id;
       if (rsid) {
         import('./research/jobs.js').then(function(mod) {
@@ -136,7 +136,7 @@ export function handleUIControl(uiData) {
           if (fn) fn(rsid);
         }).catch(function(){});
         // The clickable "Open in Deep Research" link is now emitted by the
-        // 文本中的 `#research-<id>` markdown 锚点发出 — 它渲染为普通的可点击
+        // agent loop as a `#research-<id>` markdown anchor in the assistant's
         // response text — it renders as a regular clickable chat link AND
         // persists across refresh (saved with the message). No ephemeral
         // chip injection needed here anymore.
@@ -196,7 +196,7 @@ export function handleUIControl(uiData) {
 }
 
 /**
- * 后台流完成时通知用户。
+ * Notify user when a background stream completes.
  */
 export function notifyStreamComplete(sessionId, query) {
   var isHidden = document.hidden;
@@ -219,7 +219,7 @@ export function notifyStreamComplete(sessionId, query) {
 }
 
 /**
- * 后台流完成时在聊天中插入可点击的提示消息。
+ * Insert a clickable in-chat toast when a background stream finishes.
  */
 export function insertStreamDoneToast(sessionId, query) {
   var box = document.getElementById('chat-history');
@@ -244,7 +244,7 @@ export function insertStreamDoneToast(sessionId, query) {
 }
 
 /**
- * 研究完成时通知用户（浏览器通知）。
+ * Notify when research completes (browser notification).
  */
 export function notifyResearchComplete(sessionId, query) {
   var isHidden = document.hidden;

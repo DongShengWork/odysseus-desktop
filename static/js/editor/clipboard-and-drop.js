@@ -2,19 +2,19 @@
  * Paste + drag-and-drop import handlers. Both add an image to the
  * editor as a new layer:
  *
- *   - 粘贴 (Ctrl+V)：首先检查 `state.internalClipboard`（由
+ *   - Paste (Ctrl+V): checks `state.internalClipboard` first (set by
  *     lasso copy/cut), then falls back to the system clipboard's
- *     `image/*` 项。图层命名为 "Pasted Selection" 或 "Pasted"
+ *     `image/*` items. Layer is named "Pasted Selection" or "Pasted"
  *     and becomes active; the tool snaps to Move so the user can
  *     reposition it immediately.
  *   - Drop: any `image/*` file dragged from the OS / another tab.
- *     在拖放过程中显示 "Drop image to add as new layer" 叠加层。每个
- *     拖入的图像通过 `handleImportedImage` 路由处理，因此画布
+ *     Shows a "Drop image to add as new layer" overlay mid-drag. Each
+ *     dropped image is routed through `handleImportedImage` so canvas-
  *     resize prompts + undo history work the same as the toolbar
  *     Import button.
  *
- * 两者都由 `state.editorOpen` 控制，确保编辑器关闭时
- * 它们在页面上是惰性的（页面上的其他监听器优先处理）。
+ * Both gated by `state.editorOpen` so they're inert when the editor
+ * is closed (other listeners on the page get first dibs).
  *
  * @param {{
  *   container:            HTMLElement,
@@ -32,12 +32,12 @@ export function wireClipboardAndDrop({
   container, saveState, createLayer, renderLayerPanel, composite,
   handleImportedImage, uiModule,
 }) {
-  // ── 粘贴 ──
+  // ── Paste ──
   window.addEventListener('paste', (e) => {
     if (!state.editorOpen) return;
 
     function pasteAsLayer(imgSource, label) {
-      if (!state.editorOpen) return; // 用户在粘贴过程中关闭了编辑器
+      if (!state.editorOpen) return; // user closed mid-paste
       saveState();
       const layer = createLayer(label || 'Pasted', imgSource.width, imgSource.height);
       layer.ctx.drawImage(imgSource, 0, 0);
@@ -51,7 +51,7 @@ export function wireClipboardAndDrop({
       uiModule.showToast('Pasted as new layer');
     }
 
-    // 首先检查内部剪贴板（来自 Ctrl+C 套索/魔棒）。
+    // Check internal clipboard first (from Ctrl+C lasso/wand).
     if (state.internalClipboard) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -59,7 +59,7 @@ export function wireClipboardAndDrop({
       return;
     }
 
-    // 回退到系统剪贴板。
+    // Fall back to system clipboard.
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
@@ -73,12 +73,12 @@ export function wireClipboardAndDrop({
       img.src = url;
       break;
     }
-  }, true);  // 捕获阶段以便优先于聊天输入处理
+  }, true);  // capture phase so we beat chat input
 
-  // ── 拖放 ──
-  // 可视化的拖放区域叠加层在拖拽过程中出现；通过
-  // handleImportedImage 路由处理，因此导入会遵循画布大小调整规则
-  // + 保存历史记录（与工具栏导入按钮路径相同）。
+  // ── Drag-and-drop ──
+  // Visual drop-zone overlay appears mid-drag; routes via
+  // handleImportedImage so the import respects canvas resizing rules
+  // + saves history (same path as the toolbar Import button).
   const dropZone = container;
   if (!dropZone) return;
   let dragDepth = 0;

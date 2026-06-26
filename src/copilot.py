@@ -1,20 +1,20 @@
 # src/copilot.py
-"""GitHub Copilot 提供商支持。
+"""GitHub Copilot provider support.
 
-Copilot 在 ``https://api.githubcopilot.com`` 暴露 OpenAI 兼容的 API
-（``/chat/completions`` + ``/models``）。认证是 GitHub OAuth
-**设备流程**：用户在浏览器中授权设备码，我们收到一个长期有效的
-``access_token``，直接作为 ``Authorization: Bearer <token>`` 发送 —
-没有单独的 Copilot token 交换，也没有刷新（镜像编辑器 / opencode 与
-Copilot 通信的方式）。
+Copilot exposes an OpenAI-compatible API at ``https://api.githubcopilot.com``
+(``/chat/completions`` + ``/models``). Authentication is a GitHub OAuth
+**device flow**: the user authorises a device code in their browser and we
+receive a long-lived ``access_token`` that is sent directly as
+``Authorization: Bearer <token>`` — there is no separate Copilot-token
+exchange and no refresh (mirrors how editors / opencode talk to Copilot).
 
 The only provider-specific wrinkle beyond the bearer token is a handful of
 required request headers (API version, intent, an editor-style User-Agent,
 and ``x-initiator`` for agent-vs-user request accounting). Those live in
-请求计费的 ``x-initiator``）。这些位于 :func:`copilot_headers` 中。
+:func:`copilot_headers`.
 
-此模块持有常量 + 纯辅助函数；HTTP 设备流程调用位于
-:mod:`routes.copilot_routes` 中，以便进行 auth 门控。
+This module holds the constants + pure helpers; the HTTP device-flow calls
+live in :mod:`routes.copilot_routes` so they can be auth-gated.
 """
 
 import os
@@ -24,27 +24,27 @@ from urllib.parse import urlparse
 import httpx
 
 # ---------------------------------------------------------------------------
-# 常量
+# Constants
 # ---------------------------------------------------------------------------
 
-# 用于设备流程的 GitHub OAuth client id。Copilot 的 token 端点
-# 仅接受 GitHub 已列入白名单以访问 Copilot 的 client id，因此
-# 我们复用公开的 VS Code client id（第三方客户端实际使用的标准）。
-# 如果你注册了自己的白名单应用，可通过环境变量覆盖。
+# GitHub OAuth client id used for the device flow. Copilot's token endpoint
+# only accepts client ids that GitHub has allow-listed for Copilot access, so
+# we reuse the public VS Code client id (the de-facto standard third-party
+# clients use). Override via env if you register your own allow-listed app.
 COPILOT_CLIENT_ID = os.environ.get(
     "ODYSSEUS_COPILOT_CLIENT_ID", "01ab8ac9400c4e429b23"
 )
 
-# Copilot API 要求的带日期的 API 版本头（models + chat）。
+# Dated API version header required by the Copilot API (models + chat).
 COPILOT_API_VERSION = os.environ.get(
     "ODYSSEUS_COPILOT_API_VERSION", "2026-06-01"
 )
 
-# 公共 Copilot API 基础地址。GitHub Enterprise 使用 ``copilot-api.<domain>``。
+# Public Copilot API base. GitHub Enterprise uses ``copilot-api.<domain>``.
 COPILOT_BASE = "https://api.githubcopilot.com"
 
-# Copilot 希望使用编辑器风格的 User-Agent + 集成 ID。这些向 GitHub
-# 标识客户端；保持它们稳定。
+# Copilot wants an editor-like User-Agent + integration id. These identify the
+# client to GitHub; keep them stable.
 COPILOT_USER_AGENT = os.environ.get(
     "ODYSSEUS_COPILOT_USER_AGENT", "Odysseus/1.0"
 )
@@ -55,10 +55,10 @@ COPILOT_EDITOR_VERSION = os.environ.get(
     "ODYSSEUS_COPILOT_EDITOR_VERSION", "Odysseus/1.0"
 )
 
-# 设备流程中请求的 OAuth 权限范围。
+# OAuth scope requested during the device flow.
 COPILOT_SCOPE = "read:user"
 
-# 设备流程的默认 GitHub 主机（公共 github.com）。
+# Default GitHub host for the device flow (public github.com).
 GITHUB_HOST = "github.com"
 
 
@@ -71,15 +71,15 @@ def access_token_url(host: str = GITHUB_HOST) -> str:
 
 
 def normalize_domain(url: str) -> str:
-    """从 GitHub Enterprise URL 或域名中去除 scheme/尾部斜杠。"""
+    """Strip scheme/trailing slash from a GitHub Enterprise URL or domain."""
     return (url or "").replace("https://", "").replace("http://", "").rstrip("/")
 
 
 def enterprise_base(enterprise_url: Optional[str]) -> str:
-    """返回部署的 Copilot API 基础地址。
+    """Return the Copilot API base for a deployment.
 
-    公共 github.com → ``https://api.githubcopilot.com``。
-    Enterprise <domain> → ``https://copilot-api.<domain>``。
+    Public github.com → ``https://api.githubcopilot.com``.
+    Enterprise <domain> → ``https://copilot-api.<domain>``.
     """
     if not enterprise_url:
         return COPILOT_BASE
@@ -87,7 +87,7 @@ def enterprise_base(enterprise_url: Optional[str]) -> str:
 
 
 def is_copilot_base(url: Optional[str]) -> bool:
-    """如果基础 URL 指向 Copilot API（公共或企业版），则返回 True。"""
+    """True if a base URL points at the Copilot API (public or enterprise)."""
     if not url:
         return False
     try:
@@ -96,10 +96,10 @@ def is_copilot_base(url: Optional[str]) -> bool:
         return False
     if not host:
         return False
-    # 公共：api.githubcopilot.com（或任何 *.githubcopilot.com）。
+    # Public: api.githubcopilot.com (or any *.githubcopilot.com).
     if host == "githubcopilot.com" or host.endswith(".githubcopilot.com"):
         return True
-    # 企业版：copilot-api.<domain>。
+    # Enterprise: copilot-api.<domain>.
     if host.startswith("copilot-api."):
         return True
     return False
@@ -111,14 +111,14 @@ def copilot_headers(
     agent: bool = False,
     vision: bool = False,
 ) -> Dict[str, str]:
-    """构建 Copilot 特定的请求头。
+    """Build the Copilot-specific request headers.
 
     Args:
-        api_key: GitHub 设备流程 access token（作为 Bearer 发送）。
-        agent:   请求来自 agent 循环（工具驱动的轮次）
-                 而非直接用户消息。设置 ``x-initiator`` 用于
-                 Copilot 的 agent-vs-user 请求计费。
-        vision:  请求包含图片部分。
+        api_key: the GitHub device-flow access token (sent as Bearer).
+        agent:   request originates from the agent loop (a tool-driven turn)
+                 rather than a direct user message. Sets ``x-initiator`` for
+                 Copilot's agent-vs-user request accounting.
+        vision:  the request carries an image part.
     """
     headers: Dict[str, str] = {
         "X-GitHub-Api-Version": COPILOT_API_VERSION,
@@ -136,7 +136,7 @@ def copilot_headers(
 
 
 # ---------------------------------------------------------------------------
-# 设备流程 OAuth（纯 HTTP；编排逻辑在 routes.copilot_routes）
+# Device-flow OAuth (pure HTTP; orchestration lives in routes.copilot_routes)
 # ---------------------------------------------------------------------------
 
 def _oauth_post_headers() -> Dict[str, str]:
@@ -148,8 +148,8 @@ def _oauth_post_headers() -> Dict[str, str]:
 
 
 def request_device_code(host: str = GITHUB_HOST, *, timeout: float = 10.0) -> Dict:
-    """启动设备流程。返回 GitHub 的
-    ``{device_code, user_code, verification_uri, expires_in, interval}``。
+    """Start the device flow. Returns GitHub's
+    ``{device_code, user_code, verification_uri, expires_in, interval}``.
     """
     r = httpx.post(
         device_code_url(host),
@@ -162,9 +162,9 @@ def request_device_code(host: str = GITHUB_HOST, *, timeout: float = 10.0) -> Di
 
 
 def poll_access_token(host: str, device_code: str, *, timeout: float = 10.0) -> Dict:
-    """轮询一次 access token。GitHub 在用户尚未授权时返回 HTTP 200，
-    带有 ``error`` 字段（``authorization_pending``/``slow_down``），
-    或在用户授权后返回 ``{access_token, ...}``。
+    """Poll once for the access token. GitHub returns HTTP 200 with an
+    ``error`` field (``authorization_pending``/``slow_down``) while the user
+    hasn't authorised yet, or ``{access_token, ...}`` once they have.
     """
     r = httpx.post(
         access_token_url(host),
@@ -181,9 +181,9 @@ def poll_access_token(host: str, device_code: str, *, timeout: float = 10.0) -> 
 
 
 def fetch_models(base: str, token: str, *, timeout: float = 15.0) -> List[Dict]:
-    """获取 Copilot 的模型目录，过滤为选择器启用的模型。
+    """Fetch Copilot's model catalogue, filtered to picker-enabled models.
 
-    返回 ``{id, tool_calls, vision}`` 字典列表。如果没有模型声明
+    Returns a list of ``{id, tool_calls, vision}`` dicts. Falls back to the
     full list if no model advertises ``model_picker_enabled`` (defensive
     against API-shape drift).
     """
@@ -213,20 +213,20 @@ def fetch_models(base: str, token: str, *, timeout: float = 15.0) -> List[Dict]:
 
 
 # ---------------------------------------------------------------------------
-# 每次请求的头部标志
+# Per-request header flags
 # ---------------------------------------------------------------------------
 
 _IMAGE_PART_TYPES = ("image_url", "input_image", "image")
 
 
 def request_flags(messages) -> tuple:
-    """从 OpenAI 风格的消息列表中推导 ``(agent, vision)``。
+    """Derive ``(agent, vision)`` from an OpenAI-style message list.
 
-    镜像 opencode 的逻辑：
-      * ``agent`` — 最后一条消息*不*是普通用户消息（即它是
-        工具结果 / 助手后续操作），因此 Copilot 应将请求视为
-        agent 发起的以进行请求计费。
-      * ``vision`` — 任何消息包含图片内容部分。
+    Mirrors opencode's logic:
+      * ``agent`` — the last message is *not* a plain user message (i.e. it's a
+        tool result / assistant follow-up), so Copilot should treat the request
+        as agent-initiated for request accounting.
+      * ``vision`` — any message carries an image content part.
     """
     msgs = messages or []
     last = msgs[-1] if msgs else None
@@ -243,8 +243,8 @@ def request_flags(messages) -> tuple:
 
 
 def apply_request_headers(headers: Dict[str, str], messages) -> Dict[str, str]:
-    """根据输出消息在头部字典上设置 ``x-initiator`` / ``Copilot-Vision-Request``。
-    修改并返回 ``headers``。"""
+    """Set ``x-initiator`` / ``Copilot-Vision-Request`` on a header dict based
+    on the outgoing messages. Mutates and returns ``headers``."""
     agent, vision = request_flags(messages)
     headers["x-initiator"] = "agent" if agent else "user"
     if vision:

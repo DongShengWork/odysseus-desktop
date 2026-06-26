@@ -5,8 +5,8 @@
  * Esc or click outside dismisses; position is persisted in
  * localStorage so re-opening restores where the user left it.
  *
- * 公共 API：`toggleShortcuts(show?)` — true/false 强制状态，
- * undefined 切换。
+ * Public API: `toggleShortcuts(show?)` — true/false to force a state,
+ * undefined to toggle.
  *
  * @returns {{ toggleShortcuts: (show?: boolean) => void }}
  */
@@ -41,7 +41,7 @@ export function createShortcutsPopover() {
     el.querySelector('#ge-shortcuts-close').addEventListener('click', () => toggleShortcuts(false));
 
     // Drag by the header handle. Position survives across opens
-    // 通过标题手柄拖拽。位置在多次打开之间保持（localStorage）。
+    // (localStorage).
     const handle = el.querySelector('#ge-shortcuts-handle');
     if (handle) {
       let drag = null;
@@ -51,7 +51,7 @@ export function createShortcutsPopover() {
         drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height };
         handle.setPointerCapture(e.pointerId);
         handle.style.cursor = 'grabbing';
-        // 标记为用户定位，后续切换不会重新锚定。
+        // Mark as user-positioned so subsequent toggles don't re-anchor.
         el.dataset.userPositioned = '1';
         e.preventDefault();
       });
@@ -83,9 +83,9 @@ export function createShortcutsPopover() {
   }
 
   function positionPopover(el, anchor) {
-    // 放置在锚点上方，水平居中但限制在视口内。
-    // 上方空间不足时回退到下方。
-    el.style.display = 'block';   // 需要布局计算以获取准确尺寸
+    // Place ABOVE the anchor, horizontally centred but clamped to
+    // viewport. Falls back to BELOW if there's no room above.
+    el.style.display = 'block';   // need a layout pass for accurate size
     const ar = anchor.getBoundingClientRect();
     const pr = el.getBoundingClientRect();
     const margin = 8;
@@ -110,7 +110,7 @@ export function createShortcutsPopover() {
         el.style.display = 'block';
         el.style.left = saved.left;
         el.style.top  = saved.top;
-        // 重新限制位置，以防自用户拖拽后视口发生变化。
+        // Re-clamp in case the viewport changed since the user dragged.
         requestAnimationFrame(() => {
           const r = el.getBoundingClientRect();
           const m = 4;
@@ -124,7 +124,7 @@ export function createShortcutsPopover() {
         if (anchor) positionPopover(el, anchor);
         else el.style.display = 'block';
       }
-      // 延迟外部点击，使打开我们的点击不会关闭我们。
+      // Defer outside-click so the click that opened us doesn't close us.
       outside = (e) => {
         if (el.contains(e.target)) return;
         if (e.target.closest('#ge-shortcuts-btn')) return;
@@ -140,7 +140,7 @@ export function createShortcutsPopover() {
     }
   }
 
-  /** 当弹出框当前可见时返回 true。 */
+  /** True when the popover is currently visible. */
   function isOpen() {
     return !!(pop && pop.style.display && pop.style.display !== 'none');
   }

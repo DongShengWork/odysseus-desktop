@@ -1,4 +1,4 @@
-// cookbookProgressSignal.js — 下载/安装进度活性信号
+// static/js/cookbookProgressSignal.js
 /**
  * Liveness signal for a running cookbook download/install. The watchdog treats a
  * task as stalled when this signal stays unchanged for too long, so it must move
@@ -17,8 +17,8 @@
  * keep changing while the process is alive, and only a truly hung process leaves
  * the tail frozen.
  *
- * 纯函数（字符串输入，字符串输出），因此可以进行单元测试；cookbookRunning.js
- * 引用了仅限于浏览器环境使用的模块，无法在 node 下加载。
+ * Pure (string in, string out) so it's unit-testable; cookbookRunning.js pulls
+ * in browser-only modules and can't load under node.
  */
 export function computeProgressSignal(bytes, dlAgg, lastPct, snapshot) {
   if (bytes) return bytes;

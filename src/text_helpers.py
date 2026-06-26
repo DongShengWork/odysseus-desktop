@@ -1,14 +1,14 @@
-"""跨 LLM 输出路径共享的文本清理助手。
+"""Text-cleanup helpers shared across LLM-output paths.
 
-`<think>` 标签剥离、Qwen 风格"Thinking Process"
-块以及捕获无标记推理的模型的链式思考泄露的
-软"推理散文"启发式规则的唯一真实来源。
+Single source of truth for `<think>`-tag stripping, Qwen-style "Thinking
+Process" blocks, and the soft "reasoning prose" heuristic that catches
+chain-of-thought leaks from models that don't tag their reasoning.
 
-在此模块之前，六个不同的文件（`email_routes.py`、
-`chat_helpers.py`、`note_routes.py`、`builtin_actions.py`、`research_utils.py`、
-`agent_loop.py`）各有一套相同正则的变体。在边缘情况下
-（未闭合的 `<think>`、嵌套标签、模型发出 `<thinking>` 而不是 `<think>`）
-它们都以略微不同的方式出错了。
+Before this module, six different files (`email_routes.py`,
+`chat_helpers.py`, `note_routes.py`, `builtin_actions.py`, `research_utils.py`,
+`agent_loop.py`) each had their own variant of the same regex. They all
+broke in slightly different ways on the edges (unclosed `<think>`, nested
+tags, model emitting `<thinking>` instead of `<think>`).
 """
 
 from __future__ import annotations
@@ -17,16 +17,16 @@ import re
 
 _THINK_TAG_NAME = r"(?:think(?:ing)?|thought)"
 
-# 封闭的推理块。`strip_think` 中的多遍循环处理一些模型发出的
-# 嵌套 `<think><think>...</think></think>` 模式。
+# Closed reasoning blocks. Multi-pass loop in `strip_think` handles nested
+# `<think><think>...</think></think>` patterns some models emit.
 _THINK_CLOSED_RE = re.compile(rf"<{_THINK_TAG_NAME}(?:\s+[^>]*)?>[\s\S]*?</{_THINK_TAG_NAME}>\s*", re.IGNORECASE)
-# 封闭遍之后残留的孤立打开或关闭标签。
+# Orphan opening or closing tags that survive after the closed-pass.
 _THINK_TAG_RE = re.compile(rf"</?{_THINK_TAG_NAME}[^>]*>\s*", re.IGNORECASE)
-# 响应中任何位置的未闭合开头——从头到尾剥离
-# 从 `<think>` 到字符串末尾的所有内容。
+# Dangling opener anywhere in the response with no closer — strip everything
+# from `<think>` to the end of string.
 _THINK_OPEN_RE = re.compile(rf"<{_THINK_TAG_NAME}(?:\s+[^>]*)?>[\s\S]*$", re.IGNORECASE)
-# 流式模型偶尔发出 `<thinking time="0.42">` 风格的属性。
-# 标准化为纯 `<think>`，以便上面的正则能捕获。
+# Streaming models occasionally emit `<thinking time="0.42">`-style attributes.
+# Normalize to a plain `<think>` so the regexes above catch them.
 _THINK_ATTR_RE = re.compile(rf"<{_THINK_TAG_NAME}\s+[^>]*>", re.IGNORECASE)
 _THINK_ATTR_CLOSE_RE = re.compile(rf"</{_THINK_TAG_NAME}\s+[^>]*>", re.IGNORECASE)
 _GEMMA_THOUGHT_OPEN_RE = re.compile(r"<\|channel>thought\s*\n?[\s\S]*$", re.IGNORECASE)
@@ -42,21 +42,21 @@ _GEMMA_THOUGHT_CHANNEL_CAPTURE_RE = re.compile(
     r"<\|channel>thought\s*\n?([\s\S]*?)<channel\|>\s*",
     re.IGNORECASE,
 )
-# Qwen 和其他一些模型在真实回答之前
-# 加上 "Thinking Process:" 块。
+# Qwen and a few other models prefix the response with a "Thinking Process:"
+# block before the real answer.
 _QWEN_THINKING_RE = re.compile(
     r"^Thinking Process:.*?(?=\n\n#|\n\n\*\*|\Z)",
     re.IGNORECASE | re.DOTALL,
 )
-# 泄露的提示重复头部（一些模型在回答之前重复请求）。
+# Leaked prompt-echo headers (a few models replay the request before answering).
 _PROMPT_ECHO_RES = (
     re.compile(r"^The user asks:.*?(?=\n\n#|\n\n\*\*[A-Z]|\Z)", re.DOTALL),
     re.compile(r"^We need to.*?(?=\n\n#|\n\n\*\*[A-Z]|\Z)", re.DOTALL),
 )
 
-# 对未标记推理散文的激进启发式规则（不将链式思考
-# 包裹在 `<think>` 标签中的模型）。仅作为可选项应用（`prose=True`），因为
-# 对合法用户内容存在误报，如 "Looking at the attached file…"。
+# Aggressive heuristic for untagged reasoning prose (models that don't wrap
+# CoT in `<think>` tags). Only applied as opt-in (`prose=True`) because it
+# false-positives on legit user content like "Looking at the attached file…".
 _REASONING_PREFIX_RE = re.compile(
     r"^\s*(?:"
     r"the user (?:wants|is|asks|needs|wrote|said|told|messaged|requested)|"
@@ -77,10 +77,10 @@ def _strip_reasoning_prose(text: str) -> str:
     paragraphs = re.split(r"\n\s*\n", text.strip())
     if len(paragraphs) <= 1:
         return text
-    # 仅剥离*前导的*连续的推理段落运行。保留
-    # *最后一个*推理段落后的文本会在真实回答后有推理风格句子尾随时
-    # 毁掉真实回答：keep 变为空，函数
-    # 返回尾随句子而不是上面的回答。
+    # Strip only a LEADING contiguous run of reasoning paragraphs. Keeping the
+    # text after the *last* reasoning paragraph destroyed the real answer when a
+    # reasoning-style sentence trailed it: keep became empty and the function
+    # returned that trailing sentence instead of the answer above it.
     first_keep = 0
     for i, p in enumerate(paragraphs):
         if _REASONING_PREFIX_RE.match(p):
@@ -94,12 +94,12 @@ def _strip_reasoning_prose(text: str) -> str:
 
 
 def normalize_thinking_markup(text: str) -> str:
-    """将支持的思考包装标准化为 `<think>` 标记。
+    """Canonicalize supported thinking wrappers to `<think>` markup.
 
-    聊天 UI 和持久化层已经理解 `<think>...</think>`。
-    Gemma 4 可能改为发出 `<|channel>thought\n...<channel|>`，而一些
-    网关/模型发出 `<thought>...</thought>`。将这些形状标准化为
-    现有的表示，并剥离空的思考通道。
+    The chat UI and persistence layer already understand `<think>...</think>`.
+    Gemma 4 may instead emit `<|channel>thought\n...<channel|>`, and some
+    gateways/models emit `<thought>...</thought>`. Normalize those shapes into
+    the existing representation and strip empty thought channels.
     """
     if not text:
         return text
@@ -118,38 +118,38 @@ def normalize_thinking_markup(text: str) -> str:
 
 
 def strip_think(text: str, *, prose: bool = False, prompt_echo: bool = True) -> str:
-    """从模型输出中剥离 `<think>` 块。
+    """Strip `<think>` blocks from model output.
 
     Args:
-      prose: 同时剥离未标记的"推理散文"段落。对用户
-        内容有风险（对 "Looking at the attached file…" 等短语
-        产生误报）；仅为短 LLM 纯输出启用，且仅在输入中
-        实际存在 `<think>` 标签时才启用——调用者可以通过
-        在确定输入是 LLM 纯输出时才传递 `prose=True` 来使用
-        `had_think` 语义。
-      prompt_echo: 同时剥离 Qwen "Thinking Process:" 块和
-        "The user asks:" / "We need to" 泄露的提示重复。
+      prose: also strip untagged "reasoning prose" paragraphs. Risky on user
+        content (false-positives on phrases like "Looking at the attached
+        file…"); only enable for short LLM-only outputs and only when a
+        `<think>` tag was actually present in the input — callers can use
+        the `had_think` semantics by passing `prose=True` only when they
+        know the input is LLM-only.
+      prompt_echo: also strip Qwen "Thinking Process:" blocks and
+        "The user asks:" / "We need to" leaked prompt echoes.
 
-    能处理以下情况：
-      * 闭合的 `<think>...</think>`（任意深度，加上 `<thinking>`/`<thought>`）
-      * 未闭合的 `<think>...` / `<thought>...`
-      * 游离的打开/关闭标签
-      * `<think time="0.42">` 风格的属性
-      * Gemma 4 `<|channel>thought...<channel|>` 包装
+    Robust to:
+      * closed `<think>...</think>` (any depth, plus `<thinking>`/`<thought>`)
+      * dangling unclosed `<think>...` / `<thought>...`
+      * stray opener/closer tags
+      * `<think time="0.42">`-style attributes
+      * Gemma 4 `<|channel>thought...<channel|>` wrappers
     """
     if not text:
         return ""
-    # Gemma 4 有思考能力的模型在运行时不会将推理拆分为
-    # 单独字段时，使用通道控制令牌而不是 XML 标签。
-    # 在非思考模式下思考通道可能为空；无论如何它都不是
-    # 面向用户的内容。响应通道（如果存在）只是
-    # 最终回答的包装。
+    # Gemma 4 thinking-capable models use channel control tokens rather than
+    # XML tags when the runtime does not split reasoning into a separate field.
+    # The thought channel can be empty in non-thinking mode; either way it is
+    # not user-facing content. A response channel, when present, is only a
+    # wrapper around the final answer.
     text = normalize_thinking_markup(text)
     text = _GEMMA_THOUGHT_OPEN_RE.sub("", text)
-    # 标准化属性，以便闭合/打开的正则能捕获。
+    # Normalize attributes so the closed/open regexes can catch them.
     text = _THINK_ATTR_RE.sub("<think>", text)
     text = _THINK_ATTR_CLOSE_RE.sub("</think>", text)
-    # 处理嵌套块的多遍循环。
+    # Multi-pass for nested blocks.
     prev = None
     out = text
     while prev != out:
@@ -166,7 +166,7 @@ def strip_think(text: str, *, prose: bool = False, prompt_echo: bool = True) -> 
     return out.strip()
 
 
-# 深度研究代码路径的向后兼容别名。保持从
-# `src.research_utils` 的现有导入正常工作，同时委托给中心实现。
+# Back-compat alias for the deep-research code path. Keeps existing imports
+# from `src.research_utils` working while delegating to the central impl.
 def strip_thinking(text: str) -> str:
     return strip_think(text or "", prose=False, prompt_echo=True)

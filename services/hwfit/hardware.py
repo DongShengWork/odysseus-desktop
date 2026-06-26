@@ -27,7 +27,7 @@ _last_gpu_error = None  # set by _detect_nvidia() when nvidia-smi errors (driver
 def _run(cmd):
     try:
         if _remote_host:
-            # 运行 command on remote host via SSH
+            # Run command on remote host via SSH
             if isinstance(cmd, list):
                 cmd_str = shlex.join(str(c) for c in cmd)
             else:
@@ -96,14 +96,14 @@ def _detect_nvidia():
             "nvidia-smi --query-gpu=memory.total,name --format=csv,noheader,nounits'"
         )
     # Last resort: call nvidia-smi by absolute path. Some hosts have a login
-    # shell that isn't bash (or a profile that errors), so the bash -lc 重试
+    # shell that isn't bash (or a profile that errors), so the bash -lc retry
     # above still comes back empty even though the binary is right there.
     # Also handles WSL where nvidia-smi lives at /usr/lib/wsl/lib/ — a path
     # that may not be in the server process's PATH.
     if not out:
         for _p in NVIDIA_PATH_CANDIDATES:
             # Use list form so subprocess.run (local) resolves the absolute path
-            # correctly instead of treating the whole string as an execu表名.
+            # correctly instead of treating the whole string as an executable name.
             if _remote_host:
                 out = _run(f"{_p} --query-gpu=memory.total,name --format=csv,noheader,nounits")
             else:
@@ -126,8 +126,8 @@ def _detect_nvidia():
     gpus = []
     # Devices nvidia-smi lists with a real name but a non-numeric memory.total.
     unified = []
-    # nvidia-smi lists GPUs in 索引 order (0,1,2,...), so the row position is
-    # the CUDA device 索引 we'd pass to CUDA_VISIBLE_DEVICES.
+    # nvidia-smi lists GPUs in index order (0,1,2,...), so the row position is
+    # the CUDA device index we'd pass to CUDA_VISIBLE_DEVICES.
     for idx, line in enumerate(out.strip().split("\n")):
         parts = [p.strip() for p in line.split(",")]
         if len(parts) >= 2:
@@ -337,7 +337,7 @@ def _detect_apple_silicon():
     # the fit bandwidth table keys off of.
     brand = (_run(["sysctl", "-n", "machdep.cpu.brand_string"]) or "Apple Silicon").strip()
 
-    # Total 统一内存 in bytes.
+    # Total unified memory in bytes.
     memsize = _run(["sysctl", "-n", "hw.memsize"])
     try:
         total_gb = int(memsize) / (1024**3) if memsize else 0.0
@@ -377,7 +377,7 @@ def _detect_apple_silicon():
     if gpu_cores is None:
         gpu_cores = _parse_apple_gpu_cores(_run(["system_profiler", "SPDisplaysDataType"]))
 
-    # Usable GPU budget. macOS lets Metal use most of 统一内存, but the
+    # Usable GPU budget. macOS lets Metal use most of unified memory, but the
     # default working-set limit scales with RAM: small machines have to keep
     # more back for the OS + app. These fractions track Apple's
     # recommendedMaxWorkingSetSize defaults across the lineup. Honour an
@@ -506,7 +506,7 @@ def _get_cpu_count():
                 return int(out.strip())
             except ValueError:
                 pass
-        # 回退: count "processor" lines in /proc/cpuinfo
+        # fallback: count "processor" lines in /proc/cpuinfo
         text = _read_file("/proc/cpuinfo")
         if text:
             return sum(1 for line in text.split("\n") if line.startswith("processor"))
@@ -546,7 +546,7 @@ def _detect_windows():
       * remote  -> `_run` ships the string to the host over SSH.
       * local   -> `_run` executes a list argv directly (no shell quoting hell).
     """
-    # Single PowerShell command that gathers all 硬件信息 at once
+    # Single PowerShell command that gathers all hardware info at once
     ps_cmd = (
         """
         $r = @{}
@@ -558,7 +558,7 @@ def _detect_windows():
         $r.cpu_cores = (Get-CimInstance Win32_Processor | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
         $r.arch = $cpu.AddressWidth
         $r.cpu_arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
-        # GPU 检测 via nvidia-smi (fastest) or WMI 回退
+        # GPU detection via nvidia-smi (fastest) or WMI fallback
         try { 
             $nv = nvidia-smi --query-gpu=memory.total,name --format=csv,noheader,nounits 2>$null
             if ($LASTEXITCODE -eq 0 -and $nv) { 
@@ -614,7 +614,7 @@ def _detect_windows():
     try:
         d = _json.loads(out)
         # PowerShell's Measure-Object .Sum / .Count come back as JSON numbers and
-        # 解码 to float; the Linux path returns plain ints for these — coerce
+        # decode to float; the Linux path returns plain ints for these — coerce
         # so the dict shape (and downstream int math) matches across platforms.
         def _as_int(v, default):
             try:
@@ -784,7 +784,7 @@ def detect_system(host="", ssh_port="", platform="", fresh=False):
     _remote_port = ssh_port or None
     _remote_platform = platform or None
 
-    # Windows: single PowerShell command for all 硬件信息
+    # Windows: single PowerShell command for all hardware info
     if _remote_platform == "windows" and _remote_host:
         result = _detect_windows()
         if result:
@@ -862,7 +862,7 @@ def detect_system(host="", ssh_port="", platform="", fresh=False):
             "gpu_vram_gb": None,
             "gpu_count": 0,
             "backend": backend,
-            # 设置 when nvidia-smi exists but failed (e.g. driver/library
+            # Set when nvidia-smi exists but failed (e.g. driver/library
             # version mismatch) — lets the UI say "GPU driver error" instead
             # of the misleading "No GPU".
             "gpu_error": _last_gpu_error,

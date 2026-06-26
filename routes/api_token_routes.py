@@ -1,4 +1,4 @@
-"""API Token 管理路由 — /api/tokens/*。"""
+"""API Token management routes — /api/tokens/*."""
 
 import secrets
 import uuid
@@ -96,7 +96,7 @@ def setup_api_token_routes() -> APIRouter:
             ]
 
     def _invalidate_cache(request: Request):
-        """通知 auth 中间件其缓存的 token 映射已过期。"""
+        """Tell the auth middleware its cached token map is stale."""
         try:
             invalidator = getattr(request.app.state, "invalidate_token_cache", None)
             if invalidator:
@@ -170,10 +170,10 @@ def setup_api_token_routes() -> APIRouter:
                 raise HTTPException(403, "Not your token")
             if isinstance(payload.get("name"), str) and payload["name"].strip():
                 token.name = payload["name"].strip()[:MAX_NAME_LEN]
-            # 仅在调用者实际发送了 权限范围s 参数时才修改。部分更新
-            # 如重命名（{"name": ...} 不含 "权限范围s" 键）必须
-            # 不能静默地将 token 重置为默认 权限范围 — 这会导致
-            # 之前授予的所有 权限范围 被丢弃。
+            # Only touch scopes when the caller actually sent them. A partial
+            # update such as a rename ({"name": ...} with no "scopes" key) must
+            # not silently reset the token to the default scope — that dropped
+            # every previously granted scope.
             if "scopes" in payload:
                 token.scopes = ",".join(_normalize_scopes(payload.get("scopes")))
             db.add(token)

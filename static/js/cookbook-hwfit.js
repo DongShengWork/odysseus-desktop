@@ -34,13 +34,13 @@ import spinnerModule from './spinner.js';
 import { _loadTasks, _tmuxGracefulKill } from './cookbookRunning.js';
 import { openCookbookDependencies } from './cookbook-diagnosis.js';
 
-// Map a serve-后端 code (vllm / sglang / llamacpp) → the package name
-// the Dependencies API reports. Used to look up "is this 后端 installed
+// Map a serve-backend code (vllm / sglang / llamacpp) → the package name
+// the Dependencies API reports. Used to look up "is this backend installed
 // on the target server" before firing a launch.
 const _BACKEND_PKG = { vllm: 'vllm', sglang: 'sglang', llamacpp: 'llama_cpp' };
 
-// Pre-launch: ask the deps API whether the chosen 后端 is present on
-// the target server. 返回 true if it's good to go, false if we should
+// Pre-launch: ask the deps API whether the chosen backend is present on
+// the target server. Returns true if it's good to go, false if we should
 // block and route the user into Dependencies.
 async function _ensureBackendInstalled(runBackend, host, port, envPath, modelName) {
   const pkgName = _BACKEND_PKG[runBackend];
@@ -114,7 +114,7 @@ function _downloadSourceRepo(model, backend) {
 // (possibly different) server, WITHOUT clearing the markup now — clearing it made
 // the buttons flicker out and back in. The old buttons stay visible until the
 // fresh scan returns and swaps them in place. Lives here (not cookbook.js) because
-// _gpuToggleTotal is a module-local binding that can't be reas签名ed by importers.
+// _gpuToggleTotal is a module-local binding that can't be reassigned by importers.
 export function _resetGpuToggleState(clearDismissed = true) {
   if (clearDismissed) {
     _dismissedHwChips = new Set();
@@ -165,7 +165,7 @@ export function _renderGpuToggles(system) {
     _gpuToggleTotal = 0;
     return;
   }
-  // 更新 on every scan that returns a positive total — previously this
+  // Update on every scan that returns a positive total — previously this
    // only set on the first scan, so switching servers (e.g. local 1-GPU
    // first, then a 4-GPU remote) left the Run-panel GPU buttons stuck on
    // the original count. Zero/missing totals still don't clobber a known
@@ -200,7 +200,7 @@ export function _renderGpuToggles(system) {
   const maxGpu = validCounts.length ? validCounts[validCounts.length - 1] : 0;
   // Commit the data layer to maxGpu on initial render so it matches the
   // visual highlight. Before this, _activeCount stayed undefined → no
-  // gpu_count param sent → 后端's 回退 could rank against RAM on
+  // gpu_count param sent → backend's fallback could rank against RAM on
   // mixed-resource boxes ("tightest" sorted by RAM instead of GPU).
   //
   // On boxes where total RAM > total VRAM, default to RAM (count=0) instead
@@ -225,7 +225,7 @@ export function _renderGpuToggles(system) {
   // — the loop above only handles GPU buttons.
   if (container._activeCount === 0) {
     const ramBtn = container.querySelector('.hwfit-gpu-btn[data-count="0"]');
-    // (we just set innerHTML so we re-mark below after as签名ment)
+    // (we just set innerHTML so we re-mark below after assignment)
   }
   container.innerHTML = html;
   if (container._activeCount === 0) {
@@ -281,9 +281,9 @@ export function _renderGpuToggles(system) {
 }
 
 // --- Scan persistence (survives page reloads) ----------------------------
-// The 后端 caches 硬件检测 per host (~30 min) but that's lost on a
-// 服务 restart, and a reload still shows a 加载指示器 while it re-fetches. Cache
-// the last successful /models result per param-签名ature in localStorage so a
+// The backend caches hardware detection per host (~30 min) but that's lost on a
+// service restart, and a reload still shows a spinner while it re-fetches. Cache
+// the last successful /models result per param-signature in localStorage so a
 // reload paints instantly, then we refresh in the background and swap.
 const _SCAN_CACHE_KEY = 'hwfit_scan_cache_v1';
 const _MANUAL_HW_KEY = 'hwfit_manual_hardware_v1';
@@ -448,9 +448,9 @@ function _writeScanCache(sig, data) {
   } catch {}
 }
 
-// 渲染 a clear scan-failure card into the model list: which server failed, the
+// Render a clear scan-failure card into the model list: which server failed, the
 // underlying reason (small), and a Retry button that forces a fresh probe. Used
-// for both the 后端-reported error (SSH/probe failure) and network failures,
+// for both the backend-reported error (SSH/probe failure) and network failures,
 // instead of dumping a raw one-line message.
 function _hwfitShowError(list, host, detail) {
   if (!list) return;
@@ -496,7 +496,7 @@ async function _ensureOllamaLib() {
   return _ollamaLibCache;
 }
 
-// 转换 an Ollama library entry's sizes into per-tag hwfit rows. Shape
+// Convert an Ollama library entry's sizes into per-tag hwfit rows. Shape
 // matches what _hwfitRenderList expects (fit_level, parameter_count,
 // required_gb, score, …) so the rows render identically to HF results.
 function _olParseSize(s) {
@@ -535,7 +535,7 @@ function _ollamaToHwfitRows(libModels, vramAvail, ramAvail) {
         : '?';
       // A modest score so Ollama rows still sort sensibly in the default
       // score view — bigger models get a slightly higher base, but they
-      // always come in below well-scored HF results. 排序 by Fit or VRAM
+      // always come in below well-scored HF results. Sort by Fit or VRAM
       // to surface them more aggressively.
       const score = params ? Math.min(30 + params * 0.3, 60) : 25;
       out.push({
@@ -572,8 +572,8 @@ export async function _hwfitFetch(fresh = false) {
   const hasManualOrDismissed = !!_manualHwState() || _dismissedHwChips.size > 0;
   if (hasManualOrDismissed) fresh = true;
   // Instant paint from the persisted cache (skipped on a forced Rescan), so a
-  // reload shows the last result with no 加载指示器. We still fetch fresh below and
-  // swap it in. If there's no cache hit, fall back to the 加载指示器.
+  // reload shows the last result with no spinner. We still fetch fresh below and
+  // swap it in. If there's no cache hit, fall back to the spinner.
   const _sig = _scanSig();
   const _cached = fresh ? null : _readScanCache(_sig);
   const wp = spinnerModule.createWhirlpool(18);
@@ -587,7 +587,7 @@ export async function _hwfitFetch(fresh = false) {
     }
     _hwfitRenderList(list, _applyEngineFilter(_cached.models));
   } else {
-    // Show 加载指示器 while scanning — stack the 加载指示器 above a text label
+    // Show spinner while scanning — stack the spinner above a text label
     // (the .hwfit-loading class is a centered flex ROW, so force column here).
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'hwfit-loading';
@@ -639,7 +639,7 @@ export async function _hwfitFetch(fresh = false) {
     const sortBy = document.getElementById('hwfit-sort')?.value || 'newest';
     const quantPref = document.getElementById('hwfit-quant')?.value || '';
     const targetCtx = _ctxValue();
-    // 获取 active GPU count from toggles
+    // Get active GPU count from toggles
     const toggleContainer = document.getElementById('hwfit-gpu-toggles');
     let gpuCountOverride = '';
     if (!hasManualOrDismissed && toggleContainer && typeof toggleContainer._activeCount === 'number') {
@@ -669,7 +669,7 @@ export async function _hwfitFetch(fresh = false) {
       if (v !== '') params.set(k, v);
     });
     if (hasManualOrDismissed) params.set('_hw_override_ts', String(Date.now()));
-    // Image models use a separate 仓库/endpoint
+    // Image models use a separate registry/endpoint
     const isImageMode = useCase === 'image_gen';
     if (!isImageMode) {
       if (useCase) params.set('use_case', useCase);
@@ -712,7 +712,7 @@ export async function _hwfitFetch(fresh = false) {
         }
       }
     }
-    // Normalize 镜像 model fields to match LLM renderer expectations
+    // Normalize image model fields to match LLM renderer expectations
     if (isImageMode && data.models) {
       data.models = data.models.map(m => ({
         ...m,
@@ -735,9 +735,9 @@ export async function _hwfitFetch(fresh = false) {
       if (!_cached) { _hwfitShowError(list, remoteHost, data.error); if (hw) hw.innerHTML = ''; }
       return;
     }
-    // 合并 Ollama library rows into the main list so they appear with the
+    // Merge Ollama library rows into the main list so they appear with the
     // same Fit/Param/Quant/VRAM/Mode columns as HF results and respond to the
-    // Engine filter. Skipped in 镜像-gen mode (Ollama doesn't serve diffusers).
+    // Engine filter. Skipped in image-gen mode (Ollama doesn't serve diffusers).
     if (!isImageMode) {
       const _vramAvail = data.system?.gpu_vram_gb || 0;
       const _ramAvail = data.system?.total_ram_gb || 0;
@@ -753,7 +753,7 @@ export async function _hwfitFetch(fresh = false) {
       data.models = (data.models || []).concat(_olFiltered);
     }
     // Tag the cache with the host this scan was for, so downstream
-    // code (_gpuEnvVarName, 后端-aware command builders) can avoid
+    // code (_gpuEnvVarName, backend-aware command builders) can avoid
     // trusting a stale scan when the user switches the server picker
     // to a different target without re-running hwfit.
     _hwfitCache = { ...data, _scannedHost: remoteHost || '' };
@@ -763,7 +763,7 @@ export async function _hwfitFetch(fresh = false) {
     if (!remoteHost && data.system && data.system.platform) {
       _envState.platform = data.system.platform;
     }
-    // 排序 client-side by the active column so the highest↔lowest toggle is
+    // Sort client-side by the active column so the highest↔lowest toggle is
     // deterministic (the previous array .reverse() didn't reliably flip).
     // 1st click on a column = highest first; clicking it again = lowest first.
     if (!isImageMode) {
@@ -804,9 +804,9 @@ export async function _hwfitFetch(fresh = false) {
     _hwfitRenderList(list, _applyEngineFilter(data.models));
     // Persist this result so the next page load can paint it instantly.
     _writeScanCache(_sig, data);
-    // 渲染 GPU toggles — only on first scan (no override active)
+    // Render GPU toggles — only on first scan (no override active)
     if (toggleContainer && !toggleContainer._originalSystem) {
-      // Only trust the 系统信息 if no GPU override was applied
+      // Only trust the system info if no GPU override was applied
       if (toggleContainer._activeCount === undefined) {
         toggleContainer._originalSystem = { ...data.system };
         _renderGpuToggles(toggleContainer._originalSystem);
@@ -820,8 +820,8 @@ export async function _hwfitFetch(fresh = false) {
   }
 }
 
-// 渲染 a non-blocking hardware visibility warning when Cookbook is using
-// 容器-visible hardware that may not match the user's actual host machine.
+// Renders a non-blocking hardware visibility warning when Cookbook is using
+// container-visible hardware that may not match the user's actual host machine.
 function _renderHwVisibilityWarning(sys) {
   const row = document.getElementById('hwfit-hw-row');
   if (!row) return;
@@ -829,7 +829,7 @@ function _renderHwVisibilityWarning(sys) {
   let box = document.getElementById('hwfit-hw-visibility-warning');
 
   // Manual hardware is an explicit user override, so avoid showing stale
-  // 容器-detection warnings once the user has chosen a simulated profile.
+  // container-detection warnings once the user has chosen a simulated profile.
   const warning = sys?.manual_hardware ? null : sys?.hardware_visibility_warning;
 
   if (!warning) {
@@ -896,15 +896,15 @@ function _renderHwVisibilityWarning(sys) {
 
 export function _hwfitRenderHw(el, sys) {
   if (!el || !sys) return;
-  // Cache 系统信息 globally so other modules can read VRAM without refetching
+  // Cache system info globally so other modules can read VRAM without refetching
   try { window._hwfitSystemCache = sys; } catch {}
   // Show the hardware row when we have data
   const hwRow = document.getElementById('hwfit-hw-row');
   if (hwRow) hwRow.style.display = 'flex';
   const gpuCount = sys.gpu_count || 0;
   // gpu_error = nvidia-smi present but failing (e.g. driver/library version
-  // mismatch). Surface it instead of the misleading "No GPU" — 纯文本
-  // label, full error in the 提示.
+  // mismatch). Surface it instead of the misleading "No GPU" — plain text
+  // label, full error in the tooltip.
   // Chip rendering: split into a clickable body (toggle off / on) and a
   // separate × button (fully remove from view + treat as dismissed for
   // ranking). The body's "off" state is just visually dimmed — the
@@ -923,8 +923,8 @@ export function _hwfitRenderHw(el, sys) {
   if (sys.gpu_name) {
     // Mixed-GPU boxes (#711): `${gpuCount}x ${gpu_name}` uses gpus[0].name for
     // every card, so a 4090+3060 reads as "2x RTX 4090". Use gpu_groups (the
-    // 后端 already groups identical cards) to render each pool separately
-    // and put the per-card 索引+VRAM into the 提示 so it's actually
+    // backend already groups identical cards) to render each pool separately
+    // and put the per-card index+VRAM into the tooltip so it's actually
     // useful for picking CUDA_VISIBLE_DEVICES.
     const groups = Array.isArray(sys.gpu_groups) ? sys.gpu_groups : [];
     // Shorten vendor prefixes so a mixed-GPU label fits in the chip row
@@ -1307,7 +1307,7 @@ export function _hwfitRenderList(el, models) {
 // server the user sees selected — defends against the global remoteHost being
 // changed elsewhere (e.g. background serve-task handling) between selecting and
 // clicking, which was sending downloads to the wrong host.
-// 解析 the server the user currently has selected in the scan dropdown and
+// Resolve the server the user currently has selected in the scan dropdown and
 // return its host string (''/local for local). Also mirrors it into _envState
 // for the command preview. The RETURN VALUE is the source of truth passed to
 // the download — never trust _envState.remoteHost downstream (multiple copies).
@@ -1333,7 +1333,7 @@ function _syncHostFromScanDropdown() {
   return host;
 }
 
-// Minimum 后端 version a given model needs. 返回 a semver string like
+// Minimum backend version a given model needs. Returns a semver string like
 // "0.10.0" or null when the model has no known floor. Hardcoded for now —
 // when the vLLM-recipes integration lands we can pull this from the upstream
 // recipe page instead. Keep this conservative: a null return means "any
@@ -1371,7 +1371,7 @@ function _cmpSemver(a, b) {
   return 0;
 }
 
-// Map the detected GPU + the model's quant to SGLang's URL-哈希 params so
+// Map the detected GPU + the model's quant to SGLang's URL-hash params so
 // the cookbook page lands on the right preset. SGLang supports:
 //   hw      = b200 | b300 | gb200 | gb300 | mi300x | mi325x | mi350x | mi355x | h200
 //   quant   = mxfp8 | bf16
@@ -1406,7 +1406,7 @@ export function _expandModelRow(row, modelData) {
   const existingPanel = list.querySelector('.hwfit-action-panel');
   const wasActive = row.classList.contains('hwfit-row-active');
 
-  // 移除 existing panel and active state
+  // Remove existing panel and active state
   if (existingPanel) existingPanel.remove();
   list.querySelectorAll('.hwfit-row-active').forEach(r => r.classList.remove('hwfit-row-active'));
 
@@ -1475,10 +1475,10 @@ export function _expandModelRow(row, modelData) {
       // Don't serve a model that isn't downloaded yet. vLLM/SGLang would
       // background-pull at launch, so the serve task shows up as "running" in
       // the Running tab while nothing is actually served (and llama.cpp just
-      // errors "No GGUF found"). The 配置 button and the Serve tab already
+      // errors "No GGUF found"). The Configure button and the Serve tab already
       // gate on the cached-model list — mirror that here. When the model isn't
       // present, honor the button's "Download" half by kicking off the download
-      // instead, then the user can 运行 again to serve once it finishes.
+      // instead, then the user can Run again to serve once it finishes.
       const _short = modelData.name.split('/').pop();
       const _downloaded = _cachedModelIds && (
         _cachedModelIds.has(modelData.name)
@@ -1520,8 +1520,8 @@ export function _expandModelRow(row, modelData) {
           quickRunBtn.textContent = 'Stopping…';
           for (const t of _activeServes) {
             try {
-              // Use that task's own 停止 button if it's rendered (handles
-              // endpoint 清理, Ollama unload, fade-out). Falls back to
+              // Use that task's own Stop button if it's rendered (handles
+              // endpoint cleanup, Ollama unload, fade-out). Falls back to
               // a direct tmux kill if the Active tab isn't in the DOM yet.
               const _taskEl = document.querySelector(`.cookbook-task[data-task-id="${t.sessionId}"]`);
               const _stopBtn = _taskEl?.querySelector('.cookbook-task-action-stop');
@@ -1548,7 +1548,7 @@ export function _expandModelRow(row, modelData) {
       // detected" is the other common case. Bail with a clear message
       // before kicking off the long install/launch chain — otherwise the
       // user watches `pip install vllm` finish, then sees a cryptic CUDA
-      // error 10 minutes later. (llama.cpp / Ollama have CPU 回退s
+      // error 10 minutes later. (llama.cpp / Ollama have CPU fallbacks
       // so they skip this gate.)
       const _qrBackendDetect = _detectBackend(modelData);
       const _qrRunBackend = _qrBackendDetect.backend || 'vllm';
@@ -1662,7 +1662,7 @@ export function _expandModelRow(row, modelData) {
       const detected = _detectBackend(modelData);
       const runBackend = detected.backend || 'vllm';
 
-      // 构建 serve command
+      // Build serve command
       let cmd = '';
       if (runBackend === 'sglang') {
         cmd = `python3 -m sglang.launch_server --model-path ${modelData.name} --host 0.0.0.0 --port ${port}`;
@@ -1685,7 +1685,7 @@ export function _expandModelRow(row, modelData) {
         cmd += ` --enable-auto-tool-choice --tool-call-parser ${parser}`;
       }
 
-      // 构建 env prefix
+      // Build env prefix
       let envPrefix = '';
       if (_envState.env === 'venv' && _envState.envPath) {
         const p = _envState.envPath;
@@ -1694,13 +1694,13 @@ export function _expandModelRow(row, modelData) {
         envPrefix = 'eval "$(conda shell.bash hook)" && conda activate ' + _shellQuote(_envState.envPath);
       }
 
-      // Launch via serve API. Field names must match the 后端 ServeRequest
+      // Launch via serve API. Field names must match the backend ServeRequest
       // schema (repo_id + cmd) — sending `command`/`model` failed Pydantic
-      // validation (422), which is why 运行 silently did nothing.
+      // validation (422), which is why Run silently did nothing.
       const _srv = _serverByVal(_envState.remoteServerKey || host);
 
-      // Pre-flight: if the 后端 isn't installed on the target server,
-      // route the user into Dependencies → recipe panel for that 后端
+      // Pre-flight: if the backend isn't installed on the target server,
+      // route the user into Dependencies → recipe panel for that backend
       // instead of launching into an obvious "command not found" failure.
       const _ok = await _ensureBackendInstalled(
         runBackend,
@@ -1815,7 +1815,7 @@ export function _hwfitInit() {
       const targetCtx = _ctxValue();
       try { localStorage.setItem(_CTX_KEY, String(targetCtx)); } catch {}
       // Ctx drag affects sort mode: a specific ctx target (anything < Max)
-      // implies "what runs at this 上下文长度" — sort by VRAM ascending
+      // implies "what runs at this context length" — sort by VRAM ascending
       // so the cheapest-fitting models surface first. Dragging back to Max
       // releases the constraint → go back to the default score ranking.
       const sortSel = document.getElementById('hwfit-sort');
@@ -1871,7 +1871,7 @@ export function _hwfitInit() {
   // HF token save is owned by cookbook.js (_wireTabEvents) — do not wire a
   // second change/input handler here. The old duplicate ran after cookbook.js
   // cleared the input on save and overwrote _envState.hfToken with "", so the
-  // 防抖d state sync never persisted the token to cookbook_state.json.
+  // debounced state sync never persisted the token to cookbook_state.json.
 
   // Rebuild all server select dropdowns with current servers
   function _rebuildServerSelect() {
@@ -2058,7 +2058,7 @@ export function _hwfitInit() {
     // twice). Bind each entry exactly once.
     if (entry.dataset.wired) return;
     entry.dataset.wired = '1';
-    // 注入 the status dot once if missing — into the card header next to the
+    // Inject the status dot once if missing — into the card header next to the
     // server name (was previously the first child of the input row).
     const row = entry.querySelector('.cookbook-server-row');
     const titleEl = entry.querySelector('.cookbook-server-title');
@@ -2184,7 +2184,7 @@ export function _hwfitInit() {
         _hwfitFetch();
       });
     }
-    // 保存 button on a brand-new server entry: persist + confirm with a check.
+    // Save button on a brand-new server entry: persist + confirm with a check.
     const saveBtn = entry.querySelector('.cookbook-server-save-btn');
     if (saveBtn && !saveBtn.dataset.bound) {
       saveBtn.dataset.bound = '1';
@@ -2254,7 +2254,7 @@ export function _hwfitInit() {
             if (data.platform) {
               entry.dataset.platform = data.platform;
               _syncServers();
-              // Show platform 徽章
+              // Show platform badge
               const existingBadge = entry.querySelector('.cookbook-platform-badge');
               if (existingBadge) existingBadge.remove();
               const badge = document.createElement('span');
@@ -2360,9 +2360,9 @@ export function _hwfitInit() {
       const list = document.getElementById('cookbook-servers-list');
       if (!list) return;
       const idx = list.children.length;
-      // 构建 the new entry with the SAME template as existing servers (Model
+      // Build the new entry with the SAME template as existing servers (Model
       // Directory header, default checkmark, platform icon) \u2014 isNew swaps the
-      // delete button for a 保存 button. forceRemote keeps it editable.
+      // delete button for a Save button. forceRemote keeps it editable.
       const blank = { host: '', name: '', port: '', env: 'none', envPath: '', platform: '', modelDirs: ['~/.cache/huggingface/hub'] };
       const wrap = document.createElement('div');
       wrap.innerHTML = _serverEntryHtml(blank, idx, _envState.defaultServer || '', true, true);

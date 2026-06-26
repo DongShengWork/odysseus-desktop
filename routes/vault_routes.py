@@ -1,8 +1,8 @@
 """
 vault_routes.py
 
-Vaultwarden / Bitwarden CLI 集成 — 配置和解锁端点。
-将 BW_SESSION 密钥存储在 data/vault.json 中，使用限制性权限。
+Vaultwarden / Bitwarden CLI integration — config and unlock endpoints.
+Stores the BW_SESSION key in data/vault.json with restrictive permissions.
 """
 
 import json
@@ -160,7 +160,7 @@ def setup_vault_routes():
         """Log in to Vaultwarden (required once per account)."""
         require_admin(request)
         cfg = _load_config()
-        # 更新 email
+        # Update email
         cfg["email"] = req.email
         _save_config(cfg)
 

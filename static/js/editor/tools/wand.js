@@ -1,13 +1,13 @@
 /**
- * 魔棒工具 — 在活动图层上单击即可进行泛洪填充选区。
- * Shift/Alt 修饰键会在本次点击期间覆盖持久化的模式
- * 开关（添加 / 减去）。
+ * Magic-wand tool — single-click flood-fill selection on the active
+ * layer's pixels. Shift/Alt modifiers override the persistent mode
+ * toggle for the duration of the click (add / subtract).
  *
- * 在已有选区内无修饰键点击则不选中。
+ * Clicking inside an existing selection with no modifier deselects.
  *
- * 魔棒仅做选区 — 直到用户从面板调用操作（擦除 / 复制等）
- * 才会改变图层。这就是为什么它只有 `click` 处理器
- * 而没有 begin/drag/end。
+ * Wand is selection-only — it doesn't mutate the layer until the user
+ * invokes an action (Erase / Copy / etc.) from the panel. That's why
+ * it has just a `click` handler instead of begin/drag/end.
  *
  * @param {{
  *   activeLayer: () => object | null,
@@ -26,12 +26,12 @@ export function createWandTool({ activeLayer, saveState, composite, wandHits, ru
       const layer = activeLayer();
       if (!layer) return;
       const coords = canvasCoords(e, state.mainCanvas);
-      // 持久化开关设置默认模式；Shift 强制添加，Alt
-      // 强制减去，无论开关状态如何（修饰键始终优先）。
+      // Persistent toggle sets the default mode; Shift forces add, Alt
+      // forces subtract regardless of the toggle (modifiers always win).
       let mode = state.wandMode || 'replace';
       if (e.shiftKey) mode = 'add';
       else if (e.altKey) mode = 'subtract';
-      // 在已有选区内点击且无修饰键 → 取消选中。
+      // Click INSIDE the existing selection with no modifier → deselect.
       if (mode === 'replace' && wandHits(coords.x, coords.y)) {
         saveState();
         state.wandMask = null;

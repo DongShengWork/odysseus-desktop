@@ -52,7 +52,7 @@ def _is_casual_low_signal(text: str) -> bool:
 # module. asyncio only keeps weak references to tasks created via
 # create_task, so without this the GC can collect a task mid-execution and
 # the background work (extraction, auto-naming) silently never runs.
-# Mirrors WebhookManager._spawn_tracked from src/Webhook_manager.py.
+# Mirrors WebhookManager._spawn_tracked from src/webhook_manager.py.
 _BG_TASKS: set[asyncio.Task] = set()
 
 
@@ -64,7 +64,7 @@ def _spawn_bg(coro) -> asyncio.Task:
     return task
 
 
-# ── Data 容器s ────────────────────────────────────────────────────── #
+# ── Data containers ────────────────────────────────────────────────────── #
 
 @dataclass
 class PresetInfo:
@@ -101,7 +101,7 @@ class ChatContext:
     preprocessed: PreprocessedMessage
     # Documents auto-created server-side during preprocess (e.g. when an
     # attached fillable PDF gets rendered into a markdown editor doc).
-    # The chat route emits a doc_update SSE event for each before 流式传输
+    # The chat route emits a doc_update SSE event for each before streaming
     # begins, so the editor pane switches to the new doc immediately.
     auto_opened_docs: list = field(default_factory=list)
 
@@ -171,7 +171,7 @@ def needs_auto_name(name: str) -> bool:
         return True
     if name.startswith("Chat:") or name == "Chat":
         return True
-    # Default 前端 name: "modelname HH:MM:SS AM/PM"
+    # Default frontend name: "modelname HH:MM:SS AM/PM"
     if re.match(r"^.+ \d{1,2}:\d{2}:\d{2}(\s*(AM|PM))?$", name, re.IGNORECASE):
         return True
     return False
@@ -433,7 +433,7 @@ def resolve_session_auth(sess, session_id: str, owner: Optional[str] = None):
             if owner:
                 # Missing headers usually means "recover from the saved endpoint".
                 # Scope that lookup to the session owner, otherwise two users
-                # with similar 端点地址s can borrow each other's API key.
+                # with similar endpoint URLs can borrow each other's API key.
                 from src.auth_helpers import owner_filter
                 q = owner_filter(q, ModelEndpoint, owner)
             for ep in q.all():
@@ -591,10 +591,10 @@ async def build_chat_context(
     # Preset
     preset = extract_preset(chat_handler, preset_id)
 
-    # Preprocess message (CoT, YouTube, VL 镜像s, build content). The
+    # Preprocess message (CoT, YouTube, VL images, build content). The
     # auto_opened_docs collector captures any docs created server-side
     # (e.g. fillable PDF → markdown editor doc) so the chat route can
-    # announce them to the 前端 before 流式传输.
+    # announce them to the frontend before streaming.
     auto_opened_docs: list = []
     preprocessed = await preprocess(
         chat_handler, message, att_ids or [], sess,
@@ -602,14 +602,14 @@ async def build_chat_context(
         allow_tool_preprocessing=allow_tool_preprocessing,
     )
 
-    # 添加 user message to history
+    # Add user message to history
     add_user_message(sess, chat_handler, preprocessed, incognito=incognito)
 
     # Fire events
     if not incognito:
         fire_message_event(request, webhook_manager, session_id, sess, message, compare_mode)
 
-    # 解析 owner-权限范围d prefs/context. Browser requests keep the cookie user;
+    # Resolve owner-scoped prefs/context. Browser requests keep the cookie user;
     # bearer-token chat requests use the token owner instead of the "api" sentinel.
     user = effective_user(request)
     uprefs = load_prefs_for_user(user)
@@ -618,7 +618,7 @@ async def build_chat_context(
     # Memory enabled?
     mem_enabled = not incognito and not no_memory and uprefs.get("memory_enabled", True)
     # Skills injection respects its own enable toggle (mirrors memory_enabled).
-    # When off, the "Available skills" 索引 is not added to the prompt.
+    # When off, the "Available skills" index is not added to the prompt.
     skills_enabled = not incognito and uprefs.get("skills_enabled", True)
     if not allow_tool_preprocessing:
         mem_enabled = False
@@ -631,8 +631,8 @@ async def build_chat_context(
         mem_enabled, user, incognito, no_memory, uprefs.get("memory_enabled", "NOT_SET"),
     )
 
-    # Research-spinoff ("Discuss") sessions are grounded on the 随机种子ed report:
-    # the primer system message IS the 知识库. 注入ing global memory
+    # Research-spinoff ("Discuss") sessions are grounded on the seeded report:
+    # the primer system message IS the knowledge base. Injecting global memory
     # or personal-doc RAG on every turn pulls in keyword-matched but off-topic
     # facts ("wrong data") and competes with the report, so suppress both here.
     is_research_spinoff = _session_is_research_spinoff(sess)
@@ -647,7 +647,7 @@ async def build_chat_context(
     # If pre-fetched search context was provided (compare mode), skip live web search
     skip_web = bool(search_context) or not allow_tool_preprocessing or casual_low_signal
 
-    # 构建 context preface
+    # Build context preface
     # The stream path uses enhanced_message (with CoT/preprocessing applied),
     # the sync path uses text_for_context.
     _ctx_msg = preprocessed.enhanced_message if use_enhanced_message else preprocessed.text_for_context
@@ -671,7 +671,7 @@ async def build_chat_context(
     # Capture used memories immediately
     used_memories = getattr(chat_processor, '_last_used_memories', [])
 
-    # 注入 pre-fetched search context (compare mode)
+    # Inject pre-fetched search context (compare mode)
     if search_context and allow_tool_preprocessing and not casual_low_signal:
         preface.append(untrusted_context_message("prefetched search context", search_context))
 
@@ -689,14 +689,14 @@ async def build_chat_context(
     if norm:
         sess.model = norm
 
-    # 构建 messages
+    # Build messages
     messages = preface + sess.get_context_messages()
 
     # Current date/time — injected as a standalone *user*-role context message
     # placed immediately before the latest user turn, NOT folded into the
-    # 系统提示. Its text changes every minute, and local OpenAI-compatible
-    # 后端s (llama.cpp / LM Studio) key their KV-cache prefix off the
-    # system message byte-for-byte; mixing ever-changing 时间戳 text into
+    # system prompt. Its text changes every minute, and local OpenAI-compatible
+    # backends (llama.cpp / LM Studio) key their KV-cache prefix off the
+    # system message byte-for-byte; mixing ever-changing timestamp text into
     # it would invalidate the cached prefix on every request (issue #2927).
     # Placing it at the tail also keeps it out of the stable
     # preface+history prefix, so that prefix stays byte-identical turn over
@@ -772,7 +772,7 @@ def _normalize_thinking(text: str) -> str:
     )
     thinking_prefix_re = re.compile(r'^thinking(?:\s+process)?\s*:\s*', re.IGNORECASE)
 
-    # 处理 garbled <think> tags: reasoning text followed by <think> as separator
+    # Handle garbled <think> tags: reasoning text followed by <think> as separator
     # e.g. "The user said...I should respond.\n<think>Hey! What's up?"
     garbled = re.match(
         r'^([\s\S]+?)\n*<think(?:ing)?>\s*([\s\S]*?)(?:</think(?:ing)?>)?\s*$',
@@ -881,7 +881,7 @@ def _extract_thinking_meta(text: str) -> dict | None:
     text = normalize_thinking_markup(text)
     normalized_changed = text != original_text
 
-    # 检查 for <think> tags (native or injected)
+    # Check for <think> tags (native or injected)
     time_match = re.search(r'<think(?:ing)?\s+time="([\d.]+)"', text)
     think_time = time_match.group(1) if time_match else None
     # Strip time attr for parsing
@@ -975,7 +975,7 @@ def save_assistant_response(
     if tool_events:
         md["tool_events"] = tool_events
 
-    # 提取 thinking into metadata (don't pollute message content with <think> tags)
+    # Extract thinking into metadata (don't pollute message content with <think> tags)
     _think_info = _extract_thinking_meta(full_response)
     if _think_info:
         if _think_info.get("thinking"):
@@ -992,7 +992,7 @@ def save_assistant_response(
         update_session_last_accessed(session_id)
         session_manager.save_sessions()
 
-    # 返回 the persisted message's DB id so the stream can wire it onto the
+    # Return the persisted message's DB id so the stream can wire it onto the
     # freshly-rendered bubble — lets the user edit/delete a just-streamed reply
     # without reloading. Incognito returns None: those messages are ephemeral,
     # so we don't hand out an edit/delete handle for them.
@@ -1012,7 +1012,7 @@ def _is_session_stream_active(session_id: str) -> bool:
     """Best-effort check for "is a chat completion currently streaming for
     this session?" — used to keep background extraction from overlapping a
     main completion and competing for the local backend's processing slots
-(issue #2927). Lazily imports the route module's live 仓库 to avoid
+    (issue #2927). Lazily imports the route module's live registry to avoid
     a circular import (chat_routes imports this module at load time)."""
     try:
         from routes import chat_routes as _cr

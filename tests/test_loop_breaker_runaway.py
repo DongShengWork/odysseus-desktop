@@ -3,10 +3,9 @@
 A legitimate batch of DISTINCT tool calls (e.g. creating 18 calendar events at
 once) must not be flagged as a runaway loop. Only the SAME exact call repeated
 an absurd number of times is a real runaway. Previously the backstop counted
-per-tool-type totals, so any batch of >=20 distinct calls to one tool was
+per-tool-type totals, so any batch of >=15 distinct calls to one tool was
 aborted and the calls were silently discarded.
 """
-
 import sys
 import collections
 from unittest.mock import MagicMock
@@ -43,12 +42,12 @@ def test_many_distinct_same_tool_is_not_runaway():
 
 
 def test_identical_call_repeated_is_runaway():
-    sigs = ['manage_calendar:{"action":"list_events"}'] * 20
+    sigs = ['manage_calendar:{"action":"list_events"}'] * 15
     assert _detect_runaway_call(_freq(sigs)) == 'manage_calendar'
 
 
 def test_below_threshold_is_not_runaway():
-    sigs = ['bash:ls'] * 19
+    sigs = ['bash:ls'] * 14
     assert _detect_runaway_call(_freq(sigs)) is None
 
 

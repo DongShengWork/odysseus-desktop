@@ -1,12 +1,12 @@
-"""管理员危险区域 — 按类别清理数据。
+"""Admin Danger Zone — per-category wipes.
 
-每个端点仅限管理员访问，精确截断一个数据域，
-用户可以按需重置记忆/技能/笔记等，而不会一键清空所有数据。
-`chats` 端点统一映射到已有的 /api/sessions/all，
-使危险区域遵循一致的 URL 模式。
+Each endpoint is admin-only and truncates exactly one domain so the
+user can selectively reset memory / skills / notes / etc. without
+nuking everything. The catch-all `chats` endpoint mirrors the
+existing /api/sessions/all so the Danger Zone speaks one URL pattern.
 
-URL 格式: DELETE /api/admin/wipe/{kind}
-类别: chats, memory, skills, notes, tasks, documents, gallery, calendar。
+URL shape: DELETE /api/admin/wipe/{kind}
+Kinds: chats, memory, skills, notes, tasks, documents, gallery, calendar.
 """
 
 import json
@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 
 def _wipe_memory_files():
-    """清空 memory.json + 删除每个用户的整理状态附属文件，
-    避免下次审计时对已删除的记忆做差异比较。"""
+    """Blank memory.json + drop the per-owner tidy-state sidecar so the
+    next audit doesn't try to diff against gone memories."""
     for name in ("memory.json", "memory_tidy_state.json"):
         p = os.path.join(DATA_DIR, name)
         if not os.path.exists(p):
@@ -54,7 +54,7 @@ def _wipe_memory_files():
 
 
 def _rmtree_quiet(path: str):
-    """rmtree，路径不存在时不报错。"""
+    """rmtree that doesn't crash if the path doesn't exist."""
     if os.path.isdir(path):
         try:
             shutil.rmtree(path)
@@ -91,9 +91,9 @@ def setup_admin_wipe_routes(session_manager):
                 db.query(Memory).delete()
                 db.commit()
                 _wipe_memory_files()
-                # Drop the 向量存储 too so 语义搜索 doesn't
+                # Drop the vector store too so semantic search doesn't
                 # return ghosts. Lazy import — chromadb may not be
-                # initialised in every 部署.
+                # initialised in every deployment.
                 try:
                     from src.memory_vector import get_memory_vector_store
                     mv = get_memory_vector_store()
@@ -114,7 +114,7 @@ def setup_admin_wipe_routes(session_manager):
                     for _, _, files in os.walk(skills_dir):
                         count += sum(1 for f in files if f == "SKILL.md")
                     _rmtree_quiet(skills_dir)
-                # Legacy 回退 file
+                # Legacy fallback file
                 legacy = SKILLS_FILE
                 if os.path.exists(legacy):
                     try:
@@ -130,7 +130,7 @@ def setup_admin_wipe_routes(session_manager):
                 return {"status": "deleted", "kind": kind, "count": count}
 
             if kind == "tasks":
-                # Task运行 rows reference tasks via FK — clear them first.
+                # TaskRun rows reference tasks via FK — clear them first.
                 db.query(TaskRun).delete()
                 count = db.query(ScheduledTask).count()
                 db.query(ScheduledTask).delete()

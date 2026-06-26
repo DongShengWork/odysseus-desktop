@@ -99,15 +99,15 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     async def first_run_setup(body: SetupRequest, request: Request):
         """Create initial admin account. Only works if no accounts exist."""
         if not _setup_limiter.check(request.client.host):
-            raise HTTPException(429, "请求过于频繁，请稍后再试")
+            raise HTTPException(429, "Too many requests — try again later")
         if auth_manager.is_configured:
             raise HTTPException(400, "Already configured")
         if len(body.password) < PASSWORD_MIN_LENGTH:
-            raise HTTPException(400, f"密码长度至少需要 {PASSWORD_MIN_LENGTH} 个字符")
+            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
         if len(body.username.strip()) < 1:
-            raise HTTPException(400, "用户名为必填项")
+            raise HTTPException(400, "Username is required")
         if body.username.lower() in RESERVED_USERNAMES:
-            raise HTTPException(403, "该用户名已被系统保留")
+            raise HTTPException(403, "Username is reserved")
         ok = await asyncio.to_thread(auth_manager.setup, body.username, body.password)
         if not ok:
             raise HTTPException(500, "Setup failed")
@@ -117,41 +117,41 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     async def signup(body: SignupRequest, request: Request):
         """Create a new user account. Only works if signup is enabled by admin."""
         if not _signup_limiter.check(request.client.host):
-            raise HTTPException(429, "请求过于频繁，请稍后再试")
+            raise HTTPException(429, "Too many requests — try again later")
         if not auth_manager.is_configured:
-            raise HTTPException(400, "请先完成初始设置")
+            raise HTTPException(400, "Run setup first")
         if not auth_manager.signup_enabled:
-            raise HTTPException(403, "注册已关闭，请联系管理员获取账号。")
+            raise HTTPException(403, "Registration is disabled. Ask an admin for an account.")
         if len(body.password) < PASSWORD_MIN_LENGTH:
-            raise HTTPException(400, f"密码长度至少需要 {PASSWORD_MIN_LENGTH} 个字符")
+            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
         if len(body.username.strip()) < 1:
-            raise HTTPException(400, "用户名为必填项")
+            raise HTTPException(400, "Username is required")
         if body.username.lower() in RESERVED_USERNAMES:
-            raise HTTPException(403, "该用户名已被系统保留")
+            raise HTTPException(403, "Username is reserved")
         ok = await asyncio.to_thread(auth_manager.create_user, body.username, body.password, is_admin=False)
         if not ok:
-            raise HTTPException(409, "用户名已被占用")
+            raise HTTPException(409, "Username already taken")
         return {"ok": True, "message": "Account created"}
 
     @router.post("/login")
     async def login(body: LoginRequest, request: Request, response: Response):
         if not _login_limiter.check(request.client.host):
-            raise HTTPException(429, "请求过于频繁，请稍后再试")
+            raise HTTPException(429, "Too many requests — try again later")
         # Verify password first
         username = body.username.strip().lower()
         if not await asyncio.to_thread(auth_manager.verify_password, username, body.password):
-            raise HTTPException(401, "凭证无效")
-        # 检查 2FA if enabled
+            raise HTTPException(401, "Invalid credentials")
+        # Check 2FA if enabled
         if auth_manager.totp_enabled(username):
             if not body.totp_code:
                 # Password OK but need TOTP — tell client to show code input
                 return {"ok": False, "requires_totp": True, "username": username}
             if not auth_manager.totp_verify(username, body.totp_code):
-                raise HTTPException(401, "2FA 验证码无效")
+                raise HTTPException(401, "Invalid 2FA code")
         # All checks passed — create session (password already verified above)
         token = await asyncio.to_thread(auth_manager.create_session_trusted, username)
         if not token:
-            raise HTTPException(401, "凭证无效")
+            raise HTTPException(401, "Invalid credentials")
         cookie_kwargs = dict(
             key=SESSION_COOKIE,
             value=token,
@@ -178,7 +178,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         token = request.cookies.get(SESSION_COOKIE)
         result = auth_manager.status(token)
         result["signup_enabled"] = auth_manager.signup_enabled
-        # Include the caller's effective privileges so the 前端 can
+        # Include the caller's effective privileges so the frontend can
         # hide / dim UI controls the user isn't allowed to use. Admins get
         # ADMIN_PRIVILEGES (everything on), regular users get their stored
         # set merged with DEFAULT_PRIVILEGES.
@@ -199,13 +199,13 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     async def change_password(body: ChangePasswordRequest, request: Request):
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "未登录")
+            raise HTTPException(401, "Not authenticated")
         if len(body.new_password) < PASSWORD_MIN_LENGTH:
-            raise HTTPException(400, f"密码长度至少需要 {PASSWORD_MIN_LENGTH} 个字符")
+            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
         current_token = request.cookies.get(SESSION_COOKIE)
         ok = await asyncio.to_thread(auth_manager.change_password, user, body.current_password, body.new_password)
         if not ok:
-            raise HTTPException(400, "当前密码错误")
+            raise HTTPException(400, "Current password is incorrect")
         await asyncio.to_thread(auth_manager.revoke_user_sessions, user, current_token)
         return {"ok": True}
 
@@ -218,14 +218,14 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         """Generate a TOTP secret and return the QR code URI."""
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "未登录")
+            raise HTTPException(401, "Not authenticated")
         if auth_manager.totp_enabled(user):
             raise HTTPException(400, "2FA is already enabled")
         secret = auth_manager.totp_generate_secret(user)
         if not secret:
             raise HTTPException(500, "Failed to generate secret")
         uri = auth_manager.totp_get_provisioning_uri(user, secret)
-        # 生成 QR code as base64 PNG
+        # Generate QR code as base64 PNG
         import qrcode, io, base64
         qr = qrcode.make(uri, box_size=6, border=2)
         buf = io.BytesIO()
@@ -241,9 +241,9 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         """Verify a TOTP code to confirm 2FA setup. Returns backup codes."""
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "未登录")
+            raise HTTPException(401, "Not authenticated")
         if not auth_manager.totp_confirm_enable(user, body.code):
-            raise HTTPException(400, "验证码无效，请重试")
+            raise HTTPException(400, "Invalid code — try again")
         backup = auth_manager.users.get(user, {}).get("totp_backup_codes", [])
         return {"ok": True, "backup_codes": backup}
 
@@ -255,9 +255,9 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         """Disable 2FA. Requires password confirmation."""
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "未登录")
+            raise HTTPException(401, "Not authenticated")
         if not auth_manager.totp_disable(user, body.password):
-            raise HTTPException(400, "密码错误")
+            raise HTTPException(400, "Invalid password")
         return {"ok": True}
 
     @router.get("/2fa/status")
@@ -265,7 +265,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         """Check if 2FA is enabled for the current user."""
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "未登录")
+            raise HTTPException(401, "Not authenticated")
         return {"enabled": auth_manager.totp_enabled(user)}
 
     # Admin-only routes
@@ -282,14 +282,14 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
         if len(body.password) < PASSWORD_MIN_LENGTH:
-            raise HTTPException(400, f"密码长度至少需要 {PASSWORD_MIN_LENGTH} 个字符")
+            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
         if len(body.username.strip()) < 1:
-            raise HTTPException(400, "用户名为必填项")
+            raise HTTPException(400, "Username is required")
         if body.username.lower() in RESERVED_USERNAMES:
-            raise HTTPException(403, "该用户名已被系统保留")
+            raise HTTPException(403, "Username is reserved")
         ok = auth_manager.create_user(body.username, body.password, body.is_admin)
         if not ok:
-            raise HTTPException(409, "用户名已被占用")
+            raise HTTPException(409, "Username already taken")
         return {"ok": True}
 
     @router.put("/users/{username}/privileges")
@@ -317,7 +317,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if old_username not in auth_manager.users:
             raise HTTPException(404, "User not found")
         if new_username in auth_manager.users:
-            raise HTTPException(409, "用户名已被占用")
+            raise HTTPException(409, "Username already taken")
 
         # Gate on auth first. Every mutation below is contingent on this
         # succeeding — doing it last meant a rejected rename (e.g. reserved
@@ -329,7 +329,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
         def _rollback_auth_rename() -> bool:
             # On self-rename the admin session has already moved to the new
-            # username, so the 回滚 must authenticate as the new user.
+            # username, so the rollback must authenticate as the new user.
             rollback_user = new_username if user == old_username else user
             try:
                 return bool(auth_manager.rename_user(new_username, old_username, rollback_user))
@@ -341,8 +341,8 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                 return False
 
         # Usernames are ownership keys for user data. Rename the common
-        # owner-权限范围d DB rows so the account keeps access to its sessions,
-        # docs, 邮件账户s, tasks, etc.
+        # owner-scoped DB rows so the account keeps access to its sessions,
+        # docs, email accounts, tasks, etc.
         try:
             from sqlalchemy import func
             from core.database import Base, SessionLocal
@@ -390,7 +390,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             logger.warning("Failed to rename user prefs %s -> %s: %s", old_username, new_username, e)
 
         # In-flight deep-research tasks live in the process-local
-        # ResearchHandler 仓库. They are not covered by the persisted JSON
+        # ResearchHandler registry. They are not covered by the persisted JSON
         # migration above, but the research routes filter and cancel by this
         # owner field while the job is running. Do this before sweeping
         # completed JSON files so a job that finishes during the rename saves
@@ -439,7 +439,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             logger.warning("Failed to rename memory.json owner references %s -> %s: %s", old_username, new_username, e)
 
         # uploads.json: upload rows use owner metadata for access checks and
-        # owner-prefixed 索引 keys for dedupe. Rename both so attachments keep
+        # owner-prefixed index keys for dedupe. Rename both so attachments keep
         # resolving after the account username changes.
         try:
             upload_handler = getattr(request.app.state, "upload_handler", None)
@@ -518,7 +518,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
         # The owner-rename loop above updated ApiToken.owner in the DB, but the
         # bearer-token cache still maps each token to the OLD owner. Without
-        # refreshing it, the renamed user's API 令牌s resolve to the old (now
+        # refreshing it, the renamed user's API tokens resolve to the old (now
         # non-existent) owner and stop reaching their data until the cache next
         # goes dirty. Invalidate it now, like the token CRUD routes do.
         invalidator = getattr(request.app.state, "invalidate_token_cache", None)
@@ -673,7 +673,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     # ---- Integrations CRUD ----
 
-    # 运行 migration on startup
+    # Run migration on startup
     migrate_from_settings()
 
     @router.get("/integrations")
@@ -683,7 +683,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
         items = load_integrations()
-        # Mask API keys for 前端 display
+        # Mask API keys for frontend display
         safe = [mask_integration_secret(item) for item in items]
         return {"integrations": safe}
 
@@ -738,7 +738,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
         # ntfy is special: a GET / proves the server is reachable but
         # publishes nothing, so the user has no way to know whether
-        # subscribers will actually receive 通知s. Instead, do
+        # subscribers will actually receive notifications. Instead, do
         # the real thing — POST a one-line "connectivity test" message
         # to the topic the Reminders panel is configured to use. If the
         # subscriber app is wired up correctly, this is what the green
@@ -747,7 +747,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             import httpx
             from urllib.parse import urlparse
             # Strip any path/query the user accidentally pasted in the
-            # 基础地址 (e.g. `http://host:8091/odysseus`) — otherwise
+            # base URL (e.g. `http://host:8091/odysseus`) — otherwise
             # the topic gets appended after the path and we publish to
             # `/odysseus/odysseus` (which ntfy 404s on). ntfy itself
             # only ever serves from the root.

@@ -122,7 +122,7 @@ async function _runNow(id, force = false) {
     method: 'POST', credentials: 'same-origin',
   });
   if (!res.ok) {
-    // Surface the 后端's actual reason — 409 means "already running",
+    // Surface the backend's actual reason — 409 means "already running",
     // 404 task missing, etc. Previously every error rendered as the same
     // generic "Failed to trigger task", which hid the cause.
     let msg = `Failed to trigger task (${res.status})`;
@@ -341,9 +341,9 @@ const _TASK_ICONS = {
   audit_skills:        '<path d="M9 11l3 3L22 4"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v15H6.5A2.5 2.5 0 0 0 4 19.5z"/>',
   // Assistant
   daily_brief:         '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-  // Generic action 回退 (gear)
+  // Generic action fallback (gear)
   _action_default:     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
-  // LLM task 回退 (chat bubble)
+  // LLM task fallback (chat bubble)
   _llm_default:        '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
 };
 
@@ -489,7 +489,7 @@ function _getDatePickerValue(containerId) {
   return new Date(y, m, d);
 }
 
-// ---- 渲染 ----
+// ---- Render ----
 
 const _CATEGORY_MAP = {
   // action -> category
@@ -632,7 +632,7 @@ function _renderList() {
   const list = document.getElementById('tasks-list');
   if (!list) return;
   list.innerHTML = '';
-  // Sync the count 徽章s (tab + header).
+  // Sync the count badges (tab + header).
   const _tabCount = document.getElementById('tasks-tab-count');
   if (_tabCount) _tabCount.textContent = _tasks.length;
   const _headCount = document.getElementById('tasks-head-count');
@@ -652,7 +652,7 @@ function _renderList() {
 
   _renderTaskChips();
 
-  // 过滤 by the active category tag + search query, then flatten into one
+  // Filter by the active category tag + search query, then flatten into one
   // list (the tag chips replace the old per-category collapsible headers).
   const q = _taskSearch.trim().toLowerCase();
   const visible = _tasks.filter(t => {
@@ -709,7 +709,7 @@ function _renderList() {
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const items = [];
-      // 运行 now stays in the kebab too (alongside the new 运行 button on the
+      // Run now stays in the kebab too (alongside the new Run button on the
       // card) for users coming from muscle-memory / mobile long-press.
       if (task.status !== 'completed') items.push({ label: 'Run now', icon: '<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>', action: () => _doRunNow(task.id) });
       items.push({ label: 'Edit', icon: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>', action: () => _showForm(task) });
@@ -726,7 +726,7 @@ function _renderList() {
       _showTaskDropdown(menuBtn, items);
     });
     actionsWrap.appendChild(menuBtn);
-    // 运行 now — promoted out of the kebab onto the card itself for one-click
+    // Run now — promoted out of the kebab onto the card itself for one-click
     // manual triggering. Hidden for completed tasks (same gate as before).
     if (task.status !== 'completed') {
       const runBtn = document.createElement('button');
@@ -849,7 +849,7 @@ function _renderList() {
   // flag here OR in the early-return branches above so subsequent re-renders
   // (search, filter, edit) don't replay it. Note: opening with 0 tasks AND
   // hitting the early-return ALSO clears the flag, so creating a first task
-  // afterwards won't replay the cascade — keeps the entrance 权限范围d to the
+  // afterwards won't replay the cascade — keeps the entrance scoped to the
   // very first render of the panel.
   if (_tasksCascadeNext && list.children.length) {
     list.classList.remove('tasks-just-opened');
@@ -898,7 +898,7 @@ function _attachTaskLongPress(card, menuBtn) {
 }
 
 function _showTaskDropdown(anchor, items) {
-  // 移除 any existing dropdown
+  // Remove any existing dropdown
   document.querySelectorAll('.task-dropdown').forEach(d => d.remove());
   const dd = document.createElement('div');
   dd.className = 'task-dropdown';
@@ -1182,7 +1182,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
         </div>
       `;
 
-      // 构建 time picker
+      // Build time picker
       let initH = 9, initM = 0;
       if (existing && existing.scheduled_time) {
         const [uh, um] = existing.scheduled_time.split(':').map(Number);
@@ -1337,7 +1337,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
   });
 
   // Populate model dropdown from /api/models. Value is "endpoint_url::model"
-  // so a single field 编码s both the model name and which endpoint to call.
+  // so a single field encodes both the model name and which endpoint to call.
   // Blank value (option 0) = inherit session default.
   fetch(`${API_BASE}/api/models`, { credentials: 'same-origin' })
     .then(r => r.json())
@@ -1392,7 +1392,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
     _switchTab('tasks');
   });
 
-  // Esc on the form goes back to the 添加 tab's preset picker (not the Tasks
+  // Esc on the form goes back to the Add tab's preset picker (not the Tasks
   // tab — Cancel handles that). Capture-phase + stopImmediatePropagation so
   // app.js's generic modal-dismiss doesn't close the whole Tasks window first.
   if (window._tasksFormEsc) document.removeEventListener('keydown', window._tasksFormEsc, true);
@@ -1516,7 +1516,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
       payload.trigger_event = evSel.value;
       payload.trigger_count = parseInt(countInput?.value || '5', 10);
     }
-    // Webhook: no extra fields needed, token is auto-generated server-side
+    // webhook: no extra fields needed, token is auto-generated server-side
 
     try {
       // Edit only when we have a real existing task (has an id). A draft
@@ -1536,7 +1536,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
   });
 }
 
-// ---- 运行 History ----
+// ---- Run History ----
 
 async function _showRunHistory(taskId, taskName) {
   _viewingRuns = taskId;
@@ -1620,9 +1620,9 @@ async function _doRunNow(id, force = false) {
     await _runNow(id, force);
     if (uiModule) uiModule.showToast(force ? 'Task triggered in parallel' : 'Task triggered');
   } catch (e) {
-    // Mirror the polling 通知 surface so the user sees the same kind
+    // Mirror the polling notification surface so the user sees the same kind
     // of feedback they get for finished/failed tasks — a real browser
-    // Notification when permission is granted, 提示条 回退 otherwise.
+    // Notification when permission is granted, toast fallback otherwise.
     const msg = e.message || 'Failed to trigger task';
     let fired = false;
     try {
@@ -1798,7 +1798,7 @@ async function _renderActivityView() {
 
   const _matchesSolo = (e) => {
     // Notification rows are intentionally hidden from the default "All" view —
-    // they're surfaced via the dedicated "通知s" chip so the noisy
+    // they're surfaced via the dedicated "notifications" chip so the noisy
     // alert stream doesn't drown the rest of the activity.
     if (!_solo) return !_isNotification(e);
     if (_solo === 'notifications') return _isNotification(e);
@@ -1827,7 +1827,7 @@ async function _renderActivityView() {
   const _buildChips = () => {
     const chipBar = document.getElementById('tasks-activity-chips');
     if (!chipBar) return;
-    // Distinct categories present (excluding 通知s — those have their
+    // Distinct categories present (excluding notifications — those have their
     // own chip and are hidden from the default view).
     const cats = [];
     for (const e of _activityEntries) {
@@ -1836,8 +1836,8 @@ async function _renderActivityView() {
       if (!cats.includes(c)) cats.push(c);
     }
     const hasErrors = _activityEntries.some(e => !_isNotification(e) && _entryStatus(e) === 'error');
-    // Count 通知s that would actually display under the chip — applies
-    // the active search query so the 徽章 matches what you'd see, not a
+    // Count notifications that would actually display under the chip — applies
+    // the active search query so the badge matches what you'd see, not a
     // misleading total.
     const _q = _afQuery.trim().toLowerCase();
     const notifCount = _activityEntries.filter(e =>
@@ -1967,7 +1967,7 @@ function _stackActivityEntries(entries) {
   return out;
 }
 
-// "5s" / "1m 23s" / "2h 14m" — same compact ladder the activity 时间戳s use.
+// "5s" / "1m 23s" / "2h 14m" — same compact ladder the activity timestamps use.
 function _fmtElapsed(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   if (s < 60) return s + 's';
@@ -2007,13 +2007,13 @@ function _tickActivityTimers(root) {
 // Wire row interactions: expand toggle + "Open in chat".
 function _wireActivityRows(list) {
   // Replace the [data-spin-here] placeholders in running/queued rows with the
-  // app's whirlpool 加载指示器 element (createElement, with a stop hook so the
+  // app's whirlpool spinner element (createElement, with a stop hook so the
   // poll's next render clears them cleanly).
   list.querySelectorAll('[data-spin-here]').forEach(slot => {
     try {
       const wp = spinnerModule.createWhirlpool(12);
       // Right-side placement (next to the "Running" label) — small left
-      // margin to separate from the text, no right margin so the 加载指示器
+      // margin to separate from the text, no right margin so the spinner
       // sits flush with the row's right edge.
       wp.element.style.cssText = 'display:inline-flex;width:12px;height:12px;margin:0 0 0 6px;vertical-align:middle;';
       slot.replaceWith(wp.element);
@@ -2123,8 +2123,8 @@ async function _openResultInChat(entry) {
       } catch (_) {}
     }
     if (!url) {
-      // Skip 嵌入/tts/whisper/moderation/镜像 models — they can't chat,
-      // and an endpoint may list one first (e.g. text-嵌入-ada-002).
+      // Skip embedding/tts/whisper/moderation/image models — they can't chat,
+      // and an endpoint may list one first (e.g. text-embedding-ada-002).
       const _isChatModel = (m) => {
         const l = (m || '').toLowerCase();
         return !!l && !['text-embedding', 'embedding', 'tts-', 'whisper', 'text-moderation', 'moderation-', 'dall-e', 'rerank'].some(p => l.includes(p));
@@ -2178,7 +2178,7 @@ function _classifyResult(text) {
 }
 
 // Category → fixed hue. Anything that doesn't match a keyword gets a stable
-// hue derived from the task name's 哈希, so a recurring custom task keeps
+// hue derived from the task name's hash, so a recurring custom task keeps
 // the same color from one run to the next.
 const _CATEGORY_HUES = [
   { hue: 210, kw: /\b(email|inbox|mail|smtp|imap|reply|summary|spam|urgency)\b/i },     // blue   — email
@@ -2223,8 +2223,8 @@ function _categoryLabel(taskName) {
 }
 
 function _renderActivityEntry(entry) {
-  // Canonical 索引 into _activityEntries (map() passes the FILTERED
-  // 索引, which would be wrong) — used by the Open-in-chat handler.
+  // Canonical index into _activityEntries (map() passes the FILTERED
+  // index, which would be wrong) — used by the Open-in-chat handler.
   const entryIdx = Number.isInteger(entry.sourceIdx) ? entry.sourceIdx : _activityEntries.indexOf(entry);
   const repeatBadge = entry.repeatCount > 1
     ? `<span class="task-log-repeat" title="${entry.repeatCount} similar activity rows">+${entry.repeatCount - 1} repeats</span>`
@@ -2248,7 +2248,7 @@ function _renderActivityEntry(entry) {
   const failedTag = status === 'error'
     ? '<span class="task-log-failed-tag">(failed)</span>'
     : '';
-  // 渲染 the result through markdown so 代码块s, lists, links look right.
+  // Render the result through markdown so code blocks, lists, links look right.
   let resultHtml;
   const _isRunning = entry.status === 'running' || entry.status === 'queued';
   // Skipped (noop) rows: render as a slim, dimmed one-liner — no body, no
@@ -2271,7 +2271,7 @@ function _renderActivityEntry(entry) {
   {
     const tagRe = /(^|<p>|<br\s*\/?>|\n)\[([^\]\n<>]{1,40})\]\s*/g;
     const replaceTags = (s) => s.replace(tagRe, '$1<span class="task-log-account-tag">$2</span> ');
-    // 分割 on whole <pre>...</pre> blocks (greedy match per block); only
+    // Split on whole <pre>...</pre> blocks (greedy match per block); only
     // transform the outside-of-pre segments. Then do the same for any stray
     // inline <code>...</code> spans inside the surviving outside text.
     const parts = resultHtml.split(/(<pre[\s\S]*?<\/pre>)/i);
@@ -2330,7 +2330,7 @@ function _renderActivityEntry(entry) {
        </button>`;
   }
   // Running rows replace the relative-time on the right with "Running NN" + a
-  // live whirlpool 加载指示器. Queued shows "Queued" the same way (no timer —
+  // live whirlpool spinner. Queued shows "Queued" the same way (no timer —
   // hasn't actually started yet). The elapsed counter ticks every second via
   // `_startActivityTimers` after the row is in the DOM.
   let rightHtml;
@@ -2408,7 +2408,7 @@ async function _aiDraftTask(inputEl, btnEl) {
   btnEl.disabled = true;
   btnEl.classList.add('spinning');
   btnEl.textContent = '';
-  // Match the Tidy buttons' silent whirlpool 加载指示器.
+  // Match the Tidy buttons' silent whirlpool spinner.
   const _sp = spinnerModule.create('', 'clean', 'whirlpool');
   const _spEl = _sp.createElement();
   _spEl.style.position = 'relative';
@@ -2605,7 +2605,7 @@ export function openTasks(focusId, opts) {
       }
       // If we're on the "Add" tab inside the new-task form (preset already
       // picked), step back to the preset picker instead of closing the modal.
-      // Detect by: 添加 tab active + the form's name input is mounted.
+      // Detect by: Add tab active + the form's name input is mounted.
       const _modal = document.getElementById('tasks-modal');
       const _addActive = _modal?.querySelector('.tasks-tab.active[data-tab="new"]');
       const _formMounted = _modal?.querySelector('#task-form-name');
@@ -2619,7 +2619,7 @@ export function openTasks(focusId, opts) {
   document.addEventListener('keydown', _escHandler);
 
   // Paint the scaffolding immediately so the modal-enter animation reveals a
-  // populated shell (header/search/sort/empty list with a 加载指示器 row) instead
+  // populated shell (header/search/sort/empty list with a spinner row) instead
   // of an empty modal-body that fills in after the fetch resolves — that delay
   // was visible as a "flicker" right after opening.
   _activeTab = 'tasks';
@@ -2643,8 +2643,8 @@ let _pendingFocusTaskId = null;
 function _focusTask(taskId) {
   if (!taskId) return;
   // Find the task card with this id and scroll-into-view + flash it. Backend
-  // task IDs are UUIDs so the un转义d selector is safe in practice; if that
-  // changes, swap to `[data-id="${CSS.转义(taskId)}"]`.
+  // task IDs are UUIDs so the unescaped selector is safe in practice; if that
+  // changes, swap to `[data-id="${CSS.escape(taskId)}"]`.
   setTimeout(() => {
     const card = document.querySelector(`.task-card[data-id="${taskId}"], [data-id="${taskId}"]`);
     if (!card) return;
@@ -2687,7 +2687,7 @@ export function closeTasks() {
 
 export function isTasksOpen() { return _open; }
 
-// ---- Task run 通知s polling ----
+// ---- Task run notifications polling ----
 
 let _notifInterval = null;
 
@@ -2699,9 +2699,9 @@ async function _pollTaskNotifications() {
     const notes = data.notifications || [];
     for (const n of notes) {
       const ok = n.status === 'success';
-      // Tasks with output_target='通知' carry the result text in `body`
-      // — show it as a real browser Notification (richer than a 提示条). Falls
-      // back to a 提示条 when permission is denied or unavailable.
+      // Tasks with output_target='notification' carry the result text in `body`
+      // — show it as a real browser Notification (richer than a toast). Falls
+      // back to a toast when permission is denied or unavailable.
       if (ok && n.body) {
         const title = n.task_name || 'Task';
         let fired = false;
@@ -2742,7 +2742,7 @@ function stopNotificationPolling() {
   }
 }
 
-// 启动 polling on module load
+// Start polling on module load
 startNotificationPolling();
 
 const tasksModule = { openTasks, closeTasks, isTasksOpen, startNotificationPolling, stopNotificationPolling };

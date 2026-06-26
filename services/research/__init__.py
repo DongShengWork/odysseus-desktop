@@ -1,5 +1,5 @@
 # services/research/__init__.py
-"""研究服务 — LLM 参与环路的深度研究。"""
+"""Research service — deep research with LLM-in-the-loop."""
 
 from .service import ResearchService, ResearchResult, ResearchSource
 from .research_handler import ResearchHandler

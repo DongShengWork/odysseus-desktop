@@ -1,5 +1,5 @@
 // static/js/chatRenderer.js
-// 从 chat.js 提取 — 消息渲染、引用来源、图片、性能指标
+// Extracted from chat.js — message rendering, sources, images, metrics
 
 import uiModule from './ui.js';
 import markdownModule from './markdown.js';
@@ -16,13 +16,13 @@ const CHAT_ABOUT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="n
 const COPY_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 const CHECK_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
-/** 对用于 href 的 URL 进行安全过滤 — 仅允许 http(s) 和协议相对路径。 */
+/** Sanitize a URL for use in href — only allow http(s) and protocol-relative. */
 function _safeHref(url) {
   if (!url) return '#';
   try {
     var parsed = new URL(url, window.location.origin);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return uiModule.esc(url);
-  } catch(e) { /* 无效的 URL */ }
+  } catch(e) { /* invalid URL */ }
   return '#';
 }
 
@@ -59,7 +59,7 @@ function _makeActionBtn(className, title, text, handler) {
   return btn;
 }
 
-// 附件卡片辅助函数
+// Attachment card helpers
 function _attachIcon(mimeOrName) {
   const s = (mimeOrName || '').toLowerCase();
   if (s.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(s))
@@ -68,7 +68,7 @@ function _attachIcon(mimeOrName) {
     return '<svg class="attach-card-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
   if (s === 'application/pdf' || /\.pdf$/i.test(s))
     return '<svg class="attach-card-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
-  // 默认：通用文档图标
+  // Default: generic document
   return '<svg class="attach-card-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
 }
 function _formatSize(bytes) {
@@ -77,26 +77,26 @@ function _formatSize(bytes) {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-// 构建消息附件列表的 `.attach-cards` 元素。由 addMessage 和
-// updateMessageAttachments 共享，使实时（乐观）用户气泡在
-// 上传完成后可以用真实上传 ID 重新渲染。
+// Build the `.attach-cards` element for a message's attachment list. Shared by
+// addMessage and updateMessageAttachments so a live (optimistic) user bubble
+// can be re-rendered with real upload ids once the upload resolves.
 function buildAttachCards(attachments) {
   const attachWrap = document.createElement('div');
   attachWrap.className = 'attach-cards';
   for (const att of attachments) {
     const isImage = (att.mime || '').startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(att.name || '');
     if (isImage) {
-      // 图片预览。对已上传（有 att.id）和仍在
-      // 上传中的附件都显示。闪烁骨架 + 漩涡填充
-      // 空间，直到上传解析完成（尚无 id）或缩略图
-      // 图片加载完成，避免照片突然弹出。
+      // Image preview. Shown for both uploaded (att.id present) and still-
+      // uploading attachments. A shimmering skeleton + whirlpool fills the
+      // space until either the upload resolves (no id yet) or the thumbnail
+      // image finishes loading, so the photo doesn't pop in abruptly.
       const imgWrap = document.createElement('div');
       imgWrap.className = 'attach-image-preview';
       imgWrap.style.cursor = att.id ? 'zoom-in' : 'default';
       if (att.id) imgWrap.dataset.fileId = att.id;
       if (att.id) {
         imgWrap.addEventListener('click', (e) => {
-          // 点击角落 OCR 按钮不应同时打开灯箱。
+          // Tapping the corner OCR button shouldn't also open the lightbox.
           if (e.target.closest('.attach-ocr-btn')) return;
           _openImageLightbox(att);
         });
@@ -105,12 +105,12 @@ function buildAttachCards(attachments) {
       let skel = null;
       let sp = null;
       if (!att.previewUrl) {
-        // 骨架占位符，带居中漩涡。被移除时自动停止。
+        // Skeleton placeholder with a centered whirlpool. Self-stops when removed.
         skel = document.createElement('div');
         skel.className = 'attach-image-skeleton';
-        // 在上传时后端已知宽高比时，匹配照片的宽高比，
-        // 避免骨架以 4:3 默认比例显示，然后在图片到达时
-        // 突然变为竖版形状。
+        // Match the photo's aspect ratio when the backend knew it at upload
+        // time, so the skeleton doesn't sit at a 4:3 default and then snap to
+        // a portrait shape when the image arrives.
         if (att.width && att.height) {
           skel.style.aspectRatio = att.width + ' / ' + att.height;
           skel.style.width = 'auto';
@@ -126,8 +126,8 @@ function buildAttachCards(attachments) {
 
       if (att.id || att.previewUrl) {
         const img = document.createElement('img');
-        // 小缩略图缓存 — 预览很小，无需拉取
-        // 全分辨率照片。点击仍会打开完整图片。
+        // Small cached thumbnail — the preview is tiny, no need to pull the
+        // full-resolution photo. Click still opens the full image.
         img.alt = att.name || 'Image';
         img.loading = 'lazy';
         img.style.cssText = 'max-width:300px;max-height:200px;border-radius:6px;display:' + (att.previewUrl ? 'block' : 'none') + ';';
@@ -144,20 +144,20 @@ function buildAttachCards(attachments) {
         img.addEventListener('load', _reveal);
         img.addEventListener('error', _reveal);
         img.src = att.previewUrl || `/api/upload/${att.id}?thumb=1`;
-        // 缓存的图片可能在 load 监听器附加之前就已加载完成。
+        // Cached images can be complete before the load listener attaches.
         if (img.complete && img.naturalWidth) _reveal();
-        // 保底：如果 8 秒内 load 和 error 都没触发，仍然显示。
-        // 显示时清除计时器，updateMessageAttachments 替换卡片时
-        // （会从 DOM 中移除 img / skel 元素）也清除，因此
-        // 重复重新渲染不会累积孤立的计时器。
+        // Failsafe: if neither load nor error fires within 8s, reveal anyway.
+        // The timer is cleared on reveal AND when updateMessageAttachments
+        // replaces the card (which scrubs the img / skel from the DOM), so
+        // repeated re-renders don't accumulate stranded timers.
         if (!att.previewUrl) _revealTimer = setTimeout(_reveal, 8000);
         imgWrap.appendChild(img);
 
         if (att.id) {
-          // 小角落按钮 → 打开视觉/OCR 编辑器，使用户可以
-          // 更正视觉模型提取的内容。编辑缓存于
-          // 服务器，以文件 ID 为键，因此此后引用同一
-          // 图片的消息会获取更正后的文本，而无需重新运行模型。
+          // Small corner button → opens the vision/OCR editor so the user can
+          // correct what the vision model extracted. The edit is cached on the
+          // server keyed by file id, so any later message referencing this same
+          // image picks up the corrected text instead of re-running the model.
           const ocrBtn = document.createElement('button');
           ocrBtn.type = 'button';
           ocrBtn.className = 'attach-ocr-btn';
@@ -185,7 +185,7 @@ function buildAttachCards(attachments) {
       }
       attachWrap.appendChild(imgWrap);
     } else {
-      // 非图片文件卡片
+      // Non-image file card
       const card = document.createElement('div');
       card.className = 'attach-card';
       card.dataset.name = att.name;
@@ -193,8 +193,8 @@ function buildAttachCards(attachments) {
         card.dataset.fileId = att.id;
         card.style.cursor = 'pointer';
         card.addEventListener('click', () => {
-          // PDF 和文本/代码/markdown → 在文档查看器中打开
-          // （其他文件回退到原始文件）。
+          // PDFs & text/code/markdown → open in the Documents viewer
+          // (others fall back to the raw file).
           if (window.chatModule?.openAttachment) window.chatModule.openAttachment(att, false);
           else window.open(`/api/upload/${att.id}`, '_blank');
         });
@@ -217,10 +217,10 @@ function buildAttachCards(attachments) {
   return attachWrap;
 }
 
-// 重新渲染已渲染消息的附件卡片。用于将
-// 真实上传 ID（和图片缩略图）换入乐观用户气泡，
-// 在 uploadPending() 解析后 — 否则图片预览仅在
-// 刷新后出现，因为气泡在上传分配 ID 之前渲染。
+// Re-render the attachment cards of an already-rendered message. Used to swap
+// in real upload ids (and image thumbnails) on the optimistic user bubble once
+// uploadPending() resolves — otherwise image previews only appear after a
+// refresh, because the bubble is rendered before the upload assigns ids.
 export function updateMessageAttachments(msgWrap, attachments) {
   if (!msgWrap || !attachments?.length) return;
   const body = msgWrap.querySelector('.body') || msgWrap;
@@ -230,16 +230,16 @@ export function updateMessageAttachments(msgWrap, attachments) {
   else body.appendChild(fresh);
 }
 
-// 用户点击聊天照片缩略图时的快速全尺寸预览。
-// 居中显示原始图片的覆盖层 — 无 Gallery 面板，无编辑器。
+// Quick full-size preview when the user taps a chat photo thumbnail. Just an
+// overlay with the original image centered — no Gallery panel, no editor.
 function _openImageLightbox(att) {
   if (!att?.id) return;
   const overlay = document.createElement('div');
   overlay.className = 'attach-lightbox';
-  // 立即显示缓存的缩略图，避免覆盖层在 25MB 原始图片
-  // 流式加载时显示空白。完整图片加载后替换；
-  // 如果完整加载失败（404 / 网络），保留缩略图 + 显示
-  // 错误标签，而非永远显示空白覆盖层。
+  // Show the cached thumb immediately so the overlay doesn't sit blank
+  // while a 25MB original streams in. The full image swaps in once loaded;
+  // if the full load fails (404 / network), we keep the thumb + show an
+  // error label rather than a blank overlay forever.
   const img = document.createElement('img');
   img.alt = att.name || '';
   img.src = `/api/upload/${att.id}?thumb=1`;
@@ -260,9 +260,9 @@ function _openImageLightbox(att) {
     if (_overlayObs) { try { _overlayObs.disconnect(); } catch {} }
     overlay.remove();
   };
-  // 如果覆盖层通过非关闭处理程序的路径被移除
-  // （会话切换、父元素重新渲染、外部清理），仍然移除
-  // 文档级 keydown 监听器，防止泄漏。
+  // If the overlay is removed via any path other than our close handler
+  // (session switch, parent re-render, external cleanup), still drop the
+  // document-level keydown listener so it doesn't leak.
   let _overlayObs = null;
   try {
     _overlayObs = new MutationObserver(() => {
@@ -278,11 +278,11 @@ function _openImageLightbox(att) {
   document.body.appendChild(overlay);
 }
 
-// 视觉/OCR 编辑器模态框 — 从聊天照片缩略图的角落 "Aa" 按钮打开。
-// 让用户查看和更正视觉模型提供给 LLM 的文本
-// （例如 OCR 误读单词时）。持久化到服务器的视觉
-// 缓存（PUT /api/upload/{id}/vision），因此任何后续
-// 引用同一文件的消息都会获取更正后的文本。
+// Vision/OCR editor modal — opened from the corner "Aa" button on a chat photo
+// thumbnail. Lets the user view and correct the text the vision model fed to
+// the LLM (e.g. when OCR misreads a word). Persists to the server's vision
+// cache (PUT /api/upload/{id}/vision), so any subsequent message that
+// references the same file picks up the corrected text.
 let _visionEditorEl = null;
 let _visionEditorEsc = null;
 function _closeVisionEditor() {
@@ -299,8 +299,8 @@ function _openVisionEditor(att, userMsgEl) {
   panel.className = 'vision-editor-panel';
   const title = document.createElement('div');
   title.className = 'vision-editor-title';
-  // 眼睛图标与设置 → 视觉中的图标匹配，让用户识别此文本来源。
-  //
+  // Eye icon matches the one in Settings → Vision so users recognise where
+  // this text originates.
   title.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Vision text</span>';
   panel.appendChild(title);
   const desc = document.createElement('div');
@@ -347,8 +347,8 @@ function _openVisionEditor(att, userMsgEl) {
       if (uiModule?.showError) uiModule.showError('Failed to save OCR text');
     }
   });
-  // 重新生成消息：保存编辑后的文本，关闭，然后触发重新发送
-  // 用户消息，使新的 AI 回复立即使用编辑结果。
+  // Regenerate-message: save the edited text, close, then trigger a resend of
+  // the user message so the new AI reply uses the edit immediately.
   const regenBtn = document.createElement('button');
   regenBtn.type = 'button';
   regenBtn.className = 'vision-editor-btn vision-editor-btn-primary';
@@ -380,8 +380,8 @@ function _openVisionEditor(att, userMsgEl) {
   document.body.appendChild(overlay);
   _visionEditorEl = overlay;
 
-  // ESC 关闭弹出窗口。注册在 document 上，使其无论焦点在哪里都能工作
-  // （否则 textarea 会吞掉该事件）。
+  // ESC closes the popup. Registered on document so it works regardless of
+  // focus (the textarea swallows the event otherwise).
   _visionEditorEsc = (e) => { if (e.key === 'Escape') _closeVisionEditor(); };
   document.addEventListener('keydown', _visionEditorEsc);
 
@@ -404,25 +404,25 @@ function _openVisionEditor(att, userMsgEl) {
     });
 }
 
-// 从显示文本中剥离的工具调用语法模式
+// Tool call syntax patterns to strip from displayed text
 const TOOL_CALL_RE = /\[TOOL_CALL\][\s\S]*?\[\/TOOL_CALL\]/gi;
-// 仅剥离看起来像结构化调用的围栏工具调用块，而非普通代码示例
+// Only strip fenced tool-call blocks that look like structured invocations, not regular code examples
 const EXEC_FENCE_RE = /```(?:web_search|read_file|write_file|create_document|edit_document|update_document)\s*\n[\s\S]*?```/gi;
-// XML 风格的工具调用：<minimax:tool_call>、<tool_call>、<function_call>、裸 <invoke>
+// XML-style tool calls: <minimax:tool_call>, <tool_call>, <function_call>, bare <invoke>
 const XML_TOOL_CALL_RE = /<(?:[\w]+:)?(?:tool_call|function_call)>[\s\S]*?<\/(?:[\w]+:)?(?:tool_call|function_call)>/gi;
 const XML_INVOKE_RE = /<invoke\s+name=['"][^'"]*['"]>[\s\S]*?<\/invoke>/gi;
-// DeepSeek "DSML" 工具调用标记（全角竖线 ｜ 或 ascii | 分隔），
-// 当模型发出文本工具调用而非原生调用时泄漏到内容中。
-// 剥离整个块；第二个模式捕获杂散/部分标签
-// （例如流传输中在闭合标签到达之前）。
+// DeepSeek "DSML" tool-call markup (fullwidth-pipe ｜ or ascii | delimited) that
+// leaks into content when the model emits a text tool call instead of a native
+// one. Strip the whole block; the second pattern catches stray/partial tags
+// (e.g. mid-stream before the closing tag arrives).
 const DSML_TOOL_RE = /<\s*[｜|]+\s*DSML\s*[｜|]+\s*tool_calls\s*>[\s\S]*?(?:<\s*\/\s*[｜|]+\s*DSML\s*[｜|]+\s*tool_calls\s*>|$)/gi;
 const DSML_STRAY_RE = /<\s*\/?\s*[｜|]+\s*DSML\s*[｜|]+[^>]*>/gi;
-// 关于工具结果的自述（模型回显 stdout/exit_code）
+// Self-narration about tool results (model echoing stdout/exit_code)
 const TOOL_NARRATION_RE = /(?:The (?:result|output) shows?:?\s*)?-?\s*(?:stdout|stderr|exit_code):\s*.+/gi;
 
 
-// 模型定价表 — 每百万 token
-// 模型信息：定价（每 1M token）+ 上下文窗口长度
+// Model pricing table — per million tokens
+// Model info: pricing (per 1M tokens) + context window length
 const MODEL_INFO = {
   // --- Anthropic ---
   'claude-sonnet-4-5':    { input: 3.00,  output: 15.00, ctx: 200000 },
@@ -508,10 +508,10 @@ const MODEL_INFO = {
   'hermes':               { input: 0.20,  output: 0.20,  ctx: 131072 },
 };
 
-// 兼容别名
+// Compat alias
 const MODEL_PRICING = MODEL_INFO;
 
-// 图像生成成本查询（每张图片，按模型 × 质量 × 尺寸）
+// Image generation cost lookup (per-image, by model × quality × size)
 const IMAGE_PRICING = {
   'gpt-image-1.5': { 'low': { '1024x1024': 0.009, '1024x1536': 0.013, '1536x1024': 0.013 }, 'medium': { '1024x1024': 0.034, '1024x1536': 0.05, '1536x1024': 0.05 }, 'high': { '1024x1024': 0.133, '1024x1536': 0.2, '1536x1024': 0.2 } },
   'gpt-image-1':   { 'low': { '1024x1024': 0.011, '1024x1536': 0.016, '1536x1024': 0.016 }, 'medium': { '1024x1024': 0.042, '1024x1536': 0.063, '1536x1024': 0.063 }, 'high': { '1024x1024': 0.167, '1024x1536': 0.25, '1536x1024': 0.25 } },
@@ -522,14 +522,14 @@ export function shortModel(name) {
   if (!name) return '...';
   if (typeof name !== 'string') name = String(name);
   let short = name.split('/').pop();
-  // 剥离 .gguf 扩展名
+  // Strip .gguf extension
   short = short.replace(/\.gguf$/i, '');
-  // 剥离量化后缀（Q4_K_M、Q8_0 等）和分片编号
+  // Strip quantization suffixes (Q4_K_M, Q8_0, etc.) and shard numbers
   short = short.replace(/-0000\d-of-\d+$/, '');
   short = short.replace(/[-_](Q\d[_A-Z\d]*|F16|F32|BF16|fp16|fp32)$/i, '');
-  // 如果仍然太长则截断（保留第一个有意义的部分）
+  // Truncate if still too long (keep first meaningful part)
   if (short.length > 25) {
-    // 尝试找到自然断点（模型大小后的破折号，如 -35B 或 -7B）
+    // Try to find a natural break point (dash after model size like -35B or -7B)
     const sizeMatch = short.match(/^(.+?-\d+[BbMm])/);
     if (sizeMatch) short = sizeMatch[1];
     else short = short.substring(0, 22) + '…';
@@ -652,7 +652,7 @@ export function applyModelColor(roleEl, modelName) {
       } else if (info && info.ctx) {
         html += '<div><span class="ctx-label">Context</span> <span id="_ctx-val">' + _fmtCtx(info.ctx) + ' tokens</span></div>';
       }
-      // 获取 real context from server async
+      // Fetch real context from server async
       if (!_realCtx && window.sessionModule) {
         const _sid = window.sessionModule.getCurrentSessionId();
         if (_sid) {
@@ -671,7 +671,7 @@ export function applyModelColor(roleEl, modelName) {
           }).catch(() => {});
         }
       }
-      // Show configured 最大令牌数 if set
+      // Show configured max tokens if set
       if (window.presetsModule) {
         const _pid = window.presetsModule.getSelectedPreset();
         const _preset = _pid ? window.presetsModule.getPreset(_pid) : null;
@@ -722,10 +722,10 @@ export function isLocalEndpoint(url) {
   if (!host) return true;
   if (host === 'localhost' || host === '0.0.0.0' || host === 'host.docker.internal' || host.endsWith('.local')) return true;
   if (typeof window !== 'undefined' && window.location && host === window.location.hostname) return true;
-  // A single-label hostname (no dot) is an internal/Docker 服务 name
+  // A single-label hostname (no dot) is an internal/Docker service name
   // (e.g. "nim-nano", "llamaswap", "nemotron-super-49b") or a LAN shortname —
   // never a public API, which always needs an FQDN. Treat as local → free.
-  // (Without this, 容器-name endpoints get billed at cloud rates because
+  // (Without this, container-name endpoints get billed at cloud rates because
   // the pricing table matches on a name substring, e.g. "nemotron".)
   if (!host.includes('.')) return true;
   if (/^127\./.test(host)) return true;
@@ -806,7 +806,7 @@ export function resetSessionCost(sessionId) {
 export function updateSessionCostUI() {
   const el = document.getElementById('session-cost-display');
   if (!el) return;
-  // Non-billable endpoint? Hide the 徽章 and clear stale cost that a previous
+  // Non-billable endpoint? Hide the badge and clear stale cost that a previous
   // cloud-rate calculation may have left in localStorage for this session.
   const _url = _currentEndpointUrl();
   if (!isCostTrackedEndpoint(_url)) {
@@ -1079,7 +1079,7 @@ document.addEventListener('click', function(e) {
 document.addEventListener('click', function(e) {
   // Walk past Text nodes — clicking link text yields a Text node target
   // whose .closest is undefined, so preventDefault never fires and the
-  // browser performs a default 哈希-navigation that resets the session.
+  // browser performs a default hash-navigation that resets the session.
   let _t = e.target;
   while (_t && _t.nodeType === Node.TEXT_NODE) _t = _t.parentElement;
   const a = _t && _t.closest && _t.closest('a[href]');
@@ -1236,7 +1236,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
         import('./gallery.js'),
         import('./galleryEditor.js'),
       ]);
-      // Ensure the Gallery modal is open so the editor has a 容器
+      // Ensure the Gallery modal is open so the editor has a container
       // to render into; switch its tabs to the Edit tab.
       galleryMod.default.openGallery();
       const modal = document.getElementById('gallery-modal');
@@ -1266,8 +1266,8 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   delBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const ok = await uiModule.styledConfirm('Delete this image?', {
-      confirmText: '删除',
-      cancelText: '取消',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
       danger: true,
     });
     if (!ok) return;
@@ -1314,7 +1314,7 @@ export function hideWelcomeScreen() {
   const cc = document.getElementById('chat-container');
   if (ws) ws.classList.add('hidden');
   if (cc) cc.classList.remove('welcome-active');
-  // 更新 send button — switches from muted arrow to + Chat
+  // Update send button — switches from muted arrow to + Chat
   if (window._updateSendBtnIcon) setTimeout(window._updateSendBtnIcon, 50);
   const ib = document.getElementById('incognito-btn');
   if (ib) ib.style.display = ib.classList.contains('active') ? '' : 'none';
@@ -1342,11 +1342,11 @@ export function showWelcomeScreen() {
   const wn = document.querySelector('.welcome-name');
   if (wn) {
     wn.style.animation = 'none';
-    // force reflow so the next as签名ment registers as a new animation
+    // force reflow so the next assignment registers as a new animation
     void wn.offsetHeight;
     wn.style.animation = '';
   }
-  // 更新 send button — switches from + Chat to muted arrow on empty session
+  // Update send button — switches from + Chat to muted arrow on empty session
   if (window._updateSendBtnIcon) setTimeout(window._updateSendBtnIcon, 50);
   const ib = document.getElementById('incognito-btn');
   const _researchChk = document.getElementById('research-toggle');
@@ -1390,7 +1390,7 @@ export function createMsgFooter(msgElement) {
       btn.innerHTML = CHECK_ICON;
       setTimeout(() => { btn.innerHTML = COPY_ICON; }, 1500);
     }},
-    { id: 'edit', icon: '\u270E', title: '编辑', cls: 'msg-action-btn', handler(e) {
+    { id: 'edit', icon: '\u270E', title: 'Edit', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.editAIMessage) window.chatModule.editAIMessage(msgElement);
     }},
@@ -1416,10 +1416,10 @@ export function createMsgFooter(msgElement) {
     }},
   ];
 
-  // 过滤 out unavailable actions (e.g. TTS when not enabled)
+  // Filter out unavailable actions (e.g. TTS when not enabled)
   const availableActions = allActions.filter(a => !a.available || a.available());
 
-  // Determine which 3 to show: use recent order, 回退 to defaults
+  // Determine which 3 to show: use recent order, fallback to defaults
   const recent = _getRecentActions();
   const defaults = ['copy', 'delete', 'fork'];
   const order = recent.length > 0 ? recent : defaults;
@@ -1433,7 +1433,7 @@ export function createMsgFooter(msgElement) {
   const visible = sorted.slice(0, _MAX_VISIBLE);
   const overflow = sorted.slice(_MAX_VISIBLE);
 
-  // 渲染 visible buttons
+  // Render visible buttons
   function _addBtn(action, container) {
     const btn = _makeActionBtn(action.cls, action.title, action.html ? '' : action.icon, (e) => {
       _trackAction(action.id);
@@ -1456,7 +1456,7 @@ export function createMsgFooter(msgElement) {
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       // Toggle overflow menu — close any existing one first (through its own
-      // dismiss so the Escape 仓库 entry goes with it).
+      // dismiss so the Escape registry entry goes with it).
       const existing = document.querySelector('.msg-overflow-menu');
       if (existing) {
         if (typeof existing._dismiss === 'function') existing._dismiss(); else existing.remove();
@@ -1704,10 +1704,10 @@ export function displayMetrics(messageElement, metrics) {
   const model = metrics.model || 'Unknown';
   const cost = _billableCost(model, inputTokens, outputTokens);
 
-  // Nothing useful to show — bail out (only if ALL 指标 are missing)
+  // Nothing useful to show — bail out (only if ALL metrics are missing)
   if (!responseTime && !outputTokens && tps == null && !ctxPct) return;
 
-  // Accumulate session cost (only on fresh 指标, not history reload)
+  // Accumulate session cost (only on fresh metrics, not history reload)
   if (!metrics._fromHistory) {
     const _sid = window.sessionModule && window.sessionModule.getCurrentSessionId();
     if (_sid && cost !== null) {
@@ -1805,7 +1805,7 @@ export function displayMetrics(messageElement, metrics) {
     bindMenuDismiss(popup, () => popup.remove());
   });
 
-  // Store real 上下文长度 for model info popup
+  // Store real context length for model info popup
   if (metrics.context_length && metrics.model) {
     if (!window._realContextLengths) window._realContextLengths = {};
     window._realContextLengths[metrics.model] = metrics.context_length;
@@ -1867,7 +1867,7 @@ export function displayMetrics(messageElement, metrics) {
           if (!sid) return;
           popup.remove();
 
-          // 添加 a 加载指示器 bubble at the bottom of chat
+          // Add a spinner bubble at the bottom of chat
           const chatBox = document.getElementById('chat-history');
           if (!chatBox) return;
           const compactMsg = document.createElement('div');
@@ -2023,7 +2023,7 @@ export function addMessage(role, content, modelName, metadata) {
           wrap.appendChild(roleEl);
           const body = document.createElement('div');
           body.className = 'body';
-          // 检查 if this is the last text round — sources go on top of final response
+          // Check if this is the last text round — sources go on top of final response
           var agentSourcesPrefix = '';
           var isLastTextRound = true;
           for (let rr = r + 1; rr < maxRound; rr++) {
@@ -2089,7 +2089,7 @@ export function addMessage(role, content, modelName, metadata) {
                 let cls = 'diff-ctx', text = line;
                 if (line.startsWith('+++') || line.startsWith('---')) cls = 'diff-meta';
                 else if (line.startsWith('@@')) cls = 'diff-hunk';
-                // Drop the leading diff marker (+/-/space) — colour 编码s add/del.
+                // Drop the leading diff marker (+/-/space) — colour encodes add/del.
                 else if (line.startsWith('+')) { cls = 'diff-add'; text = line.slice(1); }
                 else if (line.startsWith('-')) { cls = 'diff-del'; text = line.slice(1); }
                 else if (line.startsWith(' ')) { text = line.slice(1); }
@@ -2105,7 +2105,7 @@ export function addMessage(role, content, modelName, metadata) {
             // Click handling is delegated globally \u2014 see chat.js init.
             threadWrap.appendChild(node);
           }
-          // 检查 if next round has text — extend line down to connect
+          // Check if next round has text — extend line down to connect
           const nextTxt = (roundTexts[r + 1] || '').trim();
           if (nextTxt) threadWrap.classList.add('has-bottom');
           lastWrap = threadWrap;
@@ -2135,7 +2135,7 @@ export function addMessage(role, content, modelName, metadata) {
     // --- Wake-task / supervisor system check-in ---
     // The self-wake mechanism injects "Did you finish?" as a user message
     // (or persisted history shows a "[Task] Self-check: <id>" envelope)
-    // so the 智能体循环 re-enters and re-checks status. 渲染 as a
+    // so the agent loop re-enters and re-checks status. Render as a
     // normal user-style bubble — same chrome as a real user message,
     // just with role "Supervisor" and a short summary body — instead of
     // a slim system chip. Matches chat style and integrates cleanly
@@ -2149,7 +2149,7 @@ export function addMessage(role, content, modelName, metadata) {
       }
     }
     if (_isWakeCheck) {
-      // Supervisor self-check messages are an internal control 签名al —
+      // Supervisor self-check messages are an internal control signal —
       // skip rendering entirely so they don't show up in the conversation.
       return null;
     }
@@ -2187,8 +2187,8 @@ export function addMessage(role, content, modelName, metadata) {
 
     let text = markdownModule.squashOutsideCode(stripToolBlocks(textRaw || ''));
 
-    // For user messages, pull out vision-model 镜像 descriptions ([Image: name]\n
-    // <multi-line desc>) into a collapsible "镜像 description" section. Done for
+    // For user messages, pull out vision-model image descriptions ([Image: name]\n
+    // <multi-line desc>) into a collapsible "image description" section. Done for
     // ALL user messages (not just ones with attachment metadata) so it rebuilds
     // from the stored text even after a browser restart drops the cached attachments.
     const attachments = metadata?.attachments;
@@ -2199,7 +2199,7 @@ export function addMessage(role, content, modelName, metadata) {
         (_m, name, desc) => { const d = desc.trim(); if (d) _visionBlocks.push({ name: name, desc: d }); return ''; }
       );
     }
-    // With attachments present, also strip the embedded file/PDF/镜像-marker text.
+    // With attachments present, also strip the embedded file/PDF/image-marker text.
     if (role === 'user' && attachments?.length) {
       // Strip === File: ... === blocks, [PDF content]: blocks, and [Image attached: ...] lines
       text = text
@@ -2240,13 +2240,13 @@ export function addMessage(role, content, modelName, metadata) {
     }
 
     // The vision/OCR caption is stripped from the displayed text above (so the
-    // bubble doesn't show the raw 模型输出) but no longer rendered as an
+    // bubble doesn't show the raw model output) but no longer rendered as an
     // inline collapsible — the user can still view/edit it via the "Caption"
     // button on the photo thumbnail. _visionBlocks is intentionally left unused
     // so the parsing-and-strip side-effect on `text` still happens.
     void _visionBlocks;
 
-    // 添加 "Open Visual Report" button for persisted research messages
+    // Add "Open Visual Report" button for persisted research messages
     if (role === 'assistant' && metadata?.research) {
       var _sid = window.sessionModule?.getCurrentSessionId?.();
       if (_sid) _appendReportButton(b, _sid);
@@ -2264,13 +2264,13 @@ export function addMessage(role, content, modelName, metadata) {
       const rawDocMatch = b.innerHTML.match(/In the document, edit this specific text \((lines? [\d–\-]+)\)/);
       if (rawDocMatch) {
         const lineRef = rawDocMatch[1];
-        // 提取 instruction text (after "Instruction: ")
+        // Extract instruction text (after "Instruction: ")
         const instrMatch = b.textContent.match(/Instruction:\s*([\s\S]*)$/);
         const instrText = instrMatch ? instrMatch[1].trim() : '';
         b.innerHTML = '<span class="doc-edit-tag">Doc edit: ' + lineRef + '</span> ' + markdownModule.processWithThinking(instrText);
       }
 
-      // 渲染 attachment cards
+      // Render attachment cards
       if (attachments?.length) {
         b.appendChild(buildAttachCards(attachments));
       }
@@ -2279,7 +2279,7 @@ export function addMessage(role, content, modelName, metadata) {
     wrap.appendChild(r);
     wrap.appendChild(b);
 
-    // 添加 stopped indicator + continue button for messages that were stopped by user
+    // Add stopped indicator + continue button for messages that were stopped by user
     if (role === 'assistant' && metadata?.stopped) {
       const stoppedIndicator = document.createElement('div');
       stoppedIndicator.className = 'stopped-indicator';
@@ -2344,7 +2344,7 @@ export function addMessage(role, content, modelName, metadata) {
         wrap.dataset.raw = v.raw;
       }
 
-      // 渲染 nav
+      // Render nav
       const nav = document.createElement('span');
       nav.className = 'variant-nav';
       nav.addEventListener('click', (e) => e.stopPropagation());
@@ -2418,12 +2418,12 @@ export function addMessage(role, content, modelName, metadata) {
       // The "N pinned" / "N recalled" pill in the footer reads from
       // wrap._memoriesUsed — propagate it from saved metadata so the pill
       // survives a page refresh (live-stream path sets it via SSE, but
-      // history reloads need this as签名ment).
+      // history reloads need this assignment).
       if (metadata?.memories_used?.length) wrap._memoriesUsed = metadata.memories_used;
       wrap.appendChild(createMsgFooter(wrap));
       if (metadata) displayMetrics(wrap, metadata);
     } else {
-      // 添加 时间戳 to user header (like AI messages)
+      // Add timestamp to user header (like AI messages)
       r.appendChild(roleTimestamp(metadata?.timestamp));
 
       wrap.appendChild(createUserMsgFooter(wrap));

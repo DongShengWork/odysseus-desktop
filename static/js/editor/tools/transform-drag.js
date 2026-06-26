@@ -1,16 +1,16 @@
 /**
- * 变换拖拽工具 — 处理变换工具（通过角点/边缘手柄调整大小，
- * 通过旋转把手旋转）的拖拽交互。
+ * Transform-drag tool — handle drag interactions for the Transform
+ * tool (resize via corner/edge handles, rotation via the rot grip).
  *
  * The transform UI runs in TWO modes: the floating popup (W/H/rot
  * numeric inputs, lives elsewhere) AND direct drag on the canvas
- * `state.transformPendingW/H/Rot` 并调用 `reapplyTransform()`
+ * handles. Both ultimately mutate `state.transformPendingW/H/Rot` and
  * call `reapplyTransform()` to redraw. This module owns the drag
  * branch.
  *
- * galleryEditor.js 中的分发器调用 `tryBegin/tryContinue/
- * tryEnd`，当事件属于变换工具并已被处理时返回 `true`
- * （这样分发器就可以短路）。
+ * The dispatcher in galleryEditor.js calls `tryBegin/tryContinue/
+ * tryEnd` which return `true` when the event was for the transform
+ * tool and was handled (so the dispatcher can short-circuit).
  *
  * @param {{
  *   beginMove:             (e: Event) => void,
@@ -30,8 +30,8 @@ export function createTransformDragTool({
 }) {
   return {
     /**
-     * 在 pointerdown 时调用。如果变换工具处理了事件
-     * （分发器不应该继续传递给其他工具），则返回 true。
+     * Called on pointerdown. Returns true if the transform tool handled
+     * the event (the dispatcher should NOT fall through to other tools).
      */
     tryBegin(e) {
       if (!state.transformActive) return false;
@@ -40,9 +40,9 @@ export function createTransformDragTool({
       if (state.transformHandle) {
         state.transformStartX = coords.x;
         state.transformStartY = coords.y;
-        // 在拖拽开始时快照偏移量和尺寸，这样每帧计算
-        // "起始 + dx"（正确的增量），而不是在运行中的偏移量上累加，
-        // 之前这样做会导致上/左抓取发生漂移。
+        // Snapshot offset + size at drag-start so each frame computes
+        // "start + dx" (correct delta) rather than accumulating off the
+        // running offset, which was making top/left grabs drift.
         const layer = state.transformLayer;
         const off = state.layerOffsets.get(layer.id) || { x: 0, y: 0 };
         state.transformStartOffX = off.x;
@@ -51,9 +51,9 @@ export function createTransformDragTool({
         state.transformOrigH = layer.canvas.height;
         return true;
       }
-      // 没有命中角点 — 如果点击在图层边界框内，则
-      // 像移动工具一样操作，这样用户无需切换工具
-      // 就可以拖拽图层。
+      // No corner hit — if click inside the layer's bounding box, act
+      // like Move so the user can drag the layer around without
+      // switching tools.
       if (state.transformLayer) {
         const off = state.layerOffsets.get(state.transformLayer.id) || { x: 0, y: 0 };
         const w = state.transformLayer.canvas.width;
@@ -68,7 +68,7 @@ export function createTransformDragTool({
     },
 
     /**
-     * 在 pointermove 时调用。如果已处理则返回 true。
+     * Called on pointermove. Returns true if handled.
      *
      * When transformActive but no handle is grabbed, updates the
      * hover cursor + pulse. When a handle is grabbed, drives the
@@ -76,7 +76,7 @@ export function createTransformDragTool({
      */
     tryContinue(e) {
       if (!state.transformActive) return false;
-      // 没有正在进行的拖拽 — 仅更新悬停光标。
+      // No drag in progress — just hover-cursor + pulse.
       if (!state.transformHandle && state.mainCanvas) {
         const coords = canvasCoords(e, state.mainCanvas);
         const hovered = getTransformHandle(coords.x, coords.y);
@@ -85,13 +85,13 @@ export function createTransformDragTool({
           state.hoveredHandle = hovered;
           composite();
         }
-        return false; // 没有完全消费事件
+        return false; // didn't fully consume the event
       }
       if (!state.transformHandle) return false;
       e.preventDefault();
       const coords = canvasCoords(e, state.mainCanvas);
-      // 旋转把手 — 角度从图层的几何中心到光标测量。
-      // 如果弹窗已打开则同步到弹窗中。
+      // Rotation grip — angle measured from the layer's geometric
+      // centre to the cursor. Mirror into the popup if it's open.
       if (state.transformHandle === 'rot') {
         const layer = state.transformLayer;
         const off = state.layerOffsets.get(layer.id) || { x: 0, y: 0 };
@@ -99,7 +99,7 @@ export function createTransformDragTool({
         const cy = off.y + layer.canvas.height / 2;
         const rad = Math.atan2(coords.y - cy, coords.x - cx) + Math.PI / 2;
         let deg = Math.round((rad * 180) / Math.PI);
-        if (e.shiftKey) deg = Math.round(deg / 15) * 15; // 15° 吸附
+        if (e.shiftKey) deg = Math.round(deg / 15) * 15; // 15° snap
         while (deg > 180) deg -= 360;
         while (deg <= -180) deg += 360;
         state.transformPendingRot = deg;
@@ -110,7 +110,7 @@ export function createTransformDragTool({
         }
         return true;
       }
-      // 通过角点/边缘手柄调整大小。
+      // Resize via corner / edge handle.
       const dx = coords.x - state.transformStartX;
       const dy = coords.y - state.transformStartY;
       const layer = state.transformLayer;
@@ -120,8 +120,8 @@ export function createTransformDragTool({
       if (state.transformHandle.includes('l')) newW = state.transformOrigW - dx;
       if (state.transformHandle.includes('b')) newH = state.transformOrigH + dy;
       if (state.transformHandle.includes('t')) newH = state.transformOrigH - dy;
-      // Shift = 锁定宽高比。使用移动较多的轴
-      // （相对于原始值）作为主导轴。
+      // Shift = lock aspect ratio. Use whichever axis moved more
+      // (relative to the original) as the driver.
       if (e.shiftKey && state.transformOrigW > 0 && state.transformOrigH > 0) {
         const aspect = state.transformOrigW / state.transformOrigH;
         const wDelta = Math.abs(newW - state.transformOrigW);
@@ -134,9 +134,9 @@ export function createTransformDragTool({
       }
       newW = Math.max(1, Math.round(newW));
       newH = Math.max(1, Math.round(newH));
-      // 通过弹窗驱动的管线传递，使弹窗和拖拽保持同步。
-      // 通过 transformOrigOffset 锚定对角，这样
-      // 手柄就不会在用户拖拽时滑动。
+      // Route through the popup-driven pipeline so popup + drag stay
+      // in sync. Anchor the opposite corner via transformOrigOffset so
+      // handles don't slide while the user drags.
       state.transformPendingW = newW;
       state.transformPendingH = newH;
       const anchorOffX = state.transformStartOffX +
@@ -148,7 +148,7 @@ export function createTransformDragTool({
         y: anchorOffY + newH / 2 - state.transformOrigH / 2,
       };
       reapplyTransform();
-      // 如果弹窗已打开，将新的 W/H 同步到弹窗中。
+      // Mirror the new W/H into the popup if it's open.
       if (state.transformPopup) {
         const wIn = state.transformPopup.querySelector('#ge-transform-w');
         const hIn = state.transformPopup.querySelector('#ge-transform-h');
@@ -159,7 +159,7 @@ export function createTransformDragTool({
     },
 
     /**
-     * 在 pointerup 时调用。如果已处理则返回 true。
+     * Called on pointerup. Returns true if handled.
      */
     tryEnd() {
       if (!(state.transformActive && state.transformHandle)) return false;

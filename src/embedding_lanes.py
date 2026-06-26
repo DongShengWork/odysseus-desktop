@@ -59,7 +59,7 @@ class EmbeddingLane:
 
 
 def reset_embedding_lane_state() -> None:
-    """在端点配置变更后重置进程本地嵌入通道状态。"""
+    """Reset process-local embedding lane state after endpoint config changes."""
     try:
         from src.embeddings import reset_http_embed_state
         reset_http_embed_state()
@@ -196,9 +196,9 @@ def _get_or_reset_collection(chroma_client, name: str, metadata: Dict[str, Any],
         try:
             chroma_client.delete_collection(name)
             restored = chroma_client.get_or_create_collection(name=name, metadata=current)
-            # chromadb returns 嵌入s as a numpy ndarray, whose truth value
-            # is ambiguous — `preserved.get("嵌入s") or []` and a bare
-            # `if ... and old_嵌入s:` both raise ValueError, which aborts
+            # chromadb returns embeddings as a numpy ndarray, whose truth value
+            # is ambiguous — `preserved.get("embeddings") or []` and a bare
+            # `if ... and old_embeddings:` both raise ValueError, which aborts
             # the restore and loses the rows the reset was supposed to keep.
             # Use explicit None/len checks instead.
             old_embeddings = preserved.get("embeddings")
@@ -250,7 +250,7 @@ def _create_lane(chroma_client, base_name: str, lane_name: str, client: Any) -> 
 
 
 def build_embedding_lanes(base_name: str) -> List[EmbeddingLane]:
-    """按检索优先级返回健康的通道：custom，fastembed。"""
+    """Return healthy lanes in retrieval preference order: custom, fastembed."""
     from src.chroma_client import get_chroma_client
 
     chroma_client = get_chroma_client()
@@ -273,7 +273,7 @@ def build_embedding_lanes(base_name: str) -> List[EmbeddingLane]:
 
 
 def migrate_legacy_collection(base_name: str, lanes: Sequence[EmbeddingLane]) -> None:
-    """从旧版未加后缀的集合回填空通道数据（如果存在）。"""
+    """Backfill empty lanes from a legacy unsuffixed collection, if present."""
     if not lanes:
         return
 

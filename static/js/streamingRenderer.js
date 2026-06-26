@@ -1,39 +1,39 @@
-// 流式传输Renderer.js
+// streamingRenderer.js
 //
-// The DOM shell for incremental 流式传输 markdown rendering. One instance owns
-// the DOM of one 流式传输 助手消息 and is the only thing that writes to
+// The DOM shell for incremental streaming markdown rendering. One instance owns
+// the DOM of one streaming assistant message and is the only thing that writes to
 // it while it streams.
 //
 // It keeps the message as two regions, separated by an invisible comment marker so
-// the rendered blocks are direct children of the 容器 (no wrapper elements to
+// the rendered blocks are direct children of the container (no wrapper elements to
 // disturb CSS):
 //
-//     [ 已冻结块 ][ 已冻结块 ] <!--tail--> [ 实时尾部 ]
+//     [ finalized block, frozen ][ finalized block, frozen ] <!--tail--> [ live tail ]
 //
-//   - 已冻结块仅渲染一次，之后不再修改 — 这样代码块的悬停按钮不会闪烁，
-//     代码也只高亮一次。
-//   - 实时尾部（仍在增长的尾部块）每个 token 重新渲染一次，除了未关闭的
-//     代码围栏，它以追加模式流式传输（文本追加到稳定的 <pre> 中，围栏关闭
-//     时高亮一次）。
+//   - Finalized blocks are rendered once and never touched again — so code-block
+//     hover buttons can't flicker and code is highlighted exactly once.
+//   - The live tail (the still-growing trailing block) is re-rendered each token,
+//     except an open code fence, which streams in append-mode (text appended to a
+//     stable <pre>, highlighted once when it closes).
 //
-// 所有"是否可以安全冻结？"的逻辑都放在纯函数的 segmenter 中；本文件刻意
-// 保持机械化。如果任何操作抛出异常，将回退到全量重新渲染，确保 bug 不会
-// 产生错误输出 — 只会产生当前行为。
+// All the "is this safe to freeze?" logic lives in the pure segmenter; this file
+// is deliberately mechanical. If anything throws, it latches into a full-re-render
+// fallback so a bug can never produce broken output — only today's behavior.
 
 import { splitFinalized, describeOpenFence } from './streamingSegmenter.js';
 
-// 编译时逃生舱：设为 false 以强制使用普通的全量重新渲染路径。
-// （下面的实例级 try/catch `degraded` 回退是运行时安全网。）
+// Compile-time escape hatch: set to false to force the plain full-re-render path.
+// (The per-instance try/catch `degraded` fallback below is the runtime safety net.)
 const ENABLED = true;
 
 export function createStreamRenderer(contentEl, { render, hljs } = {}) {
   let started = false;
-  let tailMarker = null; // 已冻结节点在其之前；实时尾部节点在其之后
-  let committedLen = 0; // 已冻结的源字符数
-  let lastText = ''; // 最近的完整文本（用于 finalize）
-  let tailShownLen = 0; // 实时尾部已渲染的文本长度（驱动 token 淡入效果）
-  let appendMode = null; // { codeText: Text, appendedLen }，当未关闭的围栏在流式传输时
-  let degraded = !ENABLED; // 一旦回退到全量重新渲染后为 true
+  let tailMarker = null; // finalized nodes precede it; live-tail nodes follow it
+  let committedLen = 0; // chars of source already frozen
+  let lastText = ''; // most recent full text (for finalize)
+  let tailShownLen = 0; // rendered-text length of the live tail (drives token fade)
+  let appendMode = null; // { codeText: Text, appendedLen } while an open fence streams
+  let degraded = !ENABLED; // true once we fall back to full re-render
 
   function start() {
     contentEl.textContent = '';
@@ -50,8 +50,8 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
     while (tailMarker.nextSibling) tailMarker.nextSibling.remove();
   }
 
-  // 渲染 `src` 并冻结 tail marker 之前的节点。高亮在这里执行，
-  // 在分离的 fragment 上仅执行一次，在节点显示之前。
+  // Render `src` and freeze the nodes before the tail marker. Highlighting happens
+  // here, once, on the detached fragment before the nodes are ever shown.
   function freeze(src) {
     const holder = document.createElement('div');
     holder.innerHTML = render(src);
@@ -59,7 +59,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
     while (holder.firstChild) contentEl.insertBefore(holder.firstChild, tailMarker);
   }
 
-  // 重新渲染实时尾部。未关闭的尾部围栏以追加模式流式传输。
+  // Re-render the live tail. An open trailing fence streams in append-mode.
   function renderTail(tailText) {
     const fence = tailText ? describeOpenFence(tailText) : null;
     if (fence) {
@@ -79,8 +79,8 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
     while (holder.firstChild) contentEl.appendChild(holder.firstChild);
   }
 
-  // 以追加模式流式传输未终止代码围栏的正文，仅将新字符追加到
-  // 稳定的 <pre><code> 文本节点中 — 无需重新解析，无需重新高亮。
+  // Stream the body of an unterminated code fence by appending only the new
+  // characters to a stable <pre><code> text node — no re-parse, no re-highlight.
   function appendOpenFence(tailText, fence) {
     if (!appendMode) {
       clearTail();
@@ -92,7 +92,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
       pre.appendChild(code);
       contentEl.appendChild(pre);
       appendMode = { codeText: textNode, appendedLen: 0 };
-      tailShownLen = 0; // 代码从不淡入；围栏后的普通文本正常淡入
+      tailShownLen = 0; // code is never faded; prose after the fence fades fresh
     }
     const code = tailText.slice(fence.contentStart);
     if (code.length > appendMode.appendedLen) {
@@ -101,11 +101,11 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
     }
   }
 
-  // 将超出 `prevLen` 字符的尾部文本用 <span class="token-new"> 包裹，
-  // 实现流式淡入效果。跳过代码块（<pre>）和思考块（.thinking-content）。
-  // 注意：原始 chat.js 辅助函数检查的是 `.think-content`，这是一个应用中
-  // 不存在的类，因此思考文本曾会淡入；匹配实际的 `.thinking-content` 修正了
-  // 这个问题。在插入前的分离 fragment 上操作。
+  // Wrap tail text past `prevLen` characters in <span class="token-new"> for the
+  // streaming fade-in. Skips code (<pre>) and thinking blocks (.thinking-content).
+  // Note: the original chat.js helper checked `.think-content`, a class that exists
+  // nowhere in the app, so thinking text used to fade; matching the real
+  // `.thinking-content` corrects that. Operates on the detached fragment before insertion.
   function fadeNewText(container, prevLen) {
     if (!prevLen) return;
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
@@ -137,7 +137,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
     highlight(contentEl);
   }
 
-  // 渲染最新的完整源文本。
+  // Render the latest full source text.
   //
   // PRECONDITION: callers must pass append-only text — each call's `fullText` must
   // extend the previous one with the already-seen prefix UNCHANGED. Finalized
@@ -155,7 +155,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
       // Self-heal: if our DOM was replaced out from under us — chat.js writes
       // contentEl.innerHTML directly for thinking indicators and tool blocks, and
       // finalize() removes the marker — our tail marker is no longer a child of the
-      // 容器. Rebuild from scratch so we never append onto foreign content or
+      // container. Rebuild from scratch so we never append onto foreign content or
       // touch a detached marker.
       if (started && (!tailMarker || tailMarker.parentNode !== contentEl)) {
         started = false;
@@ -168,7 +168,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
       if (next > committedLen) {
         freeze(fullText.slice(committedLen, next));
         committedLen = next;
-        appendMode = null; // 正在流式传输的内容现在已被冻结
+        appendMode = null; // whatever was streaming is now frozen
         tailShownLen = 0;
       }
       renderTail(fullText.slice(committedLen));
@@ -180,7 +180,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
   }
 
   // Stream finished: freeze whatever is left canonically and flatten away the
-  // marker so the 容器 holds exactly what a single full render would produce.
+  // marker so the container holds exactly what a single full render would produce.
   // chat.js currently re-renders the finished message from source for its own
   // reasons and so doesn't call this, but it completes the renderer's lifecycle and
   // is exercised by the tests.

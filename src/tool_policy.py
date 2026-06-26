@@ -1,4 +1,4 @@
-"""Agent 执行的每回合工具策略组合。"""
+"""Per-turn tool policy composition for agent execution."""
 
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ _GUIDE_ONLY_PATTERNS: Tuple[Tuple[re.Pattern[str], str], ...] = tuple(
 
 @dataclass(frozen=True)
 class ToolPolicy:
-    """当前 agent 回合的有效工具行为。"""
+    """Effective tool behavior for one agent turn."""
 
     disabled_tools: frozenset[str] = frozenset()
     hidden_tools: frozenset[str] = frozenset()
@@ -131,7 +131,7 @@ class ToolPolicy:
 
 
 def detect_guide_only_turn(message: object) -> Optional[str]:
-    """当最新用户回合强烈要求不使用工具时返回原因。"""
+    """Return a reason when the latest user turn strongly requests no tools."""
 
     if not isinstance(message, str) or not message.strip():
         return None
@@ -143,7 +143,7 @@ def detect_guide_only_turn(message: object) -> Optional[str]:
 
 
 def known_tool_names() -> Set[str]:
-    """返回用于提示隐藏和拒绝列表的原生工具名称集合（尽力而为）。"""
+    """Best-effort set of native tool names for prompt hiding and denylisting."""
 
     names = set(_COMMON_TOOL_NAMES)
     try:
@@ -176,11 +176,11 @@ def build_effective_tool_policy(
     disabled_tools: Optional[Iterable[str]] = None,
     last_user_message: object = "",
 ) -> ToolPolicy:
-    """组合一个 agent 回合的有效策略。
+    """Compose the effective policy for one agent turn.
 
-    已有调用者继续提供已组合的已禁用工具拒绝列表。
-    此函数在顶层添加更高级的回合策略，使执行不再
-    委托给提示合规。
+    Existing callers still provide the already-composed disabled-tool denylist.
+    This function adds higher-level turn policy on top so enforcement is not
+    delegated to prompt compliance.
     """
 
     disabled = {str(t) for t in (disabled_tools or []) if t}

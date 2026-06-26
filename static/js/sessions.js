@@ -1,5 +1,5 @@
-// 会话管理函数
-// 本模块处理所有与会话相关的操作
+// Session Management Functions
+// This module handles all session-related operations
 
 import Storage from './storage.js';
 import uiModule, { styledPrompt } from './ui.js';
@@ -20,10 +20,10 @@ let _skipAutoSelect = false;
 const SIDEBAR_MAX_VISIBLE = 10;
 const FOLDER_MAX_VISIBLE = 5;
 let _showAllSessions = false;
-let _expandedFolders = {};  // folderName -> true 表示已点击"显示更多"
-let _sortMode = Storage.get('odysseus-session-sort') || 'active'; // 默认按最近活跃排序
-let _autoCreateInProgress = false; // 防止递归自动创建
-const _INCOGNITO_SESSIONS_KEY = 'ody-incognito-sessions'; // 隐身会话 ID 的 sessionStorage 键
+let _expandedFolders = {};  // folderName -> true if "show more" clicked
+let _sortMode = Storage.get('odysseus-session-sort') || 'active'; // default to last active
+let _autoCreateInProgress = false; // guard against recursive auto-create
+const _INCOGNITO_SESSIONS_KEY = 'ody-incognito-sessions'; // sessionStorage key for incognito session IDs
 const _isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const _mod = _isMac ? '⌘' : 'Ctrl';
 
@@ -38,7 +38,7 @@ function _isIncognitoSession(sid) { return _getIncognitoIds().includes(sid); }
 async function _cleanupIncognitoSessions() {
   const ids = _getIncognitoIds();
   if (ids.length === 0) return;
-  // 保留当前活跃的隐身会话，删除其余
+  // Keep the current active incognito session alive, delete the rest
   const toDelete = ids.filter(sid => sid !== currentSessionId);
   if (toDelete.length === 0) return;
   const keep = ids.filter(sid => sid === currentSessionId);
@@ -48,16 +48,16 @@ async function _cleanupIncognitoSessions() {
   ));
 }
 
-// Research 状态指示器跟踪
+// Research indicator tracking
 const _researchingSessions = new Set();
-const _streamingSessions = new Set();   // 后台聊天流（不通过 Research API 轮询）
-const _completedSessions = new Set();   // 已完成后台流的会话
+const _streamingSessions = new Set();   // Background chat streams (not polled against research API)
+const _completedSessions = new Set();   // Sessions with completed background streams
 let _researchPollTimer = null;
 
-// 会话列表键盘导航状态
+// Session list keyboard navigation state
 let _sessionListFocused = false;
 
-/** 从 UI 中清除当前会话（删除/归档后调用）。 */
+/** Clear current session from UI (after delete/archive). */
 function _deselectCurrentSession(sid) {
   if (currentSessionId !== sid) return;
   currentSessionId = null;
@@ -68,7 +68,7 @@ function _deselectCurrentSession(sid) {
   if (window.chatModule && window.chatModule.showWelcomeScreen) {
     window.chatModule.showWelcomeScreen();
   }
-  // 将发送按钮重置为空闲状态
+  // Reset send button to idle state
   const submitBtn = document.querySelector('.send-btn');
   if (submitBtn) {
     submitBtn.dataset.mode = '';
@@ -114,10 +114,10 @@ function _normalizeSessionsList(fetched) {
   return unique;
 }
 
-// 从 app.js 初始化依赖（空操作：依赖现在直接导入）
+// Initialize dependencies from app.js (no-op: dependencies now imported directly)
 export function initDependencies() {}
 
-// ── 文件夹状态持久化 ──
+// ── Folder state persistence ──
 const FOLDER_STATE_KEY = 'odysseus-folder-state';
 const FOLDER_ORDER_KEY = 'odysseus-folder-order';
 
@@ -134,25 +134,25 @@ function saveFolderOrder(order) {
   Storage.setJSON(FOLDER_ORDER_KEY, order);
 }
 
-/** 获取当前会话中所有唯一的文件夹名称。 */
+/** Get all unique folder names from current sessions. */
 function getFolderNames() {
   const names = new Set();
   sessions.forEach(s => { if (s.folder) names.add(s.folder); });
   return Array.from(names).sort();
 }
 
-/** 通过 API 将会话移动到某个文件夹。 */
+/** Move a session to a folder via the API. */
 async function moveToFolder(sessionId, folderName) {
   const fd = new FormData();
   fd.append('folder', folderName || '');
   await fetch(`${API_BASE}/api/session/${sessionId}`, { method: 'PATCH', body: fd });
-  // 更新本地数据
+  // Update local data
   const s = sessions.find(x => x.id === sessionId);
   if (s) s.folder = folderName || null;
   renderSessionList();
 }
 
-/** 构建会话下拉菜单中的"移动到文件夹"子菜单。 */
+/** Build the "Move to folder" submenu for a session dropdown. */
 function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
   const folders = getFolderNames();
 
@@ -160,16 +160,16 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
   moveItem.className = 'dropdown-item-compact';
   moveItem.style.position = 'relative';
   const _folderIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
-  moveItem.innerHTML = '<span class="dropdown-icon">' + _folderIcon + '</span><span>' + t('sessions.move_to_folder') + '</span>';
+  moveItem.innerHTML = '<span class="dropdown-icon">' + _folderIcon + '</span><span>Move to folder</span>';
 
   const sub = document.createElement('div');
   sub.className = 'dropdown session-folder-submenu';
 
-  // "无文件夹"选项
+  // "No folder" option
   const noneOpt = document.createElement('div');
   noneOpt.className = 'dropdown-item-compact';
   if (!currentFolder) noneOpt.style.opacity = '0.5';
-  noneOpt.textContent = t('sessions.no_folder');
+  noneOpt.textContent = '(No folder)';
   noneOpt.addEventListener('click', async (e) => {
     e.stopPropagation();
     await moveToFolder(sessionId, '');
@@ -178,7 +178,7 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
   });
   sub.appendChild(noneOpt);
 
-  // 已有文件夹
+  // Existing folders
   folders.forEach(f => {
     const opt = document.createElement('div');
     opt.className = 'dropdown-item-compact';
@@ -187,8 +187,8 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
     opt.addEventListener('click', async (e) => {
       e.stopPropagation();
       await moveToFolder(sessionId, f);
-      // 自动切换到"按文件夹"视图让用户看到聊天
-      // 去了哪里，与创建新文件夹时行为一致。
+      // Auto-flip to By Folder view so the user can see where the
+      // chat went, same as when creating a new folder.
       setSortMode('group');
       dropdown.style.display = 'none';
       sub.style.display = 'none';
@@ -196,23 +196,23 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
     sub.appendChild(opt);
   });
 
-  // "新建文件夹"选项
+  // "New folder" option
   const newOpt = document.createElement('div');
   newOpt.className = 'dropdown-item-compact';
   newOpt.style.color = 'var(--accent-primary)';
-  newOpt.textContent = t('sessions.new_folder');
+  newOpt.textContent = '+ New Folder';
   newOpt.addEventListener('click', async (e) => {
     e.stopPropagation();
-    const name = await styledPrompt(t('sessions.name_folder_prompt'), {
-      title: t('sessions.rename_folder_title'),
+    const name = await styledPrompt('Name this folder:', {
+      title: 'New folder',
       placeholder: 'e.g. Work, Research, Drafts',
-      confirmText: t('common.create'),
+      confirmText: 'Create',
     });
     if (!name || !name.trim()) return;
     await moveToFolder(sessionId, name.trim());
-    // 自动切换到"按文件夹"视图让用户立即看到
-    // 刚创建的文件夹 — 否则新文件夹消失在
-    // 平铺列表中，看起来像什么都没发生。
+    // Auto-flip to By Folder view so the user immediately sees the
+    // folder they just created — otherwise the new folder disappears
+    // into the flat list and looks like the action did nothing.
     setSortMode('group');
     dropdown.style.display = 'none';
     sub.style.display = 'none';
@@ -231,7 +231,7 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
       const subRect = sub.getBoundingClientRect();
 
       if (isMobile) {
-        // 移动端：定位在下拉菜单下方，居中
+        // On mobile: position below the dropdown, centered
         const ddRect = dropdown.getBoundingClientRect();
         sub.style.left = Math.max(8, ddRect.left) + 'px';
         sub.style.width = Math.min(ddRect.width, window.innerWidth - 16) + 'px';
@@ -242,7 +242,7 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
           sub.style.top = topBelow + 'px';
         }
       } else {
-        // 桌面端：定位在右侧
+        // Desktop: to the right
         sub.style.left = rect.right + 2 + 'px';
         sub.style.width = '';
         if (rect.top + subRect.height > window.innerHeight) {
@@ -250,7 +250,7 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
         } else {
           sub.style.top = rect.top + 'px';
         }
-        // 限制右边界
+        // Clamp right edge
         if (rect.right + 2 + subRect.width > window.innerWidth - 8) {
           sub.style.left = Math.max(8, rect.left - subRect.width - 2) + 'px';
         }
@@ -265,7 +265,7 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
   return moveItem;
 }
 
-/** 创建单个会话列表项元素。 */
+/** Create a single session list-item element. */
 function createSessionItem(s) {
   const div = document.createElement('div');
   div.className = 'list-item session-item';
@@ -279,14 +279,14 @@ function createSessionItem(s) {
   // session list re-render.
   const isOpenClaw = s.is_openclaw || s.id === 'openclaw';
 
-  // 拖拽手柄
+  // Drag handle
   const handle = document.createElement('span');
   handle.className = 'item-drag-handle';
   handle.textContent = '\u22EE\u22EE';
-  handle.title = t('sessions.drag_to_reorder');
+  handle.title = 'Drag to reorder';
   div.appendChild(handle);
 
-  // 提供商圆点指示器
+  // Provider dot indicator
   if (!isOpenClaw) {
     const star = document.createElement('span');
     const _logo = providerLogo(s.model);
@@ -300,7 +300,7 @@ function createSessionItem(s) {
     div.appendChild(star);
   }
 
-  // 会话类型图标
+  // Session type icon
   const icon = document.createElement('span');
   const _isFork = s.name && (s.name.startsWith('Fork:') || s.name.startsWith('\u2ADD'));
   const _isGroup = s.name && s.name.startsWith('[GRP]');
@@ -321,10 +321,10 @@ function createSessionItem(s) {
   } else {
     icon.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   }
-  // 标记为重要时，收藏书签替换会话图标
+  // Favorite bookmark replaces session-icon when important
   if (s.is_important && !isOpenClaw) {
     icon.className = 'session-icon session-fav';
-    icon.title = t('sessions.unfavorite');
+    icon.title = 'Unfavorite';
     icon.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     icon.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -332,7 +332,7 @@ function createSessionItem(s) {
       fd.append('important', false);
       await fetch(`${API_BASE}/api/session/${s.id}/important`, { method: 'POST', body: fd });
       s.is_important = false;
-      uiModule.showToast(t('sessions.unfavorited'));
+      uiModule.showToast('Unfavorited');
       renderSessionList();
     });
   }
@@ -350,10 +350,10 @@ function createSessionItem(s) {
   span.title = (s.model ? s.model.split('/').pop() + ' · ' : '') + chatTitle;
   span.classList.add('text-ellipsis');
 
-  // 双击重命名（仅当会话已被选中时）
+  // Double-click to rename (only when session is already selected)
   if (!isOpenClaw) {
     span.addEventListener('dblclick', (e) => {
-      if (currentSessionId !== s.id) return; // 必须先选中该会话
+      if (currentSessionId !== s.id) return; // must be selected first
       e.stopPropagation();
       const input = document.createElement('input');
       input.type = 'text';
@@ -370,7 +370,7 @@ function createSessionItem(s) {
           fd.append('name', newName);
           await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'PATCH', body: fd });
           s.name = newName;
-          uiModule.showToast(t('notification.renamed'));
+          uiModule.showToast('Renamed');
         }
         _forceSidebarOpen();
         renderSessionList();
@@ -384,9 +384,9 @@ function createSessionItem(s) {
     });
   }
 
-  // 点击行上任意位置选中会话（拖拽手柄和菜单除外）
-  // 移动端：如果用户在滚动则抑制点击（检测到 touchmove）
-  // 移动端长按显示上下文菜单
+  // Clicking anywhere on the row selects the session (except drag handle and menu)
+  // On mobile, suppress click if user was scrolling (touchmove detected)
+  // Long press on mobile shows context menu
   let _touchMoved = false;
   let _longPressTimer = null;
   let _longPressed = false;
@@ -396,12 +396,12 @@ function createSessionItem(s) {
     if (window.innerWidth > 768) return;
     _longPressTimer = setTimeout(() => {
       _longPressed = true;
-      // 触觉反馈（如果可用）
+      // Haptic feedback if available
       if (navigator.vibrate) navigator.vibrate(30);
-      // 直接显示会话下拉菜单（移动端菜单按钮已隐藏）
+      // Show the session dropdown directly (menu button is hidden on mobile)
       const dd = div._sessionDropdown;
       if (dd) {
-        // 关闭其他已打开的下拉菜单
+        // Close any other open dropdowns
         document.querySelectorAll('.dropdown').forEach(d => { if (d !== dd) d.style.display = 'none'; });
         const rect = div.getBoundingClientRect();
         dd.style.position = 'fixed';
@@ -410,13 +410,13 @@ function createSessionItem(s) {
         dd.style.right = 'auto';
         dd.style.display = 'block';
         dd.style.zIndex = '1000';
-        // 限制在视口内
+        // Clamp to viewport
         requestAnimationFrame(() => {
           const mr = dd.getBoundingClientRect();
           if (mr.bottom > window.innerHeight - 8) dd.style.top = (rect.top - mr.height - 4) + 'px';
           if (mr.right > window.innerWidth - 8) { dd.style.left = 'auto'; dd.style.right = '8px'; }
         });
-        // 点击外部关闭
+        // Close on tap outside
         const close = (ev) => { if (!dd.contains(ev.target)) { dd.style.display = 'none'; document.removeEventListener('click', close, true); } };
         setTimeout(() => document.addEventListener('click', close, true), 100);
       }
@@ -432,7 +432,7 @@ function createSessionItem(s) {
   div.addEventListener('click', (e) => {
     if (e.target.closest('.item-drag-handle') || e.target.closest('.session-fav') || e.target.closest('.hamburger') || e.target.closest('.session-dropdown') || e.target.closest('.session-rename-input') || e.target.closest('.session-select-cb')) return;
     if (_touchMoved || _longPressed) { _touchMoved = false; _longPressed = false; return; }
-    // 选择模式下，切换圆点状态而非导航
+    // In select mode, toggle dot instead of navigating
     if (_selectMode) {
       const dot = div.querySelector('.session-select-cb');
       if (dot) dot.click();
@@ -441,17 +441,17 @@ function createSessionItem(s) {
     selectSession(s.id);
   });
 
-  // 创建下拉菜单按钮
+  // Create a dropdown menu button
   const menuBtn = document.createElement('button');
   menuBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
-  menuBtn.title = t('sessions.session_actions');
+  menuBtn.title = 'Session actions';
   menuBtn.className = 'hamburger session-menu-btn';
 
-  // 创建下拉菜单
+  // Create dropdown menu
   const dropdown = document.createElement('div');
   dropdown.className = 'dropdown session-dropdown session-dropdown-menu';
 
-  // 创建菜单项
+  // Create menu items
   const _icon = (svg) => `<span class="dropdown-icon">${svg}</span>`;
   const _renameIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
   const _archiveIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>';
@@ -460,28 +460,28 @@ function createSessionItem(s) {
 
   const renameItem = document.createElement('div');
   renameItem.className = 'dropdown-item-compact';
-  renameItem.innerHTML = _icon(_renameIcon) + '<span>' + t('common.rename') + '</span>';
+  renameItem.innerHTML = _icon(_renameIcon) + '<span>Rename</span>';
 
   const archiveItem = document.createElement('div');
   archiveItem.className = 'dropdown-item-compact';
-  archiveItem.innerHTML = _icon(_archiveIcon) + '<span>' + t('common.archive') + '</span>';
+  archiveItem.innerHTML = _icon(_archiveIcon) + '<span>Archive</span>';
 
   const deleteItem = document.createElement('div');
   deleteItem.className = 'dropdown-item-compact dropdown-item-danger';
-  deleteItem.innerHTML = _icon(_deleteIcon) + '<span>' + t('common.delete') + '</span><span class="dropdown-shortcut">' + _mod + '+Alt+D</span>';
+  deleteItem.innerHTML = _icon(_deleteIcon) + '<span>Delete</span><span class="dropdown-shortcut">' + _mod + '+Alt+D</span>';
 
 
 
   dropdown.appendChild(renameItem);
 
-  // 收藏/取消收藏项
+  // Star/Unstar item
   if (!isOpenClaw) {
     const _favIcon = s.is_important
       ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'
       : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     const starItem = document.createElement('div');
     starItem.className = 'dropdown-item-compact';
-    starItem.innerHTML = _icon(_favIcon) + '<span>' + (s.is_important ? t('sessions.unfavorite') : t('sessions.favorite')) + '</span><span class="dropdown-shortcut">' + _mod + '+Alt+F</span>';
+    starItem.innerHTML = _icon(_favIcon) + '<span>' + (s.is_important ? 'Unfavorite' : 'Favorite') + '</span><span class="dropdown-shortcut">' + _mod + '+Alt+F</span>';
     starItem.addEventListener('click', async (e) => {
       e.stopPropagation();
       const newVal = !s.is_important;
@@ -497,7 +497,7 @@ function createSessionItem(s) {
 
   const copyItem = document.createElement('div');
   copyItem.className = 'dropdown-item-compact';
-  copyItem.innerHTML = _icon(_copyIcon) + '<span>' + t('sessions.copy_chat') + '</span>';
+  copyItem.innerHTML = _icon(_copyIcon) + '<span>Copy Chat</span>';
   copyItem.addEventListener('click', async (e) => {
     e.stopPropagation();
     dropdown.style.display = 'none';
@@ -505,11 +505,11 @@ function createSessionItem(s) {
       const res = await fetch(`${API_BASE}/api/history/${s.id}`);
       const data = await res.json();
       const msgs = data.history || [];
-      if (!msgs.length) { uiModule.showToast(t('sessions.no_messages_to_copy')); return; }
+      if (!msgs.length) { uiModule.showToast('No messages to copy'); return; }
       const lines = msgs
         .filter(m => m.role === 'user' || m.role === 'assistant')
         .map(m => {
-          const label = m.role === 'user' ? t('sessions.you') : t('sessions.ai');
+          const label = m.role === 'user' ? 'You' : 'AI';
           const text = typeof m.content === 'string' ? m.content.trim() : JSON.stringify(m.content);
           return `${label}: ${text}`;
         });
@@ -517,7 +517,7 @@ function createSessionItem(s) {
       try {
         await navigator.clipboard.writeText(text);
       } catch (_clipErr) {
-        // 非安全上下文的回退方案
+        // Fallback for non-secure contexts
         const ta = document.createElement('textarea');
         ta.value = text;
         ta.style.cssText = 'position:fixed;left:-9999px';
@@ -526,20 +526,20 @@ function createSessionItem(s) {
         document.execCommand('copy');
         ta.remove();
       }
-      uiModule.showToast(t('sessions.chat_copied'));
+      uiModule.showToast('Chat copied to clipboard');
     } catch (e) {
       console.error('Copy chat failed:', e);
-      uiModule.showError(t('sessions.failed_copy_chat'));
+      uiModule.showError('Failed to copy chat');
     }
   });
 
-  // 重命名项已在上方添加（第 393 行附近）
+  // Rename is already appended above (line 393)
 
-  // "选择" — 进入批量选择模式并预选此会话
+  // "Select" — enter bulk select mode with this session pre-selected
   if (!isOpenClaw) {
     const selectMoreItem = document.createElement('div');
     selectMoreItem.className = 'dropdown-item-compact';
-    selectMoreItem.innerHTML = _icon('<span style="font-size:16px;line-height:1;">●</span>') + '<span>' + t('sessions.select') + '</span>';
+    selectMoreItem.innerHTML = _icon('<span style="font-size:16px;line-height:1;">●</span>') + '<span>Select</span>';
     selectMoreItem.addEventListener('click', (e) => {
       e.stopPropagation();
       dropdown.style.display = 'none';
@@ -547,8 +547,8 @@ function createSessionItem(s) {
       const dot = div.querySelector('.session-select-cb');
       if (dot) { dot._checked = true; dot.innerHTML = '●'; dot.style.opacity = '1'; dot.style.color = 'var(--accent, var(--red))'; _selectedIds.add(s.id); _updateBulkCount(); }
     });
-    // 移动端"选择"是主要的多选操作 — 放在菜单顶部。
-    // 桌面端保持原位置。
+    // On mobile, "Select" is the primary multi-pick action — put it at the top
+    // of the menu. On desktop keep its original position.
     if (window.innerWidth <= 768) {
       dropdown.insertBefore(selectMoreItem, dropdown.firstChild);
     } else {
@@ -556,12 +556,12 @@ function createSessionItem(s) {
     }
   }
 
-  // 复制和移动到文件夹
+  // Copy & Move to folder
   const folderItem = buildFolderSubmenu(s.id, s.folder, dropdown);
   dropdown.appendChild(copyItem);
   dropdown.appendChild(folderItem);
 
-  // 危险操作前的分隔线
+  // Separator before destructive actions
   const _sep = document.createElement('div');
   _sep.style.cssText = 'height:1px;margin:3px 0;background:color-mix(in srgb,var(--border) 40%,transparent)';
   dropdown.appendChild(_sep);
@@ -569,38 +569,38 @@ function createSessionItem(s) {
   dropdown.appendChild(archiveItem);
   dropdown.appendChild(deleteItem);
 
-  // 仅移动端取消按钮 — 为触摸用户提供显式关闭。CSS 在
-  // 桌面端隐藏它（点击外部即可关闭）。
+  // Mobile-only Cancel — explicit close for touch users. CSS hides it on
+  // desktop (outside-click already dismisses cleanly there).
   const _cancelIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelItem.innerHTML = _icon(_cancelIcon) + '<span>' + t('common.cancel') + '</span>';
+  cancelItem.innerHTML = _icon(_cancelIcon) + '<span>Cancel</span>';
   cancelItem.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.style.display = 'none';
   });
   dropdown.appendChild(cancelItem);
 
-  // 添加事件监听器
+  // Add event listeners
   menuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    // 关闭其他已打开的下拉菜单
+    // Close any other open dropdowns
     document.querySelectorAll('.dropdown').forEach(d => {
       if (d !== dropdown) d.style.display = 'none';
     });
-    // 切换此下拉菜单
+    // Toggle this dropdown
     if (dropdown.style.display === 'block') {
       dropdown.style.display = 'none';
     } else {
-      // 使用视口坐标定位下拉菜单
+      // Position the dropdown using viewport coords
       const rect = menuBtn.getBoundingClientRect();
       dropdown.style.left = '';
       dropdown.style.right = (window.innerWidth - rect.right) + 'px';
-      // 先放在屏幕外以测量高度
+      // Show off-screen first to measure height
       dropdown.style.top = '-9999px';
       dropdown.style.display = 'block';
       const ddRect = dropdown.getBoundingClientRect();
-      // 如果下方空间不足则翻转到上方
+      // Flip above if not enough room below
       if (rect.bottom + 2 + ddRect.height > window.innerHeight) {
         dropdown.style.top = Math.max(2, rect.top - ddRect.height - 2) + 'px';
       } else {
@@ -612,7 +612,7 @@ function createSessionItem(s) {
   renameItem.addEventListener('click', () => {
     dropdown.style.display = 'none';
     _forceSidebarOpen();
-    // 找到会话行的名称 span 并开始内联编辑
+    // Find the session row's name span and start inline editing
     const sessionEl = document.querySelector(`.list-item[data-session-id="${s.id}"]`);
     if (!sessionEl) return;
     const span = sessionEl.querySelector('.grow');
@@ -632,7 +632,7 @@ function createSessionItem(s) {
         fd.append('name', newName);
         await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'PATCH', body: fd });
         s.name = newName;
-        uiModule.showToast(t('notification.renamed'));
+        uiModule.showToast('Renamed');
       }
       _forceSidebarOpen();
       renderSessionList();
@@ -647,29 +647,29 @@ function createSessionItem(s) {
 
   deleteItem.addEventListener('click', async () => {
     if (s.is_important) {
-      uiModule.showToast(t('sessions.unfavorite_before_delete'));
+      uiModule.showToast('Unfavorite before deleting');
       dropdown.style.display = 'none';
       return;
     }
     dropdown.style.display = 'none';
-    if (!await uiModule.styledConfirm(t('sessions.delete_session_confirm'), { confirmText: t('common.delete'), danger: true })) {
+    if (!await uiModule.styledConfirm('Delete this session?', { confirmText: 'Delete', danger: true })) {
       _forceSidebarOpen();
       return;
     }
     const wasCurrentSession = currentSessionId === s.id;
-    // 如果正在流式传输，删除前先中止
+    // If streaming, abort it before deleting
     if (wasCurrentSession && window.chatModule && window.chatModule.abortCurrentRequest) {
       window.chatModule.abortCurrentRequest();
     }
     _deselectCurrentSession(s.id);
     _removeSessionFromLocalState(s.id);
     _skipAutoSelect = true;
-    // 清理持久化聊天映射
+    // Clean up persistent chat mapping
     try {
       const pm = await import('./presets.js');
       if (pm.removePersistentChat) pm.removePersistentChat(s.id);
     } catch (e) {}
-    // 移动端如果删除当前活跃会话则关闭侧边栏，让用户看到欢迎页
+    // On mobile, close sidebar if we deleted the active session so user sees welcome screen
     if (wasCurrentSession && window.innerWidth <= 768) {
       const sidebar = document.getElementById('sidebar');
       if (sidebar) sidebar.classList.add('hidden');
@@ -678,10 +678,10 @@ function createSessionItem(s) {
     } else {
       _forceSidebarOpen();
     }
-    // 等待 API 删除完成，然后从服务器重新加载权威列表
+    // Await API deletion, then reload the authoritative list from the server
     try {
       await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' });
-    } catch (e) { /* 网络错误 — 会话可能仍在服务器端存在 */ }
+    } catch (e) { /* network error — session may still exist server-side */ }
     await loadSessions();
   });
 
@@ -697,26 +697,26 @@ function createSessionItem(s) {
         _forceSidebarOpen();
         await loadSessions();
         dropdown.style.display = 'none';
-        uiModule.showToast(t('sessions.session_archived'));
+        uiModule.showToast('Session archived');
       } else {
-        throw new Error(t('sessions.failed_archive_session'));
+        throw new Error('Failed to archive session');
       }
     } catch (error) {
       console.error('Error archiving session:', error);
-      uiModule.showError(t('sessions.failed_archive_session'));
+      uiModule.showError('Failed to archive session');
     }
   });
 
-  // 下拉菜单由共享的全局监听器 (_initDropdownDismiss) 关闭
+  // Dropdowns are closed by the shared global listener (_initDropdownDismiss)
 
-  // 防止在下拉菜单内部点击时关闭
+  // Prevent dropdown from closing when clicking inside it
   dropdown.addEventListener('click', (e) => {
     e.stopPropagation();
   });
 
   div.appendChild(span);
 
-  // 将处理中/已完成状态应用到星号圆点
+  // Apply processing/completed state to the star dot
   var _isProcessing = _researchingSessions.has(s.id) || _streamingSessions.has(s.id);
   var _isDone = _completedSessions.has(s.id) && !_isProcessing;
   if (!isOpenClaw) {
@@ -744,7 +744,7 @@ function createSessionItem(s) {
 
 let _renderRAF = null;
 export function renderSessionList() {
-  // 在同一帧内防抖快速重渲染
+  // Debounce rapid re-renders within the same frame
   if (_renderRAF) cancelAnimationFrame(_renderRAF);
   _renderRAF = requestAnimationFrame(_renderSessionListImpl);
 }
@@ -754,7 +754,7 @@ function _renderSessionListImpl() {
   const list = uiModule.el('session-list');
   if (!list) return;
 
-  // 从 localStorage 获取保存的排序
+  // Get saved order from localStorage
   const savedOrder = Storage.get('session-order');
   let orderedSessions = sessions.filter(s => !s.archived && s.folder !== 'Assistant' && !_isIncognitoSession(s.id) && (s.name || '').trim() !== 'Nobody' && (s.name || '').trim() !== 'Incognito');
 
@@ -769,7 +769,7 @@ function _renderSessionListImpl() {
           sessionMap.delete(id);
         }
       });
-      // 追加不在已保存顺序中的新会话
+      // Append any new sessions not in saved order
       sessionMap.forEach(s => ordered.push(s));
       orderedSessions = ordered;
     } catch (e) {
@@ -777,22 +777,22 @@ function _renderSessionListImpl() {
     }
   }
 
-  // 清理 body 中之前遗留的会话下拉菜单和文件夹子菜单
+  // Clean up any previous session dropdowns and folder submenus from body
   document.querySelectorAll('.session-dropdown, .folder-submenu').forEach(d => d.remove());
 
   const _frag = document.createDocumentFragment();
 
-  // ── 平铺排序模式：忽略文件夹，显示统一排序列表。——
-  // 文件夹仅在 _sortMode === 'group'（或 null/空表示
-  // 手动模式）时显示。这样保持选择器简洁：按文件夹分组
-  // 视图是排序选项之一，与"最近活跃"/"最新"并列。
+  // ── Flat sort modes: ignore folders, show one ordered list. ──
+  // Folders are only shown when _sortMode === 'group' (or null/empty
+  // for manual mode). This keeps the picker simple: a folder-grouped
+  // view is one of the sort choices, alongside Last Active / Newest.
   if (_sortMode && _sortMode !== 'group') {
     orderedSessions.sort((a, b) => {
       if (_sortMode === 'newest') return (b.created_at || '').localeCompare(a.created_at || '');
-      // "最近活跃"按最后实际消息排序，而非 updated_at —
-      // updated_at 会因重命名/切换模型/移动文件夹而更新，
-      // 使排序变得随机。对于 last_message_at 填充前的
-      // 旧行，回退到 updated_at/created_at。
+      // "Last active" sorts by the last actual MESSAGE, not updated_at —
+      // updated_at is bumped by renames / model swaps / folder moves, which
+      // made the order feel random. Fall back to updated_at/created_at for
+      // older rows that predate the last_message_at backfill.
       if (_sortMode === 'active') {
         const av = a.last_message_at || a.updated_at || a.created_at || '';
         const bv = b.last_message_at || b.updated_at || b.created_at || '';
@@ -800,7 +800,7 @@ function _renderSessionListImpl() {
       }
       return 0;
     });
-    // 收藏项仍然置顶
+    // Starred still float to top
     const starred = orderedSessions.filter(s => s.is_important);
     const rest = orderedSessions.filter(s => !s.is_important);
     const allFlat = [...starred, ...rest];
@@ -816,7 +816,7 @@ function _renderSessionListImpl() {
       const remaining = allFlat.length - SIDEBAR_MAX_VISIBLE;
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'session-show-more-btn';
-      toggleBtn.textContent = _showAllSessions ? t('common.show_less') : t('common.show_more', { n: remaining });
+      toggleBtn.textContent = _showAllSessions ? 'Show less' : `Show ${remaining} more`;
       toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         _showAllSessions = !_showAllSessions;
@@ -831,9 +831,9 @@ function _renderSessionListImpl() {
     return;
   }
 
-  // ── 分组/手动模式：先渲染文件夹，再渲染未分类会话。——
+  // ── Group / manual mode: render folders, then unfiled sessions. ──
   const folderState = loadFolderState();
-  const folders = {}; // folderName -> [会话列表]
+  const folders = {}; // folderName -> [sessions]
   const unfiled = [];
 
   orderedSessions.forEach(s => {
@@ -845,7 +845,7 @@ function _renderSessionListImpl() {
     }
   });
 
-  // 将收藏会话移到每组顶部，保持相对顺序
+  // Move starred sessions to top of each group, preserving relative order
   const starPartition = (arr) => {
     const starred = arr.filter(s => s.is_important);
     const rest = arr.filter(s => !s.is_important);
@@ -855,7 +855,7 @@ function _renderSessionListImpl() {
   starPartition(unfiled);
   Object.values(folders).forEach(arr => starPartition(arr));
 
-  // 先渲染文件夹（在未分类会话之上）
+  // Render folders first (above unfiled sessions)
   const savedFolderOrder = loadFolderOrder();
   const allFolderNames = Object.keys(folders);
   const orderedFolderNames = [];
@@ -876,11 +876,11 @@ function _renderSessionListImpl() {
     header.dataset.folderName = folderName;
     const collapsed = folderState[folderName] === false;
 
-    // 文件夹重排序的拖拽手柄
+    // Drag handle for folder reordering
     const dragHandle = document.createElement('span');
     dragHandle.className = 'folder-drag-handle';
     dragHandle.textContent = '\u2630';
-    dragHandle.title = t('sessions.drag_reorder_folder');
+    dragHandle.title = 'Drag to reorder folder';
     header.appendChild(dragHandle);
 
     const toggle = document.createElement('span');
@@ -898,15 +898,15 @@ function _renderSessionListImpl() {
     countSpan.textContent = `(${folders[folderName].length})`;
     header.appendChild(countSpan);
 
-    // 删除文件夹按钮
+    // Delete folder button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'folder-delete-btn';
     deleteBtn.textContent = '\u00d7';
-    deleteBtn.title = t('sessions.delete_folder_all');
+    deleteBtn.title = 'Delete folder and all sessions';
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const count = folders[folderName].length;
-      if (!await uiModule.styledConfirm(t('sessions.delete_folder_confirm', { name: folderName, n: count }), { confirmText: t('common.delete'), danger: true })) return;
+      if (!await uiModule.styledConfirm(`Delete folder "${folderName}" and all ${count} session(s) inside it?`, { confirmText: 'Delete', danger: true })) return;
       for (const s of folders[folderName]) {
         try {
           await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' });
@@ -933,14 +933,14 @@ function _renderSessionListImpl() {
       renderSessionList();
     });
 
-    // 允许双击重命名文件夹
+    // Allow renaming folder via double-click
     header.addEventListener('dblclick', async (e) => {
       e.stopPropagation();
       if (e.target.closest('.folder-delete-btn')) return;
-      const newName = await styledPrompt(t('sessions.rename_folder_prompt'), {
-        title: t('sessions.rename_folder_title'),
+      const newName = await styledPrompt('Rename folder:', {
+        title: 'Rename folder',
         defaultValue: folderName,
-        confirmText: t('common.rename'),
+        confirmText: 'Rename',
       });
       if (!newName || !newName.trim() || newName.trim() === folderName) return;
       const promises = folders[folderName].map(s => moveToFolder(s.id, newName.trim()));
@@ -957,7 +957,7 @@ function _renderSessionListImpl() {
       const folderLimit = folderExpanded ? folderSessions.length : FOLDER_MAX_VISIBLE;
       const visibleFolder = folderSessions.slice(0, folderLimit);
 
-      // 始终包含活跃会话，即使超出限制
+      // Always include active session even if beyond limit
       const activeInFolder = folderSessions.findIndex(s => s.id === currentSessionId);
       if (!folderExpanded && activeInFolder >= folderLimit) {
         visibleFolder.push(folderSessions[activeInFolder]);
@@ -971,7 +971,7 @@ function _renderSessionListImpl() {
         const rem = folderSessions.length - FOLDER_MAX_VISIBLE;
         const moreBtn = document.createElement('button');
         moreBtn.className = 'session-show-more-btn';
-        moreBtn.textContent = folderExpanded ? t('common.show_less') : t('common.show_more', { n: rem });
+        moreBtn.textContent = folderExpanded ? 'Show less' : `Show ${rem} more`;
         moreBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           _expandedFolders[folderName] = !folderExpanded;
@@ -986,18 +986,18 @@ function _renderSessionListImpl() {
     _frag.appendChild(folderDiv);
   });
 
-  // 在文件夹下方渲染未分类会话（限制数量，除非展开）
+  // Render unfiled sessions below folders (capped unless expanded)
   const hasFolders = orderedFolderNames.length > 0;
   const activeInUnfiled = unfiled.findIndex(s => s.id === currentSessionId);
   const limit = _showAllSessions ? unfiled.length : SIDEBAR_MAX_VISIBLE;
   const visibleUnfiled = unfiled.slice(0, limit);
 
-  // 如果活跃会话超出限制，仍包含它
+  // If active session is beyond the limit, include it
   if (!_showAllSessions && activeInUnfiled >= limit) {
     visibleUnfiled.push(unfiled[activeInUnfiled]);
   }
 
-  // 如果存在真实文件夹，用"未分类"文件夹包装
+  // Wrap in "Unsorted" folder if real folders exist
   let unfiledTarget = _frag;
   if (hasFolders && unfiled.length > 0) {
     const unsortedDiv = document.createElement('div');
@@ -1009,7 +1009,7 @@ function _renderSessionListImpl() {
     const dragHandle = document.createElement('span');
     dragHandle.className = 'folder-drag-handle';
     dragHandle.textContent = '\u2630';
-    dragHandle.title = t('sessions.drag_reorder_folder');
+    dragHandle.title = 'Drag to reorder folder';
     unsortedHeader.appendChild(dragHandle);
 
     const toggle = document.createElement('span');
@@ -1018,7 +1018,7 @@ function _renderSessionListImpl() {
     unsortedHeader.appendChild(toggle);
     const nameSpan = document.createElement('span');
     nameSpan.className = 'folder-name';
-    nameSpan.textContent = t('sessions.unsorted');
+    nameSpan.textContent = 'Unsorted';
     unsortedHeader.appendChild(nameSpan);
     const countSpan = document.createElement('span');
     countSpan.className = 'folder-count';
@@ -1028,10 +1028,10 @@ function _renderSessionListImpl() {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'folder-delete-btn';
     deleteBtn.textContent = '\u00d7';
-    deleteBtn.title = t('sessions.delete_all_unsorted');
+    deleteBtn.title = 'Delete all unsorted sessions';
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!await uiModule.styledConfirm(t('sessions.delete_unsorted_confirm', { n: unfiled.length }), { confirmText: t('common.delete'), danger: true })) return;
+      if (!await uiModule.styledConfirm(`Delete all ${unfiled.length} unsorted session(s)?`, { confirmText: 'Delete', danger: true })) return;
       for (const s of unfiled) {
         try {
           await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' });
@@ -1070,12 +1070,12 @@ function _renderSessionListImpl() {
     });
   }
 
-  // "显示更多"/"收起"切换按钮
+  // "Show more" / "Show less" toggle
   if (unfiledTarget && unfiled.length > SIDEBAR_MAX_VISIBLE) {
     const remaining = unfiled.length - SIDEBAR_MAX_VISIBLE;
     const toggleBtn = document.createElement('button');
     toggleBtn.className = 'session-show-more-btn';
-    toggleBtn.textContent = _showAllSessions ? t('common.show_less') : t('common.show_more', { n: remaining });
+    toggleBtn.textContent = _showAllSessions ? 'Show less' : `Show ${remaining} more`;
     toggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       _showAllSessions = !_showAllSessions;
@@ -1084,14 +1084,14 @@ function _renderSessionListImpl() {
     unfiledTarget.appendChild(toggleBtn);
   }
 
-  // 一次性将所有构建的元素写入列表
+  // Flush all built elements into the list in one operation
   list.innerHTML = '';
   list.appendChild(_frag);
 
   _postRenderSessionList(list);
 }
 
-/** 渲染后共享逻辑：高亮、键盘导航、滑动提示、拖拽排序 */
+/** Shared post-render: highlight, keyboard nav, swipe hint, drag sort */
 function _postRenderSessionList(list) {
   if (currentSessionId) {
     const activeEl = document.querySelector(`.list-item[data-session-id="${currentSessionId}"]`);
@@ -1119,7 +1119,7 @@ function _initKeyboardNav(list) {
 }
 
 function _initSwipeToDelete(list) {
-  // 由现有滑动代码处理 — 占位符保持一致性
+  // handled by existing swipe code — placeholder for consistency
 }
 
 function _showSwipeHint(list) {
@@ -1129,7 +1129,7 @@ function _showSwipeHint(list) {
       localStorage.setItem('ody-swipe-hint-shown', '1');
       const hint = document.createElement('div');
       hint.className = 'swipe-hint';
-      hint.innerHTML = '<span class="swipe-hint-arrow">\u2190</span> ' + t('sessions.swipe_to_delete');
+      hint.innerHTML = '<span class="swipe-hint-arrow">\u2190</span> swipe to delete';
       firstItem.style.position = 'relative';
       firstItem.appendChild(hint);
       setTimeout(() => { hint.style.opacity = '0'; }, 3000);
@@ -1138,15 +1138,15 @@ function _showSwipeHint(list) {
   }
 }
 
-// ── 移动端强制保持侧边栏打开（下拉菜单操作后）——
+// ── Force sidebar open on mobile (after dropdown actions) ──
 function _forceSidebarOpen() {
   if (window.innerWidth > 768) return;
-  // 抑制背景遮罩关闭
+  // Suppress backdrop close
   if (window._suppressSidebarClose !== undefined) {
     window._suppressSidebarClose = true;
     setTimeout(() => { window._suppressSidebarClose = false; }, 2000);
   }
-  // 强制侧边栏可见
+  // Force sidebar visible
   requestAnimationFrame(() => {
     const sb = document.getElementById('sidebar');
     if (sb && sb.classList.contains('hidden')) {
@@ -1156,10 +1156,10 @@ function _forceSidebarOpen() {
   });
 }
 
-// 移动端行内重命名进行中时，多条路径可能隐藏侧边栏
-// （背景遮罩点击、软键盘视口调整、下拉菜单关闭）。直接
-// 监视侧边栏，一旦被隐藏就重新打开 — 无论哪条路径触发都能防御。
-// 返回一个停止函数，重命名提交后调用。
+// While an inline rename is in progress on mobile, several paths can hide the
+// sidebar (backdrop tap, soft-keyboard viewport resize, dropdown dismiss). Watch
+// the sidebar directly and re-open it if anything hides it — bulletproof against
+// whichever path fires. Returns a stopper to call once the rename is committed.
 function _guardSidebarDuringRename() {
   if (window.innerWidth > 768 || !window.MutationObserver) return () => {};
   const sb = document.getElementById('sidebar');
@@ -1172,12 +1172,12 @@ function _guardSidebarDuringRename() {
     }
   });
   obs.observe(sb, { attributes: true, attributeFilter: ['class'] });
-  // 调用方停止后短暂保持守卫，捕获 blur/提交后触发的
-  // 键盘收起的 resize 事件。
+  // Keep guarding briefly after the caller stops, to catch the keyboard-dismiss
+  // resize that fires just after blur/commit.
   return () => setTimeout(() => obs.disconnect(), 400);
 }
 
-// ── 批量选择模式 ──
+// ── Bulk select mode ──
 let _selectMode = false;
 let _selectedIds = new Set();
 
@@ -1188,7 +1188,7 @@ function _enterSelectMode() {
   if (bulkBar) bulkBar.classList.remove('hidden');
   const selectBtn = document.getElementById('session-select-btn');
   if (selectBtn) selectBtn.style.opacity = '1';
-  // 为所有会话项添加选择圆点
+  // Add select dots to all session items
   document.querySelectorAll('.list-item[data-session-id]').forEach(item => {
     if (item.querySelector('.session-select-cb')) return;
     const dot = document.createElement('span');
@@ -1221,7 +1221,7 @@ function _exitSelectMode() {
   if (selectBtn) selectBtn.style.opacity = '0.5';
   const selectAll = document.getElementById('session-select-all');
   if (selectAll) selectAll.checked = false;
-  // 移除选择框
+  // Remove checkboxes
   document.querySelectorAll('.session-select-cb').forEach(cb => cb.remove());
 }
 
@@ -1245,7 +1245,7 @@ function _initBulkSelect() {
   const cancelBtn = document.getElementById('session-bulk-cancel');
   if (cancelBtn) cancelBtn.addEventListener('click', () => _exitSelectMode());
 
-  // 从漏斗下拉菜单中选择
+  // Select from funnel dropdown
   const selectFromDropdown = document.getElementById('session-select-from-dropdown');
   if (selectFromDropdown) {
     selectFromDropdown.addEventListener('click', () => {
@@ -1255,7 +1255,7 @@ function _initBulkSelect() {
     });
   }
 
-  // Escape 键退出选择模式
+  // Escape exits select mode
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && _selectMode) {
       _exitSelectMode();
@@ -1293,7 +1293,7 @@ function _initBulkSelect() {
     archiveBtn.addEventListener('click', async () => {
       if (_selectedIds.size === 0) return;
       const count = _selectedIds.size;
-      if (!await uiModule.styledConfirm(t('sessions.archive_session_confirm', { n: count }), { confirmText: t('common.archive') })) return;
+      if (!await uiModule.styledConfirm(`Archive ${count} session(s)?`, { confirmText: 'Archive' })) return;
       for (const sid of _selectedIds) {
         try {
           await fetch(`${API_BASE}/api/session/${sid}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
@@ -1302,7 +1302,7 @@ function _initBulkSelect() {
       _exitSelectMode();
       if (window._suppressSidebarClose !== undefined) { window._suppressSidebarClose = true; setTimeout(() => { window._suppressSidebarClose = false; }, 1500); }
       await loadSessions();
-      uiModule.showToast(t('sessions.session_archived_n', { n: count }));
+      uiModule.showToast(`${count} session(s) archived`);
     });
   }
 
@@ -1311,7 +1311,7 @@ function _initBulkSelect() {
     deleteBtn.addEventListener('click', async () => {
       if (_selectedIds.size === 0) return;
       const count = _selectedIds.size;
-      if (!await uiModule.styledConfirm(t('sessions.delete_session_confirm_n', { n: count }), { confirmText: t('common.delete'), danger: true })) return;
+      if (!await uiModule.styledConfirm(`Delete ${count} session(s)? This cannot be undone.`, { confirmText: 'Delete', danger: true })) return;
       const deletedIds = [];
       for (const sid of _selectedIds) {
         try {
@@ -1323,7 +1323,7 @@ function _initBulkSelect() {
       _exitSelectMode();
       if (window._suppressSidebarClose !== undefined) { window._suppressSidebarClose = true; setTimeout(() => { window._suppressSidebarClose = false; }, 1500); }
       await loadSessions();
-      uiModule.showToast(t('notification.session_deleted'));
+      uiModule.showToast(`${deletedIds.length} session(s) deleted`);
     });
   }
 }
@@ -1343,10 +1343,10 @@ function _animateSessionRowsRemoving(ids, selector) {
 
 export async function loadSessions() {
   try {
-    // 删除上次页面加载遗留的隐身会话
+    // Delete incognito sessions left over from a previous page load
     await _cleanupIncognitoSessions();
 
-    // 使用登录页预取的数据（仅首次加载）
+    // Use prefetched data from login page if available (first load only)
     const prefetched = sessionStorage.getItem('ody-prefetch-sessions');
     let fetched;
     if (prefetched) {
@@ -1367,16 +1367,16 @@ export async function loadSessions() {
     }
 
     const activeSessions = sessions.filter(s => !s.archived);
-    // "临时"会话 = 单例 Assistant 聊天 + 任意任务输出会话。
-    // 将其视为不可恢复的，以便返回应用时回到用户
-    // 最后一次实际对话，而非最近追加消息的
-    // 某个签到任务。
+    // "Transient" sessions = the singleton Assistant chat + any task-output
+    // session. Treat them as not-restorable so coming back to the app lands
+    // on the user's last actual conversation, not whichever check-in task
+    // most recently appended a message.
     const _isTransient = (s) => !!s && (s.folder === 'Assistant' || s.folder === 'Tasks');
     const _realSessions = activeSessions.filter(s => !_isTransient(s));
     const hashId = window.location.hash.replace('#', '');
     let savedId = Storage.get('lastSessionId');
-    // 如果持久化的 lastSessionId 指向临时会话（持久化守卫
-    // 添加前的旧状态），丢弃它。
+    // If the persisted lastSessionId points to a transient session (legacy
+    // state from before the persistence-guard was added), drop it.
     if (savedId) {
       const _saved = activeSessions.find(s => s.id === savedId);
       if (_saved && _isTransient(_saved)) {
@@ -1387,39 +1387,39 @@ export async function loadSessions() {
     const hasPendingChat = !!_pendingChat;
     let targetId = null;
     if (hasPendingChat) {
-      // 已选择模型且 UI 显示新的聊天，但会话直到发送
-      // 第一条消息时才创建。后台流完成后会调用 loadSessions()；
-      // 没有此守卫的话，重载时发现没有当前会话会自动选择
-      // 上一个聊天。
+      // A model was picked and the UI is showing a fresh New Chat, but the
+      // session is not created until the first message. Background stream
+      // completions call loadSessions() later; without this guard that reload
+      // sees no current session and auto-selects the previous chat.
       targetId = null;
     } else if (hashId && activeSessions.some(s => s.id === hashId)) {
       targetId = hashId;
     } else if (currentSessionId && activeSessions.some(s => s.id === currentSessionId)) {
       targetId = currentSessionId;
     } else if (currentSessionId) {
-      // 会话刚创建但可能尚未出现在列表中 — 保留它
+      // Session was just created but may not be in the list yet — keep it
       targetId = currentSessionId;
     } else if (savedId && activeSessions.some(s => s.id === savedId)) {
       targetId = savedId;
     } else if (!_skipAutoSelect && _realSessions.length > 0) {
-      // 最近的非临时会话 — 跳过 Assistant/Tasks 以免自动触发的
-      // assistant 成为默认聊天。
+      // Most-recent NON-transient session — skip Assistant / Tasks so the
+      // auto-firing assistant doesn't become the apparent default chat.
       targetId = _realSessions[0].id;
     } else if (!_skipAutoSelect && activeSessions.length > 0) {
-      // 仅存在临时会话（全新账户）— 回退到
-      // 原始行为，确保用户不会面对空白。
+      // Only transient sessions exist (brand-new account) — fall through to
+      // the original behaviour so we don't leave the user with nothing.
       targetId = activeSessions[0].id;
     }
     _skipAutoSelect = false;
 
     // Fresh login: prefer a default-model session so a brand-new user lands
     // ready to chat. CRITICAL: only do this when there's NO session to return
-    // to (no 哈希 / lastSessionId / existing chat resolved into targetId).
+    // to (no hash / lastSessionId / existing chat resolved into targetId).
     // Otherwise a fresh page load — which a server restart triggers — would
     // spin up a new empty default-model chat and shadow the user's last
     // conversation, making it look like the chat "lost its context" (and the
     // picker would still show the old model's name from cached state). See
-    // 解析顺序（哈希 → currentSession → lastSessionId → 最近一条）。
+    // the targetId resolution above (hash → currentSession → lastSessionId →
     // most-recent).
     const _isFirstLoad = !sessionStorage.getItem('ody-session-active');
     if (_isFirstLoad) {
@@ -1429,7 +1429,7 @@ export async function loadSessions() {
           const dcRes = await fetch(`${API_BASE}/api/default-chat`);
           const dc = await dcRes.json();
           if (dc.endpoint_url && dc.model) {
-            // 检查是否已有使用此模型的空会话可以复用
+            // Check if there's already an empty session with this model we can reuse
             const emptyDefault = activeSessions.find(s =>
               s.model === dc.model && s.message_count === 0
             );
@@ -1437,28 +1437,28 @@ export async function loadSessions() {
               targetId = emptyDefault.id;
             } else {
               await createDirectChat(dc.endpoint_url, dc.model, dc.endpoint_id);
-              // 移动端隐藏侧边栏，让用户直接进入聊天
+              // On mobile, hide sidebar so user lands directly in chat
               if (window.innerWidth < 768) {
                 const sb = document.getElementById('sidebar');
                 if (sb) sb.classList.add('hidden');
               }
-              return; // createDirectChat 内部处理 selectSession
+              return; // createDirectChat handles selectSession internally
             }
           }
-        } catch (_) { /* 未配置默认模型 */ }
+        } catch (_) { /* no default model configured */ }
       }
     }
 
     if (targetId && targetId !== currentSessionId) {
       await selectSession(targetId, { keepSidebar: true });
     } else if (targetId && targetId === currentSessionId) {
-      // 同一会话 — 仅刷新标题栏名称（以防自动生成的）
+      // Same session — just refresh the header name in case it was auto-generated
       const s = sessions.find(x => x.id === targetId);
       const metaEl = document.getElementById('current-meta');
       if (metaEl && s) metaEl.textContent = s.name;
     }
 
-    // 无会话选中 — 仍启用输入框使斜杠命令（如 /setup）可用
+    // No session selected — still enable input so slash commands (e.g. /setup) work
     if (!targetId && !hasPendingChat) {
       const msgInput = document.getElementById('message');
       if (msgInput) {
@@ -1469,7 +1469,7 @@ export async function loadSessions() {
         window.chatModule.showWelcomeScreen();
       }
       updateModelPicker();
-      // 仅在确实没有会话时才自动创建（而非仅未选中）
+      // Only auto-create if there are truly zero sessions (not just unselected)
       if (activeSessions.length === 0 && !_autoCreateInProgress) {
         _autoCreateInProgress = true;
         try {
@@ -1478,54 +1478,54 @@ export async function loadSessions() {
           if (dc.endpoint_url && dc.model) {
             await createDirectChat(dc.endpoint_url, dc.model, dc.endpoint_id);
           }
-        } catch (_) { /* 无默认模型 — 没关系，用户可用 /setup */ }
+        } catch (_) { /* no default model — that's fine, user can /setup */ }
         _autoCreateInProgress = false;
       }
     }
   } catch (error) {
     console.error('Error in loadSessions:', error);
-    uiModule.showError(t('sessions.failed_load_sessions', { error: error.message }));
+    uiModule.showError('Failed to load sessions: ' + error.message);
   }
 }
 
 export async function selectSession(id, { keepSidebar = false } = {}) {
-  // 如果对比模式活跃则干净地退出
+  // Exit compare mode cleanly if active
   if (window.compareModule && window.compareModule.isActive()) {
     window.compareModule.deactivate(true);
-    return; // deactivate 会触发页面重载
+    return; // deactivate does a page reload
   }
   try {
     const navToken = ++_sessionNavToken;
     const prevSessionId = currentSessionId;
-    // 导航离开时重新归档已预览的会话
+    // Re-archive peeked session when navigating away
     _checkPeekCleanup(id);
-    // 清除残留的文档文本选择，避免渗入新聊天
+    // Clear any leftover document text selection so it doesn't bleed into the new chat
     if (prevSessionId !== id && window.documentModule?.clearSelection) {
       try { window.documentModule.clearSelection(); } catch {}
     }
     currentSessionId = id;
     // Identify Assistant / task-output sessions so we don't "trap" the user
     // there on return. Skipped from both `lastSessionId` persistence and the
-    // URL 哈希 — the user complained that coming back to Odysseus kept
+    // URL hash — the user complained that coming back to Odysseus kept
     // landing them on the auto-firing task-log chat instead of their last
     // real conversation.
     const _meta = sessions.find(s => s.id === id);
     const _isTransientChat = !!_meta && (_meta.folder === 'Assistant' || _meta.folder === 'Tasks');
     if (!_isTransientChat) {
       Storage.set('lastSessionId', id);
-      // 更新 URL 哈希 但不触发 哈希change 处理器
+      // Update URL hash without triggering hashchange handler
       if (window.location.hash !== '#' + id) {
         history.replaceState(null, '', '#' + id);
       }
     }
-    // 恢复持久化聊天的角色预设
+    // Restore character preset for persistent chats
     try {
       const presetsModule = window.presetsModule || (await import('./presets.js')).default;
       if (presetsModule && presetsModule.onSessionSwitch) presetsModule.onSessionSwitch(id);
     } catch (e) {}
     const meta = sessions.find(s => s.id === id);
 
-    // 将正在进行的流移到后台而非中止
+    // Detach any in-flight stream to background instead of aborting
     try {
       if (window.chatModule) {
         if (window.chatModule.detachCurrentStream) {
@@ -1540,15 +1540,15 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
         window.chatModule.abortCurrentRequest();
       }
     }
-    // 将发送按钮重置为空闲状态
+    // Reset send button to idle state
     if (window._updateSendBtnIcon) window._updateSendBtnIcon();
     const sendBtn = document.querySelector('.send-btn');
     if (sendBtn && sendBtn.dataset.mode === 'streaming') {
       sendBtn.dataset.mode = '';
       sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
-      sendBtn.title = t('chat.send_button');
+      sendBtn.title = 'Send message';
     }
-    // 切换会话时停用对比模式
+    // Deactivate compare mode on session switch
     if (window.compareModule) {
       if (window.compareModule.isActive()) window.compareModule.deactivate(true);
       else if (window.compareModule.hasVisibleResults()) window.compareModule.cleanupResults();
@@ -1564,9 +1564,9 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       if (window._updateSendBtnIcon) window._updateSendBtnIcon();
     }
 
-    // 移动端保持侧边栏打开 — 用户通过点击聊天区域或滑动关闭
+    // On mobile, keep sidebar open — user dismisses it by tapping chat area or swiping
 
-    // 在侧边栏中高亮当前活跃会话
+    // Highlight active session in sidebar
     document.querySelectorAll('.list-item.active-session').forEach(el => el.classList.remove('active-session'));
     const activeEl = document.querySelector(`.list-item[data-session-id="${id}"]`);
     if (activeEl) activeEl.classList.add('active-session');
@@ -1575,18 +1575,18 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     if (currentMetaEl) {
       currentMetaEl.textContent = meta ? meta.name : 'Odysseus Chat';
     }
-    // 更新模型选择器可见性
+    // Update model picker visibility
     updateModelPicker();
 
-    // 刷新新选中会话的费用徽章
+    // Refresh session cost badge for the newly selected session
     if (chatRenderer.updateSessionCostUI) chatRenderer.updateSessionCostUI();
 
     const chatHistory = uiModule.el('chat-history');
-    // 预取历史以便无缝切换。`isOC`
-    // 是 OpenClaw 特殊会话标记 — 用于下方的 wouldWipe
-    // 守卫和更下方的欢迎屏分支。（其
-    // 声明已被移除但引用仍在，
-    // 每次 selectSession 都会产生 ReferenceError。）
+    // Prefetch history before fading so we can swap instantly. `isOC`
+    // is the OpenClaw special-session sentinel — used by the wouldWipe
+    // guard below and the welcome-screen branch further down. (Its
+    // declaration had been removed while leaving the references in
+    // place, producing a ReferenceError every selectSession.)
     const isOC = meta && (meta.is_openclaw || id === 'openclaw');
     let msgHistory = [], modelName = null;
     if (!isOC) {
@@ -1596,7 +1596,7 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       msgHistory = data.history || [];
       modelName = data.model || null;
       // The model returned by /api/history is the authoritative one the
-      // 后端 will use for this session. Write it back into the cached
+      // backend will use for this session. Write it back into the cached
       // session meta and refresh the picker so the displayed model can
       // never diverge from what's actually sent (the "picker says Minimax
       // but it used the default" bug after a restart / stale cache).
@@ -1609,21 +1609,21 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       }
     }
 
-    // 守卫：如果获取的历史为空但 DOM 中已有同一会话的消息
-    // 气泡（隐身会话不持久化，所以 /api/history
-    // 返回 []），保留 DOM 而不清除它。这修复了
-    // 隐身聊天中流式传输完成后调用 selectSession
-    // 时“回复闪烁 0.1秒然后空白”的 bug。
+    // Guard: if the fetched history is empty but the DOM already has message
+    // bubbles for the same session (incognito doesn't persist, so /api/history
+    // returns []), preserve the DOM instead of wiping it. This fixes the
+    // "reply flashes for 0.1s then empty" bug when selectSession is called
+    // after a streaming completion in an incognito chat.
     const isSameSession = (prevSessionId === id);
     const hasExistingBubbles = chatHistory && chatHistory.querySelectorAll('.msg').length > 0;
     const wouldWipe = !isOC && !msgHistory.length && isSameSession && hasExistingBubbles;
     if (wouldWipe) {
-      // 跳过淡入淡出/重载；已经在显示正确的内容。
+      // Skip the fade/reload; we're already showing the right content.
       if (chatHistory) chatHistory.classList.remove('no-animate');
       return;
     }
 
-    // 淡出旧内容，切换，淡入新内容
+    // Fade out old content, swap, fade in
     if (chatHistory) {
       chatHistory.style.transition = 'opacity 0.12s ease-out';
       chatHistory.style.opacity = '0';
@@ -1632,10 +1632,10 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       chatHistory.innerHTML = '';
     }
 
-    // 批量历史渲染时抑制每条消息的入场动画
+    // Suppress per-message entrance animations during bulk history render
     if (chatHistory) chatHistory.classList.add('no-animate');
 
-    // 在不可见时填充新内容
+    // Populate new content while invisible
     if (isOC) {
       if (window.chatModule && window.chatModule.showWelcomeScreen) window.chatModule.showWelcomeScreen();
       window.chatModule.addMessage('assistant',
@@ -1649,14 +1649,14 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
         if (typeof msg.content === 'string') {
           displayContent = msg.content;
         } else if (Array.isArray(msg.content)) {
-          // 多模态（图片/音频附件）：提取文本部分，跳过二进制数据
+          // Multimodal (image/audio attachments): extract text parts, skip binary
           displayContent = msg.content.filter(p => p.type === 'text').map(p => p.text).join('\n').trim();
         } else {
           displayContent = '';
         }
-        // 清理文档选择上下文以便显示
+        // Clean up doc selection context for display
         if (msg.role === 'user') {
-          // 隐藏"从上次地方继续"气泡
+          // Hide "Continue where you left off" bubbles
           if (displayContent.trim() === 'Continue where you left off' || displayContent.trim().startsWith('Your message was cut off.') || displayContent.trim().startsWith('Your previous response was interrupted.') || displayContent.includes('[Instruction: Rewrite') || displayContent.includes('[Instruction: Explain')) continue;
           const docEditMatch = displayContent.match(/^In the document, edit this specific text \((lines? [\d-]+)\):\n```\n([\s\S]*?)\n```\n\nInstruction: ([\s\S]*)$/);
           if (docEditMatch) {
@@ -1667,12 +1667,12 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       }
     } else {
       if (window.chatModule && window.chatModule.showWelcomeScreen) window.chatModule.showWelcomeScreen();
-      // 不高亮空会话 — 感觉像没有任何会话被选中
+      // Don't highlight empty sessions — feels like nothing is selected
       document.querySelectorAll('.list-item.active-session').forEach(el => el.classList.remove('active-session'));
     }
     uiModule.scrollHistoryInstant();
 
-    // 淡入并重新启用消息动画
+    // Fade in and re-enable message animations
     if (chatHistory) {
       chatHistory.style.transition = 'opacity 0.15s ease-in';
       chatHistory.style.opacity = '1';
@@ -1683,32 +1683,32 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
         window.hljs.highlightElement(block);
       });
     }
-    // 切换会话时隐藏 Research 按钮 — 它仅属于发起它的会话
+    // Hide research button on session switch — it's only for the session that started it
     var _rBtn = document.getElementById('research-toggle-btn');
     var _rChk = document.getElementById('research-toggle');
     if (_rBtn) _rBtn.style.display = 'none';
     if (_rChk) _rChk.checked = false;
 
-    // 检查页面刷新后幸存的 Research 待处理/已完成状态
+    // Check for pending/completed research that survived a page refresh
     if (window.chatModule && window.chatModule.checkPendingResearch) {
       window.chatModule.checkPendingResearch(id);
     }
-    // 如果是群组会话则恢复群组聊天状态
+    // Restore group chat state if this is a group session
     if (window.groupModule && window.groupModule.restoreState && window.groupModule.restoreState(id)) {
       if (window._syncGroupIndicator) window._syncGroupIndicator(true);
-      // 群组会话时隐藏模型选择器
+      // Hide model picker for group sessions
       const _mpw = document.getElementById('model-picker-wrap');
       if (_mpw) _mpw.style.display = 'none';
     } else if (window.groupModule && window.groupModule.isActive()) {
-      // 切换离开群组会话 — 停用
+      // Switching away from group session — deactivate
       window.groupModule.stopGroup();
       if (window._syncGroupIndicator) window._syncGroupIndicator(false);
     }
 
-    // 停止跳动通知 — 用户正在查看此会话
+    // Stop pulsing notification — user is now viewing this session
     clearStreamComplete(id);
 
-    // 重新附加任何后台流
+    // Re-attach any background stream
     try {
       if (window.chatModule && window.chatModule.checkBackgroundStream) {
         window.chatModule.checkBackgroundStream(id);
@@ -1716,9 +1716,9 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     } catch (e) {
       console.warn('checkBackgroundStream error:', e);
     }
-    // 检查服务器是否有活跃流（页面刷新后幸存）
+    // Check server for active stream (survives page refresh)
     _checkServerStream(id);
-    // 文档面板：如果下一个会话也需要则保持打开，否则关闭
+    // Document panel: keep open if next session also wants it, otherwise close
     if (window.documentModule) {
       const docBtn = document.getElementById('overflow-doc-btn');
       const meta = sessions.find(s => s.id === id);
@@ -1731,7 +1731,7 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       const docInd = document.getElementById('doc-indicator-btn');
       if (docInd) docInd.classList.toggle('visible', hasDocs);
       if (hasDocs) {
-        // 等待会话 UI 稳定后滑入文档
+        // Wait for session UI to settle, then slide in documents
         setTimeout(() => window.documentModule.loadSessionDocs(id, { restoreMode: true }), 300);
       } else if (!shouldOpen) {
         window.documentModule.closePanel();
@@ -1740,17 +1740,17 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
 
   } catch (error) {
     console.error('Error in selectSession:', error);
-    uiModule.showError(t('sessions.failed_load_session', { error: error.message }));
+    uiModule.showError('Failed to load session: ' + error.message);
   } finally {
-    // 确保会话选择后加载记忆
+    // Ensure memories are loaded after session selection
     if (window.memoryModule && window.memoryModule.loadMemories) {
       await window.memoryModule.loadMemories();
     }
-    // 自动聚焦消息输入框（除非会话列表有键盘聚焦）。
-    // 移动端跳过 — 聚焦文本框会弹出屏幕键盘，
-    // 当用户只是在聊天间导航时（如从 Library
-    // 选择聊天）会很打扰。用户可以点击输入框
-    // 来弹出键盘。
+    // Auto-focus message input (unless session list has keyboard focus).
+    // Skip on mobile — focusing the textarea pops up the on-screen keyboard,
+    // which is intrusive when the user is just navigating between chats
+    // (e.g. picking a chat from the Library). They can tap the input to
+    // bring up the keyboard when they actually want to type.
     if (!_sessionListFocused && window.innerWidth > 768) {
       const msgInput = document.getElementById('message');
       if (msgInput) msgInput.focus();
@@ -1758,23 +1758,23 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
   }
 }
 
-// 待定会话 — 本地存储直到发送第一条消息
+// Pending session — stored locally until the first message is sent
 let _pendingChat = null; // { url, modelId, endpointId }
 
 export function createDirectChat(url, modelId, endpointId) {
   _sessionNavToken++;
-  // 移除活跃流以免干扰新聊天
+  // Detach any active stream so it doesn't interfere with the new chat
   if (window.chatModule && window.chatModule.detachCurrentStream) {
     window.chatModule.detachCurrentStream(currentSessionId);
   }
-  // 同时停止活跃的群组聊天 — 否则其进行中的并行/轮询流
-  // 会持续渲染到全新聊天中（中止群组的 fetch）。
+  // Stop an active GROUP chat too — otherwise its in-flight parallel/round-robin
+  // streams keep rendering into the brand-new chat (abort the group's fetches).
   if (window.groupModule && window.groupModule.isActive && window.groupModule.isActive()) {
     try { window.groupModule.stopGroup(); } catch {}
     if (window._syncGroupIndicator) window._syncGroupIndicator(false);
   }
 
-  // 不调用 API — 仅存储模型信息并准备 UI
+  // Don't hit the API — just store the model info and prepare the UI
   _pendingChat = { url, modelId, endpointId };
   _skipAutoSelect = true;
   currentSessionId = null;
@@ -1784,40 +1784,40 @@ export function createDirectChat(url, modelId, endpointId) {
     el.classList.remove('active-session', 'active');
   });
 
-  // 关闭文档面板 — 新聊天没有文档
+  // Close document panel — new chat has no docs
   if (window.documentModule && window.documentModule.isPanelOpen()) {
     window.documentModule.closePanel();
   }
   const docBtn = document.getElementById('overflow-doc-btn');
   if (docBtn) {
     docBtn.classList.remove('active', 'has-docs');
-    docBtn.style.display = ''; // 重新显示在溢出菜单中
+    docBtn.style.display = ''; // show in overflow menu again
   }
   const docInd = document.getElementById('doc-indicator-btn');
   if (docInd) docInd.classList.remove('visible', 'active');
 
-  // 清空聊天区域并显示欢迎页
+  // Clear chat area and show welcome
   const box = document.getElementById('chat-history');
   if (box) box.innerHTML = '';
   if (window.chatModule && window.chatModule.showWelcomeScreen) {
     window.chatModule.showWelcomeScreen();
   }
 
-  // 更新模型选择器以显示待定模型
+  // Update model picker to show the pending model
   updateModelPicker();
 
-  // 更新当前元数据栏头
+  // Update current-meta header
   const metaEl = document.getElementById('current-meta');
   if (metaEl) {
-    metaEl.textContent = t('sessions.new_chat');
+    metaEl.textContent = 'New Chat';
   }
 
-  // 启用输入
+  // Enable input
   const msgInput = document.getElementById('message');
   if (msgInput) { msgInput.disabled = false; msgInput.value = ''; msgInput.focus(); }
 }
 
-/** 实际在数据库中创建会话。在发送第一条消息时调用。 */
+/** Actually create the session in the DB. Called on first message send. */
 export async function materializePendingSession() {
   const pending = _pendingChat;
   if (!pending) return false;
@@ -1843,7 +1843,7 @@ export async function materializePendingSession() {
   try {
     res = await fetch(`${API_BASE}/api/session`, { method: 'POST', body: fd });
   } catch (e) {
-    uiModule.showError(t('sessions.failed_reach_backend', { error: e }));
+    uiModule.showError('Failed to reach backend: ' + e);
     return false;
   }
 
@@ -1855,7 +1855,7 @@ export async function materializePendingSession() {
   }
 
   if (!res.ok) {
-    uiModule.showError(t('sessions.session_create_failed', { status: res.status, detail: payload.detail || JSON.stringify(payload) }));
+    uiModule.showError(`Session create failed (${res.status}) ${payload.detail || JSON.stringify(payload)}`);
     return false;
   }
 
@@ -1863,7 +1863,7 @@ export async function materializePendingSession() {
     _markIncognito(payload.id);
   }
 
-  // 清除上一个会话的残留文档文本选择
+  // Clear any leftover document text selection from the previous session
   if (window.documentModule?.clearSelection) {
     try { window.documentModule.clearSelection(); } catch {}
   }
@@ -1871,15 +1871,15 @@ export async function materializePendingSession() {
   Storage.set('lastSessionId', payload.id);
   history.replaceState(null, '', '#' + payload.id);
 
-  // 重新加载侧边栏以显示新会话 — 等待它以便会话
-  // 在调用方继续之前完全注册（防止竞态条件）
+  // Reload sidebar to show the new session — await it so the session
+  // is fully registered before the caller proceeds (prevents race conditions)
   await loadSessions().catch(() => {});
   return true;
 }
 
 export function hasPendingChat() { return !!_pendingChat; }
 export function getPendingChat() { return _pendingChat; }
-// 外部访问的 getter
+// Getters for external access
 export function getCurrentSessionId() {
   return currentSessionId;
 }
@@ -1891,13 +1891,13 @@ export function getSessions() {
 export function getCurrentModel() {
   const sess = sessions.find(x => x.id === currentSessionId);
   if (sess && sess.model) return sess.model;
-  // 待定会话尚未实体化 — 从模型选择器标签读取
+  // Pending session not yet materialized — read from model picker label
   const label = document.getElementById('model-picker-label');
   return label ? label.textContent.trim() : null;
 }
 
-/** 为当前（或待定）会话模型提供服务的 Endpoint URL。用于
- *  判断模型是本地（免费）还是付费云服务商。 */
+/** Endpoint URL serving the current (or pending) session's model. Used to
+ *  decide whether a model is local (free) vs a billable cloud provider. */
 export function getCurrentEndpointUrl() {
   const sess = sessions.find(x => x.id === currentSessionId);
   if (sess && sess.endpoint_url) return sess.endpoint_url;
@@ -1917,14 +1917,14 @@ export function setCurrentSessionId(id) {
   }
 }
 
-// 会话列表键盘导航：方向键移动，删除 删除
+// Session list keyboard navigation: arrows to move, Delete to delete
 async function _onSessionListKeydown(e) {
   const item = e.target.closest('.list-item[data-session-id]');
   if (!item) return;
 
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
-    // 获取所有容器中可见的会话项
+    // Get all visible session items across all containers
     const allItems = Array.from(document.querySelectorAll('#session-list .list-item[data-session-id]'));
     const idx = allItems.indexOf(item);
     if (idx < 0) return;
@@ -1943,10 +1943,10 @@ async function _onSessionListKeydown(e) {
     const s = sessions.find(x => x.id === sid);
     if (!s) return;
     if (s.is_important) {
-      uiModule.showToast(t('sessions.unfavorite_before_delete'));
+      uiModule.showToast('Unfavorite before deleting');
       return;
     }
-    const ok = await uiModule.styledConfirm(t('sessions.delete_session_confirm'), { confirmText: t('common.delete'), danger: true });
+    const ok = await uiModule.styledConfirm('Delete this session?', { confirmText: 'Delete', danger: true });
     if (!ok) return;
     _sessionListFocused = true;
     (async () => {
@@ -1965,13 +1965,13 @@ async function _onSessionListKeydown(e) {
   }
 }
 
-// 初始化会话拖拽排序 — 使用与模型相同的 dragSortModule
+// Initialize drag sorting for sessions — uses the same dragSortModule as models
 export function initDragSort() {
   if (!window.dragSortModule) return;
   const list = uiModule.el('session-list');
   if (!list) return;
 
-  // 未分类会话（排除文件夹内嵌的项）
+  // Unfiled sessions (exclude items nested inside folders)
   window.dragSortModule.enable('session-list', '.list-item', {
     instanceKey: 'session-items',
     handleSelector: '.item-drag-handle',
@@ -1979,7 +1979,7 @@ export function initDragSort() {
     storageKey: 'session-order',
   });
 
-  // 文件夹重排序
+  // Folder reordering
   window.dragSortModule.enable('session-list', '.session-folder', {
     instanceKey: 'session-folders',
     handleSelector: '.folder-drag-handle',
@@ -1989,7 +1989,7 @@ export function initDragSort() {
     },
   });
 
-  // 每个文件夹内的会话
+  // Sessions within each folder
   list.querySelectorAll('.session-folder-content').forEach((content, i) => {
     const id = 'session-folder-content-' + i;
     content.id = id;
@@ -1999,10 +1999,10 @@ export function initDragSort() {
   });
 }
 
-// 基于 Hash 的路由：使用浏览器前进/后退在会话间导航。
-// 跳过实体前缀的 哈希（document-、note- 等）— 这些由
-// chatRenderer.js 中自己的点击处理器处理，不能触发
-// 会话导航（否则会重置当前活跃聊天）。
+// Hash-based routing: navigate between sessions with browser back/forward.
+// Skip entity-prefixed hashes (document-, note-, etc.) — those are handled
+// by their own click handlers in chatRenderer.js and must not trigger
+// session navigation (which would reset the active chat).
 window.addEventListener('hashchange', () => {
   const hashId = window.location.hash.replace('#', '');
   if (/^(document|note|image|email|event|task|skill|research)-/.test(hashId)) return;
@@ -2012,7 +2012,7 @@ window.addEventListener('hashchange', () => {
   }
 });
 
-// ── Research 指示器管理 ──
+// ── Research indicator management ──
 function _updateResearchDots() {
   document.querySelectorAll('.session-star[data-session-id]').forEach(function(star) {
     var sid = star.dataset.sessionId;
@@ -2087,7 +2087,7 @@ export function clearStreaming(sessionId) {
 export function markStreamComplete(sessionId) {
   _researchingSessions.delete(sessionId);
   _streamingSessions.delete(sessionId);
-  // 如果用户已在查看此会话则不跳动 — 他们可以看到响应
+  // Don't pulse if user is already viewing this session — they can see the response
   if (currentSessionId === sessionId) {
     _updateResearchDots();
     _updateRailNotifs();
@@ -2096,13 +2096,13 @@ export function markStreamComplete(sessionId) {
   _completedSessions.add(sessionId);
   _updateResearchDots();
   _updateRailNotifs();
-  // 如果 Chats 分区已折叠则显示通知圆点
+  // Show notification dot on Chats section if collapsed
   const sessSection = document.getElementById('sessions-section');
   if (sessSection && sessSection.classList.contains('collapsed')) {
     const dot = document.getElementById('chats-notif-dot');
     if (dot) dot.style.display = 'inline-block';
   }
-  // 安全网：一个 tick 后重新应用，以防并发的 renderSessionList 覆盖 DOM
+  // Safety net: re-apply after a tick in case a concurrent renderSessionList overwrites the DOM
   setTimeout(function() {
     if (_completedSessions.has(sessionId)) {
       _updateResearchDots();
@@ -2110,18 +2110,18 @@ export function markStreamComplete(sessionId) {
   }, 300);
 }
 
-// ── 导航栏通知圆点 ──
-// 当后台工作进行中/完成时保持导航栏按钮亮起
+// ── Rail notification dots ──
+// Keep rail buttons lit when background work is happening / finished
 function _updateRailNotifs() {
-  // Research 导航栏 — 有任何会话在进行 Research 时跳动
+  // Research rail — pulsing while any session is researching
   const railResearch = document.getElementById('rail-research');
   if (railResearch) {
-    // OR 混合 Deep Research 面板的任务状态（由 panel.js 设置）
-    // 以便内联 Research 和面板 Research 都能保持导航栏亮起。
+    // OR in the Deep Research panel's job state (set by panel.js)
+    // so inline-research and panel-research both keep the rail lit.
     const researching = _researchingSessions.size > 0 || !!window._researchJobsActive;
     railResearch.classList.toggle('rail-notify', researching);
   }
-  // Chats 导航栏 — 后台流完成时显示
+  // Chats rail — show when a background stream completed
   const railChats = document.getElementById('rail-chats');
   if (railChats) {
     const sidebar = document.getElementById('sidebar');
@@ -2129,46 +2129,46 @@ function _updateRailNotifs() {
     const hasCompleted = _completedSessions.size > 0;
     railChats.classList.toggle('rail-notify', hasCompleted && sidebarHidden);
     railChats.classList.toggle('rail-notify-success', hasCompleted && sidebarHidden);
-    // 存储第一个已完成会话以便点击打开
+    // Store first completed session for click-to-open
     if (hasCompleted) {
       railChats.dataset.targetSession = [..._completedSessions][0];
     } else {
       delete railChats.dataset.targetSession;
     }
   }
-  // 触发导航栏同步以便按钮可见
+  // Trigger rail sync so buttons become visible
   if (window._syncRailDynamic) window._syncRailDynamic();
 }
 
 /**
- * 检查服务器是否有活跃流（页面刷新后幸存）。
- * 如果服务器仍在为此会话进行流式传输，显示 spinner
- * 并轮询直到完成，然后重新加载会话。
+ * Check server for an active stream (survives page refresh).
+ * If the server is still streaming for this session, show a spinner
+ * and poll until done, then reload the session.
  */
 async function _checkServerStream(sessionId) {
   try {
-    // 如果 Research 正在运行则跳过 — 它有自己的进度 UI
+    // Skip if research is running — it has its own progress UI
     if (_researchingSessions.has(sessionId)) return;
 
-    // 如果 SSE 读取器仍在活跃连接则跳过 — 它处理渲染
+    // Skip if the SSE reader is still actively connected — it handles rendering
     if (window.chatModule && window.chatModule.hasActiveStream && window.chatModule.hasActiveStream(sessionId)) return;
 
     const res = await fetch(`${API_BASE}/api/chat/stream_status/${sessionId}`);
-    if (!res.ok) return; // 404 = 没有活跃流
+    if (!res.ok) return; // 404 = no active stream
     const info = await res.json();
     if (info.status !== 'streaming') return;
 
-    // 如果是 Research 流则跳过 — Research 有自己的进度 UI
+    // Skip if this is a research stream — research has its own progress UI
     if (info.mode === 'research' || info.is_research) return;
 
-    // 实时恢复被移除的运行：重播其缓冲区然后流式传输实时 token
-    // (#2539)。如果不可用则回退到下方的 加载指示器+轮询路径。
+    // Live-resume the detached run: replay its buffer then stream live tokens
+    // (#2539). Falls back to the spinner+poll path below if unavailable.
     if (window.chatModule && window.chatModule.resumeStream) {
       const attached = await window.chatModule.resumeStream(sessionId);
       if (attached) return;
     }
 
-    // 回退方案：服务器仍在流式传输，显示 加载指示器 并轮询。
+    // Fallback: server is still streaming, show spinner and poll.
     const box = document.getElementById('chat-history');
     if (!box) return;
 
@@ -2184,9 +2184,9 @@ async function _checkServerStream(sessionId) {
     box.appendChild(holder);
     uiModule.scrollHistory();
 
-    // sessions.js 在模块顺序中先于 chat.js 执行，所以
-    // _checkServerStream 首次运行时 window.chatModule 可能还未设置。
-    // 在其可用时的第一个轮询周期中重试 resumeStream。
+    // sessions.js executes before chat.js in module order, so window.chatModule
+    // may not be set yet when _checkServerStream first runs. Retry resumeStream
+    // on the first poll tick where it becomes available.
     let _resumeRetried = false;
     const pollId = setInterval(async () => {
       if (getCurrentSessionId() !== sessionId) {
@@ -2211,7 +2211,7 @@ async function _checkServerStream(sessionId) {
           clearInterval(pollId);
           spinner.destroy();
           if (holder.parentNode) holder.remove();
-          // 重新加载会话以显示完成的响应 + 文档
+          // Reload session to show the completed response + docs
           selectSession(sessionId);
         }
       } catch (_) {
@@ -2222,13 +2222,13 @@ async function _checkServerStream(sessionId) {
       }
     }, 1500);
   } catch (_) {
-    // 没有活跃流 — 无需操作
+    // No stream active — nothing to do
   }
 }
 
 export function clearStreamComplete(sessionId) {
   _completedSessions.delete(sessionId);
-  // 直接 DOM 清理，以防 _updateResearchDots 错过
+  // Direct DOM cleanup in case _updateResearchDots misses it
   var item = document.querySelector(`.list-item[data-session-id="${sessionId}"]`);
   if (item) item.classList.remove('stream-complete');
   var star = document.querySelector(`.session-star[data-session-id="${sessionId}"]`);
@@ -2237,7 +2237,7 @@ export function clearStreamComplete(sessionId) {
   _updateRailNotifs();
 }
 
-// DOM 准备好后初始化下拉菜单
+// Initialize dropdowns once DOM is ready
 function _initAllDropdowns() {
   initModelPicker({
     getCurrentSessionId: () => currentSessionId,
@@ -2255,15 +2255,15 @@ if (document.readyState === 'loading') {
   _initAllDropdowns();
 }
 
-// 共享全局监听器，点击外部或 Escape 时关闭所有会话下拉菜单
+// Shared global listener to close all session dropdowns on click-away or Escape
 function _initDropdownDismiss() {
   document.addEventListener('click', (e) => {
     if (e.target.closest('.session-dropdown-menu, .session-folder-submenu')) return;
     document.querySelectorAll('.session-dropdown-menu, .session-folder-submenu').forEach(d => d.style.display = 'none');
   });
-  // 监视侧边栏 — 当它被隐藏时（任何路径：汉堡菜单、滑动、
-  // 移动端折叠），关闭任何打开的会话下拉菜单，以免它们漂浮在
-  // 页面上。
+  // Watch the sidebar — when it's hidden (any path: hamburger, swipe, mobile
+  // collapse), close any open session dropdowns so they don't orphan over
+  // the page.
   const _sb = document.getElementById('sidebar');
   if (_sb) {
     new MutationObserver(() => {
@@ -2282,17 +2282,17 @@ function _initDropdownDismiss() {
 }
 
 // ──────────────────────────────────────────────
-// 共享：定位下拉菜单
+// Shared: positioned dropdown menu
 // ──────────────────────────────────────────────
 
 /**
- * 显示一个锚定到按钮的下拉菜单，使用现有的
- * .dropdown / .dropdown-item-compact / .session-dropdown-menu CSS。
- * 项目：[{ label, action, danger? }]
- * 返回一个 close() 函数。
+ * Show a dropdown menu anchored to a button, using the existing
+ * .dropdown / .dropdown-item-compact / .session-dropdown-menu CSS.
+ * Items: [{ label, action, danger? }]
+ * Returns a close() function.
  */
 function _showDropdown(anchorEl, items) {
-  // 关闭任何已打开的归档下拉菜单
+  // Close any open archive dropdown
   document.querySelectorAll('.session-dropdown-menu.archive-dd').forEach(d => d.remove());
 
   const dd = document.createElement('div');
@@ -2310,7 +2310,7 @@ function _showDropdown(anchorEl, items) {
   }
   document.body.appendChild(dd);
 
-  // 使用视口坐标定位（与会话菜单相同的模式）
+  // Position using viewport coords (same pattern as session menus)
   const rect = anchorEl.getBoundingClientRect();
   dd.style.right = (window.innerWidth - rect.right) + 'px';
   dd.style.top = '-9999px';
@@ -2323,16 +2323,16 @@ function _showDropdown(anchorEl, items) {
   }
 
   function close() { dd.remove(); }
-  // 现有的 _initDropdownDismiss 处理 .session-dropdown-menu 的点击外部和 Escape
+  // Existing _initDropdownDismiss handles click-away + Escape for .session-dropdown-menu
   return close;
 }
 
 
 // ──────────────────────────────────────────────
-// 归档浏览器
+// Archive Browser
 // ──────────────────────────────────────────────
 
-// 所有可变的归档状态存储在此处；每次 openArchive() 时重置。
+// All mutable archive state lives here; reset on each openArchive().
 const _arc = { data: [], total: 0, search: '', offset: 0, sort: 'recent', model: '', debounce: null, selectMode: false, selected: new Set(), allModelCounts: null };
 
 function _arcRelativeTime(iso) {
@@ -2347,29 +2347,29 @@ function _arcRelativeTime(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-// ── 操作（纯副作用，不创建 DOM）──
+// ── Actions (pure side-effects, no DOM creation) ──
 
-// 预览归档会话 — 不取消归档直接加载其历史
+// Peek at an archived session — load its history without unarchiving
 let _peekingSessionId = null;
 
 async function _arcPeekOpen(sid) {
   try {
     _peekingSessionId = sid;
     closeArchive();
-    // 不取消归档直接加载历史
+    // Load history directly without unarchiving
     const res = await fetch(`${API_BASE}/api/history/${sid}`);
     const data = await res.json();
     const history = data.history || [];
 
-    // 设为当前会话以便聊天渲染
+    // Set as current session so chat renders
     currentSessionId = sid;
 
-    // 查找归档会话的元数据
+    // Find the archived session metadata
     const meta = _arc.data.find(s => s.id === sid);
     const metaEl = document.getElementById('current-meta');
     if (metaEl) metaEl.textContent = (meta?.name || 'Archived') + ' (archived)';
 
-    // 渲染聊天历史
+    // Render the chat history
     const chatBox = document.getElementById('chat-history');
     if (chatBox) chatBox.innerHTML = '';
     if (window.chatModule && window.chatModule.hideWelcomeScreen) window.chatModule.hideWelcomeScreen();
@@ -2391,7 +2391,7 @@ async function _arcPeekOpen(sid) {
   }
 }
 
-// 导航离开已预览会话时，仅清除状态
+// When navigating away from a peeked session, just clear the state
 function _checkPeekCleanup(newSessionId) {
   if (_peekingSessionId && _peekingSessionId !== newSessionId) {
     _peekingSessionId = null;
@@ -2481,7 +2481,7 @@ function _arcUpdateBulkBar() {
   }
 }
 
-// ── 数据获取 ──
+// ── Data fetching ──
 
 async function _arcFetch(append) {
   if (!append) _arc.offset = 0;
@@ -2494,7 +2494,7 @@ async function _arcFetch(append) {
     const data = await res.json();
     _arc.data = append ? _arc.data.concat(data.sessions) : data.sessions;
     _arc.total = data.total;
-    // 缓存未过滤的首次获取中的模型统计数据
+    // Cache model counts from unfiltered first fetch
     if (!_arc.allModelCounts && !_arc.model && !_arc.search) {
       const counts = {};
       _arc.data.forEach(s => {
@@ -2509,7 +2509,7 @@ async function _arcFetch(append) {
   }
 }
 
-// ── 渲染（纯状态 — 读取 _arc，写入 DOM）──
+// ── Rendering (dumb — reads _arc, writes DOM) ──
 
 function _arcRefreshUI() {
   _arcRenderStats();
@@ -2527,7 +2527,7 @@ function _arcRenderStats() {
 function _arcRenderChips() {
   const el = document.getElementById('archive-chips');
   if (!el) return;
-  // 使用缓存统计数据，以免过滤时 chip 消失
+  // Use cached counts so chips don't disappear when filtering
   const cached = _arc.allModelCounts;
   if (!cached) return;
   const modelCounts = cached.counts;
@@ -2623,12 +2623,12 @@ function _arcRenderLoadMore() {
 }
 
 
-// ── 统一图书馆模态窗（聊天/文档/归档）──
+// ── Unified Library Modal (Chats / Documents / Archive) ──
 
 const _lib = { tab: 'chats', search: '', sort: 'recent', debounce: null, selectMode: false, selected: new Set() };
 
 export function openLibrary(defaultTab) {
-  // 将所有功能委托给文档模块的图书馆（有聊天/文档/归档标签页）
+  // Delegate everything to the document module's library (has tabs for Chats/Documents/Archive)
   if (window.documentModule && window.documentModule.openLibrary) {
     window.documentModule.openLibrary({ tab: defaultTab || 'documents' });
     return;
@@ -2674,7 +2674,7 @@ export function openLibrary(defaultTab) {
   `;
   document.body.appendChild(modal);
 
-  // 可拖动
+  // Draggable
   const _clContent = modal.querySelector('.modal-content');
   const _clHeader = modal.querySelector('.modal-header');
   if (themeModule && themeModule.makeDraggable && _clContent && _clHeader) {
@@ -2683,10 +2683,10 @@ export function openLibrary(defaultTab) {
 
   document.getElementById('lib-close').addEventListener('click', closeLibrary);
 
-  // 标签页切换
+  // Tab switching
   modal.querySelectorAll('.lib-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      // 文档标签页 — 打开文档模块的图书馆（有展开/预览）
+      // Documents tab — open the document module's library (has expand/preview)
       if (tab.dataset.libTab === 'documents' && window.documentModule && window.documentModule.openLibrary) {
         closeLibrary();
         window.documentModule.openLibrary();
@@ -2700,7 +2700,7 @@ export function openLibrary(defaultTab) {
       tab.classList.add('active');
       document.getElementById('lib-search').value = '';
       document.getElementById('lib-bulk-bar').classList.add('hidden');
-      // 根据标签页更新批量操作按钮标签
+      // Update bulk action button label based on tab
       const action1 = document.getElementById('lib-bulk-action1');
       if (_lib.tab === 'archive') { action1.textContent = 'Restore'; }
       else if (_lib.tab === 'chats') { action1.textContent = 'Archive'; }
@@ -2710,7 +2710,7 @@ export function openLibrary(defaultTab) {
     });
   });
 
-  // 设置初始批量操作按钮标签
+  // Set initial bulk action label
   const _initAction = document.getElementById('lib-bulk-action1');
   if (_initAction) _initAction.textContent = _lib.tab === 'archive' ? 'Restore' : _lib.tab === 'documents' ? 'Export' : 'Archive';
 
@@ -2720,7 +2720,7 @@ export function openLibrary(defaultTab) {
     _lib.debounce = setTimeout(() => { _lib.search = e.target.value.trim().toLowerCase(); _renderLibGrid(); }, 200);
   });
 
-  // 选择模式
+  // Select mode
   document.getElementById('lib-select-btn').addEventListener('click', () => {
     _lib.selectMode = !_lib.selectMode;
     _lib.selected.clear();
@@ -2737,7 +2737,7 @@ export function openLibrary(defaultTab) {
     _updateLibCount();
   });
 
-  // 批量操作 1（归档/恢复/导出）
+  // Bulk action 1 (Archive/Restore/Export)
   document.getElementById('lib-bulk-action1').addEventListener('click', async () => {
     if (_lib.tab === 'chats') {
       for (const sid of _lib.selected) await fetch(`${API_BASE}/api/session/${sid}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
@@ -2753,7 +2753,7 @@ export function openLibrary(defaultTab) {
     _renderLibGrid();
   });
 
-  // 批量删除
+  // Bulk delete
   document.getElementById('lib-bulk-delete').addEventListener('click', async () => {
     if (!await uiModule.styledConfirm(`Delete ${_lib.selected.size} items?`, { confirmText: 'Delete', danger: true })) return;
     if (_lib.tab === 'chats' || _lib.tab === 'archive') {
@@ -2877,7 +2877,7 @@ async function _renderLibDocuments(grid) {
       card.addEventListener('click', (e) => {
         if (e.target.closest('.archive-menu-btn,.memory-select-cb')) return;
         if (_lib.selectMode) { _toggleLibSelect(card, d.id); return; }
-        // 在其会话中打开文档
+        // Open document in its session
         if (d.session_id && window.documentModule) {
           closeLibrary();
           selectSession(d.session_id);
@@ -3040,7 +3040,7 @@ export function openArchive() {
   `;
   document.body.appendChild(modal);
 
-  // 通过标头栏设置可拖动
+  // Make draggable via header
   const _arcContent = modal.querySelector('.modal-content');
   const _arcHeader = modal.querySelector('.modal-header');
   if (themeModule && themeModule.makeDraggable && _arcContent && _arcHeader) {
@@ -3081,7 +3081,7 @@ export function closeArchive() {
   }
 }
 
-/** 更新会话的 has_documents 标志并重新渲染侧边栏图标 */
+/** Update has_documents flag for a session and re-render the sidebar icon */
 export function getSortMode() { return _sortMode; }
 export function setSortMode(mode) {
   _sortMode = mode || null;
@@ -3098,7 +3098,7 @@ export function setSessionHasDocs(sessionId, hasDocs) {
   }
 }
 
-// 将所有函数导出到 window 以供主应用使用
+// Export all functions to window for use in main app
 const sessionModule = {
   initDependencies,
   renderSessionList,

@@ -14,9 +14,9 @@ QUANT_BPP = {
     "GPTQ-Int4": 0.50, "GPTQ-Int8": 1.0,
     "mlx-4bit": 0.55, "mlx-8bit": 1.0, "mlx-6bit": 0.75,
     # DeepSeek-V4-style mixed: MoE experts in FP4 (bulk), attention + non-
-    # expert dense in FP8, 嵌入s/LM head in BF16. By weight count the
+    # expert dense in FP8, embeddings/LM head in BF16. By weight count the
     # experts dominate so the effective BPP sits closer to FP4 than FP8.
-    # 实测：DeepSeek-V4-Flash 284B / 156 GB ≈ 0.55 B/param。
+    # Empirical: DeepSeek-V4-Flash 284B / 156 GB ≈ 0.55 B/param.
     "FP4-MoE-Mixed": 0.55,
     # FP8-Mixed = the *-Base variants (MoE experts also FP8, not FP4).
     "FP8-Mixed": 1.0,
@@ -31,7 +31,7 @@ QUANT_SPEED_MULT = {
     "AWQ-4bit": 1.2, "AWQ-8bit": 0.85,
     "GPTQ-Int4": 1.2, "GPTQ-Int8": 0.85,
     "mlx-4bit": 1.15, "mlx-8bit": 0.85, "mlx-6bit": 1.0,
-    "FP4-MoE-Mixed": 1.10,  # 比纯 FP4 稍慢，因为混合精度调度的额外开销
+    "FP4-MoE-Mixed": 1.10,  # slightly slower than pure FP4 because of mixed-dtype dispatch
     "FP8-Mixed": 0.85,
 }
 
@@ -41,16 +41,16 @@ QUANT_QUALITY_PENALTY = {
     "INT4": -4.0, "INT8": 0.0, "W4A16": -4.0, "W8A8": 0.0, "W8A16": 0.0,
     "Q8_0": 0.0, "Q6_K": -1.0, "Q5_K_M": -2.0,
     "Q4_K_M": -5.0, "Q4_0": -5.0, "Q3_K_M": -8.0, "Q2_K": -12.0,
-    # 原本单独的 "AWQ" 和 "AWQ-8bit" 罚分为 0.0（与 FP8 相同）。但实际上
-    # AWQ 不论哪种格式都是校准重建的，并非原始 8-bit 权重 —
-    # 相比 FP8 存在虽然小但真实的质量损失。给予轻微
-    # 罚分以便在两者都能运行时 FP8 胜出。AWQ-4bit 保持较重的罚分。
+    # Bare "AWQ" and "AWQ-8bit" used to be 0.0 (tied with FP8). In practice
+    # AWQ-anything is a calibrated reconstruction, not raw 8-bit weights —
+    # there's a small but real quality loss vs FP8. Give them a slight
+    # penalty so FP8 wins when both fit. AWQ-4bit stays heavier.
     "AWQ": -1.0, "AWQ-4bit": -4.0, "AWQ-8bit": -1.0,
     "GPTQ": -1.0, "GPTQ-Int4": -4.0, "GPTQ-Int8": -1.0,
     "mlx-4bit": -4.0, "mlx-8bit": -0.5, "mlx-6bit": -1.5,
-    # DeepSeek-V4 混合：仅 MoE 专家使用 FP4（其余部分为 FP8/BF16），
-    # 因此实际质量更接近 FP8 而非纯 FP4 —
-    # 对激活敏感的层保持高精度。惩罚约 ~0。
+    # DeepSeek-V4 mixed: only MoE experts at FP4 (the rest is FP8/BF16),
+    # so the realized quality is much closer to FP8 than to pure FP4 —
+    # the activation-sensitive layers stay high-precision. ~0 penalty.
     "FP4-MoE-Mixed": -0.5,
     "FP8-Mixed": 0.0,
 }
@@ -68,8 +68,8 @@ QUANT_BYTES_PER_PARAM = {
     "FP8-Mixed": 1.0,
 }
 
-# 预量化格式，不应经过 GGUF 量化层级。
-# 它们是对应原生 HF/vLLM 仓库的格式，而非 llama.cpp GGUF 量化级别。
+# Pre-quantized formats that should NOT go through the GGUF quant hierarchy.
+# These are native HF/vLLM-style repos, not llama.cpp GGUF quant tiers.
 PREQUANTIZED_PREFIXES = (
     "AWQ-", "GPTQ-", "mlx-", "FP8", "FP4", "NVFP4", "MXFP4", "NF4",
     "INT4", "INT8", "W4A16", "W8A8", "W8A16",
@@ -175,9 +175,9 @@ def params_b(model):
 
 
 def estimate_memory_gb(model, quant, ctx):
-    """估算推理模型所需的 VRAM。所有权重必须加载，
-    即使是 MoE（所有专家都在内存中，每 token 仅活跃专家参与计算）。
-    KV 缓存对于 MoE 按活跃参数量计算（仅活跃专家有 KV 状态）。"""
+    """Estimate VRAM needed to serve a model. All weights must be loaded,
+    even for MoE (all experts live in memory, only active ones compute per token).
+    KV cache scales with active params for MoE (only active experts have KV state)."""
     pb = params_b(model)
     bpp = QUANT_BPP.get(quant, 0.58)
     kv_params = _active_params_b(model)
@@ -185,17 +185,17 @@ def estimate_memory_gb(model, quant, ctx):
 
 
 def _active_params_b(model):
-    """对于 MoE：每 token 的活跃参数量（影响 KV 缓存和速度，不影响总 VRAM）。
-    对于 Dense：等同于总参数量。"""
+    """For MoE: active params per token (affects KV cache and speed, not total VRAM).
+    For dense: same as total params."""
     if model.get("is_moe") and model.get("active_parameters"):
         return model["active_parameters"] / 1_000_000_000.0
     return params_b(model)
 
 
 def best_quant_for_budget(model, budget_gb, ctx):
-    """找到在 budget_gb VRAM 预算内能容纳的最佳量化级别。
-    预量化模型（AWQ/GPTQ/MLX）仅使用其原生量化。
-    返回 (quant, ctx, mem_gb) 或 (None, None, None)。
+    """Find best quant that fits in budget_gb of VRAM.
+    Pre-quantized models (AWQ/GPTQ/MLX) use their native quant only.
+    Returns (quant, ctx, mem_gb) or (None, None, None).
     """
     if is_prequantized(model):
         q = model.get("quantization", "Q4_K_M")
@@ -211,7 +211,7 @@ def best_quant_for_budget(model, budget_gb, ctx):
             cur_ctx //= 2
         return None, None, None
 
-    # GGUF: 先尝试最高质量的量化，然后逐步降级
+    # GGUF: try best quality first, then fall back
     for q in QUANT_HIERARCHY:
         mem = estimate_memory_gb(model, q, ctx)
         if mem <= budget_gb:

@@ -1,22 +1,22 @@
 // static/js/slashAutocomplete.js
-// 轻量级弹出窗口，在用户输入时展示现有的 /command 注册表。
-// 从 slashCommands.js 读取 COMMANDS —— 此处不包含命令逻辑。
+// Lightweight popup that surfaces the existing /command registry as users
+// type. Reads COMMANDS from slashCommands.js — no command logic lives here.
 
 import { COMMANDS, LEGACY_ALIASES } from './slashCommands.js';
 
 const POPUP_ID = 'slash-autocomplete';
 const MAX_VISIBLE = 14;
 
-// 将注册表扁平化为可搜索的叶子条目列表。每个条目
-// 要么是顶级命令，要么是 "cmd sub" 对（使子命令在相关时获得
-// 各自的行 —— /toggle web、/chats new 等）。
-// 有意从自动完成弹出窗口中排除的命令（纯彩蛋，
-// 无生产力价值，或内部机制）。
+// Flatten the registry into a searchable list of leaf entries. Each entry is
+// either a top-level command or a "cmd sub" pair (so subcommands get their
+// own row when relevant — /toggle web, /chats new, etc).
+// Commands intentionally excluded from the autocomplete popup (pure easter
+// eggs with no productivity value, or internal machinery).
 const EXCLUDED = new Set(['flip','roll','8ball','fortune','odyssey','ascii']);
 
-// 要在弹出窗口中提升为独立行的重要历史别名。这些
-// 是人们实际会输入的短格式（/new、/clear、/web 等），
-// 而不是完整的 /chats new、/toggle web 等效项。
+// Important legacy aliases to promote to their own rows in the popup. These
+// are the short forms people will actually type (/new, /clear, /web, etc.)
+// rather than the full /chats new, /toggle web equivalents.
 const PROMOTED_ALIASES = new Set([
   'new','clear','rename','fork','export','archive','favorite','unfavorite',
   'web','bash','research','doc',
@@ -27,7 +27,7 @@ function _flatten() {
   const out = [];
   const seen = new Set();
 
-  // 1. COMMANDS 中的顶级命令及其子命令
+  // 1. Top-level commands and their subcommands from COMMANDS
   for (const [name, def] of Object.entries(COMMANDS)) {
     if (EXCLUDED.has(name)) continue;
     if (def.hidden) continue;
@@ -58,7 +58,7 @@ function _flatten() {
     }
   }
 
-  // 2. 提升的历史别名（/new、/clear、/web 等）作为便捷短行
+  // 2. Promoted legacy aliases (/new, /clear, /web …) as convenient short rows
   if (LEGACY_ALIASES) {
     for (const [alias, { parent, sub }] of Object.entries(LEGACY_ALIASES)) {
       if (!PROMOTED_ALIASES.has(alias)) continue;
@@ -89,8 +89,8 @@ async function _loadSkillEntries() {
     return (Array.isArray(data.skills) ? data.skills : []).map(s => ({
       token: s.token || `/${s.name}`,
       aliases: [],
-      category: s.category || t('slash.skills_category'),
-      help: s.help || t('slash.run_skill'),
+      category: s.category || 'Skills',
+      help: s.help || 'Run skill',
       usage: s.usage || `${s.token || `/${s.name}`} <request>`,
     })).filter(e => e.token && e.token.startsWith('/'));
   } catch {
@@ -99,8 +99,8 @@ async function _loadSkillEntries() {
 }
 
 function _scoreMatch(entry, query) {
-  // query 已经以 "/" 开头。匹配 token + 别名。前缀匹配优先于
-  // 子串匹配；别名匹配得分略低于 token 匹配。
+  // query already starts with "/". Match against token + aliases. Prefix wins
+  // over substring; alias match scores slightly lower than token match.
   const q = query.toLowerCase();
   const t = entry.token.toLowerCase();
   if (t === q) return 1000;
@@ -111,7 +111,7 @@ function _scoreMatch(entry, query) {
     if (al.startsWith(q)) return 400;
   }
   if (t.includes(q)) return 100;
-  if (entry.help.toLowerCase().includes(q.slice(1))) return 25;  // 帮助文本
+  if (entry.help.toLowerCase().includes(q.slice(1))) return 25;  // help text
   return 0;
 }
 
@@ -142,10 +142,10 @@ function _position(popup, textarea) {
   const r = textarea.getBoundingClientRect();
   const maxH = Math.min(window.innerHeight * 0.5, 360);
   popup.style.maxHeight = maxH + 'px';
-  // 将弹出窗口锚定在 textarea 上方，左对齐
+  // Anchor above the textarea, left-aligned with it
   popup.style.left = Math.round(r.left) + 'px';
   popup.style.width = Math.max(280, Math.round(Math.min(r.width, 520))) + 'px';
-  // 上方空间足够时放在上面，否则放在下面。
+  // Place above when there's enough room, otherwise below.
   const aboveSpace = r.top;
   if (aboveSpace > maxH + 20) {
     popup.style.bottom = (window.innerHeight - r.top + 6) + 'px';
@@ -161,13 +161,13 @@ function _render(popup, items, selectedIdx, query) {
     popup.innerHTML = `<div class="slash-ac-empty">No commands match <code>${_esc(query)}</code></div>`;
     return;
   }
-  // 按类别分组显示标题
+  // Group by category for the headers
   let html = '';
   let lastCat = null;
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     if (it.category !== lastCat) {
-      html += `<div class="slash-ac-cat">${_esc(it.category || t('slash.other_category'))}</div>`;
+      html += `<div class="slash-ac-cat">${_esc(it.category || 'Other')}</div>`;
       lastCat = it.category;
     }
     const sel = i === selectedIdx ? ' slash-ac-row-sel' : '';
@@ -179,7 +179,7 @@ function _render(popup, items, selectedIdx, query) {
          + `</div>`;
   }
   popup.innerHTML = html;
-  // 将选中项滚动到可视区域
+  // Scroll selected into view
   const selEl = popup.querySelector('.slash-ac-row-sel');
   if (selEl) selEl.scrollIntoView({ block: 'nearest' });
 }
@@ -213,10 +213,10 @@ export function initSlashAutocomplete(textarea) {
 
   const refresh = () => {
     const v = textarea.value;
-    // 仅在消息以 "/" 开头（无前导空格）且
-    // 命令后最多包含一个空格时才触发（以支持子命令）。
-    // 如果用户已越过斜杠命令（换行、较长的正文），
-    // 菜单隐藏 —— 我们不在句子中间自动完成。
+    // Only trigger when the message starts with "/" (no leading space) and
+    // contains at most one space after the command (so subcommands work).
+    // If the user has moved past the slash command (newline, longer prose),
+    // the menu hides — we don't autocomplete mid-sentence.
     if (!v.startsWith('/') || v.includes('\n')) { hide(); return; }
     const query = v.trim();
     const groupItems = _exactCommandGroupItems(all, query);
@@ -232,7 +232,7 @@ export function initSlashAutocomplete(textarea) {
     }
     if (!items.length && query.length > 1) { hide(); return; }
     if (!items.length) {
-      // 只有 "/" 且无匹配项 —— 回退到显示最多 MAX_VISIBLE 个全部条目
+      // Just "/" with no matches — fall back to showing everything up to MAX_VISIBLE
       items = all.slice(0, MAX_VISIBLE);
     }
     selectedIdx = 0;
@@ -264,7 +264,7 @@ export function initSlashAutocomplete(textarea) {
 
   textarea.addEventListener('input', refresh);
   textarea.addEventListener('focus', () => { if (textarea.value.startsWith('/')) refresh(); });
-  textarea.addEventListener('blur', () => { setTimeout(hide, 120); });  // 延迟以允许点击生效
+  textarea.addEventListener('blur', () => { setTimeout(hide, 120); });  // delay so click works
 
   textarea.addEventListener('keydown', (e) => {
     if (!visible || !items.length) return;
@@ -277,13 +277,13 @@ export function initSlashAutocomplete(textarea) {
       selectedIdx = (selectedIdx - 1 + items.length) % items.length;
       _render(popup, items, selectedIdx, textarea.value);
     } else if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-      // Tab 始终插入。Enter 仅在用户尚未
-      // 输入完整命令 + 参数时才插入 —— 即弹出窗口仍处于自动完成
-      // 模式，而非"准备提交已输入的命令"模式。
+      // Tab always inserts. Enter inserts only when the user hasn't already
+      // typed a full command + args — i.e. the popup is still in completion
+      // mode, not in "ready to submit a typed-out command" mode.
       const v = textarea.value.trim();
       const exactHit = items.find(it => it.token === v || it.aliases.includes(v));
       if (e.key === 'Enter' && exactHit) {
-        // 用户输入了完整命令 —— 让正常的提交路径处理
+        // User typed the whole command — let the normal submit path handle it
         hide();
         return;
       }
@@ -295,10 +295,10 @@ export function initSlashAutocomplete(textarea) {
     }
   });
 
-  // 窗口大小改变/滚动时重新定位
+  // Re-position on window resize / scroll
   window.addEventListener('resize', () => { if (visible) _position(popup, textarea); });
 
-  // 弹出窗口上的点击处理（委托）
+  // Click handler on the popup (delegated)
   document.addEventListener('mousedown', (e) => {
     if (!visible || !popup) return;
     const row = e.target.closest?.('.slash-ac-row');

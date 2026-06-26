@@ -1,5 +1,5 @@
 # src/chat_helpers.py
-"""URL 提取、消息/上传验证、请求解析。"""
+"""URL extraction, message/upload validation, request parsing."""
 
 import re
 import os
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_urls(text: str) -> List[str]:
-    """使用正则模式从文本中提取 URL。"""
+    """Extract URLs from text using regex pattern."""
     url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
     urls = re.findall(url_pattern, text)
     cleaned_urls = []
@@ -36,8 +36,8 @@ def extract_urls(text: str) -> List[str]:
     return cleaned_urls
 
 
-# Model-name substrings that 签名al native 镜像 input. A missed match here
-# silently drops the 镜像 from the chat request (it gets swapped for a text
+# Model-name substrings that signal native image input. A missed match here
+# silently drops the image from the chat request (it gets swapped for a text
 # caption), so the model never sees it. Keep this broad, especially for local
 # models (Ollama/llama.cpp) that ship under many names. See issue #124.
 _VISION_MODEL_KEYWORDS = (
@@ -48,11 +48,11 @@ _VISION_MODEL_KEYWORDS = (
     "vision", "multimodal", "llava", "bakllava", "moondream", "pixtral", "minicpm",
     "internvl", "cogvlm", "qwen-vl", "qwen2-vl", "qwen3-vl", "qwen3vl",
     # multimodal families whose names don't contain "vision"/"vl" but DO accept
-    # 镜像s — without these the 镜像 is silently dropped for common Ollama tags
+    # images — without these the image is silently dropped for common Ollama tags
     # like gemma3:4b or gemma4:12b (issue #1274). Gemma 3/4 (4b+), Llama 4 (all),
     # Mistral Small 3.1/3.2, and Phi-4 multimodal are vision-capable; per the
     # err-toward-True policy (#124) a rare text-only tag being treated as vision is
-    # the safer failure than silently dropping a real 镜像.
+    # the safer failure than silently dropping a real image.
     "gemma-3", "gemma3", "gemma-4", "gemma4",
     "llama-4", "llama4",
     "mistral-small-3.1", "mistral-small3.1", "mistral-small-3.2", "mistral-small3.2",
@@ -68,10 +68,11 @@ _VISION_VL_RE = re.compile(r'(?<![a-z])vl(?![a-z])|vlm')
 
 
 def is_vision_model(model_name: str) -> bool:
-    """尽力检测模型是否原生支持图像输入。
+    """Best-effort check of whether a model can natively accept images.
 
-    决定图像附件是直接传递给模型还是替换为单独的说明。
-    偏向 True，因为假阴性会导致图像完全丢失。参见 issue #124。
+    Decides whether image attachments get passed through to the model or
+    swapped for a separate caption. Err toward True, since a false negative
+    drops the image entirely. See issue #124.
     """
     m = (model_name or "").lower()
     if any(kw in m for kw in _VISION_MODEL_KEYWORDS):
@@ -85,7 +86,7 @@ _lmstudio_models_cache: dict = {}
 
 
 def _is_local_host(host: Optional[str]) -> bool:
-    """对回环/局域网/Tailscale 主机返回 True（绝不会是公共域名）。"""
+    """True for loopback/LAN/Tailscale hosts (never public domains)."""
     host = (host or "").lower()
     if not host:
         return False
@@ -101,8 +102,8 @@ def _is_local_host(host: Optional[str]) -> bool:
 
 
 def _probe_lmstudio_models(url: str) -> Optional[list]:
-    """返回 LM Studio 的原生 /api/v1/models 列表，当端点不是
-    LM Studio 或不可达时返回 None（短 TTL 缓存；瞬时错误不缓存）。"""
+    """Return LM Studio's native /api/v1/models list, or None when the endpoint
+    isn't LM Studio or is unreachable (short-TTL cached; transient errors uncached)."""
     parsed = urlparse(url)
     host = parsed.hostname or ""
     key = (host, parsed.port)
@@ -132,8 +133,8 @@ def _probe_lmstudio_models(url: str) -> Optional[list]:
 
 
 def lmstudio_supports_vision(url: str, model: str) -> Optional[bool]:
-    """从 LM Studio 读取 `model` 的 capabilities.vision 标志，当端点
-    不是 LM Studio 或未报告时返回 None（以便调用方回退）。"""
+    """Read `model`'s capabilities.vision flag from LM Studio, or None when the
+    endpoint isn't LM Studio or doesn't report it (so callers fall back)."""
     if not model:
         return None
     # Never probe a remote provider; LM Studio is always a local/LAN host.
@@ -156,8 +157,9 @@ def lmstudio_supports_vision(url: str, model: str) -> Optional[bool]:
 
 
 def model_supports_vision(model_name: str, endpoint_url: str = "") -> bool:
-    """模型是否接受图像，优先使用端点报告的能力（LM Studio），
-    否则回退到基于名称的检测。"""
+    """Whether a model accepts images, using the endpoint's reported
+    capability when available (LM Studio) and falling back to name-based
+    detection otherwise."""
     if endpoint_url:
         try:
             advertised = lmstudio_supports_vision(endpoint_url, model_name or "")
@@ -169,7 +171,7 @@ def model_supports_vision(model_name: str, endpoint_url: str = "") -> bool:
 
 
 def validate_message(message: str) -> str:
-    """验证消息输入。"""
+    """Validate message input."""
     if not message:
         raise HTTPException(status_code=400, detail="Message is required")
 
@@ -184,7 +186,7 @@ def validate_message(message: str) -> str:
 
 
 def validate_file_upload(file: UploadFile) -> UploadFile:
-    """验证上传文件是否符合要求。"""
+    """Validate uploaded file meets requirements."""
     if not file or not file.filename:
         raise HTTPException(
             status_code=400,
@@ -249,10 +251,10 @@ def validate_file_upload(file: UploadFile) -> UploadFile:
 def coerce_message_and_session(req_json: dict | None, message: str | None,
                                session: str | None, session_manager,
                                allow_empty: bool = False):
-    """从请求中提取消息和会话，并进行验证。
+    """Extract message and session from request, with validation.
 
-    如果 allow_empty=True（例如仅附件发送），则跳过消息必填
-    检查，空白消息会被规范化为 ""。
+    If allow_empty=True (e.g. attachment-only sends), the message-required
+    check is skipped and an empty/whitespace message is normalized to "".
     """
     try:
         if message is None or session is None:

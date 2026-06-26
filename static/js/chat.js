@@ -32,8 +32,8 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
   let API_BASE = '';
   let currentAbort = null;
   let isStreaming = false;
-  // Continuous stall watchdog: while 流式传输, if the SSE 流 produces
-  // NOTHING for STALL_THRESHOLD_MS (no deltas, no tool 心跳 — tools beat
+  // Continuous stall watchdog: while streaming, if the SSE stream produces
+  // NOTHING for STALL_THRESHOLD_MS (no deltas, no tool heartbeat — tools beat
   // every 2s, so a full minute of silence means it's genuinely stuck or the
   // model quietly stopped), surface a non-destructive "still working?" prompt
   // instead of silently hanging. Replaces relying only on the tab-refocus
@@ -104,7 +104,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
   let currentHolder = null; // Track current message holder
   let currentSpinner = null; // Track current spinner for stop cleanup
 
-  // Background 流式传输 support
+  // Background streaming support
   const _backgroundStreams = new Map(); // sessionId -> { status, accumulated, sourcesHtml, abortCtrl, query, metrics }
   const _resumingStreams = new Set();   // sessionId -> a resumeStream() reader is live (re-attach lock)
   let _streamSessionId = null; // Session ID for the currently active reader loop
@@ -120,10 +120,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
   // Sources box builder and toggleSources are now in chatRenderer.js
   var _buildSourcesBox = chatRenderer.buildSourcesBox;
 
-  // Browser 通知s now in chatStream.js
+  // Browser notifications now in chatStream.js
   var _notifyResearchComplete = chatStream.notifyResearchComplete;
 
-  // Model/镜像 pricing, _buildImageBubble now in chatRenderer.js
+  // Model/image pricing, _buildImageBubble now in chatRenderer.js
   var _buildImageBubble = chatRenderer.buildImageBubble;
   var getModelCost = chatRenderer.getModelCost;
   var getImageCost = chatRenderer.getImageCost;
@@ -180,11 +180,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
   export function init(apiBase) {
     API_BASE = apiBase;
     initSlashCommands({ apiBase, isStreaming: () => isStreaming });
-    // 初始化 邮件收件箱
+    // Initialize email inbox
     emailInbox.init(documentModule);
     // Wire the slash-command autocomplete popup on the chat composer. The
     // dispatcher already handles the typed command — this just surfaces the
-    // 仓库 as a discoverable menu when the user starts a message with /.
+    // registry as a discoverable menu when the user starts a message with /.
     import('./slashAutocomplete.js').then(mod => {
       const ta = document.getElementById('message');
       if (ta && mod.initSlashAutocomplete) mod.initSlashAutocomplete(ta);
@@ -274,12 +274,12 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
    */
   export async function handleChatSubmit(e) {
     e.preventDefault();
-    // Cancel research clarification 超时 if active
+    // Cancel research clarification timeout if active
     if (window._researchTimeoutTimer) {
       clearTimeout(window._researchTimeoutTimer);
       window._researchTimeoutTimer = null;
     }
-    // 获取 current session
+    // Get current session
     const sessionId = sessionModule.getCurrentSessionId();
     const session = sessionModule.getSessions().find(s => s.id === sessionId);
     
@@ -291,7 +291,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       return;
     }
 
-    // If currently 流式传输, stop it
+    // If currently streaming, stop it
     if (isStreaming) {
       // Cancel server-side research if in progress
       const _cancelSid = sessionModule.getCurrentSessionId();
@@ -324,12 +324,12 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       });
       document.querySelectorAll('.agent-thread.streaming').forEach(t => t.classList.remove('streaming'));
 
-      // Clean up any thinking 加载指示器s
+      // Clean up any thinking spinners
       document.querySelectorAll('.agent-thinking-dots').forEach(el => {
         if (el._spinner) el._spinner.destroy();
         el.remove();
       });
-      // No text accumulated — remove the empty holder with 加载指示器
+      // No text accumulated — remove the empty holder with spinner
       if (currentHolder && !currentAccumulated) {
         if (currentSpinner) { currentSpinner.destroy(); currentSpinner = null; }
         // Empty cancel — keep the assistant bubble around with a "Cancelled
@@ -343,7 +343,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         currentAccumulated = '';
         return;
       }
-      // 渲染 whatever was accumulated so far
+      // Render whatever was accumulated so far
       if (currentHolder && currentAccumulated) {
         // Store accumulated in a closure variable before it gets cleared
         const stoppedContent = currentAccumulated;
@@ -355,14 +355,14 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           markdownModule.squashOutsideCode(stoppedContent)
         );
         
-        // Highlight 代码块s
+        // Highlight code blocks
         if (window.hljs) {
           currentHolder.querySelectorAll('pre code').forEach((block) => {
             window.hljs.highlightElement(block);
           });
         }
         
-        // 添加 the stopped indicator with continue button
+        // Add the stopped indicator with continue button
         const stoppedIndicator = document.createElement('div');
         stoppedIndicator.className = 'stopped-indicator';
         const stoppedLabel = document.createElement('span');
@@ -392,7 +392,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         const _sid = sessionModule.getCurrentSessionId();
         if (_sid) fetch(`${API_BASE}/api/session/${_sid}/mark-stopped`, { method: 'POST' }).catch(e => console.warn('mark-stopped failed:', e));
 
-        // 添加 footer with copy/regen if not already present
+        // Add footer with copy/regen if not already present
         if (!currentHolder.querySelector('.msg-footer')) {
           currentHolder.dataset.raw = stoppedContent;
           currentHolder.appendChild(createMsgFooter(currentHolder));
@@ -419,7 +419,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     if (_sendInFlight) return;
     _sendInFlight = true;
     // Instant visual feedback so the user sees their click was accepted
-    // even before the 流式传输 button state kicks in below.
+    // even before the streaming button state kicks in below.
     const _earlyMessageInput = uiModule.el('message');
     if (_earlyMessageInput) _earlyMessageInput.disabled = true;
     if (submitBtn) submitBtn.classList.add('send-pending');
@@ -545,7 +545,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     const streamQuery = msg;
     _lastReaderActivity = Date.now();
 
-    // Acquire Web Lock to hint browser not to discard this tab while 流式传输
+    // Acquire Web Lock to hint browser not to discard this tab while streaming
     if (navigator.locks) {
       navigator.locks.request('odysseus-stream-' + streamSessionId, { mode: 'exclusive', ifAvailable: true }, lock => {
         if (!lock) return; // Another stream already holds a lock — fine
@@ -611,7 +611,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       // Clear completed dot now that user is interacting
       if (sessionModule.clearStreamComplete) sessionModule.clearStreamComplete(sessionModule.getCurrentSessionId());
 
-      // 检查 for document selection context before consuming display override
+      // Check for document selection context before consuming display override
       const docSel = documentModule && documentModule.getSelectionContext();
       if (docSel) {
         const sels = Array.isArray(docSel) ? docSel : [docSel];
@@ -699,9 +699,9 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       }
       _pendingRegenAttachments = null;
 
-      // The optimistic user bubble was rendered before the upload as签名ed ids,
-      // so 镜像 previews couldn't show (the renderer needs att.id). Now that
-      // the upload resolved, stamp the ids — plus width/height for 镜像s so
+      // The optimistic user bubble was rendered before the upload assigned ids,
+      // so image previews couldn't show (the renderer needs att.id). Now that
+      // the upload resolved, stamp the ids — plus width/height for images so
       // the skeleton can size itself to the photo's aspect ratio — and
       // re-render so the thumbnail appears live, no refresh needed.
       if (_userMsgEl && _pendingAttachInfo && ids.length) {
@@ -773,7 +773,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         try { await documentModule.saveDocument(); } catch(e) { console.warn('doc auto-save failed', e); }
       }
 
-      // 注入 document selection context if present
+      // Inject document selection context if present
       let finalMsg = msg;
       if (docSel) {
         const sels = Array.isArray(docSel) ? docSel : [docSel];
@@ -800,7 +800,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       fd.append('message', _finalMsgWithInject);
       fd.append('session', streamSessionId);
       if (ids.length) fd.append('attachments', JSON.stringify(ids));
-      // Auto-save & send active doc ID so the 后端 sees latest content
+      // Auto-save & send active doc ID so the backend sees latest content
       if (documentModule && documentModule.isPanelOpen() && documentModule.getCurrentDocId()) {
         try { await documentModule.saveDocument({ silent: true }); } catch (_e) { /* best-effort */ }
         fd.append('active_doc_id', documentModule.getCurrentDocId());
@@ -818,7 +818,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           if (emCtx.account) fd.append('active_email_account', String(emCtx.account));
         }
       } catch (_e) { /* best-effort */ }
-      // Web toggle: pre-search in Chat mode, 工具权限 in Agent mode
+      // Web toggle: pre-search in Chat mode, tool permission in Agent mode
       const toggleState = Storage.loadToggleState();
       let isAgentMode = (toggleState.mode || 'chat') === 'agent';
       // Auto-escalate to agent mode when a document is open — the user expects
@@ -923,14 +923,14 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       _applyModelColor(holder.querySelector('.role'), modelName);
       holder.style.position = 'relative';
       
-      // 创建 加载指示器
+      // Create spinner
       spinner = spinnerModule.create('Initializing', 'right', 'wave');
       currentSpinner = spinner;
       const bodyDiv = holder.querySelector('.body');
       bodyDiv.appendChild(spinner.createElement());
       spinner.start();
       
-      // 更新 加载指示器 message based on mode
+      // Update spinner message based on mode
       if (el('web-toggle').checked && !_isAgent) {
         spinner.updateMessage('Searching web with ' + (searchModule ? searchModule.getProviderLabel() : 'SearXNG'));
         setTimeout(() => spinner.updateMessage('Processing results'), 1500);
@@ -964,7 +964,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
       // User's current UTC offset in minutes (east of UTC). Threaded into
       // the agent so natural-language times like "today at 9pm" are
-      // interpreted in YOUR 时区, not the server's.
+      // interpreted in YOUR timezone, not the server's.
       const _tzOffsetMin = -new Date().getTimezoneOffset();
       const _tzName = (() => {
         try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }
@@ -988,7 +988,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         let errText = `Error ${res.status}`;
         try {
           const errBody = await res.text();
-          // 解析 nested JSON error if present
+          // Parse nested JSON error if present
           const m = errBody.match(/"message"\s*:\s*"([^"]+)"/);
           if (m) errText = m[1].replace(/\\"/g, '"');
           else if (errBody.length < 200) errText = errBody;
@@ -1015,7 +1015,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         return;
       }
 
-      // Mark the chat log busy while 流式传输 so 屏幕阅读器s wait for the
+      // Mark the chat log busy while streaming so screen readers wait for the
       // settled response instead of announcing every token. Cleared in finally.
       const _chatLog = document.getElementById('chat-history');
       if (_chatLog) _chatLog.setAttribute('aria-busy', 'true');
@@ -1026,7 +1026,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       let metrics = null;
       let isThinking = false;
       let thinkingStartTime = null;
-      // Streaming TTS: synthesize sentence-by-sentence during 流式传输
+      // Streaming TTS: synthesize sentence-by-sentence during streaming
       const streamingTTS = !!(window.aiTTSManager && window.aiTTSManager.autoPlay && window.aiTTSManager.available);
       if (streamingTTS) window.aiTTSManager.streamingStart();
       // Multi-bubble agent tracking
@@ -1040,12 +1040,12 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       let _sourcesType = '';          // 'web' or 'research'
       let _findingsData = null;      // Raw findings data for collapsible box
       // _keepResearchOn removed — clarification state now persisted server-side via DB mode
-      // Insert sources box as a stable DOM node that won't be replaced during 流式传输.
-      // 返回 the content 容器 to use for innerHTML updates.
+      // Insert sources box as a stable DOM node that won't be replaced during streaming.
+      // Returns the content container to use for innerHTML updates.
       function _ensureStreamLayout(body) {
         if (!body) return body;
-        // Sources are deferred to final render — don't insert during 流式传输
-        // Ensure a stable content div exists for 文本内容
+        // Sources are deferred to final render — don't insert during streaming
+        // Ensure a stable content div exists for text content
         var contentDiv = body.querySelector('.stream-content');
         if (!contentDiv) {
           contentDiv = document.createElement('div');
@@ -1055,7 +1055,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         return contentDiv;
       }
       const esc = uiModule.esc;
-      // 移除 thinking 加载指示器 helper
+      // Remove thinking spinner helper
       _removeThinkingSpinner = () => {
         const el = document.querySelector('.agent-thinking-dots');
         if (el) {
@@ -1064,7 +1064,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         }
       };
 
-      // Tool-aware thinking 加载指示器
+      // Tool-aware thinking spinner
       let _lastToolName = '';
       const _searchIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
       const _toolLabels = {
@@ -1095,7 +1095,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         if (!_lastToolName) {
           return 'Thinking';
         }
-        // 检查 exact match first, then prefix match
+        // Check exact match first, then prefix match
         const lower = _lastToolName.toLowerCase();
         if (_toolLabels[lower]) return _toolLabels[lower];
         for (const [key, label] of Object.entries(_toolLabels)) {
@@ -1124,7 +1124,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         _showThinkingSpinner(label);
       }
 
-      // Auto-show thinking 加载指示器 after text stops 流式传输
+      // Auto-show thinking spinner after text stops streaming
       let _textPauseTimer = null;
       function _scheduleThinkingSpinner() {
         if (_textPauseTimer) clearTimeout(_textPauseTimer);
@@ -1138,7 +1138,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         if (_textPauseTimer) { clearTimeout(_textPauseTimer); _textPauseTimer = null; }
       };
 
-      // Document 流式传输 state (text-fence detection)
+      // Document streaming state (text-fence detection)
       let _docFenceOpened = false;
       let _docFenceContentStart = -1;
       let _liveThinkSection = null;
@@ -1173,7 +1173,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         return (text || '').slice(last.index + last[0].length).trimStart();
       }
 
-      // Direct render helper for 流式传输 text
+      // Direct render helper for streaming text
       _renderStream = () => {
         let dt = markdownModule.normalizeThinkingMarkup(stripToolBlocks(roundText));
         const bodyEl = roundHolder.querySelector('.body');
@@ -1182,7 +1182,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         // If thinking was already collapsed in-place, only render the reply portion
         let liveReply = contentEl.querySelector('.live-reply-content');
         if (liveReply) {
-          // 提取 reply text — handle native <think> tags and non-tag patterns
+          // Extract reply text — handle native <think> tags and non-tag patterns
           const closedThinkReply = _replyAfterClosedThinking(dt);
           const { thinkingBlocks, content: replyText } = closedThinkReply
             ? { thinkingBlocks: [''], content: closedThinkReply }
@@ -1230,7 +1230,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           return;
         }
 
-        // If thinking is still 流式传输 (unclosed <think>), show indicator instead of raw text
+        // If thinking is still streaming (unclosed <think>), show indicator instead of raw text
         if (markdownModule.hasUnclosedThinkTag && markdownModule.hasUnclosedThinkTag(dt)) {
           const thinkStart = dt.search(/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>|<\|channel>thought/i);
           const thinkContent = dt.substring(Math.max(thinkStart, 0))
@@ -1238,22 +1238,22 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             .replace(/<channel\|>/gi, '')
             .trim();
           const lines = thinkContent.split('\n').length;
-          // Don't show beforeThink text during 流式传输 — it'll appear in the final render
+          // Don't show beforeThink text during streaming — it'll appear in the final render
           // This prevents the "split into two" duplication
           contentEl.innerHTML =
             '<div class="thinking-section"><div class="thinking-header"><div class="thinking-header-left">Thinking' +
             (lines > 1 ? ` (${lines} lines)` : '') + '</div></div></div>';
           // The stream renderer self-heals when it next sees this overwritten
-          // 容器 (流式传输Renderer.js), so no explicit reset is needed here.
+          // container (streamingRenderer.js), so no explicit reset is needed here.
           uiModule.scrollHistory();
           return;
         }
 
-        // Incremental 流式传输 render: freeze finalized blocks, re-render only the
-        // growing tail, and highlight each 代码块 once on completion. This is
+        // Incremental streaming render: freeze finalized blocks, re-render only the
+        // growing tail, and highlight each code block once on completion. This is
         // what keeps code-block hover buttons from flickering and avoids the O(N^2)
         // re-parse/re-highlight of the whole message on every token.
-        // See 流式传输Renderer.js / 流式传输Segmenter.js.
+        // See streamingRenderer.js / streamingSegmenter.js.
         const renderer = contentEl._streamRenderer ||
           (contentEl._streamRenderer = createStreamRenderer(contentEl, {
             render: (t) => markdownModule.processWithThinking(markdownModule.squashOutsideCode(t)),
@@ -1282,7 +1282,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          // 记录 SSE event types (e.g. "event: error") for debugging
+          // Log SSE event types (e.g. "event: error") for debugging
           if (line.startsWith('event: ')) {
             const evtType = line.slice(7).trim();
             if (evtType === 'error') _nextIsError = true;
@@ -1292,7 +1292,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             const data = line.slice(6);
             if (data && data !== '[DONE]') markFirstVisibleOutput();
 
-            // (thinking 加载指示器 removal is handled in agent_step / tool_start / content handlers)
+            // (thinking spinner removal is handled in agent_step / tool_start / content handlers)
 
             // Background detection: are we on a different session?
             const _isBg = (sessionModule.getCurrentSessionId() !== streamSessionId);
@@ -1365,13 +1365,13 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     else _hdrDone.appendChild(_liveThinkTimerEl);
                   }
                 }
-                // As签名 stable IDs
+                // Assign stable IDs
                 var _thinkIdDone = 'think-' + Date.now();
                 var _liveHdrDone = _liveThinkSection && _liveThinkSection.querySelector('.thinking-header');
                 if (_liveHdrDone) _liveHdrDone.dataset.thinkingId = _thinkIdDone;
                 if (_liveThinkContent) _liveThinkContent.id = _thinkIdDone;
                 if (_liveThinkToggle) _liveThinkToggle.id = _thinkIdDone + '-toggle';
-                // 创建 live-reply 容器 so final render preserves thinking bar
+                // Create live-reply container so final render preserves thinking bar
                 var _streamElDone = _liveThinkSection ? _liveThinkSection.parentElement : roundHolder.querySelector('.stream-content');
                 if (!_streamElDone) _streamElDone = roundHolder.querySelector('.body');
                 if (_streamElDone && !_streamElDone.querySelector('.live-reply-content')) {
@@ -1380,12 +1380,12 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   _streamElDone.appendChild(_replyElDone);
                 }
               }
-              // Normal foreground completion — 指标 will be displayed in the final render block below
+              // Normal foreground completion — metrics will be displayed in the final render block below
               break;
             }
             try {
               const json = JSON.parse(data);
-              // 处理 SSE error events (e.g. HTTP 404 from provider)
+              // Handle SSE error events (e.g. HTTP 404 from provider)
               if (_nextIsError || json.status >= 400) {
                 _nextIsError = false;
                 const errMsg = json.text || json.error?.message || `Error ${json.status || 'unknown'}`;
@@ -1428,19 +1428,19 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 accumulated += _delta;
                 roundText += _delta;
                 currentAccumulated = accumulated; // Update global tracker
-                // First token arrived — switch stop button from processing to 流式传输
+                // First token arrived — switch stop button from processing to streaming
                 if (wasEmpty && submitBtn && !_isBg) {
                   submitBtn.dataset.phase = 'receiving';
                 }
 
-                // 更新 background map if running in background
+                // Update background map if running in background
                 if (_isBg) {
                   var bgEntry = _backgroundStreams.get(streamSessionId);
                   if (bgEntry) bgEntry.accumulated = accumulated;
                   continue; // Skip all DOM writes
                 }
 
-                // --- Text-fence doc 流式传输 (for models that don't use native 工具调用s) ---
+                // --- Text-fence doc streaming (for models that don't use native tool calls) ---
                 if (!_docFenceOpened && documentModule && roundText.includes('```create_document\n')) {
                   const fenceIdx = roundText.indexOf('```create_document\n');
                   const afterFence = roundText.slice(fenceIdx + '```create_document\n'.length);
@@ -1448,7 +1448,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   if (fenceLines.length >= 1 && fenceLines[0].trim()) {
                     _docFenceOpened = true;
                     const title = fenceLines[0].trim();
-                    // Keep in sync with 后端 _KNOWN_LANGS in src/tool_implementations.py
+                    // Keep in sync with backend _KNOWN_LANGS in src/tool_implementations.py
                     const knownLangs = ['python','py','javascript','js','typescript','ts','html','css','json','yaml','bash','sql','rust','go','java','c','cpp','markdown','text','plain','ruby','swift','kotlin','php','email','csv','xml','toml','ini'];
                     const isLang = fenceLines.length >= 2 && knownLangs.includes(fenceLines[1].trim().toLowerCase());
                     const lang = isLang ? fenceLines[1].trim() : '';
@@ -1470,13 +1470,13 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 const normalizedRoundText = markdownModule.normalizeThinkingMarkup(roundText);
                 let hasUnclosedThink = markdownModule.hasUnclosedThinkTag(normalizedRoundText);
                 // Detect non-tag thinking patterns: "Thinking:", "Thinking Process:", Gemma-style reasoning
-                // These patterns don't use <think> tags, so we simulate unclosed thinking during 流式传输
+                // These patterns don't use <think> tags, so we simulate unclosed thinking during streaming
                 const _replyPrefixes = ['Hey', 'Hi ', 'Hi!', 'Hello', 'Sure', 'Yes', 'No ', 'No,', 'Yo', 'OK', 'Here', 'Absolutely', 'Of course', 'Great', 'Alright', 'Thanks', 'Welcome', 'Good ', "I'm happy", "I'd be"];
                 if (!hasUnclosedThink && !/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>|<\|channel>thought/i.test(normalizedRoundText)) {
                   const _trimmedRT = normalizedRoundText.trimStart();
                   const _isReasoning = markdownModule.startsWithReasoningPrefix(_trimmedRT);
                   if (_isReasoning) {
-                    // 检查 if we can see a reply boundary yet (newline then reply pattern)
+                    // Check if we can see a reply boundary yet (newline then reply pattern)
                     const _lines = _trimmedRT.split('\n');
                     let _replyFound = false;
                     for (let li = 1; li < _lines.length; li++) {
@@ -1508,13 +1508,13 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 }
                 // Detect false close: <think>short</think> where real thinking follows untagged
                 // Only applies when there's a second </think> later (model leaked thinking outside tags)
-                // Do NOT trigger if the text after </think> contains 工具调用s (that's real content)
+                // Do NOT trigger if the text after </think> contains tool calls (that's real content)
                 if (!hasUnclosedThink && isThinking) {
                   const _thinkMatch = normalizedRoundText.match(/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>([\s\S]*?)<\/(?:think(?:ing)?|thought)>/i);
                   const _thinkLen = _thinkMatch ? _thinkMatch[1].trim().length : 0;
                   if (_thinkLen < 20) {
                     const _afterClose = normalizedRoundText.replace(/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>([\s\S]*?)<\/(?:think(?:ing)?|thought)>/i, '').trim();
-                    // Only keep waiting if there's trailing text that looks like thinking (not 工具调用s)
+                    // Only keep waiting if there's trailing text that looks like thinking (not tool calls)
                     const _hasToolCall = /```(?:bash|python|web_search|read_file|write_file|create_document|edit_document|manage_|generate_image)/i.test(_afterClose);
                     const _hasOrphanClose = /<\/(?:think(?:ing)?|thought)>/i.test(_afterClose);
                     if (!_hasToolCall && (_hasOrphanClose || (Date.now() - thinkingStartTime) < 500)) {
@@ -1528,7 +1528,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   thinkingStartTime = Date.now();
                   if (spinner && spinner.element) spinner.destroy();
 
-                  // 创建 a live thinking box — starts expanded so content streams visibly
+                  // Create a live thinking box — starts expanded so content streams visibly
                   var thinkBody = roundHolder.querySelector('.body');
                   var thinkContent = _ensureStreamLayout(thinkBody);
                   thinkContent.style.minHeight = '';
@@ -1562,7 +1562,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     _thinkTimerRAF = requestAnimationFrame(_tickThinkTimer);
                   }
                   _thinkTimerRAF = requestAnimationFrame(_tickThinkTimer);
-                  // Whirlpool 加载指示器
+                  // Whirlpool spinner
                   if (_liveThinkSpinnerSlot) {
                     var _wp = spinnerModule.createWhirlpool(12);
                     _wp.element.style.margin = '0';
@@ -1573,7 +1573,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   }
                 } else if (hasUnclosedThink && isThinking) {
                   if (_liveThinkInner) {
-                    // 提取 raw thinking text (strip known thinking wrappers and prefixes)
+                    // Extract raw thinking text (strip known thinking wrappers and prefixes)
                     var thinkText = markdownModule.normalizeThinkingMarkup(roundText)
                       .replace(/<\/?(?:think(?:ing)?|thought)(?:\s+[^>]*)?>/gi, '')
                       .replace(/<\|channel>thought\s*\n?/gi, '')
@@ -1612,7 +1612,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     _liveThinkTokenCount = 0;
                     _liveThinkToggle = null;
                     _liveThinkDomId = null;
-                    // Fall through to normal 流式传输
+                    // Fall through to normal streaming
                     if (spinner && spinner.element) spinner.destroy();
                     _renderStream();
                     _scheduleThinkingSpinner();
@@ -1620,7 +1620,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   }
 
                   // Thinking ended — smooth transition: update header, pause, then collapse
-                  // 停止 live timer and 加载指示器
+                  // Stop live timer and spinner
                   cancelAnimationFrame(_thinkTimerRAF);
                   var elapsed = thinkingStartTime ? ((Date.now() - thinkingStartTime) / 1000).toFixed(1) : null;
                   // Embed thinking time in the <think> tag for persistence on reload
@@ -1645,14 +1645,14 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     }
                   }
 
-                  // As签名 stable IDs (for click-toggle handler in markdown.js)
+                  // Assign stable IDs (for click-toggle handler in markdown.js)
                   var _thinkId = 'think-' + Date.now();
                   var _liveHdr = _liveThinkSection && _liveThinkSection.querySelector('.thinking-header');
                   if (_liveHdr) _liveHdr.dataset.thinkingId = _thinkId;
                   if (_liveThinkContent) _liveThinkContent.id = _thinkId;
                   if (_liveThinkToggle) _liveThinkToggle.id = _thinkId + '-toggle';
 
-                  // Append a 容器 for the reply text that follows thinking
+                  // Append a container for the reply text that follows thinking
                   var _streamEl = _liveThinkSection ? _liveThinkSection.parentElement : roundHolder.querySelector('.stream-content');
                   if (!_streamEl) _streamEl = roundHolder.querySelector('.body');
                   if (_streamEl) {
@@ -1661,14 +1661,14 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     _streamEl.appendChild(_replyEl);
                   }
 
-                  // 渲染 any reply text that arrived with the closing </think> token
+                  // Render any reply text that arrived with the closing </think> token
                   _renderStream();
                 } else {
-                  // Normal 流式传输
+                  // Normal streaming
                   if (spinner && spinner.element) spinner.destroy();
                   _renderStream();
                   _scheduleThinkingSpinner();
-                  // Feed 流式传输 TTS with accumulated text
+                  // Feed streaming TTS with accumulated text
                   if (streamingTTS) window.aiTTSManager.streamingUpdate(roundText);
                 }
               } else if (json.type === 'research_progress') {
@@ -1677,7 +1677,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 // Highlight research button while running
                 var _rToggle = document.getElementById('research-toggle-btn');
                 if (_rToggle) _rToggle.classList.add('research-running');
-                // Request 通知 permission on first research event
+                // Request notification permission on first research event
                 if ('Notification' in window && Notification.permission === 'default') {
                   Notification.requestPermission();
                 }
@@ -1685,13 +1685,13 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 var _rSid = sessionModule && sessionModule.getCurrentSessionId();
                 if (_rSid && sessionModule.markResearching) sessionModule.markResearching(_rSid);
                 const rp = json.data;
-                // 启动 research timer + synapse on first progress event
+                // Start research timer + synapse on first progress event
                 if (!_researchTimerEl && spinner && spinner.element) {
                   _researchStartTime = rp.started_at ? rp.started_at * 1000 : Date.now();
                   _researchAvgDuration = rp.avg_duration || null;
                   _researchTimerEl = document.createElement('div');
                   _researchTimerEl.className = 'research-timer';
-                  // Styles in .research-timer CSS 类
+                  // Styles in .research-timer CSS class
                   spinner.element.parentNode.insertBefore(_researchTimerEl, spinner.element.nextSibling);
                   _researchTimerInterval = setInterval(() => {
                     if (!_researchTimerEl) return;
@@ -1707,13 +1707,13 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     _researchTimerEl.textContent = txt;
                   }, 1000);
                   // Synapse visualization — insert right above the timer so
-                  // it sits between the 加载指示器 message and the timer line.
+                  // it sits between the spinner message and the timer line.
                   try {
                     _researchSynapse = createResearchSynapse(spinner.element.parentNode, {
                       query: holder._researchQuery || rp.query || '',
                       startedAt: _researchStartTime,
                     });
-                    // Move it to live between 加载指示器 and timer
+                    // Move it to live between spinner and timer
                     if (_researchSynapse.element && _researchTimerEl) {
                       spinner.element.parentNode.insertBefore(_researchSynapse.element, _researchTimerEl);
                     }
@@ -1756,7 +1756,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   if (sessionModule && sessionModule.clearResearching) sessionModule.clearResearching(streamSessionId);
                   continue;
                 }
-                // Research done — clean up timer, show sources box, then 加载指示器 for LLM response
+                // Research done — clean up timer, show sources box, then spinner for LLM response
                 _clearResearchTimer();
                 holder._researchSources = json.data;
                 var _rSid2 = sessionModule && sessionModule.getCurrentSessionId();
@@ -1813,7 +1813,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 }
               } else if (json.type === 'workspace_rejected') {
                 // Server refused to bind the posted workspace (deleted folder,
-                // 文件路径, sensitive dir, filesystem root). Clear the stored
+                // file path, sensitive dir, filesystem root). Clear the stored
                 // value so the pill stops claiming a confinement that is not in
                 // effect, and tell the user.
                 const _wsPath = (json.data && json.data.path) || '';
@@ -1827,19 +1827,19 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 );
                 continue;
               } else if (json.type === 'model_fallback') {
-                // Model went offline — switched to 回退
+                // Model went offline — switched to fallback
                 var _fbData = json.data || {};
                 uiModule.showToast(
                   `Model ${_fbData.old_model || '?'} offline — switched to ${_fbData.new_model || '?'}`,
                   5000
                 );
-                // 更新 the model picker to reflect the new model
+                // Update the model picker to reflect the new model
                 if (sessionModule && sessionModule.updateModelPicker) {
                   sessionModule.updateModelPicker();
                 }
                 continue;
               } else if (json.type === 'model_info') {
-                // 更新 role label with model name as soon as we know it
+                // Update role label with model name as soon as we know it
                 if (!_isBg && holder) {
                   const roleEl = holder.querySelector('.role');
                   if (roleEl) {
@@ -1886,7 +1886,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
               } else if (json.type === 'rounds_exhausted') {
                 // The agent hit the per-turn step limit while still working.
                 // Offer a Continue button instead of stalling silently.
-                // NOTE: append to the chat-history 容器 (bottom), NOT the
+                // NOTE: append to the chat-history container (bottom), NOT the
                 // message body — the body innerHTML is re-rendered at stream
                 // finalize, which would wipe a note placed inside it.
                 const _chatBox = document.getElementById('chat-history');
@@ -1932,7 +1932,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 }
               } else if (json.type === 'attachments') {
                 if (_isBg) continue;
-                // 更新 user bubble — replace file chips with 镜像 previews
+                // Update user bubble — replace file chips with image previews
                 const _ub = document.querySelector('#chat-history .msg-user:last-of-type');
                 if (_ub) {
                   const _aw = _ub.querySelector('.attach-cards');
@@ -1942,7 +1942,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                       if (_isImg && _att.id) {
                         // Skip if we already have a preview for this file id —
                         // on a regenerate the original user bubble keeps its
-                        // photo and the 后端 re-emits the attachment event
+                        // photo and the backend re-emits the attachment event
                         // for the same id; without this guard we'd append a
                         // duplicate (which visually pushes the real photo off).
                         const _existingPreview = _aw.querySelector('[data-file-id="' + _att.id + '"]');
@@ -2035,7 +2035,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   if (_liveThinkHeader) _liveThinkHeader.textContent = 'View thinking process';
                   if (_liveThinkTimerEl) _liveThinkTimerEl.textContent = _elapsed2 ? _formatThinkStats(_elapsed2, _liveThinkTokenCount) : '';
                   if (_liveThinkSpinnerSlot) _liveThinkSpinnerSlot.remove();
-                  // As签名 stable IDs
+                  // Assign stable IDs
                   var _thinkId2 = 'think-' + Date.now();
                   var _liveHdr2 = _liveThinkSection && _liveThinkSection.querySelector('.thinking-header');
                   if (_liveHdr2) _liveHdr2.dataset.thinkingId = _thinkId2;
@@ -2059,10 +2059,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   }
                 }
 
-                // Track tool name for contextual 加载指示器 labels
+                // Track tool name for contextual spinner labels
                 _lastToolName = json.tool || '';
 
-                // --- Thread timeline: group tools in a thread 容器 ---
+                // --- Thread timeline: group tools in a thread container ---
                 const cmd = json.command || '';
                 const chatBox = document.getElementById('chat-history');
                 // Find existing thread to append to — check last few children
@@ -2074,9 +2074,9 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     threadWrap = child;
                     break;
                   }
-                  // Skip hidden (empty) bubbles and thinking 加载指示器s
+                  // Skip hidden (empty) bubbles and thinking spinners
                   if (child.style.display === 'none' || child.classList.contains('agent-thinking-dots')) continue;
-                  // 停止 if we hit a visible message bubble (has real content between tools)
+                  // Stop if we hit a visible message bubble (has real content between tools)
                   if (child.classList.contains('msg')) break;
                 }
                 if (threadWrap) {
@@ -2102,7 +2102,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 node.className = 'agent-thread-node running';
                 const cmdHtml = cmd ? `<pre class="agent-thread-cmd">${esc(cmd)}</pre>` : '';
                 node.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${toolIcon}</span><span class="agent-thread-tool">${esc(toolLabel)}</span><span class="agent-thread-wave">▁▂▃</span></div><div class="agent-thread-content">${cmdHtml}</div>`;
-                // Expand/collapse via delegated 点击处理器 (init at module bottom).
+                // Expand/collapse via delegated click handler (init at module bottom).
                 threadWrap.appendChild(node);
                 currentToolBubble = node;
                 // Animate the wave
@@ -2116,7 +2116,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   }, 100);
                 }
                 // Smooth per-second "cooking" timer — ticks every second (not
-                // just on the 2s 后端 心跳) so a long-running tool
+                // just on the 2s backend heartbeat) so a long-running tool
                 // always shows visible motion and never reads as frozen.
                 node._startTime = Date.now();
                 node._elapsedTicker = setInterval(() => {
@@ -2141,7 +2141,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 // Long-running subprocess (bash, python) is still in
                 // flight — refresh the running tool card with the
                 // elapsed-time + tail of its stdout/stderr so the
-                // user doesn't stare at a blind "Running…" 加载指示器.
+                // user doesn't stare at a blind "Running…" spinner.
                 if (_isBg) continue;
                 if (!currentToolBubble) continue;
                 // The per-second ticker (started in tool_start) owns the
@@ -2163,9 +2163,9 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
               } else if (json.type === 'tool_output') {
                 if (_isBg) continue;
-                // --- 更新 the current thread node ---
+                // --- Update the current thread node ---
                 if (currentToolBubble) {
-                  // 停止 wave animation + the per-second cooking ticker
+                  // Stop wave animation + the per-second cooking ticker
                   if (currentToolBubble._waveInterval) {
                     clearInterval(currentToolBubble._waveInterval);
                     currentToolBubble._waveInterval = null;
@@ -2195,7 +2195,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                       if (line.startsWith('+++') || line.startsWith('---')) cls = 'diff-meta';
                       else if (line.startsWith('@@')) cls = 'diff-hunk';
                       // Drop the leading diff marker (+/-/space) — the row colour
-                      // already 编码s add/del, and keeping it doubles up with
+                      // already encodes add/del, and keeping it doubles up with
                       // markdown "- " bullets (reads as "+-"/"--").
                       else if (line.startsWith('+')) { cls = 'diff-add'; text = line.slice(1); }
                       else if (line.startsWith('-')) { cls = 'diff-del'; text = line.slice(1); }
@@ -2215,11 +2215,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   const _wasOpen = currentToolBubble.classList.contains('open');
                   currentToolBubble.className = 'agent-thread-node' + (ok ? '' : ' error') + (_wasOpen ? ' open' : '');
                   currentToolBubble.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(json.tool)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${cmdHtml2}${outHtml}${diffHtml}</div>`;
-                  // Reset so thinking 加载指示器 between tools says "Thinking" not the old tool's label
+                  // Reset so thinking spinner between tools says "Thinking" not the old tool's label
                   _lastToolName = '';
                   uiModule.scrollHistory();
                 }
-                // --- 渲染 generated 镜像s inline ---
+                // --- Render generated images inline ---
                 if (json.image_url) {
                   const chatBox = document.getElementById('chat-history');
                   chatBox.appendChild(_buildImageBubble(json.image_url, json.image_prompt, json.image_model, json.image_size, json.image_quality, json.image_id));
@@ -2227,7 +2227,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   // Notify gallery to refresh if open
                   window.dispatchEvent(new CustomEvent('gallery-refresh'));
                 }
-                // --- 渲染 browser screenshots in 工具输出 ---
+                // --- Render browser screenshots in tool output ---
                 if (json.screenshot && currentToolBubble) {
                   const contentEl = currentToolBubble.querySelector('.agent-thread-content');
                   if (contentEl) {
@@ -2271,8 +2271,8 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   chatStream.handleUIControl(json);
                 }
 
-                // Schedule a thinking 加载指示器 between tool rounds (short delay so
-                // agent_step in the same SSE 数据块 can cancel it before it shows)
+                // Schedule a thinking spinner between tool rounds (short delay so
+                // agent_step in the same SSE chunk can cancel it before it shows)
                 _scheduleThinkingSpinner();
                 uiModule.scrollHistory();
 
@@ -2321,7 +2321,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
               } else if (json.type === 'ask_user') {
                 if (_isBg) continue;
                 // The agent posed a multiple-choice question; the turn has ended.
-                // 渲染 clickable options at the bottom of the history. The
+                // Render clickable options at the bottom of the history. The
                 // user's pick is sent as the next message and the agent resumes.
                 _cancelThinkingTimer();
                 _removeThinkingSpinner();
@@ -2339,8 +2339,8 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   // moved to when it appears.
                   card.setAttribute('role', 'group');
                   card.tabIndex = -1;
-                  // 渲染 any emoji in agent-supplied text through the app's
-                  // pipeline: 转义, then svgify to monochrome theme-tinted
+                  // Render any emoji in agent-supplied text through the app's
+                  // pipeline: escape, then svgify to monochrome theme-tinted
                   // glyphs (project rule: never colorful emoji; respects the
                   // "Text-only Emojis" setting like the rest of the chat).
                   const _emo = (s) => svgifyEmoji(uiModule.esc(String(s)));
@@ -2362,7 +2362,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   head.appendChild(closeBtn);
                   card.appendChild(head);
 
-                  // 渲染 the question inside the card so it's self-contained:
+                  // Render the question inside the card so it's self-contained:
                   // some models call ask_user without first narrating the question
                   // as assistant text, in which case the card would otherwise show
                   // bare options with no prompt.
@@ -2372,7 +2372,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     q.id = `ask-user-q-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
                     q.innerHTML = _emo(_aq.question);
                     card.appendChild(q);
-                    // Label the choice group with the question for 屏幕阅读器s.
+                    // Label the choice group with the question for screen readers.
                     card.setAttribute('aria-labelledby', q.id);
                   } else {
                     card.setAttribute('aria-label', 'Question from the assistant');
@@ -2384,7 +2384,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
                   const _send = (text) => {
                     if (!text) return;
-                    // 移除 the card once answered — the choice is sent as a
+                    // Remove the card once answered — the choice is sent as a
                     // normal user message (and the question persists as the
                     // assistant text above), so the affordances are spent.
                     card.remove();
@@ -2481,7 +2481,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 if (_activeThread) {
                   _activeThread.classList.add('has-bottom');
                 }
-                // --- New round: create fresh AI bubble with 加载指示器 ---
+                // --- New round: create fresh AI bubble with spinner ---
                 currentToolBubble = null;
                 roundFinalized = false;
                 isThinking = false;
@@ -2490,7 +2490,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 const box = document.getElementById('chat-history');
                 const newWrap = document.createElement('div');
                 newWrap.className = 'msg msg-ai msg-continuation streaming';
-                // 添加 model name label
+                // Add model name label
                 const newRole = document.createElement('div');
                 newRole.className = 'role';
                 const metaS = sessionModule.getSessions().find(s => s.id === streamSessionId);
@@ -2505,9 +2505,9 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 box.appendChild(newWrap);
                 roundHolder = newWrap;
                 roundText = '';
-                // Destroy any previous 加载指示器 before creating new one
+                // Destroy any previous spinner before creating new one
                 if (spinner && spinner.element) spinner.destroy();
-                // Show 加载指示器 while waiting for text (skip for research — has its own progress)
+                // Show spinner while waiting for text (skip for research — has its own progress)
                 if (!_researchingStreamIds.has(streamSessionId)) {
                   spinner = spinnerModule.create('Generating response', 'right', 'wave');
                   newBody.appendChild(spinner.createElement());
@@ -2569,7 +2569,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 uiModule.scrollHistory();
 
               } else if (json.error) {
-                // --- Backend error (超时, connection issue, etc.) ---
+                // --- Backend error (timeout, connection issue, etc.) ---
                 console.error('Stream error from backend:', json.error);
                 if (_isBg) continue;
                 if (spinner && spinner.element) spinner.destroy();
@@ -2593,10 +2593,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       _renderStream();
       _cancelThinkingTimer();
       _removeThinkingSpinner();
-      // 停止 any thread pulse animations
+      // Stop any thread pulse animations
       document.querySelectorAll('.agent-thread.streaming').forEach(t => t.classList.remove('streaming'));
       // --- Final render (skip if stream was ever backgrounded or currently in background) ---
-      // 移除 流式传输 class from all round bubbles
+      // Remove streaming class from all round bubbles
       holder.classList.remove('streaming');
       if (roundHolder && roundHolder !== holder) roundHolder.classList.remove('streaming');
 
@@ -2649,7 +2649,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           }
         } catch (_) {}
 
-        // Clear 流式传输 minHeight lock
+        // Clear streaming minHeight lock
         const _streamContent = roundHolder.querySelector('.stream-content');
         if (_streamContent) _streamContent.style.minHeight = '';
 
@@ -2660,7 +2660,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           // Preserve sources expanded state before final render
           var _wasExpanded = _sourcesExpanded || !!(_body4 && _body4.querySelector('.sources-content.expanded'));
 
-          // If thinking was collapsed in-place during 流式传输, preserve it
+          // If thinking was collapsed in-place during streaming, preserve it
           var _liveReplyEl = _body4 && _body4.querySelector('.live-reply-content');
           var _extracted = _liveReplyEl ? markdownModule.extractThinkingBlocks(finalDisplay) : null;
           var _finalReply = '';
@@ -2670,7 +2670,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
               _finalReply = (_extracted.content || '').trim();
             } else {
               // Non-tag thinking: extract reply from raw text
-              // 处理 garbled thinking tag: "Thinking: reasoning\n<think>reply"
+              // Handle garbled thinking tag: "Thinking: reasoning\n<think>reply"
               const _garbledMatch = finalDisplay.match(/^[\s\S]+?<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>\s*([\s\S]*?)(?:<\/(?:think(?:ing)?|thought)>)?\s*$/i);
               if (_garbledMatch && _garbledMatch[1].trim()) {
                 _finalReply = _garbledMatch[1].trim();
@@ -2698,7 +2698,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             }
           }
           if (_liveReplyEl && _finalReply) {
-            // 渲染 reply into the live-reply 容器 (thinking bar already showing)
+            // Render reply into the live-reply container (thinking bar already showing)
             var _replyHtml = markdownModule.mdToHtml(markdownModule.squashOutsideCode(_finalReply));
             _liveReplyEl.innerHTML = _replyHtml;
             _liveReplyEl.classList.remove('live-reply-content');
@@ -2709,7 +2709,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             }
             if (_findingsData) _body4.insertAdjacentHTML('beforeend', chatRenderer.buildFindingsBox(_findingsData));
           } else {
-            // Full re-render (reply empty or no live-reply 容器)
+            // Full re-render (reply empty or no live-reply container)
             _body4.innerHTML = (_sourcesData ? _buildSourcesBox(_sourcesData, _sourcesType, _wasExpanded) : '')
               + markdownModule.processWithThinking(markdownModule.squashOutsideCode(finalDisplay))
               + (_findingsData ? chatRenderer.buildFindingsBox(_findingsData) : '');
@@ -2719,7 +2719,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           var _wasExpanded2 = _sourcesExpanded || !!(_body4b && _body4b.querySelector('.sources-content.expanded'));
           _body4b.innerHTML = _sourcesData ? _buildSourcesBox(_sourcesData, _sourcesType, _wasExpanded2) : _sourcesHtml;
         } else if (roundHolder !== holder) {
-          // 检查 if there's thinking content worth showing
+          // Check if there's thinking content worth showing
           const _thinkingOnly = markdownModule.extractThinkingBlocks(roundText);
           if (_thinkingOnly.thinkingBlocks?.length && !_thinkingOnly.content) {
             // Show thinking in a collapsed section even if no visible reply text
@@ -2744,7 +2744,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         if (markdownModule.renderMermaid) markdownModule.renderMermaid(roundHolder);
 
         uiModule.scrollHistory();
-        // 渲染 RAG sources if present
+        // Render RAG sources if present
         if (holder._ragSources && holder._ragSources.length) {
           const details = document.createElement('details');
           details.className = 'rag-sources';
@@ -2761,7 +2761,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           holder.querySelector('.body').appendChild(details);
         }
 
-        // Hide first bubble if it has no visible 文本内容 (e.g. agent went straight to tools)
+        // Hide first bubble if it has no visible text content (e.g. agent went straight to tools)
         if (holder !== roundHolder && holder.style.display !== 'none') {
           const _hBody = holder.querySelector('.body');
           const _hText = _hBody ? _hBody.textContent.trim() : '';
@@ -2771,7 +2771,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         // Attach footer to the last visible bubble (roundHolder for multi-round agent, holder for single)
         const footerTarget = (roundHolder && roundHolder !== holder && roundHolder.style.display !== 'none') ? roundHolder : holder;
         footerTarget.appendChild(createMsgFooter(footerTarget));
-        // 添加 "View Report" link for completed research
+        // Add "View Report" link for completed research
         if (_researchingStreamIds.has(streamSessionId)) {
           _appendViewReportLink(footerTarget, streamSessionId);
         }
@@ -2780,7 +2780,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         if (addAITTSButton && accumulated && window.aiTTSManager?._provider !== 'disabled' && window.aiTTSManager?.available) {
           addAITTSButton(footerTarget, accumulated);
         }
-        // TTS auto-play: 流式传输 mode flushes remaining text, non-流式传输 enqueues full message
+        // TTS auto-play: streaming mode flushes remaining text, non-streaming enqueues full message
         if (accumulated && window.aiTTSManager && window.aiTTSManager.autoPlay) {
           const ttsBtn = holder.querySelector('.ai-tts-button');
           if (ttsBtn) {
@@ -2804,7 +2804,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 ttsBtn.title = 'Stop';
               }
             } else {
-              // Non-流式传输 回退 (autoPlay toggled mid-stream, etc.)
+              // Non-streaming fallback (autoPlay toggled mid-stream, etc.)
               window.aiTTSManager.enqueue(accumulated, ttsBtn, resetFn);
             }
           }
@@ -2815,7 +2815,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         // Attach variant navigation if this was a regeneration
         _attachVariantNav(footerTarget);
 
-        // 合并 with previous stopped message if this was a continue
+        // Merge with previous stopped message if this was a continue
         if (_pendingContinue) {
           const prevEl = _pendingContinue;
           _pendingContinue = null;
@@ -2831,7 +2831,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             prevBody.innerHTML = markdownModule.processWithThinking(
               markdownModule.squashOutsideCode(mergedRaw)
             );
-            // 移除 the new bubble and re-add footer to the merged one
+            // Remove the new bubble and re-add footer to the merged one
             footerTarget.remove();
             const oldFooter = prevEl.querySelector('.msg-footer');
             if (oldFooter) oldFooter.remove();
@@ -2855,12 +2855,12 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
     } catch (err) {
       _renderStream();
-      // Clean up any active 加载指示器 (e.g. "Generating response" during 工具调用s)
+      // Clean up any active spinner (e.g. "Generating response" during tool calls)
       if (spinner && spinner.element) spinner.destroy();
       _cancelThinkingTimer();
       _removeThinkingSpinner();
       document.querySelectorAll('.agent-thread.streaming').forEach(t => t.classList.remove('streaming'));
-      // 检查 if this stream was running in background
+      // Check if this stream was running in background
       const _isBgCatch = (sessionModule.getCurrentSessionId() !== streamSessionId) || _backgroundStreams.has(streamSessionId);
 
       if (_isBgCatch) {
@@ -2880,7 +2880,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           }
         }
       } else {
-        // 停止 流式传输 TTS on any error/abort
+        // Stop streaming TTS on any error/abort
         if (streamingTTS && window.aiTTSManager) window.aiTTSManager.stop();
 
         if (currentAbort && currentAbort.signal.aborted) {
@@ -3011,12 +3011,12 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           // model immediately (no wait) with a completion handshake, up to the
           // cap. Only auto-recover from connection-class failures; deterministic
           // errors (unsupported tools, 4xx/5xx, parse failures) surface right away
-          // instead of burning the nudge budget on a guaranteed-to-fail 重试.
+          // instead of burning the nudge budget on a guaranteed-to-fail retry.
           if (!(_isRecoverableStreamErr(err) && _tryAutoRecover(holder, accumulated, streamSessionId))) {
             const errorHolder = document.querySelector('.msg-ai:last-of-type .body');
             if (errorHolder) {
               let errMsg = `Error: ${err.message}`;
-              // 添加 hint for tool-call errors
+              // Add hint for tool-call errors
               if (err.message && (err.message.includes('tool') || err.message.includes('auto'))) {
                 errMsg += '\n\nThis model may not support tools — try switching to Chat mode.';
               }
@@ -3029,7 +3029,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       clearResponseTimeout();
       clearProcessingProbe();
       clearFirstTokenWaitTimers();
-      // Streaming done — let 屏幕阅读器s announce the settled response.
+      // Streaming done — let screen readers announce the settled response.
       const _chatLogDone = document.getElementById('chat-history');
       if (_chatLogDone) _chatLogDone.setAttribute('aria-busy', 'false');
       // Always clean up research tracking regardless of background state
@@ -3090,11 +3090,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
       }
 
-      // Research clarification 超时 — if user doesn't reply within 5 min, show 超时
+      // Research clarification timeout — if user doesn't reply within 5 min, show timeout
       if (holder && holder._roleSuffix === 'Research' && !_researchingStreamIds.has(streamSessionId)) {
         var _timeoutSessionId = streamSessionId;
         var _timeoutTimer = setTimeout(async function() {
-          // 检查 if research_pending is still active (user hasn't replied)
+          // Check if research_pending is still active (user hasn't replied)
           try {
             var _box = document.getElementById('chat-history');
             if (_box && sessionModule.getCurrentSessionId() === _timeoutSessionId) {
@@ -3106,7 +3106,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             }
           } catch(_te) {}
         }, 5 * 60 * 1000);
-        // Cancel 超时 if user sends a message
+        // Cancel timeout if user sends a message
         var _origSubmit = window._researchTimeoutTimer;
         if (_origSubmit) clearTimeout(_origSubmit);
         window._researchTimeoutTimer = _timeoutTimer;
@@ -3131,10 +3131,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
    * Abort current chat request
    */
   // stopServer=true ONLY for an explicit user Stop. The run is now DETACHED
-  // (survives tab close / navigation), so the generic abort used by 清理
+  // (survives tab close / navigation), so the generic abort used by cleanup
   // paths (session switch, delete, reader teardown on tab close) must NOT stop
-  // the server run — otherwise closing the tab would kill the 后台任务,
-  // defeating the whole point. Only the 停止 button cancels the server run.
+  // the server run — otherwise closing the tab would kill the background task,
+  // defeating the whole point. Only the Stop button cancels the server run.
   export function abortCurrentRequest(stopServer = false) {
     if (currentAbort) {
       currentAbort.abort();
@@ -3154,11 +3154,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
   // ── Stall watchdog ──────────────────────────────────────────────
   // Auto-recover a turn whose stream died (connection drop) or went silent:
   // preserve the partial, then re-submit a completion handshake by reusing the
-  // existing continue/resume path. 返回 false at the cap so the caller can
+  // existing continue/resume path. Returns false at the cap so the caller can
   // surface the failure instead of nudging forever.
   // Only auto-recover from connection-class failures (the genuine "silently
   // died" case). Deterministic errors — unsupported tools, HTTP 4xx/5xx, JSON
-  // parse failures — will fail identically on 重试, so surfacing them
+  // parse failures — will fail identically on retry, so surfacing them
   // immediately is both more honest and avoids wasting the nudge budget.
   function _isRecoverableStreamErr(err) {
     if (!err) return false;
@@ -3275,7 +3275,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     if (typeof createMsgFooter === 'function' && !holder.querySelector('.msg-footer')) {
       holder.appendChild(createMsgFooter(holder));
     }
-    // Persist as an 助手消息 with stopped+cancelled metadata so the
+    // Persist as an assistant message with stopped+cancelled metadata so the
     // chat-history loader renders the same indicator after a refresh.
     // Include the model name so the bubble header still shows which model
     // was running when the user hit Stop.
@@ -3283,7 +3283,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     if (sid) {
       let modelName = '';
       try { modelName = sessionModule.getCurrentModel?.() || ''; } catch {}
-      // Fallback: pull from the holder's existing meta (the 流式传输
+      // Fallback: pull from the holder's existing meta (the streaming
       // placeholder usually has the model set in the header already).
       if (!modelName) {
         modelName = holder.dataset.model
@@ -3310,7 +3310,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
    */
   export function detachCurrentStream(sessionId) {
     if (!isStreaming || !currentAbort) {
-      // Not 流式传输 — fall through to abort
+      // Not streaming — fall through to abort
       abortCurrentRequest();
       return;
     }
@@ -3369,7 +3369,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
     // Block duplicate re-attach attempts while this reader is live. A dedicated
     // set (not _backgroundStreams) so checkBackgroundStream doesn't mistake this
-    // for a same-tab POST stream and spawn its own 加载指示器+poll on re-entry.
+    // for a same-tab POST stream and spawn its own spinner+poll on re-entry.
     _resumingStreams.add(sessionId);
 
     const holder = document.createElement('div');
@@ -3396,7 +3396,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     let gotDelta = false;
     let leftSession = false;
     let metricsData = null;
-    // "Rich" responses (工具调用s, sources, doc 流式传输, multi-round) need the
+    // "Rich" responses (tool calls, sources, doc streaming, multi-round) need the
     // full canonical render, which is rebuilt from the saved DB record on reload.
     // Plain text replies can be finalized in place without a reload.
     let rich = false;
@@ -3469,7 +3469,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                           sessionModule.getCurrentSessionId() === sessionId;
 
     // Plain text reply: finalize in place. Replace the live bubble with a
-    // canonical single message (markdown + footer actions + 指标) using the
+    // canonical single message (markdown + footer actions + metrics) using the
     // same renderer history does. No history refetch, no end-of-stream flicker.
     if (onThisSession && !rich && roundText.trim()) {
       if (holder.parentNode) holder.remove();
@@ -3515,7 +3515,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     }
 
     if (entry.status === 'running') {
-      // Stream is still active — show a clean 加载指示器, poll until done,
+      // Stream is still active — show a clean spinner, poll until done,
       // then reload history to show the final saved response.
       var box = document.getElementById('chat-history');
       if (!box) return;
@@ -3552,7 +3552,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           if (holder.parentNode) holder.remove();
           return;
         }
-        // 更新 doc content while polling
+        // Update doc content while polling
         var curPoll = _backgroundStreams.get(sessionId);
         if (curPoll && curPoll._docContent && documentModule) {
           documentModule.streamDocDelta(curPoll._docContent);
@@ -3574,7 +3574,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     }
   }
 
-  // Tag short single-line 代码块s with .pre-compact so the CSS can
+  // Tag short single-line code blocks with .pre-compact so the CSS can
   // render the Run/Edit/Copy buttons as a slim row that doesn't make a
   // 1-line bash block taller than its own contents.
   function _markCompactPre(pre) {
@@ -3643,7 +3643,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       }
     });
 
-    // 运行 code button delegation
+    // Run code button delegation
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.run-code');
       if (!btn) return;
@@ -3696,7 +3696,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       }
     });
 
-    // Tapping a 代码块 body (not its buttons) toggles the overlay
+    // Tapping a code block body (not its buttons) toggles the overlay
     // copy/edit/run buttons, which otherwise cover the text on mobile.
     document.addEventListener('click', (e) => {
       if (e.target.closest('.copy-code, .edit-code, .run-code')) return;
@@ -3873,7 +3873,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           body: JSON.stringify({ keep_count: keepCount })
         });
 
-        // 移除 DOM 元素s from msgIndex onward
+        // Remove DOM elements from msgIndex onward
         for (let i = allMsgs.length - 1; i >= msgIndex; i--) {
           allMsgs[i].remove();
         }
@@ -3913,7 +3913,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     if (msgIndex < 0) return;
 
     // Prefer dataset.raw (stripped original user text) over .body.textContent
-    // — the latter slurps the rendered "View 镜像 description" collapsible
+    // — the latter slurps the rendered "View image description" collapsible
     // content too, which would then be sent back as the user's question and
     // the AI would reply to that gibberish instead of the actual prompt.
     const bodyEl = userMsgElement.querySelector('.body');
@@ -3935,7 +3935,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
     // Rescue: legacy bubbles may have stored the filename as the message
     // content (artifact of earlier broken resends). Don't re-send that as
-    // the 用户提示 if we still have the file attached. Loosen the regex
+    // the user prompt if we still have the file attached. Loosen the regex
     // to cover real-world camera/screenshot names with spaces, parens,
     // multi-dots: "Screen Shot 2026-05-28 at 4.05.32 PM.png", "IMG (1).JPG".
     if (text && _ids.length && /^[^\n\r]{1,200}\.(png|jpe?g|gif|webp|svg|bmp|heic|heif)$/i.test(text)) {
@@ -4003,7 +4003,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         userMsgEl = allMsgs[i];
         // Prefer dataset.raw (set by addMessage with the stripped, original
         // user text) over the rendered body's textContent — the latter
-        // pulls in the "View 镜像 description" collapsible content too,
+        // pulls in the "View image description" collapsible content too,
         // duplicating the OCR text on regen.
         const bodyEl = userMsgEl.querySelector('.body');
         userText = (userMsgEl.dataset.raw || (bodyEl ? bodyEl.textContent : '') || '').trim();
@@ -4024,7 +4024,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     const _attachEls = userMsgEl ? userMsgEl.querySelectorAll('[data-file-id]') : [];
     let _regenIds = Array.from(_attachEls).map(el => el.dataset.fileId).filter(Boolean);
     // Fallback for bubbles rendered before the data-file-id stamp landed:
-    // sniff the file id straight out of any `.attach-镜像-preview img`
+    // sniff the file id straight out of any `.attach-image-preview img`
     // src URLs (matches /api/upload/<id>). Otherwise an older bubble would
     // regen with zero attachments and the photo would be lost from the
     // resulting message even though the file still exists on disk.
@@ -4039,10 +4039,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
     // Rescue: earlier-version regens (before the dataset.raw fix) stored the
     // photo's filename as the user-message content. On a follow-up regen,
-    // that filename would be sent back as the literal 用户提示, so the
+    // that filename would be sent back as the literal user prompt, so the
     // AI thinks the question is "blue_night_preview.jpg" and replies "that's
-    // an 镜像 file". If userText is just a bare 镜像 filename and we have
-    // attachments, drop it so the OCR text (or the 镜像 bytes for vision
+    // an image file". If userText is just a bare image filename and we have
+    // attachments, drop it so the OCR text (or the image bytes for vision
     // models) is what the model actually sees.
     if (userText && _pendingRegenAttachments.length &&
         /^[^\n\r]{1,200}\.(png|jpe?g|gif|webp|svg|bmp|heic|heif)$/i.test(userText.trim())) {
@@ -4060,7 +4060,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     const sessionId = sessionModule.getCurrentSessionId();
     if (!sessionId) return;
 
-    // 保存 current response as a variant
+    // Save current response as a variant
     const oldRaw = aiMsgElement.dataset.raw || aiMsgElement.querySelector('.body')?.textContent || '';
     const oldHtml = aiMsgElement.querySelector('.body')?.innerHTML || '';
     let variants = [];
@@ -4083,7 +4083,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         allMsgs[i].remove();
       }
 
-      // 移除 the AI message from DOM — it will be replaced by the new 流式回复
+      // Remove the AI message from DOM — it will be replaced by the new streaming response
       // But first, stash the variants data so we can transfer it to the new element
       _pendingVariants = variants;
       _pendingVariantLabel = 'regen';
@@ -4101,7 +4101,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     }
   }
 
-  // Pending variants from a regeneration — transferred to new 流式传输 element
+  // Pending variants from a regeneration — transferred to new streaming element
   let _pendingVariants = null;
   let _pendingVariantLabel = null;
   // File-ids carried over from the original user message during a regen, so
@@ -4116,7 +4116,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     const variants = _pendingVariants;
     _pendingVariants = null;
 
-    // 添加 the new response as the latest variant
+    // Add the new response as the latest variant
     const newRaw = msgElement.dataset.raw || msgElement.querySelector('.body')?.textContent || '';
     const newHtml = msgElement.querySelector('.body')?.innerHTML || '';
     const varLabel = _pendingVariantLabel || 'regen';
@@ -4145,7 +4145,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
   }
 
   function _renderVariantNav(msgElement, variants, currentIdx) {
-    // 移除 existing nav if any
+    // Remove existing nav if any
     const old = msgElement.querySelector('.variant-nav');
     if (old) old.remove();
 
@@ -4177,7 +4177,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     prevBtn.addEventListener('click', (e) => { e.stopPropagation(); _switchVariant(msgElement, variants, currentIdx - 1); });
     nav.appendChild(prevBtn);
 
-    // Clickable number for current 索引 (click left number = go left, right = go right)
+    // Clickable number for current index (click left number = go left, right = go right)
     const numLeft = document.createElement('button');
     numLeft.className = 'variant-num';
     numLeft.textContent = String(currentIdx + 1);
@@ -4279,7 +4279,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       const data = await res.json();
 
       if (data.status === 'done') {
-        // 获取 and render the completed result
+        // Fetch and render the completed result
         _notifyResearchComplete(sessionId, data.query || '');
         if (sessionModule && sessionModule.clearResearching) sessionModule.clearResearching(sessionId);
         const resultRes = await fetch(`${API_BASE}/api/research/result/${sessionId}`, { method: 'POST' });
@@ -4295,7 +4295,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             }
             var findingsBox = chatRenderer.buildFindingsBox(resultData.raw_findings);
             var cleanResult = resultData.result;
-            // 构建 DOM directly to avoid double-processing through addMessage
+            // Build DOM directly to avoid double-processing through addMessage
             chatRenderer.hideWelcomeScreen();
             var _box = document.getElementById('chat-history');
             if (_box) {
@@ -4332,7 +4332,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       // Don't show reconnect UI if we've already switched away
       if (sessionModule.getCurrentSessionId() !== sessionId) return;
 
-      // Research is still running — show reconnect UI with 加载指示器
+      // Research is still running — show reconnect UI with spinner
       const box = document.getElementById('chat-history');
       if (!box) return;
 
@@ -4351,7 +4351,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       bodyDiv.appendChild(spinner.createElement());
       spinner.start();
 
-      // 更新 加载指示器 with current progress if available
+      // Update spinner with current progress if available
       function updateSpinnerFromProgress(progress) {
         if (!progress || !progress.phase) return;
         const rp = progress;
@@ -4397,7 +4397,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           }
           _researchTimerEl.textContent = txt;
         }, 1000);
-        // Reconnect synapse — 随机种子 it with whatever progress is already known
+        // Reconnect synapse — seed it with whatever progress is already known
         try {
           _researchSynapse = createResearchSynapse(spinner.element.parentNode, {
             query: data.query || '',
@@ -4416,7 +4416,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
       // Poll for completion
       const pollInterval = setInterval(async () => {
-        // 停止 polling if user switched to a different session
+        // Stop polling if user switched to a different session
         if (sessionModule.getCurrentSessionId() !== sessionId) {
           clearInterval(pollInterval);
           spinner.destroy();
@@ -4563,18 +4563,18 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       }
     }
 
-    // Collect DB message IDs and DOM 元素s to remove
+    // Collect DB message IDs and DOM elements to remove
     const msgIds = [];
     const domToRemove = [];
 
-    // 添加 the user message if found
+    // Add the user message if found
     if (userIndex >= 0) {
       domToRemove.push(allMsgs[userIndex]);
       const uid = allMsgs[userIndex].dataset.dbId;
       if (uid) msgIds.push(uid);
     }
 
-    // 添加 the AI message if found
+    // Add the AI message if found
     if (aiIndex >= 0) {
       domToRemove.push(allMsgs[aiIndex]);
       const aid = allMsgs[aiIndex].dataset.dbId;
@@ -4637,7 +4637,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
     const originalRaw = msgElement.dataset.raw || body.textContent || '';
 
-    // 创建 editable textarea overlay
+    // Create editable textarea overlay
     const textarea = document.createElement('textarea');
     textarea.className = 'msg-edit-textarea';
     textarea.value = originalRaw;
@@ -4647,7 +4647,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     body.parentNode.insertBefore(textarea, body.nextSibling);
     textarea.focus();
 
-    // 添加 save/cancel bar
+    // Add save/cancel bar
     const bar = document.createElement('div');
     bar.className = 'msg-edit-bar';
     const saveBtn = document.createElement('button');
@@ -4694,7 +4694,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         body.innerHTML = markdownModule.processWithThinking(markdownModule.squashOutsideCode(newContent));
         msgElement.dataset.raw = newContent;
 
-        // 添加 edited indicator if not already present
+        // Add edited indicator if not already present
         if (!msgElement.querySelector('.edited-indicator')) {
           const indicator = document.createElement('div');
           indicator.className = 'edited-indicator';
@@ -4720,7 +4720,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     const sessionId = sessionModule.getCurrentSessionId();
     if (!sessionId) return;
 
-    // 获取 the original text from the AI bubble
+    // Get the original text from the AI bubble
     const oldRaw = aiMsgElement.dataset.raw || aiMsgElement.querySelector('.body')?.textContent || '';
     const oldHtml = aiMsgElement.querySelector('.body')?.innerHTML || '';
 
@@ -4729,7 +4729,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       return;
     }
 
-    // 保存 current response as a variant
+    // Save current response as a variant
     let variants = [];
     try { variants = JSON.parse(aiMsgElement.dataset.variants || '[]'); } catch(_) {}
     if (variants.length === 0) {
@@ -4741,7 +4741,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     if (instruction.includes('shorter')) varLabel = 'shorter';
     else if (instruction.includes('simpler')) varLabel = 'simpler';
 
-    // Clear the bubble and show a whirlpool 加载指示器 while we wait for the
+    // Clear the bubble and show a whirlpool spinner while we wait for the
     // rewrite (replaces the old "Rewriting..." text).
     const bodyEl = aiMsgElement.querySelector('.body');
     let _rwSpin = null;
@@ -4751,7 +4751,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       _rwSpin.element.style.margin = '4px 0';
       bodyEl.appendChild(_rwSpin.element);
     }
-    // 停止 + detach the 加载指示器 (called once real content starts rendering, and
+    // Stop + detach the spinner (called once real content starts rendering, and
     // on the failure path so it never spins forever).
     const _killRwSpin = () => { if (_rwSpin) { try { _rwSpin.destroy(); } catch (_) {} _rwSpin = null; } };
 
@@ -4794,7 +4794,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
               throw new Error(data.error || ('HTTP ' + (data.status || 500)));
             }
             // Reasoning tokens (vLLM --reasoning-parser: Qwen3 / DeepSeek-R1)
-            // arrive as separate {delta, thinking:true} 数据块s. They are NOT
+            // arrive as separate {delta, thinking:true} chunks. They are NOT
             // the rewrite — fold them away so they don't pollute the result.
             if (data.thinking) continue;
             if (data.delta) {
@@ -4832,7 +4832,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         throw new Error('model returned no rewritten text');
       }
 
-      // 更新 the element's raw text
+      // Update the element's raw text
       if (newText) {
         aiMsgElement.dataset.raw = newText;
         // Final render with proper markdown
@@ -4842,7 +4842,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           );
         }
 
-        // 保存 the new response as a variant
+        // Save the new response as a variant
         variants.push({ raw: newText, html: bodyEl ? bodyEl.innerHTML : '', label: varLabel });
         aiMsgElement.dataset.variants = JSON.stringify(variants);
         aiMsgElement.dataset.variantIndex = String(variants.length - 1);
@@ -4886,7 +4886,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     }
   }
 
-  // Open a chat attachment in the right place: 镜像s → Gallery editor; PDFs &
+  // Open a chat attachment in the right place: images → Gallery editor; PDFs &
   // text/code/markdown → Documents viewer; anything else → raw file. A given
   // upload's imported document is reused (cached by upload id) so clicking it
   // again re-opens the same doc instead of making duplicates.
@@ -4931,7 +4931,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       } catch (_) { _attachDocCache.delete(id); }
     }
 
-    // Need a session to attach the doc to (bare-session 回退, same as compose).
+    // Need a session to attach the doc to (bare-session fallback, same as compose).
     let sid = '';
     try { sid = sessionModule.getCurrentSessionId() || ''; } catch (_) {}
     if (!sid) {
@@ -4947,7 +4947,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     try {
       let doc;
       if (isPdf) {
-        // import-pdf wants a fresh 文件上传 — re-fetch the stored blob and post it.
+        // import-pdf wants a fresh file upload — re-fetch the stored blob and post it.
         const blob = await (await fetch(url)).blob();
         const fd = new FormData();
         fd.append('file', blob, name || 'document.pdf');
@@ -5010,7 +5010,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
   // Single delegated handler for tool-call fold/expand. One listener on
   // document.body covers every .agent-thread-node — running, completed,
-  // 流式传输, history-rendered, compare-mode, all of them. Re-attaching
+  // streaming, history-rendered, compare-mode, all of them. Re-attaching
   // per-node listeners on every innerHTML rewrite was the source of the
   // "needs many clicks" bug.
   if (!window.__odysseus_thread_click_bound) {

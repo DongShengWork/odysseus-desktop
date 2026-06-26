@@ -1,10 +1,10 @@
 /**
- * 构建编辑器左侧的工具面板。
+ * Build the editor's left-side tool palette.
  *
  * Pure DOM construction — no module state. The big tool-switch logic
  * (cursor swap, control-section toggle, transform entry, inpaint
  * mask plumbing, etc.) stays in the caller and arrives here as the
- * 保留在调用方，并通过 `onSelectTool` 回调传入。
+ * `onSelectTool` callback.
  *
  * @param {{
  *   currentTool: string,
@@ -51,7 +51,7 @@ export function buildToolbar({ currentTool, onSelectTool, onClearSelection }) {
     // glance now that the "AI Tools" separator is gone.
     const aiStar = t.ai ? '<span class="ge-tool-ai" title="AI">✦</span>' : '';
     btn.classList.toggle('is-ai', !!t.ai);
-    // Selection-clear 徽章 — rendered only for tools that can hold a
+    // Selection-clear badge — rendered only for tools that can hold a
     // selection (lasso, wand). Inpaint masks are first-class sub-layers
     // now so they get their own delete-X in the layer panel.
     const clearBadge = (t.id === 'lasso' || t.id === 'wand')
@@ -60,8 +60,8 @@ export function buildToolbar({ currentTool, onSelectTool, onClearSelection }) {
         '</span>'
       : '';
     btn.innerHTML = `${aiStar}<span class="ge-tool-icon"${t.small ? ' style="font-size:14px"' : ''}>${t.icon}</span><span class="ge-tool-label">${t.label}</span>${clearBadge}`;
-    // 清除徽章的点击阻止冒泡，防止工具本身切换；
-    // 实际的清除操作由调用方处理。
+    // Clear-badge click stops propagation so the tool itself doesn't
+    // toggle; the actual clear is handled by the caller.
     btn.querySelector('.ge-tool-clear')?.addEventListener('click', (ev) => {
       ev.stopPropagation();
       onClearSelection(ev.currentTarget.dataset.clearTool);

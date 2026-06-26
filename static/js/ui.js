@@ -234,9 +234,9 @@ export async function copyToClipboard(text) {
   }
 }
 
-// Wire swipe-to-dismiss on the shared 提示条 element. 运行 once, the first
-// time a 提示条 is shown. Tracks horizontal touch drag; if the user drags
-// more than DISMISS_PX, the 提示条 slides off in the drag direction and
+// Wire swipe-to-dismiss on the shared toast element. Runs once, the first
+// time a toast is shown. Tracks horizontal touch drag; if the user drags
+// more than DISMISS_PX, the toast slides off in the drag direction and
 // hides early. Anything less snaps back. Desktop unaffected (touch
 // listeners only fire from a touchscreen — mouse is handled by the
 // existing × button and auto-hide timer).
@@ -263,7 +263,7 @@ function _wireToastSwipe(el) {
     currentX = t.clientX;
     const dx = currentX - startX;
     el.style.transform = `translateX(${dx}px)`;
-    // Fade as the 提示条 leaves the rest position — visual cue for
+    // Fade as the toast leaves the rest position — visual cue for
     // approaching the dismiss threshold.
     el.style.opacity = String(Math.max(0.2, 1 - Math.abs(dx) / 200));
   }, { passive: true });
@@ -348,8 +348,8 @@ export function showToast(msg, durationOrOpts) {
     } else {
       btn.textContent = actionLabel;
     }
-    // The 提示条 itself is `pointer-events: none` so it doesn't block clicks
-    // beneath it. With an action button we need to flip both the 提示条 AND
+    // The toast itself is `pointer-events: none` so it doesn't block clicks
+    // beneath it. With an action button we need to flip both the toast AND
     // the button so the user can actually click Undo. The flag is reset on
     // the next plain showToast / showError call (those overwrite textContent
     // which strips the button + we clear inline style at the top below).
@@ -363,7 +363,7 @@ export function showToast(msg, durationOrOpts) {
     stack.appendChild(btn);
 
     // Keyboard-shortcut hints (Ctrl+Z / ⌘Z) are meaningless on touch devices —
-    // skip them on mobile so the 提示条 just shows the Undo button.
+    // skip them on mobile so the toast just shows the Undo button.
     if (actionHint && window.innerWidth > 768) {
       const hint = document.createElement('span');
       hint.textContent = actionHint;
@@ -373,7 +373,7 @@ export function showToast(msg, durationOrOpts) {
 
     toastEl.appendChild(stack);
 
-    // Small × to dismiss the 提示条 without taking the action. Useful when
+    // Small × to dismiss the toast without taking the action. Useful when
     // the user already acted (or just doesn't want the banner sitting there).
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
@@ -406,15 +406,15 @@ export function showToast(msg, durationOrOpts) {
   toastEl.classList.add('show');
   clearTimeout(toastEl._hideTimer);
   toastEl._hideTimer = setTimeout(() => {
-    // 添加 `exiting` so the CSS rule slides it off to the LEFT instead of
+    // Add `exiting` so the CSS rule slides it off to the LEFT instead of
     // back to the right (where it came from). We piggyback on the same
-    // .提示条 base; .exiting overrides the resting transform.
+    // .toast base; .exiting overrides the resting transform.
     toastEl.classList.add('exiting');
     toastEl.classList.remove('show');
-    // Reset pointer-events so an action-提示条 (which sets it to 'auto'
-    // for its clickable button) doesn't leave the 提示条 intercepting
+    // Reset pointer-events so an action-toast (which sets it to 'auto'
+    // for its clickable button) doesn't leave the toast intercepting
     // clicks after it's slid away. Was previously only cleared on the
-    // NEXT plain 提示条, so a lingering action-提示条 could appear to
+    // NEXT plain toast, so a lingering action-toast could appear to
     // "lock" interaction near the top-right.
     toastEl.style.pointerEvents = '';
   }, duration);
@@ -469,7 +469,7 @@ function _smoothScrollStep() {
   const current = box.scrollTop;
   const diff = target - current;
 
-  // If user scrolled up 签名ificantly, don't force them down
+  // If user scrolled up significantly, don't force them down
   if (diff > 300) {
     _scrollRafId = null;
     return;
@@ -917,7 +917,7 @@ if ('ontouchstart' in window) {
     const content = e.target.closest('.modal-content') || e.target.closest('#theme-popup');
     if (!content) return;
 
-    // The 镜像 editor owns all touches inside its 容器 so the user
+    // The image editor owns all touches inside its container so the user
     // can paint / move layers / draw selections without the modal trying
     // to interpret it as a swipe-to-dismiss gesture. Skip the swipe init
     // entirely when the touch starts inside the editor area.
@@ -1136,7 +1136,7 @@ if ('ontouchstart' in window) {
 // When an input inside a modal gets focus on mobile, the OS keyboard
 // covers the bottom half of the screen. The browser is supposed to
 // scroll the input into view, but in bottom-sheet modals with their
-// own scrolling 容器 that often fails — the user types blind.
+// own scrolling container that often fails — the user types blind.
 // Scroll the input into the middle of the still-visible viewport
 // after the keyboard has had a moment to animate in.
 if ('ontouchstart' in window || window.innerWidth <= 768) {
@@ -1180,17 +1180,17 @@ if ('ontouchstart' in window || window.innerWidth <= 768) {
 
 // ── Global Escape arbiter: close exactly one thing per press ──
 // Priority: expanded library card → open chat thinking block → topmost modal.
-// 运行 capture-phase + stopImmediatePropagation so per-modal ESC listeners
+// Runs capture-phase + stopImmediatePropagation so per-modal ESC listeners
 // never also fire (which would otherwise close several modals at once).
 if (!window._odyEscExpandGuard) {
   window._odyEscExpandGuard = true;
 
   // Auto-promote any modal that becomes visible to the top of the z-stack.
-  // Every modal shares `z-索引: 250` from the base `.modal` rule, so visual
+  // Every modal shares `z-index: 250` from the base `.modal` rule, so visual
   // stacking falls back to DOM order — which is unpredictable (cookbook is
   // a static HTML node, calendar gets appended once and stays, compare and
   // research get re-appended on each open). Result: opening compare AFTER
-  // cookbook can render compare UNDER it. Bumping the z-索引 on every
+  // cookbook can render compare UNDER it. Bumping the z-index on every
   // open guarantees most-recently-opened wins both visually AND for ESC.
   let _zCounter = 1000;
   const _isVisible = (m) => !m.classList.contains('hidden') && getComputedStyle(m).display !== 'none';
@@ -1234,7 +1234,7 @@ if (!window._odyEscExpandGuard) {
     // not fall through to closing a modal — even if its header is missing
     // (the live-stream chat rebuilds thinking DOM mid-stream so the header
     // can briefly be absent). Toggling the `expanded` class directly is the
-    // 回退 so ESC never bypasses the thinking block to hit a modal.
+    // fallback so ESC never bypasses the thinking block to hit a modal.
     if (_closeHoveredWindow()) {
       e.stopImmediatePropagation(); e.preventDefault();
       return;

@@ -1,4 +1,4 @@
-"""规范内存向量存储的兼容性导入。"""
+"""Compatibility import for the canonical memory vector store."""
 
 from src.memory_vector import MemoryVectorStore
 

@@ -89,7 +89,7 @@ function buildVoteBar(n) {
     bar.appendChild(revealBtn);
   }
 
-  // 添加 Model button
+  // Add Model button
 
   // Reset button (always)
   const resetBtn = document.createElement('button');
@@ -125,7 +125,7 @@ function _saveVote(winnerIdx) {
   if (votes.length > VOTES_MAX) votes.splice(0, votes.length - VOTES_MAX);
   Storage.setJSON(VOTES_STORAGE_KEY, votes);
 
-  // Fire-and-forget POST to 后端
+  // Fire-and-forget POST to backend
   try {
     fetch(`${state.API_BASE}/api/compare/record`, {
       method: 'POST',
@@ -166,7 +166,7 @@ function handleVote(winnerIdx) {
   // Persist vote
   _saveVote(winnerIdx);
 
-  // 停止 any still-流式传输 panes (user voted early)
+  // Stop any still-streaming panes (user voted early)
   if (state._streaming && _stopAll) _stopAll();
 
   const panes = document.querySelectorAll('.compare-pane');

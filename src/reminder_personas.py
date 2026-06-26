@@ -1,4 +1,4 @@
-"""服务端内置角色镜像，用于提醒合成。
+"""Server-side mirror of the built-in characters used for reminder synthesis.
 
 The frontend ships these in static/js/presets.js (PROMPT_TEMPLATES with
 isCharacter:true). The Reminders → AI Synthesis card writes only the
@@ -59,7 +59,7 @@ _DEFAULT_SYNTHESIS_TONE = (
 
 
 def synthesis_system_prompt(persona_id: str) -> str:
-    """根据角色 ID 返回提醒合成的系统提示。
+    """Return the system prompt for reminder synthesis given a persona id.
 
     Falls back to the warm-neutral baseline when the id is empty, unknown,
     or refers to a custom (client-only) character we don't have on file.
@@ -68,7 +68,7 @@ def synthesis_system_prompt(persona_id: str) -> str:
     persona_prompt = PERSONAS.get(persona)
     if persona_prompt:
         # Persona drives the voice; the synthesis-instruction stays attached
-        # so the model knows it's writing a short 提醒, not a chat reply.
+        # so the model knows it's writing a short reminder, not a chat reply.
         return (
             persona_prompt
             + "\n\n"

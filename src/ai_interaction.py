@@ -169,7 +169,7 @@ def _resolve_model(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Di
 
 async def stream_ai_tool(tool: str, content: str, session_id: Optional[str] = None, owner: Optional[str] = None):
     """Dispatcher for streaming AI tools. Yields events as async generator."""
-    # Fallback: run non-流式传输 and yield final result
+    # Fallback: run non-streaming and yield final result
     desc, result = await dispatch_ai_tool(tool, content, session_id, owner=owner)
     yield {"_final": True, "desc": desc, "result": result}
 
@@ -220,7 +220,7 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
     if len(steps) > MAX_PIPELINE_STEPS:
         return {"error": f"Maximum {MAX_PIPELINE_STEPS} steps allowed"}
 
-    # 解析 all models first (fail fast)
+    # Resolve all models first (fail fast)
     resolved = []
     for i, step in enumerate(steps):
         model_spec = step.get("model", "").strip()
@@ -265,7 +265,7 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
 
             previous_output = response
 
-        # 构建 readable result
+        # Build readable result
         result_lines = [f"# Pipeline Results ({len(resolved)} steps)\n"]
         for so in step_outputs:
             result_lines.append(f"## Step {so['step']}: {so['model']}")
@@ -345,7 +345,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
         memories.append(entry)
         _memory_manager.save(memories)
 
-        # 更新 vector 索引 if available
+        # Update vector index if available
         if _memory_vector and hasattr(_memory_vector, 'healthy') and _memory_vector.healthy:
             try:
                 _memory_vector.add(entry["id"], text)
@@ -384,7 +384,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
             return {"error": f"Memory '{memory_id}' not found"}
         _memory_manager.save(memories)
 
-        # 更新 vector 索引
+        # Update vector index
         if _memory_vector and hasattr(_memory_vector, 'healthy') and _memory_vector.healthy:
             try:
                 _memory_vector.add(full_id, new_text)
@@ -416,7 +416,7 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
             return {"error": f"Memory '{memory_id}' not found"}
         _memory_manager.save(memories)
 
-        # 移除 from vector 索引
+        # Remove from vector index
         if _memory_vector and full_id and hasattr(_memory_vector, 'healthy') and _memory_vector.healthy:
             try:
                 _memory_vector.remove(full_id)
@@ -533,7 +533,7 @@ async def do_manage_rag(content: str, session_id: Optional[str] = None) -> Dict:
         try:
             if hasattr(_personal_docs_manager, 'remove_directory'):
                 # Performs a targeted per-directory delete (#1660). The previous
-                # unconditional _rag_manager.rebuild_索引() here wiped the whole
+                # unconditional _rag_manager.rebuild_index() here wiped the whole
                 # collection on every remove (even for untracked dirs) and has
                 # been removed.
                 _personal_docs_manager.remove_directory(directory)
@@ -547,7 +547,7 @@ async def do_manage_rag(content: str, session_id: Optional[str] = None) -> Dict:
 
 
 # ---------------------------------------------------------------------------
-# UI control tool (returns events for 前端 to apply)
+# UI control tool (returns events for frontend to apply)
 # ---------------------------------------------------------------------------
 
 async def do_ui_control(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
@@ -623,13 +623,13 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
         if not model_spec:
             return {"error": "switch_model needs a model name"}
 
-        # 解析 the model to validate it exists
+        # Resolve the model to validate it exists
         try:
             url, model_id, headers = _resolve_model(model_spec, owner=owner)
         except ValueError as e:
             return {"error": str(e)}
 
-        # 更新 current session's model if we have a session
+        # Update current session's model if we have a session
         if session_id and _session_manager:
             from src.database import SessionLocal as SL2, Session as DbSess2
             db2 = SL2()
@@ -658,8 +658,8 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
 
     elif action == "set_theme":
         theme_name = parts[1].lower() if len(parts) > 1 else ""
-        # Theme colors are defined in static/js/theme.js on the 前端.
-        # We pass the name; the 前端 looks it up from presets + custom themes.
+        # Theme colors are defined in static/js/theme.js on the frontend.
+        # We pass the name; the frontend looks it up from presets + custom themes.
         # Also check user's custom themes stored in prefs.
         # Must match the THEMES keys in static/js/theme.js.
         known_presets = [
@@ -691,12 +691,12 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
             return {"error": "create_theme needs: create_theme <name> <bg> <fg> <panel> <border> <accent> (all hex colors). Optional advanced color key=value pairs (userBubbleBg, aiBubbleBg, bubbleBorder, sidebarBg, sectionAccent, brandColor, inputBg, inputBorder, sendBtnBg, sendBtnHover, codeBg, codeFg, toggleBg, toggleActive, accentPrimary, accentError). Optional background EFFECTS: bgPattern=<none|dots|synapse|rain|constellations|perlin-flow|petals|sparkles|embers>, bgEffectColor=#RRGGBB, bgEffectIntensity=<num e.g. 1>, bgEffectSize=<num e.g. 1>, frosted=true|false"}
         name = parts[1].lower().replace(" ", "-")
         colors = {"bg": parts[2], "fg": parts[3], "panel": parts[4], "border": parts[5], "red": parts[6]}
-        # 验证 base hex colors
+        # Validate base hex colors
         import re as _re
         for k, v in colors.items():
             if not _re.match(r'^#[0-9a-fA-F]{6}$', v):
                 return {"error": f"Invalid hex color for {k}: '{v}'. Use format #RRGGBB"}
-        # 解析 optional advanced key=value pairs
+        # Parse optional advanced key=value pairs
         adv_keys = {
             "userBubbleBg", "aiBubbleBg", "bubbleBorder", "sidebarBg",
             "sectionAccent", "brandColor", "inputBg", "inputBorder",
@@ -813,7 +813,7 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
         #   open_email_reply <uid> [folder] [reply|reply-all|ai-reply]
         #     <body text on subsequent lines or after the mode token>
         # The body text (if any) gets pre-filled into the reply draft so the
-        # agent can compose-and-open in one 工具调用 instead of opening an
+        # agent can compose-and-open in one tool call instead of opening an
         # empty draft and leaving the user to wonder what happened.
         first_line = lines[0].strip()
         parts = first_line.split(maxsplit=4)
@@ -834,7 +834,7 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
         # for that. Every agent invocation of open_email_reply MUST include
         # the body. Reject empty so the agent retries with the content the
         # user asked for. Exception: ai-reply mode triggers the existing
-        # AI-Reply path on the 前端 which generates its own body.
+        # AI-Reply path on the frontend which generates its own body.
         if not body and mode != "ai-reply":
             return {
                 "error": (
@@ -898,20 +898,20 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
     if not prompt:
         return {"error": "Image prompt is required (line 1)"}
 
-    # 加载 admin settings for defaults
+    # Load admin settings for defaults
     try:
         from src.settings import load_settings
         _settings = load_settings()
     except Exception:
         _settings = {}
 
-    # Use admin-configured model/quality if not specified by the 工具调用
+    # Use admin-configured model/quality if not specified by the tool call
     if not model_spec:
         model_spec = _settings.get("image_model", "")
     if quality == "medium" and _settings.get("image_quality"):
         quality = _settings["image_quality"]
 
-    # Auto-detect best available 镜像 model if still not set
+    # Auto-detect best available image model if still not set
     if not model_spec:
         for candidate in ("gpt-image-1.5", "gpt-image-1", "dall-e-3"):
             try:
@@ -920,7 +920,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
                 break
             except ValueError:
                 continue
-        # Fallback: find any locally registered 镜像-type endpoint
+        # Fallback: find any locally registered image-type endpoint
         if not model_spec:
             try:
                 from src.database import SessionLocal, ModelEndpoint
@@ -955,23 +955,23 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
         if not model_spec:
             return {"error": "No image model found. Configure one in Admin → Image Generation."}
 
-    # 解析 the model to find the right endpoint
+    # Resolve the model to find the right endpoint
     try:
         url, model_id, headers = _resolve_model(model_spec, owner=owner)
     except ValueError:
         return {"error": f"No endpoint found with image model '{model_spec}'. "
                 "Configure an OpenAI-compatible endpoint with image generation support."}
 
-    # Detect if this is a GPT 镜像 model vs DALL-E vs local diffusion
+    # Detect if this is a GPT image model vs DALL-E vs local diffusion
     is_gpt_image = "gpt-image" in model_id.lower()
     is_dalle = "dall-e" in model_id.lower()
     is_local_diffusion = not is_gpt_image and not is_dalle
 
-    # 构建 the 镜像s 端点地址 from the 对话补全s URL
+    # Build the images endpoint URL from the chat completions URL
     base_url = url.replace("/chat/completions", "").replace("/v1/messages", "").rstrip("/")
     images_url = base_url + "/images/generations"
 
-    # 验证 size for cloud 镜像 models (local diffusion accepts any WxH)
+    # Validate size for cloud image models (local diffusion accepts any WxH)
     valid_gpt_sizes = {"1024x1024", "1024x1536", "1536x1024", "auto"}
     valid_dalle3_sizes = {"1024x1024", "1024x1792", "1792x1024"}
     if is_gpt_image and size not in valid_gpt_sizes:
@@ -986,7 +986,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
         "size": size,
     }
 
-    # GPT 镜像 models and local diffusion support quality; DALL-E does not
+    # GPT image models and local diffusion support quality; DALL-E does not
     if is_gpt_image or is_local_diffusion:
         if quality in ("low", "medium", "high", "auto"):
             payload["quality"] = quality
@@ -996,7 +996,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
     logger.info(f"Image generation: model={model_id}, size={size}, quality={quality}, prompt={prompt[:80]}")
 
     try:
-        # GPT 镜像 models can take 30-120s+ depending on quality
+        # GPT image models can take 30-120s+ depending on quality
         async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=30.0)) as client:
             resp = await client.post(images_url, json=payload, headers=headers)
 
@@ -1041,7 +1041,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
                     logger.warning(f"Failed to save gallery record: {_ge}")
                     return ""
 
-            # GPT 镜像 models always return b64_json; DALL-E may return url
+            # GPT image models always return b64_json; DALL-E may return url
             if img.get("b64_json"):
                 img_dir = Path(GENERATED_IMAGES_DIR)
                 img_dir.mkdir(parents=True, exist_ok=True)

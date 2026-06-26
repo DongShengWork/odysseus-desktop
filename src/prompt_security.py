@@ -1,4 +1,4 @@
-"""提示词注入防护辅助函数。"""
+"""Prompt-injection hardening helpers."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ GUARD_CLOSE = "<<<END_UNTRUSTED_SOURCE_DATA>>>"
 
 
 def _escape_guard_markers(text: str) -> str:
-    """中和不受信任文本中的分隔符字面量。
+    """Neutralise delimiter literals inside untrusted text.
 
     If an attacker embeds the exact guard marker strings they can
     prematurely close the sandbox block and inject instructions outside
@@ -42,14 +42,14 @@ def _escape_guard_markers(text: str) -> str:
 
 
 def _sanitize_label(label: str) -> str:
-    """清理标签以安全地包含*在*受保护的块内。
+    """Sanitize a label for safe inclusion *inside* the guarded block.
 
-    即使标签现在位于沙箱区域内，我们仍然
-    为纵深防御而清理它：
-    1. 去除首尾空白。
-    2. 将每个 CR/LF 替换为单个空格。
-    3. 通过 _escape_guard_markers() 转义防护标记字面量，因此
-       标签不能提前关闭沙箱块。
+    Even though the label now lives inside the sandboxed region, we still
+    escape it for defence-in-depth:
+    1. Strips leading/trailing whitespace.
+    2. Replaces every CR/LF with a single space.
+    3. Escapes guard marker literals via _escape_guard_markers() so the
+       label cannot prematurely close the sandbox block.
     """
     label = label.strip()
     label = label.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
@@ -58,13 +58,13 @@ def _sanitize_label(label: str) -> str:
 
 
 def untrusted_context_message(label: str, content: Any) -> Dict[str, Any]:
-    """返回一个 LLM 消息，将检索/源文本排除在 system 角色之外。
+    """Return an LLM message that keeps retrieved/source text out of system role.
 
-    模板结构使得*只有*硬编码的
-    UNTRUSTED_CONTEXT_HEADER 出现在 GUARD_OPEN 之前。没有任何用户或
-    调用方派生的文本被放置在防护前的可信框架区域中。
-    源标签和正文内容都放置在*受保护块内部*，
-    其中 LLM 将其视为不受信任的数据。
+    The template is structured so that *only* the hardcoded
+    UNTRUSTED_CONTEXT_HEADER appears before GUARD_OPEN.  No user- or
+    caller-derived text is placed in the pre-guard trusted framing zone.
+    The source label and the body content are both placed *inside* the
+    guarded block where the LLM treats them as untrusted data.
     """
     safe_label = _sanitize_label(label)
     text = "" if content is None else str(content)

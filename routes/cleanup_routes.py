@@ -1,5 +1,5 @@
-# routes/清理_routes.py
-"""清理操作的路由。"""
+# routes/cleanup_routes.py
+"""Routes for cleanup operations."""
 import logging
 from fastapi import APIRouter, HTTPException, Request
 from src.cleanup_service import get_cleanup_preview, cleanup_sessions
@@ -9,23 +9,23 @@ logger = logging.getLogger(__name__)
 
 def setup_cleanup_routes(session_manager):
     """
-    设置清理相关的路由。
+    Setup cleanup-related routes.
 
-    参数:
-        session_manager: SessionManager 实例
+    Args:
+        session_manager: SessionManager instance
 
-    返回:
-        带有清理路由的 APIRouter 实例
+    Returns:
+        APIRouter instance with cleanup routes
     """
     router = APIRouter(prefix="/api/cleanup")
 
     @router.get("/preview")
     async def cleanup_preview(request: Request):
         """
-        在不做任何更改的情况下预览将被清理的内容。
+        Preview what would be cleaned up without making any changes.
 
-        返回:
-            JSON 响应，包含将被归档/删除的会话列表和预计节省的空间
+        Returns:
+            JSON response with lists of sessions that would be archived/deleted and estimated space savings
         """
         user = get_current_user(request)
         try:
@@ -38,12 +38,12 @@ def setup_cleanup_routes(session_manager):
     @router.post("")
     async def cleanup_endpoint(request: Request):
         """
-        执行清理操作：
-        1. 归档不活跃的会话（7 天未访问）
-        2. 删除旧会话（已归档、不重要、14 天以上未访问、消息少于 10 条）
+        Perform cleanup operations:
+        1. Archive inactive sessions (not accessed for 7 days)
+        2. Delete old sessions (archived, not important, not accessed for 14+ days, with fewer than 10 messages)
 
-        返回:
-            JSON 响应，包含已删除和已归档的会话数量及释放的空间
+        Returns:
+            JSON response with counts of deleted and archived sessions, and space freed
         """
         user = get_current_user(request)
         try:

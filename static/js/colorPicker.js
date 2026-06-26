@@ -1,8 +1,8 @@
-// 自建颜色选择器，带实时反馈 HSV 方框、色相条、
-// 取色器、最近使用颜色与协调色建议。
-// 非侵入式：包装现有 <input type="color"> 元素 —
-// 它们的 .value 保持为真实数据源，我们派发 'input'
-// 事件使现有监听器继续工作。
+// In-house color picker with live-feedback HSV square, hue bar,
+// eyedropper, recent colors, and harmony suggestions.
+// Non-invasive: wraps existing <input type="color"> elements —
+// their .value stays the source of truth, and we dispatch 'input'
+// events so existing listeners keep working.
 
 const LS_RECENT = 'odysseus-recent-colors';
 const MAX_RECENT = 12;
@@ -13,7 +13,7 @@ let _h = 0, _s = 100, _v = 100;   // HSV
 let _drag = null;                  // 'sl' | 'hue' | null
 let _onOutside = null;
 
-// ── 颜色数学 ──────────────────────────────────────────────────────────
+// ── Color math ────────────────────────────────────────────────────────
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
 function hexToRgb(hex) {
@@ -68,7 +68,7 @@ function hsvToHex(h, s, v) { const { r, g, b } = hsvToRgb(h, s, v); return rgbTo
 
 function hexToHsv(hex) { const { r, g, b } = hexToRgb(hex); return rgbToHsv(r, g, b); }
 
-// ── 存储 ──────────────────────────────────────────────────────────────
+// ── Storage ───────────────────────────────────────────────────────────
 function getRecents() {
   try { return JSON.parse(localStorage.getItem(LS_RECENT) || '[]'); }
   catch { return []; }
@@ -82,9 +82,9 @@ function addRecent(hex) {
   try { localStorage.setItem(LS_RECENT, JSON.stringify(recents)); } catch {}
 }
 
-// ── 基于当前颜色的建议（5 个协调色色块）──────────────────────────────
+// ── Suggestions based on current color (5 harmony swatches) ──────────
 function computeSuggestions() {
-  // 互补色、类似色 ±30°、分裂互补色 (+150)、色调偏移
+  // Complement, analogous ±30°, split-complement (+150), tone shift
   return [
     { hex: hsvToHex(_h + 180, _s, _v),                                   label: 'Complement' },
     { hex: hsvToHex(_h + 30, _s, _v),                                    label: 'Analogous +30°' },
@@ -94,7 +94,7 @@ function computeSuggestions() {
   ];
 }
 
-// ── 弹出框构建 ─────────────────────────────────────────────────────────
+// ── Popover build ─────────────────────────────────────────────────────
 function buildPopover() {
   const p = document.createElement('div');
   p.className = 'cp-popover';
@@ -110,16 +110,16 @@ function buildPopover() {
     <div class="cp-row">
       <div class="cp-preview"></div>
       <input type="text" class="cp-hex" maxlength="7" spellcheck="false" autocomplete="off">
-      <button class="cp-eyedropper" title="取色器" type="button">
+      <button class="cp-eyedropper" title="Eyedropper" type="button">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M2 22l4-4m0 0l3-3 5 5-3 3a2 2 0 01-2.8 0l-2.2-2.2a2 2 0 010-2.8z"/>
           <path d="M14 8l3-3a3 3 0 014.2 4.2l-3 3-4.2-4.2z"/>
         </svg>
       </button>
     </div>
-    <div class="cp-section-label">建议</div>
+    <div class="cp-section-label">Suggestions</div>
     <div class="cp-swatches cp-suggestions"></div>
-    <div class="cp-section-label">最近</div>
+    <div class="cp-section-label">Recent</div>
     <div class="cp-swatches cp-recent"></div>
   `;
   document.body.appendChild(p);
@@ -127,7 +127,7 @@ function buildPopover() {
   return p;
 }
 
-// ── UI 同步 ────────────────────────────────────────────────────────────
+// ── UI sync ───────────────────────────────────────────────────────────
 function syncUI() {
   if (!_popover) return;
   const sl = _popover.querySelector('.cp-sl');
@@ -138,7 +138,7 @@ function syncUI() {
   const preview = _popover.querySelector('.cp-preview');
 
   const pureHue = hsvToHex(_h, 100, 100);
-  sl.style.background = pureHue;   // 基础色相 — 白色/黑色层通过 CSS 堆叠在上方
+  sl.style.background = pureHue;   // base hue — white/black layers stacked on top via CSS
 
   slH.style.left = (_s) + '%';
   slH.style.top = (100 - _v) + '%';
@@ -149,25 +149,25 @@ function syncUI() {
   preview.style.background = current;
   if (document.activeElement !== hex) hex.value = current;
 
-  // 建议
+  // Suggestions
   const sContainer = _popover.querySelector('.cp-suggestions');
   const sugs = computeSuggestions();
   sContainer.innerHTML = sugs.map(s =>
     `<button class="cp-swatch" title="${s.label}: ${s.hex}" data-hex="${s.hex}" style="background:${s.hex}"></button>`
   ).join('');
 
-  // 最近
+  // Recents
   const rContainer = _popover.querySelector('.cp-recent');
   const recs = getRecents();
   rContainer.innerHTML = recs.length
     ? recs.map(h => `<button class="cp-swatch" title="${h}" data-hex="${h}" style="background:${h}"></button>`).join('')
-    : '<div class="cp-recent-empty">(暂无)</div>';
+    : '<div class="cp-recent-empty">(none yet)</div>';
 }
 
 function applyToInput(pushChange) {
   if (!_input) return;
   const hex = hsvToHex(_h, _s, _v);
-  _input.value = hex;  // setter 也会更新 style.background
+  _input.value = hex;  // setter also updates style.background
   if (pushChange) _input.dispatchEvent(new Event('input', { bubbles: true }));
   syncUI();
 }
@@ -177,9 +177,9 @@ function setFromHex(hex) {
   _h = v.h; _s = v.s; _v = v.v;
 }
 
-// ── 处理程序 ─────────────────────────────────────────────────────────
-// 窗口级指针监听器 — 安装一次，不每次弹出框重建时安装，防止
-// 每次打开弹出框重建时泄漏。
+// ── Handlers ──────────────────────────────────────────────────────────
+// Window-level pointer listeners — installed ONCE, not per-popover, so they
+// don't leak when the popover is rebuilt on every open.
 let _windowPointerInstalled = false;
 function _installWindowPointer() {
   if (_windowPointerInstalled) return;
@@ -233,9 +233,9 @@ function wireHandlers(p) {
   if (window.EyeDropper) {
     eye.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      // 在系统取色器打开期间抑制外部点击关闭。
-      // 没有这个，用户的像素拾取会触发窗口点击，
-      // 击中我们的文档捕获监听器并关闭弹出框。
+      // Suppress the outside-click close while the OS eyedropper is open.
+      // Without this, the user's pixel-pick fires a window click that
+      // hits our document-capture listener and closes the popover.
       const wasOnOutside = _onOutside;
       _detachOutsideHandlers();
       try {
@@ -245,9 +245,9 @@ function wireHandlers(p) {
           applyToInput(true);
           commitCurrent();
         }
-      } catch (_) { /* 用户取消 */ }
-      // 延迟一帧重新安装外部点击处理程序，使取色器
-      // 自身的拾取点击不会立即重新关闭我们。
+      } catch (_) { /* user cancelled */ }
+      // Re-arm outside-click handler after a frame so the eyedropper's
+      // own pick-click doesn't immediately re-close us.
       if (wasOnOutside && _popover) {
         requestAnimationFrame(() => {
           if (!_popover) return;
@@ -261,7 +261,7 @@ function wireHandlers(p) {
   } else {
     eye.disabled = true;
     eye.style.opacity = '0.3';
-    eye.title = '此浏览器不支持取色器';
+    eye.title = 'Eyedropper not supported in this browser';
   }
 }
 
@@ -289,7 +289,7 @@ function commitCurrent() {
   syncUI();
 }
 
-// ── 打开 / 关闭 ──────────────────────────────────────────────────────
+// ── Open / close ──────────────────────────────────────────────────────
 function position(p, anchor) {
   const rect = anchor.getBoundingClientRect();
   const pRect = p.getBoundingClientRect();
@@ -329,8 +329,8 @@ function _destroyPopover() {
 }
 
 function open(inputEl) {
-  // 始终拆除任何先前的弹出框，永不继承过时状态
-  //（孤立监听器、隐藏但位置错乱的 div 等）。
+  // Always tear down any previous popover so we never inherit stale state
+  // (orphaned listeners, hidden-but-mispositioned div, etc.).
   _destroyPopover();
   _popover = buildPopover();
   _input = inputEl;
@@ -339,20 +339,20 @@ function open(inputEl) {
   _popover.style.visibility = 'visible';
   _popover.style.opacity = '1';
   _popover.style.pointerEvents = 'auto';
-  // 让弹出框以其自然尺寸渲染，然后定位
+  // Let it render with its natural size, then position
   requestAnimationFrame(() => {
     if (_popover && _input) position(_popover, _input);
   });
   syncUI();
 
   _onOutside = (e) => {
-    if (_drag) return;                        // 拖动期间忽略
+    if (_drag) return;                        // ignore during drag
     if (!_popover) return;
     if (_popover.contains(e.target)) return;
     if (e.target === _input) return;
-    // 如果点击落在模态框关闭按钮（X）上，吞掉它，使
-    // 弹出框关闭不会同时关闭外层模态框。用户希望
-    // 第一次点击仅关闭颜色选择器。
+    // If the click landed on a modal close button (X), swallow it so the
+    // popover-close doesn't also dismiss the enclosing modal. The user
+    // wants their first click to just close the color picker.
     const closeBtn = e.target.closest && e.target.closest('.close-btn, [aria-label*="lose" i]');
     if (closeBtn) {
       e.preventDefault();
@@ -363,22 +363,22 @@ function open(inputEl) {
   };
   _onEsc = (e) => {
     if (e.key === 'Escape') {
-      // 键盘同理：Escape 首先关闭选择器；
-      // 模态框自身的 Esc 处理程序仅在下次按键时触发。
+      // Same idea for the keyboard: Escape closes the picker first; the
+      // modal's own Esc handler only fires on the next press.
       e.preventDefault();
       e.stopPropagation();
       if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
       close();
     }
   };
-  // 延迟安装使打开我们的点击不会立即关闭我们。
-  // 使用 requestAnimationFrame 而非 setTimeout(0) 确保当前
-  // 点击事件在注册监听器之前已完全冒泡。
+  // Defer install so the click that opened us doesn't immediately close us.
+  // Use requestAnimationFrame instead of setTimeout(0) to be sure the current
+  // click event has fully bubbled before we register the listener.
   requestAnimationFrame(() => {
     document.addEventListener('click', _onOutside, true);
-    // pointerdown 在触摸设备上先于 click 触发，即使
-    // 触摸目标吞掉了 click 也能可靠触发。
-    // 捕获它确保外部触摸在移动端关闭选择器。
+    // pointerdown fires before click on touch devices, and reliably even
+    // when the tap target swallows the click. Catching it ensures
+    // outside-touches close the picker on mobile.
     document.addEventListener('pointerdown', _onOutside, true);
     document.addEventListener('keydown', _onEsc, true);
   });
@@ -388,8 +388,8 @@ function close() {
   _destroyPopover();
 }
 
-// ── 附加到输入元素 ───────────────────────────────────────────────────
-// 在用自定义 setter 包装 .value 后需要调用的标准 setter。
+// ── Attach to inputs ──────────────────────────────────────────────────
+// Standard setter we need to call after wrapping .value with a custom setter.
 const _NATIVE_VALUE_DESC = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
 
 function _syncSwatch(el) {
@@ -401,8 +401,8 @@ export function attachColorPicker(inputEl) {
   if (!inputEl || inputEl.dataset.cpAttached === '1') return;
   inputEl.dataset.cpAttached = '1';
 
-  // 通过更改元素类型来中和原生颜色对话框。
-  // 现有 `.value` 读取 + `input` 事件监听器继续工作。
+  // Neutralize the native color dialog by changing the element's type.
+  // Existing `.value` reads + `input` event listeners continue to work.
   const initialAttr = inputEl.getAttribute('value');
   const initial = inputEl.value || initialAttr || '#000000';
   inputEl.setAttribute('data-cp-original-type', inputEl.type || 'color');
@@ -410,7 +410,7 @@ export function attachColorPicker(inputEl) {
   inputEl.readOnly = true;
   inputEl.classList.add('cp-swatch-input');
 
-  // 包装 .value 使任何赋值（来自 theme.js applyColors 等）自动更新色块背景。
+  // Wrap .value so ANY assignment (from theme.js applyColors etc.) auto-updates the swatch bg.
   Object.defineProperty(inputEl, 'value', {
     configurable: true,
     get() { return _NATIVE_VALUE_DESC.get.call(this); },
@@ -420,23 +420,23 @@ export function attachColorPicker(inputEl) {
     },
   });
 
-  // 应用初始值，使色块在任何编程式设置之前显示颜色。
+  // Apply initial value so swatch shows color even before any programmatic set.
   inputEl.value = initial;
 
-  // 使用 mousedown 使其在任何文档级点击处理程序
-  //（例如我们自己的 _onOutside 监听器）决定关闭之前触发。
+  // Use mousedown so we fire BEFORE any document-level click handler
+  // (e.g. our own _onOutside listener) can decide to close.
   inputEl.addEventListener('mousedown', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // 如果同一输入元素已经打开了选择器，则关闭（切换）。
-    // 否则始终（重新）打开 — 永不陷入“无法重新打开”的状态。
+    // If the same input already has the picker open, close it (toggle).
+    // Otherwise always (re)open — never get stuck in a "won't reopen" state.
     if (_input === inputEl && _popover) {
       close();
     } else {
       open(inputEl);
     }
   });
-  // 抑制后续 click 使其不能冒泡到覆盖层/监听器。
+  // Suppress the trailing click so it can't bubble to overlays/listeners.
   inputEl.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -447,7 +447,7 @@ export function initColorPickers(root = document) {
   root.querySelectorAll('input[type="color"]').forEach(attachColorPicker);
 }
 
-// 对可能在初始化之后挂载的新输入元素重新运行
+// Re-run on new inputs that may mount after init
 export function refreshColorPickers(root = document) {
   initColorPickers(root);
 }

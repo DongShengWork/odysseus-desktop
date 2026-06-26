@@ -1,4 +1,4 @@
-# src/chat_processor.py — 聊天处理器
+# src/chat_processor.py
 import logging
 import math
 import re
@@ -12,7 +12,7 @@ from src.prompt_security import UNTRUSTED_CONTEXT_POLICY, untrusted_context_mess
 
 logger = logging.getLogger(__name__)
 
-# ── 停用词 & 分词器 ──
+# ── Stopwords & tokenizer ──
 
 _STOPWORDS = frozenset(
     "a an the is am are was were be been being have has had do does did "
@@ -36,7 +36,7 @@ _STOPWORDS = frozenset(
 )
 
 def _content_tokens(text: str) -> list:
-    """提取有意义的内容词：无停用词，最少 3 个字符，小写。"""
+    """Extract meaningful content words: no stopwords, min 3 chars, lowercase."""
     words = re.findall(r'[a-z0-9]+(?:[-_][a-z0-9]+)*', text.lower())
     return [w for w in words if len(w) >= 3 and w not in _STOPWORDS]
 
@@ -48,14 +48,14 @@ class ChatProcessor:
         self.memory_vector = memory_vector
         self.skills_manager = skills_manager
 
-    # RAG 结果注入的最低相似度分数
+    # Minimum similarity score for RAG results to be injected
     RAG_SIMILARITY_THRESHOLD = 0.35
 
     def _hybrid_retrieve(self, message: str, mem_entries: list, k: int = 5) -> list:
-        """检索与消息相关的记忆。
+        """Retrieve memories relevant to the message.
 
-        使用 BM25 风格的关键词评分 + 可选向量相似度。
-        时效性仅作为打破平局的依据，绝不是主要信号。
+        Uses BM25-style keyword scoring + optional vector similarity.
+        Recency is a tiebreaker only, never the primary signal.
         """
         if not mem_entries or not message.strip():
             return []
@@ -63,13 +63,13 @@ class ChatProcessor:
         now = time.time()
         query_tokens = _content_tokens(message)
 
-        # 如果查询没有有意义的词元，完全跳过关键词检索
+        # If the query has no meaningful tokens, skip keyword retrieval entirely
         if not query_tokens:
-            # 回退到仅向量检索（如果可用）
+            # Fall back to vector-only if available
             if not (self.memory_vector and self.memory_vector.healthy):
                 return []
 
-        # ── 从记忆语料库构建 IDF ──
+        # ── Build IDF from the memory corpus ──
         N = len(mem_entries)
         doc_freq = Counter()  # token -> how many memories contain it
         mem_token_cache = {}  # mem_id -> set of content tokens
@@ -80,7 +80,7 @@ class ChatProcessor:
                 doc_freq[t] += 1
 
         def _bm25_score(query_toks, mem_id):
-            """查询与记忆之间的 BM25 风格评分。"""
+            """BM25-inspired score between query and a memory."""
             mem_toks = mem_token_cache.get(mem_id, set())
             if not mem_toks or not query_toks:
                 return 0.0
@@ -171,26 +171,28 @@ class ChatProcessor:
         incognito: bool = False,
         use_skills: bool = True,
     ) -> Tuple[List[Dict[str, str]], List[Dict[str, Any]], List[Dict[str, str]]]:
-        """构建 LLM 调用的上下文前导。
+        """Build the context preface for LLM calls.
 
-        返回：
-            (前导消息, rag_sources 列表) 的元组
+        Returns:
+            Tuple of (preface messages, rag_sources list)
 
-        关于 KV 缓存友好性的说明：此处组装的 ``system`` 角色消息稍后
-        会被连接成单个系统消息，并作为负载的最前面发送
-        （参见 ``llm_core`` 的“合并系统消息”步骤）。本地 OpenAI 兼容
-        后端（llama.cpp / LM Studio）基于字节相同的词元前缀来键控
-        KV 缓存，因此任何在轮次之间变化的内容——时间戳、检索片段、
-        每轮计数——都不能在此处折叠到系统消息中。这些内容应放在
-        单独的 ``user``/上下文消息中，追加到数组末尾（参见
-        ``build_chat_context`` 中的 ``current_datetime_context_message``
-        和 ``untrusted_context_message`` 调用方），这样可保持静态系统
-        前缀在同一会话的不同轮次之间字节相同，让后端复用其缓存前缀。
+        Note on KV-cache friendliness: the ``system``-role messages assembled
+        here are later concatenated into a single system message and sent as
+        the very first thing in the payload (see ``llm_core``'s "consolidate
+        system messages" step). Local OpenAI-compatible backends (llama.cpp /
+        LM Studio) key their KV cache off the byte-identical token prefix, so
+        *anything* that changes turn-to-turn — timestamps, retrieved snippets,
+        per-turn counts — must NOT be folded into a system message here. Such
+        content belongs in a separate ``user``/context message appended near
+        the end of the array (see ``current_datetime_context_message`` and
+        ``untrusted_context_message`` callers in ``build_chat_context``),
+        which keeps the static system prefix byte-identical across turns of
+        the same session and lets the backend reuse its cached prefix.
         """
         preface = []
         rag_sources = []
 
-        # 添加 preset 系统提示 if specified
+        # Add preset system prompt if specified
         if preset_system_prompt:
             preface.append({
                 "role": "system",
@@ -244,7 +246,7 @@ class ChatProcessor:
                 except Exception as _e:
                     logger.warning("Failed to increment memory uses: %s", _e)
 
-            # (skills 索引 injection moved out — see below; only fires in
+            # (skills index injection moved out — see below; only fires in
             # agent mode so chat mode and incognito stay clean.)
 
         # RAG: search if enabled and rag_manager available, inject only above threshold
@@ -253,7 +255,7 @@ class ChatProcessor:
                 rag_manager = getattr(self.personal_docs_manager, 'rag_manager', None)
                 if rag_manager:
                     results = rag_manager.search(message, k=5, owner=owner)
-                    # 过滤 by similarity threshold
+                    # Filter by similarity threshold
                     relevant = [r for r in results if r.get("similarity", 0) >= self.RAG_SIMILARITY_THRESHOLD]
                     if relevant:
                         logger.info(f"RAG: {len(relevant)}/{len(results)} results above threshold {self.RAG_SIMILARITY_THRESHOLD}")
@@ -274,7 +276,7 @@ class ChatProcessor:
             except Exception as e:
                 logger.warning(f"RAG retrieval failed: {e}")
 
-        # 添加 web search if enabled
+        # Add web search if enabled
         web_sources = []
         if use_web:
             try:
@@ -305,11 +307,11 @@ class ChatProcessor:
                         f"Content from {url}:\n\n{content}",
                     ))
 
-        # Skills 索引 — progressive disclosure. Only injected when the
+        # Skills index — progressive disclosure. Only injected when the
         # model has the `manage_skills` tool available (agent_mode), and
         # never in incognito mode (the user has explicitly opted out of
         # context retention this turn). In plain chat mode the model can't
-        # call the tool anyway, so the 索引 would be noise.
+        # call the tool anyway, so the index would be noise.
         if agent_mode and not incognito and use_skills and self.skills_manager:
             try:
                 idx = self.skills_manager.index_for(owner=owner)

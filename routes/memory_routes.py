@@ -1,4 +1,4 @@
-# routes/memory_routes.py — 记忆路由
+# routes/memory_routes.py
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, File
 from typing import Dict, Any, Optional, List
 import json
@@ -9,9 +9,10 @@ import time
 from datetime import datetime
 import logging
 
-# 列表前缀正则，如 "1."、"12)" 或 "3:"，加上周围的空白。
-# 每次调用只剥离一个前缀，这样从 LLM 输出导入时不会留下
-# 编号在保存的记忆文本中。项目符号（-、*、•）也在此剥离。
+# Leading list-marker like "1.", "12)", or "3:" plus surrounding whitespace.
+# Strips one prefix per call so import-from-LLM-output doesn't leave the
+# numbering inside the saved memory text. Bullet markers (-, *, •) are
+# also peeled here for the same reason.
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:\d{1,3}[.):]\s+|[-*•]\s+)")
 
 
@@ -35,29 +36,30 @@ logger = logging.getLogger(__name__)
 
 
 def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionManager, memory_vector=None):
-    """设置记忆相关的路由。"""
+    """Set up memory-related routes."""
     router = APIRouter(prefix="/api/memory", tags=["memory"])
 
     def _owner(request: Request) -> Optional[str]:
         return get_current_user(request)
 
     def _assert_session_owner(session_obj, user):
-        """安全：如果调用者不拥有此会话，返回 404。
+        """SECURITY: 404 if the caller does not own this session.
 
-        SessionManager.get_session 不是按所有者作用域的 — 它按 ID 返回任何
-        会话。这些路由接受调用者提供的会话 ID，因此如果没有此门控，
-        用户可能针对其他租户的会话，泄漏其聊天历史、会话作用域的 LLM
-        凭据或会话标题。与 session_routes / webhook_routes 的所有权检查一致。
+        SessionManager.get_session is NOT owner-scoped — it returns any
+        session by id. These routes accept a caller-supplied session id, so
+        without this gate a user could target another tenant's session and
+        leak their chat history, their session-scoped LLM credentials, or the
+        session title. Mirrors session_routes / webhook_routes ownership.
         """
         if user is not None and getattr(session_obj, "owner", None) != user:
             raise HTTPException(404, "Session not found")
 
     def _verify_memory_owner(memory: dict, user: Optional[str]):
-        """如果用户不拥有此记忆，抛出 404。
+        """Raise 404 if user doesn't own this memory.
 
-        安全：严格所有权 — 之前 `mem_owner and mem_owner != user`
-        允许任何用户读取/编辑/删除所有者字段为空/null 的记忆，
-        这在多用户部署中泄漏了旧数据。
+        SECURITY: strict ownership — previously `mem_owner and mem_owner != user`
+        allowed any user to read/edit/delete memories with an empty/null owner
+        field, which leaked legacy data across the multi-user deploy.
         """
         if user is None:
             return  # Auth disabled
@@ -66,7 +68,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.post("/debug")
     def debug_memory_relevance(request: Request, query: str = Form(...)):
-        """调试哪些记忆会被查询触发"""
+        """Debug which memories would be triggered for a query"""
         user = _owner(request)
         memories = memory_manager.load(owner=user)
         relevant = memory_manager.get_relevant_memories(query, memories, threshold=0.05)
@@ -84,7 +86,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         request: Request,
         memory_data: Optional[MemoryAddRequest] = None
     ):
-        """添加新的记忆条目，可选类别、来源和会话引用。"""
+        """Add a new memory entry with optional category, source, and session reference."""
         from src.auth_helpers import require_privilege
         require_privilege(request, "can_manage_memory")
         if memory_data is None:
@@ -117,7 +119,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         all_mem = memory_manager.load_all()
         all_mem.append(new_entry)
         memory_manager.save(all_mem)
-        # Sync vector 索引
+        # Sync vector index
         if memory_vector and memory_vector.healthy:
             memory_vector.add(new_entry["id"], text)
         try:
@@ -129,13 +131,13 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.get("")
     def api_get_memory(request: Request):
-        """返回所有记忆条目及其元数据。"""
+        """Return all memory entries with their metadata."""
         user = _owner(request)
         return {"memory": memory_manager.load(owner=user)}
 
     @router.post("/search")
     def search_memories(request: Request, query: str = Form(...), session_id: str = Form(None), category: str = Form(None)):
-        """搜索所有记忆，可选过滤器。"""
+        """Search across all memories with optional filters."""
         user = _owner(request)
         memories = memory_manager.load(owner=user)
 
@@ -151,7 +153,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.get("/timeline")
     def memory_timeline(request: Request):
-        """按时间顺序获取记忆，包含源会话信息。"""
+        """Get memories in chronological order with source session information."""
         user = _owner(request)
         memories = memory_manager.load(owner=user)
         sorted_memories = sorted(memories, key=lambda x: x.get("timestamp", 0), reverse=True)
@@ -189,7 +191,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.get("/by-session/{session_id}")
     def get_memory_by_session(request: Request, session_id: str):
-        """获取与特定会话关联的所有记忆。"""
+        """Get all memories associated with a specific session."""
         user = _owner(request)
         try:
             _session_obj = session_manager.get_session(session_id)
@@ -219,7 +221,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.post("/extract")
     async def extract_memory(request: Request, session: str = Form(...)) -> Dict[str, List[str]]:
-        """分析会话的聊天历史并返回记忆建议。"""
+        """Analyze a session's chat history and return memory suggestions."""
         require_user(request)
         try:
             sess = session_manager.get_session(session)
@@ -269,7 +271,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.post("/audit")
     async def api_audit_memories(request: Request, session: str = Form(None)):
-        """通过 LLM 去重和合并记忆。
+        """Deduplicate and consolidate memories via LLM.
 
         Uses task/utility/default settings through the shared resolver, with
         the active session as fallback when no task or utility model is set.
@@ -324,7 +326,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         session: str | None = Form(None),
         file: UploadFile = File(...)
     ):
-        """从上传的文件中提取记忆建议（PDF、TXT、MD 等）。"""
+        """Extract memory suggestions from an uploaded file (PDF, TXT, MD, etc.)."""
         from src.auth_helpers import require_privilege
         require_privilege(request, "can_manage_memory")
 
@@ -366,7 +368,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         if ext not in allowed:
             raise HTTPException(400, f"Unsupported file type: {ext}")
 
-        # 提取 text based on 文件类型
+        # Extract text based on file type
         if ext == ".pdf":
             from src.document_processor import _process_pdf
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -419,7 +421,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
         if len(text) > 15000:
             text = text[:15000] + "\n[Truncated]"
 
-        # 发送 to LLM for 记忆提取
+        # Send to LLM for memory extraction
         import_prompt = (
             "You are a memory extraction assistant. The user uploaded a document. "
             "Analyze the text below and extract specific, useful facts — things like "
@@ -448,7 +450,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
                 headers=headers,
             )
 
-            # 解析 JSON
+            # Parse JSON
             raw = raw.strip()
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
@@ -483,7 +485,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.post("/{memory_id}/pin")
     def pin_memory(request: Request, memory_id: str, pinned: bool = Form(True)):
-        """固定或取消固定记忆。固定的记忆始终包含在上下文中。"""
+        """Pin or unpin a memory. Pinned memories are always included in context."""
         user = _owner(request)
         all_mem = memory_manager.load_all()
         for i, memory in enumerate(all_mem):
@@ -497,7 +499,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
     # Wildcard routes MUST come last — otherwise they swallow /import, /search, etc.
     @router.get("/{memory_id}")
     def get_memory_item(request: Request, memory_id: str):
-        """通过 ID 获取特定记忆项。"""
+        """Get a specific memory item by ID."""
         user = _owner(request)
         memories = memory_manager.load(owner=user)
         for memory in memories:
@@ -508,7 +510,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.put("/{memory_id}")
     def update_memory(request: Request, memory_id: str, text: str = Form(...), category: str = Form(None)):
-        """用新文本和可选类别更新现有记忆项。"""
+        """Update an existing memory item with new text and optional category."""
         user = _owner(request)
         all_mem = memory_manager.load_all()
         for i, memory in enumerate(all_mem):
@@ -520,7 +522,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
                 all_mem[i]["timestamp"] = int(time.time())
 
                 memory_manager.save(all_mem)
-                # Sync vector 索引 (remove old, add updated)
+                # Sync vector index (remove old, add updated)
                 if memory_vector and memory_vector.healthy:
                     memory_vector.remove(memory_id)
                     memory_vector.add(memory_id, text.strip())
@@ -530,11 +532,11 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
     @router.delete("/{memory_id}")
     def delete_memory(request: Request, memory_id: str):
-        """通过 ID 删除记忆项。"""
+        """Delete a memory item by its ID."""
         user = _owner(request)
         all_mem = memory_manager.load_all()
 
-        # Find and 验证 ownership before deleting
+        # Find and verify ownership before deleting
         target = next((m for m in all_mem if m["id"] == memory_id), None)
         if not target:
             raise HTTPException(404, f"Memory item {memory_id} not found")
@@ -542,7 +544,7 @@ def setup_memory_routes(memory_manager: MemoryManager, session_manager: SessionM
 
         all_mem = [m for m in all_mem if m["id"] != memory_id]
         memory_manager.save(all_mem)
-        # Sync vector 索引
+        # Sync vector index
         if memory_vector and memory_vector.healthy:
             memory_vector.remove(memory_id)
         return {"ok": True, "message": "Memory deleted successfully"}

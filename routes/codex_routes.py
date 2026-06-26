@@ -1,4 +1,4 @@
-"""Codex 集成路由。
+"""Codex integration routes.
 
 These are small HTTP surfaces intended for the Codex plugin/MCP bridge. They
 reuse existing Odysseus helpers and enforce API-token scopes before touching
@@ -82,7 +82,7 @@ async def _as_owner(request: Request, owner: str, fn, *args, **kwargs):
 
 
 def _scope_owner(request: Request, allowed: set[str]) -> str:
-    """如果调用者对该 Codex 操作拥有权限，返回数据所有者。"""
+    """Return the data owner if the caller is allowed for this Codex action."""
     if getattr(request.state, "api_token", False):
         scopes = set(getattr(request.state, "api_token_scopes", []) or [])
         if not scopes.intersection(allowed):
@@ -96,7 +96,7 @@ def _scope_owner(request: Request, allowed: set[str]) -> str:
 
 
 def _scope_owner_all(request: Request, required: set[str]) -> str:
-    """仅在 API token 拥有所有必需作用域时返回 owner。"""
+    """Return owner only when an API token has every required scope."""
     if getattr(request.state, "api_token", False):
         scopes = set(getattr(request.state, "api_token_scopes", []) or [])
         missing = required - scopes
@@ -277,8 +277,8 @@ def setup_codex_routes(
         )
 
     # ── Email draft + send ────────────────────────────────────────────────
-    # routes/email_routes.py 中的两个处理函数已通过
-    # FastAPI Depends 接受 `owner=`，直接调用无需修改 state。
+    # Both handlers in routes/email_routes.py already accept `owner=` via
+    # FastAPI Depends, so we call them directly without patching state.
 
     def _email_draft_document_content(body: dict[str, Any]) -> str:
         def clean(v: Any) -> str:
@@ -478,18 +478,18 @@ def setup_codex_routes(
         return await _as_owner(request, owner, documents_create_endpoint, request, req)
 
     # ── Cookbook surface ──
-    # 让 agent 运行用户通过 Cookbook UI 手动执行的相同
-    # 启动/监控/终止循环：读取当前任务列表 +
-    # tmux 输出，启动服务任务，停止一个。两个作用域：
-    #   cookbook:read   — 列出任务 + 输出尾部 + 列出服务器
-    #   cookbook:launch — 同时可启动/停止服务（主机 shell 执行）
+    # Lets the agent run the same launch / monitor / kill loop the user
+    # would do by hand in the Cookbook UI: read the current task list +
+    # tmux output, launch a serve task, stop one.  Two scopes:
+    #   cookbook:read   — list tasks + tail output + list servers
+    #   cookbook:launch — also start/stop serves (host shell exec)
     # `cookbook:launch` is genuinely powerful: /api/model/serve runs SSH'd
     # commands on the user's hosts. The existing _validate_serve_cmd
-    # 白名单（vllm/python3/sglang/llama-server 等，无 shell 元字符）
-    # 确保 agent 在 UI 使用的同一沙箱中运行。
+    # allowlist (vllm/python3/sglang/llama-server/etc., no shell metachars)
+    # keeps the agent inside the same sandbox the UI uses.
 
     async def _run_shell(cmd: str, timeout: float = 15.0) -> dict:
-        """运行 shell 命令，返回 {exit_code, stdout, stderr}。"""
+        """Run a shell command, return {exit_code, stdout, stderr}."""
         import asyncio as _asyncio
         try:
             proc = await _asyncio.create_subprocess_shell(
@@ -522,7 +522,7 @@ def setup_codex_routes(
             return {}
 
     def _redact_task(t: dict) -> dict:
-        """返回给 agent 前剥离敏感信息。"""
+        """Strip secrets before returning to the agent."""
         clean = {k: v for k, v in t.items() if k not in ("hf_token", "_secrets")}
         if isinstance(clean.get("payload"), dict):
             pl = clean["payload"]
@@ -559,26 +559,26 @@ def setup_codex_routes(
     @router.get("/cookbook/output/{session_id}")
     async def codex_cookbook_output(request: Request, session_id: str, tail: int = 400):
         _scope_owner(request, COOKBOOK_READ_SCOPES)
-        # 安全防护：session_id 必须是 tmux 风格的我们发放的 id
-        # （`serve-XXXX` / `cookbook-XXXX` / `queue-XXXX`）；除此之外
-        # 会允许 agent 运行任意的 `tmux capture-pane` 目标。
+        # Defensive: session_id must be the tmux-style id we issue
+        # (`serve-XXXX` / `cookbook-XXXX` / `queue-XXXX`); anything else
+        # would let the agent run arbitrary `tmux capture-pane` targets.
         import re as _re
         if not _re.fullmatch(r"[a-zA-Z0-9_-]+", session_id):
             raise HTTPException(400, "Invalid session id")
         tail = max(20, min(int(tail or 400), 4000))
-        # 解析 the task's host (if any) from cookbook state so we can
-        # SSH 连接到正确的机器，与 UI 的 _reconnectTask 行为一致。
+        # Resolve the task's host (if any) from cookbook state so we can
+        # ssh to the right box, exactly as the UI does in _reconnectTask.
         state = _read_cookbook_state()
         tasks = state.get("tasks") or []
         task = next((t for t in tasks if t.get("sessionId") == session_id), None)
         if task is None:
             raise HTTPException(404, "task not found")
         host, port_flag = _ssh_prefix_for_task(task)
-        # 优先使用持久化的日志文件而非 tmux 窗格。窗格
-        # 在 vllm 退出时会被崩溃后的 neofetch 横幅 + bash 提示符覆盖；
-        # 日志文件是原始的 stdout/stderr，
-        # 保持不变。对于 tee-to-log 运行器变更之前的旧任务回退到窗格。
-        #
+        # Prefer the persisted log file over the tmux pane. The pane gets
+        # overwritten by the post-crash neofetch banner + bash prompt the
+        # moment vllm exits; the log file is the raw stdout/stderr and
+        # survives unchanged. Falls back to pane for older tasks predating
+        # the tee-to-log runner change.
         log_path = f"/tmp/odysseus-tmux/{session_id}.log"
         inner = (
             f"if [ -s {log_path} ]; then tail -n {tail} {log_path}; "
@@ -601,31 +601,31 @@ def setup_codex_routes(
     @router.post("/cookbook/serve")
     async def codex_cookbook_serve(request: Request, body: dict[str, Any] = Body(default_factory=dict)):
         _scope_owner(request, COOKBOOK_LAUNCH_SCOPES)
-        # 使用与 UI 相同的验证逻辑包装 /api/model/serve。
-        # _validate_serve_cmd（在 model_serve 内部调用）拒绝
-        # shell 元字符并要求前导二进制文件在 cookbook 白名单中
+        # Wraps /api/model/serve with the SAME validation the UI uses.
+        # _validate_serve_cmd (called inside model_serve) rejects shell
+        # metachars and requires the leading binary to be in the
         # cookbook allowlist (vllm / python3 / sglang / llama-server / ...).
         from routes.cookbook_helpers import ServeRequest
-        # 接受 agent 自然会使用的友好别名。没有这些，
-        # 传入 `host` 会静默映射为空，服务将在本地运行而非
-        # 预期远程 — 这正是 agent 自己永远无法调试的 bug。
-        #
+        # Accept friendly aliases agents naturally reach for. Without these,
+        # passing `host` silently maps to nothing and the serve runs LOCAL
+        # instead of on the intended remote — exactly the bug an agent
+        # would never debug on its own.
         norm = dict(body or {})
         if "host" in norm and "remote_host" not in norm:
             norm["remote_host"] = norm.pop("host")
         if "model" in norm and "repo_id" not in norm:
             norm["repo_id"] = norm.pop("model")
         if "ssh_port" not in norm and "port" in norm and (str(norm.get("port") or "").isdigit() and int(norm["port"]) >= 1000):
-            # 启发式：如果 `port` 看起来像 SSH 端口（>=1000）且 (≥1000) and there's
-            # 没有显式 ssh_port，按此处理。UI 端口（8000, 8001,
-            # 30000）属于 cmd 字符串内部，不应该在此处理。
+            # Heuristic: if `port` looks like an SSH port (≥1000) and there's
+            # no explicit ssh_port, treat it as such. UI ports (8000, 8001,
+            # 30000) belong inside the cmd string, not here.
             pass  # leave as-is — user's `port` here is ambiguous; skip remap.
         try:
             req = ServeRequest(**norm)
         except Exception as exc:
             raise HTTPException(400, f"Invalid serve payload: {exc}")
         serve_endpoint = _find_endpoint(None, "POST", "/api/model/serve")
-        # 回退到从 app 上注册的 cookbook 路由导入。
+        # Fall back to importing from the cookbook router registered on app.
         if serve_endpoint is None:
             from fastapi import FastAPI
             app: FastAPI = request.app
@@ -660,7 +660,7 @@ def setup_codex_routes(
         Mirrors `list_cached_models` from the chat agent so external agents have
         the same inventory view before deciding what to serve/download."""
         _scope_owner(request, COOKBOOK_READ_SCOPES)
-        # 内部调用 /api/model/cached，使用聊天
+        # Hit /api/model/cached internally, with the same modelDirs the chat
         # agent's list_cached_models would resolve from cookbook state.
         state = _read_cookbook_state()
         env = state.get("env") if isinstance(state, dict) else {}
@@ -674,7 +674,7 @@ def setup_codex_routes(
             if isinstance(mds, str) and mds.strip() not in HF_DEFAULTS:
                 return mds
             return ""
-        # 解析 friendly host name → real host (matches list_cached_models flow).
+        # Resolve friendly host name → real host (matches list_cached_models flow).
         resolved_host = host or ""
         srv: dict[str, Any] = {}
         if host:
@@ -707,7 +707,7 @@ def setup_codex_routes(
                     break
         if cached_endpoint is None:
             raise HTTPException(503, "model cached endpoint unavailable")
-        # 端点将 host/model_dir/ssh_port/platform 作为 kwargs 读取。
+        # The endpoint reads host/model_dir/ssh_port/platform as kwargs.
         return await cached_endpoint(
             request,
             host=params.get("host") or None,
@@ -766,7 +766,7 @@ def setup_codex_routes(
             raise HTTPException(400, f"Preset {chosen.get('name')!r} has no launchable cmd "
                                      "(adopted from external launch). Use POST /cookbook/serve "
                                      "with the actual cmd instead.")
-        # 复用已验证过的 serve 处理函数。
+        # Reuse the serve handler we already validated.
         from routes.cookbook_helpers import ServeRequest
         body = {"repo_id": repo_id, "cmd": cmd}
         if host:
@@ -804,7 +804,7 @@ def setup_codex_routes(
             raise HTTPException(400, "tmux_session required, [a-zA-Z0-9_-]+ only")
         if not model:
             raise HTTPException(400, "model required")
-        # 采纳前验证 tmux 会话在目标主机上存在。
+        # Verify the tmux session exists on the target host before adopting.
         import shlex
         if host:
             check = f"ssh {shlex.quote(host)} 'tmux has-session -t {shlex.quote(sess)}'"
@@ -813,7 +813,7 @@ def setup_codex_routes(
         chk = await _run_shell(check, timeout=8)
         if chk.get("exit_code") not in (0, None):
             raise HTTPException(404, f"tmux session {sess!r} not found on {host or 'local'}")
-        # 写入 cookbook_state.json。
+        # Write into cookbook_state.json.
         import time as _t, json as _json
         from core.atomic_io import atomic_write_json
         from pathlib import Path as _Path

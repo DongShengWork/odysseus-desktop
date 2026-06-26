@@ -12,9 +12,9 @@ from routes._validators import validate_remote_host, validate_ssh_port
 
 
 # Backends the manual hardware simulator accepts. Must stay a subset of what
-# 服务s.hwfit.fit understands so a simulated box ranks like a real one:
+# services.hwfit.fit understands so a simulated box ranks like a real one:
 # "metal" routes through the Apple-Silicon path (GGUF-only, llama.cpp/Ollama),
-# the CPU 后端s through the RAM/offload path, cuda/rocm through vLLM.
+# the CPU backends through the RAM/offload path, cuda/rocm through vLLM.
 _MANUAL_BACKENDS = {"cuda", "rocm", "metal", "cpu_x86", "cpu_arm"}
 
 
@@ -101,9 +101,9 @@ def _apply_manual_hardware(system, manual_mode="", manual_gpu_count="", manual_v
     }]
     system["homogeneous"] = True
     system["backend"] = backend
-    # Apple Silicon shares one 统一内存 pool with the GPU; flag it so
+    # Apple Silicon shares one unified memory pool with the GPU; flag it so
     # the API/UI report it the way real Metal detection does. Discrete GPUs
-    # (cuda/rocm) and the CPU 后端s carry separate VRAM, so clear any
+    # (cuda/rocm) and the CPU backends carry separate VRAM, so clear any
     # stale flag a previous detection left on the dict.
     if backend == "metal":
         system["unified_memory"] = True
@@ -231,7 +231,7 @@ def setup_hwfit_routes():
         system["detected_gpu_count"] = system.get("gpu_count")
 
         groups = system.get("gpu_groups") or []
-        # 解析 the target homogeneous pool. Default (auto) = the largest pool,
+        # Resolve the target homogeneous pool. Default (auto) = the largest pool,
         # which for a uniform box is simply "all the GPUs" — no behaviour change.
         grp = None
         if groups:
@@ -249,7 +249,7 @@ def setup_hwfit_routes():
             system["gpu_name"] = g["name"]
             system["active_group"] = {**g, "use_count": n}
 
-        # 解析 the optional count defensively (matches the gpu_group guard
+        # Parse the optional count defensively (matches the gpu_group guard
         # above): a non-numeric query param previously raised ValueError ->
         # HTTP 500. A malformed value is ignored, same as omitting it.
         try:

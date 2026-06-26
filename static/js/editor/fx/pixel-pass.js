@@ -1,13 +1,13 @@
 /**
- * 将亮度/对比度、色相/饱和度、色阶或色彩平衡
- * 调整应用到源画布，并返回包含结果的
- * 新画布。纯像素数学 — 无 DOM，无模块状态。
+ * Apply a Brightness/Contrast, Hue/Saturation, Levels, or Color Balance
+ * adjustment to a source canvas and return a fresh canvas with the
+ * result. Pure pixel math — no DOM, no module state.
  *
- * 由编辑器的每层特效堆栈使用：每个 `adjLayer` 调用
- * `applyAdjustment(prevCanvas, adjLayer)`，结果输入
- * 堆栈中的下一层。
+ * Used by the editor's per-layer FX stack: each `adjLayer` calls
+ * `applyAdjustment(prevCanvas, adjLayer)` and the result feeds the
+ * next layer in the stack.
  *
- * 调整结构：
+ * Adjustment shape:
  *   { type: 'brightness-contrast', params: { brightness, contrast } }
  *   { type: 'hue-saturation',      params: { hue, saturation } }
  *   { type: 'levels',              params: { inBlack, inWhite, gamma, outBlack, outWhite } }
@@ -19,7 +19,7 @@ export function applyAdjustment(srcCanvas, adj) {
   out.width = w; out.height = h;
   const octx = out.getContext('2d');
 
-  // 亮度/对比度和色相/饱和度可以使用快速的浏览器原生 CSS 滤镜管线。
+  // B/C and H/S can use the fast browser-native CSS filter pipeline.
   if (adj.type === 'brightness-contrast') {
     const p = adj.params;
     octx.filter = `brightness(${p.brightness}) contrast(${p.contrast})`;
@@ -35,7 +35,7 @@ export function applyAdjustment(srcCanvas, adj) {
     return out;
   }
 
-  // 色阶 + 色彩平衡需要逐像素数学计算。
+  // Levels + Color Balance need per-pixel math.
   octx.drawImage(srcCanvas, 0, 0);
   const img = octx.getImageData(0, 0, w, h);
   const d = img.data;
@@ -70,8 +70,8 @@ export function applyAdjustment(srcCanvas, adj) {
     const sR = s.r*scale, sG = s.g*scale, sB = s.b*scale;
     const mR = m.r*scale, mG = m.g*scale, mB = m.b*scale;
     const hR = hi.r*scale, hG = hi.g*scale, hB = hi.b*scale;
-    // 钟形曲线色调权重，使每个像素的偏移与其
-    // 亮度属于"阴影"、"中间调"还是"高光"成比例。
+    // Bell-curve tone weights so each pixel's shift is proportional to
+    // how "shadow", "midtone", or "highlight" its luminance is.
     const wS = new Float32Array(256), wM = new Float32Array(256), wH = new Float32Array(256);
     const sig = 0.25;
     for (let v = 0; v < 256; v++) {
@@ -100,11 +100,11 @@ export function applyAdjustment(srcCanvas, adj) {
 
 
 /**
- * 通过图层的 `layer.adjustments` 字段对图层就地应用
- * 组合的色阶 + 色彩平衡处理。结果缓存在 `layer._adjCache` 中，
- * 以 `cacheKey` 为键，使重复的合成处理不会重新计算。
+ * Apply a combined Levels + Color Balance pass to a layer in-place via
+ * its `layer.adjustments` field. Cached on `layer._adjCache` keyed by
+ * `cacheKey` so repeated composite passes don't re-run the math.
  *
- * 返回缓存的输出画布。
+ * Returns the cached output canvas.
  *
  * @param {{
  *   canvas: HTMLCanvasElement,
@@ -112,7 +112,7 @@ export function applyAdjustment(srcCanvas, adj) {
  *   _adjCache?: HTMLCanvasElement,
  *   _adjCacheKey?: string,
  * }} layer
- * @param {string} cacheKey  `layer.adjustments` 的稳定签名。
+ * @param {string} cacheKey  Stable signature of `layer.adjustments`.
  */
 export function renderLayerPixelAdjustments(layer, cacheKey) {
   const adj = layer.adjustments;
@@ -129,9 +129,9 @@ export function renderLayerPixelAdjustments(layer, cacheKey) {
   const img = octx.getImageData(0, 0, out.width, out.height);
   const d = img.data;
 
-  // 色阶部分的单个 256 条目 LUT（按 R/G/B
-  // 通道相同地应用 — 在色彩平衡
-  // 紧随其后时，按亮度方式是不正确的，这里按通道处理即可）。
+  // Single 256-entry LUT for the Levels portion (applied per R/G/B
+  // channel identically — luma-style isn't right when colour balance
+  // follows, per-channel is fine here).
   const l = adj.levels || { inBlack: 0, inWhite: 255, gamma: 1, outBlack: 0, outWhite: 255 };
   const inLow  = Math.max(0, Math.min(254, l.inBlack));
   const inHigh = Math.max(inLow + 1, Math.min(255, l.inWhite));
@@ -148,7 +148,7 @@ export function renderLayerPixelAdjustments(layer, cacheKey) {
     lut[v] = Math.round(t * span + outLow);
   }
 
-  // 色彩平衡钟形曲线权重（参见 applyAdjustment）。
+  // Color Balance bell-curve weights (see applyAdjustment).
   const cb = adj.colorBalance || { shadows: {r:0,g:0,b:0}, midtones: {r:0,g:0,b:0}, highlights: {r:0,g:0,b:0} };
   const s = cb.shadows || {r:0,g:0,b:0};
   const m = cb.midtones || {r:0,g:0,b:0};
@@ -198,8 +198,8 @@ export function renderLayerPixelAdjustments(layer, cacheKey) {
  * staged + editing id, so repeated composite passes are O(1) when
  * nothing has changed.
  *
- * 如果堆栈为空且没有暂存内容，返回图层自己的
- * 画布（无分配）。
+ * If the stack is empty AND nothing is staged, returns the layer's own
+ * canvas unchanged (no allocation).
  *
  * @param {{
  *   canvas: HTMLCanvasElement,

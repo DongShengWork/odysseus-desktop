@@ -1,11 +1,11 @@
 # src/research_handler.py
-"""研究服务集成处理器，支持可展开的 UI 界面。
+"""Handler for research service integration with expandable UI support.
 
-使用 IterResearch 风格的 DeepResearcher（LLM 参与环路）作为主要
+Uses the IterResearch-style DeepResearcher (LLM-in-the-loop) as the primary
 engine, falling back to the legacy ResearchOrchestrator or basic web search
 if needed.
 
-包含任务注册表，使研究在页面刷新后仍然存活并且可以被取消。
+Includes a task registry so research survives page refreshes and can be cancelled.
 """
 import asyncio
 import json
@@ -46,7 +46,7 @@ class ResearchHandler:
             self._legacy_engine = None
 
     # ------------------------------------------------------------------
-    # Task 仓库 — background research with persistence
+    # Task registry — background research with persistence
     # ------------------------------------------------------------------
 
     def start_research(
@@ -113,7 +113,7 @@ class ResearchHandler:
                 "query": entry["query"],
                 "started_at": entry["started_at"],
             }
-        # 检查 disk for completed research
+        # Check disk for completed research
         path = RESEARCH_DATA_DIR / f"{session_id}.json"
         if path.exists():
             try:
@@ -150,7 +150,7 @@ class ResearchHandler:
             entry = self._active_tasks[session_id]
             if entry["status"] in ("done", "error", "cancelled"):
                 return entry.get("result")
-        # 检查 disk
+        # Check disk
         path = RESEARCH_DATA_DIR / f"{session_id}.json"
         if path.exists():
             try:
@@ -162,7 +162,7 @@ class ResearchHandler:
 
     def get_sources(self, session_id: str) -> Optional[list]:
         """Get deduplicated source list from research findings."""
-        # 检查 in-memory first
+        # Check in-memory first
         if session_id in self._active_tasks:
             entry = self._active_tasks[session_id]
             if entry.get("sources"):
@@ -170,7 +170,7 @@ class ResearchHandler:
             researcher = entry.get("researcher")
             if researcher and researcher.findings:
                 return self._extract_sources(researcher.findings)
-        # 检查 disk
+        # Check disk
         path = RESEARCH_DATA_DIR / f"{session_id}.json"
         if path.exists():
             try:
@@ -207,7 +207,7 @@ class ResearchHandler:
     def _save_result(self, session_id: str, entry: dict):
         """Persist completed research result to disk."""
         try:
-            # 提取 and cache sources
+            # Extract and cache sources
             sources = []
             researcher = entry.get("researcher")
             if researcher and researcher.findings:
@@ -344,7 +344,7 @@ class ResearchHandler:
         ]
         summary_text = " | ".join(summary_lines)
 
-        # 构建 sources list with clickable links. Keep the curated Sources
+        # Build sources list with clickable links. Keep the curated Sources
         # section filtered for citation quality, but also list every unique URL
         # the research run inspected so the "URLs Analyzed" count is auditable.
         sources_section = ""
@@ -373,7 +373,7 @@ class ResearchHandler:
             if analyzed_lines:
                 analyzed_urls_section = "\n### Analyzed URLs\n\n" + "\n".join(analyzed_lines) + "\n"
 
-        # 构建 raw findings section (individual extractions per source)
+        # Build raw findings section (individual extractions per source)
         raw_findings_section = ""
         if findings:
             parts = []
@@ -386,7 +386,7 @@ class ResearchHandler:
                 parts.append(f"**{i}. [{title}]({url})**\n\n{content}")
             raw_findings_section = "\n\n".join(parts)
 
-        # 构建 expandable collected info section
+        # Build expandable collected info section
         collected_section = ""
         if evolving_report or raw_findings_section:
             collected_section = "\n<details>\n<summary><strong>Raw collected findings ({} sources)</strong></summary>\n\n".format(

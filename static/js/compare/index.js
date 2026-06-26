@@ -1,4 +1,4 @@
-// compare/索引.js — orchestrator module (public API)
+// compare/index.js — orchestrator module (public API)
 /**
  * Model A/B Comparison module.
  * Builds its own multi-pane grid layout (up to 8 models).
@@ -211,10 +211,10 @@ async function deactivate(teardown) {
   // Restore agent/chat mode to what it was before compare
   _setToolbarMode(state._savedMode, true);
 
-  // 删除 unsaved sessions, then reload
+  // Delete unsaved sessions, then reload
   if (teardown) {
     if (sessionIdsToDelete.length > 0) {
-      // 保活 ensures requests complete even during page navigation
+      // keepalive ensures requests complete even during page navigation
       await Promise.all(sessionIdsToDelete.map(sid =>
         fetch(`${state.API_BASE}/api/session/${sid}`, { method: 'DELETE', keepalive: true }).catch(() => {})
       ));
@@ -238,7 +238,7 @@ async function _buildCompareUI() {
   const modelShorts = _modelDisplayNames(state._selectedModels);
   _persistSelections();
 
-  // 1. 创建 sessions (skip for search mode — no LLM sessions needed)
+  // 1. Create sessions (skip for search mode — no LLM sessions needed)
   if (state._compareMode !== 'search') {
     const sessionIds = [];
     for (let i = 0; i < n; i++) {
@@ -284,7 +284,7 @@ async function _buildCompareUI() {
     _mobileNewBtn.style.display = 'none';
   }
 
-  // 4. 保存 toolbar indicator display states before hiding
+  // 4. Save toolbar indicator display states before hiding
   const indicatorIds = ['overflow-tts-btn', 'overflow-attach-btn', 'overflow-rag-btn', 'overflow-research-btn', 'overflow-doc-btn', 'rag-indicator-btn', 'research-toggle-btn'];
   state._savedIndicatorDisplay = {};
   indicatorIds.forEach(id => {
@@ -292,7 +292,7 @@ async function _buildCompareUI() {
     if (el) state._savedIndicatorDisplay[id] = el.style.display;
   });
 
-  // 5. 保存 current mode and 随机种子 the toolbar for this compare type.
+  // 5. Save current mode and seed the toolbar for this compare type.
   const _toggleState = Storage.loadToggleState();
   state._savedMode = _toggleState.mode || 'chat';
   const _targetMode = (state._compareMode === 'agent') ? 'agent' : 'chat';
@@ -331,7 +331,7 @@ async function _buildCompareUI() {
     if (resBtn) { resBtn.style.display = ''; resBtn.classList.add('active'); }
   }
 
-  // 7. Hide existing chat 容器 children (preserves 事件监听s)
+  // 7. Hide existing chat container children (preserves event listeners)
   const container = document.getElementById('chat-container');
   state._compareElements = [];
   if (_modeCleanup) state._compareElements.push(_modeCleanup);
@@ -376,7 +376,7 @@ async function _buildCompareUI() {
   checkBtn.addEventListener('click', () => _checkUnprobed());
   headerActions.appendChild(checkBtn);
 
-  // 检查 button is dynamic: only visible when at least one selected model
+  // Check button is dynamic: only visible when at least one selected model
   // hasn't been probed yet. Show right after add/change, hide after success.
   window._updateCheckBtnState = function() {
     const btn = document.getElementById('compare-check-btn');
@@ -512,7 +512,7 @@ async function _buildCompareUI() {
 
   if (state._blindMode && n > 1) shufflePanePositions();
 
-  // 11. Move chat input bar to the bottom of the 容器
+  // 11. Move chat input bar to the bottom of the container
   const inputBar = document.querySelector('.chat-input-bar');
   if (inputBar) {
     inputBar.style.display = '';
@@ -527,7 +527,7 @@ async function _buildCompareUI() {
 
   // Eval-prompts picker — sits inside the message box at top-right (where
   // model-picker normally lives). Model-picker is irrelevant during compare,
-  // so hide it and restore on deactivate via the wrap's _清理.
+  // so hide it and restore on deactivate via the wrap's _cleanup.
   _setupEvalPicker();
 
   // 12. Hide tool buttons that don't apply during compare
@@ -574,7 +574,7 @@ function _setSendBtn(mode) {
  * Called by app.js submit guard.
  */
 function handleCompareSubmit(e) {
-  // If 流式传输, act as stop button
+  // If streaming, act as stop button
   if (state._streaming) {
     stopAll();
     return;
@@ -589,7 +589,7 @@ function handleCompareSubmit(e) {
   // textarea is empty again — programmatic clears don't fire `input` natively.
   input.dispatchEvent(new Event('input', { bubbles: true }));
   // Mobile: dismiss the on-screen keyboard after the prompt is sent so the
-  // user sees the 流式传输 output instead of the typing area. A plain blur()
+  // user sees the streaming output instead of the typing area. A plain blur()
   // is often ignored on Firefox mobile, so toggle readonly around it (and blur
   // the active element too) to reliably collapse the keyboard.
   // Mobile keyboard dismiss — use the SAME proven logic as the main chat send
@@ -646,7 +646,7 @@ async function _executeCompare(message) {
     const pane = document.querySelector('.compare-pane[data-pane="' + i + '"]');
     if (pane) {
       pane.classList.remove('winner', 'loser');
-      // Clear the previous round's Failed/Timeout 徽章 and the eval ✓/✗ grade.
+      // Clear the previous round's Failed/Timeout badge and the eval ✓/✗ grade.
       pane.querySelector('.pane-grade-badge')?.remove();
     }
     const fb = document.getElementById('cmp-badge-' + i);
@@ -663,12 +663,12 @@ async function _executeCompare(message) {
   state._streaming = true;
   state._lastPrompt = message;
   _setSendBtn('stop');
-  // Disable header buttons during 流式传输
+  // Disable header buttons during streaming
   document.querySelectorAll('#compare-shuffle-btn, #compare-check-btn, #compare-add-btn').forEach(b => {
     b.disabled = true; b.style.opacity = '0.25'; b.style.pointerEvents = 'none';
   });
 
-  // ── Search mode: direct API 调用s, no SSE 流ing ──
+  // ── Search mode: direct API calls, no SSE streaming ──
   if (state._compareMode === 'search') {
     try {
       const n = state._selectedModels.length;
@@ -677,7 +677,7 @@ async function _executeCompare(message) {
       const voteBar = document.getElementById('compare-vote-bar');
       if (voteBar) voteBar.innerHTML = '';
 
-      // 添加 user query + 加载指示器 to each pane
+      // Add user query + spinner to each pane
       for (let i = 0; i < n; i++) {
         const hist = document.getElementById('cmp-history-' + i);
         if (!hist) continue;
@@ -731,7 +731,7 @@ async function _executeCompare(message) {
           const pane = panes[i];
           if (pane) pane.style.opacity = '1';
           results.push(await _searchOne(state._selectedModels[i], i));
-          // 渲染 this result immediately
+          // Render this result immediately
           const { idx, data } = results[results.length - 1];
           const hist = document.getElementById('cmp-history-' + idx);
           if (hist) {
@@ -782,7 +782,7 @@ async function _executeCompare(message) {
         // Reset opacity
         panes.forEach(p => { p.style.opacity = ''; });
       }
-      // 渲染 results into each pane
+      // Render results into each pane
       for (const { idx, data } of results) {
         const hist = document.getElementById('cmp-history-' + idx);
         if (!hist) continue;
@@ -799,7 +799,7 @@ async function _executeCompare(message) {
           aiBody.appendChild(_renderSearchResults(data));
         }
 
-        // Footer 指标
+        // Footer metrics
         const footer = document.createElement('div');
         footer.className = 'msg-footer';
         const span = document.createElement('span');
@@ -819,7 +819,7 @@ async function _executeCompare(message) {
 
       // ── Synthesis: send results to LLM for analysis (respects _parallel setting) ──
       if (state._searchSynthModels) {
-        // 构建 list of synthesis tasks
+        // Build list of synthesis tasks
         const synthTasks = [];
         for (let i = 0; i < results.length; i++) {
           const { idx, data } = results[i];
@@ -833,7 +833,7 @@ async function _executeCompare(message) {
           const hist = document.getElementById('cmp-history-' + idx);
           if (!hist) continue;
 
-          // 添加 synthesis message with 加载指示器
+          // Add synthesis message with spinner
           const synthMsg = document.createElement('div');
           synthMsg.className = 'msg msg-ai';
           synthMsg.innerHTML = '<div class="role">Analysis</div><div class="body"></div>';
@@ -848,7 +848,7 @@ async function _executeCompare(message) {
           // Auto-scroll to show the Analysis message
           hist.scrollTop = hist.scrollHeight;
 
-          // 构建 synthesis prompt
+          // Build synthesis prompt
           const resultsText = data.results.map((r, ri) =>
             `[${ri + 1}] ${r.title}\n${r.snippet || ''}\nURL: ${r.url}`
           ).join('\n\n');
@@ -858,7 +858,7 @@ async function _executeCompare(message) {
           synthTasks.push({ idx, modelToUse, synthBody, synthMsg, spinner, hist, synthPrompt });
         }
 
-        // 运行 synthesis streams (parallel or sequential based on _parallel flag)
+        // Run synthesis streams (parallel or sequential based on _parallel flag)
         const runSynthesis = async (task) => _runSynthForPane(task.modelToUse, task.synthPrompt, task.synthBody, task.spinner, task.hist);
 
         if (state._parallel) {
@@ -895,7 +895,7 @@ async function _executeCompare(message) {
       }
     }
 
-    // ── 添加 user + AI bubbles to each pane ──
+    // ── Add user + AI bubbles to each pane ──
     const aiElements = [];
     for (let i = 0; i < n; i++) {
       const hist = document.getElementById('cmp-history-' + i);
@@ -926,7 +926,7 @@ async function _executeCompare(message) {
       aiElements.push(aiMsg);
     }
 
-    // ── Auto-ext结束时间out ──
+    // ── Auto-extend timeout ──
     const researchChk = document.getElementById('research-toggle');
     const webChkT = document.getElementById('web-toggle');
     const noTimeLimit = state._compareMode === 'research' || (researchChk && researchChk.checked);
@@ -965,19 +965,19 @@ async function _executeCompare(message) {
     state._abortControllers = new Array(n).fill(null);
 
     if (state._parallel) {
-      // 运行 all panes at once
+      // Run all panes at once
       await Promise.all(state._paneSessionIds.map((sid, i) =>
         streamToPane(i, sid, message, aiElements[i], { searchContext: sharedSearchContext, timeout: runTimeout })
       ));
     } else {
-      // 运行 one pane at a time (sequential) — active pane full opacity, others dimmed
+      // Run one pane at a time (sequential) — active pane full opacity, others dimmed
       const allPanes = document.querySelectorAll('.compare-pane');
       allPanes.forEach(p => { p.style.transition = 'opacity 0.4s ease'; });
       // Dim all except first
       allPanes.forEach((p, idx) => { p.style.opacity = idx === 0 ? '1' : '0.35'; });
 
       for (let i = 0; i < state._paneSessionIds.length; i++) {
-        // 更新 加载指示器
+        // Update spinner
         if (aiElements[i] && aiElements[i]._spinner) {
           aiElements[i]._spinner.updateLabel('Processing...');
         }
@@ -1017,7 +1017,7 @@ async function _executeCompare(message) {
 // showModelSelector imported from ./selector.js
 
 // ────────────────────────────────────────────────────────────────────────────
-// ── 清理Results / removeOverlays ──
+// ── cleanupResults / removeOverlays ──
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -1025,7 +1025,7 @@ async function _executeCompare(message) {
  * response + metrics + grade) and copy it to the clipboard. Lets users save
  * or share a side-by-side at a glance.
  */
-// 构建 the comparison markdown string. Shared by all export paths.
+// Build the comparison markdown string. Shared by all export paths.
 function _buildComparisonMarkdown() {
   const grid = document.querySelector('.compare-grid');
   if (!grid) return null;
@@ -1098,7 +1098,7 @@ async function _exportCopyMarkdown(_btn) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(md);
     } else {
-      // Avoid the focus-stealing textarea 回退 when the modern API
+      // Avoid the focus-stealing textarea fallback when the modern API
       // is available — that path briefly flashes the page as the
       // textarea is added/focused/removed.
       const ta = document.createElement('textarea');
@@ -1131,8 +1131,8 @@ function _exportDownloadMarkdown() {
 function _exportPrint() {
   const md = _buildComparisonMarkdown();
   if (!md) return;
-  // 渲染 the markdown as a quick HTML view in a new window and trigger
-  // the system print dialog — user can pick "保存 as PDF" from there.
+  // Render the markdown as a quick HTML view in a new window and trigger
+  // the system print dialog — user can pick "Save as PDF" from there.
   const w = window.open('', '_blank');
   if (!w) return;
   try { w.opener = null; } catch (_) {}
@@ -1320,7 +1320,7 @@ function _setupEvalPicker() {
 
   // Expected-answer chip — placed above the chat-input-bar (outside it), so
   // it floats over the compare grid right before the message box. Shows when
-  // a graded prompt is picked so the eval-runner can 验证 模型输出.
+  // a graded prompt is picked so the eval-runner can verify model output.
   const hintChip = document.createElement('div');
   hintChip.className = 'cmp-eval-expected hidden';
   hintChip.id = 'cmp-eval-expected';
@@ -1356,7 +1356,7 @@ function _setupEvalPicker() {
   // when starting fresh). Reappears when cleared. The expected-answer
   // chip stays put across sends — clearing it on every empty-textarea
   // tick wiped state._expectedAnswer before grading could read it, so
-  // pane ✓/✗ 徽章s never appeared. The chip is only cleared via its
+  // pane ✓/✗ badges never appeared. The chip is only cleared via its
   // own dismiss button (or when the user picks a new eval).
   const ta = document.getElementById('message');
   const _syncEvalVisibility = () => {
@@ -1367,7 +1367,7 @@ function _setupEvalPicker() {
   if (ta) ta.addEventListener('input', _syncEvalVisibility);
   _syncEvalVisibility();
 
-  // Stash 清理 so 清理Results() can detach the doc listener and
+  // Stash cleanup so cleanupResults() can detach the doc listener and
   // restore the model-picker when compare deactivates.
   wrap._cleanup = () => {
     document.removeEventListener('click', _onDocClick);
@@ -1380,7 +1380,7 @@ function _setupEvalPicker() {
 
 /** Remove compare UI elements and restore original view. */
 function cleanupResults() {
-  // 移除 all compare elements
+  // Remove all compare elements
   state._compareElements.forEach(el => {
     if (el._cleanup) el._cleanup();
     if (el._cleanupInput) el._cleanupInput();
@@ -1388,7 +1388,7 @@ function cleanupResults() {
   });
   state._compareElements = [];
 
-  // 移除 any stray compare/probe overlays
+  // Remove any stray compare/probe overlays
   document.querySelectorAll('.compare-probe-overlay').forEach(el => el.remove());
 
   // Restore sidebar
@@ -1509,7 +1509,7 @@ async function showShufflePoolEditor() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// ── 注册 cross-module callbacks ──
+// ── Register cross-module callbacks ──
 // ────────────────────────────────────────────────────────────────────────────
 
 registerCompareActions({ stopAll, resetCompare });

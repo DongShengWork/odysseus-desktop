@@ -1,13 +1,13 @@
-// Per-后端 × per-model install recipes for the Dependencies tab.
+// Per-backend × per-model install recipes for the Dependencies tab.
 //
-// Each entry says: when you're about to serve `model` on `后端`, here's
+// Each entry says: when you're about to serve `model` on `backend`, here's
 // the exact shell sequence to make the venv + install the right packages.
 // Entries are matched first-hit; put the more specific patterns ABOVE the
-// generic 回退 for that 后端.
+// generic fallback for that backend.
 
 // Recipes carry two variants per entry:
 //   variants.pip    → install into the configured venv via uv/pip
-//   variants.docker → pull the official 容器 镜像
+//   variants.docker → pull the official container image
 //
 // The renderer prepends a `source <venv>/bin/activate` for the pip variant
 // (env_prefix handles activation for Run). The docker variant skips the
@@ -15,7 +15,7 @@
 
 const _RECIPES = [
   // ── vllm ──────────────────────────────────────────────────────────────
-  // MiniMax M2/M2.7 — same as the generic vllm install/镜像 for now;
+  // MiniMax M2/M2.7 — same as the generic vllm install/image for now;
   // kept as its own entry so future model-specific patches land in one
   // obvious place without touching the catch-all.
   {
@@ -27,7 +27,7 @@ const _RECIPES = [
       docker: { commands: ['docker pull vllm/vllm-openai:latest'] },
     },
   },
-  // Generic vllm 回退.
+  // Generic vllm fallback.
   {
     backend: 'vllm',
     label: 'Any vLLM model',
@@ -64,7 +64,7 @@ const _RECIPES = [
 export const RECIPE_VARIANTS = ['pip', 'docker'];
 export const RECIPE_DEFAULT_VARIANT = 'pip';
 
-// 获取 the commands array for a recipe + variant. Falls back to pip when
+// Get the commands array for a recipe + variant. Falls back to pip when
 // the requested variant isn't defined for the recipe.
 export function recipeCommands(recipe, variant) {
   if (!recipe) return [];
@@ -77,15 +77,15 @@ export function recipeCommands(recipe, variant) {
 // affordance.
 export const RECIPE_BACKENDS = new Set(['vllm', 'sglang', 'llama_cpp']);
 
-// All recipe entries for a given 后端, in catalog order. The first one
+// All recipe entries for a given backend, in catalog order. The first one
 // is the model-specific match (when present); the last is always the
-// generic 回退.
+// generic fallback.
 export function recipesForBackend(backend) {
   return _RECIPES.filter((r) => r.backend === backend);
 }
 
-// Pick the best recipe for a 后端 + model id. 返回 the catalog
-// 回退 when nothing more specific matches, or null if the 后端
+// Pick the best recipe for a backend + model id. Returns the catalog
+// fallback when nothing more specific matches, or null if the backend
 // isn't in the catalog at all.
 export function pickRecipe(backend, modelId) {
   const candidates = recipesForBackend(backend);

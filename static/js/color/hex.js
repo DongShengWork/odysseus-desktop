@@ -1,10 +1,10 @@
 // static/js/color/hex.js
 //
-// 将 CSS 十六进制颜色解析为 {r, g, b}。纯函数 — 无 DOM — 可跨模块复用，
-// 也可在 Node 环境下进行单元测试。
+// Parse a CSS hex color into {r, g, b}. Pure — no DOM — so it can be reused
+// across modules and unit-tested under node.
 
-// 接受 "#rgb"、"#rrggbb"（可带或不带前置 '#'）。对于非法的
-// 3 位或 6 位十六进制颜色，返回 null。
+// Accepts "#rgb", "#rrggbb" (with or without the leading '#'). Returns null
+// for anything that isn't a valid 3- or 6-digit hex color.
 export function hexToRgb(hex) {
   let h = String(hex || '').trim().replace(/^#/, '');
   if (h.length === 3) h = h.split('').map((c) => c + c).join('');

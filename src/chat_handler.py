@@ -1,5 +1,5 @@
 # src/chat_handler.py
-"""聊天端点操作处理器。"""
+"""Handler for chat endpoint operations."""
 import os
 import asyncio
 import logging
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChatHandler:
-    """处理流式和非流式端点的聊天操作。"""
+    """Handles chat operations for both streaming and non-streaming endpoints."""
 
     def __init__(
         self,
@@ -53,7 +53,7 @@ class ChatHandler:
     # ------------------------------------------------------------------
 
     def validate_and_extract_preset(self, preset_id: Optional[str]) -> tuple:
-        """返回 (temperature, max_tokens, preset_system_prompt, character_name)。"""
+        """Returns (temperature, max_tokens, preset_system_prompt, character_name)."""
         if preset_id and preset_id not in self.preset_manager.presets:
             raise HTTPException(400, f"Invalid preset_id: {preset_id}")
 
@@ -85,11 +85,11 @@ class ChatHandler:
         return temperature, max_tokens, preset_system_prompt, character_name
 
     def enhance_message_if_needed(self, message: str) -> str:
-        """CoT 增强已禁用 — 现代模型原生推理。"""
+        """CoT enhancement disabled — modern models reason natively."""
         return message
 
     # ------------------------------------------------------------------
-    # 预处理 — /api/chat 和 /api/chat_stream 共享
+    # Preprocessing — shared between /api/chat and /api/chat_stream
     # ------------------------------------------------------------------
 
     async def preprocess_message(
@@ -101,18 +101,18 @@ class ChatHandler:
         allow_tool_preprocessing: bool = True,
     ) -> tuple:
         """
-        两个聊天端点的通用预处理。
+        Common preprocessing for both chat endpoints.
 
-        返回 (enhanced_message, user_content, text_for_context, youtube_transcripts, attachment_meta)
+        Returns (enhanced_message, user_content, text_for_context, youtube_transcripts, attachment_meta)
 
-        如果提供 `auto_opened_docs`，服务端文档自动创建
-        （例如来自附加的可填写 PDF）会追加描述新文档的条目，
-        以便调用方可以在流式传输之前向前端宣告。
+        If `auto_opened_docs` is provided, server-side document auto-creation
+        (e.g. from an attached fillable PDF) appends entries describing the
+        new doc so the caller can announce it to the frontend before streaming.
         """
         enhanced_message = message
         attachment_meta: List[Dict[str, Any]] = []
 
-        # 提取 URLs and process YouTube transcripts
+        # Extract URLs and process YouTube transcripts
         urls = extract_urls(enhanced_message) if allow_tool_preprocessing else []
         youtube_transcripts: List[str] = []
 
@@ -124,13 +124,13 @@ class ChatHandler:
                     continue
                 has_youtube = True
                 logger.info(f"Processing YouTube URL: {url}")
-                # 获取 transcript and comments in parallel
+                # Fetch transcript and comments in parallel
                 transcript_task = extract_transcript_async(url, video_id)
                 comments_task = fetch_youtube_comments(video_id)
                 transcript_data, comments_data = await asyncio.gather(
                     transcript_task, comments_task
                 )
-                # 提取 title/channel from comments metadata
+                # Extract title/channel from comments metadata
                 title = comments_data.get("title", "")
                 channel = comments_data.get("channel", "")
                 youtube_transcripts.append(
@@ -140,11 +140,11 @@ class ChatHandler:
                 if comments_ctx:
                     youtube_transcripts.append(comments_ctx)
 
-        # 注入 instruction prompt so the LLM gives a structured breakdown
+        # Inject instruction prompt so the LLM gives a structured breakdown
         if has_youtube:
             youtube_transcripts.insert(0, YOUTUBE_INSTRUCTION_PROMPT)
 
-        # 解析 uploads once with the session owner. Attachment IDs are
+        # Resolve uploads once with the session owner. Attachment IDs are
         # bearer-like references; never trust them without an owner check.
         files_by_id: Dict[str, Dict] = {}
         owner = getattr(sess, "owner", None)
@@ -167,8 +167,8 @@ class ChatHandler:
                         "height": fi.get("height"),
                     })
 
-        # Analyze 镜像s only when attachment preprocessing is actually
-        # allowed. The vision capability check can probe local 模型端点s,
+        # Analyze images only when attachment preprocessing is actually
+        # allowed. The vision capability check can probe local model endpoints,
         # so guide-only/no-tools turns must not reach it.
         vision_enabled = False
         main_is_vision = False
@@ -190,7 +190,7 @@ class ChatHandler:
                     file_info["name"], file_info.get("mime", "")
                 ):
                     if main_is_vision:
-                        # Main model can see 镜像s — just note it, 镜像 is passed via build_user_content.
+                        # Main model can see images — just note it, image is passed via build_user_content.
                         enhanced_message = f"{enhanced_message}\n\n[Image attached: {file_info['name']}]"
                         _m = meta_by_id.get(att_id)
                         if _m is not None:
@@ -216,7 +216,7 @@ class ChatHandler:
                         # Main model is text-only — use VL model for description.
                         # Prefer the cached/user-edited text in UPLOAD_DIR/.vision/{id}.txt
                         # so a manual correction (via the chat attachment dropdown's
-                        # editable textarea) overrides what the 视觉模型 would say.
+                        # editable textarea) overrides what the vision model would say.
                         _vcache = os.path.join(UPLOAD_DIR, ".vision", att_id + ".txt")
                         vl_desc = None
                         vl_model = get_setting("vision_model", "") or ""
@@ -241,7 +241,7 @@ class ChatHandler:
                                     pass
                         enhanced_message = f"{enhanced_message}\n\n[Image: {file_info['name']}]\n{vl_desc}"
                         # Surface the description to the client live so it renders as a
-                        # collapsible "镜像 description" on the user bubble (not just
+                        # collapsible "image description" on the user bubble (not just
                         # after a refresh that re-parses the stored message).
                         _m = meta_by_id.get(att_id)
                         if _m is not None:
@@ -256,7 +256,7 @@ class ChatHandler:
             resolved_uploads=files_by_id,
         )
 
-        # Strip 镜像_url entries for text-only models (VL description is already in the text)
+        # Strip image_url entries for text-only models (VL description is already in the text)
         if not vision_enabled and isinstance(user_content, list):
             text_parts = [
                 item.get("text", "") for item in user_content
@@ -270,7 +270,7 @@ class ChatHandler:
             ]
             user_content = "\n".join(text_parts).strip() if text_parts else enhanced_message
 
-        # 提取 text portion for naming / context
+        # Extract text portion for naming / context
         if isinstance(user_content, list):
             text_for_context = next(
                 (item["text"] for item in user_content if item.get("type") == "text"),
@@ -295,7 +295,7 @@ class ChatHandler:
             session.history = session.history[-MAX_CONTEXT_MESSAGES:]
 
     async def handle_memory_command(self, session, message: str) -> Optional[str]:
-        """处理内联记忆命令。返回响应字符串或 None。"""
+        """Process inline memory commands. Returns response string or None."""
         is_memory_cmd, memory_text = self.memory_manager.process_inline_memory_command(
             message
         )

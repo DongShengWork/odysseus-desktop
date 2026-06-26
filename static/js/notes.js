@@ -19,8 +19,8 @@ let _editingId = null;
 let _selectedIds = new Set();
 let _activeLabel = null;
 let _activeFilter = null; // null | 'default' | 'reminders' | 'no-reminders'
-// Cycle order for the Reminders chip: each click on it advances 提醒s →
-// null → no-提醒s → null → 提醒s → ... This var tracks which non-null
+// Cycle order for the Reminders chip: each click on it advances reminders →
+// null → no-reminders → null → reminders → ... This var tracks which non-null
 // state the next click should land on after passing through null.
 let _reminderChipNext = 'reminders';
 let _searchQuery = '';
@@ -37,14 +37,14 @@ let _notesKeydownHandler = null;
 let _notesSelectEscHandler = null;
 const REMINDER_FIRED_KEY = 'odysseus-notes-reminder-fired';
 // Note IDs already shown with the entry-glow once. Re-set when the user
-// reschedules the 提醒 so the new firing glows again on next open.
+// reschedules the reminder so the new firing glows again on next open.
 const REMINDER_GLOWED_KEY = 'odysseus-notes-reminder-glowed';
-// IDs of notes whose 提醒s fired while the notes panel was closed. On the
+// IDs of notes whose reminders fired while the notes panel was closed. On the
 // next open of the panel we briefly glow those cards so the user can spot them.
 const REMINDER_PENDING_HIGHLIGHT_KEY = 'odysseus-notes-reminder-pending-highlight';
 const REMINDER_ACTIVE_HIGHLIGHT_KEY = 'odysseus-notes-reminder-active-highlight';
 // Timestamp of the last time the user opened the notes panel — used to gate
-// the rail "fired" 徽章 so old 提醒s don't re-fire on every page reload.
+// the rail "fired" badge so old reminders don't re-fire on every page reload.
 const REMINDER_DISMISSED_AT_KEY = 'odysseus-notes-reminder-dismissed-at';
 const NOTES_FIRST_OPEN_HINT_KEY = 'odysseus-notes-first-open-hint-v1';
 
@@ -254,7 +254,7 @@ function _setReminderCardGlow(noteId, on = true) {
     card.classList.toggle('note-card-reminder-fired-sticky', on);
   });
 }
-// A note has an active 提醒 when its due time has passed and the user
+// A note has an active reminder when its due time has passed and the user
 // hasn't archived or fully completed it. Used for both sorting (bumped above
 // the rest of the unpinned section) and the entry-glow flush.
 function _hasActiveReminder(n) {
@@ -274,14 +274,14 @@ function _queuePendingHighlight(noteId) {
 }
 function _flushPendingHighlights() {
   // Fresh firings (queued by the background loop while the panel was closed)
-  // glow unconditionally — a 通知 just told the user something
+  // glow unconditionally — a notification just told the user something
   // happened, so we always point at the note even if it was glowed before.
   const queued = _loadPendingHighlights();
   const glowed = _loadGlowedReminders();
   const toGlow = new Set(queued);
   // For notes that are merely overdue at open time (no fresh firing event),
   // only glow the ones we haven't already shown — otherwise reopening the
-  // panel keeps lighting up old 提醒s forever.
+  // panel keeps lighting up old reminders forever.
   for (const n of _notes) {
     if (!_hasActiveReminder(n) || !_hasTimeComponent(n.due_date)) continue;
     if (queued.has(n.id) || !glowed.has(n.id)) toGlow.add(n.id);
@@ -321,7 +321,7 @@ const COLORS = [
 const _CUSTOM_GRADIENT = 'conic-gradient(from 0deg, #e06c75, #d19a66, #e5c07b, #98c379, #61afef, #c678dd, #e06c75)';
 
 // A note's color is one of: '' (none), a preset name (red/orange/…), or a
-// sentinel "bg:<镜像-url>" for a custom background 镜像 uploaded by the user.
+// sentinel "bg:<image-url>" for a custom background image uploaded by the user.
 function _isBgImage(c) { return typeof c === 'string' && c.startsWith('bg:'); }
 function _bgImageUrl(c) { return _isBgImage(c) ? c.slice(3) : ''; }
 
@@ -338,14 +338,14 @@ function _dotIsActive(value, noteColor) {
   return value === (noteColor || '');
 }
 
-// Inline style for a note card/form when color is a custom bg 镜像.
+// Inline style for a note card/form when color is a custom bg image.
 function _customColorStyle(c) {
   if (!_isBgImage(c)) return '';
   const url = _bgImageUrl(c);
   return `background-image: linear-gradient(color-mix(in srgb, var(--panel) 60%, transparent), color-mix(in srgb, var(--panel) 60%, transparent)), url('${url}'); background-size: cover; background-position: center; border-color: color-mix(in srgb, var(--fg) 25%, var(--border));`;
 }
 
-// Open a file picker, upload the chosen 镜像, and resolve with the URL.
+// Open a file picker, upload the chosen image, and resolve with the URL.
 function _pickCustomBgImage() {
   return new Promise(resolve => {
     const input = document.createElement('input');
@@ -368,7 +368,7 @@ function _pickCustomBgImage() {
         finish(`${API_BASE}/api/upload/${fileId}`);
       } catch { finish(null); }
     });
-    // Best-effort 清理 if user dismisses the dialog.
+    // Best-effort cleanup if user dismisses the dialog.
     setTimeout(() => { if (!done && !input.files?.length) finish(null); }, 30000);
     input.click();
   });
@@ -376,7 +376,7 @@ function _pickCustomBgImage() {
 
 const COLOR_HEX = {
   '':       'var(--border)',
-  // Pale/pastel palette — matches the 日历事件 color picker.
+  // Pale/pastel palette — matches the calendar event color picker.
   red:      '#f0b5ba',
   orange:   '#e8ccb2',
   yellow:   '#f2dfbd',
@@ -445,7 +445,7 @@ async function _saveNote(note) {
 
 async function _deleteNoteApi(id) {
   // v2 review — used to swallow 4xx/5xx silently. Throw so callers can
-  // distinguish success vs failure and 提示条 accordingly.
+  // distinguish success vs failure and toast accordingly.
   const r = await fetch(`${API_BASE}/api/notes/${id}`, { method: 'DELETE', credentials: 'same-origin' });
   if (!r.ok) throw new Error('HTTP ' + r.status);
 }
@@ -651,7 +651,7 @@ function _nextWeekDate() {
   return t;
 }
 function _toLocalDatetimeStr(d) {
-  // 格式化 as YYYY-MM-DDTHH:MM (local, no TZ)
+  // Format as YYYY-MM-DDTHH:MM (local, no TZ)
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
@@ -669,7 +669,7 @@ function _formatReminderTag(dateStr) {
   const dateLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return `${dateLabel}, ${time}`;
 }
-// 构建 a human label for a date's nth-weekday-of-month, e.g. "2nd Tuesday"
+// Build a human label for a date's nth-weekday-of-month, e.g. "2nd Tuesday"
 const _ORDINALS = ['1st', '2nd', '3rd', '4th', '5th'];
 const _DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 function _nthWeekdayLabel(d) {
@@ -699,10 +699,10 @@ function _lastWeekdayOfMonth(year, month, weekday) {
 }
 
 // Snap a chosen datetime forward to the next slot matching a normalized
-// 重复 pattern (preserving time-of-day, strictly in the future).
+// recurrence pattern (preserving time-of-day, strictly in the future).
 // Anchors to the user's chosen date when it's in the future (so picking a
-// 重复 on a far-future date doesn't drag it back to today); otherwise
-// anchors to "now". 返回 null for daily/yearly/none.
+// recurrence on a far-future date doesn't drag it back to today); otherwise
+// anchors to "now". Returns null for daily/yearly/none.
 function _snapToRepeat(currentDate, normRepeat) {
   const hh = currentDate.getHours();
   const mm = currentDate.getMinutes();
@@ -753,7 +753,7 @@ function _snapToRepeat(currentDate, normRepeat) {
   return null;
 }
 
-// 渲染 a repeat value as a human-readable label.
+// Render a repeat value as a human-readable label.
 // originalDate is required only to interpret legacy bare values ("weekly", "monthly", ...).
 // All call sites pass it; missing it would silently misinterpret legacy values.
 function _formatRepeatLabel(repeat, originalDate) {
@@ -933,13 +933,13 @@ function _checkReminders() {
     }
   }
   if (changed) _saveFiredReminders(fired);
-  // Always refresh 徽章 — fired state may have changed visually without note mutation
+  // Always refresh badge — fired state may have changed visually without note mutation
   _updateRailBadge();
 }
 
 function _fireReminder(note) {
   const title = note.title || 'Note reminder';
-  // Include the verbatim note content so the email/通知 actually
+  // Include the verbatim note content so the email/notification actually
   // shows what to do, not just a count. Cap the per-item lines (8 max) and
   // total length so the body stays inbox-friendly.
   let rawBody;
@@ -961,7 +961,7 @@ function _fireReminder(note) {
 
   // Ask the server to dispatch according to user settings. The server may
   // return an LLM-written synthesis line and/or send an email. We still show
-  // a local browser 通知 so the user gets immediate feedback even if
+  // a local browser notification so the user gets immediate feedback even if
   // the server path is disabled or slow.
   const showLocal = (body) => {
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -974,7 +974,7 @@ function _fireReminder(note) {
   };
 
   // Fire-and-forget server dispatch. If synthesis comes back quickly enough,
-  // use it as the 通知 body; otherwise the local 通知 has
+  // use it as the notification body; otherwise the local notification has
   // already shown with the raw body.
   let shown = false;
   const timer = setTimeout(() => { if (!shown) { shown = true; showLocal(rawBody); } }, 1500);
@@ -1048,9 +1048,9 @@ export function dismissFiredReminderDot() {
 
 function _updateRailBadge() {
   const fired = _countFiredReminders();
-  // Rail (mini sidebar) — only show the count when 提醒s have ACTUALLY
+  // Rail (mini sidebar) — only show the count when reminders have ACTUALLY
   // fired since the last dismissal (i.e. you haven't opened notes yet).
-  // Showing every overdue note forever made the 徽章 feel permanent.
+  // Showing every overdue note forever made the badge feel permanent.
   const railBtn = document.getElementById('rail-notes');
   if (railBtn) {
     let badge = railBtn.querySelector('.rail-notes-badge');
@@ -1080,7 +1080,7 @@ function _updateRailBadge() {
       dot.remove();
     }
   }
-  // Individual note cards — pulse ones with fired 提醒s
+  // Individual note cards — pulse ones with fired reminders
   document.querySelectorAll('.note-card').forEach(card => {
     const id = card.dataset.noteId;
     const note = _notes.find(n => n.id === id);
@@ -1098,8 +1098,8 @@ function _updateRailBadge() {
 }
 
 export async function refreshDueBadge(opts = {}) {
-  // Usually lightweight, but callers that just created a note 提醒 can
-  // force a refresh so the background 提醒 loop sees it immediately.
+  // Usually lightweight, but callers that just created a note reminder can
+  // force a refresh so the background reminder loop sees it immediately.
   if (opts.force || _notes.length === 0) {
     try {
       const wasArchived = _showingArchived;
@@ -1147,7 +1147,7 @@ export function openPanel() {
   const btn = document.getElementById('tool-notes-btn');
   if (btn) btn.classList.add('active');
 
-  // 创建 panel
+  // Create panel
   const pane = document.createElement('div');
   pane.id = 'notes-pane';
   pane.className = 'notes-pane';
@@ -1185,7 +1185,7 @@ export function openPanel() {
   `;
 
   // On mobile open as a full-screen bottom sheet (slide up), not the desktop
-  // side panel. 设置 inline so it wins over the base .notes-pane rule regardless
+  // side panel. Set inline so it wins over the base .notes-pane rule regardless
   // of cascade specifics (the CSS @media override wasn't reliably applying,
   // which left it as a side panel squeezing the chat).
   if (window.innerWidth <= 768) {
@@ -1333,7 +1333,7 @@ export function openPanel() {
     const ids = [..._selectedIds];
     if (!ids.length) return;
     if (uiModule && uiModule.styledConfirm) {
-      const ok = await uiModule.styledConfirm(`Delete ${ids.length} note${ids.length === 1 ? '' : 's'}?`, { confirmText: '删除', danger: true });
+      const ok = await uiModule.styledConfirm(`Delete ${ids.length} note${ids.length === 1 ? '' : 's'}?`, { confirmText: 'Delete', danger: true });
       if (!ok) return;
     }
     await Promise.all(ids.map(id => _deleteNoteApi(id).catch(() => {})));
@@ -1394,10 +1394,10 @@ export function openPanel() {
   };
   document.addEventListener('keydown', _notesKeydownHandler);
 
-  // 加载 — show skeleton immediately, then fetch
+  // Load — show skeleton immediately, then fetch
   _renderLoadingSkeleton();
   // Defer the highlight flush to the next frame so it runs *after* the cards
-  // are 提交ted to the DOM (and any FLIP animations have settled), giving
+  // are committed to the DOM (and any FLIP animations have settled), giving
   // the querySelector lookups inside something to find.
   _fetchNotes().then(() => {
     _renderNotes();
@@ -1430,7 +1430,7 @@ function _enterSelectMode() {
   const bar = document.getElementById('notes-bulk-bar');
   const btn = document.getElementById('notes-select-btn');
   if (bar) bar.classList.remove('hidden');
-  if (btn) { btn.classList.add('active'); btn.textContent = '取消'; }
+  if (btn) { btn.classList.add('active'); btn.textContent = 'Cancel'; }
   _renderNotes();
   _updateBulkBar();
 }
@@ -1462,7 +1462,7 @@ function _updateBulkBar() {
   if (pane) pane.classList.toggle('notes-select-mode', count > 0);
 }
 
-// A note's label field may hold multiple space-separated tags. 分割 + dedupe.
+// A note's label field may hold multiple space-separated tags. Split + dedupe.
 function _noteTags(n) {
   const tags = [];
   if (n?.label) tags.push(...n.label.trim().split(/\s+/).filter(Boolean));
@@ -1487,7 +1487,7 @@ async function _clearPastReminders() {
     return;
   }
   const ok = uiModule?.styledConfirm
-    ? await uiModule.styledConfirm(`Delete ${targets.length} past reminder${targets.length === 1 ? '' : 's'}?`, { confirmText: '删除', danger: true })
+    ? await uiModule.styledConfirm(`Delete ${targets.length} past reminder${targets.length === 1 ? '' : 's'}?`, { confirmText: 'Delete', danger: true })
     : confirm(`Delete ${targets.length} past reminder${targets.length === 1 ? '' : 's'}?`);
   if (!ok) return;
   await Promise.all(targets.map(n => _deleteNoteApi(n.id).catch(() => {})));
@@ -1502,7 +1502,7 @@ function _renderLabels(root = document) {
   const labels = new Set();
   for (const n of _notes) for (const t of _visibleNoteTags(n)) labels.add(t);
   const sortedLabels = [...labels].sort();
-  // Count active 提醒s (not archived, has datetime due_date)
+  // Count active reminders (not archived, has datetime due_date)
   const reminderCount = _notes.filter(n => !n.archived && n.due_date && _hasTimeComponent(n.due_date)).length;
   const pastReminderCount = _notes.filter(n => !n.archived && _isPastReminder(n)).length;
   const defaultCount = _notes.filter(n => !n.archived && _visibleNoteTags(n).length === 0).length;
@@ -1556,7 +1556,7 @@ function _renderLabels(root = document) {
         _activeFilter = (_activeFilter === 'default') ? null : 'default';
       } else if (chip.dataset.action === 'reminders') {
         _activeLabel = null;
-        // Cycle: null → 提醒s → null → no-提醒s → null → 提醒s → ...
+        // Cycle: null → reminders → null → no-reminders → null → reminders → ...
         if (_activeFilter === null) {
           _activeFilter = _reminderChipNext;
           _reminderChipNext = (_reminderChipNext === 'reminders') ? 'no-reminders' : 'reminders';
@@ -1611,7 +1611,7 @@ export function closePanel(direction) {
     Modals.unregister('notes-panel');
   }
 
-  // Drop the document keydown listener and the 30s 提醒 interval —
+  // Drop the document keydown listener and the 30s reminder interval —
   // both leaked across open/close cycles in the v2 review.
   if (_notesKeydownHandler) {
     document.removeEventListener('keydown', _notesKeydownHandler);
@@ -1668,7 +1668,7 @@ export function togglePanel() {
 
 export function isPanelOpen() { return _open; }
 
-// ---- 渲染 ----
+// ---- Render ----
 
 // FLIP animation — capture positions before render, animate back after
 function _captureCardPositions() {
@@ -1739,7 +1739,7 @@ function _renderNotes() {
     });
   }
   const sorted = [...filtered].sort((a, b) => {
-    // In 提醒s view: sort by due date ascending (soonest first)
+    // In reminders view: sort by due date ascending (soonest first)
     if (_activeFilter === 'reminders') {
       const da = new Date(a.due_date || 0).getTime();
       const db = new Date(b.due_date || 0).getTime();
@@ -1751,7 +1751,7 @@ function _renderNotes() {
     }
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
-    // Active 提醒s (due date in the past, not done/archived) rank
+    // Active reminders (due date in the past, not done/archived) rank
     // immediately under the pinned block.
     const aActive = _hasActiveReminder(a);
     const bActive = _hasActiveReminder(b);
@@ -1815,7 +1815,7 @@ function _renderNotes() {
         contentHtml += `<div class="note-goal-desc">${_esc(preview)}</div>`;
       }
       contentHtml += '<div class="note-checklist-preview">';
-      // Show ALL items — the preview 容器 is scrollable (CSS caps
+      // Show ALL items — the preview container is scrollable (CSS caps
       // its max-height + overflow-y:auto), so there's no need to truncate.
       for (let i = 0; i < note.items.length; i++) {
         const item = note.items[i];
@@ -1914,7 +1914,7 @@ function _renderNotes() {
         <button class="note-card-action note-card-archive" data-note-id="${note.id}" title="Save (archive)">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         </button>
-        <button class="note-card-action note-card-delete" data-note-id="${note.id}" title="删除">
+        <button class="note-card-action note-card-delete" data-note-id="${note.id}" title="Delete">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
         <button class="note-card-action note-card-corner-menu" data-note-id="${note.id}" title="More" aria-label="More actions">
@@ -2004,7 +2004,7 @@ function _applyMasonry(body) {
   };
   recomputeFullRows();
   body.querySelectorAll('.note-card').forEach(recompute);
-  // Watch masonry participants — content can grow (镜像 load, todo edits,
+  // Watch masonry participants — content can grow (image load, todo edits,
   // quick-add/form expansion), and stale spans are what cause visual merging.
   if ('ResizeObserver' in window) {
     _masonryObserver = new ResizeObserver(entries => {
@@ -2202,7 +2202,7 @@ function _bindCardEvents(body) {
     });
   }
   // Mobile, non-select: tapping anywhere on the card body (not on an
-  // interactive child — buttons, pin, checkbox, color dot, 提醒 pill,
+  // interactive child — buttons, pin, checkbox, color dot, reminder pill,
   // agent tag, links) opens the fullscreen editor. Previously only the
   // title / content preview triggered edit, so padding + empty gutters were
   // dead zones that felt broken on mobile.
@@ -2336,7 +2336,7 @@ function _bindCardEvents(body) {
       const finish = () => {
         _renderNotes();
         _patchNote(id, { archived: true }).then(() => {
-          uiModule.showToast('Archived', { duration: 6000, action: '撤销', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+          uiModule.showToast('Archived', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
         }).catch(() => {
           _notes.splice(idx, 0, removed);
           _renderNotes();
@@ -2414,7 +2414,7 @@ function _bindCardEvents(body) {
         _pushUndo({ label: 'archive', run: undo });
         const _undoIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>';
         _patchNote(id, { archived: true }).then(() => {
-          uiModule.showToast('Archived', { duration: 6000, action: '撤销', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+          uiModule.showToast('Archived', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
         }).catch(() => {
           _notes.splice(curIdx, 0, removed);
           _renderNotes();
@@ -2446,7 +2446,7 @@ function _bindCardEvents(body) {
       });
     });
   });
-  // 删除 (optimistic)
+  // Delete (optimistic)
   body.querySelectorAll('.note-card-delete, .note-card-x').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2497,7 +2497,7 @@ function _bindCardEvents(body) {
     });
   });
 
-  // 移除 a single checklist item (hover X)
+  // Remove a single checklist item (hover X)
   body.querySelectorAll('.note-checkbox-rm').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2612,7 +2612,7 @@ function _bindCardEvents(body) {
     });
   }
   // Track which card we last swapped with so a single hover-over triggers
-  // one swap, not a 抖动 as the pointer keeps moving inside the same card.
+  // one swap, not a jitter as the pointer keeps moving inside the same card.
   let _lastSwapId = null;
   function _maybeSwap(dragging, clientX, clientY) {
     const target = document.elementFromPoint(clientX, clientY)?.closest('.note-card');
@@ -2758,9 +2758,9 @@ function _bindCardEvents(body) {
 
 // ── Draft autosave ──────────────────────────────────────────────────
 // While a note is open in the editor, its form is snapshotted to
-// localStorage on every change (防抖d). If the connection drops, the
-// tab closes, or the page reloads before 保存 is hit, reopening that note
-// restores the unsaved text. Drafts are cleared on an explicit 保存 or
+// localStorage on every change (debounced). If the connection drops, the
+// tab closes, or the page reloads before Save is hit, reopening that note
+// restores the unsaved text. Drafts are cleared on an explicit Save or
 // Cancel. Survives offline because it never touches the network.
 const _DRAFT_PREFIX = 'odysseus-note-draft-';
 function _draftKey(id) { return _DRAFT_PREFIX + (id || '__new__'); }
@@ -2814,7 +2814,7 @@ function _commitOpenInPlaceEditor() {
   if (_isDraftEmpty(d)) { form.querySelector('.note-form-cancel')?.click(); return; }
   form.querySelector('.note-form-save')?.click();
 }
-// 合并 a stored draft over a note so _buildForm renders the unsaved edits.
+// Merge a stored draft over a note so _buildForm renders the unsaved edits.
 function _applyDraftToNote(note, id) {
   const d = _loadDraft(id);
   if (_isDraftEmpty(d)) return { note, restored: false };
@@ -2825,7 +2825,7 @@ function _applyDraftToNote(note, id) {
   return { note: merged, restored: true };
 }
 
-// ---- 创建 / Edit Form ----
+// ---- Create / Edit Form ----
 
 function _buildForm(note = null) {
   const isEdit = note && note.id;
@@ -2847,7 +2847,7 @@ function _buildForm(note = null) {
       <input type="hidden" class="note-form-due" value="${note?.due_date || ''}" />
       <input type="hidden" class="note-form-repeat" value="${note?.repeat || 'none'}" />
     </div>
-    ${currentImageUrl && type !== 'draw' ? `<div class="note-form-image-wrap"><img class="note-form-image" src="${_esc(currentImageUrl)}" draggable="false" /><button class="note-form-image-rm" title="移除">&times;</button></div>` : ''}
+    ${currentImageUrl && type !== 'draw' ? `<div class="note-form-image-wrap"><img class="note-form-image" src="${_esc(currentImageUrl)}" draggable="false" /><button class="note-form-image-rm" title="Remove">&times;</button></div>` : ''}
     <div class="note-form-body">
       ${type === 'note'
         ? `<textarea class="note-form-content" placeholder="Take a note..." rows="4">${_esc(note?.content || '')}</textarea>`
@@ -2886,16 +2886,16 @@ function _buildForm(note = null) {
         <button type="button" class="note-form-text-btn note-form-archive-btn note-form-collapsible" title="Archive">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8"/><path d="M10 12h4"/></svg><span class="nft-label">Archive</span>
         </button>
-        <button type="button" class="note-form-text-btn note-form-delete-btn note-form-collapsible danger" title="删除">
+        <button type="button" class="note-form-text-btn note-form-delete-btn note-form-collapsible danger" title="Delete">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg><span class="nft-label">Delete</span>
         </button>
         ` : ''}
         <span class="note-form-actions-spacer"></span>
-        <button class="note-form-cancel note-form-text-btn note-form-collapsible" title="取消">
+        <button class="note-form-cancel note-form-text-btn note-form-collapsible" title="Cancel">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg><span class="nft-label">Cancel</span>
         </button>
-        <button class="note-form-save note-form-text-btn" title="${isEdit ? 'Update' : '保存'}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span class="nft-label">${isEdit ? 'Update' : '保存'}</span>
+        <button class="note-form-save note-form-text-btn" title="${isEdit ? 'Update' : 'Save'}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span class="nft-label">${isEdit ? 'Update' : 'Save'}</span>
         </button>
       </div>
     </div>
@@ -2918,7 +2918,7 @@ function _buildForm(note = null) {
   let _stashedGoalDesc = (type === 'goal') ? (note?.content || '') : null;
   let _stashedGoalItems = (type === 'goal' && Array.isArray(note?.items)) ? note.items.slice() : null;
 
-  // Drawing also stashes the saved 镜像 URL so it survives Note↔Draw flips.
+  // Drawing also stashes the saved image URL so it survives Note↔Draw flips.
   let _stashedDrawUrl = (type === 'draw') ? (_safeImgSrc(note?.image_url) || null) : null;
   const _refreshFormLayout = () => {
     const body = form.closest('.notes-pane-body');
@@ -2949,7 +2949,7 @@ function _buildForm(note = null) {
         const c = form.querySelector('.note-form-canvas');
         if (c) { try { _stashedDrawUrl = c.toDataURL('image/png'); } catch {} }
       }
-      // 渲染 the new mode's body and re-wire its inputs.
+      // Render the new mode's body and re-wire its inputs.
       if (newType === 'todo') {
         let nextItems;
         if (_stashedTodoItems && _stashedTodoItems.length) {
@@ -2999,13 +2999,13 @@ function _buildForm(note = null) {
       seg?.classList.toggle('is-todo', newType === 'todo');
       seg?.classList.toggle('is-draw', newType === 'draw');
       form.querySelectorAll('.note-form-type-pill').forEach(p => p.classList.toggle('active', p.dataset.type === newType));
-      // The standalone 镜像 preview (form-镜像-wrap) and the canvas would
-      // otherwise both show the same 镜像_url when editing a drawn note.
+      // The standalone image preview (form-image-wrap) and the canvas would
+      // otherwise both show the same image_url when editing a drawn note.
       // Hide it in draw mode, restore it when leaving draw mode.
       const imgWrap = form.querySelector('.note-form-image-wrap');
       if (imgWrap) imgWrap.style.display = (newType === 'draw') ? 'none' : '';
       // The background-color dots set the note card's bg — they make no sense
-      // for a drawn note (the canvas 镜像 IS the card content), so hide them.
+      // for a drawn note (the canvas image IS the card content), so hide them.
       const bgPicker = form.querySelector('.note-color-picker');
       if (bgPicker) bgPicker.style.display = (newType === 'draw') ? 'none' : '';
       if (form.closest('.notes-pane.notes-view-grid') && window.matchMedia('(max-width: 768px)').matches) {
@@ -3018,7 +3018,7 @@ function _buildForm(note = null) {
 
   // Slide a finger across the Note/Todo/Draw control to switch modes (mobile).
   // On touchmove we find the pill under the finger and click it — reusing the
-  // pill 点击处理器 above, so the body re-renders + content stashing all
+  // pill click handler above, so the body re-renders + content stashing all
   // work. Only fires when crossing into a *different* pill.
   const _typeSeg = form.querySelector('.note-form-type-seg');
   if (_typeSeg) {
@@ -3083,14 +3083,14 @@ function _buildForm(note = null) {
       _contentTa.style.height = Math.min(_contentTa.scrollHeight, max) + 'px';
     };
     _contentTa.addEventListener('input', _grow);
-    // Grow on open so existing content is fully visible. 运行 again after the
+    // Grow on open so existing content is fully visible. Run again after the
     // fullscreen overlay's open animation settles — measuring mid-animation
     // (the overlay starts scaled/transitioning) can under-size the box.
     setTimeout(_grow, 0);
     setTimeout(_grow, 360);
   }
 
-  // Reminder bell — opens 下拉菜单
+  // Reminder bell — opens dropdown menu
   const remindBtn = form.querySelector('.note-form-remind-btn');
   const dueInput = form.querySelector('.note-form-due');
   const repeatInput = form.querySelector('.note-form-repeat');
@@ -3106,7 +3106,7 @@ function _buildForm(note = null) {
     tagsEl.innerHTML = `<button class="note-reminder-tag" type="button" title="Edit reminder">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span>${_esc(label)}${_esc(repLabel)}</span>
-      <span class="note-reminder-tag-x" title="移除">×</span>
+      <span class="note-reminder-tag-x" title="Remove">×</span>
     </button>`;
     tagsEl.querySelector('.note-reminder-tag').addEventListener('click', (e) => {
       if (e.target.classList.contains('note-reminder-tag-x')) {
@@ -3137,7 +3137,7 @@ function _buildForm(note = null) {
     // 'weekly' | 'monthly' | 'monthly_nth'
     let subMode = null;
     // Temporary state for monthly_nth so user can click N then weekday (or vice versa)
-    // before 提交ting.
+    // before committing.
     let nthDraft = { n: 0, w: -1 };
 
     const DAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -3153,8 +3153,8 @@ function _buildForm(note = null) {
       menu.remove();
     }
 
-    // Like 提交, but first snaps dueInput.value forward to the next matching
-    // slot for the chosen 重复. Use for weekly/monthly variants where the
+    // Like commit, but first snaps dueInput.value forward to the next matching
+    // slot for the chosen recurrence. Use for weekly/monthly variants where the
     // current due date may not match the chosen pattern (e.g. user picks
     // "weekly on Mondays" while the date is a Wednesday).
     function snapAndCommit(val) {
@@ -3244,7 +3244,7 @@ function _buildForm(note = null) {
           html += `<button class="note-reminder-menu-item${isNth ? ' active' : ''}" data-action="sub" data-sub="monthly_nth"><span>Nth weekday</span>${sub}<span class="note-reminder-menu-arrow">›</span></button>`;
         }
       } else if (subMode === 'monthly_nth') {
-        // Pick ordinal (1..4) and weekday (0..6); 提交 when both chosen.
+        // Pick ordinal (1..4) and weekday (0..6); commit when both chosen.
         html += `<button class="note-reminder-menu-back" data-action="back-monthly"><span class="note-reminder-menu-arrow-back">‹</span> Monthly</button>`;
         html += '<div class="note-reminder-menu-title">Nth weekday of month</div>';
         html += '<div class="note-reminder-menu-sublabel">Which one</div>';
@@ -3345,7 +3345,7 @@ function _buildForm(note = null) {
     if (remindBtn) {
       remindBtn.classList.add('has-date');
       // Jingle the bell. CSS handles the animation; remove + reflow + re-add
-      // so it replays every time the user sets/changes a 提醒.
+      // so it replays every time the user sets/changes a reminder.
       const _bell = remindBtn.querySelector('svg');
       if (_bell) {
         _bell.classList.remove('jingling');
@@ -3359,7 +3359,7 @@ function _buildForm(note = null) {
   }
 
   function _pickCustomDate() {
-    // Replace the 下拉菜单 with a small inline picker
+    // Replace the dropdown menu with a small inline picker
     document.querySelectorAll('.note-reminder-menu').forEach(m => m.remove());
     const menu = document.createElement('div');
     menu.className = 'note-reminder-menu';
@@ -3429,9 +3429,9 @@ function _buildForm(note = null) {
         form.querySelector('.note-form-image-wrap')?.remove();
         const wrap = document.createElement('div');
         wrap.className = 'note-form-image-wrap';
-        wrap.innerHTML = `<img class="note-form-image" draggable="false" /><button class="note-form-image-rm" title="移除">&times;</button>`;
+        wrap.innerHTML = `<img class="note-form-image" draggable="false" /><button class="note-form-image-rm" title="Remove">&times;</button>`;
         // Insert AFTER the whole header (a flex-row), not after the
-        // title input itself — otherwise the 镜像 lands as a sibling
+        // title input itself — otherwise the image lands as a sibling
         // of the title inside the header and flex puts them side-by-side.
         form.querySelector('.note-form-header').after(wrap);
         wrap.querySelector('.note-form-image-rm').addEventListener('click', () => { wrap.remove(); currentImageUrl = ''; });
@@ -3440,7 +3440,7 @@ function _buildForm(note = null) {
       photoInput.value = '';
     });
   }
-  // Existing 镜像 remove
+  // Existing image remove
   form.querySelector('.note-form-image-rm')?.addEventListener('click', () => {
     form.querySelector('.note-form-image-wrap')?.remove();
     currentImageUrl = '';
@@ -3485,7 +3485,7 @@ function _buildForm(note = null) {
   }
   _wireHashtag(form.querySelector('.note-form-title'));
   _wireHashtag(form.querySelector('.note-form-content'));
-  // Pressing Enter in the tag field 提交s the current word as its own tag
+  // Pressing Enter in the tag field commits the current word as its own tag
   // and parks the cursor after a trailing space, so the next word becomes a
   // separate tag rather than overwriting the previous one.
   labelInput?.addEventListener('keydown', (e) => {
@@ -3519,7 +3519,7 @@ function _buildForm(note = null) {
   // Save. Prevent the button from stealing focus on press: on mobile, the
   // first tap would otherwise just blur the focused textarea/input (closing
   // the keyboard and shifting layout), so the tap never reached the button and
-  // you had to tap "完成" twice. mousedown preventDefault keeps focus put while
+  // you had to tap "Done" twice. mousedown preventDefault keeps focus put while
   // still letting the click fire.
   const _saveBtnEl0 = form.querySelector('.note-form-save');
   _saveBtnEl0.addEventListener('mousedown', (e) => e.preventDefault());
@@ -3530,8 +3530,8 @@ function _buildForm(note = null) {
     const _saveBtn = form.querySelector('.note-form-save');
     if (_saveBtn._saving) return;
     // Mobile: when an existing note is opened and closed without edits, the
-    // 更新 (✓) button morphs into Archive (set up below). Route the click
-    // to the hidden archive button so the existing archive flow + undo 提示条
+    // Update (✓) button morphs into Archive (set up below). Route the click
+    // to the hidden archive button so the existing archive flow + undo toast
     // run unchanged.
     if (_saveBtn.classList.contains('archive-mode')) {
       form.querySelector('.note-form-archive-btn')?.click();
@@ -3558,7 +3558,7 @@ function _buildForm(note = null) {
     if (currentType === 'note') {
       payload.content = form.querySelector('.note-form-content')?.value || '';
     } else if (currentType === 'draw') {
-      // Upload the canvas PNG before saving so 镜像_url points to a
+      // Upload the canvas PNG before saving so image_url points to a
       // persistent file. We block the save until upload completes — drawings
       // can't be re-rendered later without the URL.
       const canvas = form.querySelector('.note-form-canvas');
@@ -3574,7 +3574,7 @@ function _buildForm(note = null) {
       payload.items = _collectItems(form);
     }
     if (isEdit) payload.id = note.id;
-    // Reset fired 提醒 if due_date changed (so re-arm works), and also
+    // Reset fired reminder if due_date changed (so re-arm works), and also
     // clear the entry-glow seen flag so the new firing glows again on the
     // next time the user opens the panel.
     if (isEdit && note.due_date !== payload.due_date) {
@@ -3613,7 +3613,7 @@ function _buildForm(note = null) {
     _saveNote(payload).then(saved => {
       if (!isEdit && saved && saved.id) {
         // Replace temp ID with real one from server. AND re-render — the
-        // existing card's `data-note-id="tmp_xxx"` is stale after Object.as签名
+        // existing card's `data-note-id="tmp_xxx"` is stale after Object.assign
         // bumps the in-memory id, so all subsequent clicks (edit, done, copy,
         // archive, delete) silently fail to find the note in `_notes`.
         const tmp = _notes.find(n => n.id.startsWith('tmp_'));
@@ -3631,8 +3631,8 @@ function _buildForm(note = null) {
     }
   });
 
-  // Mobile-only: when editing an existing note, the 更新 (✓) button starts in
-  // archive-mode (visually + behaviorally) and flips to 更新 on the first
+  // Mobile-only: when editing an existing note, the Update (✓) button starts in
+  // archive-mode (visually + behaviorally) and flips to Update on the first
   // edit. Lets the user tap a note to skim, then tap ✓ to archive without ever
   // touching a separate Archive button.
   if (isEdit && window.innerWidth <= 768) {
@@ -3656,7 +3656,7 @@ function _buildForm(note = null) {
   // Cancel
   form.querySelector('.note-form-cancel').addEventListener('click', () => { _clearDraft(isEdit ? note.id : '__new__'); _editingId = null; _renderNotes(); });
 
-  // Archive / 删除 — edit-mode-only buttons, mirror the (now-hidden) card actions.
+  // Archive / Delete — edit-mode-only buttons, mirror the (now-hidden) card actions.
   form.querySelector('.note-form-archive-btn')?.addEventListener('click', () => {
     if (!isEdit) return;
     const id = note.id;
@@ -3669,7 +3669,7 @@ function _buildForm(note = null) {
     _pushUndo({ label: 'archive', run: undo });
     const _undoIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>';
     _patchNote(id, { archived: true }).then(() => {
-      uiModule.showToast('Archived', { duration: 6000, action: '撤销', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+      uiModule.showToast('Archived', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
     }).catch(() => {
       _notes.splice(idx, 0, removed);
       _renderNotes();
@@ -3680,7 +3680,7 @@ function _buildForm(note = null) {
     if (!isEdit) return;
     const id = note.id;
     if (uiModule.styledConfirm) {
-      const ok = await uiModule.styledConfirm('Delete this note?', { confirmText: '删除', danger: true });
+      const ok = await uiModule.styledConfirm('Delete this note?', { confirmText: 'Delete', danger: true });
       if (!ok) return;
     } else if (!confirm('Delete this note?')) {
       return;
@@ -3718,7 +3718,7 @@ function _buildGoalHtml(note, items) {
 
 function _wireGoalForm(form, container) {
   if (!container) return;
-  // _wireHashtag is a closure inside _buildForm — out of 权限范围 here. Inline
+  // _wireHashtag is a closure inside _buildForm — out of scope here. Inline
   // the same behavior (type "#foo " in the description → tag added to the
   // form's label input) so editing a goal note doesn't ReferenceError.
   const desc = container.querySelector('.note-form-goal-desc');
@@ -3729,7 +3729,7 @@ function _wireGoalForm(form, container) {
       const m = tagRe.exec(desc.value);
       if (!m) return;
       const tag = m[2];
-      // Same dedup-after-stripping fix as the plain note 哈希tag handler.
+      // Same dedup-after-stripping fix as the plain note hashtag handler.
       const existing = labelInput.value.trim().split(/\s+/).filter(Boolean);
       const stripped = existing.map(t => t.replace(/^#+/, ''));
       if (!stripped.includes(tag)) {
@@ -3760,8 +3760,8 @@ function _buildChecklistHtml(items) {
     </div>`;
   }
   // `type="button"` matters on mobile — without it some browsers treat
-  // bare <button> as form-submit and the 点击处理器 never fires inside
-  // certain 容器s. Also bumped tap target so fingers don't miss.
+  // bare <button> as form-submit and the click handler never fires inside
+  // certain containers. Also bumped tap target so fingers don't miss.
   html += `<button type="button" class="note-cl-add">+ Add</button></div>`;
   return html;
 }
@@ -3816,7 +3816,7 @@ function _wireRow(row, container) {
 
 function _wireChecklist(container) {
   if (!container) return;
-  // Delegate the + 添加 click off the 容器 so re-renders + mobile
+  // Delegate the + Add click off the container so re-renders + mobile
   // touch quirks don't leave the button dead. The previous direct
   // `addEventListener` on the button silently broke on mobile when
   // _wireChecklist ran more than once (or before the button was in DOM).
@@ -3842,7 +3842,7 @@ function _wireChecklist(container) {
   }
   container.querySelectorAll('.note-cl-row').forEach(row => _wireRow(row, container));
 
-  // Drag-over handler on the inputs 容器
+  // Drag-over handler on the inputs container
   const inputs = container.querySelector('.note-checklist-inputs');
   if (inputs) {
     inputs.addEventListener('dragover', (e) => {
@@ -3913,7 +3913,7 @@ function _buildDrawHtml() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
           <span class="note-form-draw-shape-badge"></span>
         </button>
-        <button type="button" class="note-form-draw-undo" title="撤销">
+        <button type="button" class="note-form-draw-undo" title="Undo">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>
         </button>
       </div>
@@ -3921,20 +3921,20 @@ function _buildDrawHtml() {
   `;
 }
 
-// Attach drawing handlers to the canvas inside `容器`. Optionally loads
+// Attach drawing handlers to the canvas inside `container`. Optionally loads
 // `initialImageUrl` as a background, so editing an existing drawing keeps it.
 function _wireCanvas(container, initialImageUrl) {
   const canvas = container.querySelector('.note-form-canvas');
   if (!canvas) return;
   // Bump the backing-store resolution for retina displays so strokes stay
-  // crisp. 设置 only style.width — leaving style.height to auto so the canvas
+  // crisp. Set only style.width — leaving style.height to auto so the canvas
   // scales uniformly via its intrinsic aspect ratio. If both CSS dimensions
   // are pinned, max-width:100% shrinks the width only, leaving rasterized
   // glyphs visibly stretched relative to their on-screen input.
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const cssW = canvas.width;
   const cssH = canvas.height;
-  // Fill the 容器 up to the logical width (don't pin a hard 600px,
+  // Fill the container up to the logical width (don't pin a hard 600px,
   // which on a narrow phone forces the card wider than the viewport and
   // pushes the drawing outside the note). _pos() scales pointer coords by
   // the actual displayed width, so accuracy is preserved at any size.
@@ -3951,7 +3951,7 @@ function _wireCanvas(container, initialImageUrl) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // 加载 prior drawing as starting point so consecutive edits compose.
+  // Load prior drawing as starting point so consecutive edits compose.
   const safeInitialImageUrl = _safeImgSrc(initialImageUrl);
   if (safeInitialImageUrl) {
     const img = new Image();
@@ -3959,7 +3959,7 @@ function _wireCanvas(container, initialImageUrl) {
     img.onload = () => { try { ctx.drawImage(img, 0, 0, cssW, cssH); } catch {} };
     img.src = safeInitialImageUrl;
     // Float an X over the canvas so the user can blank it out and go back to
-    // a clean draw surface. 移除 itself once clicked.
+    // a clean draw surface. Removes itself once clicked.
     const wrap = container.querySelector('.note-form-draw-wrap');
     if (wrap && !wrap.querySelector('.note-form-draw-bg-rm')) {
       const rm = document.createElement('button');
@@ -4007,7 +4007,7 @@ function _wireCanvas(container, initialImageUrl) {
   let _shapeSnapshot = null;
 
   // Per-canvas undo stack. We snapshot the bitmap (as ImageData) BEFORE each
-  // operation — stroke, text 提交, or future operations — and pop+restore
+  // operation — stroke, text commit, or future operations — and pop+restore
   // on Undo. Cap to 30 to keep memory bounded.
   const _undoStack = [];
   const UNDO_LIMIT = 30;
@@ -4041,7 +4041,7 @@ function _wireCanvas(container, initialImageUrl) {
   };
   const _begin = (e) => {
     if (mode.startsWith('text-')) {
-      // 停止 the event so the browser doesn't synthesize a follow-up click
+      // Stop the event so the browser doesn't synthesize a follow-up click
       // that would blur the input we're about to create.
       e.preventDefault?.();
       e.stopPropagation?.();
@@ -4224,7 +4224,7 @@ function _wireCanvas(container, initialImageUrl) {
     textBtn?.classList.toggle('active', isText);
     lineBtn?.classList.toggle('active', isLine);
     circleBtn?.classList.toggle('active', isCircle);
-    // Per-button size 徽章s (S/M/L), driven off the mode suffix.
+    // Per-button size badges (S/M/L), driven off the mode suffix.
     const tBadge = textBtn?.querySelector('.note-form-draw-text-badge');
     if (tBadge) tBadge.textContent = isText ? next.slice(-1).toUpperCase() : '';
     const lBadge = lineBtn?.querySelector('.note-form-draw-shape-badge');
@@ -4262,7 +4262,7 @@ function _wireCanvas(container, initialImageUrl) {
 }
 
 // Export the canvas as a PNG dataURL, upload it via the existing /api/upload
-// endpoint, and resolve to a persistent URL. 返回 null on failure.
+// endpoint, and resolve to a persistent URL. Returns null on failure.
 async function _uploadCanvasAsPng(canvas) {
   if (!canvas) return null;
   const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
@@ -4277,7 +4277,7 @@ async function _uploadCanvasAsPng(canvas) {
   } catch { return null; }
 }
 
-// ---- 创建 / Edit / 删除 ----
+// ---- Create / Edit / Delete ----
 
 function _createNote(type = 'todo') {
   const body = document.querySelector('#notes-pane .notes-pane-body');
@@ -4292,7 +4292,7 @@ function _createNote(type = 'todo') {
   if (restored) uiModule.showToast('Restored unsaved note');
 }
 
-// 构建 the plain-text/markdown form of a note for clipboard copy.
+// Build the plain-text/markdown form of a note for clipboard copy.
 function _serializeNoteForCopy(note) {
   const lines = [];
   if (note.title) lines.push(note.title);
@@ -4308,7 +4308,7 @@ function _serializeNoteForCopy(note) {
 }
 
 // Copy a note to the clipboard, briefly swap btnEl's icon to a checkmark, and
-// 提示条. Shared by the corner-copy button click and the Ctrl/Cmd+C shortcut.
+// toast. Shared by the corner-copy button click and the Ctrl/Cmd+C shortcut.
 // ── ⋯ corner menu (Copy + Agent) ───────────────────────────────────
 function _openNoteCornerMenu(btn) {
   document.querySelectorAll('.note-corner-menu-dropdown').forEach(d => d.remove());
@@ -4396,7 +4396,7 @@ function _openTodoAgentMenu(btn) {
   });
 }
 
-// 构建 the prompt the agent gets from a note: title + body, plus any
+// Build the prompt the agent gets from a note: title + body, plus any
 // not-yet-done checklist items.
 function _noteToAgentPrompt(note) {
   const parts = [];
@@ -4422,7 +4422,7 @@ async function _agentSolveNote(id) {
     const dc = await (await fetch(`${API_BASE}/api/default-chat`, { credentials: 'same-origin' })).json();
     if (!dc.endpoint_url || !dc.model) { uiModule.showError('No default chat model configured'); return; }
 
-    // 1. 创建 the session server-side (no UI switch). skip_validation
+    // 1. Create the session server-side (no UI switch). skip_validation
     //    avoids re-probing — the default-chat endpoint is already known good.
     const label = (note.title || (Array.isArray(note.items) && note.items[0]?.text) || 'todo').slice(0, 40);
     const csFd = new FormData();
@@ -4643,7 +4643,7 @@ function _editNote(id) {
 
 async function _deleteNote(id) {
   const ok = uiModule?.styledConfirm
-    ? await uiModule.styledConfirm('Delete this note?', { confirmText: '删除', danger: true })
+    ? await uiModule.styledConfirm('Delete this note?', { confirmText: 'Delete', danger: true })
     : confirm('Delete this note?');
   if (!ok) return;
   try { await _deleteNoteApi(id); await _fetchNotes(); _renderNotes(); uiModule.showToast('Deleted'); }
@@ -4678,7 +4678,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
   overlay.className = 'note-fullscreen-overlay';
   overlay.innerHTML = `
     <div class="note-fullscreen-header">
-      <button type="button" class="note-fullscreen-back" title="返回">
+      <button type="button" class="note-fullscreen-back" title="Back">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
       <div class="note-fullscreen-actions"></div>
@@ -4686,7 +4686,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
     <div class="note-fullscreen-body"></div>
   `;
   const body = overlay.querySelector('.note-fullscreen-body');
-  // Reuse the same edit form the in-place flow builds. 保存 buttons,
+  // Reuse the same edit form the in-place flow builds. Save buttons,
   // checklist toggles, etc. all work as-is. Restore any unsaved draft.
   const { note: _n, restored } = _applyDraftToNote(note, id);
   const form = _buildForm(_n);
@@ -4729,9 +4729,9 @@ function _openMobileFullscreenEdit(id, fromCard) {
       _closeMobileFullscreenEdit({ save: false });
     });
   }
-  // The built-in 保存 handler does the API 调用 + refresh, but doesn't
+  // The built-in Save handler does the API call + refresh, but doesn't
   // dismiss our overlay. Augment it (do NOT replace — the original is
-  // async and we'd lose the API 调用) to schedule a close once the
+  // async and we'd lose the API call) to schedule a close once the
   // save+render has had time to complete.
   const saveBtn = form.querySelector('.note-form-save');
   if (saveBtn) {
@@ -4750,10 +4750,10 @@ function _openMobileFullscreenEdit(id, fromCard) {
   // ISN'T a link flips back to the input for editing.
   form.querySelectorAll('.note-cl-row').forEach(_addRowReadMode);
 
-  // Move Archive + 删除 from the form's footer actions row up into
+  // Move Archive + Delete from the form's footer actions row up into
   // the header bar (to the right of the back chevron) so they're
   // always reachable without scrolling and free up the footer for
-  // Cancel/保存 only. Handlers stay attached when nodes move.
+  // Cancel/Save only. Handlers stay attached when nodes move.
   const headerActions = overlay.querySelector('.note-fullscreen-actions');
   const archiveBtn = form.querySelector('.note-form-archive-btn');
   const deleteBtn  = form.querySelector('.note-form-delete-btn');
@@ -4761,7 +4761,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
   if (headerActions && deleteBtn)  headerActions.appendChild(deleteBtn);
   // The built-in archive/delete handlers re-render the notes grid but
   // leave THIS overlay sitting in front of it — looks like nothing
-  // happened. 添加 follow-up listeners that close the overlay so the
+  // happened. Add follow-up listeners that close the overlay so the
   // user sees the action take effect.
   if (archiveBtn) {
     archiveBtn.addEventListener('click', () => {
@@ -4770,7 +4770,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
   }
   if (deleteBtn) {
     deleteBtn.addEventListener('click', () => {
-      // 删除 shows a styled confirm — give it room to resolve before
+      // Delete shows a styled confirm — give it room to resolve before
       // we try to dismiss the overlay.
       setTimeout(() => _closeMobileFullscreenEdit({ save: false }), 500);
     });
@@ -4785,8 +4785,8 @@ function _openMobileFullscreenEdit(id, fromCard) {
     actionsGroup.insertBefore(tagsInput, actionsGroup.firstChild);
   }
 
-  // For checklist-type notes, move the photo (attach 镜像) button into
-  // the same row as the + 添加 button (right side) — keeps the meta row
+  // For checklist-type notes, move the photo (attach image) button into
+  // the same row as the + Add button (right side) — keeps the meta row
   // tidy and puts the camera within thumb-reach of the active edit.
   const addBtn   = form.querySelector('.note-cl-add');
   const photoBtn = form.querySelector('.note-form-photo-btn');
@@ -4798,7 +4798,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
     addRow.appendChild(photoBtn);
     // Tapping anywhere on the row (the empty gap, the dashed border,
     // the "+ Add" label) triggers add. The photo button keeps its own
-    // click target so attach-镜像 isn't ambushed.
+    // click target so attach-image isn't ambushed.
     addRow.addEventListener('click', (e) => {
       if (e.target.closest('.note-form-photo-btn')) return;
       if (e.target === addBtn || addBtn.contains(e.target)) return;
@@ -4853,7 +4853,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
 
   // Opening an EXISTING note → read mode, no keyboard pop. Only a
   // brand-new note (created via the + button) should auto-focus an
-  // 输入字段. The user can tap the content to switch to edit.
+  // input field. The user can tap the content to switch to edit.
   // (New-note creation flows through _createNote, not this function.)
 }
 
@@ -4861,7 +4861,7 @@ function _closeMobileFullscreenEdit(opts = {}) {
   if (!_mobileFsOverlay) return;
   const overlay = _mobileFsOverlay;
   _mobileFsOverlay = null;
-  // If the form has a 保存 button, click it on close so edits aren't lost
+  // If the form has a Save button, click it on close so edits aren't lost
   // when the user uses the back arrow instead of an explicit Save.
   if (opts.save) {
     const saveBtn = overlay.querySelector('.note-form-save, [data-action="save"]');
@@ -4941,7 +4941,7 @@ function _enterDragMode(initialCard, initialTouch) {
   }
   // Auto-grab the card the user long-pressed — they're already holding
   // their finger on it, so begin the drag straight away. Releasing
-  // (touchend) 提交s the reorder AND exits drag mode in one motion.
+  // (touchend) commits the reorder AND exits drag mode in one motion.
   if (initialCard && initialTouch) {
     _beginGrab(initialCard, initialTouch);
   }
@@ -5208,7 +5208,7 @@ async function _commitNoteReorder() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
     });
-    // 更新 local sort_order so subsequent renders agree with the server.
+    // Update local sort_order so subsequent renders agree with the server.
     ids.forEach((nid, i) => {
       const n = _notes.find(nn => nn.id === nid);
       if (n) n.sort_order = i;
@@ -5219,7 +5219,7 @@ async function _commitNoteReorder() {
 }
 
 
-// Background 提醒 loop — runs whether panel is open or not
+// Background reminder loop — runs whether panel is open or not
 async function _initReminders() {
   try {
     const res = await fetch(`${API_BASE}/api/notes`, { credentials: 'same-origin' });
@@ -5255,7 +5255,7 @@ async function openNote(noteId) {
   // for newly-created notes may not be in the DOM yet. Also poll the
   // _notes module array directly — if the note IS loaded but the
   // active filter (e.g. archive view) is hiding it, we can still
-  // surface a confirmation 提示条.
+  // surface a confirmation toast.
   if (!noteId) return;
   let tries = 0;
   const findAndFlash = () => {
@@ -5281,7 +5281,7 @@ export default notesModule;
 export { openPanel as openNotes, closePanel as closeNotes, isPanelOpen as isNotesOpen, openNote };
 window.notesModule = notesModule;
 
-// 启动 提醒 loop on module load (after a short delay so app loads first)
+// Start reminder loop on module load (after a short delay so app loads first)
 if (typeof window !== 'undefined') {
   setTimeout(_initReminders, 3000);
 }

@@ -93,7 +93,7 @@ class EditFileTool:
             return {"error": "edit_file: old_string and new_string are identical", "exit_code": 1}
 
         def _apply():
-            """执行实际字符串替换和文件写入逻辑的辅助函数。"""
+            """Helper function that performs the actual string replacement and file writing logic."""
             with open(path, "r", encoding="utf-8") as f:
                 original = f.read()
             count = original.count(old)
@@ -421,8 +421,8 @@ class GrepTool:
         return {"output": _truncate(out), "exit_code": 0}
 
 class GetWorkspaceTool:
-    """报告活动工作空间文件夹（无参数）。文件工具局限于此目录；
-    shell 从这里启动（cwd）但不受沙箱限制。"""
+    """Report the active workspace folder (no args). File tools are confined to
+    it; the shell starts there (cwd) but is NOT sandboxed."""
     async def execute(self, content: str, ctx: dict) -> dict:
         from src.tool_execution import get_active_workspace
         ws = get_active_workspace()

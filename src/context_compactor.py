@@ -1,8 +1,8 @@
 """
 context_compactor.py
 
-当接近上下文窗口限制时，自动压缩对话历史。
-通过同一个 LLM 总结较早的消息，保留关键上下文。
+Auto-compacts conversation history when approaching context window limits.
+Summarizes older messages via the same LLM, preserving key context.
 """
 
 import json
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def _content_as_text(content: Any) -> str:
-    """将消息的 content 展平为纯文本。
+    """Flatten a message's content to plain text.
 
     Handles the three shapes that flow through history: a plain string, a
     multimodal list of content blocks (vision/image attachments), and None
@@ -36,11 +36,11 @@ def _content_as_text(content: Any) -> str:
     return ""
 
 
-COMPACT_THRESHOLD = 0.85  # 在 85% 上下文窗口使用时触发压缩
+COMPACT_THRESHOLD = 0.85  # Trigger compaction at 85% of context window
 SUMMARY_MAX_TOKENS = 1024
-SMALL_CONTEXT_LIMIT = 8192  # 上下文 <= 此值的模型会进行激进裁剪
+SMALL_CONTEXT_LIMIT = 8192  # Models with context <= this get aggressive trimming
 
-# Cursor 风格的自摘要提示 — 生成结构化、密集的摘要
+# Cursor-style self-summarization prompt — produces structured, dense summaries
 SELF_SUMMARY_SYSTEM_PROMPT = """You are summarizing a conversation to preserve context after compaction. Produce a structured summary that lets the conversation continue seamlessly.
 
 Use this format:
@@ -71,27 +71,27 @@ Keep the summary under 1000 tokens. Be dense — every token should carry inform
 
 
 def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
-    """删除孤立的 `tool` 消息和悬空的 assistant `tool_calls`。
+    """Drop orphaned `tool` messages and dangling assistant `tool_calls`.
 
-    OpenAI API 要求每个 `role:"tool"` 消息必须紧跟在携带 `tool_calls` 的
-      - 删除其 tool 响应全部被裁掉的 assistant `tool_calls` 消息
+    OpenAI's API requires every `role:"tool"` message to immediately
+    follow an assistant message that carries `tool_calls` (or another
     tool message in the same batch). Front-trimming the history can cut
-    可能会裁掉 assistant 的 `tool_calls` 父消息，但保留其 tool 响应，这会触发：
-    "messages with role 'tool' must be a response to a preceding message with
+    the assistant `tool_calls` parent while keeping its tool responses,
+    which triggers: "messages with role 'tool' must be a response to a
     preceding message with 'tool_calls'". This pass repairs that:
       - drops `tool` messages with no valid preceding tool_calls
-      - 删除其 tool 响应全部被裁掉的 assistant `tool_calls` 消息
+      - drops assistant `tool_calls` messages whose tool responses were
         all trimmed away (some providers reject unanswered tool_calls)
     """
-    # 第一遍：删除孤立的 tool 消息。
+    # Pass 1: drop orphan tool messages.
     cleaned: List[Dict] = []
-    in_batch = False  # 是否紧跟在 assistant tool_calls 之后（或处于批次中）？
+    in_batch = False  # are we right after an assistant tool_calls (or mid-batch)?
     for m in msgs:
         role = m.get("role")
         if role == "tool":
             if in_batch:
                 cleaned.append(m)
-            # 否则：孤立消息 — 丢弃
+            # else: orphan — drop
             continue
         if role == "assistant" and m.get("tool_calls"):
             in_batch = True
@@ -99,19 +99,19 @@ def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
             in_batch = False
         cleaned.append(m)
 
-    # 第二遍：删除后续没有 tool 响应的 assistant tool_calls 消息
-    # （悬空）— 反向遍历，这样我们可以知道后面是什么。
+    # Pass 2: drop assistant tool_calls messages that have NO following
+    # tool response (dangling) — walk backwards so we know what follows.
     out: List[Dict] = []
     for i, m in enumerate(cleaned):
         if m.get("role") == "assistant" and m.get("tool_calls"):
             nxt = cleaned[i + 1] if i + 1 < len(cleaned) else None
             if not (nxt and nxt.get("role") == "tool"):
-                # 悬空的 tool_calls — 保留消息但移除 tool_calls，
-                # 悬空的 tool_calls — 保留消息但移除 tool_calls，
+                # Dangling tool_calls — keep the message but strip the
+                # tool_calls so it's a plain assistant turn (preserves any
                 # text content the model produced alongside the calls).
                 m = {k: v for k, v in m.items() if k != "tool_calls"}
                 if not (m.get("content") or "").strip():
-                    continue  # 没有保留价值的内容
+                    continue  # nothing left worth keeping
         out.append(m)
     return out
 
@@ -123,7 +123,7 @@ def _message_text_token_estimate(text: str) -> int:
 
 
 def _truncate_text_to_token_budget(text: str, token_budget: int) -> str:
-    """裁剪过大的当前用户消息，而不是完全丢弃它。"""
+    """Trim a too-large current user message instead of dropping it entirely."""
     if token_budget <= 32:
         return "[Current user message omitted: it exceeded the model context window.]"
 
@@ -132,7 +132,7 @@ def _truncate_text_to_token_budget(text: str, token_budget: int) -> str:
         # string rather than the raw non-string (which would move the crash
         # into the caller that concatenates/measures the result).
         return ""
-    # 匹配 src.model_context.estimate_tokens 的粗略 chars * 0.3 估算。
+    # Match src.model_context.estimate_tokens' rough chars * 0.3 estimate.
     max_chars = max(200, int((token_budget - 16) / 0.3))
     if len(text) <= max_chars:
         return text
@@ -148,22 +148,22 @@ def _truncate_text_to_token_budget(text: str, token_budget: int) -> str:
 
 
 def _truncate_tool_call_args(msg: Dict[str, Any], token_budget: int) -> Dict[str, Any]:
-    """缩小过大的 assistant ``tool_calls`` 参数以适应 ``token_budget``。
+    """Shrink oversized assistant ``tool_calls`` arguments to fit ``token_budget``.
 
     A tool-only turn persists ``content=None`` with its whole payload in
-    ``tool_calls[].function.arguments``（例如一个大的 create_document 正文），
+    ``tool_calls[].function.arguments`` (e.g. a large create_document body), which
     the text-content truncation can't reach — so the message could stay over
     budget and the upstream call would 400. Replace each argument string that
     overflows its share of the budget with a small valid-JSON placeholder,
-    保留 ``id``/``type``/``function.name``，以便工具/结果配对和
+    preserving ``id``/``type``/``function.name`` so tool/result pairing and
     provider validation are unaffected. Returns msg unchanged when there is
     nothing oversized.
     """
     tool_calls = msg.get("tool_calls")
     if not isinstance(tool_calls, list) or not tool_calls:
         return msg
-    # 扣除已存在 content 后的剩余预算（estimate_tokens 也计数 tool
-    # arguments，因此此处单独度量 content）。
+    # Budget left after whatever content survived (estimate_tokens counts tool
+    # arguments too, so measure content alone here).
     content_tokens = estimate_tokens([{"role": msg.get("role", "assistant"), "content": msg.get("content")}])
     per_call = max(16, (max(0, token_budget - content_tokens)) // len(tool_calls))
     new_calls = []
@@ -188,7 +188,7 @@ def _truncate_tool_call_args(msg: Dict[str, Any], token_budget: int) -> Dict[str
 
 
 def _truncate_message_to_token_budget(msg: Dict[str, Any], token_budget: int) -> Dict[str, Any]:
-    """返回 msg 的副本，确保其文本内容（和工具调用参数）不超过 token_budget。"""
+    """Return a copy of msg whose text content (and tool-call args) fit token_budget."""
     out = dict(msg)
     content = out.get("content", "")
     if isinstance(content, str):
@@ -207,18 +207,18 @@ def _truncate_message_to_token_budget(msg: Dict[str, Any], token_budget: int) ->
             new_content.append(cloned)
             remaining -= _message_text_token_estimate(truncated)
         out["content"] = new_content
-    # 纯工具轮次（content=None）将其负载携带在 tool_calls args 中，
-    # 上述分支无法缩小它 — 处理它以使消息能够适应。
+    # A tool-only turn (content=None) carries its payload in tool_calls args,
+    # which the branches above can't shrink — handle it so the message can fit.
     return _truncate_tool_call_args(out, token_budget)
 
 
 def trim_for_context(messages: List[Dict], context_length: int, reserve_tokens: int = 512) -> List[Dict]:
-    """裁剪系统消息以适应 context_length。
+    """Trim system messages to fit within context_length.
 
-    对于小上下文模型，逐步去除：
-    1. RAG/内存系统消息（保留预设的系统提示）
-    2. 较旧的对话轮次
-    为响应保留空间。
+    For small-context models, progressively strips:
+    1. RAG/memory system messages (keep preset system prompt)
+    2. Older conversation turns
+    Reserves space for the response.
     """
     budget = context_length - reserve_tokens
     used = estimate_tokens(messages)
@@ -227,8 +227,8 @@ def trim_for_context(messages: List[Dict], context_length: int, reserve_tokens: 
 
     logger.info(f"Trimming messages: {used} tokens > {budget} budget (ctx={context_length})")
 
-    # 将系统消息与对话分离。
-    # 标记为 _protected 的消息（例如活动文档）永远不会被裁剪。
+    # Separate system messages from conversation.
+    # Messages marked _protected (e.g. active document) are never trimmed.
     system_msgs = []
     protected_msgs = []
     convo_msgs = []
@@ -240,15 +240,15 @@ def trim_for_context(messages: List[Dict], context_length: int, reserve_tokens: 
         else:
             convo_msgs.append(msg)
 
-    # 受保护的消息计入预算但永远不会被丢弃
+    # Protected messages count toward budget but are never dropped
     protected_tokens = estimate_tokens(protected_msgs)
     budget -= protected_tokens
 
     # Priority: keep first system msg (preset prompt), drop others (memory, RAG, memo).
-    # Exception: a research-spinoff primer (the 随机种子ed report that grounds a
+    # Exception: a research-spinoff primer (the seeded report that grounds a
     # "Discuss" chat) must never be dropped — it is the conversation's whole
-    # 知识库. Treat any system message carrying research_spinoff_from
-    # metadata as essential alongside the leading 系统提示.
+    # knowledge base. Treat any system message carrying research_spinoff_from
+    # metadata as essential alongside the leading system prompt.
     def _is_research_primer(m):
         return bool((m.get("metadata") or {}).get("research_spinoff_from"))
     _primers = [m for m in system_msgs if _is_research_primer(m)]
@@ -256,7 +256,7 @@ def trim_for_context(messages: List[Dict], context_length: int, reserve_tokens: 
     essential_system = (_non_primer[:1] if _non_primer else []) + _primers
     extra_system = _non_primer[1:]
 
-    # 尝试从末尾逐个丢弃额外的系统消息
+    # Try dropping extra system messages one by one (from the end)
     trimmed = essential_system + convo_msgs
     if estimate_tokens(trimmed) <= budget:
         # Dropping extras was enough — try adding back some
@@ -269,7 +269,7 @@ def trim_for_context(messages: List[Dict], context_length: int, reserve_tokens: 
                 break
         return _sanitize_tool_messages(result + protected_msgs + convo_msgs)
 
-    # 仍然太大 — 截断第一条系统消息（但保留超过 500 个字符）
+    # Still too big — truncate the first system message (but keep more than 500 chars)
     if essential_system:
         sys_text = essential_system[0].get("content", "")
         if len(sys_text) > 2000:
@@ -278,11 +278,11 @@ def trim_for_context(messages: List[Dict], context_length: int, reserve_tokens: 
             if estimate_tokens(trimmed) <= budget:
                 return _sanitize_tool_messages(essential_system + protected_msgs + convo_msgs)
 
-    # 仍然太大 — 丢弃较旧的对话轮次，但始终保留当前的
-    # 用户轮次。如果仅粘贴的消息就超出模型上下文，则截断
-    # 该消息并附上可见提示，而不是丢弃它；否则模型
-    # 看起来像是"忽略"了大型粘贴内容，因为它从未收到它们。
-    # Hermes 风格：近期上下文比旧上下文更重要。
+    # Still too big — drop older conversation turns BUT always keep the current
+    # user turn. If a pasted message alone exceeds the model context, truncate
+    # that message with a visible notice instead of dropping it; otherwise the
+    # model appears to "ignore" large pastes because it never receives them.
+    # Hermes-style: recent context matters more than old context.
     PROTECT_RECENT = 10
     current_msg = convo_msgs[-1:] if convo_msgs else []
     prior_convo = convo_msgs[:-1] if convo_msgs else []
@@ -298,7 +298,7 @@ def trim_for_context(messages: List[Dict], context_length: int, reserve_tokens: 
             prior_convo.pop(0)
         convo_msgs = prior_convo + current_msg
 
-    # 如果当前消息本身太大，只缩小该消息。
+    # If the current message itself is too large, shrink only that message.
     if current_msg and estimate_tokens(essential_system + protected_msgs + convo_msgs) > budget:
         prefix = essential_system + protected_msgs + convo_msgs[:-1]
         available_for_current = max(64, budget - estimate_tokens(prefix))
@@ -317,9 +317,9 @@ async def maybe_compact(
     headers: Optional[Dict] = None,
     owner: Optional[str] = None,
 ) -> tuple:
-    """检查上下文使用情况并在超过阈值时进行压缩。
+    """Check context usage and compact if above threshold.
 
-    返回 (messages, context_length, was_compacted)。
+    Returns (messages, context_length, was_compacted).
     """
     context_length = get_context_length(endpoint_url, model)
     used = estimate_tokens(messages)
@@ -332,7 +332,7 @@ async def maybe_compact(
         f"Context at {pct:.1f}% ({used}/{context_length} tokens) — compacting"
     )
 
-    # 分为系统前言和对话部分
+    # Split into system preface and conversation
     system_msgs = []
     convo_msgs = []
     for msg in messages:
@@ -344,24 +344,24 @@ async def maybe_compact(
     if len(convo_msgs) < 4:
         return messages, context_length, False
 
-    # 将对话分成两半：总结较旧的一半，保留最近的一半
+    # Split conversation: summarize older half, keep recent half
     split_point = len(convo_msgs) // 2
     older = convo_msgs[:split_point]
     recent = convo_msgs[split_point:]
 
-    # 构建要摘要的文本
+    # Build the text to summarize
     convo_text = "\n".join(
         f"{msg.get('role', 'user').upper()}: {_content_as_text(msg.get('content'))[:2000]}"
         for msg in older
     )
 
-    # 从已有的摘要消息中统计先前的压缩次数
+    # Count prior compactions from existing summary messages
     compaction_count = sum(
         1 for m in system_msgs
         if "[Conversation summary" in m.get("content", "")
     )
 
-    # 如果配置了 utility 模型则使用，否则回退到 session 模型
+    # Use utility model if configured, otherwise fall back to session model
     util_url, util_model, util_headers = resolve_endpoint("utility", owner=owner)
     compact_url = util_url or endpoint_url
     compact_model = util_model or model
@@ -389,9 +389,9 @@ async def maybe_compact(
         )
     except Exception as e:
         logger.error(f"Compaction summary failed: {e}")
-        # 优雅降级：保持对话完整，而不是静默丢弃较旧的
-        # 一半内容。was_compacted=False 告知调用者未被摘要；
-        # trim_for_context 处理长度问题。
+        # Degrade gracefully: keep the conversation intact rather than
+        # silently dropping the older half. was_compacted=False signals the
+        # caller nothing was summarized; trim_for_context handles length.
         return messages, context_length, False
 
     summary_msg = {
@@ -401,11 +401,11 @@ async def maybe_compact(
 
     compacted = system_msgs + [summary_msg] + recent
 
-    # 更新 session 历史记录以匹配。传递 len(system_msgs)，以便
-    # _update_session_history 中的 recent_history 切片使用正确的
-    # 偏移量 — session.history 包含系统消息，但
-    # split_point 是相对于 convo_msgs 索引的，而 convo_msgs 不包含系统消息。
-    # 没有这一步，切片会丢弃开头的系统消息。
+    # Update session history to match. Pass len(system_msgs) so the
+    # recent_history slice in _update_session_history uses the correct
+    # offset — session.history INCLUDES the system messages, but
+    # split_point is indexed against convo_msgs which does NOT. Without
+    # this, the slice drops the leading system message(s).
     _update_session_history(session, split_point, summary, system_msg_count=len(system_msgs))
 
     new_used = estimate_tokens(compacted)
@@ -419,12 +419,12 @@ async def maybe_compact(
 
 def _update_session_history(session, split_point: int, summary: str,
                             system_msg_count: int = 0):
-    """更新压缩后的内存中 session 历史记录。
+    """Update the in-memory session history after compaction.
 
-    `split_point` 是 `convo_msgs`（去除系统消息后）中的索引。
+    `split_point` is the index in `convo_msgs` (system-stripped). The
     in-memory `session.history` includes leading system messages, so the
-    实际的近期历史切片从 `system_msg_count + split_point` 开始。
-    将 `session.history[:system_msg_count]` 添加到新历史记录前，
+    actual recent-history slice starts at `system_msg_count + split_point`.
+    Prepending `session.history[:system_msg_count]` to the new history
     preserves persona, preset, and RAG system messages that would
     otherwise be dropped.
     """
@@ -435,8 +435,8 @@ def _update_session_history(session, split_point: int, summary: str,
     if effective_split >= len(session.history):
         return
 
-    # 保留最近的消息，在开头添加摘要和开头的系统
-    # 消息，以便系统提示在压缩后仍能保留。
+    # Keep the recent messages, prepend summary AND the leading system
+    # messages so the system prompt survives compaction.
     system_prefix = list(session.history[:system_msg_count])
     recent_history = session.history[effective_split:]
     summary_msg = ChatMessage(

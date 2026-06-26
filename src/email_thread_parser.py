@@ -1,25 +1,25 @@
 """
-email_thread_parser.py — 邮件线程解析器
+email_thread_parser.py
 
-static/js/emailLibrary.js 中 JS 线程解析器的服务端移植。
-遍历邮件正文（HTML 或纯文本）并返回回复轮次的树形结构，
-客户端可直接渲染而无需重新解析。
+Server-side port of the JS thread parser in static/js/emailLibrary.js.
+Walks an email body (HTML or plain text) and returns a tree of reply turns
+that the client can render directly without re-parsing.
 
-镜像 talon (mailgun) 和 email-reply-parser 的规则：
-  - 多语言 "On <date>, <name> wrote:" 归属行（20+ 种语言）
-  - Outlook 风格 "From: ... Sent: ... Subject:" 头部块
-  - "----- Original Message -----" 分隔符
-  - <blockquote> 嵌套（HTML）
-  - "> " 前缀嵌套（纯文本）
+Mirrors the rules from talon (mailgun) and email-reply-parser:
+  - Multilingual "On <date>, <name> wrote:" attribution lines (20+ locales)
+  - Outlook-style "From: ... Sent: ... Subject:" header blocks
+  - "----- Original Message -----" delimiters
+  - <blockquote> nesting (HTML)
+  - "> " prefix nesting (plain text)
 
-返回字典列表：
+Returns a list of dicts:
     [
       {"level": 0, "body_html": "...", "meta": null},
       {"level": 1, "body_html": "...", "meta": "Alice <a@x> · May 5"},
       {"level": 2, "body_html": "...", "meta": "Bob <b@y> · May 4"},
       ...
     ]
-其中 level 0 是当前回复，递增的级别 = 链中更深的位置。
+where level 0 is the current reply, increasing levels = deeper in the chain.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ _OUTLOOK_HEADER_RE = re.compile(
     rf"{_FROM}\s*:\s*[^\n]+\s*\n\s*(?:.+\n)?{_SENT}\s*:\s*[^\n]+\s*\n",
     re.IGNORECASE,
 )
-# 停止 the From/Date captures at the next header key so they don't swallow
+# Stop the From/Date captures at the next header key so they don't swallow
 # the whole header block when whitespace has been normalised.
 _FROM_STOP = rf"\s+(?:{_FROM}|{_SENT}|{_SUBJ}|{_TO}|{_CCBCC}|Importance|Priority)\s*:"
 _DATE_STOP = rf"\s+(?:{_FROM}|{_SUBJ}|{_TO}|{_CCBCC}|Importance|Priority)\s*:"
@@ -200,7 +200,7 @@ def _normalize_body(text: str) -> str:
     if not text:
         return text
     text = _strip_mashed_header(text)
-    # Outlook appends `<mailto:foo@bar>` after every 邮件地址 it
+    # Outlook appends `<mailto:foo@bar>` after every email address it
     # finds, and `<https://...>` after every URL. Both are duplicate
     # noise — they show the same target as the visible text. Drop them.
     text = re.sub(r"<mailto:[^<>\s]*>", "", text, flags=re.IGNORECASE)
@@ -304,7 +304,7 @@ def _parse_plaintext(text: str) -> list[dict[str, Any]] | None:
 
     def flush() -> None:
         # `buf` is only mutated via .clear() / .append() in the enclosing
-        # 权限范围, never re-as签名ed, so it doesn't need `nonlocal`.
+        # scope, never re-assigned, so it doesn't need `nonlocal`.
         nonlocal pending_meta
         if not buf:
             return
@@ -446,8 +446,8 @@ def _parse_html(html: str) -> list[dict[str, Any]] | None:
     except Exception:
         return None
 
-    # Find all quote 容器s, then keep only the top-level ones (those
-    # whose nearest ancestor that's also a quote 容器 is None).
+    # Find all quote containers, then keep only the top-level ones (those
+    # whose nearest ancestor that's also a quote container is None).
     all_quotes = [t for t in soup.find_all(True) if _is_quote_container(t)]
     if not all_quotes:
         return None
@@ -466,7 +466,7 @@ def _parse_html(html: str) -> list[dict[str, Any]] | None:
 
     turns: list[dict[str, Any]] = []
 
-    # Collect the new-reply content from OUTSIDE the quote 容器s.
+    # Collect the new-reply content from OUTSIDE the quote containers.
     # Most replies are top-posted (head), but Japanese / formal emails are
     # frequently bottom-posted (tail). Some users do both. We combine head
     # and tail into a single level-0 turn so the new content always shows
@@ -534,10 +534,10 @@ def _parse_html(html: str) -> list[dict[str, Any]] | None:
 
     def _walk(node, level: int):
         meta_from_node = _extract_quote_meta(str(node))
-        # Recurse into nested quote 容器s inside this one, then strip
+        # Recurse into nested quote containers inside this one, then strip
         # them so the body of THIS turn doesn't include them.
         nested = [t for t in node.find_all(True, recursive=True) if _is_quote_container(t)]
-        # Keep only direct-quote descendants (no other quote 容器 between)
+        # Keep only direct-quote descendants (no other quote container between)
         def has_quote_between(child, ancestor) -> bool:
             p = child.parent
             while p is not None and p is not ancestor:
@@ -550,11 +550,11 @@ def _parse_html(html: str) -> list[dict[str, Any]] | None:
             n.extract()
         body_html = node.decode_contents()
 
-        # Collapse "wrapper-only" quote 容器s: if the only remaining
+        # Collapse "wrapper-only" quote containers: if the only remaining
         # content of this node (after pulling out nested quotes) is an
         # attribution line, don't emit a separate turn for it. Instead,
         # pass the attribution down as meta for the directly-nested child.
-        # Without this collapse, gmail_quote_容器 produces a phantom
+        # Without this collapse, gmail_quote_container produces a phantom
         # bubble that contains just the JP/EN attribution line.
         body_text = re.sub(r"<[^>]+>", " ", body_html).strip()
         body_text = _html.unescape(body_text)

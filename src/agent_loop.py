@@ -621,7 +621,7 @@ def _assemble_prompt(tool_names: set, disabled_tools: set = None, compact: bool 
     return "\n\n".join(parts)
 
 
-# Legacy: full prompt with all tools (回退 when RAG unavailable)
+# Legacy: full prompt with all tools (fallback when RAG unavailable)
 AGENT_SYSTEM_PROMPT = _assemble_prompt(set(TOOL_SECTIONS.keys()))
 
 
@@ -629,12 +629,12 @@ _cached_base_prompt = None
 _cached_base_prompt_key = None
 
 # Constants — moved out of hot paths to avoid per-request/per-round allocation
-# Hosts whose endpoints natively support OpenAI-style 函数调用ing.
+# Hosts whose endpoints natively support OpenAI-style function calling.
 # When the active endpoint is one of these, the agent sends FUNCTION_TOOL_SCHEMAS
 # (so the model emits `tool_calls` directly) instead of relying on the model
 # to copy fenced-block examples from prompt text. Smaller models — DeepSeek
 # especially — often fail to follow the fenced-block convention and emit raw
-# JSON, which the agent then can't parse as a 工具调用.
+# JSON, which the agent then can't parse as a tool call.
 _API_HOSTS = frozenset([
     "api.openai.com", "api.anthropic.com",
     "openrouter.ai", "api.groq.com",
@@ -924,12 +924,12 @@ def _classify_agent_request(messages: List[Dict], last_user: str) -> Dict[str, o
         domains.add("settings")
     if has(r"\b(contact|contacts|phone|phone number|address book|vcard)\b"):
         domains.add("contacts")
-    # API-integration intent — calling a configured 服务 via the api_call
+    # API-integration intent — calling a configured service via the api_call
     # tool. Without this the #3794 repro ("Use the api_call tool to call Home
-    # Assistant GET /api/states") matched no domain, classified as low-签名al,
+    # Assistant GET /api/states") matched no domain, classified as low-signal,
     # and the tool never reached the schema filter. Detect it explicitly so the
-    # "integrations" domain 随机种子s api_call deterministically (see
-    # _DOMAIN_TOOL_MAP), independent of 嵌入 retrieval.
+    # "integrations" domain seeds api_call deterministically (see
+    # _DOMAIN_TOOL_MAP), independent of embedding retrieval.
     if has(r"\bapi[ _]call\b", r"\bintegrations?\b",
            r"\b(?:home ?assistant|miniflux|gitea|linkding|jellyfin)\b"):
         domains.add("integrations")
@@ -994,7 +994,7 @@ def _build_system_prompt(
 
     # With RAG tools, cache key includes the selected tools
     _rt_key = frozenset(relevant_tools) if relevant_tools else None
-    # Include a 签名ature of the built-in overrides so editing one in the
+    # Include a signature of the built-in overrides so editing one in the
     # Skills UI takes effect without a restart (busts the prompt cache).
     # Hash the full dict so content edits (not just key add/remove) bust it.
     try:
@@ -1005,7 +1005,7 @@ def _build_system_prompt(
     cache_key = (frozenset(disabled_tools or []), bool(mcp_mgr), needs_admin, _rt_key, compact, _ov_sig, owner, suppress_local_context, suppress_skills)
     if _cached_base_prompt and _cached_base_prompt_key == cache_key and not active_document:
         agent_prompt = _cached_base_prompt
-        # Skill 索引 is user-editable (name + description), so it must never
+        # Skill index is user-editable (name + description), so it must never
         # live in the trusted system role and is NOT cached. Always recompute
         # when the cache hits.
         _, _skill_index_block = _build_base_prompt(
@@ -1038,13 +1038,13 @@ def _build_system_prompt(
     set_active_model(model)
 
     # Current date/time for every agent request. This is user-local when the
-    # browser provided 时区 headers, with a server-local 回退.
+    # browser provided timezone headers, with a server-local fallback.
     #
     # IMPORTANT: this is intentionally NOT prepended into agent_prompt (the
     # system message) anymore. Its text changes every minute, and local
-    # OpenAI-compatible 后端s (llama.cpp / LM Studio) key their KV-cache
+    # OpenAI-compatible backends (llama.cpp / LM Studio) key their KV-cache
     # prefix off the system message byte-for-byte — mixing ever-changing
-    # 时间戳 text into the (already large, tool-laden) agent 系统提示
+    # timestamp text into the (already large, tool-laden) agent system prompt
     # would invalidate the cached prefix on every single request, forcing a
     # full prompt re-evaluation each turn (issue #2927). It's built here as a
     # standalone *user*-role message and inserted near the end of the array,
@@ -1058,7 +1058,7 @@ def _build_system_prompt(
 
     # Document context is kept as a SEPARATE message (not merged into the tool
     # prompt) so the context trimmer doesn't destroy it when truncating the
-    # massive tool-description 系统提示.
+    # massive tool-description system prompt.
     _doc_message = None
     # Matched-skills block: same treatment (separate user-role message with
     # metadata.trusted=False) so user-editable skill content can't inject into
@@ -1180,8 +1180,8 @@ def _build_system_prompt(
     else:
         set_active_document(None)
 
-    # Active email reader — 前端 told us the user has an email open.
-    # 注入 a context block so "reply", "summarize this", "what does it say"
+    # Active email reader — frontend told us the user has an email open.
+    # Inject a context block so "reply", "summarize this", "what does it say"
     # resolve to the real UID instead of the agent inventing a fresh .md
     # draft with fake headers. This is the email equivalent of _doc_message.
     _email_message = None
@@ -1240,7 +1240,7 @@ def _build_system_prompt(
         _email_message = untrusted_context_message("active email reader", email_ctx)
         _email_message["_protected"] = True
 
-    # 注入 writing style for any email writing path. This is deliberately
+    # Inject writing style for any email writing path. This is deliberately
     # broader than read/list: models may compose via send_email, reply_to_email,
     # or ui_control open_email_reply after the first tool round.
     _inject_style = False
@@ -1302,7 +1302,7 @@ def _build_system_prompt(
             'that open draft is the target: use update_document/edit_document on it instead of creating another document.'
         )
 
-    # 注入 relevant skills based on the user's last message. The
+    # Inject relevant skills based on the user's last message. The
     # SkillsManager does a Jaccard token-match over published skills'
     # name + description + when_to_use + procedure, returning the top
     # few. If the teacher wrote a procedure for "open my X chat" last
@@ -1421,7 +1421,7 @@ def _build_system_prompt(
 
     messages = messages[:insert_idx] + [agent_msg] + messages[insert_idx:]
 
-    # 合并 consecutive system messages — but skip _protected doc messages
+    # Merge consecutive system messages — but skip _protected doc messages
     merged = []
     for msg in messages:
         if (msg.get("role") == "system"
@@ -1515,16 +1515,16 @@ def _build_base_prompt(
         elif compact:
             agent_prompt = _assemble_prompt(set(TOOL_SECTIONS.keys()), disabled, compact=True)
 
-    # 注入 the Level-0 skill 索引 — one line per skill so the agent
+    # Inject the Level-0 skill index — one line per skill so the agent
     # knows what canonical procedures exist. Includes published skills
     # plus teacher-escalation drafts (auto-written when the student
     # fails a task; appear here on the very next turn so the student
     # can apply them immediately). Full SKILL.md fetched on demand via
-    # `manage_skills view name=...`. Gating mirrors 索引_for: platform
-    # + requires_toolsets + 回退_for_toolsets.
+    # `manage_skills view name=...`. Gating mirrors index_for: platform
+    # + requires_toolsets + fallback_for_toolsets.
     #
     # SECURITY: skill `name` and `description` are user-editable, so the
-    # 索引 block is returned SEPARATELY (not appended to agent_prompt).
+    # index block is returned SEPARATELY (not appended to agent_prompt).
     # The caller wraps it in untrusted_context_message and ships it as a
     # user-role message — same treatment as the matched-skills block.
     skill_index_block = ""
@@ -1553,17 +1553,17 @@ def _build_base_prompt(
                         lines.append(f"- `{s['name']}` — {s['description']}{badge}")
                 skill_index_block = "\n\n" + "\n".join(lines)
         except Exception as _e:
-            # Skill 索引 is a soft enhancement — never fail prompt assembly on it.
+            # Skill index is a soft enhancement — never fail prompt assembly on it.
             logger.debug(f"Skill-index injection skipped: {_e}")
 
-    # 注入 integration descriptions
+    # Inject integration descriptions
     if not suppress_local_context:
         from src.integrations import get_integrations_prompt
         integ_prompt = get_integrations_prompt()
         if integ_prompt:
             agent_prompt += "\n\n" + integ_prompt
 
-    # 注入 MCP 工具 descriptions
+    # Inject MCP tool descriptions
     if mcp_mgr:
         mcp_desc = mcp_mgr.get_tool_descriptions_for_prompt(mcp_disabled_map or {})
         if mcp_desc:
@@ -1594,7 +1594,7 @@ def _resolve_tool_blocks(round_response: str, native_tool_calls: list, round_num
         # have a reliable structured channel for real tool invocations. When such
         # a model emits no native tool_calls, any ```bash/```python/```json fence
         # in its prose is virtually always an illustrative example for the user
-        # (e.g. "here's the command you'd run"), not an attempted 工具调用 —
+        # (e.g. "here's the command you'd run"), not an attempted tool call —
         # executing it causes accidental runs and clarification loops (#3222).
         #
         # Gate ONLY that fenced-block pattern for native models, not the whole
@@ -1647,9 +1647,9 @@ def _append_tool_results(
             _m.pop("reasoning_content", None)
     if used_native and native_tool_calls:
         assistant_msg = {"role": "assistant"}
-        # When the model emitted ONLY 工具调用s (no prose), content must be
+        # When the model emitted ONLY tool calls (no prose), content must be
         # null, NOT an empty string. Google Gemini's OpenAI-compatible endpoint
-        # and Ollama both reject an 助手消息 that carries tool_calls
+        # and Ollama both reject an assistant message that carries tool_calls
         # alongside empty-string content with HTTP 400 ("contents is not
         # specified" / a JSON parse error), which aborts every tool-using turn
         # at the follow-up round. null (i.e. omitted text) is the spec-correct
@@ -1665,8 +1665,8 @@ def _append_tool_results(
                     "name": tc.get("name", ""),
                     "arguments": tc.get("arguments", "{}"),
                 },
-                # Gemini 3 requires the opaque thought_签名ature it returned with
-                # each 函数调用 to be echoed back on the follow-up turn, or
+                # Gemini 3 requires the opaque thought_signature it returned with
+                # each function call to be echoed back on the follow-up turn, or
                 # the next request 400s. Replay it when present; other providers
                 # never emit it (their payload builders just ignore the field).
                 **({"extra_content": tc["extra_content"]} if tc.get("extra_content") else {}),
@@ -1689,9 +1689,9 @@ def _append_tool_results(
         messages.append(msg)
         # Tool output (shell/python stdout, file reads, fetched pages, email
         # bodies, MCP results) is sourced from outside the server. Wrap it as
-        # untrusted data so prompt-injection inside a 工具结果 is treated as
+        # untrusted data so prompt-injection inside a tool result is treated as
         # data, not instructions — same hardening as skills (#788) and the
-        # web/RAG context. THREAT_MODEL.md lists 工具输出 as a surface that
+        # web/RAG context. THREAT_MODEL.md lists tool output as a surface that
         # must go through untrusted_context_message.
         messages.append(
             untrusted_context_message("tool execution results", tool_output_text)
@@ -1726,9 +1726,9 @@ def _compute_final_metrics(
                 input_content += msg["content"] + "\n"
         input_tokens = len(input_content) // 4
         output_tokens = len(full_response) // 4
-    # Prefer the 后端's true generation speed (llama.cpp
-    # timings.predicted_per_second) — pure 解码, no prefill/tool/network time.
-    # Fall back to tokens/wall-clock only when the 后端 didn't report it
+    # Prefer the backend's true generation speed (llama.cpp
+    # timings.predicted_per_second) — pure decode, no prefill/tool/network time.
+    # Fall back to tokens/wall-clock only when the backend didn't report it
     # (e.g. cloud APIs without timings); that figure reads low because
     # total_duration includes prefill + agent overhead.
     if backend_gen_tps and backend_gen_tps > 0:
@@ -1745,8 +1745,8 @@ def _compute_final_metrics(
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "tokens_per_second": round(tps, 2),
-        # True 解码 speed when the 后端 reported it; "computed" = the
-        # tokens/wall-clock 回退 (reads low — includes prefill/overhead).
+        # True decode speed when the backend reported it; "computed" = the
+        # tokens/wall-clock fallback (reads low — includes prefill/overhead).
         "tps_source": "backend" if (backend_gen_tps and backend_gen_tps > 0) else "computed",
         "total_tokens": input_tokens + output_tokens,
         "context_length": context_length,
@@ -1978,7 +1978,7 @@ async def stream_agent_loop(
     public_blocked_tools = blocked_tools_for_owner(owner)
     if public_blocked_tools:
         disabled_tools.update(public_blocked_tools)
-        # MCP 工具s are namespaced dynamically, so hide all MCP schemas for
+        # MCP tools are namespaced dynamically, so hide all MCP schemas for
         # public/non-admin users rather than trying to enumerate every tool.
         mcp_mgr = None
 
@@ -2095,7 +2095,7 @@ async def stream_agent_loop(
         return
 
     if plan_mode and mcp_mgr:
-        # Allow read-only MCP 工具s to investigate, block write/unknown ones:
+        # Allow read-only MCP tools to investigate, block write/unknown ones:
         # hide them from the schemas AND reject them at runtime by qualified name.
         _mcp_block_map, _mcp_block_q = mcp_mgr.plan_mode_blocked_mcp()
         for _sid, _names in _mcp_block_map.items():
@@ -2112,7 +2112,7 @@ async def stream_agent_loop(
     if not guide_only and not _relevant_tools and _low_signal_turn:
         from src.tool_index import ALWAYS_AVAILABLE
         if workspace:
-            # An active workspace IS the file-work 签名al: a vague "look at the
+            # An active workspace IS the file-work signal: a vague "look at the
             # project" means explore this folder. Surface only the READ-ONLY file
             # tools (intersection with the plan-mode read-only allowlist) so the
             # agent can investigate; write/shell tools stay out until the request
@@ -2123,7 +2123,7 @@ async def stream_agent_loop(
             logger.info("[tool-rag] Low-signal but workspace active; including read-only file tools")
         else:
             # Don't short-circuit: fall through to RAG retrieval below.
-            # Non-English queries are flagged low_签名al by the English-only
+            # Non-English queries are flagged low_signal by the English-only
             # intent classifier, but fastembed retrieval works across languages.
             logger.info("[tool-rag] Low-signal query; will run RAG retrieval")
     if not guide_only and not _relevant_tools:
@@ -2170,7 +2170,7 @@ async def stream_agent_loop(
                 _relevant_tools.update(tools)
         logger.info(f"[tool-rag] Keyword fallback selected: {sorted(_relevant_tools - ALWAYS_AVAILABLE)}")
 
-    # If deterministic domain detection fired, 随机种子 the corresponding domain
+    # If deterministic domain detection fired, seed the corresponding domain
     # tools into the selected tool set. This is not direct prompt-pack
     # injection: `_assemble_prompt()` still derives domain rules from the final
     # tool names. It prevents obvious requests like "last 5 emails" from
@@ -2202,19 +2202,19 @@ async def stream_agent_loop(
 
     # Per-request UI toggles are stronger than retrieval. If the user turns on
     # Search, the model must see the search tools even when the latest text is a
-    # typo or otherwise low-签名al for tool RAG.
+    # typo or otherwise low-signal for tool RAG.
     if not guide_only and forced_tools:
         if _relevant_tools is None:
             from src.tool_index import ALWAYS_AVAILABLE
             _relevant_tools = set(ALWAYS_AVAILABLE)
         _relevant_tools.update(t for t in forced_tools if t not in disabled_tools)
 
-    # The skill 索引 injected by _build_system_prompt tells the model to
+    # The skill index injected by _build_system_prompt tells the model to
     # call `manage_skills action=view`, and Jaccard-matched skills are pasted
     # into the prompt as procedures to follow — but neither path goes through
     # tool selection, so the model can be handed a procedure naming tools
     # (grep, read_file, ...) that aren't in its schema list. Keep the schemas
-    # in lockstep: manage_skills is callable whenever any skill is 索引ed,
+    # in lockstep: manage_skills is callable whenever any skill is indexed,
     # and a matched skill's declared requires_toolsets ride along with it.
     if not guide_only and _relevant_tools is not None and not _low_signal_turn:
         try:
@@ -2231,7 +2231,7 @@ async def stream_agent_loop(
             if _owner_skills:
                 _relevant_tools.add("manage_skills")
                 if _retrieval_query:
-                    # 验证 against every known executable tool, not just
+                    # Validate against every known executable tool, not just
                     # TOOL_SECTIONS — code-nav tools (grep/glob/ls) ship as
                     # schemas without a prompt-prose section.
                     from src.tool_policy import known_tool_names
@@ -2254,7 +2254,7 @@ async def stream_agent_loop(
 
     _t2 = time.time()
     # Hosted-API match by URL, OR the model name looks like a recent model
-    # known to follow OpenAI-style 函数调用ing (DeepSeek, GPT*, Claude,
+    # known to follow OpenAI-style function calling (DeepSeek, GPT*, Claude,
     # Gemini, Qwen3+, Mixtral, Llama 3.1+). Caught the DeepSeek-via-local-
     # vLLM case where endpoint_url doesn't include a vendor host.
     _model_lc = (model or "").lower()
@@ -2282,7 +2282,7 @@ async def stream_agent_loop(
         "gpt-4", "gpt-5", "gpt-o", "claude", "gemini", "gemma",
         "qwen3", "qwen2.5", "mixtral", "mistral", "llama-3.1", "llama-3.2",
         "llama-3.3", "llama-4", "llama3.1", "llama3.2", "llama3.3", "llama4",
-        # Local-served models that follow OpenAI-style 函数调用ing
+        # Local-served models that follow OpenAI-style function calling
         # via vLLM's `--enable-auto-tool-choice`. Belt-and-suspenders
         # with the per-endpoint flag above.
         "minimax", "kimi", "yi-", "phi-3", "phi-4", "command-r",
@@ -2291,8 +2291,8 @@ async def stream_agent_loop(
         # (reasoning model) does not — handled by the blocklist below.
         "deepseek-v", "deepseek-chat",
     ))
-    # Models known to reject 工具模式s at the Ollama/local level even when
-    # the 端点地址 would otherwise enable native 函数调用ing.
+    # Models known to reject tool schemas at the Ollama/local level even when
+    # the endpoint URL would otherwise enable native function calling.
     # The per-endpoint supports_tools flag (True/False) always takes priority
     # and can override this list for users who know their setup.
     _model_no_tools = any(kw in _model_lc for kw in (
@@ -2302,14 +2302,14 @@ async def stream_agent_loop(
         # OpenAI's native tool-call channel unless the endpoint opts in.
         "gpt-oss",
     ))
-    # Native Ollama endpoints (/api/chat) handle 工具模式s differently from
+    # Native Ollama endpoints (/api/chat) handle tool schemas differently from
     # the OpenAI-compat path. Models like gemma4, qwen3.5, ministral respond to
-    # 工具模式s by emitting a single native tool_call token then stopping,
-    # rather than writing a fenced block — the 智能体循环 sees 1 token and no
+    # tool schemas by emitting a single native tool_call token then stopping,
+    # rather than writing a fenced block — the agent loop sees 1 token and no
     # recognised tool, so the round terminates immediately (issue #1567).
     # Unless the endpoint is explicitly marked supports_tools=True by the user
     # (via the endpoint settings toggle), treat Ollama-native as text-only so
-    # the fenced-block path is used instead of native 函数调用ing.
+    # the fenced-block path is used instead of native function calling.
     _is_ollama_native = _is_ollama_native_url(endpoint_url or "")
     _ollama_openai_compat = _is_ollama_openai_compat_url(endpoint_url or "")
     if _endpoint_supports is True:
@@ -2338,7 +2338,7 @@ async def stream_agent_loop(
         # Steer the model to investigate-then-propose. Hard tool gating handles
         # every write path except shell; this directive is what keeps the
         # intentionally-allowed bash/python read-only, so it must DOMINATE. Put
-        # it at the very TOP of the 系统提示 (the base prompt is large and
+        # it at the very TOP of the system prompt (the base prompt is large and
         # action-oriented — appending buried it, and small models ignored it).
         if messages and messages[0].get("role") == "system":
             messages[0]["content"] = PLAN_MODE_DIRECTIVE + "\n\n" + (messages[0].get("content") or "")
@@ -2450,19 +2450,19 @@ async def stream_agent_loop(
     total_tool_calls = 0  # for budget enforcement
 
     # Loop-breaker state. Small models (e.g. deepseek-v4-flash) can get
-    # stuck firing the same 工具调用 over and over with no text — burns
+    # stuck firing the same tool call over and over with no text — burns
     # all 20 rounds, looks like the chat "died". Track recent call
-    # 签名atures + consecutive no-text tool rounds to bail early.
+    # signatures + consecutive no-text tool rounds to bail early.
     _recent_call_sigs = collections.deque(maxlen=6)
     _stuck_rounds = 0
-    # Frequency of each exact call 签名ature (tool + args), for the runaway
-    # backstop. Counting identical repeats — not distinct same-工具调用s —
-    # lets a legit batch (e.g. 18 日历事件s at once) through.
+    # Frequency of each exact call signature (tool + args), for the runaway
+    # backstop. Counting identical repeats — not distinct same-tool calls —
+    # lets a legit batch (e.g. 18 calendar events at once) through.
     _call_freq: collections.Counter = collections.Counter()
     _THINK_RE = re.compile(r'<think>.*?</think>', re.DOTALL | re.IGNORECASE)
     _force_answer = False  # set by loop-breaker → next round runs with NO tools
     # Supervisor: how many times we've nudged the model after it announced
-    # an action without emitting the 工具调用. Capped to prevent a model
+    # an action without emitting the tool call. Capped to prevent a model
     # that *can't* call the tool from looping forever.
     _intent_nudge_count = 0
     _MAX_INTENT_NUDGES = 2
@@ -2470,7 +2470,7 @@ async def stream_agent_loop(
     # "I said I would, then didn't" detector. The pattern that breaks debug
     # loops on weak models (deepseek-v4-flash mid-2026): the model writes
     # "Let me tail the output to see the error" and then ends the turn with
-    # no tool_calls. The intent is sincere but the 函数调用 gets dropped.
+    # no tool_calls. The intent is sincere but the function call gets dropped.
     # Match the common phrasings + an action verb that maps to an available
     # tool, so we don't nudge on harmless transitional text like "let me
     # know what you think".
@@ -2486,12 +2486,12 @@ async def stream_agent_loop(
     )
     _awaiting_user = False  # set by ask_user → end the turn and wait for a choice
 
-    # Document 流式传输 state (persists across rounds)
+    # Document streaming state (persists across rounds)
     _doc_acc = ""          # accumulated tool-call JSON arguments
     _doc_opened = False    # whether doc_stream_open was sent
     _doc_last_len = 0      # last content length sent
 
-    # 设置 when the loop runs out of rounds while the agent was still actively
+    # Set when the loop runs out of rounds while the agent was still actively
     # using tools — i.e. it was cut off, not finished. Drives a "Continue" event
     # so the user can resume instead of the turn silently stalling.
     _exhausted_rounds = False
@@ -2500,7 +2500,7 @@ async def stream_agent_loop(
         round_response = ""
         round_reasoning = ""  # reasoning_content deltas (DeepSeek-thinking, vLLM --reasoning-parser)
         native_tool_calls = []  # populated if model uses function calling
-        # Reset doc 流式传输 state per round
+        # Reset doc streaming state per round
         _doc_acc = ""
         _doc_opened = False
         _doc_last_len = 0
@@ -2510,16 +2510,16 @@ async def stream_agent_loop(
         # detect a SUBSEQUENT block in the same round.
         _doc_scan_from = 0
 
-        # 合并 native 工具模式s with MCP 工具模式s, filtering out
+        # Merge native tool schemas with MCP tool schemas, filtering out
         # Only send function schemas for API models (OpenAI, Anthropic, etc.).
         # Local models use fenced code blocks or <tool_code> — schemas add overhead.
         if _force_answer:
             # Loop-breaker decided the model has enough info but keeps
-            # calling tools. 发送 NO tools this round so it's forced to
+            # calling tools. Send NO tools this round so it's forced to
             # write the answer instead of flailing further.
             all_tool_schemas = []
         elif _is_api_model:
-            # 过滤 schemas by RAG-selected tools (if available)
+            # Filter schemas by RAG-selected tools (if available)
             if _relevant_tools:
                 # _build_base_prompt unions _ADMIN_TOOLS into the prompt
                 # sections when admin intent fires — the schema list must
@@ -2551,7 +2551,7 @@ async def stream_agent_loop(
                     and t.get("name") not in disabled_tools
                 ]
         else:
-            # Local: only MCP schemas when message suggests MCP 工具 usage
+            # Local: only MCP schemas when message suggests MCP tool usage
             _last_content = _last_user.lower()
             _wants_mcp = any(kw in _last_content for kw in _MCP_KEYWORDS)
             all_tool_schemas = mcp_schemas if (_wants_mcp and mcp_schemas) else []
@@ -2560,14 +2560,14 @@ async def stream_agent_loop(
         _tool_names_sent = [t.get("function", {}).get("name") for t in (all_tool_schemas or []) if t.get("function")]
         logger.info(f"[agent-debug] round={round_num} model={model} _is_api_model={_is_api_model} tools_sent={len(_tool_names_sent)} tool_names={_tool_names_sent[:15]} relevant_tools={sorted(_relevant_tools)[:15] if _relevant_tools else 'ALL'}")
 
-        # Primary target + any configured 回退 models. stream_llm_with_回退
+        # Primary target + any configured fallback models. stream_llm_with_fallback
         # only switches on a pre-content failure, so streamed output is never
         # duplicated; the dead-host cooldown keeps repeat primary attempts cheap.
         _candidates = [(endpoint_url, model, headers)] + list(fallbacks or [])
-        # stream_llm enforces a per-read INACTIVITY 超时 (httpx read=超时),
+        # stream_llm enforces a per-read INACTIVITY timeout (httpx read=timeout),
         # which kills a wedged/silent endpoint. This wall-clock deadline is the
         # complementary cap for the rare stream that trickles bytes forever and
-        # so never trips the inactivity 超时. Generous — only catches runaway.
+        # so never trips the inactivity timeout. Generous — only catches runaway.
         _round_deadline = time.time() + max(agent_stream_timeout * 4, 1200)
         _round_start = time.time()
         _round_first_event_logged = False
@@ -2608,7 +2608,7 @@ async def stream_agent_loop(
                     max(agent_stream_timeout * 4, 1200),
                 )
                 break
-            # Forward error events from stream_llm to the 前端
+            # Forward error events from stream_llm to the frontend
             if chunk.startswith("event: error"):
                 logger.warning(
                     "[agent-timing] stream_error round=%s elapsed=%.3fs chunk=%r",
@@ -2626,7 +2626,7 @@ async def stream_agent_loop(
                     if data.get("type") == "tool_call_delta":
                         if tool_policy and tool_policy.blocks(data.get("name")):
                             continue
-                        # Stream document content to 前端 as AI generates it
+                        # Stream document content to frontend as AI generates it
                         logger.debug(f"tool_call_delta: name={data.get('name')}, len(arg_delta)={len(data.get('arg_delta', ''))}")
                         _doc_acc += data.get("arg_delta", "")
                         if not _doc_opened:
@@ -2673,7 +2673,7 @@ async def stream_agent_loop(
                         last_round_input_tokens = round_input
                         has_real_usage = True
                         # Backend-reported TRUE generation speed (llama.cpp
-                        # timings.predicted_per_second) — pure 解码, excludes
+                        # timings.predicted_per_second) — pure decode, excludes
                         # prefill/network. Preferred over tokens/wall-clock, which
                         # reads low. Keep the last round's value (the gen phase).
                         if u.get("gen_tps"):
@@ -2715,8 +2715,8 @@ async def stream_agent_loop(
                             round_response += data["delta"]
                             full_response += data["delta"]
                         yield chunk  # Stream all rounds
-                        # Detect text-fence doc 流式传输 for rounds 2+
-                        # (round 1 is handled by 前端 fence detection + server fenced block path)
+                        # Detect text-fence doc streaming for rounds 2+
+                        # (round 1 is handled by frontend fence detection + server fenced block path)
                         if (
                             round_num > 1
                             and not _doc_acc
@@ -2769,7 +2769,7 @@ async def stream_agent_loop(
                     if round_num == 1:
                         yield chunk
             elif chunk.startswith("event: "):
-                # Forward error events to 前端 as visible text
+                # Forward error events to frontend as visible text
                 yield chunk
             # Intercept [DONE] — don't forward until all rounds finish
 
@@ -2792,7 +2792,7 @@ async def stream_agent_loop(
         # Force-answer round: we told the model to STOP calling tools and
         # answer. If it ignored that and emitted a (possibly DSML) tool
         # call anyway, discard it — don't execute, don't re-loop. Keep
-        # only the prose; if there's none, emit a graceful 回退.
+        # only the prose; if there's none, emit a graceful fallback.
         if _force_answer:
             if tool_blocks:
                 logger.info(f"[agent] force-answer round {round_num}: discarding {len(tool_blocks)} ignored tool call(s)")
@@ -2800,7 +2800,7 @@ async def stream_agent_loop(
             if not _THINK_RE.sub("", strip_tool_blocks(round_response)).strip():
                 # The model burned its budget gathering data but never wrote a
                 # final answer (common with weaker models on multi-source
-                # briefings). Salvage it: one blunt non-流式传输 synthesis call
+                # briefings). Salvage it: one blunt non-streaming synthesis call
                 # over the full conversation (which already holds every tool
                 # result) before falling back to the canned apology.
                 _synth = ""
@@ -2864,7 +2864,7 @@ async def stream_agent_loop(
                 logger.info(f"Auto-created document from {lang_tag} code block ({code_body.count(chr(10))+1} lines)")
                 break  # only auto-create one document per round
 
-        # 保存 cleaned round text for history persistence
+        # Save cleaned round text for history persistence
         # Keep <think> blocks so they render in the thinking section on reload
         # Mirror the same fenced-pattern gate used to resolve tool_blocks above:
         # an illustrative fence that wasn't executed (because this is a native
@@ -2913,8 +2913,8 @@ async def stream_agent_loop(
                             "\n\nFix these now using tools, then finish."
                         ),
                     })
-                    # Require fresh effectful work before 验证ing again, so we
-                    # never re-验证 an unchanged state in a loop.
+                    # Require fresh effectful work before verifying again, so we
+                    # never re-verify an unchanged state in a loop.
                     _effectful_used = False
                     continue
             # ── Intent-without-action supervisor ─────────────────────
@@ -2965,14 +2965,14 @@ async def stream_agent_loop(
                         "one sentence instead of restating the plan."
                     ),
                 })
-                # Visible 签名al in the stream so the user knows we caught it.
+                # Visible signal in the stream so the user knows we caught it.
                 yield f'data: {json.dumps({"type": "agent_step", "round": round_num + 1})}\n\n'
                 continue
             break  # no tools — done
 
         # ── Loop-breaker (Terminus-style stall detector) ──────────────
         # Stall detector for repeated no-progress tool loops.
-        # A round is "useless" ONLY when it re-issues a recent 工具调用 AND
+        # A round is "useless" ONLY when it re-issues a recent tool call AND
         # writes no answer text — i.e. the model is going in circles.
         # Genuine exploration (new, distinct calls) is never useless, so
         # multi-step work (file hunts, multi-host ssh, build→test→fix) rides
@@ -2987,7 +2987,7 @@ async def stream_agent_loop(
         for _b in tool_blocks:
             _call_freq[f"{_b.tool_type}:{(_b.content or '').strip()[:120]}"] += 1
         # "Real" answer text = round text minus <think> blocks. Empty-think
-        # rounds (just "<think>\n\n</think>" + a 工具调用) must not read as
+        # rounds (just "<think>\n\n</think>" + a tool call) must not read as
         # progress, so strip think before checking.
         _real_text = _THINK_RE.sub("", cleaned_round).strip()
         # Circling = repeating a recent call with nothing written. Any
@@ -2998,7 +2998,7 @@ async def stream_agent_loop(
             _stuck_rounds = 0
         # Runaway = the SAME exact call repeated an absurd number of times.
         # Distinct calls to one tool (a real batch) are legitimate work, so we
-        # count identical call 签名atures, not raw per-tool-type totals.
+        # count identical call signatures, not raw per-tool-type totals.
         _runaway = _detect_runaway_call(_call_freq)
         if _stuck_rounds >= 4 or _runaway:
             reason = (f"calling {_runaway} with identical arguments over and over" if _runaway
@@ -3030,7 +3030,7 @@ async def stream_agent_loop(
 
         # Pre-stream document content for fenced tool blocks (non-native path)
         # Native path already streamed via tool_call_delta above
-        # For round 1 fenced blocks, 前端 fence detection already handled 流式传输
+        # For round 1 fenced blocks, frontend fence detection already handled streaming
         if not _doc_opened and round_num == 1:
             for block in tool_blocks:
                 if tool_policy and tool_policy.blocks(block.tool_type):
@@ -3075,7 +3075,7 @@ async def stream_agent_loop(
                 break
 
             total_tool_calls += 1
-            # 构建 a short display string for the 前端 tool bubble.
+            # Build a short display string for the frontend tool bubble.
             # Document tools show a brief summary instead of dumping full content.
             is_doc_tool = block.tool_type in ("create_document", "update_document", "edit_document", "suggest_document")
             if is_doc_tool:
@@ -3097,7 +3097,7 @@ async def stream_agent_loop(
                 )
 
                 # Streaming progress for long-running tools (bash, python).
-                # The bash/python branches inside _direct_回退 emit
+                # The bash/python branches inside _direct_fallback emit
                 # periodic {elapsed_s, tail} payloads via this callback;
                 # we forward each one as a `tool_progress` SSE event so
                 # the UI can render live elapsed-time + tail-of-output.
@@ -3172,7 +3172,7 @@ async def stream_agent_loop(
                     except Exception as _e:
                         logger.debug(f"skill requires_toolsets unlock skipped: {_e}")
 
-            # 提取 structured web sources from web_search 工具输出.
+            # Extract structured web sources from web_search tool output.
             # web_search returns {"output": ..., "exit_code": 0}; check "output"
             # first so the <!-- SOURCES:…--> marker is found and stripped even
             # when the result doesn't carry a "results" or "stdout" key.
@@ -3197,7 +3197,7 @@ async def stream_agent_loop(
                         except (json.JSONDecodeError, Exception):
                             pass
 
-            # Emit doc-specific event for document tools — the 前端
+            # Emit doc-specific event for document tools — the frontend
             # document panel handles this; no need to show content in chat.
             if is_doc_tool and "action" in result:
                 if result["action"] == "suggest":
@@ -3209,14 +3209,14 @@ async def stream_agent_loop(
                         f'data: {json.dumps({"type": "doc_update", "doc_id": result["doc_id"], "content": result["content"], "version": result["version"], "title": result.get("title", ""), "language": result.get("language")})}\n\n'
                     )
 
-            # Emit ui_control event for 前端 to apply UI changes
+            # Emit ui_control event for frontend to apply UI changes
             if "ui_event" in result:
                 yield (
                     f'data: {json.dumps({"type": "ui_control", "data": result})}\n\n'
                 )
 
             # ask_user: the agent posed a multiple-choice question. Emit it so the
-            # 前端 renders clickable options, then end the turn (below) and
+            # frontend renders clickable options, then end the turn (below) and
             # wait — the user's pick becomes the next message.
             if "ask_user" in result:
                 # The question lives in the tool args. ChatMessage.to_dict()
@@ -3238,14 +3238,14 @@ async def stream_agent_loop(
                 _awaiting_user = True
 
             # update_plan: agent wrote back to the plan (ticked a step / revised).
-            # Push it to the 前端 so the stored plan + docked window update
+            # Push it to the frontend so the stored plan + docked window update
             # live. Does NOT end the turn — the agent keeps working.
             if "plan_update" in result:
                 yield (
                     f'data: {json.dumps({"type": "plan_update", "data": result["plan_update"]})}\n\n'
                 )
 
-            # 构建 output for 前端 tool bubble.
+            # Build output for frontend tool bubble.
             # Document tools get a short summary — content goes to the editor panel.
             output_text = ""
             if is_doc_tool and "action" in result:
@@ -3259,7 +3259,7 @@ async def stream_agent_loop(
                 elif action == "update":
                     output_text = f'Document updated: "{title}" (v{ver})'
             elif "stdout" in result:
-                # On a bash/python 超时 the result carries error + (often
+                # On a bash/python timeout the result carries error + (often
                 # empty) stdout/stderr; fall back to the error so the "timed
                 # out" reason reaches the UI instead of a blank result.
                 raw = result["stdout"] or result["stderr"] or result.get("error", "")
@@ -3295,22 +3295,22 @@ async def stream_agent_loop(
                     "toggle_name", "state", "mode", "model", "endpoint_url",
                     "theme_name", "colors",
                     # ui_control open_email_reply payload — without these the
-                    # 前端 openReplyDraft bails on undefined uid and the
+                    # frontend openReplyDraft bails on undefined uid and the
                     # reply window silently never opens.
                     "uid", "folder", "account_id",
                     # Optional pre-filled body for open_email_reply so the
-                    # agent can compose-and-open in one 工具调用.
+                    # agent can compose-and-open in one tool call.
                     "body",
                     # ui_control open_panel payload
                     "panel",
                 ):
                     if k in result:
                         tool_output_data[k] = result[k]
-            # Forward 镜像 data from generate_镜像 tool
+            # Forward image data from generate_image tool
             for k in ("image_url", "image_prompt", "image_model", "image_size", "image_quality"):
                 if k in result:
                     tool_output_data[k] = result[k]
-            # Forward screenshots from browser tools (base64 镜像s)
+            # Forward screenshots from browser tools (base64 images)
             if result.get("images"):
                 img = result["images"][0]
                 tool_output_data["screenshot"] = f"data:{img['mimeType']};base64,{img['data']}"
@@ -3320,7 +3320,7 @@ async def stream_agent_loop(
             yield f'data: {json.dumps(tool_output_data)}\n\n'
 
             # Native document tools open in the editor + carry the REAL doc id.
-            # Emit a doc_update so the 前端 opens/activates it and sends it
+            # Emit a doc_update so the frontend opens/activates it and sends it
             # back as active_doc_id next turn (otherwise the agent can't "see"
             # the document it just created on the follow-up message).
             if block.tool_type in ("create_document", "update_document", "edit_document") and result.get("doc_id"):
@@ -3346,7 +3346,7 @@ async def stream_agent_loop(
 
             # Same pattern for notes: when manage_notes creates a note
             # and returns note_id, drop a `[View note](#note-<id>)` link
-            # into the stream so chatRenderer's 点击处理器 routes to
+            # into the stream so chatRenderer's click handler routes to
             # the new openNote() in notes.js — opens the notes panel and
             # scrolls/flashes the matching card. Without this, the agent
             # would write "View note" as a phrase with no target.
@@ -3357,7 +3357,7 @@ async def stream_agent_loop(
                 _anchor = f"\n\n[{_label}](#note-{_nid})\n"
                 yield 'data: ' + json.dumps({"delta": _anchor}) + '\n\n'
 
-            # 保存 for history persistence
+            # Save for history persistence
             tool_event = {
                 "round": round_num,
                 "tool": block.tool_type,
@@ -3389,7 +3389,7 @@ async def stream_agent_loop(
             break
 
         # ask_user posed a question — stop here and wait for the user's choice.
-        # Don't feed 工具结果s back or advance a round; the user's selection
+        # Don't feed tool results back or advance a round; the user's selection
         # arrives as the next message and the agent resumes from there. The
         # question text is already in the streamed response, so it persists.
         if _awaiting_user:
@@ -3423,14 +3423,14 @@ async def stream_agent_loop(
         yield f'data: {json.dumps({"type": "rounds_exhausted", "rounds": max_rounds})}\n\n'
 
     # If the response is completely empty and no tools were executed,
-    # yield a 回退 message so the user is not left hanging.
+    # yield a fallback message so the user is not left hanging.
     full_response, _fallback_chunk = _empty_response_fallback(
         full_response, round_reasoning, tool_events
     )
     if _fallback_chunk:
         yield _fallback_chunk
 
-    # --- Final 指标 ---
+    # --- Final metrics ---
     total_duration = time.time() - total_start
     metrics = _compute_final_metrics(
         messages, full_response, total_duration, time_to_first_token,
@@ -3446,7 +3446,7 @@ async def stream_agent_loop(
 
     # Teacher-escalation: inline takeover visible in the chat stream.
     # The student just finished; if Tier 1 flags failure, the teacher
-    # gets a turn (with its own 工具调用s forwarded to the user) and
+    # gets a turn (with its own tool calls forwarded to the user) and
     # a skill is saved ONLY if the teacher actually succeeds. Skipped
     # when we ARE the teacher to avoid recursion.
     if not _is_teacher_run and not guide_only:
