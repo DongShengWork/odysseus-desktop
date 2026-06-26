@@ -163,13 +163,13 @@ async function _openDownloadForGgufTask(task) {
     || raw;
   const cookbook = window.cookbookModule;
   if (cookbook && typeof cookbook.open === 'function') {
-    cookbook.open({ tab: 'Search' });
+    cookbook.open({ tab: '搜索' });
   } else {
     document.getElementById('tool-cookbook-btn')?.click();
   }
   setTimeout(async () => {
     const modal = document.getElementById('cookbook-modal');
-    const tab = modal?.querySelector('.cookbook-tab[data-backend="Search"]');
+    const tab = modal?.querySelector('.cookbook-tab[data-backend="搜索"]');
     if (tab && !tab.classList.contains('active')) tab.click();
     const search = document.getElementById('hwfit-search');
     if (search) {
@@ -1868,7 +1868,7 @@ export function _renderRunningTab() {
     runTab.innerHTML = tasks.length ? `Active${activeCountHtml}${_errCount2 ? '<span class="cookbook-tab-error-dot"></span>' : ''}` : 'Active';
     if (!hasContent) {
       if (runTab.classList.contains('active')) {
-        const wfTab = tabBar.querySelector('.cookbook-tab[data-backend="Search"]');
+        const wfTab = tabBar.querySelector('.cookbook-tab[data-backend="搜索"]');
         if (wfTab) wfTab.click();
       }
       runTab.remove();
@@ -2342,7 +2342,7 @@ export function _renderRunningTab() {
         if (task.status !== 'running' && task.status !== 'queued') {
           items.push({ group: 'run', label: 'Reconnect tmux', action: 'reconnect' });
         }
-        items.push({ group: 'run', label: 'Restart', action: 'retry' });
+        items.push({ group: 'run', label: '重启', action: 'retry' });
         // ── Edit section ────────────────────────────────────────────
         // Merged "Edit & relaunch" — opens the structured serve panel
         // pre-filled with this task's config. The old standalone "Edit
@@ -2446,12 +2446,12 @@ export function _renderRunningTab() {
         // Label matches behavior — the kill handler ALWAYS first kills
         // the live tmux session and (for serve tasks) deletes the
         // matching model-endpoint, THEN animates the task card out.
-        // Just "Remove" hid that it stops the live serve too.
+        // Just "移除" hid that it stops the live serve too.
         // ── Danger section ──────────────────────────────────────────
         const _isLive = task.type === 'serve' && ['running', 'ready', 'loading', 'warming', 'starting'].includes(task.status || '');
         items.push({
           group: 'danger',
-          label: _isLive ? 'Stop and remove' : 'Remove',
+          label: _isLive ? 'Stop and remove' : '移除',
           action: 'kill',
           tooltip: _isLive
             ? 'Kill the live tmux session, deregister the chat endpoint, and remove this row'
@@ -2459,7 +2459,7 @@ export function _renderRunningTab() {
           danger: true,
         });
         // Cancel = mobile-only dismiss item. Same pattern as the email kebab.
-        items.push({ group: 'danger', label: 'Cancel', action: 'cancel', mobileOnly: true, custom: () => {} });
+        items.push({ group: 'danger', label: '取消', action: 'cancel', mobileOnly: true, custom: () => {} });
 
         const _MENU_ICONS = {
           'start-now': '<polygon points="6 4 20 12 6 20 6 4"/>',

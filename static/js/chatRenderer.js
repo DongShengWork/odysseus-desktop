@@ -1266,8 +1266,8 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   delBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const ok = await uiModule.styledConfirm('Delete this image?', {
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
+      confirmText: '删除',
+      cancelText: '取消',
       danger: true,
     });
     if (!ok) return;
@@ -1390,7 +1390,7 @@ export function createMsgFooter(msgElement) {
       btn.innerHTML = CHECK_ICON;
       setTimeout(() => { btn.innerHTML = COPY_ICON; }, 1500);
     }},
-    { id: 'edit', icon: '\u270E', title: 'Edit', cls: 'msg-action-btn', handler(e) {
+    { id: 'edit', icon: '\u270E', title: '编辑', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.editAIMessage) window.chatModule.editAIMessage(msgElement);
     }},

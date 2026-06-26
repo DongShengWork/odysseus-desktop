@@ -507,7 +507,7 @@ async function loadEndpoints() {
               ${hasModels ? `<span style="font-size:10px;opacity:0.4;${category === 'api' ? 'flex-basis:100%;' : ''}">Click to manage models</span>` : ''}
             </div>
             <div style="display:flex;gap:4px;align-items:center;">
-              <button class="admin-btn-sm" data-adm-toggle-ep="${ep.id}">${ep.is_enabled ? 'Disable' : 'Enable'}</button>
+              <button class="admin-btn-sm" data-adm-toggle-ep="${ep.id}">${ep.is_enabled ? '禁用' : '启用'}</button>
               <button class="admin-btn-delete" data-adm-del-ep="${ep.id}" data-adm-ep-online="${ep.online ? '1' : '0'}">Delete</button>
               ${hasModels ? '<svg class="admin-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>' : ''}
             </div>
@@ -805,7 +805,7 @@ function initEndpointForm() {
       }
       if (addBtn) {
         addBtn.disabled = false;
-        addBtn.textContent = 'Add';
+        addBtn.textContent = '添加';
         addBtn.style.width = '55px';
         addBtn.style.display = '';
       }
@@ -828,7 +828,7 @@ function initEndpointForm() {
       }
       if (addBtn) {
         addBtn.disabled = false;
-        addBtn.textContent = 'Add';
+        addBtn.textContent = '添加';
         addBtn.style.width = '55px';
         addBtn.style.display = '';
       }
@@ -1092,7 +1092,7 @@ function initEndpointForm() {
         }
       } else { msg.textContent = d.detail || 'Failed'; msg.className = 'admin-error'; }
     } catch (e) { msg.textContent = 'Request failed'; msg.className = 'admin-error'; }
-    btn.disabled = false; btn.textContent = 'Add';
+    btn.disabled = false; btn.textContent = '添加';
   });
 
   async function _startProviderDeviceAuth(providerKey, triggerEl = null) {
@@ -1118,7 +1118,7 @@ function initEndpointForm() {
     const reset = () => {
       if (triggerEl) {
         triggerEl.disabled = false;
-        triggerEl.textContent = triggerText || 'Add';
+        triggerEl.textContent = triggerText || '添加';
       }
       deviceAuthPolling = false;
       _setApiFormForProvider();
@@ -1176,7 +1176,7 @@ function initEndpointForm() {
               ta.remove();
             }
             copyBtn.textContent = ok ? 'Copied' : 'Failed';
-            setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+            setTimeout(() => { copyBtn.textContent = '复制'; }, 1500);
           });
         },
       });
@@ -1702,7 +1702,7 @@ const MCP_PRESETS = [
         { name: "Yahoo",         imap: "imap.mail.yahoo.com", smtp: "smtp.mail.yahoo.com" },
         { name: "iCloud",        imap: "imap.mail.me.com",    smtp: "smtp.mail.me.com" },
         { name: "Zoho",          imap: "imap.zoho.com",       smtp: "smtp.zoho.com" },
-        { name: "Custom",        imap: "",                    smtp: "" },
+        { name: "自定义",        imap: "",                    smtp: "" },
       ],
     },
     help: "Works with any IMAP/SMTP email provider.\n1. Pick your provider from the dropdown (or choose Custom)\n2. Enter your email address and password (or app password)\n3. Click Add Server" },
@@ -1726,7 +1726,7 @@ const MCP_PRESETS = [
     help: "1. Go to notion.so/my-integrations\n2. Create a new integration\n3. Copy the Internal Integration Secret\n4. Share the Notion pages/databases you want accessible with the integration\n5. For Openapi Mcp Headers enter:\n   {\"Authorization\": \"Bearer YOUR_SECRET\", \"Notion-Version\": \"2022-06-28\"}" },
   { name: "Linear",          command: "npx", args: ["-y", "mcp-linear"],                                env: { LINEAR_API_KEY: "" },
     help: "1. Go to linear.app > Settings > API\n2. Create a Personal API Key\n3. Paste it as Linear Api Key" },
-  { name: "Brave Search",    command: "npx", args: ["-y", "@modelcontextprotocol/server-brave-search"], env: { BRAVE_API_KEY: "" },
+  { name: "Brave 搜索",    command: "npx", args: ["-y", "@modelcontextprotocol/server-brave-search"], env: { BRAVE_API_KEY: "" },
     help: "1. Go to brave.com/search/api\n2. Sign up for a free plan (2000 queries/month)\n3. Copy your API key" },
   { name: "Browser (Playwright)", command: "npx", args: ["-y", "@playwright/mcp@latest", "--headless"],  env: {},
     help: "Browser automation via Playwright. The AI can navigate pages, click, fill forms, and read content.\nRuns headless by default. Remove --headless from Args to see the browser window.\nFirst run installs Chromium automatically." },
@@ -1744,8 +1744,8 @@ const TOOL_META = {
   python:            { name: 'Python',           desc: 'Run Python scripts',              cat: 'Code',       ctx: '~200' },
   read_file:         { name: 'Read File',        desc: 'Read files from disk',            cat: 'Code',       ctx: '~150' },
   write_file:        { name: 'Write File',       desc: 'Write/create files',              cat: 'Code',       ctx: '~150' },
-  web_search:        { name: 'Web Search',       desc: 'Search the web via SearXNG',      cat: 'Search',     ctx: '~300' },
-  search_chats:      { name: 'Search Chats',     desc: 'Search conversation history',     cat: 'Search',     ctx: '~150' },
+  web_search:        { name: '联网搜索',       desc: 'Search the web via SearXNG',      cat: '搜索',     ctx: '~300' },
+  search_chats:      { name: 'Search Chats',     desc: 'Search conversation history',     cat: '搜索',     ctx: '~150' },
   create_document:   { name: 'Create Document',  desc: 'Create new documents',            cat: 'Documents',  ctx: '~200' },
   update_document:   { name: 'Update Document',  desc: 'Modify existing documents',       cat: 'Documents',  ctx: '~200' },
   edit_document:     { name: 'Edit Document',    desc: 'Find & replace in documents',     cat: 'Documents',  ctx: '~200' },
@@ -1770,7 +1770,7 @@ const TOOL_META = {
   manage_mcp:        { name: 'MCP Servers',      desc: 'Manage MCP connections',          cat: 'System',     ctx: '~100' },
   manage_webhooks:   { name: 'Webhooks',         desc: 'Configure webhook events',        cat: 'System',     ctx: '~100' },
   manage_tokens:     { name: 'API Tokens',       desc: 'Manage API access tokens',        cat: 'System',     ctx: '~100' },
-  manage_settings:   { name: 'Settings',         desc: 'Change app settings',             cat: 'System',     ctx: '~100' },
+  manage_settings:   { name: '设置',         desc: 'Change app settings',             cat: 'System',     ctx: '~100' },
 };
 
 async function loadBuiltinTools() {
@@ -1792,7 +1792,7 @@ async function loadBuiltinTools() {
     }
 
     // 类别顺序
-    const catOrder = ['Code', 'Search', 'Documents', 'Media', 'Knowledge', 'Multi-Agent', 'Sessions', 'System', 'Other'];
+    const catOrder = ['Code', '搜索', 'Documents', 'Media', 'Knowledge', 'Multi-Agent', 'Sessions', 'System', 'Other'];
     let html = '';
     for (const cat of catOrder) {
       const items = groups[cat];
@@ -1921,7 +1921,7 @@ async function loadMcpServers() {
           <div style="display:flex;gap:4px;align-items:center;">
             ${s.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${s.id}" target="_blank" class="admin-btn-sm" style="background:var(--red);color:#fff;text-decoration:none;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;">Authorize</a>` : ''}
             <button class="admin-btn-sm" data-adm-mcp-reconnect="${s.id}">Reconnect</button>
-            <button class="admin-btn-delete" style="border-color:${s.is_enabled ? 'color-mix(in srgb, var(--red) 30%, transparent)' : 'color-mix(in srgb, var(--fg) 30%, transparent)'};color:${s.is_enabled ? 'var(--red)' : 'var(--fg)'};" data-adm-mcp-toggle="${s.id}" data-adm-mcp-enable="${!s.is_enabled}">${s.is_enabled ? 'Disable' : 'Enable'}</button>
+            <button class="admin-btn-delete" style="border-color:${s.is_enabled ? 'color-mix(in srgb, var(--red) 30%, transparent)' : 'color-mix(in srgb, var(--fg) 30%, transparent)'};color:${s.is_enabled ? 'var(--red)' : 'var(--fg)'};" data-adm-mcp-toggle="${s.id}" data-adm-mcp-enable="${!s.is_enabled}">${s.is_enabled ? '禁用' : '启用'}</button>
             <button class="admin-btn-delete" data-adm-mcp-delete="${s.id}">Delete</button>
             ${hasTools ? '<svg class="admin-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>' : ''}
           </div>
@@ -1938,7 +1938,7 @@ async function loadMcpServers() {
           msg.textContent = data.connected ? t('admin.mcp_reconnected', { n: data.tool_count }) : t('admin.mcp_failed', { msg: data.error || 'unknown' });
           msg.className = data.connected ? 'admin-success' : 'admin-error';
           loadMcpServers();
-        } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+        } catch (e) { msg.textContent = '失败: ' + e.message; msg.className = 'admin-error'; }
       });
     });
     list.querySelectorAll('[data-adm-mcp-toggle]').forEach(btn => {
@@ -2223,7 +2223,7 @@ function initMcpForm() {
       const res = await fetch('/api/mcp/servers', { method: 'POST', body: fd, credentials: 'same-origin' });
       const data = await res.json();
       if (data.needs_oauth) {
-        msg.innerHTML = t('admin.added_mcp', { name: esc(name) })--red);font-weight:600;">Authorize with Google</a> to connect`;
+        msg.innerHTML = `已添加 ${esc(name)} — <a href="/api/mcp/oauth/authorize/${data.id}" target="_blank" style="color:var(--red);font-weight:600;">使用 Google 授权</a> 以连接`;
         msg.className = 'admin-success';
       } else if (data.connected) {
         msg.textContent = t('admin.added_mcp_tools', { name: name, n: data.tool_count }); msg.className = 'admin-success';
@@ -2231,7 +2231,7 @@ function initMcpForm() {
       el('adm-mcpName').value = ''; el('adm-mcpCommand').value = ''; el('adm-mcpArgs').value = ''; el('adm-mcpUrl').value = '';
       _clearEnvFields(); helpBox.style.display = 'none'; _activeHelp = null; _activeOauthFile = null; _activeOauth = null;
       loadMcpServers();
-    } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = '失败: ' + e.message; msg.className = 'admin-error'; }
   });
 }
 
@@ -2541,7 +2541,7 @@ async function loadWebhooks() {
           </div>
           <div class="admin-ep-actions">
             <button class="admin-btn-sm" data-adm-wh-test="${w.id}">Test</button>
-            <button class="admin-btn-sm" data-adm-wh-toggle="${w.id}">${w.is_active ? 'Disable' : 'Enable'}</button>
+            <button class="admin-btn-sm" data-adm-wh-toggle="${w.id}">${w.is_active ? '禁用' : '启用'}</button>
             <button class="admin-btn-delete" data-adm-wh-delete="${w.id}">Delete</button>
           </div>
         </div>`;
@@ -2553,7 +2553,7 @@ async function loadWebhooks() {
           const res = await fetch(`/api/webhooks/${btn.dataset.admWhTest}/test`, { method: 'POST', credentials: 'same-origin' });
           msg.textContent = res.ok ? 'Test sent!' : 'Test failed'; msg.className = res.ok ? 'admin-success' : 'admin-error';
           setTimeout(() => loadWebhooks(), 1000);
-        } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+        } catch (e) { msg.textContent = '失败: ' + e.message; msg.className = 'admin-error'; }
       });
     });
     list.querySelectorAll('[data-adm-wh-toggle]').forEach(btn => {
@@ -2585,13 +2585,13 @@ function initWebhookForm() {
       const res = await fetch('/api/webhooks', { method: 'POST', body: fd, credentials: 'same-origin' });
       if (res.ok) { msg.textContent = 'Webhook added'; msg.className = 'admin-success'; el('adm-whName').value = ''; el('adm-whUrl').value = ''; el('adm-whSecret').value = ''; loadWebhooks(); }
       else { const d = await res.json(); msg.textContent = d.detail || 'Failed'; msg.className = 'admin-error'; }
-    } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = '失败: ' + e.message; msg.className = 'admin-error'; }
   });
 }
 
 /* ── 功能 ── */
 const featureLabels = {
-  web_search: 'Web Search', deep_research: 'Deep Research',
+  web_search: '联网搜索', deep_research: 'Deep Research',
   memory: 'Memory', document_editor: 'Document Editor', rag: 'RAG Knowledge Base', sensitive_filter: 'Sensitive Info Filter',
   gallery: 'Gallery'
 };
@@ -2642,9 +2642,9 @@ function initCalDAV() {
         body: JSON.stringify({ caldav_url: urlIn.value, caldav_username: userIn.value, caldav_password: passIn.value }),
       });
       const d = await res.json();
-      status.textContent = d.ok ? 'Saved' : 'Error';
+      status.textContent = d.ok ? 'Saved' : '错误';
       status.style.color = d.ok ? 'var(--green)' : 'var(--red)';
-    } catch (e) { status.textContent = 'Error'; status.style.color = 'var(--red)'; }
+    } catch (e) { status.textContent = '错误'; status.style.color = 'var(--red)'; }
     setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 3000);
   });
 
@@ -2661,7 +2661,7 @@ function initCalDAV() {
       const d = await res.json();
       status.textContent = d.ok ? t('admin.caldav_connected', { n: d.calendars }) : t('admin.caldav_failed', { error: d.error });
       status.style.color = d.ok ? 'var(--green)' : 'var(--red)';
-    } catch (e) { status.textContent = 'Error'; status.style.color = 'var(--red)'; }
+    } catch (e) { status.textContent = '错误'; status.style.color = 'var(--red)'; }
     setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 5000);
   });
 }
@@ -2686,7 +2686,7 @@ function initBackup() {
       URL.revokeObjectURL(a.href);
       msg.textContent = 'Export downloaded.'; msg.className = 'admin-success';
     } catch (e) { msg.textContent = 'Export failed: ' + e.message; msg.className = 'admin-error'; }
-    btn.disabled = false; btn.textContent = 'Export Data';
+    btn.disabled = false; btn.textContent = '导出数据';
   });
 
   const fileInput = el('adm-importFile');
@@ -2720,7 +2720,7 @@ function initBackup() {
         msg.textContent = result.message || result.detail || 'Import failed'; msg.className = 'admin-error';
       }
     } catch (e) { msg.textContent = 'Import failed: ' + e.message; msg.className = 'admin-error'; }
-    btn.disabled = false; btn.textContent = 'Import Data';
+    btn.disabled = false; btn.textContent = '导入数据';
   });
 }
 
@@ -2740,7 +2740,7 @@ function initDangerZone() {
       const kind = btn.dataset.wipeKind;
       const isAll = kind === '__all__';
       const label = isAll ? 'data across every category' : (_LABELS[kind] || kind);
-      if (!await uiModule.styledConfirm(`Delete ALL ${label}? This cannot be undone.`, { confirmText: 'Delete', danger: true })) return;
+      if (!await uiModule.styledConfirm(`Delete ALL ${label}? This cannot be undone.`, { confirmText: '删除', danger: true })) return;
       if (!await uiModule.styledConfirm(`Really delete every one of your ${label}?`, { confirmText: isAll ? 'Yes, delete everything' : 'Yes, delete everything', danger: true })) return;
       btn.disabled = true;
       const prevHtml = btn.innerHTML;

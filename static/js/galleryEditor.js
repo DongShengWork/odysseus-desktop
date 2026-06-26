@@ -730,7 +730,7 @@ function _saveState(label) {
   // step) rather than kill the user's action.
   try {
     const snap = _snapshotState();
-    snap._label = label || 'Edit';
+    snap._label = label || '编辑';
     snap._ts = Date.now();
     state.undoStack.push(snap);
     if (state.undoStack.length > MAX_HISTORY) state.undoStack.shift();
@@ -1324,7 +1324,7 @@ function _showCropApply() {
 
 function _applyCrop() {
   if (!state.cropRect) return;
-  _saveState('Crop');
+  _saveState('裁剪');
   const { x, y, w, h } = state.cropRect;
   const cw = Math.round(w);
   const ch = Math.round(h);
@@ -3346,7 +3346,7 @@ function _loadProjectPrompt() {
 function _promptCanvasSize(opts) {
   opts = opts || {};
   const title    = opts.title    || 'New canvas';
-  const okLabel  = opts.okLabel  || 'Create';
+  const okLabel  = opts.okLabel  || '创建';
   const initialW = opts.initialW || 1024;
   const initialH = opts.initialH || 1024;
   return new Promise(resolve => {
@@ -3586,7 +3586,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
       const bgLayer = createLayer('Background', w, h);
       bgLayer.ctx.fillStyle = '#ffffff';
       bgLayer.ctx.fillRect(0, 0, w, h);
-      const editLayer = createLayer('Edit', w, h);
+      const editLayer = createLayer('编辑', w, h);
       state.layers.push(bgLayer);
       state.layers.push(editLayer);
       state.activeLayerId = editLayer.id;
@@ -3648,7 +3648,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   });
   function _loadSourceImage() {
 
-  // Loading overlay — whirlpool + "Loading" label while the source image
+  // Loading overlay — whirlpool + "加载中" label while the source image
   // downloads / decodes. Especially important for multi-MB photos where
   // the canvas would otherwise sit blank for several seconds with no
   // feedback. If a draft-lookup overlay is already mounted, reuse it.
@@ -3688,14 +3688,14 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
 }
 
 // Update the gallery's Edit tab label to reflect what's currently open.
-// Pass null to reset to plain "Edit". Only mutates the inner label span
+// Pass null to reset to plain "编辑". Only mutates the inner label span
 // so the SVG icon next to it survives the update.
 function _setEditTabLabel(name) {
   const tab = document.getElementById('gallery-editor-tab');
   if (!tab) return;
   const labelEl = tab.querySelector('.gallery-tab-label') || tab;
   if (!name) {
-    labelEl.textContent = 'Edit';
+    labelEl.textContent = '编辑';
     tab.classList.remove('has-edit');
     return;
   }
