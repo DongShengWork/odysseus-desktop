@@ -412,8 +412,8 @@
           body: JSON.stringify({ username, password, remember, totp_code: code })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Invalid code');
-        if (!data.ok) throw new Error('Login failed');
+        if (!res.ok) throw new Error(data.detail || '无效验证码');
+        if (!data.ok) throw new Error('登录失败');
         form._totpMode = false;
         finishLogin();
       } catch (err) {
@@ -428,19 +428,19 @@
     if (mode === 'setup' || mode === 'signup') {
       const confirm = document.getElementById('confirmPassword').value;
       if (password !== confirm) {
-        errEl.textContent = 'Passwords do not match';
+        errEl.textContent = '两次输入的密码不一致';
         errEl.style.display = 'block';
         submitBtn.disabled = false;
         return;
       }
       if (password.length < policy.password_min_length) {
-        errEl.textContent = `Password must be at least ${policy.password_min_length} characters`;
+        errEl.textContent = `密码长度至少需要 ${policy.password_min_length} 个字符`;
         errEl.style.display = 'block';
         submitBtn.disabled = false;
         return;
       }
       if (policy.reserved_usernames.includes(username.toLowerCase())) {
-        errEl.textContent = 'This username is reserved';
+        errEl.textContent = '该用户名已被保留';
         errEl.style.display = 'block';
         submitBtn.disabled = false;
         return;
@@ -496,7 +496,7 @@
         body: JSON.stringify(loginBody)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Login failed');
+      if (!res.ok) throw new Error(data.detail || '登录失败');
       return data;
     }
     try {

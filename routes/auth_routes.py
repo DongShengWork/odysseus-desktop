@@ -99,15 +99,15 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     async def first_run_setup(body: SetupRequest, request: Request):
         """Create initial admin account. Only works if no accounts exist."""
         if not _setup_limiter.check(request.client.host):
-            raise HTTPException(429, "Too many requests — try again later")
+            raise HTTPException(429, "请求过于频繁，请稍后再试")
         if auth_manager.is_configured:
             raise HTTPException(400, "Already configured")
         if len(body.password) < PASSWORD_MIN_LENGTH:
-            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+            raise HTTPException(400, f"密码长度至少需要 {PASSWORD_MIN_LENGTH} 个字符")
         if len(body.username.strip()) < 1:
-            raise HTTPException(400, "Username is required")
+            raise HTTPException(400, "用户名为必填项")
         if body.username.lower() in RESERVED_USERNAMES:
-            raise HTTPException(403, "Username is reserved")
+            raise HTTPException(403, "该用户名已被系统保留")
         ok = await asyncio.to_thread(auth_manager.setup, body.username, body.password)
         if not ok:
             raise HTTPException(500, "Setup failed")
@@ -117,41 +117,41 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     async def signup(body: SignupRequest, request: Request):
         """Create a new user account. Only works if signup is enabled by admin."""
         if not _signup_limiter.check(request.client.host):
-            raise HTTPException(429, "Too many requests — try again later")
+            raise HTTPException(429, "请求过于频繁，请稍后再试")
         if not auth_manager.is_configured:
-            raise HTTPException(400, "Run setup first")
+            raise HTTPException(400, "请先完成初始设置")
         if not auth_manager.signup_enabled:
-            raise HTTPException(403, "Registration is disabled. Ask an admin for an account.")
+            raise HTTPException(403, "注册已关闭，请联系管理员获取账号。")
         if len(body.password) < PASSWORD_MIN_LENGTH:
-            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+            raise HTTPException(400, f"密码长度至少需要 {PASSWORD_MIN_LENGTH} 个字符")
         if len(body.username.strip()) < 1:
-            raise HTTPException(400, "Username is required")
+            raise HTTPException(400, "用户名为必填项")
         if body.username.lower() in RESERVED_USERNAMES:
-            raise HTTPException(403, "Username is reserved")
+            raise HTTPException(403, "该用户名已被系统保留")
         ok = await asyncio.to_thread(auth_manager.create_user, body.username, body.password, is_admin=False)
         if not ok:
-            raise HTTPException(409, "Username already taken")
+            raise HTTPException(409, "用户名已被占用")
         return {"ok": True, "message": "Account created"}
 
     @router.post("/login")
     async def login(body: LoginRequest, request: Request, response: Response):
         if not _login_limiter.check(request.client.host):
-            raise HTTPException(429, "Too many requests — try again later")
+            raise HTTPException(429, "请求过于频繁，请稍后再试")
         # Verify password first
         username = body.username.strip().lower()
         if not await asyncio.to_thread(auth_manager.verify_password, username, body.password):
-            raise HTTPException(401, "Invalid credentials")
+            raise HTTPException(401, "凭证无效")
         # 检查 2FA if enabled
         if auth_manager.totp_enabled(username):
             if not body.totp_code:
                 # Password OK but need TOTP — tell client to show code input
                 return {"ok": False, "requires_totp": True, "username": username}
             if not auth_manager.totp_verify(username, body.totp_code):
-                raise HTTPException(401, "Invalid 2FA code")
+                raise HTTPException(401, "2FA 验证码无效")
         # All checks passed — create session (password already verified above)
         token = await asyncio.to_thread(auth_manager.create_session_trusted, username)
         if not token:
-            raise HTTPException(401, "Invalid credentials")
+            raise HTTPException(401, "凭证无效")
         cookie_kwargs = dict(
             key=SESSION_COOKIE,
             value=token,
@@ -199,13 +199,13 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     async def change_password(body: ChangePasswordRequest, request: Request):
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "Not authenticated")
+            raise HTTPException(401, "未登录")
         if len(body.new_password) < PASSWORD_MIN_LENGTH:
-            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+            raise HTTPException(400, f"密码长度至少需要 {PASSWORD_MIN_LENGTH} 个字符")
         current_token = request.cookies.get(SESSION_COOKIE)
         ok = await asyncio.to_thread(auth_manager.change_password, user, body.current_password, body.new_password)
         if not ok:
-            raise HTTPException(400, "Current password is incorrect")
+            raise HTTPException(400, "当前密码错误")
         await asyncio.to_thread(auth_manager.revoke_user_sessions, user, current_token)
         return {"ok": True}
 
@@ -218,7 +218,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         """Generate a TOTP secret and return the QR code URI."""
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "Not authenticated")
+            raise HTTPException(401, "未登录")
         if auth_manager.totp_enabled(user):
             raise HTTPException(400, "2FA is already enabled")
         secret = auth_manager.totp_generate_secret(user)
@@ -241,9 +241,9 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         """Verify a TOTP code to confirm 2FA setup. Returns backup codes."""
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "Not authenticated")
+            raise HTTPException(401, "未登录")
         if not auth_manager.totp_confirm_enable(user, body.code):
-            raise HTTPException(400, "Invalid code — try again")
+            raise HTTPException(400, "验证码无效，请重试")
         backup = auth_manager.users.get(user, {}).get("totp_backup_codes", [])
         return {"ok": True, "backup_codes": backup}
 
@@ -255,9 +255,9 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         """Disable 2FA. Requires password confirmation."""
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "Not authenticated")
+            raise HTTPException(401, "未登录")
         if not auth_manager.totp_disable(user, body.password):
-            raise HTTPException(400, "Invalid password")
+            raise HTTPException(400, "密码错误")
         return {"ok": True}
 
     @router.get("/2fa/status")
@@ -265,7 +265,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         """Check if 2FA is enabled for the current user."""
         user = _get_current_user(request)
         if not user:
-            raise HTTPException(401, "Not authenticated")
+            raise HTTPException(401, "未登录")
         return {"enabled": auth_manager.totp_enabled(user)}
 
     # Admin-only routes
@@ -282,14 +282,14 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
         if len(body.password) < PASSWORD_MIN_LENGTH:
-            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+            raise HTTPException(400, f"密码长度至少需要 {PASSWORD_MIN_LENGTH} 个字符")
         if len(body.username.strip()) < 1:
-            raise HTTPException(400, "Username is required")
+            raise HTTPException(400, "用户名为必填项")
         if body.username.lower() in RESERVED_USERNAMES:
-            raise HTTPException(403, "Username is reserved")
+            raise HTTPException(403, "该用户名已被系统保留")
         ok = auth_manager.create_user(body.username, body.password, body.is_admin)
         if not ok:
-            raise HTTPException(409, "Username already taken")
+            raise HTTPException(409, "用户名已被占用")
         return {"ok": True}
 
     @router.put("/users/{username}/privileges")
@@ -317,7 +317,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if old_username not in auth_manager.users:
             raise HTTPException(404, "User not found")
         if new_username in auth_manager.users:
-            raise HTTPException(409, "Username already taken")
+            raise HTTPException(409, "用户名已被占用")
 
         # Gate on auth first. Every mutation below is contingent on this
         # succeeding — doing it last meant a rejected rename (e.g. reserved
