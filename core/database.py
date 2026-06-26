@@ -2,25 +2,28 @@ import os
 import logging
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 from sqlalchemy import event, create_engine, Column, String, Text, Boolean, DateTime, Integer, ForeignKey, JSON, Index, func, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import relationship, sessionmaker, backref
 
+from src.runtime_paths import get_app_root
+
 logger = logging.getLogger(__name__)
 
-# 创建声明式模型的基类
+# Create base class for declarative models
 Base = declarative_base()
 
 
 def utcnow_naive() -> datetime:
-    """返回不带时区信息的 UTC 时间，用于现有 DateTime 列。"""
+    """Return naive UTC for existing DateTime columns."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class TimestampMixin:
-    """为模型添加时间戳字段的混入类"""
+    """Mixin that adds timestamp fields to models"""
     @declared_attr
     def created_at(cls):
         return Column(DateTime, default=utcnow_naive, nullable=False)
@@ -29,24 +32,41 @@ class TimestampMixin:
     def updated_at(cls):
         return Column(DateTime, default=utcnow_naive, onupdate=utcnow_naive, nullable=False)
 
-# 从环境变量获取数据库 URL，默认使用 DATA_DIR 中的 SQLite
+# Ensure the writable data directory exists before SQLite connects.
 from src.constants import DATA_DIR, AUTH_FILE, MEMORY_FILE, USER_PREFS_FILE, SETTINGS_FILE
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR}/app.db")
+Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
-# 创建引擎
+
+def _default_database_url() -> str:
+    return f"sqlite:///{Path(DATA_DIR) / 'app.db'}"
+
+
+def _normalize_sqlite_url(url: str) -> str:
+    if not url.startswith("sqlite:///"):
+        return url
+    db_path = url.replace("sqlite:///", "", 1)
+    if db_path == ":memory:" or os.path.isabs(db_path):
+        return url
+    return f"sqlite:///{(Path(get_app_root()) / db_path).resolve().as_posix()}"
+
+
+# Get database URL from environment, default to SQLite in DATA_DIR
+DATABASE_URL = _normalize_sqlite_url(os.getenv("DATABASE_URL", _default_database_url()))
+
+# Create engine
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 )
 
-# 创建会话工厂
+# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# 监听 Engine 类确保此监听器对进程内创建的所有 Engine
-# 实例都生效，而不仅仅是主应用引擎。
-# isinstance(sqlite3.Connection) 检查确保在使用非 SQLite 数据库后端时，
-# 此 PRAGMA foreign_keys=ON 配置保持为无操作。
+# Listening on the Engine class ensures this listener fires for all Engine
+# instances created within the process, not just the primary application engine.
+# The isinstance(sqlite3.Connection) check ensures that this PRAGMA foreign_keys=ON
+# configuration remains a no-op when using non-SQLite database backends.
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if isinstance(dbapi_connection, sqlite3.Connection):
@@ -56,7 +76,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 
 
 class EncryptedText(TypeDecorator):
-    """文本列透明加密（静态存储），通过 src.secret_storage 实现。
+    """Text column transparently encrypted at rest via src.secret_storage.
 
     Writes are Fernet-encrypted (`enc:` prefix); reads decrypt back to
     plaintext, so all consumers use the column normally. Legacy plaintext
@@ -82,64 +102,64 @@ class EncryptedText(TypeDecorator):
 
 class Session(TimestampMixin, Base):
     """
-    会话表的 SQLAlchemy 模型。
-    表示一个包含配置和元数据的聊天会话。
+    SQLAlchemy model for Session table.
+    Represents a chat session with its configuration and metadata.
     """
     __tablename__ = "sessions"
     
-    # 主键
+    # Primary key
     id = Column(String, primary_key=True, index=True)
     
-    # 会话元数据
+    # Session metadata
     name = Column(String, nullable=False)
     endpoint_url = Column(String, nullable=False)
     model = Column(String, nullable=False)
-    owner = Column(String, nullable=True, index=True)  # 用户名；null = 传统/共享
+    owner = Column(String, nullable=True, index=True)  # username; null = legacy/shared
     
-    # 配置标志
+    # Configuration flags
     rag = Column(Boolean, default=False)
     archived = Column(Boolean, default=False)
 
-    # 组织
+    # Organization
     folder = Column(String, nullable=True, default=None)
     
-    # 以 JSON 格式存储的请求头
+    # Headers stored as JSON
     headers = Column(JSON, default=dict)
     
-    # 时间戳由 TimestampMixin 提供
+    # Timestamps are provided by TimestampMixin
     last_accessed = Column(DateTime, default=func.now(), onupdate=func.now())
-    # 此会话中最后一次实际消息的时间戳。仅在消息
-    # 持久化时显式设置（不使用 onupdate）— 因此它是一个干净的
-    # "最后一次对话"信号，不受重命名/模型切换/仅打开聊天
-    # （这些都会更新 updated_at 和 last_accessed）的影响。
-    # "最近活跃"排序使用此字段。
+    # Timestamp of the last actual MESSAGE in this session. Set explicitly
+    # only when a message is persisted (NOT onupdate) — so it's a clean
+    # "last conversation" signal, immune to renames / model swaps / merely
+    # opening the chat (all of which bump updated_at and last_accessed).
+    # The "Last active" sort uses this.
     last_message_at = Column(DateTime, nullable=True, default=None)
     
     
-    # 索引 - 优化的复合索引
+    # Indexes - optimized composites
     __table_args__ = (
         Index('ix_sessions_active', 'archived', 'last_accessed'),
         Index('ix_sessions_search', 'name', 'archived'),
     )
     
-    # 属性
+    # Properties
     is_important = Column(Boolean, default=False)
     message_count = Column(Integer, default=0)
     total_input_tokens = Column(Integer, default=0)
     total_output_tokens = Column(Integer, default=0)
-    mode = Column(String, nullable=True)  # 'agent'、'chat' 或 'research'
-    crew_member_id = Column(String, nullable=True)  # 链接到 crew_members.id
+    mode = Column(String, nullable=True)  # 'agent', 'chat', or 'research'
+    crew_member_id = Column(String, nullable=True)  # links to crew_members.id
 
-    # 与聊天消息的关联关系
+    # Relationship to chat messages
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
     
     @property
     def is_active(self):
-        """检查会话是否活跃（未归档）"""
+        """Check if session is active (not archived)"""
         return not self.archived
     
     def to_dict(self):
-        """将会话转换为字典，用于 JSON 序列化"""
+        """Convert session to dictionary for JSON serialization"""
         return {
             'id': self.id,
             'name': self.name,
@@ -161,56 +181,56 @@ class Session(TimestampMixin, Base):
 
 class ChatMessage(Base):
     """
-    聊天消息表的 SQLAlchemy 模型。
-    表示会话中的单条聊天消息。
+    SQLAlchemy model for ChatMessage table.
+    Represents individual chat messages within a session.
     """
     __tablename__ = "chat_messages"
     
-    # 主键 - 使用 String 以支持 UUID
+    # Primary key - using String to support UUIDs
     id = Column(String, primary_key=True, index=True)
     
-    # 外键关联到 Session
+    # Foreign key to Session
     session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    # 消息内容
+    # Message content
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
-    meta_data = Column("metadata", Text, nullable=True)  # JSON 字符串，用于指标等
+    meta_data = Column("metadata", Text, nullable=True)  # JSON string for metrics etc.
 
-    # 时间戳
+    # Timestamp
     timestamp = Column(DateTime, default=utcnow_naive)
     
-    # 与 Session 的关联关系
+    # Relationship to Session
     session = relationship("Session", back_populates="messages")
     
-    # 索引 - 优化的复合索引
+    # Indexes - optimized composite
     __table_args__ = (
-        Index('ix_messages_session_time', 'session_id', 'timestamp'),  # 复合索引，用于高效的消息检索
+        Index('ix_messages_session_time', 'session_id', 'timestamp'),  # Composite for efficient message retrieval
     )
 
 class Document(TimestampMixin, Base):
-    """AI 可原地创建和编辑的动态文档。"""
+    """Living document that the AI can create and edit in-place."""
     __tablename__ = "documents"
 
     id              = Column(String, primary_key=True, index=True)
     session_id      = Column(String, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)
     title           = Column(String, nullable=False, default="Untitled")
-    language        = Column(String, nullable=True)          # "python"、"markdown"、"text" 等
+    language        = Column(String, nullable=True)          # "python", "markdown", "text", etc.
     current_content = Column(Text, nullable=False, default="")
     version_count   = Column(Integer, default=1)
     is_active       = Column(Boolean, default=True)
-    # 软归档：在恢复之前从文档库的文档列表/搜索/整理中隐藏。
-    # 与 is_active（跟踪"在会话中打开"）不同。
+    # Soft-archive: hidden from the Library's Documents list/search/Tidy until
+    # restored. Distinct from is_active (which tracks "open in a session").
     archived        = Column(Boolean, default=False)
-    # 此文档的所有者。文档过去通过关联的聊天会话
-    # 派生所有权，但会话可能被删除（session_id → NULL 通过
-    # SET NULL），导致文档孤立并使其从所有者的文档库
-    # + 搜索中消失。直接拥有该行可以应对这种情况。
+    # Owner of this document. Documents used to derive ownership from their
+    # linked chat session, but a session can be deleted (session_id → NULL via
+    # SET NULL), orphaning the doc and making it vanish from the owner's
+    # Library + search. Owning the row directly is robust against that.
     owner           = Column(String, nullable=True, index=True)
-    tidy_verdict    = Column(String, nullable=True)        # "keep"、"junk" 或 None（尚未审核）
-    # 来源：如果此文档是通过打开电子邮件附件创建的，
-    # 这些字段指向源电子邮件，以便"签名并回复"流程
-    # 可以在原始对话中串联回复。
+    tidy_verdict    = Column(String, nullable=True)        # "keep", "junk", or None (not yet reviewed)
+    # Provenance: if this document was created by opening an email attachment,
+    # these point back to the source email so the "Sign and reply" flow can
+    # thread a response on the original conversation.
     source_email_uid         = Column(String, nullable=True)
     source_email_folder      = Column(String, nullable=True)
     source_email_account_id  = Column(String, nullable=True)
@@ -222,35 +242,35 @@ class Document(TimestampMixin, Base):
 
 
 class DocumentVersion(Base):
-    """文档在某个时间点的不可变快照。"""
+    """Immutable snapshot of a document at a point in time."""
     __tablename__ = "document_versions"
 
     id             = Column(String, primary_key=True, index=True)
     document_id    = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     version_number = Column(Integer, nullable=False)
     content        = Column(Text, nullable=False)
-    summary        = Column(String, nullable=True)     # 编辑描述
-    source         = Column(String, default="ai")      # "ai" 或 "user"
+    summary        = Column(String, nullable=True)     # Edit description
+    source         = Column(String, default="ai")      # "ai" or "user"
     created_at     = Column(DateTime, default=utcnow_naive)
 
     document = relationship("Document", back_populates="versions")
 
 
 class GalleryAlbum(TimestampMixin, Base):
-    """一个相册/文件夹。"""
+    """A photo album/folder."""
     __tablename__ = "gallery_albums"
 
     id          = Column(String, primary_key=True, index=True)
     name        = Column(String, nullable=False)
     description = Column(Text, default="")
-    cover_id    = Column(String, nullable=True)  # 封面照片的 GalleryImage.id
+    cover_id    = Column(String, nullable=True)  # GalleryImage.id for cover photo
     owner       = Column(String, nullable=True, index=True)
 
     images = relationship("GalleryImage", back_populates="album")
 
 
 class GalleryImage(TimestampMixin, Base):
-    """存储照片和 AI 生成图片的元数据。"""
+    """Stores metadata for photos and AI-generated images."""
     __tablename__ = "gallery_images"
 
     id         = Column(String, primary_key=True, index=True)
@@ -260,25 +280,25 @@ class GalleryImage(TimestampMixin, Base):
     size       = Column(String, nullable=True)
     quality    = Column(String, nullable=True)
     tags       = Column(String, nullable=True, default="")
-    ai_tags    = Column(Text, nullable=True, default="")       # AI 生成的标签（逗号分隔）
+    ai_tags    = Column(Text, nullable=True, default="")       # AI-generated tags (comma-separated)
     session_id = Column(String, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)
     album_id   = Column(String, ForeignKey("gallery_albums.id", ondelete="SET NULL"), nullable=True, index=True)
     owner      = Column(String, nullable=True, index=True)
     is_active  = Column(Boolean, default=True)
     favorite   = Column(Boolean, default=False)
 
-    # 文件完整性
+    # File integrity
     file_hash  = Column(String(64), nullable=True, index=True)  # SHA-256
 
-    # EXIF / 照片元数据
+    # EXIF / photo metadata
     taken_at       = Column(DateTime, nullable=True, index=True)  # EXIF DateTimeOriginal
     camera_make    = Column(String, nullable=True)
     camera_model   = Column(String, nullable=True)
-    gps_lat        = Column(String, nullable=True)  # 存储为字符串以保持精度
+    gps_lat        = Column(String, nullable=True)  # stored as string for precision
     gps_lng        = Column(String, nullable=True)
     width          = Column(Integer, nullable=True)
     height         = Column(Integer, nullable=True)
-    file_size      = Column(Integer, nullable=True)  # 字节
+    file_size      = Column(Integer, nullable=True)  # bytes
 
     session = relationship("Session", backref=backref("gallery_images"))
     album   = relationship("GalleryAlbum", back_populates="images")
@@ -291,32 +311,32 @@ class GalleryImage(TimestampMixin, Base):
 
 
 class EmailAccount(TimestampMixin, Base):
-    """已配置的 IMAP/SMTP 账户。每个用户支持多个账户 —
-    每个所有者恰好有一个行的 is_default=True。
+    """A configured IMAP/SMTP account. Supports multiple accounts per user —
+    exactly one row per owner has is_default=True.
 
-    安全说明：imap_password / smtp_password 通过
-    src/secret_storage.py 使用 Fernet 加密存储。密钥位于
-    data/.app_key（权限 0o600，已 gitignore）。任何能读取
-    该文件的人都能解密每一行，因此威胁模型是"被盗的 SQLite 备份"
-    而非"进程被攻破"。首次启动时，所有旧版明文行会
-    自动迁移（参见 _migrate_encrypt_email_passwords）。
+    Security note: imap_password / smtp_password are stored Fernet-encrypted
+    via src/secret_storage.py. The key lives at data/.app_key (mode 0o600,
+    gitignored). Anyone with read access to that file can decrypt every
+    row, so the threat model is "stolen SQLite backup" rather than
+    "process compromise". On first start any legacy plaintext rows are
+    migrated automatically (see _migrate_encrypt_email_passwords).
     """
     __tablename__ = "email_accounts"
 
     id             = Column(String, primary_key=True, index=True)
     owner          = Column(String, nullable=True, index=True)
-    name           = Column(String, nullable=False)  # 显示名称："Work"、"Personal" 等
+    name           = Column(String, nullable=False)  # Display name: "Work", "Personal", etc.
     is_default     = Column(Boolean, default=False, nullable=False)
     enabled        = Column(Boolean, default=True, nullable=False)
 
-    # IMAP（接收）
+    # IMAP (receiving)
     imap_host      = Column(String, default="")
     imap_port      = Column(Integer, default=993)
     imap_user      = Column(String, default="")
     imap_password  = Column(String, default="")
     imap_starttls  = Column(Boolean, default=True)
 
-    # SMTP（发送）
+    # SMTP (sending)
     smtp_host      = Column(String, default="")
     smtp_port      = Column(Integer, default=465)
     smtp_security  = Column(String, default="ssl")  # ssl | starttls | none
@@ -324,6 +344,13 @@ class EmailAccount(TimestampMixin, Base):
     smtp_password  = Column(String, default="")
 
     from_address   = Column(String, default="")
+    display_name   = Column(String, nullable=True)   # "Hriday Ranka" — used in From: header
+
+    # OAuth2 (Google / Google Workspace). Tokens stored encrypted via secret_storage.
+    oauth_provider      = Column(String, nullable=True)   # "google" or None
+    oauth_access_token  = Column(String, nullable=True)   # encrypted
+    oauth_refresh_token = Column(String, nullable=True)   # encrypted
+    oauth_token_expiry  = Column(String, nullable=True)   # unix timestamp string
 
     __table_args__ = (
         Index('ix_email_accounts_owner_default', 'owner', 'is_default'),
@@ -331,43 +358,43 @@ class EmailAccount(TimestampMixin, Base):
 
 
 class ModelEndpoint(TimestampMixin, Base):
-    """管理员配置的模型端点。模型通过 /v1/models 自动发现。"""
+    """Admin-configured model endpoints. Models are auto-discovered via /v1/models."""
     __tablename__ = "model_endpoints"
 
     id = Column(String, primary_key=True, index=True)
-    name = Column(String, nullable=False)          # 显示标签，例如 "Local vLLM"、"OpenRouter"
-    base_url = Column(String, nullable=False)      # Base URL，例如 "http://localhost:8002/v1"
-    api_key = Column(EncryptedText, nullable=True)  # 可选的提供商 API 密钥，加密存储
+    name = Column(String, nullable=False)          # Display label, e.g. "Local vLLM", "OpenRouter"
+    base_url = Column(String, nullable=False)      # Base URL, e.g. "http://localhost:8002/v1"
+    api_key = Column(EncryptedText, nullable=True)  # Optional provider API key, encrypted at rest
     is_enabled = Column(Boolean, default=True)
-    hidden_models = Column(Text, nullable=True)    # 探测失败的模型 ID 的 JSON 列表
-    cached_models = Column(Text, nullable=True)    # 最后已知模型 ID 的 JSON 列表（避免在列表时进行探测）
-    pinned_models = Column(Text, nullable=True)    # 管理员固定的模型 ID 的 JSON 列表（手动指定，可能不在 /v1/models 中）
-    model_type = Column(String, nullable=True, default="llm")  # "llm" 或 "image"
-    # auto = 按 URL 分类；local = 自托管服务器；api/proxy = 外部
-    # OpenAI 兼容 API，即使通过私有/tailnet IP 也可达。
+    hidden_models = Column(Text, nullable=True)    # JSON list of model IDs that failed probing
+    cached_models = Column(Text, nullable=True)    # JSON list of last-known model IDs (avoids probe on list)
+    pinned_models = Column(Text, nullable=True)    # JSON list of admin-pinned model IDs (manual, may not appear in /v1/models)
+    model_type = Column(String, nullable=True, default="llm")  # "llm" or "image"
+    # auto = classify by URL; local = self-hosted server; api/proxy = external
+    # OpenAI-compatible API even when reachable through a private/tailnet IP.
     endpoint_kind = Column(String, nullable=True, default="auto")
-    # auto = 带 TTL/退避的后台刷新；manual/disabled = 仅缓存优先，
-    # 除非显式请求端点探测。
+    # auto = background refresh with TTL/backoff; manual/disabled = cached-first
+    # only unless an explicit endpoint probe is requested.
     model_refresh_mode = Column(String, nullable=True, default="auto")
     model_refresh_interval = Column(Integer, nullable=True, default=None)
     model_refresh_timeout = Column(Integer, nullable=True, default=None)
-    # 此端点上的模型是否接受 OpenAI 风格的函数
-    # schema + 发出 `tool_calls`。在 Cookbook 自动注册时
-    # 从 serve 命令中的 `--enable-auto-tool-choice` 自动检测；
-    # 可以在 UI 中按端点切换。NULL = 未知，回退到
-    # agent_loop.py 中的模型名称关键词启发式方法。
+    # Whether models on this endpoint accept OpenAI-style function
+    # schemas + emit `tool_calls`. Auto-detected at Cookbook auto-
+    # register time from `--enable-auto-tool-choice` in the serve cmd;
+    # can be toggled per-endpoint in the UI. NULL = unknown, falls
+    # back to the model-name keyword heuristic in agent_loop.py.
     supports_tools = Column(Boolean, nullable=True, default=None)
-    # 按用户的所有权。NULL = 传统/共享（对所有用户可见）— 这是
-    # 历史默认值。当非 null 时，模型选择器仅向该用户
-    # 显示此端点（管理员始终可见全部）。
+    # Per-user ownership. NULL = legacy/shared (visible to every user) — this
+    # is the historical default. When non-null, the model picker only shows
+    # the endpoint to that user (admins always see everything).
     owner = Column(String, nullable=True, index=True)
-    # 可选的 OAuth/会话支持的凭证行。用于需要刷新令牌
-    # 而不是静态 API 密钥的订阅支持提供商。
+    # Optional OAuth/session-backed credential row. Used by subscription-backed
+    # providers that need refresh tokens instead of a static API key.
     provider_auth_id = Column(String, nullable=True, index=True)
 
 
 class ProviderAuthSession(TimestampMixin, Base):
-    """支持刷新令牌的模型提供商的加密 OAuth/会话凭据。"""
+    """Encrypted OAuth/session credentials for refresh-aware model providers."""
     __tablename__ = "provider_auth_sessions"
 
     id = Column(String, primary_key=True, index=True)
@@ -381,16 +408,16 @@ class ProviderAuthSession(TimestampMixin, Base):
     auth_mode = Column(String, nullable=True)
 
 class McpServer(TimestampMixin, Base):
-    """管理员配置的 MCP（模型上下文协议）工具服务器。"""
+    """Admin-configured MCP (Model Context Protocol) tool servers."""
     __tablename__ = "mcp_servers"
 
     id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=False)
     transport = Column(String, nullable=False, default="stdio")  # "stdio" or "sse"
-    command = Column(String, nullable=True)      # stdio 模式：可执行文件路径
-    args = Column(Text, nullable=True)           # JSON 数组，命令参数
-    env = Column(Text, nullable=True)            # JSON 对象，环境变量
-    url = Column(String, nullable=True)          # SSE 模式：服务器 URL
+    command = Column(String, nullable=True)      # For stdio: executable path
+    args = Column(Text, nullable=True)           # JSON array of command args
+    env = Column(Text, nullable=True)            # JSON object of env vars
+    url = Column(String, nullable=True)          # For SSE: server URL
     is_enabled = Column(Boolean, default=True)
     oauth_config = Column(Text, nullable=True)   # JSON: provider, keys_file, token_file, scopes
     disabled_tools = Column(Text, nullable=True)  # JSON array of tool names to hide from LLM
@@ -398,11 +425,11 @@ class McpServer(TimestampMixin, Base):
 
 
 class Comparison(TimestampMixin, Base):
-    """存储 A/B 模型对比结果。"""
+    """Stores A/B model comparison results."""
     __tablename__ = "comparisons"
 
     id = Column(String, primary_key=True, index=True)
-    session_id = Column(String, nullable=True)     # 父会话上下文（可选）
+    session_id = Column(String, nullable=True)     # Parent session context (optional)
     owner = Column(String, nullable=True, index=True)  # username
     prompt = Column(Text, nullable=False)
     model_a = Column(String, nullable=False)
@@ -424,14 +451,14 @@ class Comparison(TimestampMixin, Base):
 
 
 class Signature(TimestampMixin, Base):
-    """用户保存的可视化签名（图片印章）。
+    """User-saved visual signatures (image stamps).
 
-    可在 PDF 表单填写、电子邮件撰写和文档编辑中复用。
-    `data_png` 是 base64 编码的 PNG（无 `data:` 前缀）。SVG 矢量
-    列保留用于未来的平滑矢量存储。两者均在静态存储时使用
-    Fernet 加密（参见 EncryptedText / src.secret_storage）；手写
-    签名是敏感信息，因此绝不能以明文形式存在于数据库文件中。
-    现有行在启动时自动迁移。
+    Reusable across PDF form filling, email composition, and document editing.
+    `data_png` is a base64-encoded PNG (no `data:` prefix). The SVG vector
+    column is reserved for future smooth vector storage. Both are stored
+    Fernet-encrypted at rest (see EncryptedText / src.secret_storage); a
+    handwritten signature is sensitive, so it must never sit plaintext in the
+    DB file. Existing rows are migrated automatically on startup.
     """
     __tablename__ = "signatures"
 
@@ -445,7 +472,7 @@ class Signature(TimestampMixin, Base):
 
 
 class ApiToken(TimestampMixin, Base):
-    """用于外部集成的 API 令牌（n8n、Make 等）。"""
+    """API tokens for external integrations (n8n, Make, etc.)."""
     __tablename__ = "api_tokens"
 
     id = Column(String, primary_key=True, index=True)
@@ -459,7 +486,7 @@ class ApiToken(TimestampMixin, Base):
 
 
 class Webhook(TimestampMixin, Base):
-    """事件触发的外发 Webhook。"""
+    """Outgoing webhooks fired on events."""
     __tablename__ = "webhooks"
 
     id = Column(String, primary_key=True, index=True)
@@ -474,7 +501,7 @@ class Webhook(TimestampMixin, Base):
 
 
 class UserTool(TimestampMixin, Base):
-    """用户创建的沙盒化迷你应用/工具。"""
+    """User-created sandboxed mini-apps/tools."""
     __tablename__ = "user_tools"
 
     id            = Column(String, primary_key=True, index=True)
@@ -499,7 +526,7 @@ class UserTool(TimestampMixin, Base):
 
 
 class UserToolData(Base):
-    """用户工具持久化数据的键值存储。"""
+    """Key-value storage for user tool persistent data."""
     __tablename__ = "user_tool_data"
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
@@ -517,7 +544,7 @@ class UserToolData(Base):
 
 
 class CrewMember(TimestampMixin, Base):
-    """自定义 AI 角色（'团队成员'），拥有自己的个性、模型、工具和记忆范围。"""
+    """A custom AI persona ('crew member') with its own personality, model, tools, and memory scope."""
     __tablename__ = "crew_members"
 
     id            = Column(String, primary_key=True, index=True)
@@ -541,7 +568,7 @@ class CrewMember(TimestampMixin, Base):
 
 
 class ScheduledTask(TimestampMixin, Base):
-    """周期性或一次性任务 — LLM 驱动或直接操作，时间或事件触发。"""
+    """A recurring or one-off task — LLM-powered or direct action, time or event triggered."""
     __tablename__ = "scheduled_tasks"
 
     id             = Column(String, primary_key=True, index=True)
@@ -571,13 +598,13 @@ class ScheduledTask(TimestampMixin, Base):
     then_task_id   = Column(String, ForeignKey("scheduled_tasks.id", ondelete="SET NULL"), nullable=True)
     webhook_token  = Column(String, nullable=True, unique=True)
     crew_member_id = Column(String, nullable=True)     # optional link to crew_members.id
-    # character_id 历史上引用了从未实际创建的 agent_characters 表。
-    # 保留此列以保持架构兼容性，但删除 ForeignKey
-    # 以便 SQLAlchemy 表排序在刷新时不会失败。
+    # character_id historically referenced an agent_characters table that was
+    # never actually created. Keep the column for schema compatibility but
+    # drop the ForeignKey so SQLAlchemy table sort doesn't fail on flush.
     character_id   = Column(String, nullable=True)
-    max_steps      = Column(Integer, nullable=True)       # 最大 agent 循环迭代次数（null=无限制）
-    email_results  = Column(Boolean, default=True)        # 将结果通过电子邮件发送到 character.email_to
-    notifications_enabled = Column(Boolean, default=True) # 每个任务的完成通知开关
+    max_steps      = Column(Integer, nullable=True)       # max agent loop iterations (null=unlimited)
+    email_results  = Column(Boolean, default=True)        # email results to character.email_to
+    notifications_enabled = Column(Boolean, default=True) # per-task on/off for completion notifications
 
     session = relationship("Session", backref=backref("scheduled_tasks", cascade="save-update, merge"))
     then_task = relationship("ScheduledTask", remote_side=[id], foreign_keys=[then_task_id])
@@ -589,19 +616,19 @@ class ScheduledTask(TimestampMixin, Base):
 
 
 class EditorDraft(TimestampMixin, Base):
-    """持久化的进行中图库编辑器会话 — 分层项目状态，
-    用户可以关闭并在以后重新打开。将完整的图层有效负载
-    存储为 JSON（每层包含 base64 编码的 PNG dataURL），
-    并附带一个小缩略图用于首页列表。
+    """Persisted in-progress gallery-editor session — layered project state
+    that the user can close and reopen later. Stores the full layer payload
+    as JSON (with base64-encoded PNG dataURLs per layer) plus a small
+    thumbnail for the landing-screen list.
     """
     __tablename__ = "editor_drafts"
 
     id              = Column(String, primary_key=True, index=True)
     owner           = Column(String, nullable=True, index=True)
     name            = Column(String, nullable=False, default="Untitled")
-    # 如果草稿是从图库照片打开的，回指它，以便我们
-    # 可以显示"恢复编辑 <photo>"，重新打开该照片时
-    # 会恢复相同的草稿，而不是从头开始。
+    # If the draft was opened FROM a gallery photo, point back at it so we
+    # can show "Resuming edit of <photo>" and so reopening that photo picks
+    # up the same draft rather than starting fresh.
     source_image_id = Column(String, nullable=True, index=True)
     width           = Column(Integer, nullable=True)
     height          = Column(Integer, nullable=True)
@@ -610,8 +637,8 @@ class EditorDraft(TimestampMixin, Base):
     # we don't have to re-shape the model every time the editor adds a
     # new piece of state.
     payload         = Column(Text, nullable=False, default="")
-    # 用于列表页面的小预览（data URL，约 128px 宽）。内联存储，
-    # 以便列表端点可以一次性返回所有内容。
+    # Tiny preview (data URL, ~128px wide) for the landing list. Stored
+    # inline so the list endpoint can return everything in one shot.
     thumbnail       = Column(Text, nullable=True)
     is_active       = Column(Boolean, default=True)
 
@@ -621,7 +648,7 @@ class EditorDraft(TimestampMixin, Base):
 
 
 class TaskRun(Base):
-    """ScheduledTask 的单次执行记录。"""
+    """Record of a single execution of a ScheduledTask."""
     __tablename__ = "task_runs"
 
     id          = Column(String, primary_key=True, index=True)
@@ -645,42 +672,42 @@ class TaskRun(Base):
 
 class Memory(Base):
     """
-    记忆表的 SQLAlchemy 模型。
-    表示带有元数据的持久化记忆条目。
+    SQLAlchemy model for Memory table.
+    Represents persistent memory entries with metadata.
     """
     __tablename__ = "memories"
     
-    # 主键
+    # Primary key
     id = Column(String, primary_key=True, index=True)
     
-    # 记忆内容
+    # Memory content
     text = Column(Text, nullable=False)
     
-    # 分类
+    # Categorization
     category = Column(String, default='fact')
     source = Column(String, default='user')
 
-    # 所有者（用户名）
+    # Owner (username)
     owner = Column(String, nullable=True, index=True)
 
-    # 关联到会话（可为空）
+    # Reference to session (nullable)
     session_id = Column(String, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)
 
-    # 时间戳，Unix 时间戳格式
+    # Timestamp as Unix timestamp
     timestamp = Column(Integer, default=lambda: int(utcnow_naive().timestamp()))
 
-    # 与 Session 的关联关系
+    # Relationship to Session
     session = relationship("Session", backref="memories")
 
-    # 索引 - 优化的复合索引
+    # Indexes - optimized composites
     __table_args__ = (
-        Index('ix_memories_lookup', 'category', 'timestamp'),  # 用于基于分类的查询
-        Index('ix_memories_session', 'session_id', 'timestamp'),  # 用于基于会话的查询
+        Index('ix_memories_lookup', 'category', 'timestamp'),  # Composite for category-based queries
+        Index('ix_memories_session', 'session_id', 'timestamp'),  # Composite for session-based queries
     )
 
 def _migrate_add_last_message_at_column():
     """Add last_message_at to sessions + backfill from the latest message
-    最新消息时间戳回填（无消息时回退到 last_accessed / created_at）。
+    timestamp per session (fallback to last_accessed / created_at when a
     session has no messages). Idempotent: column-add is guarded, and the
     backfill only touches rows where last_message_at is still NULL so it
     won't clobber live values on later restarts."""
@@ -695,8 +722,8 @@ def _migrate_add_last_message_at_column():
         columns = [row[1] for row in cursor.fetchall()]
         if "last_message_at" not in columns:
             conn.execute("ALTER TABLE sessions ADD COLUMN last_message_at DATETIME")
-        # 回填所有 NULL 行：最新消息时间戳，否则 last_accessed，
-        # 否则 created_at。仅填充 NULL，因此在每次启动时都是安全的。
+        # Backfill any NULL rows: newest message timestamp, else last_accessed,
+        # else created_at. Only fills NULLs so it's safe on every startup.
         conn.execute(
             """
             UPDATE sessions
@@ -724,7 +751,7 @@ def _migrate_add_last_message_at_column():
             pass
 
 def _migrate_add_document_archived_column():
-    """为 documents 表添加 `archived` 列（软归档标志）。有防护检查，幂等。"""
+    """Add `archived` to documents (soft-archive flag). Guarded + idempotent."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -748,7 +775,7 @@ def _migrate_add_document_archived_column():
 
 
 def _migrate_add_owner_column():
-    """将 owner 列添加到 sessions 表（如果不存在）。"""
+    """Add owner column to sessions table if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -772,7 +799,7 @@ def _migrate_add_owner_column():
             pass
 
 def _migrate_model_endpoints():
-    """重建 model_endpoints 表（如果架构变更，url→base_url 迁移）。"""
+    """Recreate model_endpoints table if schema changed (url->base_url)."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -795,7 +822,7 @@ def _migrate_model_endpoints():
             pass
 
 def _migrate_add_hidden_models_column():
-    """将 hidden_models 列添加到 model_endpoints（如果不存在）。"""
+    """Add hidden_models column to model_endpoints if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -818,13 +845,13 @@ def _migrate_add_hidden_models_column():
             pass
 
 def _migrate_add_model_endpoint_owner_column():
-    """将 owner 列添加到 model_endpoints（如果不存在）。
+    """Add owner column to model_endpoints if it doesn't exist.
 
-    如果没有此列，按用户模型选择器查询
-    `(owner == user) | (owner IS NULL)` 会因 `OperationalError:
-    no such column: model_endpoints.owner` 而失败，导致非管理员用户
-    即使 `allowed_models` 不受限制，选择器也为空。
-    为现有行回填 NULL（被过滤器视为共享）。
+    Without this column, the per-user model picker query
+    `(owner == user) | (owner IS NULL)` fails with `OperationalError:
+    no such column: model_endpoints.owner`, leaving non-admin users
+    with an empty picker even when `allowed_models` is unrestricted.
+    Backfills NULL for existing rows (treated as shared by the filter).
     """
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
@@ -850,7 +877,7 @@ def _migrate_add_model_endpoint_owner_column():
 
 
 def _migrate_add_provider_auth_id_column():
-    """将 provider_auth_id 列添加到 model_endpoints（如果不存在）。"""
+    """Add provider_auth_id column to model_endpoints if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -875,7 +902,7 @@ def _migrate_add_provider_auth_id_column():
 
 
 def _migrate_add_model_type_column():
-    """将 model_type 列添加到 model_endpoints（如果不存在）。"""
+    """Add model_type column to model_endpoints if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -898,7 +925,7 @@ def _migrate_add_model_type_column():
             pass
 
 def _migrate_add_model_endpoint_refresh_columns():
-    """添加端点分类/刷新策略列（如果缺失）。"""
+    """Add endpoint classification / refresh policy columns if missing."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -926,7 +953,7 @@ def _migrate_add_model_endpoint_refresh_columns():
             pass
 
 def _migrate_add_task_run_model_column():
-    """将 model 列添加到 task_runs（如果不存在），记录实际运行的模型。"""
+    """Add model column to task_runs if it doesn't exist (records which model ran)."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -949,7 +976,7 @@ def _migrate_add_task_run_model_column():
             pass
 
 def _migrate_add_supports_tools_column():
-    """将 supports_tools 列添加到 model_endpoints（如果不存在）。"""
+    """Add supports_tools column to model_endpoints if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -973,7 +1000,7 @@ def _migrate_add_supports_tools_column():
 
 
 def _migrate_add_cached_models_column():
-    """将 cached_models 列添加到 model_endpoints（如果不存在）。"""
+    """Add cached_models column to model_endpoints if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -995,7 +1022,7 @@ def _migrate_add_cached_models_column():
             pass
 
 def _migrate_add_pinned_models_column():
-    """将 pinned_models 列添加到 model_endpoints（如果不存在）。"""
+    """Add pinned_models column to model_endpoints if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -1018,7 +1045,7 @@ def _migrate_add_pinned_models_column():
             pass
 
 def _migrate_add_notes_sort_order():
-    """将 sort_order、image_url、repeat 列添加到 notes（如果不存在）。"""
+    """Add sort_order, image_url, repeat columns to notes if they don't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -1050,7 +1077,7 @@ def _migrate_add_notes_sort_order():
             pass
 
 def _migrate_add_mode_column():
-    """将 mode 列添加到 sessions 表（如果不存在）。"""
+    """Add mode column to sessions table if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -1073,7 +1100,7 @@ def _migrate_add_mode_column():
             pass
 
 def _migrate_add_folder_column():
-    """将 folder 列添加到 sessions 表（如果不存在）。"""
+    """Add folder column to sessions table if it doesn't exist."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -1096,7 +1123,7 @@ def _migrate_add_folder_column():
             pass
 
 def _migrate_add_token_columns():
-    """将累计 token 跟踪列添加到 sessions 表。"""
+    """Add cumulative token tracking columns to sessions table."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -1120,7 +1147,7 @@ def _migrate_add_token_columns():
             pass
 
 def _migrate_add_owner_to_table(table_name: str, index_name: str):
-    """通用辅助函数：将 owner TEXT 列 + 索引添加到表（如果缺失）。"""
+    """Generic helper: add owner TEXT column + index to a table if missing."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -1144,19 +1171,19 @@ def _migrate_add_owner_to_table(table_name: str, index_name: str):
             pass
 
 def _migrate_add_multiuser_owner_columns():
-    """将 owner 列添加到 memories、gallery_images、user_tools、comparisons。"""
+    """Add owner column to memories, gallery_images, user_tools, comparisons."""
     _migrate_add_owner_to_table("memories", "ix_memories_owner")
     _migrate_add_owner_to_table("gallery_images", "ix_gallery_images_owner")
     _migrate_add_owner_to_table("user_tools", "ix_user_tools_owner")
     _migrate_add_owner_to_table("comparisons", "ix_comparisons_owner")
     _migrate_add_owner_to_table("api_tokens", "ix_api_tokens_owner")
-    # 在此列存在之前，documents 通过其会话关联派生所有权；
-    # 传统所有者扫描（见下文）在下次启动时回填。
+    # documents derived ownership from their session join until this column
+    # existed; the legacy-owner sweep (below) backfills it on the next boot.
     _migrate_add_owner_to_table("documents", "ix_documents_owner")
 
 
 def _migrate_add_api_token_scopes_column():
-    """为现有安装添加 API 令牌作用域。
+    """Add API token scopes for existing installs.
 
     Existing tokens get the current only-supported scope (`chat`) so they keep
     working after the schema migration, but route checks no longer treat tokens
@@ -1184,19 +1211,19 @@ def _migrate_add_api_token_scopes_column():
             pass
 
 def _migrate_assign_legacy_owner():
-    """将所有空 owner 的数据分配给第一个（管理员）用户。
+    """Assign all null-owner data to the first (admin) user.
 
-    在启动时和定期（sweep_null_owners）运行，以确保在认证禁用 /
-    通过 localhost 绕过中间件时创建的数据不会以全局可访问的方式
-    存在于数据库中。以前只扫描 5 张表；实际拥有 owner 列的表
-    集合要大得多。
+    Runs at boot AND periodically (sweep_null_owners) so that data created
+    while auth is disabled / middleware is bypassed via localhost doesn't
+    sit in the DB as world-visible. Previously only swept 5 tables; the
+    actual set of owner-bearing tables is much larger.
     """
     import sqlite3
     import json as _json
 
-    # 从 auth.json 查找管理员用户。认证架构使用 `is_admin: True`，
-    # 而不是 `role: "admin"` — 旧代码查找了错误的字段，
-    # 每次都静默地回退到"第一个用户"。
+    # Find admin user from auth.json. The auth schema uses `is_admin: True`,
+    # not `role: "admin"` — old code looked for the wrong field and silently
+    # fell through to "first user" every time.
     auth_path = os.path.join(os.path.dirname(DATABASE_URL.replace("sqlite:///", "")), "auth.json")
     if not os.path.isabs(auth_path):
         auth_path = AUTH_FILE
@@ -1226,9 +1253,9 @@ def _migrate_assign_legacy_owner():
     conn = None
     try:
         conn = sqlite3.connect(db_path)
-        # 每个有 `owner` 列的表。后续新增的表将自动
-        # 被识别，因为我们只在列存在时才 UPDATE；
-        # 显式列表用于记录意图。
+        # Every table with an `owner` column. New tables added later will be
+        # picked up automatically because we only UPDATE when the column
+        # exists; the explicit list documents intent.
         tables = [
             "sessions", "memories", "gallery_images", "user_tools",
             "comparisons", "documents", "signatures", "notes",
@@ -1256,7 +1283,7 @@ def _migrate_assign_legacy_owner():
         except Exception:
             pass
 
-    # 同时迁移 memory.json
+    # Also migrate memory.json
     mem_path = MEMORY_FILE
     try:
         if os.path.exists(mem_path):
@@ -1274,14 +1301,14 @@ def _migrate_assign_legacy_owner():
     except Exception as e:
         logger.warning(f"memory.json legacy migration failed: {e}")
 
-    # 同时迁移 user_prefs.json 到按用户格式
+    # Also migrate user_prefs.json to per-user format
     prefs_path = USER_PREFS_FILE
     try:
         if os.path.exists(prefs_path):
             with open(prefs_path, "r", encoding="utf-8") as f:
                 prefs = _json.load(f)
             if "_users" not in prefs and prefs:
-                # 扁平格式 → 嵌套在管理员用户下
+                # Flat format → nest under admin user
                 new_prefs = {"_users": {admin_user: prefs}}
                 with open(prefs_path, "w", encoding="utf-8") as f:
                     _json.dump(new_prefs, f, indent=2)
@@ -1291,12 +1318,12 @@ def _migrate_assign_legacy_owner():
 
 
 def _migrate_backfill_document_owner_from_session():
-    """从关联的聊天会话回填 documents.owner。
+    """Backfill documents.owner from the owner of the linked chat session.
 
-    必须在添加 owner 列之后、批量旧版 owner 清扫之前运行，
-    以便与会话关联的文档获得其*真实*所有者，而只有真正的
-    孤立文档（无会话）才会落到管理员分配中。幂等 — 仅处理
-    NULL-owner 的行。"""
+    Must run AFTER the owner column is added and BEFORE the blanket
+    legacy-owner sweep, so session-linked docs get their *true* owner
+    while only genuinely orphaned (sessionless) docs fall through to the
+    admin assignment. Idempotent — only touches NULL-owner rows."""
     try:
         with engine.connect() as conn:
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(documents)"))]
@@ -1318,7 +1345,7 @@ def _migrate_backfill_document_owner_from_session():
 
 
 def _migrate_add_tidy_verdict():
-    """将 tidy_verdict 列添加到 documents 表（如果缺失）。"""
+    """Add tidy_verdict column to documents table if missing."""
     try:
         with engine.connect() as conn:
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(documents)"))]
@@ -1331,7 +1358,7 @@ def _migrate_add_tidy_verdict():
 
 
 def _migrate_add_doc_source_email_cols():
-    """为 documents 表添加源邮件溯源列（用于签名并回复流程）。"""
+    """Add source-email provenance columns to documents (for the Sign-and-Reply flow)."""
     cols_to_add = {
         "source_email_uid":        "VARCHAR",
         "source_email_folder":     "VARCHAR",
@@ -1345,7 +1372,7 @@ def _migrate_add_doc_source_email_cols():
                 if col not in existing:
                     conn.execute(text(f"ALTER TABLE documents ADD COLUMN {col} {spec}"))
                     logging.getLogger(__name__).info(f"Added {col} column to documents")
-            # 用于按消息 ID 查找的索引（"查找现有草稿"路径）
+            # Index for lookup-by-message-id (the "find existing draft" path)
             conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS ix_documents_source_email_message_id "
                 "ON documents (source_email_message_id)"
@@ -1355,7 +1382,7 @@ def _migrate_add_doc_source_email_cols():
         logging.getLogger(__name__).warning(f"doc source-email migration: {e}")
 
 def _migrate_add_task_automation_columns():
-    """将自动化列添加到 scheduled_tasks 表（如果缺失）。"""
+    """Add automation columns to scheduled_tasks table if missing."""
     new_cols = {
         "task_type": "VARCHAR DEFAULT 'llm'",
         "action": "VARCHAR",
@@ -1372,7 +1399,7 @@ def _migrate_add_task_automation_columns():
                 if col_name not in col_names:
                     conn.execute(text(f"ALTER TABLE scheduled_tasks ADD COLUMN {col_name} {col_def}"))
 
-            # 检查 prompt/schedule/scheduled_time 是否仍为 NOT NULL — 需要重建表
+            # Check if prompt/schedule/scheduled_time are still NOT NULL — need table rebuild
             notnull_map = {r[1]: r[3] for r in cols_info}
             needs_rebuild = (
                 notnull_map.get("prompt", 0) == 1 or
@@ -1427,8 +1454,27 @@ def _migrate_add_task_automation_columns():
     except Exception as e:
         logging.getLogger(__name__).warning(f"task automation migration: {e}")
 
+def _migrate_add_email_oauth_columns():
+    """Add Google OAuth and display_name columns to email_accounts if missing."""
+    try:
+        with engine.connect() as conn:
+            cols = [r[1] for r in conn.execute(text("PRAGMA table_info(email_accounts)"))]
+            for col, typedef in [
+                ("oauth_provider",      "TEXT"),
+                ("oauth_access_token",  "TEXT"),
+                ("oauth_refresh_token", "TEXT"),
+                ("oauth_token_expiry",  "TEXT"),
+                ("display_name",        "TEXT"),
+            ]:
+                if col not in cols:
+                    conn.execute(text(f"ALTER TABLE email_accounts ADD COLUMN {col} {typedef}"))
+            conn.commit()
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"email oauth columns migration: {e}")
+
+
 def _migrate_add_oauth_config():
-    """将 oauth_config 列添加到 mcp_servers 表（如果缺失）。"""
+    """Add oauth_config column to mcp_servers table if missing."""
     try:
         with engine.connect() as conn:
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(mcp_servers)"))]
@@ -1440,7 +1486,7 @@ def _migrate_add_oauth_config():
         logging.getLogger(__name__).warning(f"oauth_config migration: {e}")
 
 def _migrate_add_disabled_tools():
-    """将 disabled_tools 列添加到 mcp_servers 表（如果缺失）。"""
+    """Add disabled_tools column to mcp_servers table if missing."""
     try:
         with engine.connect() as conn:
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(mcp_servers)"))]
@@ -1452,12 +1498,12 @@ def _migrate_add_disabled_tools():
         logging.getLogger(__name__).warning(f"disabled_tools migration: {e}")
 
 def _migrate_add_mcp_oauth_tokens_column():
-    """将 oauth_tokens 列添加到 mcp_servers 表（如果缺失）。
+    """Add oauth_tokens column to mcp_servers table if missing.
 
-    模型将此列声明为 EncryptedText，但 SQL 类型有意使用纯 TEXT：
-    EncryptedText 是一个 SQLAlchemy TypeDecorator，在 Python 层加密
-    并将密文存储为 TEXT，因此数据库列类型是 TEXT。这与现有的
-    加密列一致（参见 _migrate_encrypt_*）。"""
+    The model declares this column as EncryptedText, but the SQL type is plain
+    TEXT on purpose: EncryptedText is a SQLAlchemy TypeDecorator that encrypts at
+    the Python layer and stores the ciphertext as TEXT, so the DB column type is
+    TEXT. This matches the existing encrypted columns (see _migrate_encrypt_*)."""
     try:
         with engine.connect() as conn:
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(mcp_servers)"))]
@@ -1469,7 +1515,7 @@ def _migrate_add_mcp_oauth_tokens_column():
         logging.getLogger(__name__).warning(f"oauth_tokens migration: {e}")
 
 def _migrate_add_task_v2_columns():
-    """将 cron_expression、then_task_id、webhook_token 添加到 scheduled_tasks。"""
+    """Add cron_expression, then_task_id, webhook_token to scheduled_tasks."""
     new_cols = {
         "cron_expression": "VARCHAR",
         "then_task_id": "VARCHAR",
@@ -1489,10 +1535,10 @@ def _migrate_add_task_v2_columns():
         logging.getLogger(__name__).warning(f"task v2 migration: {e}")
 
 def _migrate_drop_ping_notes_tasks():
-    """一次性清理：ping_notes 和 ping_events 曾经被作为面向用户的
-    任务播种。现在它们是调度器内部的纯后台扫描器
-    （不使用 LLM，不属于 Tasks UI）。删除两者的现有行及其运行记录。
-    （tidy_sessions/documents/research 仍然保留为任务。）"""
+    """One-time cleanup: ping_notes and ping_events used to be seeded as
+    user-facing tasks. They're now pure background scanners inside the
+    scheduler (no LLM, don't belong in the Tasks UI). Remove existing rows
+    + their runs for both. (tidy_sessions/documents/research stay as tasks.)"""
     targets = ("ping_notes", "ping_events")
     try:
         with engine.connect() as conn:
@@ -1510,7 +1556,7 @@ def _migrate_drop_ping_notes_tasks():
 
 
 def _migrate_add_notifications_enabled():
-    """每个任务的通知开关（默认开启）。"""
+    """Per-task notification on/off toggle (default ON)."""
     try:
         with engine.connect() as conn:
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(scheduled_tasks)"))]
@@ -1523,7 +1569,7 @@ def _migrate_add_notifications_enabled():
 
 
 def _migrate_add_crew_member_id():
-    """将 crew_member_id 列添加到 sessions 和 scheduled_tasks 表（如果缺失）。"""
+    """Add crew_member_id column to sessions and scheduled_tasks tables if missing."""
     try:
         with engine.connect() as conn:
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(sessions)"))]
@@ -1540,7 +1586,7 @@ def _migrate_add_crew_member_id():
         logging.getLogger(__name__).warning(f"crew_member_id migration: {e}")
 
 def _migrate_add_assistant_columns():
-    """为 personal-assistant 功能将 is_default_assistant + timezone 列添加到 crew_members。"""
+    """Add is_default_assistant + timezone columns to crew_members for the personal-assistant feature."""
     try:
         with engine.connect() as conn:
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(crew_members)"))]
@@ -1560,7 +1606,7 @@ def _migrate_add_assistant_columns():
 
 
 class Note(TimestampMixin, Base):
-    """Google Keep 风格的便签或清单。"""
+    """A Google Keep-style note or checklist."""
     __tablename__ = "notes"
 
     id         = Column(String, primary_key=True, index=True)
@@ -1574,33 +1620,33 @@ class Note(TimestampMixin, Base):
     pinned     = Column(Boolean, default=False)
     archived   = Column(Boolean, default=False)
     due_date   = Column(String, nullable=True)
-    source     = Column(String, default="user")     # "user" 或 "agent"
+    source     = Column(String, default="user")     # "user" or "agent"
     session_id = Column(String, nullable=True)
     sort_order = Column(Integer, default=0)
-    image_url  = Column(String, nullable=True)      # 上传的图片 URL（相对路径）
-    repeat     = Column(String, default="none")     # none、daily、weekly、monthly、yearly
-    # Auto-AI 字段 — 由 /api/notes/{id}/classify 填充。分类
-    # JSON 形状为 { kind, solvable, confidence, task_prompt, tools, items?: [...] }。
-    # 内容哈希作为重新分类的门控（避免每次保存都消耗 LLM 费用）。
+    image_url  = Column(String, nullable=True)      # uploaded image URL (relative path)
+    repeat     = Column(String, default="none")     # none, daily, weekly, monthly, yearly
+    # Auto-AI fields — populated by /api/notes/{id}/classify. The classification
+    # JSON shape is { kind, solvable, confidence, task_prompt, tools, items?: [...] }.
+    # Content hash gates re-classification (avoid LLM spend on every save).
     ai_classification = Column(Text, nullable=True)
     ai_content_hash   = Column(String, nullable=True)
-    # 由便签的"Agent"按钮生成的任务会话（solve-this-todo）。
-    # 便签显示一个可点击的标签，用于打开此会话进行审阅。
+    # Chat session spawned by the note's "Agent" button (solve-this-todo).
+    # The note shows a clickable tag that opens this session for review.
     agent_session_id  = Column(String, nullable=True)
 
 
 class CalendarCal(TimestampMixin, Base):
-    """一个日历（例如 'Personal'、'TimeTree'）。"""
+    """A calendar (e.g. 'Personal', 'TimeTree')."""
     __tablename__ = "calendars"
 
     id    = Column(String, primary_key=True, index=True)
     owner = Column(String, nullable=True, index=True)
     name  = Column(String, nullable=False)
     color = Column(String, default="#5b8abf")
-    source = Column(String, default="local")  # "local" 或 "caldav"
-    # 用户偏好设置中拥有此日历的 CalDAV 账户的 UUID。
-    # 对于本地日历和在多账户支持添加之前创建的 CalDAV 日历
-    # 为 NULL（视为"使用任何已配置的账户"）。
+    source = Column(String, default="local")  # "local" or "caldav"
+    # UUID of the CalDAV account in user prefs that owns this calendar.
+    # NULL for local calendars and for CalDAV calendars created before
+    # multi-account support was added (treated as "use any configured account").
     account_id = Column(String, nullable=True, index=True)
     caldav_base_url = Column(String, nullable=True)
 
@@ -1608,7 +1654,7 @@ class CalendarCal(TimestampMixin, Base):
 
 
 class CalendarEvent(TimestampMixin, Base):
-    """一个日历事件。"""
+    """A calendar event."""
     __tablename__ = "calendar_events"
 
     uid         = Column(String, primary_key=True, index=True)
@@ -1619,19 +1665,19 @@ class CalendarEvent(TimestampMixin, Base):
     dtstart     = Column(DateTime, nullable=False, index=True)
     dtend       = Column(DateTime, nullable=False)
     all_day     = Column(Boolean, default=False)
-    # 当 dtstart/dtend 存储为 UTC 时刻时为 True（在保留源 TZID 的
-    # 导入路径上设置）。False = 传统本地时间。驱动序列化时的
-    # `Z` 后缀，以便前端正确解释。
+    # True when dtstart/dtend are stored as UTC instants (set on import paths
+    # that preserve the source TZID). False = legacy naive-local. Drives the
+    # `Z`-suffix on serialization so the frontend interprets correctly.
     is_utc      = Column(Boolean, default=False, nullable=False)
     rrule       = Column(String, default="")
-    color       = Column(String, nullable=True)  # 每个事件的颜色覆盖
-    status      = Column(String, default="confirmed")  # confirmed、cancelled
+    color       = Column(String, nullable=True)  # per-event color override
+    status      = Column(String, default="confirmed")  # confirmed, cancelled
     importance  = Column(String, default="normal")    # low | normal | high | critical
     event_type  = Column(String, nullable=True)        # work | personal | health | travel | meal | social | admin | other
-    last_pinged = Column(DateTime, nullable=True)      # 助手上次提醒此事件的时间
-    # "caldav" = 从 CalDAV 服务器拉取（因此同步可能在其在
-    # 上游消失时清除它）。NULL/local = 本地创建（agent、邮件分类或
-    # 写入失败的 UI 事件），绝不能被同步清除。
+    last_pinged = Column(DateTime, nullable=True)      # last time the assistant pinged about this event
+    # "caldav" = pulled from a CalDAV server (so the sync may prune it when it
+    # vanishes upstream). NULL/local = created locally (agent, email triage, or
+    # a UI event whose write-back failed) and must NOT be pruned by the sync.
     origin      = Column(String, nullable=True, index=True)
     remote_href = Column(String, nullable=True)        # CalDAV object URL for updates/deletes
     remote_etag = Column(String, nullable=True)        # Last seen CalDAV ETag, when available
@@ -1655,7 +1701,7 @@ class CalendarDeletedEvent(TimestampMixin, Base):
 
 
 class Integration(TimestampMixin, Base):
-    """一个外部服务连接（电子邮件、RSS、Webhook 等）。"""
+    """An external service connection (email, RSS, webhook, etc.)."""
     __tablename__ = "integrations"
 
     id     = Column(String, primary_key=True, index=True)
@@ -1670,9 +1716,9 @@ class Integration(TimestampMixin, Base):
 
 
 def _migrate_seed_email_account():
-    """如果 email_accounts 为空且 settings.json 中有旧版平铺的
-    imap_host/smtp_host 键，则从中创建一个默认账户，确保升级用户
-    不受影响。可安全重复运行 — 一旦存在任何行就短路返回。"""
+    """If email_accounts is empty and settings.json has legacy flat imap_host/smtp_host
+    keys, create a single default account from them so nothing breaks for users who
+    upgraded. Safe to run repeatedly — it short-circuits once any row exists."""
     try:
         with engine.connect() as conn:
             tables = [r[0] for r in conn.execute(text(
@@ -1737,14 +1783,14 @@ def _migrate_seed_email_account():
         logging.getLogger(__name__).warning(f"seed email account migration: {e}")
 
 
-# 警告：外键强制已为所有 SQLite 连接全局启用。
-# 任何将来临时违反外键约束的迁移或架构变更
-# 都会失败。要执行此类操作，必须在迁移工作流
-# 期间临时禁用 foreign_keys。
+# WARNING: Foreign-key enforcement is enabled globally for all SQLite connections.
+# Any future migrations or schema changes that temporarily violate foreign-key
+# constraints will fail. To perform such operations, foreign_keys must be
+# temporarily disabled around the migration workflow.
 def init_db():
     """
-    通过创建所有表来初始化数据库。
-    应在启动应用时调用。
+    Initialize the database by creating all tables.
+    Should be called when starting the application.
     """
     _migrate_model_endpoints()
     Base.metadata.create_all(bind=engine)
@@ -1771,6 +1817,7 @@ def init_db():
     _migrate_add_tidy_verdict()
     _migrate_add_doc_source_email_cols()
     _migrate_add_oauth_config()
+    _migrate_add_email_oauth_columns()
     _migrate_add_task_automation_columns()
     _migrate_add_disabled_tools()
     _migrate_add_mcp_oauth_tokens_column()
@@ -1794,12 +1841,12 @@ def init_db():
 
 
 def _migrate_backfill_task_folders():
-    """为预先存在的任务/研究会话回填 folder='Tasks'。
+    """Backfill folder='Tasks' on pre-existing task/research sessions.
 
-    任务调度器创建的会话（LLM 任务、操作任务、研究运行）
-    现在在创建时将 folder='Tasks'。此迁移标记所有
-    早于此分配旧会话。幂等 — 仅处理
-    folder 为 NULL 或空且标题匹配已知前缀的行。
+    Sessions created by the task scheduler (LLM tasks, action tasks, research
+    runs) now set folder='Tasks' at creation time.  This migration tags any
+    older sessions that predate that assignment.  Idempotent — only touches
+    rows where folder is NULL or empty and the title matches known prefixes.
     """
     try:
         with engine.connect() as conn:
@@ -1820,7 +1867,7 @@ def _migrate_backfill_task_folders():
 
 
 def _migrate_chat_messages_fts():
-    """创建并回填 SQLite 的会话记录全文搜索索引。"""
+    """Create and backfill the session transcript FTS index for SQLite."""
     if not DATABASE_URL.startswith("sqlite"):
         return
 
@@ -1887,7 +1934,7 @@ def _migrate_chat_messages_fts():
 
 
 def _migrate_add_email_smtp_security():
-    """为 Proton Bridge/自定义本地 SMTP 添加显式 SMTP 安全模式。"""
+    """Add explicit SMTP security mode for Proton Bridge/custom local SMTP."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -1918,8 +1965,8 @@ def _migrate_add_email_smtp_security():
 
 
 def _migrate_encrypt_endpoint_keys():
-    """加密 model_endpoints 中任何明文存储的提供商 API 密钥。幂等；
-    使用原始 SQL 以避免 EncryptedText 装饰器被重复应用。"""
+    """Encrypt any plaintext provider API keys in model_endpoints. Idempotent;
+    raw SQL so the EncryptedText decorator isn't applied twice."""
     try:
         from src.secret_storage import encrypt, is_encrypted
     except Exception as e:
@@ -1942,9 +1989,9 @@ def _migrate_encrypt_endpoint_keys():
 
 
 def _migrate_encrypt_signatures():
-    """加密 signatures 表中仍存在的任何明文签名图片。
-    幂等 — 已带有 `enc:` 前缀的行被跳过。使用原始 SQL
-    以避免 EncryptedText 类型装饰器被重复应用。"""
+    """Encrypt any plaintext signature images still in the signatures table.
+    Idempotent — rows already prefixed with `enc:` are skipped. Uses raw SQL
+    so the EncryptedText type decorator isn't applied twice."""
     try:
         from src.secret_storage import encrypt, is_encrypted
     except Exception as e:
@@ -1974,9 +2021,9 @@ def _migrate_encrypt_signatures():
 
 
 def _migrate_encrypt_email_passwords():
-    """加密 email_accounts 表中仍存在的任何明文 IMAP/SMTP 密码。
-    幂等 — 已带有 `enc:` 前缀的行被跳过。
-    可在每次启动时安全运行。"""
+    """Encrypt any plaintext IMAP/SMTP passwords still in the email_accounts
+    table. Idempotent — rows already prefixed with `enc:` are skipped.
+    Safe to run on every startup."""
     try:
         from src.secret_storage import encrypt, is_encrypted
     except Exception as e:
@@ -2008,9 +2055,9 @@ def _migrate_encrypt_email_passwords():
 
 
 def _migrate_add_calendar_is_utc():
-    """将 is_utc 列添加到 calendar_events，使导入的事件可以保留
-    其原始 UTC 时间戳（传输中的 Z 后缀），而不会影响
-    旧版不带时区的本地行。"""
+    """Add is_utc column to calendar_events so imported events can preserve
+    their original UTC timestamps (Z-suffix on the wire) without touching
+    legacy naive-local rows."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -2034,9 +2081,9 @@ def _migrate_add_calendar_is_utc():
 
 
 def _migrate_add_calendar_origin():
-    """将 `origin` 添加到 calendar_events，使 CalDAV 同步能够区分离
-    服务器拉取的行（在上游消失时可清除）和本地创建的行（agent /
-    邮件分类 / 回写失败），后者绝不能清除。幂等。"""
+    """Add `origin` to calendar_events so the CalDAV sync can tell server-pulled
+    rows (prunable when they vanish upstream) from locally-created ones (agent /
+    email triage / failed write-back), which must never be pruned. Idempotent."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -2061,8 +2108,8 @@ def _migrate_add_calendar_origin():
 
 
 def _migrate_add_calendar_account_id():
-    """将 `account_id` 添加到 calendars，使每个 CalDAV 日历知道
-    哪个凭据集（来自用户偏好中的 caldav_accounts）拥有它。幂等。"""
+    """Add `account_id` to calendars so each CalDAV-backed calendar knows which
+    credential set (from caldav_accounts in user prefs) owns it. Idempotent."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -2112,7 +2159,7 @@ def _migrate_add_caldav_sync_columns():
 
 
 def _migrate_add_calendar_metadata():
-    """将 importance/event_type/last_pinged 列添加到 calendar_events 表。"""
+    """Add importance/event_type/last_pinged columns to calendar_events table."""
     import sqlite3
     db_path = DATABASE_URL.replace("sqlite:///", "")
     if not os.path.exists(db_path):
@@ -2139,8 +2186,8 @@ def _migrate_add_calendar_metadata():
 
 def get_db():
     """
-    获取数据库会话的依赖项。
-    用于 FastAPI 路由中注入数据库会话。
+    Dependency to get a database session.
+    Used in FastAPI routes to inject database sessions.
     """
     db = SessionLocal()
     try:
@@ -2153,7 +2200,7 @@ from typing import Generator
 
 @contextmanager
 def get_db_session() -> Generator:
-    """数据库会话的上下文管理器"""
+    """Context manager for database sessions"""
     session = SessionLocal()
     try:
         yield session
@@ -2165,7 +2212,7 @@ def get_db_session() -> Generator:
         session.close()
 
 def bulk_insert_messages(session_id: str, messages: list):
-    """高效地批量插入多条消息"""
+    """Efficiently insert multiple messages"""
     with get_db_session() as db:
         db.bulk_insert_mappings(
             ChatMessage,
@@ -2181,7 +2228,7 @@ def bulk_insert_messages(session_id: str, messages: list):
         )
 
 def cleanup_old_sessions(days: int = 30):
-    """删除超过指定天数的会话"""
+    """Remove sessions older than specified days"""
     from datetime import timedelta
     
     with get_db_session() as db:
@@ -2196,7 +2243,7 @@ def cleanup_old_sessions(days: int = 30):
         return deleted_count
 
 def get_session_stats():
-    """获取数据库统计信息"""
+    """Get database statistics"""
     with get_db_session() as db:
         stats = {
             'total_sessions': db.query(Session).count(),
@@ -2208,10 +2255,10 @@ def get_session_stats():
         return stats
 
 def get_detailed_stats():
-    """获取包含文件大小的综合数据库统计信息"""
-    stats = get_session_stats()  # 复用已有函数
+    """Get comprehensive database statistics including file size"""
+    stats = get_session_stats()  # Use existing function
     
-    # 添加数据库文件大小
+    # Add database file size
     db_size_mb = 0.0
     if "sqlite" in DATABASE_URL:
         db_path = DATABASE_URL.replace("sqlite:///", "")
@@ -2226,7 +2273,7 @@ def get_detailed_stats():
     return stats
 
 def update_session_last_accessed(session_id: str):
-    """更新会话的 last_accessed 时间戳"""
+    """Update the last_accessed timestamp for a session"""
     with get_db_session() as db:
         db_session = db.query(Session).filter(Session.id == session_id).first()
         if db_session:
@@ -2236,11 +2283,11 @@ def update_session_last_accessed(session_id: str):
     return False
 
 def get_session_mode(session_id: str):
-    """返回会话持久化的 `mode`，如果未设置/未知则返回 None。
+    """Return a session's persisted `mode`, or None if unset/unknown.
 
-    尽力而为：从不抛出异常（任何数据库错误返回 None），因此
-    热请求路径上的调用方无需防护。通过 get_db_session() 路由，
-    确保连接始终归还到连接池。"""
+    Best-effort: never raises (returns None on any DB error) so callers on hot
+    request paths needn't guard it. Routed through get_db_session() so the
+    connection is always returned to the pool."""
     try:
         with get_db_session() as db:
             return db.query(Session.mode).filter(Session.id == session_id).scalar()
@@ -2249,11 +2296,11 @@ def get_session_mode(session_id: str):
         return None
 
 def set_session_mode(session_id: str, mode: str) -> bool:
-    """持久化会话的 `mode`。尽力而为：从不抛出异常，返回成功标志。
+    """Persist a session's `mode`. Best-effort: never raises, returns success.
 
-    通过 get_db_session() 路由，因此写入中途失败（例如并发流
-    下的 SQLite 'database is locked'）仍会将连接归还到连接池
-    而非泄漏 — 重复泄漏会耗尽连接池。"""
+    Routed through get_db_session() so a failure mid-write (e.g. a SQLite
+    'database is locked' under concurrent streams) still returns the connection
+    to the pool instead of leaking it — repeated leaks would exhaust it."""
     try:
         with get_db_session() as db:
             db.query(Session).filter(Session.id == session_id).update({"mode": mode})
@@ -2263,17 +2310,17 @@ def set_session_mode(session_id: str, mode: str) -> bool:
         return False
 
 def get_session_by_id(session_id: str):
-    """通过 ID 获取会话"""
+    """Get a session by ID"""
     with get_db_session() as db:
         return db.query(Session).filter(Session.id == session_id).first()
 
 def get_upcoming_events(owner, horizon_days: int = 60, limit: int = 40):
-    """即将到来的、未取消的事件，以 {uid, title, start} 字典形式返回，按时间升序排列。
+    """Upcoming, non-cancelled events as {uid, title, start} dicts, soonest first.
 
-    owner=None 表示不限定所有者（单用户/旧版）。多用户调用者
-    必须传入所有者的用户名 — 否则会读取所有租户的事件。
-    自动化的邮件到日历流程依赖于此，以避免泄露（并操作）
-    其他用户的日历。"""
+    owner=None means NO owner scoping (single-user / legacy). Multi-user callers
+    MUST pass the owning username — otherwise they read every tenant's events.
+    The autonomous email->calendar pass relies on this to avoid disclosing (and
+    acting on) other users' calendars."""
     from datetime import timedelta
     now = utcnow_naive()
     with get_db_session() as db:
@@ -2294,7 +2341,7 @@ def get_upcoming_events(owner, horizon_days: int = 60, limit: int = 40):
         ]
 
 def archive_session(session_id: str):
-    """归档一个会话"""
+    """Archive a session"""
     with get_db_session() as db:
         session = db.query(Session).filter(Session.id == session_id).first()
         if session:
@@ -2303,7 +2350,7 @@ def archive_session(session_id: str):
             return True
     return False
 
-# 初始化数据库并创建所有表
+# Initialize the database by creating all tables
 
 
 init_db()

@@ -1,4 +1,4 @@
-"""认证路由 — 登录、登出、注册、状态、用户管理。"""
+"""Authentication routes — login, logout, signup, status, user management."""
 
 from fastapi import APIRouter, Request, Response, HTTPException
 from pydantic import BaseModel
@@ -12,8 +12,8 @@ import re
 from pathlib import Path
 
 from core.atomic_io import atomic_write_json, atomic_write_text
-from core.auth import AuthManager, SetAdminResult
-from src.constants import DEEP_RESEARCH_DIR, MEMORY_FILE, SKILLS_DIR
+from core.auth import AuthManager, RESERVED_USERNAMES, SetAdminResult, TOKEN_TTL
+from src.constants import DEEP_RESEARCH_DIR, MEMORY_FILE, PASSWORD_MIN_LENGTH, SKILLS_DIR
 from src.rate_limiter import RateLimiter
 from src.settings_scrub import scrub_settings
 from src.settings import (
@@ -97,13 +97,17 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/setup")
     async def first_run_setup(body: SetupRequest, request: Request):
-        """创建初始管理员账户。仅在没有账户时有效。"""
+        """Create initial admin account. Only works if no accounts exist."""
         if not _setup_limiter.check(request.client.host):
             raise HTTPException(429, "Too many requests — try again later")
         if auth_manager.is_configured:
             raise HTTPException(400, "Already configured")
-        if len(body.password) < 8:
-            raise HTTPException(400, "Password must be at least 8 characters")
+        if len(body.password) < PASSWORD_MIN_LENGTH:
+            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+        if len(body.username.strip()) < 1:
+            raise HTTPException(400, "Username is required")
+        if body.username.lower() in RESERVED_USERNAMES:
+            raise HTTPException(403, "Username is reserved")
         ok = await asyncio.to_thread(auth_manager.setup, body.username, body.password)
         if not ok:
             raise HTTPException(500, "Setup failed")
@@ -111,17 +115,19 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/signup")
     async def signup(body: SignupRequest, request: Request):
-        """创建新用户账户。仅在管理员开启注册时有效。"""
+        """Create a new user account. Only works if signup is enabled by admin."""
         if not _signup_limiter.check(request.client.host):
             raise HTTPException(429, "Too many requests — try again later")
         if not auth_manager.is_configured:
             raise HTTPException(400, "Run setup first")
         if not auth_manager.signup_enabled:
             raise HTTPException(403, "Registration is disabled. Ask an admin for an account.")
-        if len(body.password) < 8:
-            raise HTTPException(400, "Password must be at least 8 characters")
+        if len(body.password) < PASSWORD_MIN_LENGTH:
+            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
         if len(body.username.strip()) < 1:
             raise HTTPException(400, "Username is required")
+        if body.username.lower() in RESERVED_USERNAMES:
+            raise HTTPException(403, "Username is reserved")
         ok = await asyncio.to_thread(auth_manager.create_user, body.username, body.password, is_admin=False)
         if not ok:
             raise HTTPException(409, "Username already taken")
@@ -131,19 +137,21 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     async def login(body: LoginRequest, request: Request, response: Response):
         if not _login_limiter.check(request.client.host):
             raise HTTPException(429, "Too many requests — try again later")
-        # 先验证密码
+        # Verify password first
         username = body.username.strip().lower()
         if not await asyncio.to_thread(auth_manager.verify_password, username, body.password):
             raise HTTPException(401, "Invalid credentials")
-        # 如果启用了 2FA，检查
+        # Check 2FA if enabled
         if auth_manager.totp_enabled(username):
             if not body.totp_code:
-                # 密码正确但需要 TOTP — 告知客户端显示验证码输入
+                # Password OK but need TOTP — tell client to show code input
                 return {"ok": False, "requires_totp": True, "username": username}
             if not auth_manager.totp_verify(username, body.totp_code):
                 raise HTTPException(401, "Invalid 2FA code")
-        # 所有检查通过 — 创建会话（密码已在上面验证）
+        # All checks passed — create session (password already verified above)
         token = await asyncio.to_thread(auth_manager.create_session_trusted, username)
+        if not token:
+            raise HTTPException(401, "Invalid credentials")
         cookie_kwargs = dict(
             key=SESSION_COOKIE,
             value=token,
@@ -153,7 +161,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             path="/",
         )
         if body.remember:
-            cookie_kwargs["max_age"] = 60 * 60 * 24 * 7  # 7 天
+            cookie_kwargs["max_age"] = TOKEN_TTL
         response.set_cookie(**cookie_kwargs)
         return {"ok": True, "username": username}
 
@@ -170,10 +178,10 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         token = request.cookies.get(SESSION_COOKIE)
         result = auth_manager.status(token)
         result["signup_enabled"] = auth_manager.signup_enabled
-        # 包含调用者的有效权限，以便前端可以隐藏/灰显
-        # 用户不允许使用的 UI 控件。管理员获得
-        # ADMIN_PRIVILEGES（全部开启），普通用户获得其存储的
-        # 权限集与 DEFAULT_PRIVILEGES 合并后的结果。
+        # Include the caller's effective privileges so the frontend can
+        # hide / dim UI controls the user isn't allowed to use. Admins get
+        # ADMIN_PRIVILEGES (everything on), regular users get their stored
+        # set merged with DEFAULT_PRIVILEGES.
         try:
             u = result.get("username")
             if u:
@@ -182,13 +190,18 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             pass
         return result
 
+    @router.get("/policy")
+    async def auth_policy():
+        """Return public auth policy constants for the frontend."""
+        return auth_manager.policy()
+
     @router.post("/change-password")
     async def change_password(body: ChangePasswordRequest, request: Request):
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
-        if len(body.new_password) < 8:
-            raise HTTPException(400, "Password must be at least 8 characters")
+        if len(body.new_password) < PASSWORD_MIN_LENGTH:
+            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
         current_token = request.cookies.get(SESSION_COOKIE)
         ok = await asyncio.to_thread(auth_manager.change_password, user, body.current_password, body.new_password)
         if not ok:
@@ -197,12 +210,12 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         return {"ok": True}
 
     # ------------------------------------------------------------------
-    # 双因素认证
+    # Two-factor authentication
     # ------------------------------------------------------------------
 
     @router.post("/2fa/setup")
     async def totp_setup(request: Request):
-        """生成 TOTP 密钥并返回二维码 URI。"""
+        """Generate a TOTP secret and return the QR code URI."""
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
@@ -212,7 +225,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         if not secret:
             raise HTTPException(500, "Failed to generate secret")
         uri = auth_manager.totp_get_provisioning_uri(user, secret)
-        # 生成二维码为 base64 PNG
+        # Generate QR code as base64 PNG
         import qrcode, io, base64
         qr = qrcode.make(uri, box_size=6, border=2)
         buf = io.BytesIO()
@@ -225,7 +238,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/2fa/confirm")
     async def totp_confirm(body: TotpVerifyRequest, request: Request):
-        """验证 TOTP 验证码以确认 2FA 设置。返回备用码。"""
+        """Verify a TOTP code to confirm 2FA setup. Returns backup codes."""
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
@@ -239,7 +252,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/2fa/disable")
     async def totp_disable(body: TotpDisableRequest, request: Request):
-        """禁用 2FA。需要密码确认。"""
+        """Disable 2FA. Requires password confirmation."""
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
@@ -249,13 +262,13 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.get("/2fa/status")
     async def totp_status(request: Request):
-        """检查当前用户是否启用了 2FA。"""
+        """Check if 2FA is enabled for the current user."""
         user = _get_current_user(request)
         if not user:
             raise HTTPException(401, "Not authenticated")
         return {"enabled": auth_manager.totp_enabled(user)}
 
-    # 管理员专属路由
+    # Admin-only routes
     @router.get("/users")
     async def list_users(request: Request):
         user = _get_current_user(request)
@@ -268,8 +281,12 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
-        if len(body.password) < 8:
-            raise HTTPException(400, "Password must be at least 8 characters")
+        if len(body.password) < PASSWORD_MIN_LENGTH:
+            raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters")
+        if len(body.username.strip()) < 1:
+            raise HTTPException(400, "Username is required")
+        if body.username.lower() in RESERVED_USERNAMES:
+            raise HTTPException(403, "Username is reserved")
         ok = auth_manager.create_user(body.username, body.password, body.is_admin)
         if not ok:
             raise HTTPException(409, "Username already taken")
@@ -323,7 +340,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                 )
                 return False
 
-        # 用户名是用户数据的所有权键。在更改认证数据之前，
+        # Usernames are ownership keys for user data. Rename the common
         # owner-scoped DB rows so the account keeps access to its sessions,
         # docs, email accounts, tasks, etc.
         try:
@@ -355,7 +372,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                 )
             raise HTTPException(500, "Failed to rename user data")
 
-        # 每用户偏好设置使用 JSON 存储，而非 SQL。
+        # Per-user prefs are JSON-backed, not SQL-backed.
         try:
             from routes.prefs_routes import _load as _load_prefs, _save as _save_prefs
             prefs = _load_prefs()
@@ -432,6 +449,23 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         except Exception as e:
             logger.warning("Failed to rename upload owner references %s -> %s: %s", old_username, new_username, e)
 
+        # direct personal RAG uploads live in per-owner directories and the
+        # vector metadata also carries the username used for owner-filtered
+        # search. Keep both in sync with the auth rename.
+        try:
+            from routes.personal_routes import rename_personal_upload_owner
+            personal_docs_manager = getattr(request.app.state, "personal_docs_manager", None)
+            if personal_docs_manager is not None:
+                rag_manager = getattr(personal_docs_manager, "rag_manager", None)
+                rename_personal_upload_owner(
+                    old_username,
+                    new_username,
+                    personal_docs_manager=personal_docs_manager,
+                    rag_manager=rag_manager,
+                )
+        except Exception as e:
+            logger.warning("Failed to rename personal RAG upload owner references %s -> %s: %s", old_username, new_username, e)
+
         # skills: SKILL.md frontmatter carries owner: <username>; the usage
         # sidecar (_usage.json) keys entries as owner::skill-name. Both must
         # be updated or the renamed user's Skills panel goes empty.
@@ -482,11 +516,11 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                 if str(getattr(sess, "owner", None) or "").strip().lower() == old_username:
                     sess.owner = new_username
 
-        # 上面的 owner 重命名循环已更新了数据库中的 ApiToken.owner，
-        # 但 bearer-token 缓存仍然将每个令牌映射到旧的 owner。如果不
-        # 刷新它，重命名用户的 API 令牌会解析到旧的（现已不存在的）
-        # owner，并停止访问其数据，直到缓存下次标记为脏。现在就使其
-        # 失效，与令牌 CRUD 路由的做法相同。
+        # The owner-rename loop above updated ApiToken.owner in the DB, but the
+        # bearer-token cache still maps each token to the OLD owner. Without
+        # refreshing it, the renamed user's API tokens resolve to the old (now
+        # non-existent) owner and stop reaching their data until the cache next
+        # goes dirty. Invalidate it now, like the token CRUD routes do.
         invalidator = getattr(request.app.state, "invalidate_token_cache", None)
         if callable(invalidator):
             invalidator()
@@ -520,12 +554,12 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     @router.post("/signup-toggle", deprecated=True)
     async def toggle_signup(request: Request):
         """
-        切换开放注册开/关。仅限管理员。
+        Toggle open registration on/off. Admin only.
 
-        已弃用：此端点使用切换语义，可能导致不安全的
-        状态变更。请改用 PUT /open-signup。
+        DEPRECATED: This endpoint uses toggle semantics which can lead to unsafe state changes.
+        Use PUT /open-signup instead.
 
-        保留此端点用于向后兼容，可能在未来版本中移除。
+        This endpoint is kept for backward compatibility and may be removed in future versions.
         """
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
@@ -535,7 +569,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.put("/open-signup")
     async def set_signup_enabled(body: SetOpenRegistrationRequest, request: Request):
-        """设置开放注册启用状态。仅限管理员。"""
+        """Set open signup enabled state. Admin only."""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -566,24 +600,24 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             raise
         if not ok:
             raise HTTPException(400, "Cannot delete user")
-        # delete_user 会删除用户的 ApiToken 行，但 bearer-auth
-        # 中间件从一个内存中的 prefix->token 缓存中提供服务，
-        # 该缓存仅在标记为脏时才重建。没有这个，已删除用户的已缓存
-        # 令牌会继续认证，直到其他令牌操作或重启清除缓存。
-        # 与令牌路由的做法相同。
+        # delete_user removes the user's ApiToken rows, but the bearer-auth
+        # middleware serves from an in-memory prefix->token cache that only
+        # rebuilds when flagged dirty. Without this, a deleted user's already
+        # cached token keeps authenticating until some other token op or a
+        # restart clears the cache. Mirror what the token routes do.
         _invalidate_api_token_cache()
         return {"ok": True}
 
-    # ---- 功能可见性（管理员管理） ----
+    # ---- Feature visibility (admin-managed) ----
 
     @router.get("/features")
     async def get_features():
-        """公开：返回启用了哪些 UI 功能。"""
+        """Public: returns which UI features are enabled."""
         return _load_features()
 
     @router.post("/features")
     async def set_features(request: Request):
-        """仅限管理员：更新功能开关。"""
+        """Admin only: update feature toggles."""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -595,13 +629,13 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         _save_features(current)
         return current
 
-    # ---- 应用设置（管理员管理） ----
+    # ---- App settings (admin-managed) ----
 
     @router.get("/settings")
     async def get_settings(request: Request):
-        """返回应用设置。管理员获得完整集合；非管理员获得
-        已屏蔽密钥的脱敏副本。前端将其用于键位绑定 +
-        TTS 偏好设置，因此无需管理员即可调用。"""
+        """Returns app settings. Admins get the full set; non-admins get
+        a scrubbed copy with secret keys blanked. The frontend uses this
+        for keybinds + TTS prefs, so it stays callable without admin."""
         user = _get_current_user(request)
         settings = _load_settings()
         if user and auth_manager.is_admin(user):
@@ -610,17 +644,17 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/settings")
     async def set_settings(request: Request):
-        """仅限管理员：更新应用设置。"""
+        """Admin only: update app settings."""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
         body = await request.json()
         current = _load_settings()
-        # 对数值设置逐键校验：将其强制转为整数并限制在合理范围内，
-        # 以避免错误的值禁用 agent 或使其失控。
+        # Per-key validation for numeric settings: coerce to int and clamp to a
+        # sane range so a bad value can't disable the agent or let it run away.
         _INT_RANGES = {
             "agent_max_rounds": (1, 200),
-            "agent_max_tool_calls": (0, 1000),  # 0 = 无限制
+            "agent_max_tool_calls": (0, 1000),  # 0 = unlimited
         }
         for key in DEFAULT_SETTINGS:
             if key not in body:
@@ -637,30 +671,30 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         _save_settings(current)
         return current
 
-    # ---- 集成 CRUD ----
+    # ---- Integrations CRUD ----
 
-    # 在启动时运行迁移
+    # Run migration on startup
     migrate_from_settings()
 
     @router.get("/integrations")
     async def list_integrations_route(request: Request):
-        """列出所有集成（仅限管理员，密钥已遮蔽）。"""
+        """List all integrations (admin only, keys masked)."""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
         items = load_integrations()
-        # 遮蔽 API 密钥以供前端显示
+        # Mask API keys for frontend display
         safe = [mask_integration_secret(item) for item in items]
         return {"integrations": safe}
 
     @router.get("/integrations/presets")
     async def list_presets():
-        """列出可用的集成预设。"""
+        """List available integration presets."""
         return {"presets": {k: {kk: vv for kk, vv in v.items() if kk != "api_key"} for k, v in INTEGRATION_PRESETS.items()}}
 
     @router.post("/integrations")
     async def create_integration(request: Request):
-        """创建新的集成（仅限管理员）。"""
+        """Create a new integration (admin only)."""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -670,7 +704,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.put("/integrations/{integration_id}")
     async def update_integration_route(integration_id: str, request: Request):
-        """更新现有集成（仅限管理员）。"""
+        """Update an existing integration (admin only)."""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -682,7 +716,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.delete("/integrations/{integration_id}")
     async def delete_integration_route(integration_id: str, request: Request):
-        """删除集成（仅限管理员）。"""
+        """Delete an integration (admin only)."""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -693,7 +727,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/integrations/{integration_id}/test")
     async def test_integration_route(integration_id: str, request: Request):
-        """测试与集成的连接（仅限管理员）。"""
+        """Test connectivity to an integration (admin only)."""
         user = _get_current_user(request)
         if not user or not auth_manager.is_admin(user):
             raise HTTPException(403, "Admin only")
@@ -713,9 +747,9 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             import httpx
             from urllib.parse import urlparse
             # Strip any path/query the user accidentally pasted in the
-            # （例如 `http://host:8091/odysseus`）— 否则主题会
+            # base URL (e.g. `http://host:8091/odysseus`) — otherwise
             # the topic gets appended after the path and we publish to
-            # 被附加在路径后面，我们会发布到 `/odysseus/odysseus`
+            # `/odysseus/odysseus` (which ntfy 404s on). ntfy itself
             # only ever serves from the root.
             raw_base = (integ.get("base_url") or "").strip()
             parsed = urlparse(raw_base)
@@ -760,7 +794,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             except Exception as e:
                 hint = ""
                 if parsed.hostname not in ("127.0.0.1", "localhost"):
-                    hint = " 如果使用 Docker Compose ntfy，请在 .env 中将 NTFY_BIND 设置为该主机/Tailscale IP，NTFY_BASE_URL 设置为相同的服务器 URL，然后重建 ntfy。"
+                    hint = " If this is Docker Compose ntfy, set NTFY_BIND to that host/Tailscale IP and NTFY_BASE_URL to the same server URL in .env, then recreate ntfy."
                 return {"ok": False, "message": f"ntfy publish to {full_url} failed: {e}.{hint}"[:500]}
 
         if preset == "discord_webhook":
@@ -784,8 +818,8 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             except Exception as e:
                 return {"ok": False, "message": f"Request failed: {e}"[:400]}
 
-        # 所有其他预设：对已知的健康检查端点执行 GET。
-        # 如果预设缺失，回退到从名称检测。
+        # All other presets: GET against a known health endpoint.
+        # Fall back to detecting from name if preset is missing.
         health_paths = {
             "miniflux": "/v1/me",
             "gitea": "/api/v1/version",

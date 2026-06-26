@@ -1,10 +1,10 @@
-"""个人助理路由 — 解析每个用户的单例，读写其设置，
-并列出其定时签到任务。
+"""Personal assistant routes — resolve the per-user singleton, read/write
+its settings, and list its scheduled check-in tasks.
 
-个人助理本质上是一个带特殊标记的 CrewMember，拥有一个
-固定会话和三个每日定时任务（"早上/午间/晚间签到"）。
-所有属性均可由用户编辑：名称、个性、模型、
-启用的工具、时区以及三个签到的时间/提示/启用开关。
+The personal assistant is just a specially-flagged CrewMember that owns one
+pinned Session and three daily ScheduledTasks ("Morning/Midday/Evening
+check-in"). Everything about it is user-editable: name, personality, model,
+enabled tools, timezone, and the three check-in times/prompts/enabled flags.
 """
 
 import json
@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from core.database import SessionLocal, CrewMember, ScheduledTask
 from src.auth_helpers import get_current_user
+from core.auth import RESERVED_USERNAMES
 from src.task_scheduler import compute_next_run
 
 
@@ -24,7 +25,7 @@ class CheckInUpdate(BaseModel):
     name: Optional[str] = None
     scheduled_time: Optional[str] = None  # "HH:MM"
     prompt: Optional[str] = None
-    enabled: Optional[bool] = None        # 映射到 status "active"/"paused"
+    enabled: Optional[bool] = None        # maps to status "active"/"paused"
 
 
 class AssistantSettingsUpdate(BaseModel):
@@ -34,7 +35,7 @@ class AssistantSettingsUpdate(BaseModel):
     model: Optional[str] = None
     endpoint_url: Optional[str] = None
     enabled_tools: Optional[list[str]] = None
-    allow_autonomous_email: Optional[bool] = None  # 便捷开关
+    allow_autonomous_email: Optional[bool] = None  # convenience toggle
     timezone: Optional[str] = None
     check_ins: Optional[list[CheckInUpdate]] = None
 
@@ -85,15 +86,15 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
             raise HTTPException(status_code=401, detail="Not authenticated")
         return owner
 
-    # 合成的/非人类 owner，这些 owner 永远不应该被创建为助理 +
-    # 签到任务。之前在任意 /assistant 路由下以这些 owner 访问
-    # 会为其创建完整的 CrewMember + 早/午/晚签到任务，
-    # 然后与真实用户的签到双重触发。
-    _SYNTHETIC_OWNERS = frozenset({"internal-tool", "api", "demo", "system", ""})
+    # Synthetic / non-human owners that should NEVER get an assistant +
+    # check-in tasks seeded. Hitting any /assistant route under one of these
+    # used to seed a full CrewMember + Morning/Midday/Evening tasks under that
+    # owner, which then double-fired alongside the real user's check-ins.
+    # RESERVED_USERNAMES covers the same set; the `not owner` guard handles "".
 
     async def _get_or_create(owner: str) -> CrewMember:
-        """返回每个用户的助手 CrewMember，按需创建。"""
-        if not owner or owner in _SYNTHETIC_OWNERS:
+        """Return the per-owner assistant CrewMember, creating it on demand."""
+        if not owner or owner in RESERVED_USERNAMES:
             raise HTTPException(status_code=400, detail=f"Cannot seed assistant for {owner!r}")
         db = SessionLocal()
         try:
@@ -105,8 +106,8 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
                 return crew
         finally:
             db.close()
-        # 延迟创建。这与启动钩子为每个用户执行的代码相同
-        # —— 可以安全地再次调用，它是幂等的。
+        # Seed lazily. This is the same code the startup hook runs for each
+        # user — safe to call again, it's idempotent.
         await task_scheduler.ensure_assistant_defaults(owner)
         db = SessionLocal()
         try:
@@ -120,7 +121,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
     @router.get("/session")
     async def get_assistant_session(request: Request):
-        """解析（或延迟创建）该用户的固定助手会话。"""
+        """Resolve (or lazily create) the pinned Assistant session for this user."""
         owner = _owner(request)
         crew = await _get_or_create(owner)
         if not crew or not crew.session_id:
@@ -133,7 +134,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
     @router.get("/settings")
     async def get_assistant_settings(request: Request):
-        """返回 CrewMember 字段 + 三个签到任务行 + 用于日志的任务 ID。"""
+        """Return CrewMember fields + the three check-in task rows + task IDs for logs."""
         owner = _owner(request)
         crew = await _get_or_create(owner)
         if not crew:
@@ -154,7 +155,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
     @router.patch("/settings")
     async def update_assistant_settings(payload: AssistantSettingsUpdate, request: Request):
-        """在一次调用中更新 CrewMember 字段和/或签到任务。"""
+        """Update CrewMember fields and/or check-in tasks in one call."""
         owner = _owner(request)
         crew = await _get_or_create(owner)
         if not crew:
@@ -166,7 +167,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
             if not crew_db:
                 raise HTTPException(status_code=404, detail="Assistant not found")
 
-            # 更新 CrewMember 字段。
+            # Update CrewMember fields.
             if payload.name is not None:
                 crew_db.name = payload.name.strip() or crew_db.name
             if payload.avatar is not None:
@@ -180,7 +181,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
             if payload.timezone is not None:
                 crew_db.timezone = payload.timezone or None
 
-            # 工具列表：要么是显式列表，要么是隐式开关。
+            # Tool list: either explicit list, or implicit toggle.
             if payload.enabled_tools is not None:
                 crew_db.enabled_tools = json.dumps(payload.enabled_tools)
             if payload.allow_autonomous_email is not None:
@@ -198,7 +199,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
             crew_db.updated_at = datetime.utcnow()
 
-            # 更新签到任务。
+            # Update check-in tasks.
             if payload.check_ins:
                 now_utc = datetime.utcnow()
                 tz_name = crew_db.timezone or None
@@ -232,8 +233,8 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
                         )
                     task.updated_at = datetime.utcnow()
 
-            # 时区变更也会改变所有签到的下次运行时间，即使
-            # 用户没有修改时间字段。
+            # Timezone change also shifts the NEXT run of all check-ins even if
+            # the user didn't touch the time fields.
             if payload.timezone is not None:
                 now_utc = datetime.utcnow()
                 tz_name = crew_db.timezone or None
@@ -250,7 +251,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
             db.commit()
 
-            # 重新读取 crew_db + tasks 以返回最新状态。
+            # Re-read crew_db + tasks to return the fresh state.
             crew_out = db.query(CrewMember).filter(CrewMember.id == crew.id).first()
             tasks_out = db.query(ScheduledTask).filter(
                 ScheduledTask.owner == owner,
@@ -266,7 +267,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
     @router.post("/run/{task_id}")
     async def run_check_in_now(task_id: str, request: Request):
-        """立即触发一个助手签到的执行（手动测试）。"""
+        """Trigger one of the assistant's check-ins immediately (manual test)."""
         owner = _owner(request)
         db = SessionLocal()
         try:
@@ -289,13 +290,13 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
     @router.get("/run-status/{task_id}")
     async def run_status(task_id: str, request: Request):
-        """检查最近一次任务执行是否已完成。"""
+        """Check whether the most recent run of a task has finished."""
         from core.database import TaskRun, ScheduledTask
         user = _owner(request)
         db = SessionLocal()
         try:
-            # 安全：如果任务不属于此用户则返回 404 — 没有此检查，
-            # 任何已认证的用户都可以轮询任意 task_id 的状态。
+            # SECURITY: 404 if the task doesn't belong to this user — without
+            # this any authenticated user could poll the status of any task_id.
             task = db.query(ScheduledTask).filter(ScheduledTask.id == task_id).first()
             if not task:
                 raise HTTPException(404, "Task not found")
@@ -314,7 +315,7 @@ def setup_assistant_routes(task_scheduler) -> APIRouter:
 
     @router.get("/available-timezones")
     async def list_timezones():
-        """返回用于填充设置下拉列表的 IANA 时区名称列表。"""
+        """Return the IANA tz name list used to populate the settings dropdown."""
         try:
             from zoneinfo import available_timezones
             zones = sorted(available_timezones())

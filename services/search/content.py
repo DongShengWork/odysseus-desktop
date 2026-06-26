@@ -1,4 +1,4 @@
-"""网页内容抓取，支持缓存、PDF 提取和摘要辅助功能。"""
+"""Webpage content fetching with caching, PDF extraction, and summarization helpers."""
 
 import copy
 import io
@@ -14,6 +14,8 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+
+from src.constants import WEB_FETCH_SOFT_MAX_BYTES, WEB_FETCH_HARD_MAX_BYTES, WEB_FETCH_USER_AGENT
 
 from .analytics import RateLimitError, error_logger
 from .cache import (
@@ -89,21 +91,131 @@ def _public_http_url(url: str) -> bool:
         return False
 
 
-def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 5) -> httpx.Response:
+class BodyTooLargeError(Exception):
+    """The server declared a body larger than the hard fetch ceiling."""
+
+    def __init__(self, url: str, declared_bytes: int):
+        self.url = url
+        self.declared_bytes = declared_bytes
+        super().__init__(
+            f"response body is {declared_bytes:,} bytes, over the "
+            f"{WEB_FETCH_HARD_MAX_BYTES:,}-byte hard cap"
+        )
+
+
+class _CappedFetch:
+    """Result of a size-capped streaming GET.
+
+    Carries just what fetch_webpage_content needs from an httpx.Response,
+    plus the cap bookkeeping: the (possibly truncated) body, whether the
+    cap cut it short, and the size the server declared via Content-Length
+    (wire bytes; None when absent).
+    """
+
+    __slots__ = ("status_code", "headers", "content", "truncated",
+                 "declared_bytes", "encoding", "url")
+
+    def __init__(self, status_code, headers, content, truncated,
+                 declared_bytes, encoding, url):
+        self.status_code = status_code
+        self.headers = headers
+        self.content = content
+        self.truncated = truncated
+        self.declared_bytes = declared_bytes
+        self.encoding = encoding
+        self.url = url
+
+    @property
+    def text(self) -> str:
+        return self.content.decode(self.encoding or "utf-8", errors="replace")
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            request = httpx.Request("GET", self.url)
+            raise httpx.HTTPStatusError(
+                f"HTTP {self.status_code} for {self.url}",
+                request=request,
+                response=httpx.Response(self.status_code, request=request),
+            )
+
+
+def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 5,
+                    max_bytes: int = None) -> "_CappedFetch":
+    """Capped streaming GET with SSRF-guarded manual redirects.
+
+    The body is streamed and buffering stops at ``max_bytes`` (default: the
+    soft cap), so an oversized resource cannot be pulled into memory or the
+    content cache in full. When Content-Length already declares a body over
+    the hard ceiling, the fetch is refused before any body bytes are read.
+    """
+    cap = min(max_bytes or WEB_FETCH_SOFT_MAX_BYTES, WEB_FETCH_HARD_MAX_BYTES)
     current = url
     for _ in range(max_redirects + 1):
         if not _public_http_url(current):
             raise httpx.RequestError("Blocked private/internal URL", request=httpx.Request("GET", current))
-        response = httpx.get(current, headers=headers, timeout=timeout, follow_redirects=False)
-        if response.status_code not in (301, 302, 303, 307, 308):
-            return response
-        location = response.headers.get("location")
-        if not location:
-            return response
-        current = urljoin(str(response.url), location)
+        # Force identity transfer-encoding. With gzip/deflate the wire bytes
+        # (and Content-Length) can be a small fraction of the decoded body, so
+        # a tiny compressed response could pass the hard-cap preflight and then
+        # expand past the ceiling in a single decoded chunk before the streamed
+        # cap below can slice it. Identity makes Content-Length the true body
+        # size and keeps each streamed chunk bounded by the network read.
+        req_headers = dict(headers or {})
+        req_headers["Accept-Encoding"] = "identity"
+        with httpx.stream("GET", current, headers=req_headers, timeout=timeout,
+                          follow_redirects=False) as response:
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("location")
+                if not location:
+                    return _CappedFetch(response.status_code, response.headers, b"",
+                                        False, None, response.encoding, str(response.url))
+                current = urljoin(str(response.url), location)
+                continue
+
+            # A server can ignore the identity request and still return a
+            # compressed body; httpx.iter_bytes would then decode it, and a tiny
+            # gzip can balloon into one decoded chunk far past the cap before we
+            # slice. Refuse a compressed Content-Encoding so the streamed cap
+            # stays a real memory bound (Content-Length is the compressed wire
+            # length here, so the preflight and size metadata are unreliable too).
+            enc = (response.headers.get("content-encoding") or "").strip().lower()
+            if enc and enc != "identity":
+                raise httpx.RequestError(
+                    f"Refusing compressed response (Content-Encoding: {enc}) after "
+                    "requesting identity: cannot bound decoded body size",
+                    request=httpx.Request("GET", current),
+                )
+
+            declared = None
+            raw_len = response.headers.get("content-length")
+            if raw_len and raw_len.isdigit():
+                declared = int(raw_len)
+            # Refuse before buffering anything when the server already tells
+            # us the body exceeds the absolute ceiling (Content-Length is wire
+            # bytes; the decompressed body can only be larger).
+            if declared is not None and declared > WEB_FETCH_HARD_MAX_BYTES:
+                raise BodyTooLargeError(current, declared)
+
+            chunks = []
+            read = 0
+            truncated = False
+            # We requested identity above, so iter_bytes yields the raw body in
+            # network-read-sized chunks (no decompression expansion); the cap
+            # therefore bounds what we actually buffer.
+            for chunk in response.iter_bytes():
+                read += len(chunk)
+                if read > cap:
+                    keep = cap - (read - len(chunk))
+                    if keep > 0:
+                        chunks.append(chunk[:keep])
+                    truncated = True
+                    break
+                chunks.append(chunk)
+            return _CappedFetch(response.status_code, response.headers,
+                                b"".join(chunks), truncated, declared,
+                                response.encoding, str(response.url))
     raise httpx.RequestError("Too many redirects", request=httpx.Request("GET", current))
 
-# PDF 提取（可选依赖）
+# PDF extraction (optional dependency)
 try:
     from pdfminer.high_level import extract_text as pdf_extract_text
 except ImportError:
@@ -111,10 +223,10 @@ except ImportError:
 
 
 # ----------------------------------------------------------------------
-# HTML 提取辅助函数
+# HTML extraction helpers
 # ----------------------------------------------------------------------
 def _extract_meta(soup: BeautifulSoup) -> dict:
-    """捕获 meta description 和 keywords（如果存在）。"""
+    """Pull meta description and keywords if present."""
     description = ""
     keywords = ""
     desc_tag = soup.find("meta", attrs={"name": re.compile("description", re.I)})
@@ -127,9 +239,9 @@ def _extract_meta(soup: BeautifulSoup) -> dict:
 
 
 def _extract_og_image(soup: BeautifulSoup) -> str:
-    """从 meta 标签中提取最佳代表性图片 URL。
+    """Extract the best representative image URL from meta tags.
 
-    仅返回绝对 http(s) URL——跳过相对路径和 data URI。
+    Only returns absolute http(s) URLs -- skips relative paths and data URIs.
     """
     candidates = []
     for prop in ("og:image", "og:image:url", "og:image:secure_url"):
@@ -149,7 +261,7 @@ def _extract_og_image(soup: BeautifulSoup) -> str:
 
 
 def _extract_lists(soup: BeautifulSoup) -> List[List[str]]:
-    """返回列表的列表，每个内层列表代表一个 <ul>/<ol>。"""
+    """Return a list of lists, each inner list representing a <ul>/<ol>."""
     all_lists = []
     for lst in soup.find_all(["ul", "ol"]):
         items = [li.get_text(separator=" ", strip=True) for li in lst.find_all("li")]
@@ -159,7 +271,7 @@ def _extract_lists(soup: BeautifulSoup) -> List[List[str]]:
 
 
 def _extract_tables(soup: BeautifulSoup) -> List[List[List[str]]]:
-    """返回表格列表，每个表格是行列表，每行是单元格文本列表。"""
+    """Return a list of tables, each table is a list of rows, each row a list of cell texts."""
     tables_data = []
     for table in soup.find_all("table"):
         rows = []
@@ -173,7 +285,7 @@ def _extract_tables(soup: BeautifulSoup) -> List[List[List[str]]]:
 
 
 def _extract_code_blocks(soup: BeautifulSoup) -> List[str]:
-    """收集 <pre> 和 <code> 块中的文本。"""
+    """Collect text from <pre> and <code> blocks."""
     blocks = []
     for tag in soup.find_all(["pre", "code"]):
         txt = tag.get_text(separator=" ", strip=True)
@@ -183,7 +295,7 @@ def _extract_code_blocks(soup: BeautifulSoup) -> List[str]:
 
 
 def _detect_js_frameworks(soup: BeautifulSoup) -> bool:
-    """对常见 JS 框架的非常朴素的检测。"""
+    """Very naive detection of common JS frameworks."""
     js_indicators = [
         "react", "angular", "vue", "svelte", "next", "nuxt",
         "ember", "backbone", "jquery", "polymer", "mithril",
@@ -202,7 +314,7 @@ def _detect_js_frameworks(soup: BeautifulSoup) -> bool:
 
 
 def _empty_result(url: str, error: str = "") -> dict:
-    """构建标准的失败结果字典。"""
+    """Build a standard failure result dict."""
     return {
         "url": url,
         "title": "",
@@ -220,14 +332,24 @@ def _empty_result(url: str, error: str = "") -> dict:
 
 
 # ----------------------------------------------------------------------
-# 主要内容抓取器
+# Main content fetcher
 # ----------------------------------------------------------------------
-def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) -> dict:
-    """抓取网页并提取有意义的内容，支持缓存。"""
-    cache_key = generate_cache_key(url)
+def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0,
+                          max_bytes: int = None) -> dict:
+    """Fetch and extract meaningful content from a webpage with caching.
+
+    ``max_bytes`` raises the download budget per call (clamped to the hard
+    cap); the default is the soft cap. When the body is cut short the result
+    carries ``truncated``/``fetched_bytes``/``total_bytes`` so callers can
+    tell the model the content is partial (#3812).
+    """
+    effective_cap = min(max_bytes or WEB_FETCH_SOFT_MAX_BYTES, WEB_FETCH_HARD_MAX_BYTES)
+    # The cap is part of the cache identity: a truncated soft-cap fetch must
+    # not be served to a later full-budget request for the same URL.
+    cache_key = generate_cache_key(f"{url}#cap={effective_cap}")
     cache_file = CONTENT_CACHE_DIR / f"{cache_key}.cache"
 
-    # 检查缓存
+    # Check cache
     if cache_file.exists():
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
@@ -244,21 +366,27 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
             cache_file.unlink(missing_ok=True)
             content_cache_index.pop(cache_key, None)
 
-    # 抓取
+    # Fetch
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "User-Agent": WEB_FETCH_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate",
+            # identity so the streamed size cap in _get_public_url stays honest
+            # (a compressed body can decode to far more than Content-Length).
+            "Accept-Encoding": "identity",
             "Connection": "keep-alive",
         }
-        response = _get_public_url(url, headers=headers, timeout=timeout)
+        response = _get_public_url(url, headers=headers, timeout=timeout,
+                                   max_bytes=effective_cap)
 
         if response.status_code == 429:
             raise RateLimitError(f"Rate limit hit for {url} (attempt {retry_attempt})")
 
         response.raise_for_status()
+    except BodyTooLargeError as e:
+        error_logger.warning(f"Refused oversized body for {url}: {e}")
+        return _empty_result(url, f"TooLarge: {e}")
     except httpx.HTTPStatusError as e:
         error_logger.warning(f"HTTP {e.response.status_code} fetching {url}: {e}")
         return _empty_result(url, f"HTTP {e.response.status_code}: {e}")
@@ -269,9 +397,27 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
         error_logger.error(str(e))
         return _empty_result(url, str(e))
 
-    # PDF 处理
+    # Size bookkeeping shared by every content branch below. getattr keeps
+    # plain httpx.Response stand-ins (tests) working without the cap fields.
+    _size_fields = {
+        "truncated": getattr(response, "truncated", False),
+        "fetched_bytes": len(response.content),
+        "total_bytes": getattr(response, "declared_bytes", None),
+    }
+
+    # PDF handling
     content_type = response.headers.get("Content-Type", "").lower()
     if "application/pdf" in content_type or url.lower().endswith(".pdf"):
+        if _size_fields["truncated"]:
+            # A PDF cut mid-stream is not parseable; unlike text there is no
+            # useful partial result, so report the budget problem instead.
+            _declared = _size_fields["total_bytes"]
+            return _empty_result(
+                url,
+                f"TooLarge: PDF exceeds the {effective_cap:,}-byte fetch budget"
+                + (f" (size {_declared:,} bytes)" if _declared else "")
+                + "; retry with a larger budget if it fits under the hard cap",
+            )
         if pdf_extract_text is None:
             logger.error("pdfminer.six is not installed; cannot extract PDF text.")
             pdf_text = ""
@@ -295,6 +441,7 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
             "js_message": "",
             "success": bool(pdf_text),
             "error": "" if pdf_text else "Failed to extract PDF text",
+            **_size_fields,
         }
         _cache_result(cache_file, cache_key, result, url)
         return result
@@ -329,11 +476,12 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
             "js_message": "",
             "success": bool(text_body),
             "error": "" if text_body else "Empty response body",
+            **_size_fields,
         }
         _cache_result(cache_file, cache_key, result, url)
         return result
 
-    # HTML 处理
+    # HTML handling
     try:
         soup = BeautifulSoup(response.text, "html.parser")
     except Exception as e:
@@ -349,8 +497,8 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
     js_rendered = _detect_js_frameworks(soup)
     js_message = "Page appears to be rendered by a JavaScript framework; content may be incomplete." if js_rendered else ""
 
-    # 主要文本内容（启发式）：优先选择语义/内容类容器，
-    # 跳过导航/页脚/样板文本；针对文章页面优化。
+    # Main textual content (heuristic): prefer semantic / "content"-classed
+    # containers to skip nav/footer/boilerplate; tuned for article pages.
     main_content = ""
     content_areas = soup.find_all(
         ["main", "article", "section", "div"],
@@ -361,9 +509,9 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
             main_content += area.get_text(separator=" ", strip=True) + " "
     main_content = re.sub(r"\s+", " ", main_content).strip()
 
-    # 如果启发式方法只找到极少的包装内容，回退到 body 文本并
-    # 剥离明显的样板文本，确保 UI/深度研究搜索结果
-    # 不会对应用/落地页显示为空。
+    # If the heuristic finds only a tiny wrapper, fall back to body text with
+    # obvious boilerplate stripped so UI/deep-research search results do not
+    # look empty for app/landing pages.
     THIN_CONTENT_CHARS = 600
     if len(main_content) < THIN_CONTENT_CHARS:
         body = soup.find("body")
@@ -391,13 +539,14 @@ def fetch_webpage_content(url: str, timeout: int = 5, retry_attempt: int = 0) ->
         "js_message": js_message,
         "success": True,
         "error": "",
+        **_size_fields,
     }
     _cache_result(cache_file, cache_key, result, url)
     return result
 
 
 def _cache_result(cache_file, cache_key: str, result: dict, url: str):
-    """将结果写入内容缓存。"""
+    """Write a result to the content cache."""
     try:
         cache_data = {"timestamp": datetime.now().isoformat(), "data": result}
         with open(cache_file, "w", encoding="utf-8") as f:
@@ -409,10 +558,10 @@ def _cache_result(cache_file, cache_key: str, result: dict, url: str):
 
 
 # ----------------------------------------------------------------------
-# 内容摘要辅助函数
+# Content summarization helpers
 # ----------------------------------------------------------------------
 def extract_key_points(text: str) -> List[str]:
-    """从文本块中提取项目符号式关键要点。"""
+    """Pull out bullet-style key points from a block of text."""
     points: List[str] = []
     bullet_pat = re.compile(r"^\s*[-*•]\s+(.*)")
     numbered_pat = re.compile(r"^\s*\d+[\.\)]\s+(.*)")
@@ -424,24 +573,24 @@ def extract_key_points(text: str) -> List[str]:
 
 
 def get_tldr(text: str, max_sentences: int = 3) -> str:
-    """取前几句生成一个非常简短的摘要。"""
+    """Produce a very short TL;DR by taking the first few sentences."""
     sentences = re.split(r"(?<=[.!?])\s+", text)
     selected = [s.strip() for s in sentences if s][:max_sentences]
     return " ".join(selected)
 
 
 def extract_quotes(text: str) -> List[str]:
-    """返回长度至少 15 个字符的引文摘录。"""
-    # 反向引用开始引号，使结束引号必须匹配——
-    # 否则 `"text'`（双引号开始，单引号结束）会被当作引用。
+    """Return quoted excerpts that are at least 15 characters long."""
+    # Backreference the opening quote so the closing quote must match it —
+    # otherwise `"text'` (open double, close single) is treated as a quote.
     return [m.group(2).strip() for m in re.finditer(r'(["\'])([^"\']{15,}?)\1', text)]
 
 
 def extract_statistics(text: str) -> List[str]:
-    """查找数字、百分比、日期和简单度量值。"""
-    # 匹配逗号分隔的数字（1,000,000）或纯数字串（50000）——
-    # 旧的 `\d{1,3}(?:,\d{3})*` 只匹配无逗号数字的前 3 位，
-    # 且末尾的 `\b` 会丢掉闭合的 `%`。
+    """Find numbers, percentages, dates and simple measurements."""
+    # Match a comma-grouped number (1,000,000) OR a plain digit run (50000) —
+    # the old `\d{1,3}(?:,\d{3})*` matched only the first 3 digits of a
+    # comma-less number, and the trailing `\b` dropped a closing `%`.
     pattern = re.compile(
         r"\b(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(%|percent|‰|per cent|[a-zA-Z]+)?",
         re.IGNORECASE,

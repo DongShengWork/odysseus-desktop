@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 NON_ADMIN_BLOCKED_TOOLS = {
     "bash",
     "python",
+    "manage_bg_jobs",
     "read_file",
     "write_file",
     "edit_file",
@@ -114,6 +115,8 @@ _PLAN_MODE_KNOWN_MUTATORS = {
     # Shell 永远不是只读安全的；显式阻止它，这样即使
     # schema 列表加载失败，它也不会进入 plan 模式。
     "bash", "python",
+    # Controls shell processes (kill); plan mode can't run bash anyway.
+    "manage_bg_jobs",
 }
 
 

@@ -1,7 +1,7 @@
 // static/js/markdown.js
 
 /**
- * Markdown 渲染和内容处理工具
+ * Markdown rendering and content processing utilities
  */
 
 import uiModule from './ui.js';
@@ -36,6 +36,14 @@ function linkHtml(text, url) {
   return `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${safeText}</a>`;
 }
 
+function imageHtml(alt, url, title) {
+  const safeUrl = safeLinkUrl(url);
+  if (!safeUrl || safeUrl.startsWith('#')) return escapeHtml(alt || '');
+  const safeAlt = escapeHtml(alt || '');
+  const safeTitle = title ? ` title="${escapeHtml(title)}"` : '';
+  return `<img src="${escapeHtml(safeUrl)}" alt="${safeAlt}"${safeTitle} loading="lazy" decoding="async">`;
+}
+
 function _isModelEndpointUrl(rawUrl) {
   try {
     const parsed = new URL(String(rawUrl || ''), window.location.origin);
@@ -53,13 +61,13 @@ function _isModelEndpointUrl(rawUrl) {
  * (emitted by the markdown link pass). Those fragments are later restored
  * verbatim into innerHTML, so without scrubbing them a model — or any content
  * routed through here — could smuggle in an `<img onerror=...>`, an
- * `<a href="javascript:...">`、`onmouseover=` 处理器等，
+ * `<a href="javascript:...">`, an `onmouseover=` handler, etc. and execute
  * script in the authenticated page (DOM XSS).
  *
- * 解析到 <template> 中是惰性的：赋值给 template.innerHTML 既不会
- * 获取资源也不会运行脚本，因此我们可以遍历生成的 DOM 树，
- * 删除可执行脚本的元素，并在返回（现已安全）的片段之前
- * 剥离事件处理器属性和危险 URL 协议。
+ * Parsing into a <template> is inert: assigning to template.innerHTML neither
+ * fetches resources nor runs scripts, so we can walk the resulting tree,
+ * drop script-capable elements, and strip event-handler attributes and
+ * dangerous URL schemes before the (now safe) fragment is handed back.
  */
 const _ALLOWED_HTML_BAD_TAGS = new Set([
   'SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META',
@@ -91,17 +99,17 @@ function _cleanAllowedHtmlOnce(htmlString) {
   const tpl = document.createElement('template');
   tpl.innerHTML = htmlString;
   for (const el of Array.from(tpl.content.querySelectorAll('*'))) {
-    // 将标签转为大写进行比较：HTML tagName 是大写的
-    // SVG/MathML 元素保留其原始（小写/驼峰）大小写，因此
-    // 直接 `Set.has(el.tagName)` 会漏掉例如命名空间的 <script>。
+    // Upper-case the tag for comparison: HTML tagNames are upper-case, but
+    // SVG/MathML elements preserve their original (lower/camel) case, so a
+    // raw `Set.has(el.tagName)` would miss e.g. a namespaced <script>.
     if (_ALLOWED_HTML_BAD_TAGS.has(el.tagName.toUpperCase())) {
       el.remove();
       continue;
     }
     for (const attr of Array.from(el.attributes)) {
       const name = attr.name.toLowerCase();
-      // 删除所有内联事件处理器（onerror、onclick、onmouseover 等）
-      // 以及 srcdoc（无框架的脚本向量）。
+      // Drop every inline event handler (onerror, onclick, onmouseover, ...)
+      // and srcdoc (a frame-less script vector).
       if (name.startsWith('on') || name === 'srcdoc') {
         el.removeAttribute(attr.name);
         continue;
@@ -113,8 +121,8 @@ function _cleanAllowedHtmlOnce(htmlString) {
         }
         continue;
       }
-      // 中和 URL 属性中的 javascript:/vbscript:/data: 协议。
-      // 首先去除控制/空白字符，避免例如 `java\tscript:` 绕过去。
+      // Neutralize javascript:/vbscript:/data: in URL-bearing attributes.
+      // Strip control/space chars first so e.g. "java\tscript:" can't slip by.
       if (_ALLOWED_HTML_URL_ATTRS.has(name)) {
         if (name === 'srcset' ? _isDangerousSrcset(attr.value) : _isDangerousUrl(attr.value)) {
           el.removeAttribute(attr.name);
@@ -127,12 +135,12 @@ function _cleanAllowedHtmlOnce(htmlString) {
 
 function sanitizeAllowedHtml(html) {
   const raw = String(html == null ? '' : html);
-  // 非浏览器上下文（例如未来的 SSR/Node 导入）：通过转义
-  // 而非信任标记来安全关闭。
+  // Non-browser context (e.g. a future SSR/Node import): fail closed by
+  // escaping rather than trusting the markup.
   if (typeof document === 'undefined') return escapeHtml(raw);
 
-  // 清理到不动点。重新解析序列化输出可能会改变 DOM 树
-  //（变异型 XSS 的基础），因此反复清理直到不再变化。
+  // Sanitize to a fixpoint. Re-parsing the serialized output can mutate the
+  // tree (the basis of mutation-XSS), so re-clean until it stops changing.
   let out = raw;
   for (let i = 0; i < 4; i++) {
     const next = _cleanAllowedHtmlOnce(out);
@@ -143,10 +151,10 @@ function sanitizeAllowedHtml(html) {
 }
 
 /**
- * 检查文本是否有未关闭的 think 标签
+ * Check if text has unclosed think tag
  */
 export function hasUnclosedThinkTag(text) {
-  text = text || '';
+  text = normalizeThinkingMarkup(text || '');
   const openCount =
     (text.match(/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>/gi) || []).length
     + (text.match(/<\|channel>thought/gi) || []).length;
@@ -163,6 +171,10 @@ export function startsWithReasoningPrefix(text) {
 export function normalizeThinkingMarkup(text) {
   if (!text) return text;
   let normalized = text;
+  // MiniMax M-series can emit namespaced reasoning tags like
+  // <mm:think>...</mm:think>. Normalize them into the shared thinking parser.
+  normalized = normalized.replace(/<mm:think(\s+[^>]*)?>/gi, (_m, attrs = '') => `<think${attrs || ''}>`);
+  normalized = normalized.replace(/<\/mm:think>/gi, '</think>');
   normalized = normalized.replace(/<thought(\s+[^>]*)?>/gi, (_m, attrs = '') => `<think${attrs || ''}>`);
   normalized = normalized.replace(/<\/thought>/gi, '</think>');
   normalized = normalized.replace(/<\|channel>thought\s*\n?([\s\S]*?)<channel\|>\s*/gi, (_m, content = '') => {
@@ -228,39 +240,39 @@ function normalizePlainThinking(text) {
 }
 
 /**
- * 提取所有完整的 thinking 块和剩余内容
+ * Extract all complete thinking blocks and remaining content
  */
 export function extractThinkingBlocks(text) {
-  // 处理异常模式：<think></think>\n...实际思考内容...\n</think>
-  // 某些模型会先输出一个空的 <think></think>，然后将思考内容放在外部，
-  // 最后用第二个孤立的 </think> 关闭。
+  // Handle malformed patterns: <think></think>\n...actual thinking...\n</think>
+  // Some models emit an empty <think></think> then put thinking text outside,
+  // closed by a second orphaned </think>.
   let normalized = normalizePlainThinking(text);
-  // 将 <think>short</think>...实际思考内容...</think> 合并为一个块
-  // 模型有时会先输出一个简单块，然后继续在标签外思考
+  // Collapse <think>short</think>...real thinking...</think> into one block
+  // Models sometimes emit a trivial first block then continue thinking outside tags
   normalized = normalized.replace(/<think(?:ing)?(?:\s+[^>]*)?>.{0,30}<\/think(?:ing)?>\s*([\s\S]*?)<\/think(?:ing)?>/gi, (m, content) => {
     return '<think>' + content.trim() + '</think>';
   });
 
-  // 合并连续的 <think> 块（某些模型将思考内容分散到多个标签中）
+  // Merge consecutive <think> blocks (some models split thinking across multiple tags)
   normalized = normalized.replace(/<\/think(?:ing)?>\s*<think(?:ing)?(?:\s+[^>]*)?>/gi, '\n\n');
 
-  // 如果存在，提取 thinking 时间属性
+  // Extract thinking time attribute if present
   const timeMatch = normalized.match(/<think(?:ing)?\s+time="([\d.]+)"/i);
   const thinkingTime = timeMatch ? timeMatch[1] : null;
-  // 为内容提取去除时间属性
+  // Strip time attribute for content extraction
   normalized = normalized.replace(/<think(?:ing)?\s+time="[\d.]+"/gi, '<think');
 
   const thinkRegex = /<think(?:ing)?(?:\s+[^>]*)?>([\s\S]*?)<\/think(?:ing)?>/gi;
   const thinkingBlocks = [];
   let match;
 
-  // 提取所有完整的 thinking 块
+  // Extract all complete thinking blocks
   while ((match = thinkRegex.exec(normalized)) !== null) {
     const content = match[1].trim();
     if (content) thinkingBlocks.push(content);
   }
 
-  // 移除所有完整的 <think>/<thinking> 块
+  // Remove all complete <think>/<thinking> blocks
   let cleanContent = normalized.replace(thinkRegex, '');
 
   // If there's an unclosed tag, decide between two cases:
@@ -290,17 +302,17 @@ export function extractThinkingBlocks(text) {
     }
   }
 
-  // 处理孤儿 </think>（没有开始标签）——标签之前的文本是泄露的思考内容
+  // Handle orphaned </think> with no opening tag — text before it is leaked thinking
   const orphanMatch = cleanContent.match(/^([\s\S]+?)<\/think(?:ing)?>/i);
   if (orphanMatch && orphanMatch[1].trim()) {
     thinkingBlocks.push(orphanMatch[1].trim());
     cleanContent = cleanContent.slice(orphanMatch[0].length);
   }
 
-  // 去除剩余的所有孤儿关闭标签
+  // Strip any remaining orphaned closing tags
   cleanContent = cleanContent.replace(/<\/think(?:ing)?>/gi, '');
 
-  // 将所有 thinking 块合并为一个——没有必要显示多个下拉
+  // Merge all thinking blocks into one — no reason to show multiple dropdowns
   const mergedBlocks = thinkingBlocks.length > 1
     ? [thinkingBlocks.join('\n\n')]
     : thinkingBlocks;
@@ -313,7 +325,7 @@ export function extractThinkingBlocks(text) {
 }
 
 /**
- * 创建可折叠的 thinking 区域
+ * Create a collapsible thinking section
  */
 function createThinkingSection(thinkingContent, index = 0, thinkingTime = null) {
   const id = `thinking-${Date.now()}-${index}`;
@@ -350,18 +362,18 @@ function createTaskCompletedMarker() {
 }
 
 /**
- * 处理文本并渲染带有 thinking 区域的内容
+ * Process text and render with thinking sections
  */
-// ── Emoji → 单色 SVG（OpenMoji-black，通过同源 /api/emoji 代理） ──
-// 将彩色系统/Twemoji emoji 替换为与周围文字颜色一致的
-// 单色线条图标（项目规则：永远不使用彩色 emoji）。操作在
-// 已渲染的 HTML 上：仅处理标签外部的文本，跳过 <code>/<pre>。
+// ── Emoji → monochrome SVG (OpenMoji-black via same-origin /api/emoji proxy) ──
+// Replace colorful system/Twemoji emoji with single-color line icons tinted to
+// the surrounding text color (project rule: never colorful emoji). Operates on
+// rendered HTML: only touches text outside tags and skips <code>/<pre>.
 const _EMOJI_RE = /\p{Extended_Pictographic}/u;
 const _emojiSeg = (typeof Intl !== 'undefined' && Intl.Segmenter)
   ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
 
 function _emojiCodepoints(emoji) {
-  // Twemoji 文件名规则：除非序列中有 ZWJ (U+200D)，否则去除 U+FE0F。
+  // Twemoji filename rule: strip U+FE0F unless the sequence has a ZWJ (U+200D).
   const s = emoji.indexOf('‍') >= 0 ? emoji : emoji.replace(/️/g, '');
   const cps = [];
   for (const ch of s) { const c = ch.codePointAt(0); if (c) cps.push(c.toString(16)); }
@@ -370,10 +382,10 @@ function _emojiCodepoints(emoji) {
 function _emojiImg(emoji) {
   const code = _emojiCodepoints(emoji);
   if (!code) return emoji;
-  // 单色线条图标：使用 OpenMoji 黑色 SVG 作为 CSS mask，
-  // 填充色为周围文字颜色（currentColor），
-  // 使 emoji 渲染为与主题一致的单一色调线条字形。
-  // 如果代理无法提供字形，则返回透明 SVG，因此 mask 不显示任何内容。
+  // Monochrome line icon: the OpenMoji black SVG is used as a CSS mask filled
+  // with the surrounding text color (currentColor), so emoji render as a single
+  // theme-tinted line glyph — never colorful (project rule). If the proxy can't
+  // supply the glyph it returns a transparent SVG, so the mask shows nothing.
   return `<span class="emoji" role="img" aria-label="${emoji}" style="--em:url('/api/emoji/${code}.svg')"></span>`;
 }
 function _svgifyText(text) {
@@ -384,25 +396,25 @@ function _svgifyText(text) {
   }
   return out;
 }
-/** 当"仅文本 Emoji"开启时，保留 HTML 中的 Unicode 以便 deEmojify() 移除它们。 */
+/** When "Text-only Emojis" is on, keep Unicode in HTML so deEmojify() can strip them. */
 function _useSvgEmoji() {
   return typeof document === 'undefined' || !document.body?.classList.contains('text-emojis');
 }
 
-// `opts.shortcodes`（默认 true）控制 issue-#345 的 `:name:` → emoji 展开。
-// 聊天中传入 true；文档/邮件正文渲染器中传入 false，
-// 使作者输入的 `:shortcode:` 文本保持原样（参见 mdToHtml 调用处）。
-// 无论是否启用 shortcodes，Unicode emoji → 单色 SVG 的转换始终执行，
-// 因此文档中的真实 😀 仍然会渲染为像之前一样的主题线条图标。
+// `opts.shortcodes` (default true) controls the issue-#345 `:name:` → emoji
+// expansion. Chat passes it through as true; document/email body renderers pass
+// false so author-typed `:shortcode:` text stays literal (see mdToHtml callers).
+// The Unicode-emoji → monochrome-SVG pass always runs regardless, so a real 😀
+// in a document still renders as the themed line icon as it always has.
 export function svgifyEmoji(html, opts) {
   if (!_useSvgEmoji() || !html) return html;
   const allowShortcodes = !opts || opts.shortcodes !== false;
-  // 遍历 HTML 有两个原因：将真实的 Unicode emoji 转为 SVG 图标，
-  // 或者处理模型输出的 `:shortcode:` 短代码文本（issue #345）。
+  // Two reasons to walk the HTML: real Unicode emoji to turn into SVG icons,
+  // or `:shortcode:` text the model emitted instead of an emoji (issue #345).
   const hasUnicode = _EMOJI_RE.test(html);
   const hasShortcode = allowShortcodes && hasEmojiShortcode(html);
   if (!hasUnicode && !hasShortcode) return html;
-  const parts = html.split(/(<[^>]*>)/);   // 奇数索引 = 标签
+  const parts = html.split(/(<[^>]*>)/);   // odd indices = tags
   let codeDepth = 0;
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) {
@@ -413,8 +425,8 @@ export function svgifyEmoji(html, opts) {
     }
     if (codeDepth !== 0) continue;
     let seg = parts[i];
-    // 先将短代码展开为 Unicode，然后它们和已存在的 Unicode emoji
-    // 一起被渲染为相同的单色线条图标。
+    // Expand shortcodes to Unicode first, then both they and any pre-existing
+    // Unicode emoji get rendered as the same monochrome line icons below.
     if (hasShortcode) seg = replaceEmojiShortcodes(seg);
     if (_EMOJI_RE.test(seg)) seg = _svgifyText(seg);
     parts[i] = seg;
@@ -422,10 +434,10 @@ export function svgifyEmoji(html, opts) {
   return parts.join('');
 }
 /**
- * 通用可折叠区域，复用 thinking 下拉框的样式和
- * 委托切换（任何 `.thinking-header[data-thinking-id]`）。
- * 标签通过 data-label 属性驱动 "查看 <label>" / "隐藏 <label>" 文本。
- * 例如用于用户照片消息上的视觉模型图像描述。
+ * Generic collapsible section that reuses the thinking-dropdown styling and its
+ * delegated toggle (any `.thinking-header[data-thinking-id]`). The label drives
+ * the "View <label>" / "Hide <label>" text via data-label. Used e.g. for the
+ * vision-model image description on a user's photo message.
  */
 export function createCollapsible(contentMarkdown, label = 'details') {
   const id = `collapse-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -448,12 +460,12 @@ export function processWithThinking(text) {
   const doneOnly = /^\s*\[DONE\]\s*$/i.test(visibleContent);
   const hadTrailingDone = !doneOnly && /(?:^|\n)\s*\[DONE\]\s*$/i.test(visibleContent);
 
-  // 添加 thinking 区域（默认折叠）
+  // Add thinking sections (collapsed by default)
   thinkingBlocks.forEach((block, index) => {
     html += createThinkingSection(block, index, thinkingTime);
   });
 
-  // 添加实际内容
+  // Add the actual content
   if (doneOnly) {
     html += createTaskCompletedMarker();
   } else {
@@ -466,7 +478,7 @@ export function processWithThinking(text) {
 }
 
 /**
- * 将 Markdown 转换为 HTML
+ * Convert markdown to HTML
  */
 export function mdToHtml(src, opts) {
   const allowedHtmlBlocks = [];
@@ -476,7 +488,7 @@ export function mdToHtml(src, opts) {
 
   // Extract fenced code blocks before any markdown/HTML preservation passes.
   // Otherwise placeholders from the allowed-HTML sanitizer (e.g.
-  // ___ALLOWED_HTML_0___）可能泄漏到引用的 HTML/JS 示例中，
+  // ___ALLOWED_HTML_0___) can leak into quoted HTML/JS samples, because the
   // placeholder gets captured as literal code content and never restored inside
   // the final <pre><code> block.
   s = s.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
@@ -486,7 +498,7 @@ export function mdToHtml(src, opts) {
       .replace(/^\s*\n+/, '')
       .replace(/\n+\s*$/g, '');
 
-    // Mermaid 图表：渲染为图表而非代码块
+    // Mermaid diagrams: render as diagram instead of code block
     if (lang && lang.toLowerCase() === 'mermaid') {
       const mermaidId = 'mermaid-' + Date.now() + '-' + mermaidBlocks.length;
       const raw = cleaned.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -515,47 +527,53 @@ export function mdToHtml(src, opts) {
   // These regexes upgrade the broken forms to proper markdown links so
   // the standard `[text](url)` handler below picks them up.
   const ANCHOR_KIND = '(?:session|document|note|image|email|event|task|skill|research)';
-  // 情况 A：`[Name] [#kind-id]` — agent 将 URL 放在方括号中，通常
-  // 在标签旁边的表格单元格中。将它们配对。
+  // Case A: `[Name] [#kind-id]` — agent put the URL in brackets, often
+  // in a table cell next to the label. Pair them.
   s = s.replace(
     new RegExp(`\\[([^\\]\\n]+?)\\]\\s*\\[#(${ANCHOR_KIND}-[A-Za-z0-9_-]+)\\]`, 'g'),
     '[$1](#$2)',
   );
-  // 情况 B：单独的 `[#kind-id]` 没有前面的标签——给它一个
-  // 通用的"→ 打开"链接文本以便仍然渲染为按钮。
+  // Case B: bare `[#kind-id]` with no preceding label — give it a
+  // generic "→ open" link text so it still renders as a button.
   s = s.replace(
     new RegExp(`\\[#(${ANCHOR_KIND}-[A-Za-z0-9_-]+)\\]`, 'g'),
     '[→ open](#$1)',
   );
-  // 情况 C：纯文本中的 `#kind-id`——仅在以单词边界分隔
-  // 且未处于 markdown 链接或锚点语法中时生效。
-  // 使用后顾断言 `](` 或 `[` 跳过这些情况。
+  // Case C: bare `#kind-id` in plain text — only when it's word-
+  // boundary delimited and NOT already inside a markdown link or
+  // anchor syntax. Use a lookbehind for `](` or `[` to skip those.
   s = s.replace(
     new RegExp(`(^|[^\\[(])#(${ANCHOR_KIND}-[A-Za-z0-9_-]+)\\b`, 'g'),
     '$1[#$2](#$2)',
   );
 
-  // 将 markdown 链接 [text](url) 转换为可点击链接
-  // 内部 #hash 链接在页面内导航；外部链接在新标签页中打开
+  // Convert markdown images before links so ![alt](url) does not become
+  // literal "!" plus a normal link.
+  s = s.replace(/!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (match, alt, url, title) => {
+    return imageHtml(alt, url, title);
+  });
+
+  // Convert markdown links [text](url) to clickable links
+  // Internal #hash links navigate in-page; external links open in new tab
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
     return linkHtml(text, url);
   });
 
-  // 自动链接裸 URL（http/https）。跳过已在 <a> 标签内的 URL
-  //（由上方 markdown 链接替换生成）以及反引号中的 URL。
+  // Autolink bare URLs (http/https). Skips URLs already inside <a> tags
+  // (placed by markdown link replacement above) and URLs in backticks.
   s = s.replace(
     /(^|[\s(<])(https?:\/\/[^\s<>"'`\]]+[^\s<>"'`\].,;:!?])/g,
     (match, prefix, url) => `${prefix}${linkHtml(url, url)}`
   );
 
-  // 自动链接模型经常以纯文本输出的无协议域名
-  //（例如 "techcrunch.com/ai"、"perplexity.ai"、"www.wired.com"）。TLD 白名单
-  // 防止匹配文件名/版本号（"package.json"、"node.js"、"v1.2.3"）；
-  // 要求的开头 /[\s(<] 前缀意味着已在 http 链接中（前面有 "//"）
-  // 或电子邮件中（前面有 "@"）的域名会被跳过。
-  // 要求 TLD 以真实的域名边界结束，这样点分隔的代码标识符如
-  // `sklearn.metrics` 不会链接到 `sklearn.me` 并在剩余文本中留下
-  // 占位符片段。
+  // Autolink scheme-less domains the model often emits as plain text
+  // (e.g. "techcrunch.com/ai", "perplexity.ai", "www.wired.com"). The TLD
+  // allowlist keeps it from matching file names / versions ("package.json",
+  // "node.js", "v1.2.3"); the required start/[\s(<] prefix means domains
+  // already inside an http link (preceded by "//") or an email ("@") are
+  // skipped. Require the TLD to end at a real domain boundary so dotted code
+  // identifiers like `sklearn.metrics` do not link `sklearn.me` and leave
+  // placeholder fragments in the remaining text.
   s = s.replace(
     /(^|[\s(<])((?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)*\.(?:com|org|net|io|ai|co|dev|app|gov|edu|news|info|tech|xyz|me)(?=$|[\/\s<>"'`\]).,;:!?])(?:\/[^\s<>"'`\])]*)?)/gi,
     (match, prefix, domain) => {
@@ -565,31 +583,32 @@ export function mdToHtml(src, opts) {
     }
   );
 
-  // 提取 <details>...</details> 块并替换为占位符
-  // 默认展开以便 agent 输出可见
+  // Extract <details>...</details> blocks and replace with placeholders
+  // Default to open so agent output is visible
   s = s.replace(/<details>([\s\S]*?)<\/details>/gi, (match) => {
     const placeholder = `___ALLOWED_HTML_${allowedHtmlBlocks.length}___`;
     allowedHtmlBlocks.push(sanitizeAllowedHtml(match.replace(/<details>/i, '<details open>')));
     return placeholder;
   });
 
-  // 同样保留 <a> 标签（它们现在已经由 markdown 转换存在于 HTML 中）
-  s = s.replace(/<a\s+[^>]*>.*?<\/a>/gi, (match) => {
+  // ALSO preserve <a>/<img> tags the same way (they're now in the HTML from
+  // markdown conversion)
+  s = s.replace(/<(?:a\s+[^>]*>.*?<\/a|img\s+[^>]*?)>/gi, (match) => {
     const placeholder = `___ALLOWED_HTML_${allowedHtmlBlocks.length}___`;
     allowedHtmlBlocks.push(sanitizeAllowedHtml(match));
     return placeholder;
   });
 
-  // 现在转义其他所有内容
+  // Now escape everything else
   s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   s = s.replace(/\n{3,}/g, '\n\n');
 
-  // KaTeX 数学公式渲染（在代码块提取之后进行，确保代码中的数学公式安全）
+  // KaTeX math rendering (after code blocks are extracted, so math in code is safe)
   const mathBlocks = [];
   if (window.katex) {
-    // 显示数学：\[ ... \] — GPT 风格分隔符（gpt-5.x、Claude 等）。
-    // 在 $$ / $ 之前处理，使所有常用分隔符都能渲染。
+    // Display math: \[ ... \]  — GPT-style delimiter (gpt-5.x, Claude, etc.).
+    // Handle before $$/$ so all common delimiters render.
     s = s.replace(/\\\[([\s\S]*?)\\\]/g, (match, math) => {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -598,8 +617,8 @@ export function mdToHtml(src, opts) {
         return placeholder;
       } catch (e) { return match; }
     });
-    // 行内数学：\( ... \) — GPT 风格行内分隔符。仅限单行
-    //（[^\n]），避免行文中孤立的转义括号跨行吞噬内容。
+    // Inline math: \( ... \)  — GPT-style inline delimiter. Single-line only
+    // ([^\n]) so a stray escaped paren in prose can't swallow across lines.
     s = s.replace(/\\\(([^\n]*?)\\\)/g, (match, math) => {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -608,7 +627,7 @@ export function mdToHtml(src, opts) {
         return placeholder;
       } catch (e) { return match; }
     });
-    // 显示数学：$$...$$
+    // Display math: $$...$$
     s = s.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -617,7 +636,7 @@ export function mdToHtml(src, opts) {
         return placeholder;
       } catch (e) { return match; }
     });
-    // 行内数学：$...$（前后不是 $ 或数字，不跨多行）
+    // Inline math: $...$  (not preceded/followed by $ or digit, not spanning multiple lines)
     s = s.replace(/(?<!\$)\$(?!\$)([^\$\n]+?)\$(?!\$)/g, (match, math) => {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -628,7 +647,7 @@ export function mdToHtml(src, opts) {
     });
   }
 
-  // 处理管道表格
+  // Handle pipe tables
   s = s.replace(/(?:^|\n)([^\n]*\|[^\n]*\|[^\n]*)(?:\n([^\n]*\|[^\n]*\|[^\n]*))*/g, (table) => {
     if (table.includes('___CODE_BLOCK_') || table.includes('___ALLOWED_HTML_')) return table;
 
@@ -659,20 +678,20 @@ export function mdToHtml(src, opts) {
     return html;
   });
 
-  // 行内代码（但不包括占位符）
+  // Inline code (but not placeholders)
   s = s.replace(/`([^`]+?)`/g, (match, code) => {
     if (code.startsWith('___CODE_BLOCK_') || code.startsWith('___ALLOWED_HTML_')) return match;
     return `<code>${code}</code>`;
   });
 
-  // 水平线（必须在粗体/斜体之前，避免 * 冲突）
+  // Horizontal rules (must come before bold/italic to avoid * conflicts)
   s = s.replace(/^(?:---|\*\*\*|___)\s*$/gm, '<hr>');
 
-  // 粗体、斜体、删除线
+  // Bold, italic, strikethrough
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\*([^*]+)\*/g, '<em>$1</em>');
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
 
-  // 标题
+  // Headers
   s = s.replace(/^###### (.*)$/gm, '<h6>$1</h6>')
        .replace(/^##### (.*)$/gm, '<h5>$1</h5>')
        .replace(/^#### (.*)$/gm, '<h4>$1</h4>')
@@ -680,59 +699,59 @@ export function mdToHtml(src, opts) {
        .replace(/^## (.*)$/gm, '<h2>$1</h2>')
        .replace(/^# (.*)$/gm, '<h1>$1</h1>');
 
-  // 有序列表（1. 2. 3. 等）
+  // Ordered lists (1. 2. 3. etc.)
   s = s.replace(/^(\d+)\. (.*)$/gm, '<oli>$2</oli>');
   s = s.replace(/(?:^|\n)(<oli>[\s\S]*?)(?=\n(?!<oli>)|$)/g, m => `<ol>${m.trim().replace(/<\/?oli>/g, (t) => t === '<oli>' ? '<li>' : '</li>')}</ol>`);
 
-  // GitHub 风格任务列表（- [ ] / - [x]）→ 复选框项。必须在通用
-  // 无序列表规则之前运行，以免 "- " 前缀被先消费。
-  // 输出 <uli>（带 class），使下面的无序列表包装器将其视为
-  // 列表项。由计划模式使用：计划 + 进度渲染为清单。
+  // GitHub-style task lists (- [ ] / - [x]) → checkbox items. Must run before
+  // the generic unordered-list rule so the "- " prefix isn't consumed first.
+  // Emits <uli> (with a class) so the unordered-list wrapper below treats it
+  // as a list item. Used by plan mode: plan + progress render as a checklist.
   s = s.replace(/^(?:- |\* )\[([ xX])\] (.*)$/gm, (_m, mark, text) => {
     const done = mark.toLowerCase() === 'x';
     return `<uli class="task-item${done ? ' task-done' : ''}"><span class="task-check" aria-hidden="true"></span><span class="task-text">${text}</span></uli>`;
   });
 
-  // 无序列表。<uli> 可以携带属性（task-item class），因此
-  // 包装器在转换 <uli ...> → <li ...> 时会保留它们。
+  // Unordered lists. <uli> may carry attributes (task-item class), so the
+  // wrapper preserves them when converting <uli ...> → <li ...>.
   s = s.replace(/^(?:- |\* )(.*)$/gm, '<uli>$1</uli>');
   s = s.replace(/(^|\n)((?:<uli\b[^>]*>[^\n]*<\/uli>(?:\n|$))+)/g, (_, prefix, block) =>
     `${prefix}<ul>${block.trim().replace(/<uli\b([^>]*)>/g, '<li$1>').replace(/<\/uli>/g, '</li>')}</ul>`);
 
-  // 引用块
+  // Blockquotes
   s = s.replace(/^&gt; (.*)$/gm, '<bq>$1</bq>');
   s = s.replace(/(?:^|\n)(<bq>[\s\S]*?)(?=\n(?!<bq>)|$)/g, m =>
     `<blockquote>${m.trim().replace(/<\/?bq>/g, (t) => t === '<bq>' ? '<p>' : '</p>')}</blockquote>`);
 
-  // 段落——但不包括代码块占位符或允许的 HTML
+  // Paragraphs - but NOT for code block placeholders or allowed HTML
   s = s.replace(/^(?!<h\d|<ul>|<ol>|<li|<oli>|<\/li>|<pre>|<blockquote>|<bq>|<hr>|___CODE_BLOCK_|___ALLOWED_HTML_|___MATH_BLOCK_|___MERMAID_BLOCK_)([^\n]+)$/gm, '<p>$1</p>');
 
-  // 段落内的换行
+  // Line breaks within paragraphs
   s = s.replace(/<p>([\s\S]*?)<\/p>/g, (match, content) => {
     if (content.includes('___CODE_BLOCK_') || content.includes('___ALLOWED_HTML_') || content.includes('___MATH_BLOCK_') || content.includes('___MERMAID_BLOCK_')) return match;
     const withLineBreaks = content.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>');
     return `<p>${withLineBreaks}</p>`;
   });
 
-  // 移除空段落
+  // Remove empty paragraphs
   s = s.replace(/<p><\/p>/g, '');
 
-  // 关键：首先恢复允许的 HTML 块
+  // CRITICAL: Restore allowed HTML blocks first
   allowedHtmlBlocks.forEach((block, index) => {
     s = s.replace(`___ALLOWED_HTML_${index}___`, block);
   });
 
-  // 恢复数学块
+  // Restore math blocks
   mathBlocks.forEach((block, index) => {
     s = s.replace(`___MATH_BLOCK_${index}___`, block);
   });
 
-  // 恢复 mermaid 图表块
+  // Restore mermaid diagram blocks
   mermaidBlocks.forEach((block, index) => {
     s = s.replace(`___MERMAID_BLOCK_${index}___`, block);
   });
 
-  // 关键：最后恢复代码块
+  // CRITICAL: Restore code blocks at the end
   codeBlocks.forEach((block, index) => {
     s = s.replace(`___CODE_BLOCK_${index}___`, block);
   });
@@ -741,7 +760,7 @@ export function mdToHtml(src, opts) {
 }
 
 /**
- * 减少代码块外部的多余空白
+ * Reduce excessive whitespace outside of code blocks
  */
 export function squashOutsideCode(s) {
   if (!s) return "";
@@ -756,7 +775,7 @@ export function squashOutsideCode(s) {
 }
 
 /**
- * 渲染可能是文本或内容块数组的内容
+ * Render content that may be text or array of content blocks
  */
 export function renderContent(content) {
   if (Array.isArray(content)) {
@@ -771,7 +790,7 @@ export function renderContent(content) {
 }
 
 /**
- * 初始化容器（或整个文档）中未处理的 Mermaid 图表
+ * Initialize any unprocessed Mermaid diagrams in a container (or whole document)
  */
 export function renderMermaid(container) {
   if (!window.mermaid) return;
@@ -802,7 +821,7 @@ const markdownModule = {
 
 export default markdownModule;
 
-// Mermaid 是异步加载的，因此不会延迟应用框架渲染。
+// Mermaid is loaded async so it cannot delay the app shell.
 function initMermaid() {
   if (!window.mermaid || window.__odysseusMermaidReady) return;
   window.mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
@@ -811,11 +830,11 @@ function initMermaid() {
 window.odysseusInitMermaid = initMermaid;
 initMermaid();
 
-// 跨页面刷新持久化哪些 thinking 区域已被展开。
-// ID 是渲染时生成的（基于 Date.now），因此我们使用内部文本内容的
-// 稳定哈希作为键——相同的内容在重新加载时会得到相同的哈希。
-// localStorage 保存展开哈希的 Set；我们监听聊天历史的变化，
-// 在插入匹配的区域时重新展开它们。
+// Persist which thinking sections were expanded across page refreshes.
+// IDs are render-generated (Date.now-based) so we key by a stable hash of
+// the inner text content instead — same content reproduces the same hash on
+// reload. LocalStorage holds a Set of expanded hashes; we observe the chat
+// history and re-expand matching sections as they're inserted.
 const THINK_EXPANDED_KEY = 'odysseus-thinking-expanded';
 function _loadExpandedSet() {
   try { return new Set(JSON.parse(localStorage.getItem(THINK_EXPANDED_KEY) || '[]')); }
@@ -824,7 +843,7 @@ function _loadExpandedSet() {
 function _saveExpandedSet(set) {
   try {
     const arr = [...set];
-    // 限制存储增长——保留最近的 200 条记录。
+    // Bound storage growth — keep the most recent 200 entries.
     if (arr.length > 200) arr.splice(0, arr.length - 200);
     localStorage.setItem(THINK_EXPANDED_KEY, JSON.stringify(arr));
   } catch {}
@@ -846,11 +865,11 @@ function _setThinkingExpanded(content, toggle, header, expanded) {
   const label_el = header?.querySelector('.thinking-header-left span');
   if (label_el) {
     const label = label_el.dataset.label || 'thinking process';
-    label_el.textContent = expanded ? `Hide ${label}` : t('markdown.view_label', { label: label });
+    label_el.textContent = expanded ? `Hide ${label}` : `View ${label}`;
   }
 }
 
-// 委托的 thinking 切换点击处理器（CSP 安全，无内联 onclick）
+// Delegated click handler for thinking toggle (CSP-safe, no inline onclick)
 document.addEventListener('click', function(e) {
   const header = e.target.closest('.thinking-header[data-thinking-id]');
   if (!header) return;
@@ -862,7 +881,7 @@ document.addEventListener('click', function(e) {
   const willExpand = !content.classList.contains('expanded');
   _setThinkingExpanded(content, toggle, header, willExpand);
 
-  // 通过内容哈希持久化，使选择在刷新后仍然有效。
+  // Persist by content hash so the choice survives a refresh.
   const hash = _hashThinkingContent(content);
   if (!hash) return;
   const set = _loadExpandedSet();
@@ -871,8 +890,8 @@ document.addEventListener('click', function(e) {
   _saveExpandedSet(set);
 });
 
-// 观察聊天历史；当 thinking 区域出现时，如果其哈希与用户之前
-// 展开的哈希匹配，则将其展开。
+// Watch the chat history; whenever a thinking section appears, expand it if
+// its hash matches one the user previously expanded.
 (function _watchThinking() {
   if (window._thinkingWatcherWired) return;
   window._thinkingWatcherWired = true;
@@ -965,7 +984,7 @@ async function _registerEndpointFromButton(btn) {
         window.dispatchEvent(new CustomEvent('ge:model-endpoints-updated', { detail: { baseUrl } }));
         if (window.modelsModule?.refreshModels) window.modelsModule.refreshModels(true);
         if (window.sessionModule?.updateModelPicker) window.sessionModule.updateModelPicker();
-        uiModule.showToast?.(t('markdown.already_in_picker', { name: existing.name || _endpointNameFromUrl(baseUrl) }));
+        uiModule.showToast?.(`Already in model picker: ${existing.name || _endpointNameFromUrl(baseUrl)}`);
         return;
       }
     }
@@ -987,18 +1006,18 @@ async function _registerEndpointFromButton(btn) {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(t('markdown.http_error', { status: res.status }) + (body ? ': ' + body.slice(0, 160) : ''));
+      throw new Error(`HTTP ${res.status}${body ? ': ' + body.slice(0, 160) : ''}`);
     }
     btn.classList.add('added');
     btn.innerHTML = '<span aria-hidden="true">✓</span><span>Added</span>';
     window.dispatchEvent(new CustomEvent('ge:model-endpoints-updated', { detail: { baseUrl } }));
     if (window.modelsModule?.refreshModels) await window.modelsModule.refreshModels(true);
     if (window.sessionModule?.updateModelPicker) window.sessionModule.updateModelPicker();
-    uiModule.showToast?.(t('markdown.endpoint_added', { name: _endpointNameFromUrl(baseUrl) }));
+    uiModule.showToast?.(`Model endpoint added: ${_endpointNameFromUrl(baseUrl)}`);
   } catch (err) {
     btn.disabled = false;
     btn.innerHTML = original;
-    uiModule.showError?.(t('markdown.add_endpoint_failed', { msg: err.message || err }));
+    uiModule.showError?.(`Add endpoint failed: ${err.message || err}`);
   }
 }
 

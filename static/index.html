@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>Odysseus Chat</title>
@@ -8,9 +8,9 @@
   <meta name="theme-color" content="#282c34">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <!-- 禁用 iOS / Android 对数字（电话/日期/地址）的自动链接
-       在邮件正文中——会将随机数字包裹在 <a href="tel:..."> 中，
-       使用的浏览器默认样式与 Odysseus 主题不匹配。 -->
+  <!-- Disable iOS / Android auto-linkifying of numbers (phone/date/address)
+       in email bodies — was wrapping random digits in <a href="tel:..."> with
+       browser-default styling that didn't match the Odysseus theme. -->
   <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <script nonce="{{CSP_NONCE}}">
@@ -26,22 +26,22 @@
         s.setProperty('--panel', c.panel);
         s.setProperty('--border', c.border);
         if (c.red) s.setProperty('--red', c.red);
-        // 立即设置 --brand-color（= 自定义品牌色或主题红色），
-        // 让加载屏的 ASCII 波浪从首次渲染就显示最终颜色。
-        // 否则它会以 --red 开始，等应用启动后 applyColors()
-        // 填充 --brand-color 时发生可见的颜色切换。
+        // Set --brand-color now (= custom brand or the theme red) so the
+        // loading-screen ASCII wave shows its final colour from the first
+        // paint. Otherwise it starts on --red and visibly switches once the
+        // app boots and applyColors() fills --brand-color.
         var _bc = (c.advanced && c.advanced.brandColor) || c.red;
         if (_bc) s.setProperty('--brand-color', _bc);
-        // 匹配移动端浏览器工具栏/状态栏颜色与已保存的主题背景色，
-        // 从首次渲染即生效。否则硬编码的深色 meta 标签会在加载期间
-        // 保持不变，等应用启动后状态栏颜色才"切换"。
+        // Match the mobile browser toolbar / status bar to the saved theme bg
+        // from the very first paint. Otherwise the hardcoded dark meta sits
+        // there during load and the bar "switches" colour once the app boots.
         var mtc = document.querySelector('meta[name="theme-color"]');
         if (mtc && c.bg) mtc.setAttribute('content', c.bg);
-        // 更新 favicon 以匹配强调色
+        // Update favicon to match accent color
         var ac = c.red || '#e06c75';
         var fav = document.querySelector("link[rel='icon']");
         if (fav) fav.href = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 4L16 22L6 22Z' fill='" + ac + "'/><path d='M16 8L16 22L24 22Z' fill='" + ac + "' opacity='0.6'/><path d='M4 24Q10 20 16 24Q22 28 28 24' stroke='" + ac + "' stroke-width='2.5' fill='none' stroke-linecap='round'/></svg>");
-        // 从主题派生语法高亮颜色
+        // Derive syntax highlighting colors from theme
         function h2hsl(hex) {
           hex = hex.replace('#','');
           var r=parseInt(hex.substring(0,2),16)/255, g=parseInt(hex.substring(2,4),16)/255, b=parseInt(hex.substring(4,6),16)/255;
@@ -67,24 +67,24 @@
         s.setProperty('--hl-builtin', hsl2h(180,Math.min(fH[1]+15,60),dk?65:40));
         s.setProperty('--hl-variable', hsl2h((fH[0]+30)%360,Math.min(fH[1]+5,60),fH[2]));
         s.setProperty('--hl-params', hsl2h(fH[0],Math.max(fH[1]-5,10),dk?Math.min(fH[2]+8,85):Math.max(fH[2]-8,25)));
-        // 应用高级覆盖设置（如果存在）
+        // Apply advanced overrides if present
         if (c.advanced) {
           var a = c.advanced;
           var advMap = {userBubbleBg:'--user-bubble-bg',aiBubbleBg:'--ai-bubble-bg',bubbleBorder:'--bubble-border',sidebarBg:'--sidebar-bg',sectionAccent:'--section-accent',brandColor:'--brand-color',inputBg:'--input-bg',inputBorder:'--input-border',sendBtnBg:'--send-btn-bg',sendBtnHover:'--send-btn-hover',codeBg:'--code-bg',codeFg:'--code-fg',toggleBg:'--toggle-bg',toggleActive:'--toggle-active',accentPrimary:'--accent-primary',accentError:'--accent-error'};
           for (var k in advMap) { if (a[k]) s.setProperty(advMap[k], a[k]); }
         }
       }
-      // 提前应用字体设置
+      // Apply font early
       if (t && t.font) {
         var fm = {mono:"'Fira Code', monospace",sans:"system-ui, -apple-system, 'Segoe UI', sans-serif",serif:"Georgia, 'Times New Roman', serif"};
         if (fm[t.font]) { s.setProperty('--font-family', fm[t.font]); }
         else { s.setProperty('--font-family', "'" + t.font.replace(/'/g,'') + "', sans-serif"); }
       }
-      // 在 html 元素上应用密度类
+      // Apply density class on html
       if (t && t.density && t.density !== 'comfortable') {
         document.documentElement.classList.add('density-' + t.density);
       }
-      // 在 body 可用后立即应用背景图案
+      // Apply background pattern on body once available
       if (t && t.bgPattern && t.bgPattern !== 'none') {
         document.addEventListener('DOMContentLoaded', function() {
           document.body.classList.add('bg-pattern-' + t.bgPattern);
@@ -93,17 +93,17 @@
     } catch(e){}
   })();
   </script>
-  <!-- 按路由区分 favicon。收藏 /calendar 会显示日历图标，
-       /notes 显示笔记图标等。每个图形使用当前主题强调色渲染。
-       根路径回退到小船 logo。 -->
+  <!-- Per-route favicon. Bookmarking /calendar shows a calendar icon,
+       /notes a notes icon, etc. Each shape is rendered in the current
+       theme accent color. Falls back to the boat logo on the root path. -->
   <script nonce="{{CSP_NONCE}}">
   (function(){
     try {
       var path = (window.location.pathname || '').toLowerCase();
       var theme = (function(){ try { return JSON.parse(localStorage.getItem('odysseus-theme')); } catch(_) { return null; } })();
       var ac = (theme && (theme.red || theme.colors && theme.colors.red)) || '#e06c75';
-      // 形状是线条描边 SVG（不使用 emoji 字形）。每个条目返回
-      // 使用 currentColor=`ac` 渲染的内部 SVG 标记。
+      // Shapes are line-stroke SVGs (no emoji glyphs). Each entry returns
+      // the inner SVG markup rendered against currentColor=`ac`.
       var SHAPES = {
         '/calendar':
           "<rect x='4' y='6' width='24' height='22' rx='2' fill='none' stroke='" + ac + "' stroke-width='2.5'/>" +
@@ -139,7 +139,7 @@
           "<rect x='21' y='8' width='6' height='19' rx='1' fill='none' stroke='" + ac + "' stroke-width='2.5' transform='rotate(8 24 17)'/>",
       };
       var inner = SHAPES[path];
-      if (!inner) return; // 根路径保持默认的小船图标。
+      if (!inner) return; // Root path keeps the default boat icon.
       var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>" + inner + "</svg>";
       var href = 'data:image/svg+xml,' + encodeURIComponent(svg);
       var fav = document.querySelector("link[rel='icon']");
@@ -148,7 +148,7 @@
       var apple = document.querySelector("link[rel='apple-touch-icon']");
       if (!apple) { apple = document.createElement('link'); apple.rel = 'apple-touch-icon'; document.head.appendChild(apple); }
       apple.href = href;
-      // 同时自定义页面标题，让书签获得有用的名称。
+      // Also customize the page title so the bookmark inherits a useful name.
       var titles = {
         '/calendar': 'Calendar — Odysseus',
         '/notes': 'Notes — Odysseus',
@@ -160,10 +160,10 @@
         '/library': 'Library — Odysseus',
       };
       if (titles[path]) document.title = titles[path];
-      // 按路由区分 Android 主屏幕图标。我们通过替换 <link rel="manifest">
-      // 为包含此路由 SVG 图标的按页面 Blob URL——这样"添加到主屏幕"
-      // 就会使用特定路由的图标而非共享的小船 logo。
-      // 在不支持 Blob URL 的浏览器上静默回退。
+      // Per-route Android home-screen icon. We swap the <link rel="manifest">
+      // to a per-page Blob URL with this route's SVG icon — that way "Add to
+      // Home Screen" picks up the route-specific glyph instead of the shared
+      // boat logo. Falls back silently on browsers without Blob URL support.
       try {
         if (inner && typeof Blob !== 'undefined') {
           var pwa = {
@@ -190,16 +190,16 @@
   })();
   </script>
   <script defer src="/static/lib/highlight.min.js"></script>
-  <!-- Inter 字体 — 自托管，无 Google 依赖 -->
+  <!-- Inter font — self-hosted, no Google dependencies -->
   <style>
     @font-face { font-family: 'Inter'; font-weight: 400; font-style: normal; font-display: swap; src: url('/static/fonts/Inter-Regular.woff2') format('woff2'); }
     @font-face { font-family: 'Inter'; font-weight: 500; font-style: normal; font-display: swap; src: url('/static/fonts/Inter-Medium.woff2') format('woff2'); }
     @font-face { font-family: 'Inter'; font-weight: 600; font-style: normal; font-display: swap; src: url('/static/fonts/Inter-SemiBold.woff2') format('woff2'); }
   </style>
-  <!-- KaTeX CSS 以 media="print" 加载，不阻塞渲染，
-       加载后由 JS 切换为 "all"。Mermaid 初始化在库加载完成后运行。
-       两者都是通过下方的 addEventListener 来接入的（行内 onload= 
-       属性被 CSP script-src-attr 阻止）。 -->
+  <!-- KaTeX CSS is loaded with media="print" so it doesn't block render,
+       then flipped to "all" via JS after load. Mermaid init runs once the
+       library finishes loading. Both hooks are wired via addEventListener
+       below (inline onload= attrs are blocked by CSP script-src-attr). -->
   <link id="katex-css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" media="print">
   <script async src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
   <script id="mermaid-script" async src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
@@ -222,7 +222,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, viewport-fit=cover" />
 </head>
 <body>
-  <!-- 加载遮罩层 — 隐藏所有闪烁内容直到应用准备就绪 -->
+  <!-- Loading overlay — hides all flashing until app is ready -->
   <div id="app-loader" style="position:fixed;inset:0;z-index:99999;background:var(--bg,#282c34);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;transition:opacity .3s">
     <div id="loader-wave" style="color:var(--brand-color,var(--red,#e06c75));font-family:monospace;font-size:11px;opacity:.5">▁▂▃</div>
   </div>
@@ -240,7 +240,7 @@
     setTimeout(function(){var l=document.getElementById('app-loader');if(l){l.style.opacity='0';setTimeout(function(){l.remove()},300)}},5000);
   })();
   </script>
-  <!-- 记忆管理弹窗 -->
+  <!-- Memory Management Modal -->
   <div id="memory-modal" class="modal hidden">
     <div class="modal-content memory-modal-content" role="dialog" aria-label="Brain" style="background:var(--bg)">
       <div class="modal-header">
@@ -254,7 +254,7 @@
           <button class="memory-tab" data-memory-tab="add"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Add</button>
           <button class="memory-tab" data-memory-tab="settings"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
         </div>
-        <!-- ── 浏览标签页 ── -->
+        <!-- ── Browse tab ── -->
         <div class="memory-tab-panel" data-memory-panel="browse">
           <div class="admin-card" style="display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:0;">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
@@ -297,7 +297,7 @@
             <div id="memory-suggestions-body" class="memory-suggestions hidden"></div>
           </div>
         </div>
-        <!-- ── 添加标签页 ── -->
+        <!-- ── Add tab ── -->
         <div class="memory-tab-panel hidden" data-memory-panel="add">
           <div class="admin-card">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
@@ -352,7 +352,7 @@
             </div>
           </div>
         </div>
-        <!-- ── 技能标签页 ── -->
+        <!-- ── Skills tab ── -->
         <div class="memory-tab-panel hidden" data-memory-panel="skills">
           <div class="admin-card" style="display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:0;">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
@@ -401,7 +401,7 @@
             <div id="skills-list" class="memory-list"></div>
           </div>
         </div>
-        <!-- ── 设置标签页 ── -->
+        <!-- ── Settings tab ── -->
         <div class="memory-tab-panel hidden" data-memory-panel="settings">
           <div class="admin-card">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px">
@@ -448,7 +448,7 @@
     </div>
   </div>
 
-  <!-- 主题弹窗（浮动面板） -->
+  <!-- Theme Popup (floating panel) -->
   <div id="theme-modal" class="modal hidden">
   <div id="theme-popup" class="modal-content admin-modal-content" role="dialog" aria-label="Theme" style="background:var(--bg)">
     <div class="modal-header theme-popup-header" id="theme-popup-header">
@@ -459,13 +459,13 @@
       </button>
       <button class="close-btn" id="close-theme-popup" aria-label="Close theme">&#x2716;</button>
     </div>
-    <!-- 主题标签页 -->
+    <!-- Theme tabs -->
     <div class="admin-tabs" id="theme-tabs">
       <button class="admin-tab active" data-tab="theme-tab-browse"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><path d="M12 2a7 7 0 0 0 0 20 4 4 0 0 1 0-8 4 4 0 0 0 0-8"/><circle cx="8" cy="9" r="1.4" fill="currentColor"/><circle cx="15" cy="14" r="1.4" fill="currentColor"/><circle cx="9" cy="15" r="1.4" fill="currentColor"/></svg>Themes</button>
       <button class="admin-tab" data-tab="theme-tab-customize"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M9.06 11.9l-3.5 3.5a2.85 2.85 0 1 0 4.03 4.03l8.49-8.49a4.5 4.5 0 1 0-6.36-6.36L3.18 12.62"/><path d="M14 7l3 3"/></svg>Customize</button>
     </div>
 
-    <!-- 标签页：浏览主题 -->
+    <!-- Tab: Browse themes -->
     <div id="theme-tab-browse" class="theme-tab-panel">
       <div class="admin-card">
         <h2>Default Themes</h2>
@@ -477,7 +477,7 @@
       </div>
     </div>
 
-    <!-- 标签页：自定义 -->
+    <!-- Tab: Customize -->
     <div id="theme-tab-customize" class="theme-tab-panel" style="display:none">
       <div class="admin-card">
         <h2>Colors</h2>
@@ -537,7 +537,7 @@
         </div>
         <button class="theme-adv-clear-btn" id="theme-adv-clear">Clear Advanced Overrides</button>
       </div>
-      <!-- 色彩和谐生成器（独立卡片） -->
+      <!-- Color Harmony Generator (its own card) -->
       <div class="admin-card" id="theme-harmony-card">
         <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="20" r="2.5"/></svg>Color Harmony</h2>
         <div class="theme-harmony-row">
@@ -659,18 +659,18 @@
   <button id="mobile-menu-btn" aria-label="Toggle sidebar">&#x2630;</button>
 
   <button class="hamburger-btn" id="hamburger-btn" title="Show sidebar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-  <!-- 已移除新建会话按钮 — 改用发送按钮中的 + -->
+  <!-- new session button removed — use + in send button instead -->
   <div class="icon-rail" id="icon-rail">
     <div class="rail-resize-handle" id="rail-resize-handle"></div>
-    <!-- 静态：核心操作 -->
+    <!-- Static: core actions -->
     <button class="icon-rail-btn" id="rail-search-btn" title="Search conversations (Ctrl+K)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><path d="M21 21l-4.35-4.35"/></svg></button>
     <button class="icon-rail-btn rail-new-chat" id="rail-new-session" title="New chat"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="icon-rail-btn" id="rail-delete-session" title="Delete session">&#x2715;</button>
     <div class="rail-separator"></div>
-    <!-- 动态上下文指示器（仅在激活时显示） -->
+    <!-- Dynamic contextual indicators (shown only while active) -->
     <button class="icon-rail-btn rail-dynamic" id="rail-chats" title="Chat ready" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
     <button class="icon-rail-btn rail-dynamic" id="rail-documents" title="Documents" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></button>
-    <!-- 工具启动器 — 始终可见，按字母排序 -->
+    <!-- Tool launchers — always visible, alphabetical -->
     <button class="icon-rail-btn" id="rail-calendar" title="Calendar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
     <button class="icon-rail-btn" id="rail-compare" title="Compare"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></svg></button>
     <button class="icon-rail-btn" id="rail-cookbook" title="Cookbook"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></button>
@@ -683,7 +683,7 @@
     <button class="icon-rail-btn" id="rail-tasks" title="Tasks"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg></button>
     <button class="icon-rail-btn" id="rail-theme" title="Theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20 5 5 0 0 0 5-5 3 3 0 0 0-3-3h-2a3 3 0 0 1-3-3 5 5 0 0 1 5-5"/></svg></button>
     <div style="flex:1"></div>
-    <!-- 静态：底部 -->
+    <!-- Static: bottom -->
     <button class="icon-rail-btn" id="rail-settings" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
 
@@ -704,14 +704,14 @@
         <svg class="sidebar-action-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
         <span class="grow" style="position:relative;left:-1px;">Search</span>
       </div>
-      <!-- Assistant 侧边栏条目已移除 — 其日志和设置活在
-           Tasks 弹窗内部（Activity + Settings 标签页）。后端
-           assistant 会话仍然维持，用于 scheduled tasks 的
-           log_to_assistant() 写入。 -->
+      <!-- Assistant sidebar entry removed — its log + settings live inside
+           the Tasks modal (Activity + Settings tabs). The backend
+           assistant session is still maintained for log_to_assistant()
+           writes from scheduled tasks. -->
 
       <div class="section" id="sessions-section">
         <div class="section-header-flex">
-          <span class="section-title" id="chats-section-title"><svg class="section-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span id="chats-section-label" class="section-title-label" data-i18n="sidebar.sessions">Chats</span><span id="chats-notif-dot" class="sidebar-notif-dot" style="display:none"></span></span>
+          <span class="section-title" id="chats-section-title"><svg class="section-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span id="chats-section-label" class="section-title-label">Chats</span><span id="chats-notif-dot" class="sidebar-notif-dot" style="display:none"></span></span>
           <div style="position:relative; display:inline-block; display:flex; gap:4px; align-items:center;">
             <button type="button" class="section-header-btn list-item-plus-btn chats-manage-btn" id="chats-library-btn" title="Manage Chats (Library)">
               <span aria-hidden="true" style="display:inline-block;width:13px;height:13px;"></span>
@@ -757,41 +757,41 @@
         </div>
         <div id="session-list" role="listbox"></div>
       </div>
-      <!-- 隐藏的会话操作下拉菜单 -->
+      <!-- Hidden dropdown for session actions -->
       <div id="session-actions-dropdown" class="dropdown hidden">
         <div class="dropdown-item" id="rename-session-option">
-          <h4 data-i18n="common.rename">Rename</h4>
-          <p data-i18n="notification.session_renamed">Change the session name</p>
+          <h4>Rename</h4>
+          <p>Change the session name</p>
         </div>
         <div class="dropdown-item" id="delete-session-option">
-          <h4 data-i18n="common.delete">Delete</h4>
+          <h4>Delete</h4>
           <p>Remove this session permanently</p>
         </div>
         <div class="dropdown-item" id="memory-session-option">
-          <h4 data-i18n="tools.brain">Memory</h4>
+          <h4>Memory</h4>
           <p>Extract memories from this session</p>
         </div>
       </div>
 
       <div class="section" id="email-section">
         <div class="section-header-flex">
-          <span class="section-title" id="email-section-title" style="cursor:pointer;" title="Open email inbox"><svg class="section-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span data-i18n="sidebar.email">Email</span></span>
+          <span class="section-title" id="email-section-title" style="cursor:pointer;" title="Open email inbox"><svg class="section-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span>Email</span></span>
           <button type="button" class="section-header-btn list-item-plus-btn" id="email-compose-btn" title="Compose email">
             <svg class="list-item-plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span class="list-item-plus-label" data-i18n="common.new">new</span>
+            <span class="list-item-plus-label">new</span>
           </button>
-          <!-- 未读圆点是 header 的直接子元素，放置在 compose
-               按钮之后（它原来在标题内部，按钮之前）。
-               标题的 flex:1 吃掉了空闲空间，这使得圆点
-               落在最右角，+ 号紧贴其左侧 —
-               即圆点出现时圆点和 + 号交换位置。 -->
+          <!-- Unread dot is a direct header child placed AFTER the compose
+               button (it used to live inside the title, before the button).
+               With the title's flex:1 eating the free space, this lands the
+               dot at the far-right corner with the + just to its left —
+               i.e. the dot and + swap places when the dot appears. -->
           <span id="email-unread-dot" class="sidebar-notif-dot" style="display:none"></span>
         </div>
       </div>
 
       <div class="section" id="models-section">
         <div class="section-header-flex">
-          <span class="section-title" data-i18n="sidebar.models"> Models</span>
+          <span class="section-title"> Models</span>
           <div style="position:relative; display:inline-block;">
             <button type="button" class="section-header-btn" id="model-sort-btn" title="Sort models">
               <svg class="sort-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -820,7 +820,7 @@
 
       <div class="section" id="tools-section">
         <div class="section-header-flex">
-          <span class="section-title"><svg class="section-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span data-i18n="sidebar.tools">Tools</span></span>
+          <span class="section-title"><svg class="section-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Tools</span>
         </div>
         <div class="list-item" id="tool-memory-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -830,7 +830,7 @@
             <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
             <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/>
           </svg>
-          <span class="grow" data-i18n="tools.brain">Brain</span>
+          <span class="grow">Brain</span>
         </div>
         <div class="list-item" id="tool-calendar-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -841,11 +841,11 @@
             <line x1="8" y1="2" x2="8" y2="6"/>
             <line x1="3" y1="10" x2="21" y2="10"/>
           </svg>
-          <span class="grow" data-i18n="tools.calendar">Calendar</span>
+          <span class="grow">Calendar</span>
         </div>
         <div class="list-item" id="tool-compare-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></svg>
-          <span class="grow" data-i18n="tools.compare">Compare</span>
+          <span class="grow">Compare</span>
         </div>
         <div class="list-item" id="tool-cookbook-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -854,13 +854,13 @@
             <path d="M12 7v14"/>
             <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>
           </svg>
-          <span class="grow" data-i18n="tools.cookbook">Cookbook</span>
+          <span class="grow">Cookbook</span>
           <span id="cookbook-bg-status" style="display:none;font-size:9px;opacity:0.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:12px;flex-shrink:1;min-width:0;position:relative;top:-1px;"></span>
           <span class="cookbook-notif-dot" id="cookbook-notif-dot" style="display:none;margin-left:6px;margin-right:4px;position:relative;top:-1px;left:0px;"></span>
         </div>
         <div class="list-item" id="tool-research-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.5;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-          <span class="grow" data-i18n="tools.deep_research">Deep Research</span>
+          <span class="grow">Deep Research</span>
         </div>
         <div class="list-item" id="tool-gallery-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -870,16 +870,16 @@
             <circle cx="8.5" cy="8.5" r="1.5"/>
             <path d="M21 15l-5-5L5 21"/>
           </svg>
-          <span class="grow" data-i18n="tools.gallery">Gallery</span>
+          <span class="grow">Gallery</span>
         </div>
         <div class="list-item" id="tool-library-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h6M9 11h4"/>
           </svg>
-          <span class="grow" data-i18n="tools.library">Library</span>
+          <span class="grow">Library</span>
           <button type="button" class="list-item-plus-btn" id="library-new-doc-btn" title="New document">
             <svg class="list-item-plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span class="list-item-plus-label" data-i18n="common.new">new</span>
+            <span class="list-item-plus-label">document</span>
           </button>
         </div>
         <div class="list-item" id="tool-notes-btn">
@@ -890,7 +890,7 @@
             <path d="M15 3v5h5"/>
             <path d="M8 17.5 15.5 10l2.5 2.5L10.5 20H8z"/>
           </svg>
-          <span class="grow" data-i18n="tools.notes">Notes</span>
+          <span class="grow">Notes</span>
         </div>
         <div class="list-item" id="tool-tasks-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -902,7 +902,7 @@
             <line x1="3" y1="10" x2="21" y2="10"/>
             <path d="M9 16l2 2 4-4"/>
           </svg>
-          <span class="grow" data-i18n="tools.tasks">Tasks</span>
+          <span class="grow">Tasks</span>
           <span id="assistant-notif-dot" class="sidebar-notif-dot" style="display:none"></span>
         </div>
 
@@ -916,14 +916,14 @@
             <circle cx="15" cy="14" r="1.5" fill="currentColor"/>
             <circle cx="9" cy="15" r="1.5" fill="currentColor"/>
           </svg>
-          <span class="grow" data-i18n="tools.theme">Theme</span>
+          <span class="grow">Theme</span>
         </div>
       </div>
     </div>
     <div class="sidebar-user-bar" id="sidebar-user-bar">
       <div class="user-bar-left" id="user-bar-profile">
         <div class="user-bar-avatar" id="user-bar-avatar"></div>
-        <span class="user-bar-name" id="user-bar-name" data-i18n="sidebar.user">User</span>
+        <span class="user-bar-name" id="user-bar-name">User</span>
       </div>
       <div class="user-bar-actions">
         <button type="button" class="user-bar-btn" id="user-bar-settings" title="Settings">
@@ -934,17 +934,17 @@
   </nav>
 
   <main class="chat-container welcome-active" id="chat-container" aria-label="Chat area" aria-busy="false">
-    <!-- 为辅助技术提供持久化页面标题。视觉隐藏使其
-         不影响布局，但始终存在于主地标区域内
-         （显示可见品牌的侧边栏在移动端隐藏于画布外），
-         这样页面始终暴露一个单一的 level-1 标题。 -->
+    <!-- Persistent page heading for assistive tech. Visually hidden so it
+         never affects layout, but always present inside the main landmark
+         (the sidebar that shows the visible brand is hidden off-canvas on
+         mobile) so the page always exposes a single level-1 heading. -->
     <h1 class="a11y-visually-hidden">Odysseus</h1>
     <div class="chat-top-bar">
       <button type="button" class="incognito-indicator" id="incognito-indicator" title="Nobody mode active — click to deactivate" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg></button>
-      <div class="chat-meta-overlay"><span id="current-meta">Odysseus Chat</span><span id="current-meta-count" class="chat-meta-count" aria-hidden="true"></span><span id="session-cost-display" class="session-cost-display" style="display:none;"></span><span class="export-dropdown-wrap" id="export-dropdown-wrap"><button type="button" class="export-dl-btn" id="export-dl-btn" title="More"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="export-dropdown-menu" id="export-dropdown-menu"><div class="export-dropdown-item" id="export-rename-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span><span data-i18n="common.rename">Rename</span></div><div class="export-dropdown-item" id="export-copy-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span data-i18n="common.copy">Copy Chat</span></div><div class="export-dropdown-item" id="export-pdf-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15v-2h2a1.5 1.5 0 0 1 0 3H9z"/></svg></span><span>PDF</span></div><div class="export-dropdown-item" id="export-doc-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span><span>Save to Documents</span></div></div></span></div>    </div>
+      <div class="chat-meta-overlay"><span id="current-meta">Odysseus Chat</span><span id="current-meta-count" class="chat-meta-count" aria-hidden="true"></span><span id="session-cost-display" class="session-cost-display" style="display:none;"></span><span class="export-dropdown-wrap" id="export-dropdown-wrap"><button type="button" class="export-dl-btn" id="export-dl-btn" title="More"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="export-dropdown-menu" id="export-dropdown-menu"><div class="export-dropdown-item" id="export-rename-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span><span>Rename</span></div><div class="export-dropdown-item" id="export-copy-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span>Copy Chat</span></div><div class="export-dropdown-item" id="export-pdf-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15v-2h2a1.5 1.5 0 0 1 0 3H9z"/></svg></span><span>PDF</span></div><div class="export-dropdown-item" id="export-doc-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span><span>Save to Documents</span></div></div></span></div>    </div>
     <div id="welcome-screen">
       <div class="welcome-name"><svg class="welcome-boat" viewBox="0 0 32 32"><path d="M16 4L16 22L6 22Z" fill="currentColor"/><path d="M16 8L16 22L24 22Z" fill="currentColor" opacity="0.6"/><path d="M4 24Q10 20 16 24Q22 28 28 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>Odysseus</div>
-      <div class="welcome-sub" id="welcome-sub">欢迎，<span class="setup-trigger-link" style="color:var(--accent,var(--red));font-weight:600;cursor:pointer;text-decoration:underline;" title="点击启动设置">输入 /setup</span> 开始使用。</div>
+      <div class="welcome-sub" id="welcome-sub">Welcome, <span class="setup-trigger-link" style="color:var(--accent,var(--red));font-weight:600;cursor:pointer;text-decoration:underline;" title="Click to launch setup">type /setup</span> to get started.</div>
       <div class="welcome-tip" id="welcome-tip"></div>
       <button type="button" class="incognito-btn" id="incognito-btn" title="Enable Nobody mode — no memory, no history saved">
         <svg class="eye-open" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -953,7 +953,7 @@
         <svg class="eye-blinded" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/>
         </svg>
-        <span class="incognito-label" data-i18n="chat.incognito">Nobody</span>
+        <span class="incognito-label">Nobody</span>
       </button>
       <div id="welcome-setup" style="display:none"></div>
     </div>
@@ -961,23 +961,23 @@
     (function(){
       var mobile = window.matchMedia('(max-width: 768px)').matches;
       var desktop = [
-        '提示：按 Ctrl+K 可搜索所有对话。',
-        '提示：按 Ctrl+B 可快速切换侧边栏。',
-        '提示：按住 Shift 点击侧边栏切换按钮可将其换到另一侧。',
-        '提示：将文件拖放到聊天区域即可附加。',
-        '提示：右键点击会话可进行重命名、删除和记忆操作。',
+        'Tip: Press Ctrl+K to search across all your conversations.',
+        'Tip: Press Ctrl+B to quickly toggle the sidebar.',
+        'Tip: Shift-click the sidebar toggle to swap it to the other side.',
+        'Tip: Drag and drop files onto the chat to attach them.',
+        'Tip: Right-click a session for rename, delete, and memory options.',
       ];
       var phone = [
-        '提示：长按会话可进行重命名、删除和记忆操作。',
-        '提示：点击眼睛图标开启无痕模式——不保存任何历史记录。',
-        '提示：切换到 Agent 模式可使用网页搜索和代码执行。',
-        '提示：使用对比模式可并排测试不同模型。',
-        '提示：点击输入框旁的 + 按钮可附加图片或文件。',
+        'Tip: Long-press a session for rename, delete, and memory options.',
+        'Tip: Tap the eye icon for Nobody mode — no history saved.',
+        'Tip: Switch to Agent mode for web search and code execution.',
+        'Tip: Use Compare mode to test different models side by side.',
+        'Tip: Attach images or files using the + button next to the input.',
       ];
       var tips = mobile ? phone : desktop;
       var el = document.getElementById('welcome-tip');
       if (el) {
-        el.textContent = '输入 /setup，然后选择本地模型或 API。';
+        el.textContent = 'Type /setup, then choose Local models or API.';
       }
       fetch('/api/version').then(function(r){return r.json()}).then(function(d){
         if (d.version) window._appVersion = d.version;
@@ -986,26 +986,31 @@
     </script>
     <div id="chat-history" class="chat-history" role="log" aria-live="polite"></div>
 
-    <!-- 附件条 -->
+    <!-- Attachments strip -->
     <div id="attach-strip" class="attach-strip"></div>
 
-    <!-- 表单逻辑隐藏元素 -->
+    <!-- Hidden elements for form logic -->
     <input type="checkbox" id="research-toggle" style="display:none;">
     <input type="checkbox" id="rag-toggle" style="display:none;">
     <input type="checkbox" id="incognito-toggle" style="display:none;">
     <input type="file" id="file-input" class="hidden" multiple />
 
-    <!-- 统一聊天输入栏 -->
+    <!-- Unified chat input bar -->
     <div class="chat-input-bar">
       <div class="chat-input-top">
         <div id="message-ghost" class="ghost-text-overlay" aria-hidden="true"></div>
-        <textarea id="message" data-i18n-placeholder="chat.placeholder" placeholder="Message Odysseus..." required autocomplete="off" aria-label="Message input" rows="1" autofocus></textarea>
-        <!-- 模型选择器（聊天框内，右上角） -->
+        <textarea id="message" placeholder="Message Odysseus..." required autocomplete="off" aria-label="Message input" rows="1" autofocus></textarea>
+        <!-- Model picker (inside chatbox, top-right) -->
         <div class="model-picker-wrap" id="model-picker-wrap">
           <button type="button" class="model-picker-btn" id="model-picker-btn" title="Switch model"><span id="model-picker-label">Select model</span> <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg></button>
           <div class="model-picker-menu hidden" id="model-picker-menu">
             <div class="model-picker-search-row">
-              <input type="text" id="model-picker-search" placeholder="Search models..." autocomplete="off" aria-label="Search models">
+              <div class="model-picker-search-wrap">
+                <input type="text" id="model-picker-search" placeholder="Search models..." autocomplete="off" aria-label="Search models">
+                <button type="button" class="model-picker-refresh-btn" id="model-picker-refresh-btn" title="Refresh model picker" aria-label="Refresh model picker">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </button>
+              </div>
               <button type="button" class="model-picker-action-btn primary" id="model-picker-add-models-btn" title="Add model endpoints" aria-label="Add model endpoints">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
               </button>
@@ -1017,7 +1022,7 @@
       <div id="pinned-tools-bar"></div>
       <div class="chat-input-bottom" style="visibility:hidden">
         <div class="chat-input-left">
-          <!-- 溢出菜单（+）— 始终在第一位/左侧 -->
+          <!-- Overflow menu (+) — always first/left -->
           <div class="overflow-wrapper">
             <button type="button" class="input-icon-btn overflow-plus-btn" id="overflow-plus-btn" title="More tools" aria-label="More tools" aria-haspopup="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1050,12 +1055,12 @@
                 <span>Workspace</span>
                 <span class="overflow-active-dot"></span>
               </button>
-              <!-- 行内"深度研究模式"切换已移除（被 Deep Research 
-                   侧边栏 / trigger_research 取代）。隐藏的
-                   #research-toggle 复选框保留但设为无效，
-                   以免现有 JS 引用报错；没有此入口点则无法启用。 -->
-              <!-- 群聊已移至 Characters 弹窗的 Group 标签页 -->
-              <!-- TTS 模式已隐藏 — 本版本中朗读功能已关闭。 -->
+              <!-- Inline "deep research mode" toggle removed (superseded by the
+                   Deep Research sidebar / trigger_research). The hidden
+                   #research-toggle checkbox is kept inert so existing JS refs
+                   don't break; without this entry point it can't be enabled. -->
+              <!-- Group Chat moved to Characters modal Group tab -->
+              <!-- TTS Mode hidden — read-aloud feature is off in this build. -->
               <button type="button" class="overflow-menu-item" id="overflow-tts-btn" hidden style="display:none">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                 <span>TTS Mode</span>
@@ -1069,13 +1074,13 @@
               </button>
             </div>
           </div>
-          <!-- 网页搜索（放大镜） -->
+          <!-- Web search (magnifying glass) -->
           <button type="button" class="input-icon-btn" title="Web search" id="web-toggle-btn" data-mode-tool="true" aria-label="Web search" aria-pressed="false">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
           </button>
-          <!-- Shell 命令（终端） -->
+          <!-- Shell commands (terminal) -->
           <button type="button" class="input-icon-btn" title="Shell Access" id="bash-toggle-btn" data-mode-tool="true" aria-label="Shell access" aria-pressed="false">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
@@ -1087,7 +1092,7 @@
             <span style="font-size:11px;margin-left:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="workspace-indicator-name"></span>
             <svg class="tool-indicator-x" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
           </button>
-          <!-- RAG 工具栏指示器（激活前隐藏） -->
+          <!-- RAG toolbar indicator (hidden until active) -->
           <button type="button" class="input-icon-btn tool-indicator" title="RAG active — click to deactivate" id="rag-indicator-btn" style="display:none;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
@@ -1095,26 +1100,26 @@
             <span style="font-size:11px;margin-left:2px;">RAG</span>
             <svg class="tool-indicator-x" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
           </button>
-          <!-- 6. 深度研究（激活前隐藏） -->
+          <!-- 6. Deep Research (hidden until active) -->
           <button type="button" class="input-icon-btn tool-indicator" title="Deep Research active — click to deactivate" id="research-toggle-btn" style="display:none;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
             <span style="font-size:11px;margin-left:2px;">Research</span>
             <svg class="tool-indicator-x" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
           </button>
-          <!-- 7. 群聊（激活前隐藏） -->
+          <!-- 7. Group Chat (hidden until active) -->
           <button type="button" class="input-icon-btn tool-indicator" title="Group Chat active — click to deactivate" id="group-toggle-btn" style="display:none;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <span style="font-size:11px;margin-left:2px;">Group</span>
             <svg class="tool-indicator-x" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
           </button>
           <input type="checkbox" id="group-toggle" style="display:none;">
-          <!-- 角色指示器（激活前隐藏） -->
+          <!-- Character indicator (hidden until active) -->
           <button type="button" class="input-icon-btn tool-indicator" title="Persona active — click to deactivate" id="character-indicator-btn" style="display:none;">
             <svg id="char-indicator-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             <span id="character-indicator-name" style="font-size:11px;margin-left:2px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
             <svg class="tool-indicator-x" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
           </button>
-          <!-- 对比工具栏指示器（激活前隐藏） -->
+          <!-- Compare toolbar indicator (hidden until active) -->
           <button type="button" class="input-icon-btn tool-indicator" title="Compare active — click to deactivate" id="compare-indicator-btn" style="display:none;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></svg>
             <span style="font-size:11px;margin-left:2px;">Compare</span>
@@ -1122,7 +1127,7 @@
           </button>
         </div>
         <div class="chat-input-right">
-          <!-- Agent / Chat 模式切换 -->
+          <!-- Agent / Chat mode toggle -->
           <div class="mode-toggle">
             <button type="button" class="mode-toggle-btn active" id="mode-agent-btn" aria-pressed="true">Agent</button>
             <button type="button" class="mode-toggle-btn" id="mode-chat-btn" aria-pressed="false">Chat</button>
@@ -1132,13 +1137,13 @@
           </button>
         </div>
       </div>
-      <!-- 状态隐藏复选框 -->
+      <!-- Hidden checkboxes for state -->
       <input type="checkbox" id="web-toggle" style="display:none;">
       <input type="checkbox" id="bash-toggle" style="display:none;">
     </div>
     <form id="chat-form" autocomplete="off" action="javascript:void(0);" style="display:none;"></form>
 
-    <!-- 角色（自定义预设）弹窗 -->
+    <!-- Character (custom preset) modal -->
     <div id="custom-preset-modal" class="modal hidden">
       <div class="modal-content preset-modal-content" role="dialog" aria-label="Prompt" style="background:var(--bg)">
         <div class="modal-header">
@@ -1152,7 +1157,7 @@
               <button class="preset-tab" data-chartab="character"><svg class="preset-tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Persona</span></button>
               <button class="preset-tab" data-chartab="group"><svg class="preset-tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Group</span></button>
             </div>
-            <!-- 注入标签页（同时包含模型调参：temperature + max tokens） -->
+            <!-- Inject tab (also holds model tuning: temperature + max tokens) -->
             <div class="preset-chartab" data-chartab-panel="inject">
               <label for="inject-prefix">Prefix</label>
               <textarea id="inject-prefix" rows="2" placeholder="Added before your message" style="margin-bottom:8px"></textarea>
@@ -1174,7 +1179,7 @@
               </div>
               <input type="range" class="preset-range" id="custom-max-tokens" min="256" max="8448" step="256" value="8448">
             </div>
-            <!-- 提示词（角色/人设）标签页 -->
+            <!-- Prompt (character/persona) tab -->
             <div class="preset-chartab" data-chartab-panel="character" style="display:none">
               <label>Persona</label>
               <div class="char-name-combo">
@@ -1200,7 +1205,7 @@
                 </button>
               </div>
             </div>
-            <!-- 群组标签页 -->
+            <!-- Group tab -->
             <div class="preset-chartab" data-chartab-panel="group" style="display:none">
               <div style="display:flex;gap:4px;margin-bottom:8px;">
                 <button type="button" class="compare-parallel-toggle" id="group-mode-btn" style="flex:1;height:auto;width:auto;">
@@ -1285,7 +1290,7 @@
   })();
   </script>
 
-  <!-- 重命名会话弹窗 -->
+  <!-- Rename Session Modal -->
   <div id="rename-session-modal" class="modal hidden">
     <div class="modal-content" role="dialog" aria-label="Rename session" style="width: 400px;">
       <div class="modal-header">
@@ -1311,7 +1316,7 @@
   </div>
 
 
-  <!-- 食谱弹窗 -->
+  <!-- Cookbook Modal -->
   <div id="cookbook-modal" class="modal hidden">
     <div class="modal-content" role="dialog" aria-label="Cookbook" style="width: min(780px, 92vw); height: 94vh; max-height: 94vh; background: var(--bg);">
       <div class="modal-header">
@@ -1322,7 +1327,7 @@
     </div>
   </div>
 
-  <!-- 设置弹窗（所有用户） -->
+  <!-- Settings Modal (all users) -->
   <div id="settings-modal" class="modal hidden">
     <div class="modal-content settings-modal-content" role="dialog" aria-label="Settings">
       <div class="modal-header">
@@ -1335,7 +1340,7 @@
       </div>
       <div class="settings-layout">
         <div class="settings-sidebar">
-          <!-- 第 1 部分：AI 基础设施（添加模型 → AI 默认设置 → 搜索） -->
+          <!-- Section 1: AI plumbing (Add Models → AI Defaults → Search) -->
           <button class="settings-nav-item active" data-settings-tab="services">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>
             <span>Add Models</span>
@@ -1353,9 +1358,9 @@
             <span>Search</span>
           </button>
           <div class="settings-sidebar-divider"></div>
-          <!-- 第 2 部分：通讯（集成 → 邮件 → 提醒）。
-               集成排在最前面，因为它是其他两个标签页
-               所依赖的底层账户实际所在。 -->
+          <!-- Section 2: Comms (Integrations → Email → Reminders).
+               Integrations leads here because it's where the underlying
+               accounts the other two tabs depend on actually live. -->
           <button class="settings-nav-item" data-settings-tab="integrations">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             <span>Integrations</span>
@@ -1369,7 +1374,7 @@
             <span>Reminders</span>
           </button>
           <div class="settings-sidebar-divider"></div>
-          <!-- 第 3 部分：用户体验（外观 → 快捷键） -->
+          <!-- Section 3: UX (Appearance → Shortcuts) -->
           <button class="settings-nav-item" data-settings-tab="appearance">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a7 7 0 0 0 0 20 4 4 0 0 1 0-8 4 4 0 0 0 0-8"/></svg>
             <span>Appearance</span>
@@ -1379,7 +1384,7 @@
             <span>Shortcuts</span>
           </button>
           <div class="settings-sidebar-divider"></div>
-          <!-- 第 4 部分：账户（位于用户区底部） -->
+          <!-- Section 4: Account (sits at the bottom of the user section) -->
           <button class="settings-nav-item" data-settings-tab="account">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             <span>Account</span>
@@ -1401,7 +1406,7 @@
         </div>
         <div class="settings-panels">
 
-        <!-- ═══ AI 标签页 ═══ -->
+        <!-- ═══ AI TAB ═══ -->
 
         <div data-settings-panel="ai" class="hidden">
           <div class="admin-card">
@@ -1491,7 +1496,7 @@
               <div id="set-researchMsg" style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);margin-top:2px;"></div>
             </div>
           </div>
-          <!-- Agent 卡片已移至 Agent Tools 标签页。 -->
+          <!-- Agent card moved to the Agent Tools tab. -->
           <div class="admin-card">
             <h2 style="display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:1px;opacity:0.6;flex-shrink:0"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Image Generation<span style="flex:1"></span><label class="admin-switch"><input type="checkbox" id="set-imgEnabledToggle"><span class="admin-slider"></span></label></h2>
             <div class="admin-toggle-sub" style="margin-bottom:8px">Configure which model to use for image generation.</div>
@@ -1511,9 +1516,9 @@
               <div id="set-imgSettingsMsg" style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);"></div>
             </div>
           </div>
-          <!-- TTS 面板已隐藏 — 用户完全选择不使用朗读功能。保留
-               在 DOM 中，以便绑定 set-ttsProviderSelect 等的 JS
-               不会因缺少节点而报错；对任何人不可见。 -->
+          <!-- TTS panel hidden — user opted out of read-aloud entirely. Kept
+               in DOM so the JS that wires set-ttsProviderSelect etc. doesn't
+               throw on missing nodes; not visible to anyone. -->
           <div class="admin-card" hidden style="display:none">
             <h2 style="display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Text to Speech<span style="flex:1"></span><label class="admin-switch"><input type="checkbox" id="set-ttsEnabledToggle" checked><span class="admin-slider"></span></label></h2>
             <div class="admin-toggle-sub" style="margin-bottom:8px">Configure TTS provider for assistant message read-aloud.</div>
@@ -1565,19 +1570,19 @@
               <div id="set-ttsSettingsMsg" style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);"></div>
             </div>
           </div>
-          <!-- Teacher Model 设置卡片已隐藏，作为 2.0 
-               "加固核心"优化的一部分。升级流程在 `teacher_model` 
-               未设置时（默认状态）处于休眠，因此后端对通过 
-               `manage_settings` / settings backup 设置了的用户
-               仍然正常工作。等核心体验更快后再加回此卡片以
-               显示该开关。 -->
+          <!-- Teacher Model settings card hidden as part of the 2.0
+               "harden the core" pass. The escalation flow is dormant when
+               `teacher_model` is unset (its default), so the backend keeps
+               working for anyone who wired it via `manage_settings` /
+               settings backup. Re-add this card to surface the toggle
+               again once the core experience is faster. -->
           <div class="admin-card">
             <h2 style="display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:1px;opacity:0.6;flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2 6 12 13 22 6"/></svg>Email Safety<span style="flex:1"></span><label class="admin-switch" title="When on, agent send_email and reply_to_email tools stage a draft for your approval instead of sending immediately."><input type="checkbox" id="set-agentEmailConfirm" checked><span class="admin-slider"></span></label></h2>
             <div class="admin-toggle-sub" style="margin-bottom:8px">When on, agent <code>send_email</code> / <code>reply_to_email</code> tools stage a draft for your approval (in the chat) instead of SMTPing immediately. Stops models from inventing a signature and sending it to a real recipient before you can review.</div>
           </div>
         </div>
 
-        <!-- ═══ 搜索标签页 ═══ -->
+        <!-- ═══ SEARCH TAB ═══ -->
         <div data-settings-panel="search" class="hidden">
           <div class="admin-card">
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Web Search</h2>
@@ -1585,9 +1590,9 @@
             <div class="settings-col">
               <div class="settings-row">
                 <label class="settings-label">Provider</label>
-                <!-- 自定义选择器（带 logo）。隐藏的原生 <select> 会镜像
-                     其值，使现有读取 set-searchProvider 的 JS
-                     无需修改即可继续工作。 -->
+                <!-- Custom picker (with logos). Hidden native <select> mirrors
+                     its value so the existing JS that reads
+                     set-searchProvider keeps working unchanged. -->
                 <div class="adm-provider-picker search-provider-picker" id="search-provider-picker" style="flex:1;position:relative;top:5px;">
                   <button type="button" class="adm-provider-btn" id="search-provider-btn">
                     <span class="adm-provider-current"><span class="adm-provider-logo"></span><span class="adm-provider-name">SearXNG</span></span>
@@ -1691,7 +1696,7 @@
           </div>
         </div>
 
-        <!-- ═══ 外观标签页 ═══ -->
+        <!-- ═══ APPEARANCE TAB ═══ -->
         <div data-settings-panel="appearance" class="settings-appearance-panel hidden">
           <div class="admin-card" style="padding-bottom:6px;">
             <h2 style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>Sidebar<span style="flex:1"></span><button type="button" class="vis-reset-btn" data-vis-reset title="Reset this section to defaults" aria-label="Reset Sidebar to defaults" style="background:none;border:none;padding:2px 4px;cursor:pointer;color:inherit;opacity:0.55;display:inline-flex;align-items:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button></h2>
@@ -1875,10 +1880,10 @@
           </div>
         </div>
 
-        <!-- ═══ 主题标签页 ═══ -->
+        <!-- ═══ THEME TAB ═══ -->
 
-        <!-- ═══ 记忆标签页 ═══ -->
-        <!-- ═══ 快捷键标签页 ═══ -->
+        <!-- ═══ MEMORY TAB ═══ -->
+        <!-- ═══ SHORTCUTS TAB ═══ -->
         <div data-settings-panel="shortcuts" class="hidden">
           <div class="admin-card" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;">
             <div>
@@ -1893,7 +1898,7 @@
         </div>
 
 
-        <!-- ═══ 账户标签页 ═══ -->
+        <!-- ═══ ACCOUNT TAB ═══ -->
         <div data-settings-panel="account" class="hidden">
           <div class="admin-card">
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account</h2>
@@ -1913,7 +1918,7 @@
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Change Password</h2>
             <div class="settings-col">
               <input id="settings-pw-current" type="password" placeholder="Current password" autocomplete="current-password" style="padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-family:inherit;font-size:12px;">
-              <input id="settings-pw-new" type="password" placeholder="New password (min 8)" autocomplete="new-password" style="padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-family:inherit;font-size:12px;">
+              <input id="settings-pw-new" type="password" placeholder="New password" autocomplete="new-password" style="padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-family:inherit;font-size:12px;">
               <input id="settings-pw-confirm" type="password" placeholder="Confirm new password" autocomplete="new-password" style="padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-family:inherit;font-size:12px;">
               <div class="settings-row" style="margin-top:2px;justify-content:flex-end;">
                 <span id="settings-pw-msg" style="font-size:11px;margin-right:auto;"></span>
@@ -1924,12 +1929,12 @@
           <div class="admin-card" id="settings-2fa-card">
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>Two-Factor Authentication</h2>
             <div id="settings-2fa-content">
-              <!-- 由 JS 填充 -->
+              <!-- Populated by JS -->
             </div>
           </div>
         </div>
 
-        <!-- ═══ 邮件标签页 ═══ -->
+        <!-- ═══ EMAIL TAB ═══ -->
         <div data-settings-panel="email" class="hidden">
           <div class="admin-card">
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>Email Accounts</h2>
@@ -1961,7 +1966,7 @@
           </div>
         </div>
 
-        <!-- ═══ 提醒标签页 ═══ -->
+        <!-- ═══ REMINDERS TAB ═══ -->
         <div data-settings-panel="reminders" class="hidden">
           <div class="admin-card">
             <h2 style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>How you're reminded<span style="flex:1"></span><span id="set-reminder-test-msg" style="font-size:11px;font-weight:normal;"></span><button class="admin-btn-sm" id="set-reminder-test-btn" style="font-size:11px;font-weight:normal;display:inline-flex;align-items:center;gap:4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>Test</button></h2>
@@ -2029,7 +2034,7 @@
           </div>
         </div>
 
-        <!-- ═══ 管理员：用户标签页 ═══ -->
+        <!-- ═══ ADMIN: USERS TAB ═══ -->
         <div data-settings-panel="users" class="hidden">
           <div class="admin-card">
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>Registration</h2>
@@ -2049,7 +2054,7 @@
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>Add User</h2>
             <div class="admin-add-form">
               <input id="adm-newUsername" type="text" placeholder="Username">
-              <input id="adm-newPassword" type="password" placeholder="Password (min 8)">
+              <input id="adm-newPassword" type="password" placeholder="Password">
               <div class="admin-switch-inline" title="Grant full admin access"><label class="admin-switch"><input type="checkbox" id="adm-newIsAdmin"><span class="admin-slider"></span></label> Admin</div>
             </div>
             <div class="settings-row" style="margin-top:6px;">
@@ -2059,10 +2064,10 @@
           </div>
         </div>
 
-        <!-- ═══ 服务标签页 ═══ -->
+        <!-- ═══ SERVICES TAB ═══ -->
         <div data-settings-panel="services">
 
-          <!-- ── 本地卡片 ─────────────────────────────────────────── -->
+          <!-- ── Local card ─────────────────────────────────────────── -->
           <div class="admin-card">
             <h2 style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Add Local Models <span style="opacity:0.45;font-weight:normal;font-size:0.82em">(Endpoint)</span>
               <span style="flex:1"></span>
@@ -2107,7 +2112,7 @@
             </div>
           </div>
 
-          <!-- ── API 卡片 ───────────────────────────────────────────── -->
+          <!-- ── API card ───────────────────────────────────────────── -->
           <div class="admin-card">
             <h2 style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Add API Models <span style="opacity:0.45;font-weight:normal;font-size:0.82em">(Endpoint)</span>
               <span style="flex:1"></span>
@@ -2189,7 +2194,7 @@
 
         </div>
 
-        <!-- ═══ 已添加模型标签页 ═══ -->
+        <!-- ═══ ADDED MODELS TAB ═══ -->
         <div data-settings-panel="added-models" class="hidden">
           <div class="admin-card">
             <h2 style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><polyline points="20 6 9 17 4 12"/></svg>Added Models <span style="opacity:0.45;font-weight:normal;font-size:0.82em">(Endpoints)</span>
@@ -2217,8 +2222,8 @@
           </div>
         </div>
 
-        <!-- ═══ 工具标签页 ═══ -->
-        <!-- ═══ 集成标签页 ═══ -->
+        <!-- ═══ TOOLS TAB ═══ -->
+        <!-- ═══ INTEGRATIONS TAB ═══ -->
         <div data-settings-panel="integrations" class="hidden">
           <div class="admin-card">
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Integrations</h2>
@@ -2231,7 +2236,7 @@
           </div>
         </div>
 
-        <!-- ═══ 工具标签页 ═══ -->
+        <!-- ═══ TOOLS TAB ═══ -->
         <div data-settings-panel="tools" class="hidden">
           <div class="admin-card" style="margin-bottom:12px;">
             <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Agent</h2>
@@ -2255,7 +2260,7 @@
           </div>
         </div>
 
-        <!-- ═══ 系统标签页 ═══ -->
+        <!-- ═══ SYSTEM TAB ═══ -->
         <div data-settings-panel="system" class="hidden">
 
           <div class="admin-card" id="settings-system-logs-card">
@@ -2408,7 +2413,7 @@
     </div>
   </div>
 
-  <!-- 搜索覆盖层（Ctrl+K 命令面板） -->
+  <!-- Search overlay (Ctrl+K command palette) -->
   <div class="search-overlay hidden" id="search-overlay">
     <div class="search-popup">
       <input type="text" id="search-input" placeholder="Search conversations..." autocomplete="off" />
@@ -2416,13 +2421,12 @@
     </div>
   </div>
 
-  <!-- Toast 容器（为屏幕阅读器提供 aria-live） -->
+  <!-- Toast container (aria-live for screen readers) -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 
 
-<!-- 按此顺序加载模块 -->
-<script type="module" src="/static/js/i18n.js"></script>
+<!-- Load modules in this order -->
 <script type="module" src="/static/js/storage.js"></script>
 <script type="module" src="/static/js/ui.js"></script>
 <script type="module" src="/static/js/markdown.js"></script>
@@ -2434,7 +2438,7 @@
 <script type="module" src="/static/js/tourAutoplay.js"></script>
 <script type="module" src="/static/js/fileHandler.js"></script>
 <script type="module" src="/static/js/voiceRecorder.js"></script>
-<script type="module" src="/static/js/models.js"></script>  <!-- 必须在 app.js 之前加载 -->
+<script type="module" src="/static/js/models.js"></script>  <!-- This must come BEFORE app.js -->
 <script type="module" src="/static/js/rag.js"></script>
 <script type="module" src="/static/js/presets.js"></script>
 <script type="module" src="/static/js/search.js"></script>
@@ -2455,7 +2459,7 @@
 <script type="module" src="/static/js/settings.js"></script>
 <script type="module" src="/static/js/admin.js"></script>
 <script type="module" src="/static/js/assistant.js"></script>
-<script type="module" src="/static/app.js"></script>  <!-- app.js 必须最后加载 -->
+<script type="module" src="/static/app.js"></script>  <!-- app.js must be LAST -->
 <script type="module" src="/static/js/init.js"></script>
 <script type="module" src="/static/js/a11y.js"></script>
 <script nonce="{{CSP_NONCE}}">if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js').catch(()=>{});}</script>

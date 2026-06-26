@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 class LLMConfig:
-    """LLM 操作的配置常量。"""
+    """Configuration constants for LLM operations."""
     DEFAULT_TIMEOUT = 30
     DEFAULT_TEMPERATURE = 1.0
     DEFAULT_MAX_TOKENS = 0
@@ -43,10 +43,10 @@ def _stream_timeout(read_timeout) -> httpx.Timeout:
     return httpx.Timeout(connect=LLMConfig.CONNECT_TIMEOUT, read=float(read_timeout), write=30.0, pool=5.0)
 
 
-# LLM 响应缓存
+# Cache for LLM responses
 def _get_cache_key(url: str, model: str, messages: List[Dict], 
                    temperature: float, max_tokens: int) -> str:
-    """生成 LLM 请求的缓存键。"""
+    """Generate cache key for LLM requests."""
     hashable_messages = []
     for msg in messages:
         sorted_items = tuple(sorted(msg.items()))
@@ -63,31 +63,31 @@ def _get_cache_key(url: str, model: str, messages: List[Dict],
 
 _response_cache = {}
 
-# 死主机冷却：映射主机（scheme://host:port）→ 冷却过期的 Unix 时间戳。
-# 当连接到主机失败时，我们将其标记为死主机 DEAD_HOST_COOLDOWN 秒，使
-# 后续调用立即失败，而不是等待连接超时。防止
-# 一个不可达的上游阻塞整个应用其他部分的聊天。
+# Dead-host cooldown: maps host (scheme://host:port) -> unix ts when cooldown expires.
+# When a connect to a host fails, we mark it dead for DEAD_HOST_COOLDOWN seconds so
+# subsequent calls fail instantly instead of waiting on the connect timeout. Keeps
+# one unreachable upstream from jamming chat across the rest of the app.
 #
-# 但单个瞬时抖动（本地模型短暂繁忙，瞬间的
-# Tailscale 中断）曾触发长达 60 秒的锁死 — 用户在 503 后以为
-# 模型已死，而实际上它一秒后就恢复了。因此：
-#   - 在冷却之前要求 FAIL_THRESHOLD 次连续失败
-#   - 更短的冷却时间使恢复更快
-#   - 任何成功立即重置失败计数器
+# But a SINGLE transient blip (local model briefly busy, a momentary
+# Tailscale hiccup) used to trip a full 60s lockout — the user saw a
+# 503 and thought the model died when it was fine a second later. So:
+#   - require FAIL_THRESHOLD consecutive failures before cooling
+#   - shorter cooldown so recovery is quick
+#   - any success resets the failure counter immediately
 DEAD_HOST_COOLDOWN = 20.0
 _HOST_FAIL_THRESHOLD = 2
 _dead_hosts: Dict[str, float] = {}
 _host_fails: Dict[str, int] = {}
-# 保护上面的两个映射。同步的 llm_call() 在 FastAPI 的
-# 线程池中运行（同步路由如 /sessions/auto-sort），而 llm_call_async()
-# 在事件循环中运行，因此这些映射从多个 OS 线程中被修改。
-# 没有锁的情况下，_host_fails 的 get()+1+set 是一个读-修改-写操作，
-# 会在并发连接错误下丢失失败计数（issue #659）。
+# Guards the two maps above. The synchronous llm_call() runs inside FastAPI's
+# threadpool (sync routes such as /sessions/auto-sort) while llm_call_async()
+# runs on the event loop, so these maps are mutated from multiple OS threads.
+# Without the lock the get()+1+set on _host_fails is a read-modify-write that
+# loses failure counts under concurrent connect errors (issue #659).
 _host_health_lock = threading.Lock()
 _model_activity: Dict[str, float] = {}
 
 _HARMONY_MARKER_RE = re.compile(
-    r"<\|channel\|>(analysis|final)"
+    r"<\|channel\|>(analysis|commentary|final)"
     r"|<\|start\|>(?:assistant|system|user|tool)?"
     r"|<\|message\|>"
     r"|<\|end\|>"
@@ -96,6 +96,7 @@ _HARMONY_MARKER_RE = re.compile(
 )
 _HARMONY_MARKERS = (
     "<|channel|>analysis",
+    "<|channel|>commentary",
     "<|channel|>final",
     "<|start|>assistant",
     "<|start|>system",
@@ -111,7 +112,7 @@ _HARMONY_MAX_MARKER_LEN = max(len(marker) for marker in _HARMONY_MARKERS)
 
 
 def _harmony_suffix_hold_len(text: str) -> int:
-    """返回尾部有多少个字符可能是 harmony 标记的开头。"""
+    """Return how many trailing chars could be the start of a harmony marker."""
     limit = min(len(text), _HARMONY_MAX_MARKER_LEN - 1)
     for n in range(limit, 0, -1):
         suffix = text[-n:]
@@ -121,7 +122,7 @@ def _harmony_suffix_hold_len(text: str) -> int:
 
 
 class _HarmonyStreamRouter:
-    """路由 OpenAI harmony 分析/最终通道，不泄露标记。"""
+    """Route OpenAI harmony analysis/final channels without leaking markers."""
 
     def __init__(self) -> None:
         self._buf = ""
@@ -145,7 +146,10 @@ class _HarmonyStreamRouter:
             out.append((text, False))
             return
         if self._in_message:
-            out.append((text, self._channel == "analysis"))
+            # analysis + commentary (tool-call preambles / function-arg bodies)
+            # are internal, not user-facing — route them to thinking so they
+            # don't leak into the visible answer; only `final` is visible.
+            out.append((text, self._channel in ("analysis", "commentary")))
 
     def _handle_marker(self, match: re.Match[str]) -> None:
         marker = match.group(0)
@@ -190,13 +194,13 @@ def _same_model_identity(left: str, right: str) -> bool:
     return (left or "").strip().lower() == (right or "").strip().lower()
 
 def note_model_activity(url: str, model: str):
-    """记录一次真实的上游请求使用了此端点/模型。"""
+    """Record that a real upstream request used this endpoint/model."""
     if not url or not model:
         return
     _model_activity[_model_activity_key(url, model)] = time.time()
 
 def seconds_since_model_activity(url: str, model: str) -> Optional[float]:
-    """自端点/模型上次在此进程中使用以来的秒数。"""
+    """Seconds since the endpoint/model was last used in this process."""
     ts = _model_activity.get(_model_activity_key(url, model))
     if not ts:
         return None
@@ -239,14 +243,14 @@ def _clear_host_dead(url: str) -> None:
         _host_fails.pop(key, None)
 
 
-# 共享的异步 HTTP 客户端。复用同一客户端保持连接预热：
-# 对 api.anthropic.com / api.openai.com / openrouter 的重复调用跳过
-# 100-500ms 的 TCP+TLS 握手。延迟初始化以便绑定到运行中的事件循环。
+# Shared async HTTP client. Reusing one client keeps connections warm:
+# repeat calls to api.anthropic.com / api.openai.com / openrouter skip the
+# 100-500ms TCP+TLS handshake. Lazy init so we bind to the running event loop.
 _http_client: Optional[httpx.AsyncClient] = None
 _http_limits = httpx.Limits(max_connections=100, max_keepalive_connections=30, keepalive_expiry=30.0)
 
 def _get_http_client() -> httpx.AsyncClient:
-    """返回进程全局的 AsyncClient。每次请求的超时在调用时传入。"""
+    """Return process-wide AsyncClient. Per-request timeout is passed at call time."""
     global _http_client
     if _http_client is None or _http_client.is_closed:
         from src.tls_overrides import llm_verify
@@ -256,11 +260,11 @@ def _get_http_client() -> httpx.AsyncClient:
     return _http_client
 
 def _get_cached_response(cache_key: str) -> Optional[str]:
-    """获取缓存响应（如果存在）。"""
+    """Get cached response if it exists."""
     return _response_cache.get(cache_key)
 
 def _set_cached_response(cache_key: str, response: str) -> None:
-    """将响应存入缓存。"""
+    """Store response in cache."""
     if len(_response_cache) > 128:
         keys_to_remove = list(_response_cache.keys())[:64]
         for key in keys_to_remove:
@@ -270,7 +274,7 @@ def _set_cached_response(cache_key: str, response: str) -> None:
             _response_cache.pop(key, None)
     _response_cache[cache_key] = response
 
-# ── Anthropic 原生 API 适配器 ──
+# ── Anthropic native API adapter ──
 
 ANTHROPIC_MODELS = [
     "claude-opus-4-20250514", "claude-opus-4",
@@ -280,10 +284,11 @@ ANTHROPIC_MODELS = [
 
 
 def _is_ollama_native_url(url: str) -> bool:
-    """对原生 Ollama API URL（包括 Ollama Cloud）返回 True。"""
+    """Return True for native Ollama API URLs, including Ollama Cloud."""
     try:
         parsed = urlparse(url or "")
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to parse URL for Ollama detection", exc_info=e)
         return False
     host = parsed.hostname or ""
     path = (parsed.path or "").rstrip("/")
@@ -314,7 +319,7 @@ def _is_ollama_openai_compat_url(url: str) -> bool:
 
 
 def _ollama_api_root(url: str) -> str:
-    """返回原生 Ollama API 根路径，如 https://ollama.com/api。"""
+    """Return a native Ollama API root such as https://ollama.com/api."""
     url = (url or "").strip().rstrip("/")
     parsed = urlparse(url)
     path = (parsed.path or "").rstrip("/")
@@ -335,22 +340,22 @@ def _ollama_api_root(url: str) -> str:
 
 
 def _normalize_ollama_url(url: str) -> str:
-    """确保原生 Ollama URL 指向 /api/chat。"""
+    """Ensure a native Ollama URL points at /api/chat."""
     base = _ollama_api_root(url)
     return base.rstrip("/") + "/chat"
 
 
 def _ollama_normalize_tool_messages(messages: List[Dict]) -> List[Dict]:
-    """将 Odysseus 标准的 OpenAI 风格消息适配到原生 Ollama /api/chat。
+    """Adapt Odysseus' canonical OpenAI-style messages to native Ollama /api/chat.
 
-    Odysseus 以 OpenAI 形状携带 assistant 工具调用，其中
-    ``function.arguments`` 是一个 JSON *字符串*。原生 Ollama 期望它是一个
-    JSON *对象*；给定字符串会导致整个请求以 HTTP 400
-    "Value looks like object, but can't find closing '}' symbol" 失败，这会中断
-    每个后续（工具结果）轮次。在这里将 arguments 解析回对象，
-    在浅拷贝上进行，保持非工具消息不变。不透明的
-    Gemini ``extra_content``（thought_signature）被丢弃 — 它对
-    Ollama 无意义，仅在对话被重放到 Gemini 时相关。
+    Odysseus carries assistant tool calls in the OpenAI shape, where
+    `function.arguments` is a JSON *string*. Native Ollama expects it to be a
+    JSON *object*; given the string it fails the whole request with HTTP 400
+    "Value looks like object, but can't find closing '}' symbol", which aborts
+    every follow-up (tool-result) round. Parse the arguments back into an object
+    here, on a shallow copy, leaving non-tool messages untouched. The opaque
+    Gemini `extra_content` (thought_signature) is dropped — it is meaningless to
+    Ollama and only matters when the conversation is replayed to Gemini.
     """
     out: List[Dict] = []
     for m in messages or []:
@@ -386,7 +391,7 @@ def _build_ollama_payload(
     tools: Optional[List[Dict]] = None,
     num_ctx: Optional[int] = None,
 ) -> Dict:
-    """构建 Ollama /api/chat 端点的 JSON 负载。
+    """Build the JSON payload for Ollama's /api/chat endpoint.
 
     ``num_ctx`` sets the input context window. Ollama defaults to 2048
     when the option is omitted, so a model with a larger advertised
@@ -422,9 +427,9 @@ def _parse_ollama_response(data: dict) -> str:
 
 
 def _host_match(url: str, *domains: str) -> bool:
-    """如果 URL 的主机名等于任何 ``domains`` 或其子域名，返回 True。
+    """Return True if url's hostname equals any of `domains` or is a subdomain of one.
 
-    用于像 "is this Anthropic?" / "is this OpenRouter?" 这样的检查。
+    Used by helpers that want "is this Anthropic?" / "is this OpenRouter?"
     style checks. Prefer this over substring matching on the URL: the
     substring form gives wrong answers for unrelated paths or query strings
     that happen to contain the domain text.
@@ -583,13 +588,13 @@ async def httpx_post_kimi_aware_async(client, url: str, headers: Optional[Dict],
 
 
 def _detect_provider(url: str) -> str:
-    """从配置的端点 URL 检测 API 提供商。
+    """Detect the API provider from a configured endpoint URL.
 
-    基于主机名（精确或子域名）匹配而非子串，因此仅在其路径或
-    查询中包含提供商域名的 URL — 或像 ``anthropic.com.example`` 这样
-    外观相似的主机 — 不会被错误分类。
-    未知主机回退到 OpenAI 兼容默认值，这也是大多数
-    提供商所实现的。
+    Matches on hostname (exact or subdomain) rather than substring, so a URL
+    that merely contains a provider's domain in its path or query — or a
+    look-alike host such as ``anthropic.com.example`` — is not misclassified.
+    Unknown hosts fall back to the OpenAI-compatible default, which the
+    majority of providers implement.
     """
     if _is_ollama_native_url(url):
         return "ollama"
@@ -682,7 +687,7 @@ def _provider_headers(provider: str, headers: Optional[Dict] = None) -> Dict[str
 
 
 def _provider_label(url: str) -> str:
-    """对错误消息返回人性化的提供商名称。"""
+    """Human-friendly provider name for error messages."""
     if not url:
         return "provider"
     if _host_match(url, "anthropic.com"): return "Anthropic"
@@ -792,10 +797,11 @@ def _format_chatgpt_subscription_error(status_code: int, text: str) -> str:
 
 
 def _format_upstream_error(status: int, body: bytes | str, url: str) -> str:
-    """将上游 HTTP 错误转换为用户可读的句子。
+    """Turn an upstream HTTP error into a user-readable sentence.
 
     Auth failures (401/403) become 'xAI rejected the API key' etc., so the UI
-    不再显示原始 JSON 如 ``{"error":{"message":"User not found."}}``。"""
+    stops showing raw JSON like '{"error":{"message":"User not found."}}'.
+    """
     if isinstance(body, bytes):
         try:
             body = body.decode("utf-8", errors="replace")
@@ -835,23 +841,23 @@ def _format_upstream_error(status: int, body: bytes | str, url: str) -> str:
 _MAX_COMPLETION_TOKENS_MODELS = {"o1", "o3", "o4", "gpt-4.5", "gpt-5"}
 
 def _uses_max_completion_tokens(model: str) -> bool:
-    """检查模型是否需要 max_completion_tokens 而非 max_tokens。"""
+    """Check if a model requires max_completion_tokens instead of max_tokens."""
     if not model:
         return False
     m = model.lower()
     return any(m.startswith(p) or f"/{p}" in m for p in _MAX_COMPLETION_TOKENS_MODELS)
 
-# OpenAI 推理模型（o1、o3、o4、gpt-5 系列）只接受默认的
-# temperature。发送任何显式值 — 即使是 0.0 — 都会返回 HTTP 400
-# （"Only the default (1) value is supported"）。否则会破坏聊天，当
-# 预设设置了非默认温度时，并使端点探测将
-# 完全正常的模型报告为失败。对于这些模型我们省略该字段，让
-# API 使用其必需的默认值。（gpt-4.5 被有意识地排除 — 它不是
-# 推理模型，正常接受 temperature。）
+# OpenAI reasoning models (o1, o3, o4, gpt-5 families) only accept the default
+# temperature. Sending any explicit value — even 0.0 — returns HTTP 400
+# ("Only the default (1) value is supported"). That otherwise breaks chat when a
+# preset sets a non-default temperature, and makes endpoint probing report a
+# perfectly good model as failing. For these models we omit the field and let
+# the API use its required default. (gpt-4.5 is intentionally excluded — it is
+# not a reasoning model and accepts temperature normally.)
 _FIXED_TEMPERATURE_MODELS = ("o1", "o3", "o4", "gpt-5", "kimi-for-coding")
 
 def _restricts_temperature(model: str) -> bool:
-    """检查模型是否拒绝任何非默认的 temperature。"""
+    """Check if a model rejects any non-default temperature."""
     if not model:
         return False
     m = model.lower()
@@ -900,11 +906,14 @@ def _anthropic_rejects_temperature(model: str) -> bool:
         return False
     return (int(match.group(1)), int(match.group(2))) >= (4, 7)
 
-# 支持结构化思考的模型 — 可能输出 </think> 而没有开标签
-_THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1", "deepseek-reasoner", "minimax", "m2-reap", "gemma")
+# Models that support structured thinking — may output </think> without opening tag
+_THINKING_MODEL_PATTERNS = (
+    "qwen3", "qwq", "deepseek-r1", "deepseek-reasoner", "minimax",
+    "m2-reap", "gemma", "stepfun", "step-3", "step3",
+)
 
 def _supports_thinking(model: str) -> bool:
-    """检查模型是否支持结构化思考输出。"""
+    """Check if model supports structured thinking output."""
     if not model:
         return False
     m = model.lower()
@@ -954,7 +963,7 @@ def _convert_openai_content_to_anthropic(content):
 
 
 def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=False, tools=None):
-    """将 OpenAI 风格的消息转换为 Anthropic 格式。"""
+    """Convert OpenAI-style messages to Anthropic format."""
     system_parts = []
     chat_messages = []
     for m in messages:
@@ -1041,7 +1050,7 @@ def _build_anthropic_payload(model, messages, temperature, max_tokens, stream=Fa
     return payload
 
 def _build_anthropic_headers(headers):
-    """将 Bearer 认证转换为 Anthropic 的 x-api-key。"""
+    """Convert Bearer auth to x-api-key for Anthropic."""
     h = {"Content-Type": "application/json", "anthropic-version": "2023-06-01"}
     if headers:
         for k, v in headers.items():
@@ -1114,13 +1123,13 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
         elif "content" in item:
             cleaned.append(item)
 
-    # 在发送给任何 OpenAI 兼容的提供商之前修复 tool-call 邻接关系。
-    # 裁剪/压缩/重试可能导致 ``role:"tool"`` 消息
-    # 没有紧邻其前的 assistant ``tool_calls`` 父消息，这会被
-    # DeepSeek 拒绝并报错：
+    # Repair tool-call adjacency before sending to any OpenAI-compatible
+    # provider. Trimming/compaction/retries can leave `role:"tool"` messages
+    # without their immediately-preceding assistant `tool_calls` parent, which
+    # DeepSeek rejects with:
     # "Messages with role 'tool' must be a response to a preceding message with
-    # 'tool_calls'"。同时去除未收到回答的 assistant tool_calls；一些提供商
-    # 将其拒绝为不完整的对话。
+    # 'tool_calls'". Also strip unanswered assistant tool_calls; some providers
+    # reject those as incomplete conversations.
     repaired: List[Dict] = []
     i = 0
     while i < len(cleaned):
@@ -1128,8 +1137,8 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
         role = msg.get("role")
 
         if role == "tool":
-            # 孤立工具结果。紧邻此前没有有效的 assistant tool_calls 父消息，
-            # 因此不能发送。
+            # Orphan tool result. There is no valid assistant tool_calls parent
+            # immediately before this batch, so it cannot be sent.
             logger.debug("Dropping orphan tool message before provider request")
             i += 1
             continue
@@ -1219,7 +1228,7 @@ def _sanitize_llm_messages(messages: List[Dict]) -> List[Dict]:
     return merged
 
 def _normalize_anthropic_url(url: str) -> str:
-    """确保 Anthropic URL 指向 /v1/messages。"""
+    """Ensure Anthropic URL points to /v1/messages."""
     url = url.rstrip("/")
     if url.endswith("/v1/messages"):
         return url
@@ -1229,7 +1238,7 @@ def _normalize_anthropic_url(url: str) -> str:
 
 
 def _model_list_base(url: str) -> str:
-    """将模型/聊天 URL 规范化为已配置的端点 base。"""
+    """Normalize model/chat URLs to the configured endpoint base."""
     base = (url or "").strip().rstrip("/")
     for suffix in ("/models", "/chat/completions", "/completions", "/v1/messages", "/responses"):
         if base.endswith(suffix):
@@ -1266,7 +1275,7 @@ def _configured_cached_model_ids(
     owner: Optional[str] = None,
     endpoint_id: Optional[str] = None,
 ) -> List[str]:
-    """返回匹配 endpoint_url 的已配置端点的缓存模型。"""
+    """Return cached models for a configured endpoint matching endpoint_url."""
     target = _model_list_base(endpoint_url)
     if not target:
         return []
@@ -1309,7 +1318,7 @@ def list_model_ids(
     owner: Optional[str] = None,
     endpoint_id: Optional[str] = None,
 ) -> List[str]:
-    """列出来自端点的可用模型 ID。"""
+    """List available model IDs from an endpoint."""
     cached = _configured_cached_model_ids(base_chat_url, owner=owner, endpoint_id=endpoint_id)
     if cached:
         return cached
@@ -1344,8 +1353,8 @@ def list_model_ids(
                 r = httpx.get(root + "/api/tags", timeout=timeout)
                 r.raise_for_status()
                 return [m.get("name") or m.get("model") for m in (r.json().get("models") or []) if m.get("name") or m.get("model")]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to fetch model list from configured endpoint", exc_info=e)
         return []
 
 def normalize_model_id(
@@ -1356,7 +1365,7 @@ def normalize_model_id(
     owner: Optional[str] = None,
     endpoint_id: Optional[str] = None,
 ) -> Optional[str]:
-    """将模型 ID 规范化为与可用模型匹配。"""
+    """Normalize a model ID to match available models."""
     avail = list_model_ids(endpoint_url, timeout, owner=owner, endpoint_id=endpoint_id)
     if not avail:
         return None
@@ -1372,7 +1381,7 @@ def normalize_model_id(
 def llm_call(url: str, model: str, messages: List[Dict], temperature: float = LLMConfig.DEFAULT_TEMPERATURE,
              max_tokens: int = LLMConfig.DEFAULT_MAX_TOKENS, headers: Optional[Dict] = None, 
              timeout: int = LLMConfig.DEFAULT_TIMEOUT, prompt_type: Optional[str] = None) -> str:
-    """同步 LLM 调用，支持可选的提示类型增强。"""
+    """Synchronous LLM call with optional prompt type enhancement."""
     h = _provider_headers(_detect_provider(url))
     # Tolerate headers that arrive as a JSON string (some sessions stored them
     # double-encoded) — otherwise h.update() throws "dictionary update sequence
@@ -1503,7 +1512,7 @@ def llm_call_with_fallback(candidates, messages, **kwargs) -> str:
 
 
 async def llm_call_async_with_fallback(candidates, messages, **kwargs) -> str:
-    """与 ``llm_call_with_fallback`` 的异步变体 — 相同语义。"""
+    """Async variant of `llm_call_with_fallback` — same semantics."""
     cands = _dedupe_candidates(candidates)
     if not cands:
         raise HTTPException(503, "No model endpoint configured")
@@ -1531,7 +1540,7 @@ async def llm_call_async(
     prompt_type: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> str:
-    """使用 httpx 的异步 LLM 调用，支持连接池、超时、重试逻辑和性能日志。"""
+    """Asynchronous LLM call using httpx with connection pooling, timeout, retry logic, and performance logging."""
     provider = _detect_provider(url)
     messages_copy = _sanitize_llm_messages(messages)
 
@@ -2129,6 +2138,8 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
                                             yield _stream_delta_event(reasoning, thinking=True)
                                         content = delta.get("content") or ""
                                         if content:
+                                            content = re.sub(r"<mm:think(\s+[^>]*)?>", r"<think\1>", content, flags=re.IGNORECASE)
+                                            content = re.sub(r"</mm:think>", "</think>", content, flags=re.IGNORECASE)
                                             stripped = content.lstrip()
                                             # gpt-oss harmony format (<|channel|>analysis/final): route via the harmony
                                             # stream router. Sticky once the first marker appears — distinct from the

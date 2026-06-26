@@ -1,6 +1,6 @@
 /**
- * emailLibrary.js — 电子邮件库弹窗模态框。
- * 与 documentLibrary.js 模式相似。以对网格形式显示邮件，支持搜索/过滤。
+ * emailLibrary.js — Email library popup modal.
+ * Similar pattern to documentLibrary.js. Shows emails in a grid with search/filter.
  */
 
 import spinnerModule from './spinner.js';
@@ -213,11 +213,11 @@ function _wireRecipientChips(root) {
         const copied = await _copyTextToClipboard(email);
         if (!copied) throw new Error('copy failed');
         copyBtn.classList.add('copied');
-        copyBtn.title = t('email.copied');
+        copyBtn.title = 'Copied';
         showToast?.('Email copied');
         setTimeout(() => {
           copyBtn.classList.remove('copied');
-          copyBtn.title = t('email.copy_email');
+          copyBtn.title = 'Copy email';
         }, 900);
       } catch (_) {
         showToast?.('Copy failed');
@@ -303,10 +303,10 @@ function _syncEmailReadState(uid, isRead = true) {
   });
 }
 
-  // 回复从文档编辑器发送时，源邮件在服务端标记为
-  // \Answered 并触发 `email-answered` 事件。实时反映该状态，
-  // 使邮件显示为已完成，无需等待手动刷新。
-  window.addEventListener('email-answered', (e) => {
+// When a reply is sent (from the doc editor), the source email is marked
+// \Answered server-side and an `email-answered` event fires. Reflect that live
+// so the email shows as done without waiting for a manual refresh.
+window.addEventListener('email-answered', (e) => {
   const uid = e.detail && e.detail.uid;
   if (uid == null) return;
   const em = (state._libEmails || []).find(x => String(x.uid) === String(uid));
@@ -341,7 +341,7 @@ function _syncUnreadTabBadge(count) {
       chip.title = `Open ${label}`;
     } else {
       delete chip.dataset.emailUnreadLabel;
-      chip.title = t('email.restore_email');
+      chip.title = 'Restore Email';
     }
   });
 }
@@ -401,10 +401,10 @@ function _emailSplitLeftEdge() {
 
 function _setEmailDocumentSplit(leftEdge, emailWidth) {
   if (window.innerWidth <= 768) return;
-  // 句点间隙为零，使文档窗格紧贴邮件右边缘。
-  // modalSnap.js 的左停靠路径以 0 间隙发布相同的变量 — 两个系统
-  // 在紧贴上达成一致，因此它们之间的切换不会导致文档
-  // "跳动"侧移。每侧 1px 的模态边框就是视觉接缝。
+  // Zero gap so the doc-pane sits flush against the email's right edge.
+  // modalSnap.js's left-dock path publishes the same vars with 0 gap — both
+  // systems agree on flush so handoffs between them don't cause the doc to
+  // "jump" sideways. The 1px modal border on each side is the visual seam.
   const splitGap = 0;
   const left = Math.max(0, Math.round(leftEdge || 0));
   const width = Math.max(320, Math.round(emailWidth || 420));
@@ -547,8 +547,8 @@ function _prepareEmailWindowForDocument(modal) {
     _scheduleEmailDocumentSplitMeasure(modal);
     return false;
   }
-  // 如果 Email 是全屏且空间足够，将其停靠到左侧而不是最小化，
-  // 这样文档/撰写窗格可以在旁边打开。
+  // If Email is fullscreen and there is room, park it left instead of
+  // minimizing so the document/compose pane can open beside it.
   _snapEmailModalToLeftSidebar(modal);
   return false;
 }
@@ -625,11 +625,11 @@ function _animateEmailCardRemoval(uids, opts = {}) {
 }
 
 
-// 当账户被主动选中时，附加 &account_id=... 的 URL 后缀辅助函数。
-// 此文件中的每个邮件路由调用都经过这里，因此切换账户
-// 只是单个变量的翻转。
-// 打开设置模态框并激活特定标签页。用于电子邮件/日历等中的空状态
-// "设置于：设置 › X" 链接。
+// URL-suffix helper — appends &account_id=... when an account is actively selected.
+// Every email route call in this file goes through here so switching accounts
+// is a single-variable flip.
+// Open the Settings modal and activate a specific tab. Used by empty-state
+// "Set up at: Settings › X" links across email/calendar/etc.
 function _openSettingsTab(tab) {
   if (tab === 'integrations' && window.adminModule && typeof window.adminModule.open === 'function') {
     window.adminModule.open('integrations');
@@ -673,8 +673,8 @@ function _acct() {
 // used to wipe its DOM and spinner-from-empty on every open, even when
 // the same view was just visible a second ago.
 //
-// 会话级别（存在于模块作用域中，硬刷新时清除）。
-// 搜索结果和 __scheduled__ 特意不缓存。
+// Session-only (lives in module scope, cleared on hard reload). Search
+// results and __scheduled__ are deliberately not cached.
 const _libListCache = new Map();
 const _LIB_CACHE_MAX = 24;
 let _libPrewarmTimer = null;
@@ -699,7 +699,7 @@ function _libCacheKey() {
 }
 function _libCacheGet(key) { return _libListCache.get(key) || null; }
 function _libCachePut(key, value) {
-  // 重新插入以提升 LRU 最近性。
+  // Re-insert to bump LRU recency.
   _libListCache.delete(key);
   _libListCache.set(key, value);
   if (_libListCache.size > _LIB_CACHE_MAX) {
@@ -716,7 +716,7 @@ function _resetEmailListForFreshLoad() {
   const grid = document.getElementById('email-lib-grid');
   if (grid) _renderEmailLoading(grid);
   const stats = document.getElementById('email-lib-stats');
-  if (stats) stats.textContent = t('email.loading');
+  if (stats) stats.textContent = 'Loading...';
 }
 
 function _loadEmailsFresh() {
@@ -745,9 +745,9 @@ async function _prewarmDefaultEmailView() {
   const ck = _libCacheKeyFor(accountId, folder, filter, false);
   if (_libCacheGet(ck)) return;
 
-  // 账户请求成本低，为首次打开预热账户条。
-  // 然后列表请求同时预热客户端缓存和后端 IMAP/读缓存。
-  // 故障保持静默：未配置邮件不应在应用启动时烦扰用户。
+  // The accounts request is cheap and warms the account strip for first open.
+  // Then the list request warms both the client cache and the backend IMAP/read
+  // cache. Failure stays silent: no configured mail should not nag on app boot.
   try {
     const accountsRes = await fetch(`${API_BASE}/api/email/accounts`, { credentials: 'same-origin' });
     if (accountsRes.ok) {
@@ -766,11 +766,11 @@ async function _prewarmDefaultEmailView() {
   _libCachePut(ck, { emails: data.emails || [], total: data.total || 0 });
 }
 function _libCacheWriteBack() {
-  // 在本地变更已更新 state._libEmails 后
-  //（删除/归档/批量操作），将更改同步到缓存中，以便
-  // 下次重新打开时在重新 fetch 成功前不会短暂显示变更前的状态。
-  // 在搜索期间跳过（结果不是真实列表），
-  // 以及计划的虚拟文件夹。
+  // After a local mutation that already updated state._libEmails
+  // (delete / archive / bulk), sync the change into the cache so the
+  // next reopen doesn't briefly show the pre-mutation state before the
+  // refetch wins. Skipped during search (results aren't the real list)
+  // and on the scheduled virtual folder.
   if (state._libSearch) return;
   if (state._libFolder === '__scheduled__') return;
   const ck = _libCacheKey();
@@ -779,21 +779,21 @@ function _libCacheWriteBack() {
   }
 }
 
-// 将活动账户 ID 暴露给其他模块（document.js 发送邮件时使用此值）。
-// 使用简单的全局变量而非跨模块导入，以保持耦合最小。
+// Expose the active account id to other modules (document.js uses this when sending).
+// Simple global rather than cross-module import to keep coupling minimal.
 function _publishActiveAccount() {
   try { window.__odysseusActiveEmailAccount = state._libAccountId || null; } catch (_) {}
-  // 发布活动账户的自身地址，以便回复全部可以将我们从
-  // 收件人列表中排除。此全局变量在 emailInbox.js 中被读取但从未被设置。
+  // Publish the active account's own address so reply-all can exclude us from
+  // the recipient list. This global was read in emailInbox.js but never set.
   try {
     const accts = state._libAccounts || [];
     const active = accts.find(a => a && a.id === state._libAccountId)
       || accts.find(a => a && a.is_default)
       || accts[0];
     window._myEmailAddress = (active && (active.from_address || active.imap_user)) || '';
-    // 同时发布所有已配置的地址，以便回复全部可以排除用户的
-    // 所有邮箱，而不仅仅是活动账户（多账户用户的其他地址
-    // 之前被添加到了抄送中）。
+    // Also publish every configured address so reply-all can exclude all of
+    // the user's own mailboxes, not just the active one (multi-account users
+    // were getting their other addresses added to Cc).
     const all = [];
     for (const a of accts) {
       if (a && a.from_address) all.push(a.from_address);
@@ -811,7 +811,7 @@ export function initEmailLibrary(config) {
 export function isOpen() { return state._libOpen; }
 
 export function openEmailLibrary(opts = {}) {
-  // 强行清理之前尝试的任何陈旧状态
+  // Force-clean any stale state from previous attempts
   const existing = document.getElementById('email-lib-modal');
   if (existing) existing.remove();
   if (state._libEscHandler) {
@@ -819,16 +819,16 @@ export function openEmailLibrary(opts = {}) {
     state._libEscHandler = null;
   }
   state._libOpen = true;
-  // 在移动端侧边栏覆盖内容 — 关闭它，以免邮件视图在后面打开
-  //（与会话切换/删除相同的模式）。
+  // On mobile the sidebar overlays content — close it so the email view isn't
+  // opened behind it (same pattern as session-switch/delete).
   if (window.innerWidth <= 768) {
     const _sb = document.getElementById('sidebar');
     if (_sb) _sb.classList.add('hidden');
     const _bd = document.getElementById('sidebar-backdrop');
     if (_bd) _bd.classList.remove('visible');
-    // 邮件最后打开 → 将邮件窗口置于任何打开文档之前
-    //（它们交替：最后打开的那个胜出）。文档在背后保持打开；
-    // 重新打开文档会将其翻回顶部。
+    // Email was opened last → bring the email windows IN FRONT of any open doc
+    // (they alternate: whichever was opened last wins). The doc stays open
+    // behind it; reopening the doc flips it back on top.
     document.body.classList.add('email-front');
   }
   state._libEmails = [];
@@ -843,9 +843,9 @@ export function openEmailLibrary(opts = {}) {
   _libSuggestionCache = null;
   state._libFilter = 'all';
   state._libHasAttachments = false;
-  // 以多米诺级联动画渲染第一张卡片（与侧边栏 section-domino-in
-  // 关键帧相同）。在动画排队后由 _renderGrid 重置，以便后续的
-  // 过滤器/排序重新渲染是即时的。
+  // Animate the very first card render with a domino cascade (same as the
+  // sidebar section-domino-in keyframe). Reset by _renderGrid after the
+  // animation is queued so subsequent filter/sort re-renders are instant.
   state._libJustOpened = true;
   if (Object.prototype.hasOwnProperty.call(opts, 'account_id')) {
     state._libAccountId = opts.account_id || null;
@@ -962,12 +962,12 @@ export function openEmailLibrary(opts = {}) {
 
   document.body.appendChild(modal);
   modal.style.display = 'block';
-  // 使模态背景非阻塞，以便用户可以与应用的其余部分交互
+  // Make modal background non-blocking so user can interact with rest of the app
   modal.style.cssText += 'pointer-events:none;background:transparent;';
 
-  // 注册以便芯片带有正确的标签/图标。restoreFn 留空 —
-  // 只需取消最小化模态框就足够了；其中展开的任何邮件
-  // 保持展开状态。
+  // Register so the chip carries the right label/icon. restoreFn left
+  // empty — just unminimizing the modal is enough; whatever email was
+  // expanded inside stays expanded.
   try {
     Modals.register('email-lib-modal', {
       label: 'Email',
@@ -977,7 +977,7 @@ export function openEmailLibrary(opts = {}) {
         if (m) m.classList.add('hidden');
       },
       restoreFn: () => {
-        // 最后重新打开 → 将邮件窗口置于任何打开文档之前。
+        // Reopened last → bring the email windows in front of any open doc.
         document.body.classList.add('email-front');
         // Mobile: tapping the library chip chips down any open email
         // reader so the library is the only visible window. Pairs with
@@ -1010,7 +1010,7 @@ export function openEmailLibrary(opts = {}) {
   if (content) {
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
-      // 移动端底部锚定面板
+      // Bottom-anchored sheet on mobile
       content.style.position = 'fixed';
       content.style.pointerEvents = 'auto';
       content.style.left = '0';
@@ -1019,7 +1019,7 @@ export function openEmailLibrary(opts = {}) {
       content.style.top = 'auto';
       content.style.transform = 'none';
     } else {
-      // 使用固定定位 + 计算偏移量在屏幕上居中
+      // Center on screen using fixed positioning + computed offsets
       content.style.position = 'fixed';
       content.style.pointerEvents = 'auto';
       // Wait a frame for size to stabilize, then center. Center against the
@@ -1036,7 +1036,7 @@ export function openEmailLibrary(opts = {}) {
     }
   }
 
-  // 连线事件
+  // Wire events
   document.getElementById('email-lib-close').addEventListener('click', closeEmailLibrary);
 
   // Clicking the modal header (anywhere except buttons/inputs) collapses
@@ -1057,8 +1057,8 @@ export function openEmailLibrary(opts = {}) {
     });
   }
 
-  // 拖拽到顶部边缘 → 吸附到全屏（Aero Snap）。在全屏时拖离
-  // 顶部边缘则取消吸附回居中窗口。
+  // Drag-to-top edge → snap to fullscreen (Aero Snap). Dragging away from
+  // the top edge while fullscreen unsnaps back to a centered window.
   _makeDraggable(content, modal, 'email-lib-fullscreen');
 
   document.getElementById('email-lib-folder').addEventListener('change', (e) => {
@@ -1070,7 +1070,7 @@ export function openEmailLibrary(opts = {}) {
     _syncUnreadWindowGlow();
     _syncReminderClearButton();
     _loadEmailsFresh();
-    // 同步快速切换的激活状态，使其与下拉菜单匹配。
+    // Sync quick-toggle active states so they mirror the dropdown.
     document.getElementById('email-undone-btn')?.classList.toggle('active', state._libFilter === 'undone');
     document.getElementById('email-reminder-btn')?.classList.toggle('active', state._libFilter === 'reminders');
     // Mirror the picker label/icon.
@@ -1164,7 +1164,7 @@ export function openEmailLibrary(opts = {}) {
     const btn = document.getElementById('email-lib-refresh-btn');
     btn?.classList.add('email-lib-refreshing');
     state._libOffset = 0;
-    // 不要擦除 state._libEmails — _loadEmails 将在强制重新 fetch 时
+    // Don't wipe state._libEmails — _loadEmails will paint the cached
     // list while the forced refetch runs, so the grid doesn't blank out
     // mid-refresh. `force: true` adds the cache-buster so the server's
     // 8s list cache is bypassed for an actually-fresh result.
@@ -1172,7 +1172,7 @@ export function openEmailLibrary(opts = {}) {
       await _loadEmails({ force: true });
     } finally {
       btn?.classList.remove('email-lib-refreshing');
-      // 闪烁显示对勾约 900ms，以便用户获得清晰的"完成"提示。
+      // Flash a checkmark for ~900ms so the user gets a clear "done" cue.
       if (btn) {
         const orig = btn.innerHTML;
         btn.classList.add('email-lib-refresh-done');
@@ -1189,8 +1189,8 @@ export function openEmailLibrary(opts = {}) {
 
 
   const _composeNew = () => {
-    // 桌面端：当有足够空间容纳邮件和撰写/文档窗格时，保持 Email 打开。
-    // 移动端仍然收起标签页，以便文档拥有整个屏幕。
+    // Desktop: keep Email open when there is enough room for it plus the
+    // compose/document pane. Mobile still tabs down so the doc owns the screen.
     if (_prepareEmailWindowForDocument(document.getElementById('email-lib-modal'))) {
       if (!Modals.minimize('email-lib-modal')) closeEmailLibrary();
     }
@@ -1201,8 +1201,8 @@ export function openEmailLibrary(opts = {}) {
   };
   document.getElementById('email-lib-compose-btn').addEventListener('click', _composeNew);
 
-  // 移动端 FAB：与（桌面端）新建按钮相同的操作，另外在列表滚动时收缩为图标，
-  // 并在滚动停止时弹回扩展为 "New"。
+  // Mobile FAB: same action as the (desktop) New button, plus collapse-to-icon
+  // while the list scrolls and spring back out to "New" when scrolling stops.
   const _fab = document.getElementById('email-lib-fab');
   if (_fab) {
     _fab.addEventListener('click', _composeNew);
@@ -1213,16 +1213,16 @@ export function openEmailLibrary(opts = {}) {
         _fab.classList.add('collapsed');
         clearTimeout(_fabIdle);
         _fabIdle = setTimeout(() => _fab.classList.remove('collapsed'), 280);
-        _positionFab();   // Firefox 的工具栏在滚动时显示/隐藏
+        _positionFab();   // Firefox's toolbar shows/hides on scroll
       }, { passive: true });
     }
 
-    // 将 FAB 保持在浏览器底部工具栏之上。env(safe-area-inset)
-    // 不覆盖 Android 版 Firefox 的 URL 栏，且其 100dvh 处理不可靠，
-    // 因此测量面板延伸到 *可见*（visualViewport）区域之下的程度，
-    // 并将按钮上移相应的量。
+    // Keep the FAB above the browser's bottom toolbar. env(safe-area-inset)
+    // doesn't cover Firefox-for-Android's URL bar, and its 100dvh handling is
+    // unreliable, so measure how far the panel extends below the *visible*
+    // (visualViewport) area and lift the button by that much.
     function _positionFab() {
-      if (!_fab.isConnected) {       // 模态框被重建/关闭 — 停止监听
+      if (!_fab.isConnected) {       // modal was rebuilt/closed — stop listening
         window.visualViewport?.removeEventListener('resize', _positionFab);
         window.visualViewport?.removeEventListener('scroll', _positionFab);
         window.removeEventListener('resize', _positionFab);
@@ -1238,7 +1238,7 @@ export function openEmailLibrary(opts = {}) {
       window.visualViewport.addEventListener('scroll', _positionFab);
     }
     window.addEventListener('resize', _positionFab);
-    // 在布局稳定后运行（模态框打开带有动画）。
+    // Run after layout settles (modal opens with an animation).
     requestAnimationFrame(() => requestAnimationFrame(_positionFab));
     setTimeout(_positionFab, 300);
 
@@ -1250,9 +1250,9 @@ export function openEmailLibrary(opts = {}) {
       if (_revealed || !_fab.isConnected) return;
       _revealed = true;
       _positionFab();
-      // FAB 是 .modal-content 的绝对子元素，它在打开时向上滑入（sheet-enter）。
-      // 等待该入场动画完成后再弹出 FAB，否则它会随着滑动运动
-      //（"跟随窗口滑下"）。
+      // The FAB is an absolute child of .modal-content, which slides up on open
+      // (sheet-enter). Wait until that entrance finishes before popping the FAB
+      // in, otherwise it rides the slide ("swipes down with the window").
       const content = _fab.closest('.modal-content');
       const pop = () => { _positionFab(); requestAnimationFrame(() => _fab.classList.add('fab-revealed')); };
       if (!content || content.classList.contains('sheet-ready')) {
@@ -1265,7 +1265,7 @@ export function openEmailLibrary(opts = {}) {
           pop();
         };
         content.addEventListener('animationend', onEnd);
-        setTimeout(onEnd, 450);  // 如果 animationend 未触发则作为回退
+        setTimeout(onEnd, 450);  // fallback if animationend doesn't fire
       }
     };
     if (_grid) {
@@ -1276,7 +1276,7 @@ export function openEmailLibrary(opts = {}) {
           if (_grid.children.length) { _gobs.disconnect(); _revealFab(); }
         });
         _gobs.observe(_grid, { childList: true });
-        // 安全网 — 如果列表仍然为空，永远不要让 FAB 隐藏。
+        // Safety net — never leave the FAB hidden if the list stays empty.
         setTimeout(() => { _gobs.disconnect(); _revealFab(); }, 1600);
       }
     } else {
@@ -1311,9 +1311,9 @@ export function openEmailLibrary(opts = {}) {
     _renderGrid();
   });
 
-  // 批量取消 — 以与通过切换的新取消相同的拆除方式接线。
-  // 让全局 Esc 处理程序（keyboard-shortcuts.js）通过点击可见的
-  // [id$="-bulk-cancel"] 按钮来关闭选择模式。
+  // Bulk cancel — wired with the same teardown a fresh Cancel-via-toggle does.
+  // Lets the global Esc handler (keyboard-shortcuts.js) close select mode by
+  // clicking the visible [id$="-bulk-cancel"] button.
   document.getElementById('email-lib-bulk-cancel')?.addEventListener('click', () => {
     state._selectMode = false;
     state._selectedUids.clear();
@@ -1322,7 +1322,7 @@ export function openEmailLibrary(opts = {}) {
     _renderGrid();
   });
 
-  // 批量操作
+  // Bulk actions
   document.getElementById('email-lib-bulk-actions').addEventListener('click', (e) => {
     e.stopPropagation();
     if (state._selectedUids.size === 0) {
@@ -1346,7 +1346,7 @@ export function openEmailLibrary(opts = {}) {
     return _selectEmailReaderContents(reader);
   };
 
-  // ESC 关闭 + 箭头导航 + 删除所选/当前展开的邮件。
+  // ESC to close + Arrow nav + Delete on the selected / currently-expanded email.
   state._libEscHandler = (e) => {
     const modal = document.getElementById('email-lib-modal');
     if (!modal || modal.classList.contains('hidden')) return;
@@ -1374,7 +1374,7 @@ export function openEmailLibrary(opts = {}) {
       closeEmailLibrary();
       return;
     }
-    // 当用户正在某处输入时，不要劫持箭头/删除键。
+    // Don't hijack arrows / delete while the user is typing somewhere.
     const t = e.target;
     if (_isEmailTypingTarget(t)) return;
     const isDeleteKey = e.key === 'Delete' || e.key === 'Backspace';
@@ -1542,22 +1542,22 @@ export function closeEmailLibrary() {
     state._libEscHandler = null;
   }
   state._libOpen = false;
-  // 如果 /email 路由折叠了宽侧边栏以为全屏模态框腾出空间，
-  // 现在模态框消失后重新展开它。
+  // If the /email route collapsed the wide sidebar to make room for
+  // the fullscreen modal, re-expand it now that the modal is gone.
   try { window._restoreSidebarIfRouteCollapsed?.(); } catch (_) {}
 }
 
-// 通过其头部使模态框可拖拽。如果提供了 `modal` 和 `fsClass`，
-// 拖拽到视口顶部边缘会吸附到全屏（Aero Snap）。
-// 在全屏时从顶部拖离则取消吸附。
+// Make a modal draggable by its header. If `modal` and `fsClass` are
+// provided, dragging to the top edge of the viewport snaps to fullscreen
+// (Aero Snap). Dragging away from the top while fullscreen unsnaps.
 function _makeDraggable(content, modal, fsClass) {
   if (!content) return;
   const header = content.querySelector('.modal-header');
   if (!header) return;
-  // 每个模态框的全屏行为 — 调用方提供 fsClass，我们应用
-  // email-lib 和 email-window 都使用的相同内联样式全屏模式。
-  // exitFullscreen 恢复默认窗口大小 (min(720px, 92vw) × 85vh)
-  // 并围绕光标居中。
+  // Per-modal fullscreen behavior — caller supplies fsClass, we apply
+  // the same inline-style fullscreen pattern email-lib + email-window
+  // both use. exitFullscreen restores the default windowed size
+  // (min(720px, 92vw) × 85vh) and centers around the cursor.
   const enterFullscreen = () => {
     if (!fsClass || modal.classList.contains(fsClass)) return;
     modal.classList.add(fsClass);
@@ -1592,7 +1592,7 @@ function _makeDraggable(content, modal, fsClass) {
     header,
     fsClass,
     skipSelector: '.close-btn, .modal-close',
-    enableLeftDock: true,  // 在右侧回复时将邮件停靠在左侧
+    enableLeftDock: true,  // park the email on the left while replying on the right
     onDragStart: ({ rect }) => {
       if (!modal.classList.contains('email-snap-left')) return;
       modal.classList.remove('email-snap-left');
@@ -1631,8 +1631,8 @@ function _snapEmailModalToLeftSidebar(modal) {
   if ((modal.id || '').startsWith('email-view-')) return false;
   const content = modal.querySelector('.modal-content');
   if (!content) return false;
-  // 仅在全屏时才停靠 — 对于手动调整大小的窗口，
-  // 用户已经选择了其布局；不要通过吸附来意外改变它。
+  // Only dock if currently fullscreen — for a manually-sized window the
+  // user already chose its layout; don't surprise them by snapping it.
   const wasLibFs = modal.classList.contains('email-lib-fullscreen');
   const wasWinFs = modal.classList.contains('email-window-fullscreen');
   if (!wasLibFs && !wasWinFs) return false;
@@ -1705,14 +1705,14 @@ async function _loadFolders({ resetMissing = false } = {}) {
       if (f === state._libFolder) opt.selected = true;
       sel.appendChild(opt);
     }
-    // Scheduled（特殊虚拟文件夹）
+    // Scheduled (special virtual folder)
     const sep2 = document.createElement('option');
     sep2.disabled = true;
     sep2.textContent = '─────────';
     sel.appendChild(sep2);
     const schedOpt = document.createElement('option');
     schedOpt.value = '__scheduled__';
-    schedOpt.textContent = t('email.scheduled');
+    schedOpt.textContent = 'Scheduled';
     if (state._libFolder === '__scheduled__') schedOpt.selected = true;
     sel.appendChild(schedOpt);
     sel.value = state._libFolder;
@@ -2388,7 +2388,7 @@ async function _doSearch() {
 
     const results = data.emails || [];
     _libSearchHadResults = true;
-    state._libEmails = results;  // 临时替换为搜索结果
+    state._libEmails = results;  // temporarily replace with search results
     state._libTotal = data.total || results.length;
     // Refresh the pre-search snapshot so any subsequent _applyPillFilter
     // call (focus / pill edit / etc.) sources from the actual search
@@ -2535,7 +2535,7 @@ function _renderEmailLoading(grid) {
   } catch (_) {}
   const label = document.createElement('div');
   label.className = 'email-loading-label';
-  label.textContent = t('email.loading_emails');
+  label.textContent = 'Loading emails';
   wrap.appendChild(label);
   grid.appendChild(wrap);
   return sp;
@@ -2558,22 +2558,22 @@ async function _refreshUnreadBadge() {
     const n = data.total || 0;
     _syncUnreadTabBadge(n);
     if (state._libFilter === 'unread') {
-      // 当前正在查看未读邮件 — 显示点击后将带来的视图。
+      // Currently viewing unread — show what the click will take you to.
       try {
         const allRes = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(folder)}${_acct()}&limit=1&filter=all`);
         const allData = await allRes.json();
         const t = allData.total || 0;
         badge.textContent = `${t} all`;
-        badge.title = t('email.show_all_emails');
+        badge.title = 'Show all emails';
         badge.style.display = '';
       } catch (_) {
-        badge.textContent = t('email.show_all');
-        badge.title = t('email.show_all_emails');
+        badge.textContent = 'Show all';
+        badge.title = 'Show all emails';
         badge.style.display = '';
       }
     } else if (n > 0) {
       badge.textContent = n > 999 ? '999+ unread' : `${n} unread`;
-      badge.title = t('email.show_unread');
+      badge.title = 'Show unread emails';
       badge.style.display = '';
     } else {
       badge.style.display = 'none';
@@ -2635,9 +2635,9 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
     } else {
       const accountQS = accountAtStart ? `&account_id=${encodeURIComponent(accountAtStart)}` : '';
       const attQS = hasAttachmentsAtStart ? '&has_attachments=1' : '';
-      // `&_=Date.now()` 绕过服务端的 8 秒列表缓存。默认打开
-      // 省略它以允许快速关闭/重新打开立即返回；刷新按钮传递
-      // `force: true` 来添加它。
+      // `&_=Date.now()` bypasses the server's 8s list cache. Default
+      // opens omit it so rapid close/reopen returns instantly; the
+      // Refresh button passes `force: true` to add it back.
       const buster = force ? `&_=${Date.now()}` : '';
       const res = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(folderAtStart)}${accountQS}&limit=100&offset=${offsetAtStart}&filter=${filterAtStart}${attQS}${buster}`);
       const data = await res.json();
@@ -2666,8 +2666,8 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
   } catch (e) {
     if (seq !== _libLoadSeq || accountAtStart !== (state._libAccountId || '')) return;
     if (sp) sp.destroy();
-    // 如果我们已绘制了缓存列表，保留在屏幕上 — 比擦除它显示
-    // "加载失败"更好，因为仍有可读内容。
+    // If we already painted the cached list, leave it on screen — beats
+    // wiping it for "Failed to load" when there's still readable content.
     if (!cached) {
       const msg = e && e.message ? `Failed to load: ${e.message}` : 'Failed to load';
       grid.innerHTML = `<div class="email-loading">${_esc(msg)}${_emailSetupHintHtml()}</div>`;
@@ -2718,10 +2718,10 @@ async function _loadScheduled(grid, sp) {
     `;
     card.appendChild(content);
 
-    // 取消按钮
+    // Cancel button
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'memory-item-btn';
-    cancelBtn.title = t('email.cancel_scheduled');
+    cancelBtn.title = 'Cancel scheduled send';
     cancelBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
     cancelBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -2750,7 +2750,7 @@ function _renderGrid() {
   let filtered = state._libEmails;
   try { console.log('[email-search] _renderGrid: state._libEmails.length=', (state._libEmails || []).length, 'pills=', (state._libSearchPills || []).length, 'draft=', JSON.stringify(state._libSearchDraft || ''), 'libSearch=', JSON.stringify(state._libSearch || '')); } catch {}
 
-  // 应用排序
+  // Apply sort
   if (state._libSort === 'unread') {
     filtered = [...filtered].sort((a, b) => Number(a.is_read) - Number(b.is_read));
   } else if (state._libSort === 'favorites') {
@@ -2790,8 +2790,8 @@ function _renderGrid() {
       });
       return;
     }
-    // 收件箱清零是一种成功 — 将消息与笑脸配对，
-    // 使空状态读作"全部处理完毕"，而不是"某些东西坏了"。
+    // Inbox-zero is a win — pair the message with a small smiley so the
+    // empty state reads as "all caught up", not "something's broken".
     const _smileyIco = '<span style="vertical-align:-3px;margin-left:6px;">' + emptyStateIcon('smiley') + '</span>';
     // Only show the "Set up at Settings › Integrations" hint when the inbox
     // is TRULY empty — no filter, no search, no source emails. A sub-filter
@@ -2831,16 +2831,16 @@ function _renderGrid() {
   if (state._libJustOpened) {
     grid.classList.add('email-lib-just-opened');
     state._libJustOpened = false;
-    // 级联后剥离类名，以免限制后续动画
-    //（如归档时的 FLIP 重排）。最坏情况持续时间与下面关键帧
-    // 集合中最长延迟匹配。
+    // Strip the class after the cascade so it doesn't restrict later
+    // animations (e.g. the FLIP reflow when archiving). Worst-case
+    // duration matches the longest delay in the keyframe set below.
     setTimeout(() => grid.classList.remove('email-lib-just-opened'), 900);
   }
   for (const em of filtered) {
     grid.appendChild(_createCard(em));
   }
 
-  // 如果深度链接要求展开特定邮件，现在执行并清除。
+  // If a deep-link asked us to expand a specific email, do it now and clear.
   if (state._libPendingExpandUid) {
     const target = filtered.find(e => String(e.uid) === String(state._libPendingExpandUid));
     const wantUid = state._libPendingExpandUid;
@@ -2864,7 +2864,7 @@ function _createCard(em) {
   card.dataset.uid = String(em.uid);
   if (state._selectMode && state._selectedUids.has(em.uid)) card.classList.add('selected');
 
-  // 选择模式下的复选框
+  // Checkbox in select mode
   if (state._selectMode) {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
@@ -2880,8 +2880,8 @@ function _createCard(em) {
     card.appendChild(cb);
   }
 
-  // 在"已发送"文件夹中，显示收件人 — 发件人始终是你，
-  // 这会隐藏实际有用的信息。在"已发送"之外，像以前一样显示发件人。
+  // In Sent folder, show the recipient(s) — the sender is always you and
+  // hides the actually useful info. Outside Sent, show the sender as before.
   const isSentFolderEarly = /sent/i.test(state._libFolder);
   let senderName;
   let senderAddress;
@@ -2920,8 +2920,8 @@ function _createCard(em) {
   const titleEl = document.createElement('span');
   titleEl.className = 'memory-item-title';
   titleEl.textContent = em.subject || '(no subject)';
-  // 悬停预览：通过原生浏览器工具提示直接在标题上显示缓存的 AI 摘要 —
-  // 无需打开邮件即可浏览。
+  // Hover preview: surface the cached AI summary directly on the title via
+  // a native browser tooltip — no need to open the email to skim it.
   if (em.cached_summary) {
     titleEl.title = em.cached_summary;
     titleEl.classList.add('email-card-has-summary');
@@ -2930,13 +2930,27 @@ function _createCard(em) {
 
   if (em.has_attachments) {
     const att = document.createElement('span');
-    att.title = t('email.has_attachments');
+    att.title = 'Has attachments';
     att.style.cssText = 'opacity:0.6;flex-shrink:0;display:inline-flex;';
     att.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
     titleRow.appendChild(att);
   }
 
-  // 完成对勾 + 未读圆点保持在左侧的主题旁。
+  const tags = Array.isArray(em.tags) ? em.tags : [];
+  if (tags.length || em.is_spam_verdict) {
+    const tagWrap = document.createElement('span');
+    tagWrap.className = 'email-tags email-card-tags';
+    tagWrap.innerHTML = tags.map(t => {
+      const tag = String(t || '').trim().toLowerCase().replace(/_/g, '-');
+      return tag ? `<span class="email-tag email-tag-${_esc(tag)}">${_esc(tag)}</span>` : '';
+    }).join('');
+    if (em.is_spam_verdict) {
+      tagWrap.insertAdjacentHTML('beforeend', '<span class="email-tag email-tag-spam">spam</span>');
+    }
+    titleRow.appendChild(tagWrap);
+  }
+
+  // Done check + unread dot stay next to the subject on the left.
   const isSentFolder = /sent/i.test(state._libFolder);
   if (!isSentFolder) {
     const doneCheck = document.createElement('span');
@@ -2957,7 +2971,7 @@ function _createCard(em) {
       // un-checking too — without this the hover state and the active state
       // look identical, so the click felt like a no-op.
       doneCheck.classList.remove('just-checked', 'just-unchecked');
-      void doneCheck.offsetWidth; // 重新启动动画
+      void doneCheck.offsetWidth; // restart animation
       doneCheck.classList.add(newState ? 'just-checked' : 'just-unchecked');
       setTimeout(() => doneCheck.classList.remove('just-checked', 'just-unchecked'), 500);
       if (newState) {
@@ -2984,15 +2998,15 @@ function _createCard(em) {
 
   if (em.is_flagged) {
     const star = document.createElement('span');
-    star.title = t('email.favorited_email');
+    star.title = 'Favorited';
     star.style.cssText = 'color:var(--accent, var(--red));opacity:0.85;flex-shrink:0;display:inline-flex;';
     star.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     titleRow.appendChild(star);
   }
 
-  // 上一页/下一页箭头 — 仅在此卡片为展开状态时可见
-  //（通过 CSS 控制，折叠的卡片保持干净）。点击通过折叠
-  // 当前卡片并展开相邻卡片来导航。
+  // Prev/next arrows — visible only when this card is the expanded one
+  // (CSS-gated so collapsed cards stay clean). Click navigates by collapsing
+  // this card and expanding the neighbour.
   const navArrows = document.createElement('span');
   navArrows.className = 'email-card-nav-arrows';
   navArrows.innerHTML = `
@@ -3030,13 +3044,13 @@ function _createCard(em) {
 
   card.appendChild(content);
 
-  // 每张卡片菜单按钮（...菜单）
+  // Per-card menu button (... menu)
   if (!state._selectMode) {
     const actionsWrap = document.createElement('div');
     actionsWrap.className = 'memory-item-actions';
     const menuBtn = document.createElement('button');
     menuBtn.className = 'memory-item-btn';
-    menuBtn.title = t('email.actions');
+    menuBtn.title = 'Actions';
     menuBtn.style.position = 'relative';
     menuBtn.style.top = '-1px';
     menuBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
@@ -3047,8 +3061,8 @@ function _createCard(em) {
     actionsWrap.appendChild(menuBtn);
     card.appendChild(actionsWrap);
 
-    // 长按行任意位置打开相同的操作菜单 — 与
-    // 聊天 / 归档 / 研究 / 文档标签页的长按 UX 匹配。
+    // Long-press anywhere on the row opens the same actions menu — matches
+    // the chats / archive / research / documents tabs' long-press UX.
     let _hold = null, _holdStart = null;
     const _cancelHold = () => { if (_hold) { clearTimeout(_hold); _hold = null; } _holdStart = null; };
     card.addEventListener('pointerdown', (e) => {
@@ -3072,7 +3086,7 @@ function _createCard(em) {
     card.addEventListener('pointercancel', _cancelHold);
   }
 
-  // 点击处理器 — 切换预览展开
+  // Click handler — toggle preview expansion
   card.addEventListener('click', async (e) => {
     if (card._suppressNextClick) { card._suppressNextClick = false; return; }
     if (state._selectMode) {
@@ -3163,7 +3177,7 @@ async function _toggleCardPreview(card, em) {
     Math.min(Math.max(260, window.innerHeight * 0.56), gridRect?.height || window.innerHeight)
   );
 
-  // 已展开 — 折叠
+  // Already expanded — collapse
   if (card.classList.contains('email-card-expanded')) {
     card.classList.remove('email-card-expanded');
     card.classList.remove('doclib-card-expanded');
@@ -3175,7 +3189,7 @@ async function _toggleCardPreview(card, em) {
     return;
   }
 
-  // 折叠其他已展开的卡片
+  // Collapse any other expanded card
   if (grid) {
     grid.querySelectorAll('.email-card-expanded').forEach(c => {
       c.classList.remove('email-card-expanded');
@@ -3201,15 +3215,15 @@ async function _toggleCardPreview(card, em) {
     fetch(`${API_BASE}/api/email/mark-read/${em.uid}?folder=${encodeURIComponent(folderAtStart)}${_acct()}`, { method: 'POST' })
       .catch(err => console.error('Failed to mark email read:', err));
   }
-  // 模态框上的类钩子，使头部隐藏/填充规则在不支持 :has()
-  // 的浏览器（Firefox 移动版）上也能工作 — 下面的 :has() 版本
-  // 保留为桌面路径。
+  // Class hook on the modal so the header-hide / padding rules work on
+  // browsers without :has() support (Firefox mobile) — the :has() versions
+  // below stay as the desktop path.
   if (modal && modalRect?.height) {
     modal.style.setProperty('--email-reading-modal-min-h', `${Math.round(modalRect.height)}px`);
   }
   modal?.classList.add('email-reading');
 
-  // 使用旋转器显示加载阅读器
+  // Show loading reader with whirlpool spinner
   const reader = document.createElement('div');
   reader.className = 'email-card-reader email-card-reader-loading';
   reader.style.minHeight = `${Math.max(180, Math.round(stableOpenHeight - 70))}px`;
@@ -3238,18 +3252,18 @@ async function _toggleCardPreview(card, em) {
       return;
     }
 
-    // 本地标记为已读
+    // Mark as read locally
     _syncEmailReadState(em.uid, true);
     _prefetchAdjacentEmails(card);
     _stampReaderContext(reader, { ...em, ...data }, state._libFolder, state._libAccountId);
 
     // Build the attachments wrap using the shared helper so the signature-
-    //（小内联 PNG/JPG、Outlook image001 占位符、logo/banner 文件）
+    // image filter (small inline PNGs/JPGs, Outlook image001 placeholders,
     // logo/banner files) is applied here too. Falls back to '' when every
     // attachment is filtered out.
     const attsHtml = _buildAttsHtmlFor(em.uid, data);
 
-    // 格式化日期为简洁形式："Mar 21, 2026 14:32"
+    // Format date nicely (compact): "Mar 21, 2026 14:32"
     let dateDisplay = data.date || '';
     try {
       if (data.date) {
@@ -3263,7 +3277,7 @@ async function _toggleCardPreview(card, em) {
       }
     } catch (_) {}
 
-    // 从逗号分隔的地址列表构建收件人芯片组
+    // Build recipient chip group from a comma-separated address list
     const buildRecipients = (str) => {
       if (!str) return '';
       const addrs = _splitRecipientList(str);
@@ -3274,7 +3288,7 @@ async function _toggleCardPreview(card, em) {
       }).join('');
     };
 
-    // 构建 From 芯片 — 单个芯片带有姓名，点击显示地址
+    // Build the From chip too — single chip with name, click reveals address
     const fromChip = _recipientChipHtml(`${data.from_name || ''} <${data.from_address || ''}>`, data.from_name || data.from_address, 'from-chip');
 
     reader.innerHTML = `
@@ -3307,7 +3321,7 @@ async function _toggleCardPreview(card, em) {
     reader.classList.remove('email-card-reader-loading');
     reader.style.minHeight = '';
 
-    // 附件头部点击切换折叠/展开（与摘要相同的 UX）。
+    // Attachment header click toggles fold/unfold (same UX as the summary).
     const attsWrap = reader.querySelector('.email-reader-atts-wrap');
     if (attsWrap) {
       const attsToggle = attsWrap.querySelector('.email-reader-atts-header');
@@ -3362,17 +3376,17 @@ async function _toggleCardPreview(card, em) {
       await _summarizeEmail(reader, data, ev.currentTarget);
     });
     _wireMetaToggle(reader);
-    // from-sender / thread-search 搜索按钮暂时禁用 —
+    // from-sender / thread-search Search button is DISABLED for now —
     // the search + threaded sidebar UX is too buggy to ship. Physically
     // remove it from every reader render path. Re-enable by deleting
-    // 物理移除此按钮。通过删除这些 .remove() 行 + CSS 规则可重新启用。
+    // these .remove() lines + the CSS rule.
     reader.querySelector('[data-act="from-sender"]')?.remove();
     reader.querySelector('[data-act="from-sender"]')?.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       await _toggleFromSenderPanel(reader, data, ev.currentTarget);
     });
 
-    // 刷新此新展开卡片的标题行上一页/下一页箭头。
+    // Refresh the title-row prev/next arrows for this newly-expanded card.
     _syncCardNavArrows(card);
 
     // Horizontal swipe on the reader switches to prev/next email — but
@@ -3431,14 +3445,14 @@ async function _toggleCardPreview(card, em) {
           const max = _scrollEl.scrollWidth - _scrollEl.clientWidth;
           const atLeftEdge = _scrollEl.scrollLeft <= 2;
           const atRightEdge = _scrollEl.scrollLeft >= max - 2;
-          // 向左滑动(dx<0)显示右侧内容 → 如果不在右边缘，
-          // 这是滚动而非导航。
+          // Swiping LEFT (dx<0) reveals content to the right → if not at
+          // right edge, that's a scroll, not a nav.
           if (dx < 0 && !atRightEdge) return;
-          // 向右滑动(dx>0)显示左侧内容 → 如果不在左边缘，
-          // 这是滚动而非导航。
+          // Swiping RIGHT (dx>0) reveals content to the left → if not at
+          // left edge, that's a scroll, not a nav.
           if (dx > 0 && !atLeftEdge) return;
-          // 如果浏览器在此手势期间已经滚动，无条件视为滚动
-          //（用户显然想要平移）。
+          // If the browser already scrolled during this gesture, treat as
+          // scroll regardless (the user clearly wanted to pan).
           if (_scrollEl.scrollLeft !== _startScrollLeft) return;
         }
         const dir = dx < 0 ? 1 : -1;
@@ -3447,15 +3461,15 @@ async function _toggleCardPreview(card, em) {
       }, { passive: true });
     }
 
-    // 如果邮件有预缓存的摘要，立即显示。折叠状态通过渲染器中的
-    // _summaryCollapsedPref 持久化。
+    // If the email has a pre-cached summary, show it immediately. Fold
+    // state is persisted via _summaryCollapsedPref inside the renderer.
     if (data.cached_summary) {
       const sumBtn = reader.querySelector('[data-act="summarize"]');
       _showCachedSummary(reader, data.cached_summary, sumBtn);
     }
 
     _wireRecipientChips(reader);
-    // 始终停止冒泡，以便在读邮件时卡的点击不会触发。
+    // Always stop bubbling so the card's click doesn't fire while reading.
     reader.addEventListener('click', (ev) => { ev.stopPropagation(); });
   } catch (e) {
     reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">Failed to load email</div>`;
@@ -3463,16 +3477,16 @@ async function _toggleCardPreview(card, em) {
 }
 
 /**
- * 将可能的签名块包裹在折叠的 <details> 中，以防止其占据整个阅读器。
- * 我们按优先级顺序尝试：
- *   1. 邮件客户端签名包裹器 — Gmail 的 `gmail_signature` div 是显式的，
- *      无需猜测。Apple Mail 的 data-smartmail 同理。
- *   2. 标准的 "-- " RFC 3676 签名分隔符。
- *   3. 常见的落款短语（"Best regards"、"Cheers" 等）在自己的行上 —
- *      较模糊，但能捕获没有破折号标记的签名。
- *   4. "Sent from my iPhone/Android" / "Get Outlook for ..." 移动客户端
- *      样板文本。
- * 任何匹配的内容从标记处到正文末尾都被包裹起来。
+ * Wrap a probable signature block in a collapsed <details> so it stops
+ * eating the whole reader. We try, in priority order:
+ *   1. Mail-client signature wrappers — Gmail's `gmail_signature` div is
+ *      explicit, no guessing required. Same for Apple Mail's data-smartmail.
+ *   2. The standard "-- " RFC 3676 sig delimiter.
+ *   3. A common closing phrase ("Best regards", "Cheers", etc.) on its own
+ *      line — fuzzier, but catches sigs without the dash marker.
+ *   4. "Sent from my iPhone/Android" / "Get Outlook for ..." mobile-client
+ *      boilerplate.
+ * Anything matched gets wrapped from the marker through end-of-body.
  */
 /**
  * Render the email body with sig/quote folds. If the backend has cached
@@ -3486,10 +3500,10 @@ async function _toggleCardPreview(card, em) {
 // signature/disclaimer as its own message), the user can flip this off to
 // fall back to plain rendering. Survives reloads.
 const _BUBBLES_DISABLED_KEY = 'odysseus.email.bubblesDisabled';
-// 线程化聊天气泡邮件视图目前已禁用 — 太不稳定无法发布。
-// 通过始终返回 true 来强制使用纯文本渲染。
-// 重新启用需恢复 localStorage 支持的主体 + 阅读器
-// 更多菜单中的切换菜单项。
+// Threaded chat-bubble email view is DISABLED for now — too buggy to
+// ship. Force plain-text rendering everywhere by always returning true.
+// Re-enable by restoring the localStorage-backed body + the toggle
+// menu item in the reader's More menu.
 function _bubblesDisabled() {
   return true;
 }
@@ -3504,9 +3518,9 @@ function _renderEmailBody(data) {
   const fromAddr = String(data?.from_address || '').toLowerCase().trim();
   const isMine = !!fromAddr && _meEmailAddrs().has(fromAddr);
 
-  // 用户撰写的消息（已发送文件夹或收件箱中的自己发送副本）
-  // 是当前撰写的文本。不要让缓存的边界或 HTML 引用解析
-  // 将整个内容隐藏在"较早回复"后面。
+  // Messages authored by the user (Sent folder or self-sent copies in INBOX)
+  // are current authored text. Do not let cached boundaries or HTML
+  // blockquote parsing hide the whole thing behind "Earlier reply".
   if ((isSentFolder || isMine) && plain) {
     const plainTurns = _renderPlaintextThread(plain);
     if (plainTurns && !/^\s*<details\b/i.test(plainTurns.trim())) {
@@ -3515,9 +3529,9 @@ function _renderEmailBody(data) {
     return _foldSignature(_escLinkify(plain).replace(/\n/g, '<br>'), null);
   }
 
-  // 优先使用服务端缓存的线程解析 — 这是最丰富的结构，
-  // 也是聊天气泡布局的基础。当用户手动禁用
-  // 气泡渲染时跳过。
+  // Prefer the server-cached thread parse — that's the richest structure
+  // and the one the chat-bubble layout is built around. Skip when the user
+  // has manually disabled bubble rendering.
   if (!_bubblesDisabled() && Array.isArray(data && data.thread_turns) && data.thread_turns.length) {
     return _foldSignature(
       _renderTurnsAsBubbles(data.thread_turns, data),
@@ -3525,10 +3539,10 @@ function _renderEmailBody(data) {
     );
   }
   const b = data && data.boundaries;
-  // 当存在缓存边界且有纯文本来切分时使用缓存边界
+  // Use cached boundaries when present AND we have plain-text body to slice
   if (b && plain && (b.sig_start >= 0 || b.quote_start >= 0)) {
-    // 选择两者中较早的作为"此点以下的所有内容都是可折叠的"的切分点，
-    // 但分别用各自的标签渲染签名和引用。
+    // Pick the EARLIER of the two as the cut for "everything below this is
+    // foldable", but render sig and quote with their own labels.
     let sig = (typeof b.sig_start === 'number' && b.sig_start >= 0) ? b.sig_start : -1;
     let quote = (typeof b.quote_start === 'number' && b.quote_start >= 0) ? b.quote_start : -1;
     // Clamp
@@ -3567,13 +3581,13 @@ function _renderEmailBody(data) {
         out += '<details class="email-sig-fold">' + _foldSummary('Signature', _SIG_ICON)
              + sigHtml + '</details>';
       } else {
-        // 短落款 — 保持内联；折叠只会增加样板。
+        // Short closing — leave inline; folding would just add chrome.
         out += sigHtml;
       }
     }
     return out;
   }
-  // 回退：客户端解析（HTML 或纯文本）。
+  // Fallback: client-side parse (HTML or plaintext).
   const hintSig = (data && data.sender_signature) || null;
   const isHtml = !!data.body_html;
   let rendered;
@@ -3601,12 +3615,12 @@ function _safeRenderEmailBody(data) {
   }
 }
 
-// ── 邮件线程的聊天气泡渲染 ──
-// 每个解析的轮次渲染为一个聊天气泡。活动账户的
-// 发出的回复气泡右对齐；其他人的气泡左对齐。
-// 顺序颠倒，使最旧的消息位于对话顶部，
-// 最新的（当前正在阅读的消息）位于底部 —
-// 符合人们对聊天的心理模型。
+// ── Chat-bubble rendering for email threads ──
+// Each parsed turn renders as a chat bubble. Bubbles for the active
+// account's outgoing replies align right; everyone else aligns left.
+// Order is reversed so the oldest message sits at the top of the
+// conversation and the newest (the message currently being read) sits
+// at the bottom — matches the mental model people have from chat.
 
 function _meEmailAddrs() {
   const set = new Set();
@@ -3618,7 +3632,7 @@ function _meEmailAddrs() {
 }
 
 // _parseTurnMeta / _formatBubbleDate / _formatRecipients / _senderColor /
-// _initials 位于 ./emailLibrary/utils.js
+// _initials live in ./emailLibrary/utils.js
 
 function _renderTurnsAsBubbles(turns, data) {
   if (!Array.isArray(turns) || !turns.length) return '';
@@ -3628,12 +3642,12 @@ function _renderTurnsAsBubbles(turns, data) {
   const lvl0Author = (data && (data.from_name || data.from_address)) || '';
   const lvl0Date = _formatBubbleDate(data && data.date);
 
-  // 最新回复在顶部，较旧的历史记录在下方。轮次按浅→深排列
-  //（级别 0 = 当前回复，更深级别 = 较早的引用材料），因此我们
-  // 按源顺序渲染而不反转。
+  // Newest reply on top, older history below. Turns come ordered shallow→deep
+  // (level 0 = current reply, deeper levels = older quoted material) so we
+  // render in source order without reversing.
   const ordered = turns.slice();
 
-  // 收集每个轮次的发件人身份 + 频率，用于下面的无自我情况。
+  // Gather per-turn sender identity + frequency for the no-self case below.
   const turnIdentity = ordered.map((t) => {
     if (t.level === 0) {
       return { email: lvl0Email, author: lvl0Author };
@@ -3664,7 +3678,7 @@ function _renderTurnsAsBubbles(turns, data) {
       if (!key) return 'theirs';
       if (key === leftKey)  return 'theirs';
       if (key === rightKey) return 'mine';
-      // 为第三及以上参与方使用稳定哈希。
+      // Stable hash for 3rd+ parties.
       let h = 0;
       for (let i = 0; i < key.length; i++) h = ((h << 5) - h + key.charCodeAt(i)) | 0;
       return (h & 1) ? 'mine' : 'theirs';
@@ -3683,7 +3697,7 @@ function _renderTurnsAsBubbles(turns, data) {
       author = p.author || (t.meta || 'Earlier reply');
       date = p.date;
     }
-    // 无自我回退：按每个发件人侧边映射路由。
+    // No-self fallback: route by per-sender side mapping.
     if (sideForKey) {
       const id = turnIdentity[i];
       const key = (id.email || id.author || '').toLowerCase();
@@ -3713,8 +3727,8 @@ function _renderTurnsAsBubbles(turns, data) {
 }
 
 /**
- * 将服务端缓存的线程轮次（{level, body_html, meta} 列表）
- * 渲染为客户端解析器产生的相同嵌套卡片结构。
+ * Render server-cached thread turns (list of {level, body_html, meta})
+ * into the same nested-card structure the client-side parser produces.
  */
 function _renderTurnsFromServer(turns) {
   if (!Array.isArray(turns) || !turns.length) return '';
@@ -3755,7 +3769,7 @@ function _renderTurnsFromServer(turns) {
     const w = wrap(top);
     if (stack.length) stack[stack.length - 1].html += w; else out += w;
   }
-  // 为底部折叠标记圆角。
+  // Mark the bottom-most fold for rounded corners.
   const lastIdx = out.lastIndexOf('<details class="email-thread-turn email-quote-fold"');
   if (lastIdx >= 0) {
     out = out.slice(0, lastIdx)
@@ -3768,19 +3782,19 @@ function _renderTurnsFromServer(turns) {
 }
 
 /**
- * 将邮件正文的回复链解析为轮次卡片堆栈。
- * 每个轮次 = { author, date, bodyHtml, nested[] }，其中 body 是
- * 在下一个引用边界之前的全部内容，`nested` 是内部的子线程
- *（递归解析）。如果邮件没有引用线程可解析（单条消息，无需折叠），
- * 返回 null。
+ * Parse an email body's reply chain into a stack of turn-cards.
+ * Each turn = { author, date, bodyHtml, nested[] } where the body is
+ * everything UP TO the next quote boundary, and `nested` is the sub-thread
+ * inside (recursively parsed). Returns null if the email has no quoted
+ * thread to parse (single message, no folds needed).
  */
-// ── 受 Talon 启发的多语言引用检测模式 ──
-// 来源：
-//   github.com/mailgun/talon（HTML/文本引用检测）
-//   github.com/crisp-oss/email-reply-parser（语言环境列表）
+// ── Talon-inspired multilingual quote-detection patterns ──
+// Sources:
+//   github.com/mailgun/talon (HTML/text quote detection)
+//   github.com/crisp-oss/email-reply-parser (locale list)
 //
-// _TALON_* / _SIG_BLOAT_MIN_CHARS 位于 ./emailLibrary/utils.js
-// _SIG_ICON / _QUOTE_ICON 位于 ./emailLibrary/signatureFold.js
+// _TALON_* / _SIG_BLOAT_MIN_CHARS live in ./emailLibrary/utils.js
+// _SIG_ICON / _QUOTE_ICON live in ./emailLibrary/signatureFold.js
 
 function _renderThreadStructure(html) {
   if (!html || typeof html !== 'string' || html.length > 200000) return null;
@@ -3790,14 +3804,14 @@ function _renderThreadStructure(html) {
   const root = doc.getElementById('__t');
   if (!root) return null;
 
-  // 找到顶级 blockquote（不在另一个 blockquote 内部嵌套的）。
+  // Find top-level blockquotes (not nested inside another blockquote).
   const tops = Array.from(root.querySelectorAll('blockquote')).filter(b =>
     !b.parentElement.closest('blockquote')
   );
   if (!tops.length) return null;
 
   // Build the current-message body: everything in root up to the first
-  // 之前的所有内容，减去引入它的 "On <date>, <author> wrote:" 归属行。
+  // top-level blockquote, minus the "On <date>, <author> wrote:" attribution
   // line that introduces it.
   const head = doc.createElement('div');
   let cursor = root.firstChild;
@@ -3806,21 +3820,21 @@ function _renderThreadStructure(html) {
     head.appendChild(cursor);
     cursor = next;
   }
-  // 从 `head` 中剥离尾部的 "On <date>, <name> wrote:" / Outlook 风格归属，
-  // 因为相同的信息会出现在轮次头部中。
+  // Strip trailing "On <date>, <name> wrote:" / Outlook-style attribution
+  // from `head` since the same info will appear in the turn header.
   let attribution = _harvestAttribution(head);
 
-  // 递归解析每个顶级 blockquote 为一个轮次（及其嵌套链）。
+  // Recursively parse each top-level blockquote into a turn (and its nested chain).
   const turnsHtml = [];
   for (let i = 0; i < tops.length; i++) {
     const bq = tops[i];
-    // blockquote 可能在内部第一个文本中包含 Outlook 风格的
-    // "From: / Sent: / Subject:" 头部。将其提取为轮次元数据。
+    // The blockquote may have an Outlook-style "From: / Sent: / Subject:"
+    // header inside as the first text. Extract that as the turn meta.
     const meta = _extractTurnMetaFromBlockquote(bq) || attribution || _extractQuoteMeta(bq.innerHTML);
     const innerHtml = bq.innerHTML;
 
     // Heuristic: if a blockquote has no detectable attribution (no "From:",
-    // 无 "On <date>... wrote:"）且其内容匹配签名风格模式
+    // no "On <date>... wrote:") AND its content matches signature-style
     // patterns (corporate disclaimer, "registered in", legal notices, just
     // a name + title), treat it as a Signature fold instead of an Earlier
     // Reply. This stops mail clients that wrap signatures in <blockquote>
@@ -3836,8 +3850,8 @@ function _renderThreadStructure(html) {
       continue;
     }
 
-    // 递归渲染此 blockquote 内部（可能包含其自己的
-    // 嵌套 blockquote，表示更早的回复）。
+    // Recursively render the inside of this blockquote (which may contain
+    // its own nested blockquotes representing earlier replies).
     const nested = _renderThreadStructure(innerHtml);
     const bodyHtml = nested || innerHtml;
     const isLast = i === tops.length - 1;
@@ -3847,8 +3861,8 @@ function _renderThreadStructure(html) {
         + `<div class="email-thread-turn-body">${bodyHtml}</div>`
       + '</details>'
     );
-    // 只有第一个轮次使用提取的归属；更深层次的轮次
-    // 从 blockquote 内部获取自己的归属。
+    // Only the first turn uses the harvested attribution; deeper turns
+    // get their own from inside the blockquote.
     attribution = null;
   }
 
@@ -3861,27 +3875,27 @@ function _renderThreadStructure(html) {
 // proper Signature fold. Conservative — only fires when there's no quoted
 // reply markers AND it matches strong corporate-noise phrases.
 // _looksLikeSignature / _harvestAttribution / _extractTurnMetaFromBlockquote
-// 位于 ./emailLibrary/signatureFold.js
+// live in ./emailLibrary/signatureFold.js
 
 /**
- * 将任何引用的回复链包裹在折叠的 <details> 中，以免深度邮件线程
- * 主导阅读器。检测：
- *   - <blockquote> 标签（Gmail / 本地引用回复）
- *   - Outlook 风格 "From: ... Sent: ... To: ... Subject: ..." 头部
- * 每个都获得自己的"较早线程"切换。
+ * Wrap any quoted reply chain in a collapsed <details> so deep email threads
+ * don't dominate the reader. Detects:
+ *   - <blockquote> tags (Gmail / native quoted replies)
+ *   - Outlook-style "From: ... Sent: ... To: ... Subject: ..." headers
+ * Each gets its own "Earlier thread" toggle.
  */
 /**
- * 将纯文本邮件正文解析为堆叠的轮次卡片，通过遍历
- * `> ` 引用前缀级别和 Outlook 风格 "On X wrote:" / Original-Message
- * 边界。返回渲染后的 HTML，或在没有引用内容时返回 null
- *（调用方回退到扁平渲染）。
+ * Parse a plaintext email body into stacked turn-cards by walking
+ * `> ` quote-prefix levels and Outlook-style "On X wrote:" / Original-Message
+ * boundaries. Returns rendered HTML, or null when there's no quoted content
+ * (caller falls back to flat rendering).
  *
- * 镜像 talon 的 `extract_from_plain` 和 email-reply-parser 片段：
- *   1. 以一个或多个 `>` 字符开头的行是引用的（级别 = > 的数量）。
- *   2. 增加级别打开更深层次的轮次（嵌套回复）。
- *   3. `-----Original Message-----` 和 `On <date>, <name> wrote:` 即使
- *      没有 `>` 也启动新轮次。
- *   4. 前导的非引用段是当前消息。
+ * Mirrors talon's `extract_from_plain` and email-reply-parser fragments:
+ *   1. Lines starting with one or more `>` chars are quoted (level = count of >).
+ *   2. Increasing the level opens a deeper turn (nested reply).
+ *   3. `-----Original Message-----` and `On <date>, <name> wrote:` start a
+ *      new turn even without `>`.
+ *   4. The leading non-quoted segment is the current message.
  */
 function _renderPlaintextThread(text) {
   if (!text || typeof text !== 'string' || text.length > 200000) return null;
@@ -3978,15 +3992,15 @@ function _renderPlaintextThread(text) {
 }
 
 // _foldSummary / _extractQuoteMeta / _SIG_ICON / _QUOTE_ICON
-// 位于 ./emailLibrary/signatureFold.js
+// live in ./emailLibrary/signatureFold.js
 
 function _foldQuotedReplies(html) {
   if (!html || typeof html !== 'string') return html;
   if (html.length > 200000) return html;
   const before = html;
-  // 使用 DOMParser 进行正确的嵌套 blockquote 处理。针对 HTML 的正则
-  // 错误处理嵌套并留下孤立的闭合标签，浏览器重新平衡这些标签，
-  // 产生两种视觉上不一致的折叠样式。
+  // Use DOMParser for proper nested-blockquote handling. Regex against HTML
+  // mishandles nesting and leaves orphan close tags that the browser
+  // re-balances, producing two visually inconsistent fold styles.
   try {
     const doc = new DOMParser().parseFromString(`<div id="__r">${html}</div>`, 'text/html');
     const root = doc.getElementById('__r');
@@ -4002,27 +4016,27 @@ function _foldQuotedReplies(html) {
         for (const bq of tops) {
           const det = doc.createElement('details');
           det.className = 'email-quote-fold';
-          // 将摘要构建为原始 HTML — 比手动构建 DOM 更容易。
+          // Build the summary as raw HTML — easier than building DOM by hand.
           const summary = _foldSummary('Earlier thread', _QUOTE_ICON, _extractQuoteMeta(bq.innerHTML));
           det.innerHTML = summary;
           bq.parentNode.insertBefore(det, bq);
-          det.appendChild(bq); // 将原始 blockquote（及任何嵌套的）移入 details
+          det.appendChild(bq); // move the original blockquote (and any nested ones) into the details
         }
-        // 仅标记最后一个折叠，以便 CSS 可以为其添加圆角底边。
+        // Tag only the last fold so CSS can give it rounded bottom corners.
         const allFolds = root.querySelectorAll('.email-quote-fold');
         if (allFolds.length) allFolds[allFolds.length - 1].classList.add('last-fold');
         return root.innerHTML;
       }
     }
   } catch (e) {
-    // 如果 DOMParser 失败，回退到下面的旧正则路径
+    // Fall through to the legacy regex path below if DOMParser fails
   }
-  // 如果 DOM 路径已经包裹了某些内容，我们上面已返回。否则
-  // 未找到 blockquote — 尝试 Outlook 头部启发式。
+  // If DOM-pass already wrapped something, we returned above. Otherwise no
+  // blockquotes were found — try the Outlook-header heuristic.
   if (html !== before) return html;
-  // Outlook 风格引用回复头部 — 多语言。从第一个
-  // "From: ... Sent: ... Subject: ..." 块折叠到正文末尾，
-  // 所有先前的线程级别一起折叠。
+  // Outlook-style quoted-reply header — multilingual. Fold from the first
+  // "From: ... Sent: ... Subject: ..." block through end-of-body so all
+  // prior thread levels collapse together.
   const FROM = '(?:From|Från|Von|De|De\\s|Da|От|Od|Van)';
   const SENT = '(?:Sent|Skickat|Gesendet|Envoyé|Inviato|Enviado|Verzonden|Отправлено|Wysłane)';
   const SUBJ = '(?:Subject|Ämne|Betreff|Objet|Oggetto|Asunto|Onderwerp|Тема|Temat)';
@@ -4033,7 +4047,7 @@ function _foldQuotedReplies(html) {
   const m = html.match(outlookRe);
   if (m) {
     const idx = html.lastIndexOf(m[0]);
-    // Outlook 回退最终只产生一个折叠，因此将其标记为最后一个。
+    // Outlook fallback only ever produces ONE fold, so tag it as last.
     html = html.slice(0, idx) + m[1]
       + '<details class="email-quote-fold last-fold">'
       + _foldSummary('Earlier thread', _QUOTE_ICON, _extractQuoteMeta(m[2]))
@@ -4043,9 +4057,9 @@ function _foldQuotedReplies(html) {
 }
 
 
-// 全局偏好：一旦用户折叠某个 AI 摘要面板，所有邮件都保持折叠状态；
-// 一旦展开，保持展开状态。存储在 localStorage 中，
-// 以便选择在重新加载后仍然保留。
+// Global preference: AI summary panels stay collapsed across every email
+// once the user folds one, and stay expanded once they unfold. Stored in
+// localStorage so the choice survives reloads.
 const _SUMMARY_COLLAPSED_KEY = 'odysseus.email.summaryCollapsed';
 function _summaryCollapsedPref() {
   try { return localStorage.getItem(_SUMMARY_COLLAPSED_KEY) === '1'; } catch { return false; }
@@ -4086,12 +4100,12 @@ function _showCachedSummary(reader, summary, btn) {
   if (btn) {
     btn.classList.add('active');
     const label = btn.querySelector('.btn-label');
-    if (label) label.textContent = t('email.summary');
+    if (label) label.textContent = 'Summary';
   }
 }
 
-// "此发件人的其他邮件" — 阅读器内的滑出面板，列出同一地址的最近邮件。
-// 点击项目可原地加载。
+// "Other from this sender" — slide-out panel inside the reader listing
+// recent emails from the same address. Click an item to load it in place.
 async function _toggleFromSenderPanel(reader, data, btn) {
   const body = reader.querySelector('.email-reader-body');
   if (!body) return;
@@ -4114,7 +4128,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     });
   };
 
-  // 已打开？关闭它。
+  // Already open? Close it.
   const existing = reader.querySelector('.from-sender-panel');
   if (existing) {
     existing.remove();
@@ -4156,8 +4170,8 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   if (btn) btn.classList.add('active');
   _recenterModal();
 
-  // 头部关闭 — 与工具栏漏斗按钮相同，因此关闭路径保持单一来源
-  //（面板移除 + 激活类删除）。
+  // Header close — same as the toolbar funnel button so the close path
+  // stays single-sourced (panel removal + active class drop).
   const headerClose = panel.querySelector('.from-sender-close');
   if (headerClose) {
     headerClose.addEventListener('click', (ev) => {
@@ -4169,12 +4183,12 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   }
 
   const listEl = panel.querySelector('.from-sender-list');
-  // 提升以便 panel._originalEmails（稍后赋值，在 try 外部）可以看到它。
+  // Hoisted so panel._originalEmails (assigned later, outside the try) can see it.
   let emails = [];
 
-  // 多标签模型 — 头部现在是 {name, address} 芯片列表。
-  // 过滤逻辑：当每个标签的地址都出现在 from/to/cc 中（在连接的头部字符串上
-  // 进行不区分大小写的子串匹配）时，邮件匹配。
+  // Multi-tag model — the header is now a list of {name, address} chips.
+  // Filter logic: an email matches when EVERY tag's address appears in
+  // from/to/cc (case-insensitive substring on the joined header strings).
   panel._tags = [{ name: displayName, address: fromAddr }];
   panel._attachmentsOnly = false;
   const searchEl = panel.querySelector('.from-sender-search');
@@ -4202,7 +4216,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
       });
     });
   };
-  // 按每个活动标签过滤已加载的邮件（或最近邮件）。
+  // Filter loaded emails (or recents) by every active tag.
   const _matchesTags = (em) => {
     if (!panel._tags.length) return true;
     const haystack = [
@@ -4230,8 +4244,8 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     panel._lastShowFolder = !!opts.showFolder;
     _applyToggles();
   };
-  // 重新运行当前标签集/查询的相应获取路径。
-  // 提前声明以便上面的芯片移除处理程序可以调用它。
+  // Re-runs the appropriate fetch path for the current tag set / query.
+  // Declared early so chip-removal handlers above can call it.
   let _refreshList = () => {};
   if (attToggle) {
     attToggle.addEventListener('click', (ev) => {
@@ -4264,7 +4278,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     emails = raw;
 
     if (!emails.length) {
-      listEl.innerHTML = `<div class="from-sender-empty">${t('email.no_other_emails', { folder: _esc(state._libFolder || 'INBOX') })}</div>`;
+      listEl.innerHTML = `<div class="from-sender-empty">No other emails from this sender in ${_esc(state._libFolder || 'INBOX')}.</div>`;
     } else {
       panel._setResults(emails, { showFolder: false });
     }
@@ -4280,9 +4294,9 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   updatePlaceholder();
   _renderChips();
 
-  // 当芯片变化以及用户清除查询时都使用。
-  // 拉取跨常见文件夹的最新邮件，以便用户着陆到有用的内容，
-  // 然后 _applyToggles 按标签缩小范围。
+  // Used both when chips change AND when the user clears their query.
+  // Pulls the most-recent emails across the common folders so the user
+  // lands on something useful, then _applyToggles narrows by tags.
   let _recentToken = 0;
   const _loadRecentAcross = async () => {
     const myToken = ++_recentToken;
@@ -4306,7 +4320,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
         const db = b.date ? Date.parse(b.date) : 0;
         return db - da;
       });
-      // 预先取更宽的切片；标签/附件过滤器会进一步修剪。
+      // Take a wider slice up front; tag/attachment filters trim it.
       merged = merged.slice(0, 80);
       panel._setResults(merged, { showFolder: true });
       updatePlaceholder();
@@ -4316,7 +4330,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     }
   };
 
-  // 添加联系人作为标签，清除输入，刷新列表。
+  // Adds a contact as a tag, clears input, refreshes the list.
   const _addTag = (contact) => {
     if (!contact || !contact.address) return;
     const addr = String(contact.address).toLowerCase();
@@ -4329,17 +4343,17 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     _refreshList();
   };
 
-  // 跨文件夹搜索 — 当用户输入时，如果发件人芯片仍然活跃，也尊重它。
-  // 芯片活跃时的空输入恢复原始的"此发件人邮件"视图；
-  // 芯片被移除时的空输入显示提示。
+  // Cross-folder search — when the user types, also honor the sender chip if
+  // it's still active. Empty input with chip active restores the original
+  // "from this sender" view; empty input with chip removed shows the prompt.
   if (searchEl) {
     let searchToken = 0;
     let debounceTimer = null;
     let suggestToken = 0;
     let highlightedIdx = -1;
 
-    // 跨文件夹的自由文本邮件搜索。标签过滤通过
-    // panel._setResults 中的 _applyToggles 应用。
+    // Free-text email search across folders. Tag filter is applied via
+    // _applyToggles inside panel._setResults.
     const runSearch = async (q) => {
       const myToken = ++searchToken;
       const folders = _crossFolderCandidates();
@@ -4370,17 +4384,17 @@ async function _toggleFromSenderPanel(reader, data, btn) {
       }
     };
 
-    // 连接 _refreshList 以便芯片移除/标签添加可以重新运行匹配
-    // 当前输入状态的路径。
+    // Hook up _refreshList so chip removal / tag add can rerun whichever
+    // path matches the current input state.
     _refreshList = () => {
       const q = (searchEl.value || '').trim();
       if (q.length >= 2) runSearch(q);
       else _loadRecentAcross();
     };
 
-    // 联系人建议 — 从 /api/email/contacts 获取。在输入框下方渲染
-    // 一个小的绝对定位下拉菜单。上/下/回车/ESC 键在下面的
-    // keydown 监听器中处理。
+    // Contact suggestions — fetched from /api/email/contacts. Renders a
+    // small absolutely-positioned dropdown under the input. Up/Down/Enter/
+    // Esc handled in the keydown listener below.
     const _renderSuggestions = (items) => {
       if (!suggestEl) return;
       if (!items || !items.length) {
@@ -4404,7 +4418,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
           highlightedIdx = Number(item.dataset.idx);
         });
         item.addEventListener('mousedown', (ev) => {
-          // mousedown 以便我们在 blur 夺走焦点之前添加芯片
+          // mousedown so we add the chip BEFORE blur takes the focus away
           ev.preventDefault();
           _addTag({ name: item.dataset.name, address: item.dataset.addr });
         });
@@ -4413,9 +4427,9 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     const _fetchSuggestions = async (q) => {
       const myToken = ++suggestToken;
       try {
-        // 使用与电子邮件撰写器 To/Cc 字段相同的联系人源
-        // (/api/contacts/search → {results: [{name, emails:[...]}]})。
-        // 展平为 {name, address} 对并删除任何已标记的地址。
+        // Use the same contact source as the email composer's To/Cc fields
+        // (/api/contacts/search → {results: [{name, emails:[...]}]}). Flatten
+        // to {name, address} pairs and drop any already-tagged address.
         const res = await fetch(`${API_BASE}/api/contacts/search?q=${encodeURIComponent(q)}`);
         const j = await res.json();
         if (myToken !== suggestToken) return;
@@ -4443,7 +4457,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
         _loadRecentAcross();
         return;
       }
-      // 立即触发建议（廉价的 SQL）并延迟邮件搜索。
+      // Fire suggestions immediately (cheap SQL) and defer the email search.
       _fetchSuggestions(q);
       debounceTimer = setTimeout(() => runSearch(q), 220);
     });
@@ -4472,7 +4486,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
           suggestEl.hidden = true;
         }
       } else if (ev.key === 'Backspace' && searchEl.value === '' && panel._tags.length) {
-        // 空输入 + 退格键弹出最右边的芯片 — 常见的芯片输入习惯。
+        // Empty input + Backspace pops the rightmost chip — common chip-input idiom.
         ev.preventDefault();
         panel._tags.pop();
         _renderChips();
@@ -4481,12 +4495,12 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     });
 
     searchEl.addEventListener('blur', () => {
-      // 在 blur 时隐藏建议，带有微小延迟以便点击建议有机会触发
-      //（mousedown-add 在大多数情况下已涵盖）。
+      // Hide suggestions on blur, with a tiny delay so click-on-suggestion
+      // gets a chance to fire (mousedown-add covers most cases anyway).
       setTimeout(() => { if (suggestEl) suggestEl.hidden = true; }, 120);
     });
   }
-  // 存储发件人的邮件，以便在搜索被清除后恢复。
+  // Stash the sender's emails for restoring after a search is cleared.
   panel._originalEmails = (typeof emails !== 'undefined') ? emails : [];
 }
 
@@ -4531,8 +4545,8 @@ function _renderFromSenderRows(emails, listEl, reader, opts = {}) {
       const uid = row.dataset.uid;
       const folder = row.dataset.folder || state._libFolder;
       if (!uid) return;
-      // 在我们知道的任何缓存中查找行的邮件；菜单仅需要
-      // uid + subject + folder 来进行操作。
+      // Look up the row's email in any cache we know about; the menu just
+      // needs uid + subject + folder for its actions.
       const em = (typeof emails !== 'undefined' ? emails : []).find(e => String(e.uid) === String(uid))
         || state._libEmails.find(e => String(e.uid) === String(uid))
         || { uid, subject: row.querySelector('.from-sender-subj')?.textContent || '' };
@@ -4547,9 +4561,9 @@ function _renderFromSenderRows(emails, listEl, reader, opts = {}) {
 // skip nodes that already have listeners.
 function _wireAttachmentHandlers(reader, folder) {
   const useFolder = folder || state._libFolder;
-  // 在此处检测移动端，以便当从没有 _isMobileUA 作用域的上下文
-  //（如 _openEmailAsTab、_openEmailWindow）调用此函数时，
-  // 附件芯片处理程序不会因 ReferenceError 而崩溃。
+  // Detect mobile here so the attachment-chip handler doesn't blow up with
+  // a ReferenceError when this fn is called from contexts that don't have
+  // _isMobileUA in scope (e.g. _openEmailAsTab, _openEmailWindow).
   const _isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   reader.querySelectorAll('.email-attachment-open').forEach(openBtn => {
     if (openBtn.dataset.wired === '1') return;
@@ -4560,11 +4574,12 @@ function _wireAttachmentHandlers(reader, folder) {
       const uid = openBtn.dataset.openUid;
       const index = openBtn.dataset.openIndex;
       const name = openBtn.dataset.openName || `attachment-${index}`;
+      const sourceFolder = openBtn.dataset.openFolder || useFolder;
       if (!uid || index == null) return;
       const orig = openBtn.style.opacity;
       openBtn.style.opacity = '0.4';
       try {
-        const folderQs = encodeURIComponent(useFolder);
+        const folderQs = encodeURIComponent(sourceFolder);
         const res = await fetch(
           `${API_BASE}/api/email/attachment-as-doc/${encodeURIComponent(uid)}/${encodeURIComponent(index)}?folder=${folderQs}${_acct()}`,
           { method: 'POST', credentials: 'same-origin' }
@@ -4618,8 +4633,9 @@ function _wireAttachmentHandlers(reader, folder) {
       const uid = chip.dataset.attUid;
       const index = chip.dataset.attIndex;
       const name = chip.dataset.attName || `attachment-${index}`;
+      const sourceFolder = chip.dataset.attFolder || useFolder;
       if (!uid || index == null) return;
-      const url = `${API_BASE}/api/email/attachment/${encodeURIComponent(uid)}/${encodeURIComponent(index)}?folder=${encodeURIComponent(useFolder)}${_acct()}`;
+      const url = `${API_BASE}/api/email/attachment/${encodeURIComponent(uid)}/${encodeURIComponent(index)}?folder=${encodeURIComponent(sourceFolder)}${_acct()}`;
       if (_isMobileUA) {
         window.open(url, '_blank');
         return;
@@ -4686,37 +4702,62 @@ function _isLikelySignatureImage(a) {
   const isImage = /\.(png|jpe?g|gif|bmp|svg|webp)$/i.test(name);
   if (!isImage) return false;
   const size = Number(a.size) || 0;
-  // Outlook / Gmail 内联图片占位符总是看起来像这样。
+  // Outlook / Gmail inline image placeholders always look like this.
   if (/^image\d{3,}\.(png|jpe?g|gif)$/i.test(name)) return true;
   if (/^(signature|logo|sig|footer|banner)[-_\d]*\.(png|jpe?g|gif|svg)$/i.test(name)) return true;
-  // 大多数签名 logo / 内联缩略图 < 30 KB。真正的用户共享图片
-  //（截图、照片）通常是 50 KB+。
+  // Most signature logos / inline thumbnails are < 30 KB. Real user-
+  // shared images (screenshots, photos) are typically 50 KB+.
   if (size > 0 && size < 30 * 1024) return true;
   return false;
 }
 
-// 为邮件读取响应构建附件头部+芯片 HTML。提取出来以便初始打开
-// 和交换阅读器路径都可以渲染它。
+// Build the attachments header+chips HTML for an email read response. Pulled
+// out so both the initial-open and the swap-reader paths can render it.
 function _buildAttsHtmlFor(uid, data) {
-  if (!data || !data.attachments || !data.attachments.length) return '';
-  const _OPENABLE_RE = /\.(pdf|docx|txt|md|markdown)$/i;
-  const visible = data.attachments.filter(a => !_isLikelySignatureImage(a));
-  if (!visible.length) return '';
-  const chips = visible.map(a => {
+  if (!data) return '';
+  const _OPENABLE_RE = /\.(pdf|docx|txt|md|markdown|eml)$/i;
+  const currentAttachments = Array.isArray(data.attachments) ? data.attachments : [];
+  const relatedAttachments = Array.isArray(data.related_attachments) ? data.related_attachments : [];
+  if (!currentAttachments.length && !relatedAttachments.length) return '';
+  const visible = currentAttachments.filter(a => !_isLikelySignatureImage(a));
+  const hidden = currentAttachments.filter(a => _isLikelySignatureImage(a));
+  const related = relatedAttachments.filter(a => !_isLikelySignatureImage(a));
+  const renderChip = (a, extraClass = '') => {
     const openable = _OPENABLE_RE.test(a.filename || '');
+    const chipUid = a.source_uid || a.uid || uid;
+    const chipFolder = a.source_folder || data.folder || state._libFolder || 'INBOX';
     const openBtn = openable
-      ? `<span class="email-attachment-open" title="Open in document editor" data-open-uid="${_esc(uid)}" data-open-index="${a.index}" data-open-name="${_esc(a.filename)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg><span class="email-attachment-open-label">Open</span></span>`
+      ? `<span class="email-attachment-open" title="Open in document editor" data-open-uid="${_esc(chipUid)}" data-open-index="${a.index}" data-open-name="${_esc(a.filename)}" data-open-folder="${_esc(chipFolder)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg><span class="email-attachment-open-label">Open</span></span>`
       : '';
-    return `<button type="button" class="email-attachment-chip" data-att-uid="${_esc(uid)}" data-att-index="${a.index}" data-att-name="${_esc(a.filename)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>${_esc(a.filename)}</span><span class="att-size">${Math.round((a.size||0)/1024)} KB</span>${openBtn}</button>`;
-  }).join('');
+    return `<button type="button" class="email-attachment-chip${extraClass}" data-att-uid="${_esc(chipUid)}" data-att-index="${a.index}" data-att-name="${_esc(a.filename)}" data-att-folder="${_esc(chipFolder)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>${_esc(a.filename)}</span><span class="att-size">${Math.round((a.size||0)/1024)} KB</span>${openBtn}</button>`;
+  };
+  const chips = visible.map(a => renderChip(a)).join('');
+  const hiddenChips = hidden.map(a => renderChip(a, ' email-attachment-chip-muted')).join('');
+  const relatedChips = related.map(a => renderChip(a, ' email-attachment-chip-related')).join('');
+  const visibleSection = visible.length
+    ? '<div class="email-reader-atts">' + chips + '</div>'
+    : '';
+  const relatedSection = related.length
+    ? '<div class="email-reader-atts-hidden-note">From earlier in this thread</div><div class="email-reader-atts email-reader-atts-related">' + relatedChips + '</div>'
+    : '';
+  const hiddenSection = hidden.length
+    ? '<div class="email-reader-atts-hidden-note">Filtered inline images / signature files</div><div class="email-reader-atts email-reader-atts-hidden">' + hiddenChips + '</div>'
+    : '';
+  const label = visible.length
+    ? `Attachments (${visible.length + related.length})`
+    : related.length
+      ? `Thread attachments (${related.length})`
+      : `Hidden inline attachments (${hidden.length})`;
   return (
     '<div class="email-reader-atts-wrap collapsed">'
     +   '<div class="email-reader-atts-header email-summary-toggle" role="button" tabindex="0">'
     +     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>'
-    +     `<span>Attachments (${data.attachments.length})</span>`
+    +     `<span>${label}</span>`
     +     '<svg class="email-summary-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto;transition:transform .15s ease;"><polyline points="6 9 12 15 18 9"/></svg>'
     +   '</div>'
-    +   '<div class="email-reader-atts">' + chips + '</div>'
+    +   visibleSection
+    +   relatedSection
+    +   hiddenSection
     + '</div>'
   );
 }
@@ -4732,7 +4773,7 @@ let _emailTabSeq = 0;
 // it stays "tab 2" until it's closed — even if tab 1 closes first, the
 // remaining reader doesn't renumber down to 1. New tabs claim the
 // lowest unused slot.
-const _emailReaderSlots = new Map(); // modalId -> 槽位 (1, 2, 3, ...)
+const _emailReaderSlots = new Map(); // modalId -> slot (1, 2, 3, ...)
 function _allocReaderSlot(modalId) {
   if (_emailReaderSlots.has(modalId)) return _emailReaderSlots.get(modalId);
   const used = new Set(_emailReaderSlots.values());
@@ -4745,8 +4786,8 @@ function _freeReaderSlot(modalId) {
   _emailReaderSlots.delete(modalId);
 }
 
-// JS 驱动的门：在 <body> 上设置 [data-email-tabs="N"]，以便 CSS 可以
-// 仅在 2+ 标签页存在时显示每个芯片的数字徽章。
+// JS-driven gate: sets [data-email-tabs="N"] on <body> so CSS can show
+// the per-chip number badge only when 2+ tabs exist.
 function _syncEmailTabsCount() {
   const tabs = document.querySelectorAll('.minimized-dock-chip[data-modal-id^="email-view-"]');
   document.body.dataset.emailTabs = String(tabs.length);
@@ -4760,9 +4801,9 @@ function _syncEmailTabsCount() {
 function _syncEmailTabBadge() {
   const readers = document.querySelectorAll('.minimized-dock-chip[data-modal-id^="email-reader-"]');
   document.body.dataset.emailReaders = String(readers.length);
-  // 为每个芯片标记其持久槽位号。CSS 通过 attr() 读取
-  // data-tab-num 而不是使用计数器，这样当其他标签页关闭时
-  // 数字保持稳定。
+  // Stamp each chip with its persistent slot number. CSS reads
+  // data-tab-num via attr() instead of using a counter so the number
+  // stays stable when other tabs close.
   readers.forEach(chip => {
     const slot = _emailReaderSlots.get(chip.dataset.modalId);
     if (slot) chip.dataset.tabNum = String(slot);
@@ -4788,11 +4829,11 @@ function _ensureEmailTabObserver() {
   const tryWire = () => {
     const dock = document.getElementById('minimized-dock');
     if (!dock) { setTimeout(tryWire, 200); return; }
-    // 只关注我们关心的：停靠栏中的芯片添加/移除。
+    // Only watch what we care about: chip add/remove in the dock.
     const obs = new MutationObserver(handler);
     obs.observe(dock, { childList: true });
-    // 监听库网格，以便卡片展开/折叠的切换实时更新库芯片的
-    // "has-expanded" 徽章。
+    // Watch the library grid so toggling a card expanded/collapsed
+    // updates the lib chip's "has-expanded" badge in real time.
     const wireGridObs = () => {
       const grid = document.getElementById('email-lib-grid');
       if (!grid) { setTimeout(wireGridObs, 500); return; }
@@ -4808,7 +4849,7 @@ function _ensureEmailTabObserver() {
 //   - email-lib-modal (the inbox library) is unique. Its chip just
 //     restores it.
 //   - Each "Open in new tab" creates a separate per-email reader modal
-//     （id "email-reader-{uid}-{seq}"），具有与库内联阅读器相同的
+//     (id "email-reader-{uid}-{seq}") with the SAME structure & classes
 //     as the library's inline reader, so they look identical. Each
 //     reader registers its own dock chip with a number badge.
 async function _openEmailAsTab(em, folder) {
@@ -4819,7 +4860,7 @@ async function _openEmailAsTab(em, folder) {
 
   // Build the modal shell. Uses the same doclib-modal-content sizing
   // as the email library so it feels like a sibling window. The reader
-  // email-card-reader / email-reader-* 类 → 样式相同。
+  // body inside uses the exact same email-card-reader / email-reader-*
   // classes the inline reader uses → identical styling.
   const modal = document.createElement('div');
   modal.className = 'modal email-reader-tab-modal';
@@ -4841,10 +4882,10 @@ async function _openEmailAsTab(em, folder) {
     </div>
   `;
   document.body.appendChild(modal);
-  // 继承 .modal 的显示（flex-center）。z-index 高于库
-  //（库使用默认 .modal z-index 250），以便新标签页位于顶部。
+  // Inherit display from .modal (flex-center). z-index above the library
+  // (which uses default .modal z-index 250) so the new tab sits on top.
   modal.style.zIndex = '270';
-  // 最后打开 → 邮件窗口在已打开文档之前（交替标志）。
+  // Opened last → email windows in front of any open doc (alternation flag).
   document.body.classList.add('email-front');
 
   Modals.register(modalId, {
@@ -4856,11 +4897,11 @@ async function _openEmailAsTab(em, folder) {
       Promise.resolve().then(_syncEmailTabBadge);
     },
     restoreFn: () => {
-      // 最后重新打开 → 将邮件窗口置于任何已打开文档之前。
+      // Reopened last → bring the email windows in front of any open doc.
       document.body.classList.add('email-front');
-      // 移动端：一次只有一个邮件窗口可见。点击此芯片
-      // 收起库 + 任何其他阅读器，这样用户通过停靠栏在它们之间切换
-      // 而不是堆叠。
+      // Mobile: only one email window visible at a time. Tapping this
+      // chip chips down the library + any other reader, so the user
+      // toggles between them via the dock instead of stacking.
       if (window.innerWidth <= 768) {
         try {
           if (Modals.isRegistered('email-lib-modal') && !Modals.isMinimized('email-lib-modal')) {
@@ -4878,18 +4919,18 @@ async function _openEmailAsTab(em, folder) {
       }
     },
   });
-  // 通过 modalManager 连接 `_` 最小化按钮（它看到我们的 .minimize-btn
-  // 已经存在，只需绑定点击处理程序）。
+  // Wire the `_` minimize button via modalManager (it sees our .minimize-btn
+  // already exists and just binds the click handler).
   try { Modals.injectMinimizeButton(modal, modalId); } catch {}
-  // X 按钮完全关闭标签页（拆卸并取消注册）。
+  // X button fully closes the tab (tears down and unregisters).
   modal.querySelector('.close-btn')?.addEventListener('click', (ev) => {
     ev.stopPropagation();
     Modals.close(modalId);
   });
 
-  // 在 header 上接线拖拽（仅桌面端）。匹配 app.js initUIVisibility 中的
-  // 全局模式，但那只在启动时运行一次，看不到动态创建的模态框 —
-  // 因此我们在此复制它。
+  // Wire dragging on the header (desktop only). Matches the global pattern
+  // in app.js initUIVisibility, but that runs once at boot and doesn't see
+  // dynamically-created modals — so we replicate it here.
   const content = modal.querySelector('.modal-content');
   const mh = modal.querySelector('.modal-header');
   if (mh && content) {
@@ -4923,8 +4964,8 @@ async function _openEmailAsTab(em, folder) {
     });
   }
 
-  // 在前面打开新标签页，位于邮件库之上。用户可以点击 `_`
-  // 将其收起为芯片，阅读完成后使用。
+  // Open the new tab in front, on top of the email library. The user
+  // can tap `_` to tab it down to a chip when they're done reading.
   //
   // Mobile: bottom-sheet windows fill the viewport, so stacking multiple
   // readers on top of each other is confusing — only one window can be
@@ -4949,8 +4990,8 @@ async function _openEmailAsTab(em, folder) {
   _ensureEmailTabObserver();
   _syncEmailTabBadge();
 
-  // 使用与 _toggleCardPreview 完全相同的模板获取 + 渲染邮件正文，
-  // 使视觉效果完全匹配。
+  // Fetch + render the email body using the exact same template as
+  // _toggleCardPreview so the visuals match perfectly.
   const reader = modal.querySelector('.email-card-reader');
   _markEmailReaderActive(reader);
   const sp = spinnerModule.createWhirlpool(28);
@@ -5076,7 +5117,7 @@ async function _openEmailWindow(em, folder) {
   document.body.appendChild(modal);
   modal.style.display = 'block';
   const content = modal.querySelector('.modal-content');
-  // 位置从屏幕中心偏移，以便连续窗口形成级联。
+  // Position offset from screen center so successive windows cascade.
   const isMobile = window.innerWidth <= 768;
   if (isMobile) {
     content.style.position = 'fixed';
@@ -5098,7 +5139,7 @@ async function _openEmailWindow(em, folder) {
   modal.querySelector('.close-btn')?.addEventListener('click', () => modal.remove());
   try { _makeDraggable(content, modal, 'email-window-fullscreen'); } catch {}
 
-  // 加载 + 渲染
+  // Load + render
   const bodyEl = modal.querySelector('.email-window-body');
   const loading = modal.querySelector('.email-window-loading');
   try {
@@ -5113,8 +5154,8 @@ async function _openEmailWindow(em, folder) {
     _syncEmailReadState(em.uid, true);
     const subjEl = modal.querySelector('.email-window-subject');
     if (subjEl && data.subject) subjEl.textContent = data.subject;
-    // 以与内联阅读器相同的方式构建收件人芯片，
-    // 使独立查看器看起来/感觉起来与真实邮件视图完全相同。
+    // Build recipient chips the same way the inline reader does so the
+    // standalone viewer looks/feels exactly like a real email view.
     const _chipsFor = (addrs) => {
       if (!addrs) return '';
       const list = _splitRecipientList(addrs);
@@ -5126,8 +5167,8 @@ async function _openEmailWindow(em, folder) {
     const fromChip = _recipientChipHtml(`${data.from_name || ''} <${data.from_address || ''}>`, data.from_name || data.from_address, 'from-chip');
     let attsHtml = '';
     try { attsHtml = _buildAttsHtmlFor(em.uid, data); } catch {}
-    // 重新将 bodyEl 用作完整的 email-card-reader，以便内联阅读器的
-    // CSS 适用（有尺寸的头部、两行操作按钮等）。
+    // Repurpose bodyEl as a full email-card-reader so the inline reader's
+    // CSS applies (sized header, action buttons in two rows, etc.).
     bodyEl.classList.add('email-card-reader');
     _markEmailReaderActive(bodyEl);
     bodyEl.style.padding = '0';
@@ -5159,7 +5200,7 @@ async function _openEmailWindow(em, folder) {
     `;
     _markEmailReaderActive(bodyEl);
     _wireRecipientChips(bodyEl);
-    // 连接内联阅读器拥有的所有相同操作处理程序。
+    // Wire all the same action handlers the inline reader has.
     try { _wireAttachmentHandlers(bodyEl, useFolder); } catch {}
     const attsWrap = bodyEl.querySelector('.email-reader-atts-wrap');
     if (attsWrap) {
@@ -5196,7 +5237,7 @@ async function _openEmailWindow(em, folder) {
       // Use a synthetic "card" — the more-menu only needs the anchor
       // element and the email data. The card param is mostly used to find
       // the next sibling; the standalone window has none so we just pass
-      // 传递 bodyEl 作为替代。
+      // bodyEl as a stand-in.
       try { _showReaderMoreMenu(em, modal, bodyEl, ev.currentTarget); } catch {}
     });
   } catch (err) {
@@ -5227,7 +5268,7 @@ async function _swapReaderToUid(reader, uid, folder) {
       return;
     }
     _syncEmailReadState(uid, true);
-    // 更新头部元数据（From/To/Subject）以匹配新邮件。
+    // Update the header meta (From/To/Subject) so it matches the new email.
     const headerMeta = reader.querySelector('.email-reader-meta');
     if (headerMeta) {
       const subj = data.subject || '(no subject)';
@@ -5297,28 +5338,28 @@ async function _summarizeEmail(reader, data, btn) {
   const body = reader.querySelector('.email-reader-body');
   if (!body) return;
 
-  // 如果摘要面板已存在，切换：隐藏/显示
+  // If a summary panel already exists, toggle: hide/show
   const existing = body.querySelector('.email-summary-panel');
   if (existing) {
     if (existing.style.display === 'none') {
       existing.style.display = '';
       if (btn) {
         btn.classList.add('active');
-        btn.querySelector('.btn-label').textContent = t('email.summary');
+        btn.querySelector('.btn-label').textContent = 'Summary';
       }
     } else {
       existing.style.display = 'none';
       if (btn) {
         btn.classList.remove('active');
-        btn.querySelector('.btn-label').textContent = t('email.summary');
+        btn.querySelector('.btn-label').textContent = 'Summary';
       }
     }
     return;
   }
 
-  // 还没有面板。如果邮件没有缓存的 AI 摘要，显示占位符
-  // "未生成 — 立即创建？"提示，而不是立即触发 LLM。
-  // 这避免了意外的 LLM 花费，并使状态对用户明确。
+  // No panel yet. If the email has no cached AI summary, show a placeholder
+  // "not generated — create now?" prompt instead of firing the LLM immediately.
+  // This avoids accidental LLM spend and makes the state explicit to the user.
   if (!data.cached_summary) {
     const prompt = document.createElement('div');
     prompt.className = 'email-summary-panel';
@@ -5332,10 +5373,10 @@ async function _summarizeEmail(reader, data, btn) {
     if (btn) {
       btn.classList.add('active');
       const label = btn.querySelector('.btn-label');
-      if (label) label.textContent = t('email.summary');
+      if (label) label.textContent = 'Summary';
     }
-    // 没有取消按钮 — 再次切换摘要按钮会隐藏此面板
-    //（由上面的现有面板分支处理），所以它是多余的。
+    // No Cancel button — toggling the Summary button again hides this panel
+    // (handled by the existing-panel branch above), so it'd be redundant.
     prompt.querySelector('[data-act="summary-generate"]').addEventListener('click', async (ev) => {
       ev.stopPropagation();
       prompt.remove();
@@ -5344,7 +5385,7 @@ async function _summarizeEmail(reader, data, btn) {
     return;
   }
 
-  // 缓存的摘要存在 — 立即显示它。
+  // Cached summary exists — show it immediately.
   await _generateSummary(reader, data, btn);
 }
 
@@ -5388,8 +5429,8 @@ async function _generateSummary(reader, data, btn) {
         body: data.body,
         subject: data.subject,
         from: `${data.from_name} <${data.from_address}>`,
-        // 发送标识符以便后端可以获取原始消息并
-        // 提取附件文本用于摘要（PDF、发票等）。
+        // Send identifiers so the backend can fetch the raw message and
+        // pull attachment text for the summary (PDFs, invoices, etc.).
         uid: data.uid || '',
         folder: state._libFolder || 'INBOX',
         message_id: data.message_id || '',
@@ -5404,10 +5445,10 @@ async function _generateSummary(reader, data, btn) {
       if (btn) {
         btn.classList.add('active');
         const label = btn.querySelector('.btn-label');
-        if (label) label.textContent = t('email.summary');
+        if (label) label.textContent = 'Summary';
       }
     } else {
-      content.innerHTML = `<span style="color:var(--red)">${_esc(result.error || t('email.failed_to_summarize'))}</span>`;
+      content.innerHTML = `<span style="color:var(--red)">${_esc(result.error || 'Failed to summarize')}</span>`;
       panel.remove();
     }
   } catch (e) {
@@ -5419,9 +5460,9 @@ async function _generateSummary(reader, data, btn) {
   }
 }
 
-// 将邮件 ⋮ 下拉菜单保持在视口内：当它会超出底部时
-//（例如手机屏幕上位置较低的邮件），如果上方有更多空间就翻转到锚点之上，
-// 如果仍然溢出则限制高度并滚动。
+// Keep an email ⋮ dropdown inside the viewport: when it would spill past the
+// bottom (e.g. an email low on a phone screen), flip it above the anchor if
+// there's more room up there, and cap height + scroll if it still overflows.
 function _fitEmailDropdown(dropdown, rect) {
   requestAnimationFrame(() => {
     const margin = 8;
@@ -5438,16 +5479,16 @@ function _fitEmailDropdown(dropdown, rect) {
       dropdown.style.left = margin + 'px';
       dropdown.style.right = 'auto';
     }
-    // 垂直适应 — 如果下方空间不足，则向上翻转或限制高度+滚动。
+    // Vertical fit — flip up or cap+scroll if it doesn't fit below.
     const dh = dropdown.offsetHeight;
     const below = window.innerHeight - rect.bottom - margin;
     const above = rect.top - margin;
-    if (dh <= below) return;                 // 在下方合适
-    if (above > below) {                     // 向上翻转
+    if (dh <= below) return;                 // fits below as-is
+    if (above > below) {                     // flip upward
       dropdown.style.top = 'auto';
       dropdown.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
       if (dh > above) { dropdown.style.maxHeight = above + 'px'; dropdown.style.overflowY = 'auto'; }
-    } else {                                 // 保持在下方，限制高度+滚动
+    } else {                                 // keep below, cap + scroll
       dropdown.style.maxHeight = below + 'px';
       dropdown.style.overflowY = 'auto';
     }
@@ -5455,15 +5496,15 @@ function _fitEmailDropdown(dropdown, rect) {
 }
 
 function _showReaderMoreMenu(em, card, reader, anchor) {
-  // 切换：如果此锚点对应的下拉菜单已打开，关闭它。
+  // Toggle: if a dropdown for THIS anchor is already open, close it.
   const existing = document.querySelector('.email-card-dropdown');
   if (existing && existing._anchor === anchor) {
     existing.remove();
     anchor.classList.remove('reader-more-active');
     return;
   }
-  // 否则在打开新下拉菜单之前关闭任何其他打开的下拉菜单
-  //（并清除其锚点的激活状态）。
+  // Otherwise close any other open dropdown (and clear its anchor's active
+  // state) before opening a fresh one.
   document.querySelectorAll('.email-card-dropdown').forEach(d => {
     if (d._anchor) d._anchor.classList.remove('reader-more-active');
     d.remove();
@@ -5497,7 +5538,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
     _renderGrid();
     _libCacheWriteBack();
     if (!nextUid) return;
-    // _renderGrid 之后，卡片节点是新鲜的 — 重新解析并展开。
+    // After _renderGrid, the card nodes are fresh — re-resolve and expand.
     const grid = document.getElementById('email-lib-grid');
     const nextCard = grid?.querySelector(`.doclib-card[data-uid="${CSS.escape(String(nextUid))}"]`);
     const nextEm = state._libEmails.find(e => String(e.uid) === String(nextUid));
@@ -5594,8 +5635,8 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      // 将发件人保存到 CardDAV 联系人。从列表项 (em) 中提取姓名 + 地址；
-      // 回退到拆分本地部分作为姓名。
+      // Save the sender to CardDAV contacts. Pulls name + address off the
+      // list-item (em); falls back to splitting the local-part for a name.
       label: 'Save sender to contacts',
       icon: _contactIcon,
       action: async () => {
@@ -5686,8 +5727,8 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
     });
     dropdown.appendChild(item);
   }
-  // 仅移动端的取消项 — 触摸用户的显式关闭。CSS 在桌面端隐藏它，
-  // 因为桌面端外部点击已经能干净地关闭。 (卡片菜单)
+  // Mobile-only Cancel item — explicit close for touch users. CSS hides it
+  // on desktop where outside-click already dismisses cleanly.
   const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
@@ -5732,7 +5773,7 @@ function _showCardMenu(em, anchor) {
   const _newTabIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
   const actions = [
     { label: 'Open', icon: _replyIcon, action: async () => {
-      // 仅内联展开（与点击行相同）。
+      // Just expand inline (same as tapping the row).
       const card = anchor.closest('.doclib-card');
       if (card && !card.classList.contains('doclib-card-expanded')) {
         await _toggleCardPreview(card, em);
@@ -5764,7 +5805,7 @@ function _showCardMenu(em, anchor) {
         const wasActive = check ? check.classList.contains('active') : !!em.is_answered;
         const newState = !wasActive;
         em.is_answered = newState;
-        if (newState) _syncEmailReadState(em.uid, true); // 标记完成意味着标记已读
+        if (newState) _syncEmailReadState(em.uid, true); // mark-done implies mark-read
         try {
           if (newState) {
             await fetch(`${API_BASE}/api/email/mark-answered/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
@@ -5883,8 +5924,8 @@ function _showCardMenu(em, anchor) {
     });
     dropdown.appendChild(item);
   }
-  // 仅移动端的取消项 — 触摸用户的显式关闭。CSS 在桌面端隐藏它，
-  // 因为桌面端外部点击已经能干净地关闭。 (卡片菜单)
+  // Mobile-only Cancel item — explicit close for touch users. CSS hides it
+  // on desktop where outside-click already dismisses cleanly.
   const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
@@ -5908,7 +5949,7 @@ function _showCardMenu(em, anchor) {
   setTimeout(() => document.addEventListener('click', close, true), 10);
 }
 
-// 选择模式的批量"操作"下拉菜单 — 删除按钮是单独的可见按钮。
+// Bulk "Actions" dropdown for select mode — Delete is a separate visible button.
 function _showBulkActionsMenu(anchor) {
   document.querySelectorAll('.email-card-dropdown').forEach(d => d.remove());
   const dropdown = document.createElement('div');
@@ -5930,7 +5971,7 @@ function _showBulkActionsMenu(anchor) {
     it.addEventListener('click', (e) => { e.stopPropagation(); dropdown.remove(); a.action(); });
     dropdown.appendChild(it);
   }
-  // 仅移动端取消 — 与每张卡片和侧边栏下拉菜单匹配。
+  // Mobile-only Cancel — matches the per-card and sidebar dropdowns.
   const _cancelIco2 = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelIt = document.createElement('div');
   cancelIt.className = 'dropdown-item-compact dropdown-cancel-mobile';
@@ -5969,8 +6010,8 @@ function _updateBulkBar() {
   if (count) count.textContent = `${state._selectedUids.size} Selected`;
   const all = document.getElementById('email-lib-select-all');
   if (all) all.checked = state._libEmails.length > 0 && state._libEmails.every(e => state._selectedUids.has(e.uid));
-  // 当有选中项时，将操作按钮亮化为与"N 项已选"计数相同的完整 --fg 颜色
-  //（按钮默认为暗淡的 60% --fg）。
+  // When something's selected, brighten Actions to the same full --fg color as
+  // the "N Selected" count (the button is a dimmer 60% --fg by default).
   const actions = document.getElementById('email-lib-bulk-actions');
   if (actions) actions.style.color = state._selectedUids.size > 0 ? 'var(--fg)' : '';
   const deleteBtn = document.getElementById('email-lib-bulk-delete');
@@ -6272,8 +6313,8 @@ function _handleAiReplyButton(ev, em, data) {
 }
 
 function _hasMultipleRecipients(data) {
-  // 统计 To + Cc 中的不同地址（减去当前用户）。当用户地址尚未知时，
-  // 空回退 — 不排除任何人。
+  // Count distinct addresses in To + Cc (minus the current user). Empty
+  // fallback when the user's address isn't yet known — no exclusion.
   const myAddress = (window._myEmailAddress || '').toLowerCase();
   const extractEmails = (str) => {
     if (!str) return [];
@@ -6288,7 +6329,7 @@ function _hasMultipleRecipients(data) {
     ...extractEmails(data.to),
     ...extractEmails(data.cc),
   ]);
-  // 发件人也算作另一个其他人
+  // Sender counts as one other person too
   if (data.from_address && data.from_address.toLowerCase() !== myAddress) {
     recipients.add(data.from_address.toLowerCase());
   }
@@ -6405,12 +6446,12 @@ async function _createEmailReplyReminder(em, dueDate, customText = '') {
     ? `${dueDate.getFullYear()}-${pad(dueDate.getMonth()+1)}-${pad(dueDate.getDate())}T${pad(dueDate.getHours())}:${pad(dueDate.getMinutes())}`
     : null;
   const fullFrom = em.from || em.sender || '';
-  // 仅从 "First Last <email@x>" 中提取名字，或回退到电子邮件本地部分
+  // Extract just the first name from "First Last <email@x>" or fall back to email local part
   let from = 'someone';
   if (fullFrom) {
     const fullName = _extractName(fullFrom);
     if (fullName) {
-      // 剥离引号，取第一个空格分隔的词，首字母大写
+      // Strip quotes, take the first whitespace-separated word, capitalize
       const first = fullName.replace(/^["']|["']$/g, '').trim().split(/[\s,]+/)[0] || '';
       if (first) from = first.charAt(0).toUpperCase() + first.slice(1);
     }
@@ -6453,17 +6494,17 @@ async function _createEmailReplyReminder(em, dueDate, customText = '') {
   }
 }
 
-// 在通过 innerHTML 注入之前消毒不受信任的 HTML 邮件正文。
+// Sanitize untrusted HTML email bodies before injecting via innerHTML.
 //
-// 拒绝列表消毒器 — 必须阻止所有已知的 XSS 攻击入口：
+// Denylist sanitizer — has to block every well-known XSS sink:
 //   - <script>, <iframe>, <object>, <embed>, <form>, <style>, <link>
-//   - 完全移除 SVG（事件处理器、<use href="javascript:">、<foreignObject>、
-//     <animate>、<set> 等）。邮件客户端不需要 SVG。
-//   - <math>（MathML 可以携带处理器）。
+//   - SVG entirely (event handlers, <use href="javascript:">, <foreignObject>,
+//     <animate>, <set>, etc.). Email clients don't need SVG.
+//   - <math> (MathML can carry handlers).
 //   - <base href="...">, <meta http-equiv="refresh">, <noscript>, <frame>,
-//     <frameset>, <applet>, <portal>。
-//   - on* 属性；href/src/srcset/formaction/action/background/poster/data
-//     属性中的 javascript:/vbscript:/data: URL。
-//   - srcdoc（防御性 — iframe 已被移除）。
-//   - 包含 javascript: 或 expression() 的内联 `style` 声明。
+//     <frameset>, <applet>, <portal>.
+//   - on* attributes; javascript:/vbscript:/data: URLs in href/src/srcset/
+//     formaction/action/background/poster/data attributes.
+//   - srcdoc (defensive — iframe is already nuked).
+//   - inline `style` declarations containing javascript: or expression().
 // _sanitizeHtml / _escLinkify live in ./emailLibrary/utils.js

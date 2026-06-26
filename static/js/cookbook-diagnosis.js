@@ -1,6 +1,6 @@
 // ============================================
-// COOKBOOK 诊断子模块
-// 错误模式匹配和诊断 UI
+// COOKBOOK DIAGNOSIS SUB-MODULE
+// Error pattern matching and diagnosis UI
 // ============================================
 
 import {
@@ -19,8 +19,8 @@ import {
   _serveAutoRetryReplace,
   _serveAutoRetryRemove,
   _serveAutoFix,
-  // 纯说明符（无 ?v=）—— 必须与所有其他 cookbook.js 导入者匹配，以便浏览器只加载一次。
-  // 参见 cookbook-hwfit.js。
+  // Plain specifier (no ?v=) — must match every other cookbook.js importer so the
+  // browser loads it once. See cookbook-hwfit.js.
 } from './cookbook.js';
 import uiModule from './ui.js';
 
@@ -37,7 +37,7 @@ function _diagFixIcon(label) {
   const l = String(label || '').toLowerCase();
   const _svg = (path) => `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="cookbook-diag-btn-ico" aria-hidden="true">${path}</svg>`;
   if (l.startsWith('retry') || l.includes('relaunch') || l.includes('restart')) {
-    // 循环箭头刷新图标
+    // Circular-arrow refresh
     return _svg('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>');
   }
   if (l.startsWith('copy')) {
@@ -58,12 +58,12 @@ function _diagFixIcon(label) {
   if (l.startsWith('switch') || l.includes('use ')) {
     return _svg('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>');
   }
-  // 默认：灯泡图标（通用"建议"）
+  // Default: lightbulb (generic "suggestion")
   return _svg('<path d="M9 21h6"/><path d="M12 17v4"/><path d="M12 3a6 6 0 0 0-4 10.5c1 1 1.5 2 1.5 3.5h5c0-1.5.5-2.5 1.5-3.5A6 6 0 0 0 12 3Z"/>');
 }
 import spinnerModule from './spinner.js';
 
-// ── 错误诊断 ──
+// ── Error diagnosis ──
 
 // Re-exported so callers (Launch-tab pre-flight) can deep-link into the
 // Dependencies tab + auto-expand a specific backend's recipe panel and
@@ -149,7 +149,7 @@ function _openCpuServeEdit(panel) {
   });
 }
 
-// 推断单文件 checkpoint 需要配置的来源受限制基础仓库
+// Infer the gated base repo that single-file checkpoints need configs from
 function _inferBaseRepo(text) {
   if (!text) return null;
   const t = text.toLowerCase();
@@ -202,8 +202,8 @@ export const ERROR_PATTERNS = [
   },
   {
     pattern: /There is no module or parameter named ['"]lm_head\.input_scale['"]|lm_head\.input_scale|weight_scale_2/i,
-    message: 'vLLM could not load this ModelOpt LM-head quantized checkpoint with the current runtime.',
-    suggestion: '建议操作：通过提供此 CLI 的环境升级 vLLM（包管理器、venv、Docker 镜像或源码检出），或选择兼容的 checkpoint。',
+    message: 'vLLM cannot load this ModelOpt LM-head quantized checkpoint with the current runtime.',
+    suggestion: 'Suggested action: upgrade vLLM through the environment that provides this CLI (package manager, venv, Docker image, or source checkout), or choose a compatible checkpoint.',
     fixes: [
       { label: 'Open Dependencies', action: () => _openCookbookDependencies('vllm') },
       {
@@ -254,7 +254,7 @@ export const ERROR_PATTERNS = [
   },
   {
     pattern: /No CUDA GPUs are available|no GPU.*found|CUDA_VISIBLE_DEVICES.*invalid/i,
-    message: 'No GPUs visible. 检查您的 GPU 选择或驱动程序。',
+    message: 'No GPUs visible. Check your GPU selection or driver.',
     fixes: [
       { label: 'Clear GPU selection (use all)', action: (panel) => {
         _setPanelField(panel, 'gpus', '');
@@ -266,7 +266,7 @@ export const ERROR_PATTERNS = [
   {
     pattern: /403 Forbidden|401 Unauthorized|Access to model.*is restricted|gated repo|not in the authorized list|awaiting a review/i,
     message: 'Gated model. Your HF token IS being sent — but its account must be granted access first: open the model page, accept the license, and wait for approval (Meta models can take a while).',
-    // 从错误文本中提取仓库名称以构建 HF 链接
+    // Extract repo name from error text to build HF link
     _repoPattern: /Access to model\s+(\S+)\s+is restricted|gated repo.*?huggingface\.co\/([^\s/]+\/[^\s/]+)/i,
     fixes: [
       { label: 'Request access on HF', action: (panel, _text) => {
@@ -286,7 +286,7 @@ export const ERROR_PATTERNS = [
     message: 'Single-file checkpoint needs a base model for missing components (text encoder, VAE). The base model may be gated — accept the license and set your HF token.',
     fixes: [
       { label: 'Request access to base model', action: (panel, _text) => {
-        // 从错误中提取受限制仓库，或者从模型名称推断
+        // Extract gated repo from error, or infer from model name
         const gated = _text && _text.match(/Access to model\s+(\S+)\s+is restricted/i);
         const base = _text && _text.match(/config=([^\s,)]+)/i);
         const model = _text && _text.match(/load model from\s+(\S+)/i);
@@ -434,8 +434,8 @@ export const ERROR_PATTERNS = [
     fixes: [
       { label: 'Try --trust-remote-code', action: (panel) => _serveAutoRetry(panel, '--trust-remote-code'), autofix: true },
       { label: 'Update vLLM on server', action: () => {
-        // 使用 venv 中 python3 的绝对路径（当通过 SSH 非交互式会话配置时，
-        // 裸 `python3` 可能会选择用户站点 Python 而非 venv 中的版本）。
+        // Use the venv's python3 by absolute path when configured (SSH non-
+        // interactive sessions often pick user-site Python over the venv).
         const _vp = (_envState.env === 'venv' && _envState.envPath)
           ? `${_envState.envPath.replace(/\/+$/, '')}/bin/python3` : 'python3';
         _launchServeTask('update-vllm', 'pip-update', `${_vp} -m pip install -U vllm transformers`);
@@ -459,6 +459,40 @@ export const ERROR_PATTERNS = [
     message: 'Ollama is not installed on this server. Run: curl -fsSL https://ollama.com/install.sh | sh',
     fixes: [
       { label: 'Copy install command', action: () => _copyText('curl -fsSL https://ollama.com/install.sh | sh') },
+    ],
+  },
+  // System build deps must be checked BEFORE the llama-server catch-all:
+  // a `cmake: command not found` failure ALSO produces `llama-server:
+  // command not found` later in the script (the build aborts then the
+  // run line fails) — pattern order is first-match-wins, so without
+  // these specific entries the user gets the misleading "install
+  // llama-cpp-python[server]" suggestion when the actual blocker is a
+  // missing OS-package toolchain that pip can't ship.
+  {
+    pattern: /cmake: command not found|cmake.*not found.*Could not/i,
+    message: 'cmake is required to compile llama.cpp from source, but it is not installed on this server.',
+    suggestion: 'Suggested action: install cmake via the OS package manager — apt: cmake build-essential / pacman: cmake base-devel / dnf: cmake gcc-c++ make / brew: cmake. Cookbook can do this automatically on the next launch if your user has passwordless sudo for apt/pacman/dnf.',
+    fixes: [
+      { label: 'Open Dependencies', action: () => _openCookbookDependencies('llama_cpp') },
+      { label: 'Copy apt install', action: () => _copyText('sudo apt install -y cmake build-essential git') },
+      { label: 'Copy pacman install', action: () => _copyText('sudo pacman -Sy --needed cmake base-devel git') },
+      { label: 'Copy dnf install', action: () => _copyText('sudo dnf install -y cmake gcc gcc-c++ make git') },
+    ],
+  },
+  {
+    pattern: /^(make|g\+\+|gcc): command not found|Could not find C\+\+ compiler/i,
+    message: 'A C/C++ compiler (build-essential / base-devel) is required to compile llama.cpp.',
+    fixes: [
+      { label: 'Open Dependencies', action: () => _openCookbookDependencies('llama_cpp') },
+      { label: 'Copy apt install', action: () => _copyText('sudo apt install -y build-essential') },
+    ],
+  },
+  {
+    pattern: /^git: command not found/i,
+    message: 'git is required to clone the llama.cpp source tree.',
+    fixes: [
+      { label: 'Open Dependencies', action: () => _openCookbookDependencies('llama_cpp') },
+      { label: 'Copy apt install', action: () => _copyText('sudo apt install -y git') },
     ],
   },
   {
@@ -533,11 +567,11 @@ export const ERROR_PATTERNS = [
   },
   {
     // FlashInfer JIT-compiles attention kernels for the host GPU on first
-    // 如果系统 /usr/bin/nvcc 版本低于 CUDA 11.8，它无法针对 sm_89/sm_90
+    // use. If the system /usr/bin/nvcc is older than CUDA 11.8 it can't
     // target sm_89/sm_90 (Ada/Hopper), and the engine workers die before
     // they can report a useful traceback. Two quick paths out: pick a
     // non-flashinfer attention backend, or set CUDACXX to a newer nvcc
-    // 较新的 nvcc（vLLM 将 nvidia-cuda-nvcc 安装到 venv 中——指定它即可）。
+    // (vLLM installs nvidia-cuda-nvcc into the venv — point at that).
     pattern: /nvcc fatal\s+:\s+Unsupported gpu architecture 'compute_\d+'/i,
     message: 'FlashInfer is JIT-compiling sampling kernels with an nvcc too old for this GPU (no sm_89 / sm_90 support — pre-CUDA 11.8). Changing the attention backend does not help — flashinfer JITs the SAMPLER too. The clean fix is to set VLLM_USE_FLASHINFER_SAMPLER=0 so vLLM uses its native sampler instead.',
     suggestion: 'Suggested action: relaunch with VLLM_USE_FLASHINFER_SAMPLER=0 prepended. (Confirmed on the QuantTrio/Qwen3.5 model card as the canonical workaround.)',
@@ -545,7 +579,7 @@ export const ERROR_PATTERNS = [
       { label: 'Retry with VLLM_USE_FLASHINFER_SAMPLER=0', action: (panel) => _serveAutoRetryReplace(panel, '', 'VLLM_USE_FLASHINFER_SAMPLER=0 ', { prepend: true }) },
       { label: 'Uninstall flashinfer-python', action: () => {
         // Hard fallback: vLLM 0.22 reaches into flashinfer for sampling kernels
-        // 硬回退方案：在某些配置下，即使设置了 VLLM_USE_FLASHINFER_SAMPLER=0，
+        // even with VLLM_USE_FLASHINFER_SAMPLER=0 in some configs. Removing
         // the package forces it onto the native sampler.
         const _vp = (_envState.env === 'venv' && _envState.envPath)
           ? `${_envState.envPath.replace(/\/+$/, '')}/bin/python3` : 'python3';
@@ -555,8 +589,8 @@ export const ERROR_PATTERNS = [
     ],
   },
   {
-    // vLLM <-> torch ABI 不匹配：vLLM 导入的 torch.library 辅助函数
-    // (`infer_schema`、`register_fake` 等) 仅在较新的 torch 版本中存在。
+    // vLLM <-> torch ABI mismatch: vLLM imports torch.library helpers
+    // (`infer_schema`, `register_fake`, etc.) that only exist on newer torch
     // versions. When the installed torch is older, the import fails before
     // any server code runs. Fix is to reinstall vllm (which pulls a matching
     // torch) or upgrade torch directly.
@@ -564,8 +598,8 @@ export const ERROR_PATTERNS = [
     message: 'vLLM was built against a newer torch than what is installed. Reinstall vLLM so pip pulls a compatible torch (or upgrade torch directly).',
     fixes: [
       { label: 'Reinstall vLLM (pulls matching torch)', action: () => {
-        // venv 中 python3 的绝对路径 —— 裸 `python3` 在 SSH 连接中会落入错误的
-        // site-packages（当 ~/.local/bin 优先于 venv 时）。
+        // Absolute path to the venv's python3 — bare `python3` lands in the
+        // wrong site-packages over SSH when ~/.local/bin precedes the venv.
         const _vp = (_envState.env === 'venv' && _envState.envPath)
           ? `${_envState.envPath.replace(/\/+$/, '')}/bin/python3` : 'python3';
         _launchServeTask('reinstall-vllm', 'pip-reinstall', `${_vp} -m pip install --force-reinstall vllm`);
@@ -578,23 +612,49 @@ export const ERROR_PATTERNS = [
     ],
   },
   {
-    // Tail-only + healthy-server suppression. tmux capture-pane returns the
-    // entire scrollback every poll, so a one-shot startup traceback would
-    // otherwise stick on the panel forever even while the server happily
-    // serves /v1/models. Only fire if the traceback is in recent output AND
-    // the server isn't currently logging healthy traffic.
+    // Dependency-install (pip) build failure — a required package failed to
+    // build its wheel (common when an old sdist's setup.py breaks on a newer
+    // Python, e.g. basicsr on 3.13). This is an install problem, NOT a serve
+    // problem, so it must never suggest killing vLLM.
+    match: (text) => {
+      const TAIL = text.slice(-6000);
+      // A serve script can run a fallback build and then start serving fine —
+      // don't flag a stale build error once the server is up.
+      if (/Application startup complete|"(?:GET|POST)\s+\/v1\/[^"]+ HTTP\/[\d.]+"\s*2\d\d|Uvicorn running on|server is listening on https?:\/\//i.test(TAIL)) return false;
+      return /Failed to build\b|subprocess-exited-with-error|Could not build wheels|metadata-generation-failed/i.test(TAIL);
+    },
+    message: 'A dependency failed to build during install — usually an older package whose build breaks on this Python version, not a server problem. The install did not finish.',
+    suggestion: 'Suggested action: check the captured output for the package that failed to build; it may need a newer release or a patch to install on this Python version.',
+    fixes: [],
+  },
+  {
+    // vLLM-specific traceback: only offer the kill-processes recovery when the
+    // output is actually about vLLM. Tail-only + healthy-server suppression so
+    // a one-shot startup traceback doesn't stick on the panel forever while
+    // the server happily serves /v1/models.
     match: (text) => {
       const TAIL = text.slice(-4096);
       if (!/Traceback \(most recent call last\)/i.test(TAIL)) return false;
-      // 尾部中的健康标记表示之前爆炸的内容已从中恢复
-      // —— 服务器正在运行并响应请求。
       if (/Application startup complete|"GET \/v1\/[^"]+ HTTP\/[\d.]+" 2\d\d|Uvicorn running on/i.test(TAIL)) return false;
-      return true;
+      return /vllm/i.test(TAIL);
     },
-    message: 'Python traceback detected — may be a handled error, check logs.',
+    message: 'A vLLM process hit a Python traceback and may be wedged.',
     fixes: [
       { label: 'Kill vLLM processes', action: (panel) => _runQuickCmd(panel, 'pkill -f vllm') },
     ],
+  },
+  {
+    // Generic traceback (not vLLM, not a pip build): surface it without
+    // suggesting an unrelated vLLM kill. Same tail-only + healthy suppression.
+    match: (text) => {
+      const TAIL = text.slice(-4096);
+      if (!/Traceback \(most recent call last\)/i.test(TAIL)) return false;
+      if (/Application startup complete|"GET \/v1\/[^"]+ HTTP\/[\d.]+" 2\d\d|Uvicorn running on/i.test(TAIL)) return false;
+      return true;
+    },
+    message: 'Python traceback detected — check the captured output below for the underlying error.',
+    suggestion: 'Suggested action: read the captured output for the failing step; copy the troubleshooting bundle if you need help.',
+    fixes: [],
   },
 ];
 
@@ -682,23 +742,27 @@ export function _showDiagnosis(panel, diagnosis, sourceText) {
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.className = 'cookbook-diag-copy';
-  copyBtn.title = t('cookbook.copy_diagnosis_details');
+  copyBtn.title = 'Copy diagnosis details';
   copyBtn.setAttribute('aria-label', 'Copy diagnosis');
   copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   copyBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const bundle = _diagnosisCopyBundle(task, diagnosis, sourceText, suggestionText);
-    try {
-      await navigator.clipboard.writeText(bundle);
+    // Use the shared helper which falls back to execCommand('copy') on
+    // non-HTTPS origins (Tailscale IPs, LAN IPs, etc.) — navigator.clipboard
+    // is silently a no-op on those, which is why the button appeared dead
+    // for users on http://100.113.161.2:7011 over Tailscale/mobile.
+    const ok = await _copyText(bundle);
+    if (ok) {
       copyBtn.classList.add('copied');
       setTimeout(() => { if (copyBtn.isConnected) copyBtn.classList.remove('copied'); }, 1200);
-    } catch (_) {}
+    }
   });
 
   const dismissBtn = document.createElement('button');
   dismissBtn.type = 'button';
   dismissBtn.className = 'cookbook-diag-dismiss';
-  dismissBtn.title = t('cookbook.dismiss_diagnosis');
+  dismissBtn.title = 'Dismiss diagnosis';
   dismissBtn.setAttribute('aria-label', 'Dismiss');
   dismissBtn.textContent = '×';
   dismissBtn.addEventListener('click', (e) => {
@@ -742,7 +806,7 @@ export function _showDiagnosis(panel, diagnosis, sourceText) {
     // Always render fixes as inline buttons. The old "Actions ▾" dropdown
     // (for >3 fixes) was broken — the menu wouldn't open in some panels and
     // hid useful actions behind a non-working affordance. Inline buttons wrap
-    // 内联按钮在 `.cookbook-diag-fixes`（flex-wrap）中自然换行，因此长列表会
+    // naturally in `.cookbook-diag-fixes` (flex-wrap) so a long list reflows
     // onto multiple rows instead of getting collapsed.
     const row = document.createElement('div');
     row.className = 'cookbook-diag-fixes';
@@ -757,7 +821,7 @@ export function _showDiagnosis(panel, diagnosis, sourceText) {
       });
       row.appendChild(btn);
     }
-    body.appendChild(row);
+    diag.appendChild(row);
   }
 }
 
@@ -767,7 +831,7 @@ export function _clearDiagnosis(panel) {
   if (diag) { diag.innerHTML = ''; diag.classList.add('hidden'); }
 }
 
-// ── 快速命令 ──
+// ── Quick command ──
 
 export async function _runQuickCmd(panel, cmd) {
   let fullCmd = cmd;
@@ -775,7 +839,7 @@ export async function _runQuickCmd(panel, cmd) {
     fullCmd = _sshCmd(_envState.remoteHost, cmd);
   }
   const diag = panel.querySelector('.cookbook-diagnosis');
-  if (diag) { diag.classList.remove('hidden'); diag.textContent = t('cookbook.diagnosis_running', { cmd: fullCmd }); }
+  if (diag) { diag.classList.remove('hidden'); diag.textContent = `Running: ${fullCmd}...`; }
 
   try {
     const res = await fetch('/api/shell/stream', {
@@ -786,6 +850,6 @@ export async function _runQuickCmd(panel, cmd) {
     });
     if (diag) diag.textContent = res.ok ? `Done: ${cmd}` : `Failed (HTTP ${res.status})`;
   } catch (e) {
-    if (diag) diag.textContent = t('cookbook.diagnosis_error', { msg: e.message });
+    if (diag) diag.textContent = `Error: ${e.message}`;
   }
 }

@@ -1,9 +1,9 @@
 """
 agent_loop.py
 
-odysseus-ui 的流式 agent 循环。
-用多轮工具执行包装 stream_llm()。
-LLM 通过写围栏代码块来决定何时使用工具。
+Streaming agent loop for odysseus-ui.
+Wraps stream_llm() with multi-round tool execution.
+The LLM decides when to use tools by writing fenced code blocks.
 """
 
 import asyncio
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 def _load_mcp_disabled_map() -> Dict[str, set]:
-    """从数据库加载每个 MCP 服务端禁用的工具集合。"""
+    """Load per-server disabled tool sets from the database."""
     from core.database import McpServer, SessionLocal
     disabled_map: Dict[str, set] = {}
     db = SessionLocal()
@@ -57,8 +57,8 @@ def _load_mcp_disabled_map() -> Dict[str, set]:
         db.close()
     return disabled_map
 
-# 告诉 LLM 可用工具的系统提示。
-# 始终注入 — LLM 自行决定是否使用。
+# System prompt that tells the LLM about available tools.
+# Always injected — the LLM decides whether to use them.
 _AGENT_PREAMBLE = """\
 You are an AI assistant with tool access. You can run shell commands, execute Python, search the web, \
 read/write files, create and edit documents, generate images, manage memories, and more. \
@@ -267,6 +267,10 @@ _DOMAIN_RULES = {
 - Use `resolve_contact` to look up a contact's email or phone number by name. Searches the CardDAV address book and sent email history.
 - Use `manage_contact` to list, add, update, or delete contacts in the address book.
 - Do NOT use `manage_memory` for contact lookups — contact details live in the address book, not memory.""",
+    "integrations": """\
+## Integration/API rules
+- To query or control a configured service integration (Home Assistant, Miniflux, Gitea, Linkding, Jellyfin, or any other registered service), use `api_call` with the integration name, HTTP method, path, and optional JSON body.
+- Do not use shell, curl, or `app_api` to reach a user's connected integration when `api_call` is available.""",
 }
 
 _DOMAIN_TOOL_MAP = {
@@ -277,9 +281,10 @@ _DOMAIN_TOOL_MAP = {
     "notes_calendar_tasks": {"manage_notes", "manage_calendar", "manage_tasks"},
     "ui": {"ui_control"},
     "sessions": {"create_session", "list_sessions", "manage_session", "send_to_session", "search_chats"},
-    "files": {"bash", "python", "read_file", "write_file", "edit_file", "grep", "glob", "ls", "get_workspace"},
+    "files": {"bash", "python", "read_file", "write_file", "edit_file", "grep", "glob", "ls", "get_workspace", "manage_bg_jobs"},
     "settings": {"manage_settings", "manage_endpoints", "manage_mcp", "manage_webhooks", "manage_tokens", "app_api"},
     "contacts": {"resolve_contact", "manage_contact"},
+    "integrations": {"api_call"},
 }
 
 def _domain_rules_for_tools(tool_names: set) -> list[str]:
@@ -292,8 +297,8 @@ def _domain_rules_for_tools(tool_names: set) -> list[str]:
         rules.append(_LINK_RULES)
     return rules
 
-# 每个工具部分以它覆盖的工具名称作为键。
-# 覆盖多个工具的部分使用元组键。
+# Each tool section is keyed by tool name(s) it covers.
+# Sections with multiple tools use a tuple key.
 TOOL_SECTIONS = {
     "bash": """\
 ```bash
@@ -516,37 +521,64 @@ Blocked paths/routes (refused for safety): /api/auth/, /api/users/, /api/tokens/
 }
 
 def get_builtin_overrides() -> dict:
-    """内置工具描述（TOOL_SECTIONS）的用户覆盖项。
-    全局存储在 settings.json 中，方便用户预览和编辑
-    助手使用原生工具的说明，并带有回退路径。"""
+    """User overrides for built-in tool descriptions (TOOL_SECTIONS).
+    Stored globally in settings.json so the user can preview + edit how
+    the assistant is told to use a native tool, with a revert path."""
     try:
         from src.settings import get_setting
         ov = get_setting("builtin_tool_overrides", {})
         return ov if isinstance(ov, dict) else {}
     except Exception as e:
-        logger.warning('Failed to load builtin tool overrides: %s', e)
+        logger.warning("Failed to load builtin tool overrides, using defaults", exc_info=e)
         return {}
 
 
 def _section_text(name: str, default: str) -> str:
-    """获取工具的实际 TOOL_SECTIONS 文本 — 有用户覆盖项则用它，
-    否则使用内置默认值。"""
+    """Effective TOOL_SECTIONS text for a tool — user override if set,
+    else the shipped default."""
     ov = get_builtin_overrides()
     val = ov.get(name)
     return val if isinstance(val, str) and val.strip() else default
 
 
+def _compact_tool_line(name: str, section: str) -> str:
+    """One-line fenced-tool usage hint for compact/local prompts."""
+    text = (section or "").strip()
+    if not text:
+        return f"- `{name}`"
+    if text.startswith("- "):
+        return text
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    usage = []
+    in_fence = False
+    for ln in lines:
+        if ln.startswith("```"):
+            usage.append(ln)
+            in_fence = not in_fence
+            if len(usage) >= 3:
+                break
+            continue
+        if in_fence and len(usage) < 3:
+            usage.append(ln)
+    if usage:
+        return f"- `{name}` — " + " ".join(usage)
+    return f"- `{name}` — " + lines[0][:160]
+
+
 def _assemble_prompt(tool_names: set, disabled_tools: set = None, compact: bool = False) -> str:
-    """构建仅包含指定工具的系统提示。"""
+    """Build the system prompt with only the specified tools included."""
     disabled = disabled_tools or set()
     included = tool_names - disabled
 
     if compact:
-        tool_list = ", ".join(sorted(included)) if included else "none"
+        tool_lines = []
+        for name, _default_section in TOOL_SECTIONS.items():
+            if name in included:
+                tool_lines.append(_compact_tool_line(name, _section_text(name, _default_section)))
         parts = [
-            "You are an AI assistant with tool access.",
-            f"Available tools: {tool_list}.",
-            _API_AGENT_RULES,
+            _AGENT_PREAMBLE,
+            "## Available tools\n" + ("\n".join(tool_lines) if tool_lines else "none"),
+            _AGENT_RULES,
         ]
         parts.extend(_domain_rules_for_tools(included))
         return "\n\n".join(parts)
@@ -589,20 +621,20 @@ def _assemble_prompt(tool_names: set, disabled_tools: set = None, compact: bool 
     return "\n\n".join(parts)
 
 
-# 旧版：包含所有工具的完整提示（当 RAG 不可用时的回退方案）
+# Legacy: full prompt with all tools (fallback when RAG unavailable)
 AGENT_SYSTEM_PROMPT = _assemble_prompt(set(TOOL_SECTIONS.keys()))
 
 
 _cached_base_prompt = None
 _cached_base_prompt_key = None
 
-# 从热路径中移出的常量 — 避免每次请求/每轮分配
-# 原生支持 OpenAI 风格函数调用的端点主机。
-# 当活动端点是其中之一时，agent 发送 FUNCTION_TOOL_SCHEMAS
-# （以便模型直接输出 tool_calls），而不是依赖模型
-# 从提示文本中复制围栏代码块示例。较小的模型 — 尤其是
-# DeepSeek — 经常无法遵循围栏代码块约定，输出原始
-# JSON，agent 随后无法将其解析为工具调用。
+# Constants — moved out of hot paths to avoid per-request/per-round allocation
+# Hosts whose endpoints natively support OpenAI-style function calling.
+# When the active endpoint is one of these, the agent sends FUNCTION_TOOL_SCHEMAS
+# (so the model emits `tool_calls` directly) instead of relying on the model
+# to copy fenced-block examples from prompt text. Smaller models — DeepSeek
+# especially — often fail to follow the fenced-block convention and emit raw
+# JSON, which the agent then can't parse as a tool call.
 _API_HOSTS = frozenset([
     "api.openai.com", "api.anthropic.com",
     "openrouter.ai", "api.groq.com",
@@ -612,11 +644,6 @@ _API_HOSTS = frozenset([
     "api.perplexity.ai", "api.x.ai",
     "ollama.com", "api.venice.ai", "api.kimi.com",
     "api.githubcopilot.com",
-    # Local OpenAI-compatible endpoints (llama.cpp, vLLM, LM Studio, etc.).
-    # 没有这些，_is_api_model 会退回到基于
-    # 模型名称的关键词嗅探，因此运行良好的本地服务器得不到原生工具
-    # schemas，agent 会静默降级到围栏代码块解析。
-    "localhost", "127.0.0.1", "host.docker.internal",
 ])
 _MCP_KEYWORDS = frozenset(["mcp", "browse", "browser", "website", "calendar", "event", "email",
                            "gmail", "screenshot", "navigate", "click", "miniflux", "rss", "feed"])
@@ -644,8 +671,30 @@ def _is_ollama_openai_compat_url(endpoint_url: str) -> bool:
     return parsed.port == 11434 and (path == "/v1" or path.startswith("/v1/"))
 
 
+def _is_local_openai_compat_url(endpoint_url: str) -> bool:
+    try:
+        parsed = urlparse(endpoint_url or "")
+    except Exception:
+        return False
+    host = (parsed.hostname or "").lower()
+    path = (parsed.path or "").rstrip("/")
+    if not (path == "/v1" or path.startswith("/v1/")):
+        return False
+    if host in {"localhost", "127.0.0.1", "0.0.0.0", "host.docker.internal"}:
+        return True
+    if host.startswith("192.168.") or host.startswith("10."):
+        return True
+    if host.startswith("172."):
+        try:
+            second = int(host.split(".")[1])
+            return 16 <= second <= 31
+        except Exception:
+            return False
+    return False
+
+
 def _endpoint_lookup_keys(endpoint_url: str) -> List[str]:
-    """运行时聊天 URL 对应的候选 ModelEndpoint.base_url 键。"""
+    """Candidate ModelEndpoint.base_url keys for a runtime chat URL."""
     raw = (endpoint_url or "").strip()
     keys: List[str] = []
 
@@ -667,7 +716,7 @@ def _endpoint_lookup_keys(endpoint_url: str) -> List[str]:
         pass
     return keys
 
-# 管理工具关键词 — 如果最后一条用户消息包含以下任一关键词，则包含管理工具
+# Admin tool keywords — if the last user message contains any of these, include admin tools
 _ADMIN_KEYWORDS = [
     "session", "sessions", "chat", "chats", "conversation", "conversations",
     "delete", "fork", "truncate",
@@ -676,15 +725,15 @@ _ADMIN_KEYWORDS = [
     "task", "tasks", "schedule", "cron", "setting", "settings", "preference",
     "configure", "config", "setup", "manage", "admin", "pipeline", "second opinion",
     "list models", "switch model", "change model", "theme", "create theme",
-    # 文档相关关键词 — "显示/列出/读取 我的文档"、"打开我的笔记文件" 等。
-    # 没有这些关键词，manage_documents 永远不会出现在提示中，
-    # agent 会乱用 curl/bash 而不是使用正确的工具。
+    # Documents — "show/list/read my docs", "open my notes file", etc.
+    # Without these, manage_documents never reaches the prompt and the
+    # agent flails (curl, bash) instead of using the right tool.
     "document", "documents", "doc", "docs", "library", "tidy",
     "note", "notes", "todo", "todos", "reminder", "reminders",
 ]
 
 def _detect_admin_intent(messages: List[Dict]) -> bool:
-    """检查最后一条用户消息是否暗示需要使用管理工具。"""
+    """Check if the last user message suggests admin/management tool usage."""
     for msg in reversed(messages):
         if msg.get("role") == "user":
             content = msg.get("content", "")
@@ -696,7 +745,7 @@ def _detect_admin_intent(messages: List[Dict]) -> bool:
 
 
 def _extract_last_user_message(messages: List[Dict]) -> str:
-    """获取最近一条用户消息的纯文本内容。"""
+    """Return the most recent user message as plain text."""
     for msg in reversed(messages):
         if msg.get("role") == "user":
             content = msg.get("content", "")
@@ -707,6 +756,17 @@ def _extract_last_user_message(messages: List[Dict]) -> str:
 
 
 _LOW_SIGNAL_RE = re.compile(r"^[\W_]*$", re.UNICODE)
+_CASUAL_OPENING_RE = re.compile(
+    r"^\s*(?:h+i+|hey+|hello+|yo+|sup+|what'?s up|wass?up|hiya|howdy|"
+    r"lol|lmao|haha+|hehe+|thanks?|thank you|ty|idk|dunno|meh|bruh|bro)\b(?P<tail>.*)$",
+    re.IGNORECASE,
+)
+_CASUAL_BLOCKLIST_RE = re.compile(
+    r"\b(?:cookbook|serve|serving|launch|start|vllm|sglang|llama\.?cpp|ollama|"
+    r"download|model|email|document|doc|note|calendar|task|search|web|research|"
+    r"file|folder|repo|git|settings?|endpoint|api|token|mcp)\b",
+    re.IGNORECASE,
+)
 _EXPLICIT_CONTINUATION_RE = re.compile(
     r"^\s*(?:"
     r"yes|y|yeah|yep|ok|okay|sure|do it|go ahead|continue|carry on|"
@@ -716,19 +776,61 @@ _EXPLICIT_CONTINUATION_RE = re.compile(
     r")\s*[.!?]*\s*$",
     re.IGNORECASE,
 )
+_RETRY_CONTINUATION_RE = re.compile(
+    r"\b(?:try again|retry|again|rerun|re-run|run it again|launch it again|"
+    r"start it again|failed|fails?|died|crashed|broke|insta|instantly)\b",
+    re.IGNORECASE,
+)
+_COOKBOOK_CONTEXT_RE = re.compile(
+    r"\b(?:cookbook|serve|serving|served|launch|start|preset|vllm|sglang|"
+    r"llama\.?cpp|ollama|download|cached models?|model servers?|running models?|"
+    r"gpu box|ajax|qwen|gemma|llama|mistral|minimax)\b",
+    re.IGNORECASE,
+)
 
 
 def _is_explicit_continuation(text: str) -> bool:
-    """仅这些简短回复可继承较早的用户轮次以进行工具检索。"""
+    """Only these terse replies may inherit older user turns for tool retrieval."""
     return bool(_EXPLICIT_CONTINUATION_RE.match(str(text or "").strip()))
 
 
+def _is_casual_low_signal(text: str) -> bool:
+    """True for short greetings/slang that should not inherit stale context."""
+    s = str(text or "").strip()
+    m = _CASUAL_OPENING_RE.match(s)
+    if not m:
+        return False
+    tail = m.group("tail") or ""
+    if _CASUAL_BLOCKLIST_RE.search(tail):
+        return False
+    # Allow a short vocative/address after the opener without hardcoding the
+    # address term itself: "hey man", "yo dude", "sup <name>". Longer tails are
+    # more likely to be an actual request and should get normal context/tooling.
+    tail_words = re.findall(r"[A-Za-z0-9_'-]+", tail)
+    return len(tail_words) <= 2
+
+
+def _is_contextual_retry_continuation(messages: List[Dict], text: str) -> bool:
+    """Treat "try again / it failed" as a continuation only for active tool work.
+
+    These follow-ups are common after Cookbook launches: the latest user turn
+    says only "try again it failed", while the actionable model/host/command
+    details live one or two turns back. Keep this intentionally narrow so
+    ordinary chat does not inherit stale Cookbook context.
+    """
+    latest = str(text or "").strip()
+    if not latest or not _RETRY_CONTINUATION_RE.search(latest):
+        return False
+    recent = _recent_context_for_retrieval(messages, max_user=5, max_chars=1200)
+    return bool(_COOKBOOK_CONTEXT_RE.search(recent))
+
+
 def _assistant_requested_followup(messages: List[Dict]) -> bool:
-    """上一条助手回复是否请求了缺失的任务详情。
+    """True when the previous assistant turn asked for missing task details.
 
     This allows natural replies like "buy milk" after "What would you like on
     your to-do list?" to inherit the prior domain, without letting random
-    先前的领域，而不会让随机问候继承过时的 Cookbook/email/document 上下文。
+    greetings inherit stale Cookbook/email/document context.
     """
     seen_latest_user = False
     for msg in reversed(messages):
@@ -764,11 +866,12 @@ def _classify_agent_request(messages: List[Dict], last_user: str) -> Dict[str, o
     which domain rule packs get appended to the system prompt.
     """
     text = str(last_user or "").strip()
-    continuation = _is_explicit_continuation(text) or _assistant_requested_followup(messages)
+    retry_continuation = _is_contextual_retry_continuation(messages, text)
+    continuation = _is_explicit_continuation(text) or _assistant_requested_followup(messages) or retry_continuation
     retrieval_query = _recent_context_for_retrieval(messages) if continuation else text
     q = retrieval_query.lower()
 
-    if not text or bool(_LOW_SIGNAL_RE.match(text)):
+    if not text or bool(_LOW_SIGNAL_RE.match(text)) or _is_casual_low_signal(text):
         return {
             "low_signal": True,
             "continuation": False,
@@ -811,10 +914,25 @@ def _classify_agent_request(messages: List[Dict], last_user: str) -> Dict[str, o
         domains.add("sessions")
     if has(r"\b(file|folder|directory|repo|git|grep|find in files|read file|edit file|shell|terminal|bash|python)\b"):
         domains.add("files")
+    # Managing detached bash jobs: "kill the background job", "stop the job",
+    # "kill that job", "check the job output", "is the bg job done".
+    if (has(r"\b(background|bg)\s+(jobs?|task)\b")
+            or has(r"\b(kill|stop|cancel|terminate|check|tail|show|list)\b.{0,16}\bjobs?\b")
+            or has(r"\bjobs?\b.{0,16}\b(output|status|done|finished|running)\b")):
+        domains.add("files")
     if has(r"\b(endpoint|api token|mcp|webhook|preference|configure|config|setting)\b"):
         domains.add("settings")
     if has(r"\b(contact|contacts|phone|phone number|address book|vcard)\b"):
         domains.add("contacts")
+    # API-integration intent — calling a configured service via the api_call
+    # tool. Without this the #3794 repro ("Use the api_call tool to call Home
+    # Assistant GET /api/states") matched no domain, classified as low-signal,
+    # and the tool never reached the schema filter. Detect it explicitly so the
+    # "integrations" domain seeds api_call deterministically (see
+    # _DOMAIN_TOOL_MAP), independent of embedding retrieval.
+    if has(r"\bapi[ _]call\b", r"\bintegrations?\b",
+           r"\b(?:home ?assistant|miniflux|gitea|linkding|jellyfin)\b"):
+        domains.add("integrations")
 
     low_signal = not continuation and not domains
     return {
@@ -843,8 +961,11 @@ def _recent_context_for_retrieval(messages: List[Dict], max_user: int = 3, max_c
         if isinstance(content, list):
             content = " ".join(b.get("text", "") for b in content if isinstance(b, dict))
         content = (content or "").strip()
-        # Skip injected tool-result envelopes — role=user but not human intent.
-        if not content or content.startswith("[Tool execution results]"):
+        # Skip injected envelopes — role=user but not human intent. Tool results
+        # are now wrapped via untrusted_context_message (metadata.trusted=False);
+        # keep the legacy "[Tool execution results]" prefix for older histories.
+        meta = msg.get("metadata") or {}
+        if not content or meta.get("trusted") is False or content.startswith("[Tool execution results]"):
             continue
         collected.append(content)
         if len(collected) >= max_user:
@@ -863,9 +984,10 @@ def _build_system_prompt(
     compact: bool = False,
     owner: Optional[str] = None,
     suppress_local_context: bool = False,
+    suppress_skills: bool = False,
     active_email: Optional[Dict[str, str]] = None,
 ) -> List[Dict]:
-    """构建 agent 系统提示，注入 MCP/文档上下文，合并连续的系统消息。"""
+    """Build agent system prompt, inject MCP/document context, merge consecutive system msgs."""
     global _cached_base_prompt, _cached_base_prompt_key
     if suppress_local_context:
         active_document = None
@@ -880,7 +1002,7 @@ def _build_system_prompt(
         _ov_sig = _hl.sha256(_json.dumps(get_builtin_overrides() or {}, sort_keys=True).encode()).hexdigest()
     except Exception:
         _ov_sig = ""
-    cache_key = (frozenset(disabled_tools or []), bool(mcp_mgr), needs_admin, _rt_key, compact, _ov_sig, owner, suppress_local_context)
+    cache_key = (frozenset(disabled_tools or []), bool(mcp_mgr), needs_admin, _rt_key, compact, _ov_sig, owner, suppress_local_context, suppress_skills)
     if _cached_base_prompt and _cached_base_prompt_key == cache_key and not active_document:
         agent_prompt = _cached_base_prompt
         # Skill index is user-editable (name + description), so it must never
@@ -890,6 +1012,7 @@ def _build_system_prompt(
             disabled_tools, mcp_mgr, needs_admin, relevant_tools,
             mcp_disabled_map=mcp_disabled_map, compact=compact, owner=owner,
             suppress_local_context=suppress_local_context,
+            suppress_skills=suppress_skills,
         )
     else:
         agent_prompt, _skill_index_block = _build_base_prompt(
@@ -901,6 +1024,7 @@ def _build_system_prompt(
             compact=compact,
             owner=owner,
             suppress_local_context=suppress_local_context,
+            suppress_skills=suppress_skills,
         )
         if not active_document:
             _cached_base_prompt = agent_prompt
@@ -929,8 +1053,8 @@ def _build_system_prompt(
     try:
         from src.user_time import current_datetime_context_message
         _datetime_message = current_datetime_context_message()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to build datetime context message", exc_info=e)
 
     # Document context is kept as a SEPARATE message (not merged into the tool
     # prompt) so the context trimmer doesn't destroy it when truncating the
@@ -973,8 +1097,8 @@ def _build_system_prompt(
             try:
                 from src.pdf_form_doc import find_source_upload_id
                 _is_form_backed = bool(find_source_upload_id(active_document.current_content or ""))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to detect if document is form-backed, assuming plain", exc_info=e)
 
             if _is_form_backed:
                 doc_ctx = (
@@ -1184,7 +1308,7 @@ def _build_system_prompt(
     # few. If the teacher wrote a procedure for "open my X chat" last
     # time the student failed, this is where the student finds it
     # before deciding which tool to call.
-    if not suppress_local_context:
+    if not suppress_local_context and not suppress_skills:
         try:
             last_user = _extract_last_user_message(messages)
             # Respect the user's skills-enabled toggle (mirrors memory_enabled).
@@ -1351,6 +1475,7 @@ def _build_base_prompt(
     compact: bool = False,
     owner: Optional[str] = None,
     suppress_local_context: bool = False,
+    suppress_skills: bool = False,
 ):
     """Build the agent prompt with only relevant tools included.
 
@@ -1403,7 +1528,7 @@ def _build_base_prompt(
     # The caller wraps it in untrusted_context_message and ships it as a
     # user-role message — same treatment as the matched-skills block.
     skill_index_block = ""
-    if not suppress_local_context:
+    if not suppress_local_context and not suppress_skills:
         try:
             from services.memory.skills import SkillsManager
             from src.constants import DATA_DIR
@@ -1449,7 +1574,7 @@ def _build_base_prompt(
 
 
 def _resolve_tool_blocks(round_response: str, native_tool_calls: list, round_num: int, is_api_model: bool = False):
-    """选择原生函数调用或围栏代码块解析。返回 (tool_blocks, used_native)。"""
+    """Choose native function calls or fenced code block parsing. Returns (tool_blocks, used_native)."""
     used_native = False
     if native_tool_calls:
         tool_blocks = []
@@ -1562,8 +1687,14 @@ def _append_tool_results(
         if round_reasoning:
             msg["reasoning_content"] = round_reasoning
         messages.append(msg)
+        # Tool output (shell/python stdout, file reads, fetched pages, email
+        # bodies, MCP results) is sourced from outside the server. Wrap it as
+        # untrusted data so prompt-injection inside a tool result is treated as
+        # data, not instructions — same hardening as skills (#788) and the
+        # web/RAG context. THREAT_MODEL.md lists tool output as a surface that
+        # must go through untrusted_context_message.
         messages.append(
-            {"role": "user", "content": f"[Tool execution results]\n\n{tool_output_text}"}
+            untrusted_context_message("tool execution results", tool_output_text)
         )
 
 
@@ -1584,7 +1715,7 @@ def _compute_final_metrics(
     backend_gen_tps: float = 0,
     backend_prefill_tps: float = 0,
 ) -> dict:
-    """计算 token 计数、TPS，构建最终指标字典。"""
+    """Compute token counts, TPS, and build the final metrics dict."""
     if has_real_usage:
         input_tokens = real_input_tokens
         output_tokens = real_output_tokens
@@ -1788,7 +1919,7 @@ def build_active_plan_note(approved_plan: str) -> str:
     )
 
 
-def _detect_runaway_call(call_freq, threshold=20):
+def _detect_runaway_call(call_freq, threshold=15):
     """Tool name of a call signature repeated >= ``threshold`` times — a real
     runaway loop. Counts IDENTICAL repeated calls (same tool AND args), so a
     legitimate batch of distinct calls to one tool (e.g. creating 18 calendar
@@ -1822,6 +1953,7 @@ async def stream_agent_loop(
     approved_plan: Optional[str] = None,
     tool_policy: Optional[ToolPolicy] = None,
     workspace: Optional[str] = None,
+    forced_tools: Optional[Set[str]] = None,
     _is_teacher_run: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Streaming agent loop generator.
@@ -1861,6 +1993,20 @@ async def stream_agent_loop(
     _needs_admin = _detect_admin_intent(messages)
     _last_user = _extract_last_user_message(messages)
     _intent = _classify_agent_request(messages, _last_user)
+    _low_signal_turn = bool(_intent.get("low_signal"))
+    _casual_low_signal_turn = _is_casual_low_signal(_last_user)
+    _direct_low_signal = (
+        _low_signal_turn
+        and not bool(_intent.get("continuation"))
+        and not plan_mode
+        and not approved_plan
+        and not guide_only
+        and (_casual_low_signal_turn or active_document is None)
+        and (_casual_low_signal_turn or not active_email)
+        and (_casual_low_signal_turn or not workspace)
+        and not forced_tools
+        and not relevant_tools
+    )
     # Tool retrieval uses the latest message by default. It may inherit recent
     # user turns only for explicit continuations ("yes", "do it", "1").
     _retrieval_query = str(_intent.get("retrieval_query") or _last_user)
@@ -1868,11 +2014,86 @@ async def stream_agent_loop(
         "[agent-intent] latest=%r continuation=%s low_signal=%s domains=%s retrieval_query=%r",
         _last_user[:120],
         bool(_intent.get("continuation")),
-        bool(_intent.get("low_signal")),
+        _low_signal_turn,
         sorted(_intent.get("domains") or []),
         _retrieval_query[:200],
     )
     _mcp_disabled_map = _load_mcp_disabled_map() if mcp_mgr else {}
+    if _direct_low_signal:
+        logger.info("[agent] direct low-signal reply path for latest=%r", _last_user[:80])
+        direct_messages = [{"role": "user", "content": _last_user}]
+        direct_response = ""
+        direct_start = time.time()
+        direct_actual_model = model
+        real_input_tokens = 0
+        real_output_tokens = 0
+        try:
+            async for chunk in stream_llm_with_fallback(
+                [(endpoint_url, model, headers)] + list(fallbacks or []),
+                direct_messages,
+                temperature=temperature,
+                max_tokens=min(max_tokens or 128, 128),
+                prompt_type=None,
+                tools=None,
+                timeout=int(get_setting("agent_stream_timeout_seconds", 300) or 300),
+                session_id=session_id,
+            ):
+                if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
+                    try:
+                        data = json.loads(chunk[6:])
+                    except json.JSONDecodeError:
+                        yield chunk
+                        continue
+                    if data.get("type") == "usage":
+                        usage = data.get("data", {}) or {}
+                        direct_actual_model = usage.get("model") or direct_actual_model
+                        real_input_tokens += usage.get("input_tokens", 0) or 0
+                        real_output_tokens += usage.get("output_tokens", 0) or 0
+                        continue
+                    if data.get("type") == "model_actual":
+                        direct_actual_model = data.get("model") or direct_actual_model
+                        data["requested_model"] = model
+                        yield f"data: {json.dumps(data)}\n\n"
+                        continue
+                    if data.get("type") == "fallback":
+                        direct_actual_model = data.get("answered_by") or direct_actual_model
+                        yield chunk
+                        continue
+                    if "delta" in data:
+                        if not data.get("thinking"):
+                            direct_response += data.get("delta", "")
+                        yield chunk
+                        continue
+                    yield chunk
+                elif chunk.startswith("event: "):
+                    yield chunk
+        except Exception as _direct_err:
+            logger.warning("[agent] direct low-signal path failed: %s", _direct_err)
+            fallback = "Hey."
+            direct_response += fallback
+            yield f"data: {json.dumps({'delta': fallback})}\n\n"
+
+        if not direct_response.strip():
+            fallback = "Hey."
+            direct_response = fallback
+            yield f"data: {json.dumps({'delta': fallback})}\n\n"
+
+        duration = time.time() - direct_start
+        metrics = {
+            "model": direct_actual_model,
+            "requested_model": model,
+            "input_tokens": real_input_tokens or estimate_tokens(direct_messages),
+            "output_tokens": real_output_tokens or max(len(direct_response) // 4, 1),
+            "total_time": round(duration, 2),
+            "response_time": round(duration, 2),
+            "agent_rounds": 0,
+            "tool_calls": 0,
+            "direct_low_signal": True,
+        }
+        yield f"data: {json.dumps({'type': 'metrics', 'data': metrics})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
     if plan_mode and mcp_mgr:
         # Allow read-only MCP tools to investigate, block write/unknown ones:
         # hide them from the schemas AND reject them at runtime by qualified name.
@@ -1884,11 +2105,11 @@ async def stream_agent_loop(
 
     # RAG-based tool selection: retrieve relevant tools for this query.
     # If caller provided a pre-computed set (e.g. task_scheduler), use that.
-    _relevant_tools = set() if guide_only else relevant_tools
+    _relevant_tools = relevant_tools
     _t1 = time.time()
     if _relevant_tools:
         logger.info(f"[tool-rag] Using caller-provided relevant_tools ({len(_relevant_tools)} tools)")
-    if not guide_only and not _relevant_tools and bool(_intent.get("low_signal")):
+    if not guide_only and not _relevant_tools and _low_signal_turn:
         from src.tool_index import ALWAYS_AVAILABLE
         if workspace:
             # An active workspace IS the file-work signal: a vague "look at the
@@ -1979,6 +2200,15 @@ async def stream_agent_loop(
     if _relevant_tools is not None and active_document is not None:
         _relevant_tools.update({"edit_document", "update_document", "suggest_document"})
 
+    # Per-request UI toggles are stronger than retrieval. If the user turns on
+    # Search, the model must see the search tools even when the latest text is a
+    # typo or otherwise low-signal for tool RAG.
+    if not guide_only and forced_tools:
+        if _relevant_tools is None:
+            from src.tool_index import ALWAYS_AVAILABLE
+            _relevant_tools = set(ALWAYS_AVAILABLE)
+        _relevant_tools.update(t for t in forced_tools if t not in disabled_tools)
+
     # The skill index injected by _build_system_prompt tells the model to
     # call `manage_skills action=view`, and Jaccard-matched skills are pasted
     # into the prompt as procedures to follow — but neither path goes through
@@ -1986,7 +2216,7 @@ async def stream_agent_loop(
     # (grep, read_file, ...) that aren't in its schema list. Keep the schemas
     # in lockstep: manage_skills is callable whenever any skill is indexed,
     # and a matched skill's declared requires_toolsets ride along with it.
-    if not guide_only and _relevant_tools is not None:
+    if not guide_only and _relevant_tools is not None and not _low_signal_turn:
         try:
             from services.memory.skills import SkillsManager
             from src.constants import DATA_DIR
@@ -2051,7 +2281,7 @@ async def stream_agent_loop(
     _model_supports_tools = any(kw in _model_lc for kw in (
         "gpt-4", "gpt-5", "gpt-o", "claude", "gemini", "gemma",
         "qwen3", "qwen2.5", "mixtral", "mistral", "llama-3.1", "llama-3.2",
-        "llama-3.3", "llama-4",
+        "llama-3.3", "llama-4", "llama3.1", "llama3.2", "llama3.3", "llama4",
         # Local-served models that follow OpenAI-style function calling
         # via vLLM's `--enable-auto-tool-choice`. Belt-and-suspenders
         # with the per-endpoint flag above.
@@ -2093,13 +2323,15 @@ async def stream_agent_loop(
         _is_api_model = False
     else:
         _is_api_model = any(h in endpoint_url for h in _API_HOSTS) or _model_supports_tools
+    _compact_agent_prompt = _is_api_model or _is_ollama_native or _ollama_openai_compat
     messages, mcp_schemas = _build_system_prompt(
         messages, model, active_document, mcp_mgr, disabled_tools,
         needs_admin=_needs_admin, relevant_tools=_relevant_tools,
         mcp_disabled_map=_mcp_disabled_map,
-        compact=_is_api_model,
+        compact=_compact_agent_prompt,
         owner=owner,
         suppress_local_context=guide_only,
+        suppress_skills=_low_signal_turn,
         active_email=active_email,
     )
     if plan_mode and not guide_only:
@@ -2185,6 +2417,14 @@ async def stream_agent_loop(
     # Strip internal metadata keys before sending to the LLM API
     messages = [{k: v for k, v in msg.items() if k != "_protected"} for msg in messages]
 
+    agent_prompt_tokens = estimate_tokens(messages)
+    logger.info(
+        "[agent-timing] prep_done model=%s prompt_tokens=%s context_length=%s prep=%s",
+        model,
+        agent_prompt_tokens,
+        context_length,
+        {k: round(v, 3) for k, v in prep_timings.items()},
+    )
     yield f"data: {json.dumps({'type': 'agent_prep', 'data': {k: round(v, 3) for k, v in prep_timings.items()}})}\n\n"
 
     full_response = ""
@@ -2213,7 +2453,7 @@ async def stream_agent_loop(
     # stuck firing the same tool call over and over with no text — burns
     # all 20 rounds, looks like the chat "died". Track recent call
     # signatures + consecutive no-text tool rounds to bail early.
-    _recent_call_sigs = collections.deque(maxlen=10)
+    _recent_call_sigs = collections.deque(maxlen=6)
     _stuck_rounds = 0
     # Frequency of each exact call signature (tool + args), for the runaway
     # backstop. Counting identical repeats — not distinct same-tool calls —
@@ -2329,6 +2569,19 @@ async def stream_agent_loop(
         # complementary cap for the rare stream that trickles bytes forever and
         # so never trips the inactivity timeout. Generous — only catches runaway.
         _round_deadline = time.time() + max(agent_stream_timeout * 4, 1200)
+        _round_start = time.time()
+        _round_first_event_logged = False
+        _round_first_token_logged = False
+        logger.info(
+            "[agent-timing] round_start round=%s model=%s endpoint=%s prompt_tokens=%s tools=%s native_tools=%s timeout=%s",
+            round_num,
+            model,
+            endpoint_url,
+            estimate_tokens(messages),
+            len(_tool_names_sent),
+            bool(all_tool_schemas),
+            agent_stream_timeout,
+        )
         async for chunk in stream_llm_with_fallback(
             _candidates,
             messages,
@@ -2339,11 +2592,30 @@ async def stream_agent_loop(
             timeout=agent_stream_timeout,
             session_id=session_id,
         ):
+            if not _round_first_event_logged:
+                _round_first_event_logged = True
+                logger.info(
+                    "[agent-timing] first_event round=%s elapsed=%.3fs kind=%s",
+                    round_num,
+                    time.time() - _round_start,
+                    "error" if chunk.startswith("event: error") else "data",
+                )
             if time.time() > _round_deadline:
-                logger.warning(f"[agent] round {round_num} stream exceeded wall-clock deadline; cutting off")
+                logger.warning(
+                    "[agent-timing] round_deadline round=%s elapsed=%.3fs deadline_s=%s",
+                    round_num,
+                    time.time() - _round_start,
+                    max(agent_stream_timeout * 4, 1200),
+                )
                 break
             # Forward error events from stream_llm to the frontend
             if chunk.startswith("event: error"):
+                logger.warning(
+                    "[agent-timing] stream_error round=%s elapsed=%.3fs chunk=%r",
+                    round_num,
+                    time.time() - _round_start,
+                    chunk[:500],
+                )
                 yield chunk
                 continue
             if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
@@ -2423,6 +2695,15 @@ async def stream_agent_loop(
                         if not first_token_received:
                             time_to_first_token = time.time() - total_start
                             first_token_received = True
+                        if not _round_first_token_logged:
+                            _round_first_token_logged = True
+                            logger.info(
+                                "[agent-timing] first_visible_token round=%s elapsed=%.3fs total_elapsed=%.3fs thinking=%s",
+                                round_num,
+                                time.time() - _round_start,
+                                time.time() - total_start,
+                                bool(data.get("thinking")),
+                            )
                         # Keep reasoning deltas in a separate accumulator so
                         # we can echo them back via `reasoning_content` on the
                         # next request (DeepSeek requires this; harmless for
@@ -2492,7 +2773,21 @@ async def stream_agent_loop(
                 yield chunk
             # Intercept [DONE] — don't forward until all rounds finish
 
-        tool_blocks, used_native = _resolve_tool_blocks(round_response, native_tool_calls, round_num, is_api_model=_is_api_model)
+        logger.info(
+            "[agent-timing] round_stream_done round=%s elapsed=%.3fs text_chars=%s tool_calls=%s first_event=%s first_token=%s",
+            round_num,
+            time.time() - _round_start,
+            len(round_response),
+            len(native_tool_calls),
+            _round_first_event_logged,
+            _round_first_token_logged,
+        )
+        tool_blocks, used_native = _resolve_tool_blocks(
+            round_response,
+            native_tool_calls,
+            round_num,
+            is_api_model=(_is_api_model and not guide_only),
+        )
 
         # Force-answer round: we told the model to STOP calling tools and
         # answer. If it ignored that and emitted a (possibly DSML) tool
@@ -2576,7 +2871,7 @@ async def stream_agent_loop(
         # model with no real native_tool_calls) must not be stripped from the
         # persisted text either — otherwise it streams once and then disappears
         # on reload (#3222 follow-up).
-        cleaned_round = strip_tool_blocks(round_response, skip_fenced=(_is_api_model and not used_native)).strip()
+        cleaned_round = strip_tool_blocks(round_response, skip_fenced=(_is_api_model and not used_native and not guide_only)).strip()
         round_texts.append(cleaned_round)
 
         if not tool_blocks:
@@ -2648,6 +2943,15 @@ async def stream_agent_loop(
                 _intent_nudge_count += 1
                 _matched_phrase = _intent_match.group(0).strip()
                 logger.info(f"[agent] intent-without-action nudge #{_intent_nudge_count} on round {round_num}: {_matched_phrase!r}")
+                _lower_phrase = _matched_phrase.lower()
+                _cookbook_log_hint = ""
+                if any(_word in _lower_phrase for _word in ("log", "logs", "output", "tail", "status")):
+                    _cookbook_log_hint = (
+                        " If this is about a Cookbook/model serve, the concrete calls are: "
+                        "`list_served_models` first, then `tail_serve_output` with the "
+                        "session_id from the serve/list result. Never answer with "
+                        "\"check logs\" when those tools are available."
+                    )
                 messages.append({
                     "role": "system",
                     "content": (
@@ -2656,6 +2960,7 @@ async def stream_agent_loop(
                         "see you announced the action but didn't run it, which "
                         "is the most frustrating thing you can do. "
                         "DO IT NOW: emit the actual function call this turn. "
+                        f"{_cookbook_log_hint}"
                         "If you decided not to do it after all, say so plainly in "
                         "one sentence instead of restating the plan."
                     ),
@@ -2695,7 +3000,7 @@ async def stream_agent_loop(
         # Distinct calls to one tool (a real batch) are legitimate work, so we
         # count identical call signatures, not raw per-tool-type totals.
         _runaway = _detect_runaway_call(_call_freq)
-        if _stuck_rounds >= 7 or _runaway:
+        if _stuck_rounds >= 4 or _runaway:
             reason = (f"calling {_runaway} with identical arguments over and over" if _runaway
                       else "repeating the same tool calls without new progress")
             logger.warning(f"[agent] loop-breaker tripped on round {round_num} ({reason}); sig={_sig[:80]!r}")

@@ -4,6 +4,7 @@ import uuid
 import logging
 import re
 from typing import Dict, List, Optional, Any
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import httpx
 from fastapi import HTTPException
@@ -18,7 +19,7 @@ log = logging.getLogger(__name__)
 DATA_FILE = INTEGRATIONS_FILE
 
 # ---------------------------------------------------------------------------
-# 预设
+# Presets
 # ---------------------------------------------------------------------------
 
 INTEGRATION_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -154,7 +155,7 @@ INTEGRATION_PRESETS: Dict[str, Dict[str, Any]] = {
 }
 
 # ---------------------------------------------------------------------------
-# 存储
+# Storage
 # ---------------------------------------------------------------------------
 
 
@@ -163,7 +164,7 @@ def _ensure_data_dir() -> None:
 
 
 def _encrypt_integration_secrets(integrations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """返回已加密 API key 的存储安全副本。"""
+    """Return storage-safe copies with API keys encrypted at rest."""
     safe: List[Dict[str, Any]] = []
     for item in integrations:
         copy = dict(item)
@@ -175,7 +176,7 @@ def _encrypt_integration_secrets(integrations: List[Dict[str, Any]]) -> List[Dic
 
 
 def _decrypt_integration_secrets(integrations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """返回已解密 API key 的运行时副本供调用方使用。"""
+    """Return runtime copies with API keys decrypted for callers."""
     decoded: List[Dict[str, Any]] = []
     for item in integrations:
         copy = dict(item)
@@ -194,7 +195,7 @@ def _has_plaintext_api_key(integrations: List[Dict[str, Any]]) -> bool:
 
 
 def mask_integration_secret(integration: Dict[str, Any]) -> Dict[str, Any]:
-    """返回安全用于 API 响应的副本。"""
+    """Return a copy safe for API responses."""
     safe = dict(integration)
     api_key = safe.get("api_key", "")
     if api_key:
@@ -202,8 +203,24 @@ def mask_integration_secret(integration: Dict[str, Any]) -> Dict[str, Any]:
     return safe
 
 
+def _normalize_integration_base_url(base_url: Any) -> str:
+    if not isinstance(base_url, str) or not base_url.strip():
+        raise ValueError("Integration base URL is required")
+    cleaned = base_url.strip().rstrip("/")
+    if "?" in cleaned or "#" in cleaned:
+        raise ValueError("Integration base URL must not include query or fragment")
+    parsed = urlparse(cleaned)
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname:
+        raise ValueError("Integration base URL must be an HTTP(S) URL")
+    return urlunparse(parsed._replace(scheme=parsed.scheme.lower(), query="", fragment="")).rstrip("/")
+
+
+def _join_integration_url(base_url: str, path: str) -> str:
+    return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
+
+
 def load_integrations() -> List[Dict[str, Any]]:
-    """从磁盘加载所有集成并解密密钥供运行时使用。"""
+    """Load all integrations from disk with secrets decrypted for runtime use."""
     if not os.path.exists(DATA_FILE):
         return []
     try:
@@ -225,14 +242,14 @@ def load_integrations() -> List[Dict[str, Any]]:
 
 
 def save_integrations(integrations: List[Dict[str, Any]]) -> None:
-    """将集成列表持久化到磁盘，API key 加密存储。"""
+    """Persist integrations list to disk with API keys encrypted at rest."""
     _ensure_data_dir()
     atomic_write_json(DATA_FILE, _encrypt_integration_secrets(integrations), indent=2)
     safe_chmod(DATA_FILE, 0o600)
 
 
 def get_integration(integration_id: str) -> Optional[Dict[str, Any]]:
-    """根据 ID 获取单个集成。"""
+    """Get a single integration by id."""
     for item in load_integrations():
         if item.get("id") == integration_id:
             return item
@@ -240,7 +257,7 @@ def get_integration(integration_id: str) -> Optional[Dict[str, Any]]:
 
 
 def add_integration(data: Dict[str, Any]) -> Dict[str, Any]:
-    """添加新集成。如果提供了 'preset'，先合并预设默认值。"""
+    """Add a new integration. If 'preset' is given, merge preset defaults first."""
     integration: Dict[str, Any] = {}
 
     preset_key = data.get("preset")
@@ -261,8 +278,10 @@ def add_integration(data: Dict[str, Any]) -> Dict[str, Any]:
 
     if not isinstance(integration.get("name"), str) or not integration["name"].strip():
         raise HTTPException(400, "Integration name is required")
-    if not isinstance(integration.get("base_url"), str) or not integration["base_url"].strip():
-        raise HTTPException(400, "Integration base URL is required")
+    try:
+        integration["base_url"] = _normalize_integration_base_url(integration.get("base_url"))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     integrations = load_integrations()
     integrations.append(integration)
@@ -271,16 +290,20 @@ def add_integration(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def update_integration(integration_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """更新已有集成的字段。返回更新后的集成或 None。"""
+    """Update fields on an existing integration. Returns updated integration or None."""
+    data = dict(data)
     if "name" in data and (not isinstance(data["name"], str) or not data["name"].strip()):
         raise HTTPException(400, "Integration name is required")
-    if "base_url" in data and (not isinstance(data["base_url"], str) or not data["base_url"].strip()):
-        raise HTTPException(400, "Integration base URL is required")
+    if "base_url" in data:
+        try:
+            data["base_url"] = _normalize_integration_base_url(data["base_url"])
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     integrations = load_integrations()
     for item in integrations:
         if item.get("id") == integration_id:
-            data.pop("id", None)  # 防止更改 ID
+            data.pop("id", None)  # prevent id change
             item.update(data)
             save_integrations(integrations)
             return item
@@ -288,7 +311,7 @@ def update_integration(integration_id: str, data: Dict[str, Any]) -> Optional[Di
 
 
 def delete_integration(integration_id: str) -> bool:
-    """根据 ID 删除集成。找到并删除返回 True。"""
+    """Delete an integration by id. Returns True if found and deleted."""
     integrations = load_integrations()
     original_len = len(integrations)
     integrations = [i for i in integrations if i.get("id") != integration_id]
@@ -299,24 +322,24 @@ def delete_integration(integration_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# API 执行
+# API execution
 # ---------------------------------------------------------------------------
 
 def _strip_html_tags(html: str) -> str:
-    """粗略的 HTML 标签去除。"""
+    """Rough HTML tag stripping."""
     text = re.sub(r"<[^>]+>", "", html)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
 def _find_integration(identifier: str) -> Optional[Dict[str, Any]]:
-    """按 ID 或名称（不区分大小写）查找集成。"""
+    """Find integration by id or name (case-insensitive)."""
     integrations = load_integrations()
-    # 先按 ID 查找
+    # try id first
     for item in integrations:
         if item.get("id") == identifier:
             return item
-    # 再按名称查找
+    # try name
     lower = identifier.lower()
     for item in integrations:
         if item.get("name", "").lower() == lower:
@@ -332,7 +355,7 @@ async def execute_api_call(
     body: Optional[Any] = None,
     extra_headers: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    """对已注册的集成执行 HTTP 请求。"""
+    """Execute an HTTP request against a registered integration."""
 
     integration = _find_integration(integration_id)
     if not integration:
@@ -341,13 +364,14 @@ async def execute_api_call(
     if not integration.get("enabled", True):
         return {"error": f"Integration '{integration.get('name')}' is disabled", "exit_code": 1}
 
-    base_url = integration.get("base_url", "").rstrip("/")
-    if not base_url:
-        return {"error": "Integration has no base_url configured", "exit_code": 1}
+    try:
+        base_url = _normalize_integration_base_url(integration.get("base_url", ""))
+    except ValueError as exc:
+        return {"error": str(exc), "exit_code": 1}
 
-    # 去除用户可能意外包含的常见 API 路径后缀
-    # （例如 "http://host/v1/" → "http://host"）。集成的预设
-    # 端点已包含完整路径，因此 base 应为裸路径。
+    # Strip common API path suffixes users might accidentally include
+    # (e.g. "http://host/v1/" → "http://host"). The integration's preset
+    # endpoints include the full path, so the base should be bare.
     preset = (integration.get("preset") or integration.get("name", "")).lower()
     strip_suffixes = {
         "miniflux": ["/v1"],
@@ -360,16 +384,19 @@ async def execute_api_call(
             base_url = base_url[: -len(suf)]
             break
 
-    # 验证路径
+    # Validate path
     if not path.startswith("/"):
         return {"error": "Path must start with /", "exit_code": 1}
     if re.search(r"^https?://", path) or "://" in path:
         return {"error": "Path must not contain a protocol scheme", "exit_code": 1}
 
-    url = base_url + path
+    if "#" in path:
+        return {"error": "Path must not contain a fragment", "exit_code": 1}
+
+    url = _join_integration_url(base_url, path)
     method = method.upper()
 
-    # 构建请求头
+    # Build headers
     headers: Dict[str, str] = {}
     if extra_headers:
         headers.update(extra_headers)
@@ -378,7 +405,7 @@ async def execute_api_call(
     auth_type = integration.get("auth_type", "none")
 
     if auth_type == "header" and api_key:
-        # 当 auth_header 未设置或为空时，根据预设/名称回退
+        # Fall back based on preset/name when auth_header is unset or empty
         header_name = integration.get("auth_header") or ""
         if not header_name:
             preset = (integration.get("preset") or integration.get("name", "")).lower()
@@ -397,7 +424,7 @@ async def execute_api_call(
         param_name = integration.get("auth_param", "api_key")
         params[param_name] = api_key
 
-    # auth_type == "basic" — 期望 api_key 为 "user:password" 格式
+    # auth_type == "basic" — expects api_key as "user:password"
     auth = None
     if auth_type == "basic" and api_key:
         parts = api_key.split(":", 1)
@@ -418,7 +445,7 @@ async def execute_api_call(
         content_type = response.headers.get("content-type", "")
         status = response.status_code
 
-        # 格式化响应体
+        # Format response body
         if "application/json" in content_type:
             try:
                 data = response.json()
@@ -514,13 +541,13 @@ async def execute_api_call(
 
 
 # ---------------------------------------------------------------------------
-# 系统提示词辅助
+# System prompt helper
 # ---------------------------------------------------------------------------
 
 def get_integrations_prompt() -> str:
-    """返回描述所有已启用集成的字符串，用于注入系统提示词。
+    """Return a string describing all enabled integrations for system prompt injection.
 
-    如果没有集成被启用则返回空字符串。
+    Returns empty string if no integrations are enabled.
     """
     integrations = load_integrations()
     enabled = [i for i in integrations if i.get("enabled", True)]
@@ -540,12 +567,12 @@ def get_integrations_prompt() -> str:
 
 
 # ---------------------------------------------------------------------------
-# 迁移
+# Migration
 # ---------------------------------------------------------------------------
 
 def migrate_from_settings() -> None:
-    """如果 data/settings.json 中有 miniflux_url 和 miniflux_api_key，
-    则创建 Miniflux 集成并从 settings 中清除这些键。"""
+    """If data/settings.json has miniflux_url and miniflux_api_key, create a
+    Miniflux integration and clear those keys from settings."""
     settings_path = SETTINGS_FILE
     if not os.path.exists(settings_path):
         return
@@ -562,7 +589,7 @@ def migrate_from_settings() -> None:
     if not miniflux_url or not miniflux_key:
         return
 
-    # 检查 Miniflux 集成是否已存在
+    # Check if a miniflux integration already exists
     existing = load_integrations()
     for item in existing:
         if item.get("preset") == "miniflux":
@@ -575,7 +602,7 @@ def migrate_from_settings() -> None:
         "api_key": miniflux_key,
     })
 
-    # 清除已迁移的键
+    # Clear migrated keys
     settings.pop("miniflux_url", None)
     settings.pop("miniflux_api_key", None)
     with open(settings_path, "w", encoding="utf-8") as f:

@@ -51,7 +51,7 @@ async function _ensureBackendInstalled(runBackend, host, port, envPath, modelNam
       params.set('host', host);
       if (port) params.set('ssh_port', String(port));
       if (envPath) params.set('venv', envPath);
-}
+    }
     const r = await fetch('/api/cookbook/packages' + (params.toString() ? '?' + params : ''));
     const d = await r.json();
     const pkg = (d.packages || []).find(p => p.name === pkgName);
@@ -60,7 +60,7 @@ async function _ensureBackendInstalled(runBackend, host, port, envPath, modelNam
     // If we can't tell, don't block — the server's own serve route will
     // surface a clearer error anyway.
     return true;
-}
+  }
   const targetLabel = host || 'this server';
   uiModule.showToast(
     `${pkgName} not installed on ${targetLabel}. Opening Dependencies — pick your model and click Run.`,
@@ -70,11 +70,11 @@ async function _ensureBackendInstalled(runBackend, host, port, envPath, modelNam
   return false;
 }
 
-// ── What Fits?（硬件模型适配）──
+// ── What Fits? (hardware model fitting) ──
 
 export let _hwfitCache = null;
 export let _hwfitDebounce = null;
-export let _cachedModelIds = null; // 已下载的仓库 ID 列表
+export let _cachedModelIds = null; // repo IDs already downloaded
 // Bumped on every _hwfitFetch; a slow scan (remote SSH probe can take ~10s)
 // checks this before rendering so a stale response can't clobber a newer one
 // after the user has switched servers.
@@ -86,7 +86,7 @@ let _dismissedHwChips = new Set();
 // while "removed" ones don't render at all until next rescan.
 let _removedHwChips = new Set();
 
-export let _gpuToggleTotal = 0; // 来自首次扫描的真实 GPU 数量，永不被覆盖
+export let _gpuToggleTotal = 0; // real GPU count from first scan, never overridden
 
 function _firstGgufSource(model) {
   const sources = Array.isArray(model?.gguf_sources) ? model.gguf_sources : [];
@@ -105,8 +105,8 @@ function _downloadSourceRepo(model, backend) {
     if (_looksLikeGgufRepo(model)) {
       const repo = model?.quant_repo || model?.repo_id || model?.name;
       if (repo) return { repo, kind: 'GGUF' };
-}
-}
+    }
+  }
   return { repo: model?.quant_repo || model?.name || '', kind: '' };
 }
 
@@ -119,7 +119,7 @@ export function _resetGpuToggleState(clearDismissed = true) {
   if (clearDismissed) {
     _dismissedHwChips = new Set();
     _removedHwChips = new Set();
-}
+  }
   const tc = document.getElementById('hwfit-gpu-toggles');
   if (tc) {
     tc._originalSystem = null;
@@ -128,11 +128,11 @@ export function _resetGpuToggleState(clearDismissed = true) {
     tc._groups = null;
     tc._builtGroup = undefined;
     delete tc.dataset.rendered;
-}
+  }
   _gpuToggleTotal = 0;
 }
 
-// 裁剪供应商前缀，使池标签显示为 "RTX 4090 D" 而非 "NVIDIA GeForce RTX 4090 D"。
+// Trim vendor noise so a pool label reads "RTX 4090 D" not "NVIDIA GeForce RTX 4090 D".
 function _shortGpuName(name) {
   return String(name || 'GPU')
     .replace(/^NVIDIA\s+GeForce\s+/i, '')
@@ -142,7 +142,7 @@ function _shortGpuName(name) {
 }
 
 // Powers of two up to the pool size, plus the exact pool size — these are the
-// --tensor-parallel-size 值（TP 必须整除 GPU 数量和模型的注意力头数）。
+// only safe vLLM --tensor-parallel-size values (TP must divide the GPU count and
 // the model's attention heads). Never offer a count we can't actually serve.
 function _validTpCounts(poolSize) {
   const out = [1, 2, 4, 8, 16].filter(n => n <= poolSize);
@@ -164,7 +164,7 @@ export function _renderGpuToggles(system) {
     container._groups = null;
     _gpuToggleTotal = 0;
     return;
-}
+  }
   // Update on every scan that returns a positive total — previously this
    // only set on the first scan, so switching servers (e.g. local 1-GPU
    // first, then a 4-GPU remote) left the Run-panel GPU buttons stuck on
@@ -189,13 +189,13 @@ export function _renderGpuToggles(system) {
 
   let html = '';
   if (heterogeneous) {
-    html += `<select class="hwfit-gpu-group" id="hwfit-gpu-group" title="${t('cookbook.gpu_pool_title')}">`;
+    html += `<select class="hwfit-gpu-group" id="hwfit-gpu-group" title="Which GPU pool to serve from — vLLM can only tensor-parallel across identical GPUs">`;
     groups.forEach((g, i) => {
       const lbl = `${g.count}× ${_shortGpuName(g.name)} (${Math.round(g.vram_total)} GB)`;
       html += `<option value="${i}"${i === container._activeGroup ? ' selected' : ''}>${esc(lbl)}</option>`;
-  });
+    });
     html += '</select>';
-}
+  }
   const validCounts = _validTpCounts(poolSize);
   const maxGpu = validCounts.length ? validCounts[validCounts.length - 1] : 0;
   // Commit the data layer to maxGpu on initial render so it matches the
@@ -212,39 +212,39 @@ export function _renderGpuToggles(system) {
       container._activeCount = 0;
     } else if (validCounts.length) {
       container._activeCount = maxGpu;
-}
-}
+    }
+  }
   html += '<button class="hwfit-gpu-btn" data-count="0" title="CPU / RAM only">RAM</button>';
   const hasExplicitCount = typeof container._activeCount === 'number';
   for (const n of validCounts) {
     const text = n === 1 ? 'GPU' : n + ' GPU';
     const isActive = hasExplicitCount && n === container._activeCount;
     html += `<button class="hwfit-gpu-btn${isActive ? ' active' : ''}" data-count="${n}" title="${n} GPU${n > 1 ? 's' : ''}">${text}</button>`;
-}
+  }
   // Also mark the RAM button active when the user explicitly chose RAM (0)
   // — the loop above only handles GPU buttons.
   if (container._activeCount === 0) {
     const ramBtn = container.querySelector('.hwfit-gpu-btn[data-count="0"]');
     // (we just set innerHTML so we re-mark below after assignment)
-}
+  }
   container.innerHTML = html;
   if (container._activeCount === 0) {
     const ramBtn = container.querySelector('.hwfit-gpu-btn[data-count="0"]');
     if (ramBtn) ramBtn.classList.add('active');
-}
+  }
 
   // Pool dropdown: switch pools, reset the count to the new pool's max, rebuild.
   const sel = container.querySelector('#hwfit-gpu-group');
   if (sel) {
     sel.addEventListener('change', () => {
-    container._activeCount = maxGpu;
-  if (container._activeCount === undefined && validCounts.length) {
+      container._activeGroup = parseInt(sel.value) || 0;
+      container._activeCount = undefined;   // default to the new pool's max
       delete container.dataset.rendered;    // force a count-button rebuild
       _renderGpuToggles(system);
-    _hwfitCache = null;
-    _hwfitFetch(true);
-  });
-}
+      _hwfitCache = null;
+      _hwfitFetch();
+    });
+  }
 
   if (!container._gpuBound) {
     container._gpuBound = true;
@@ -271,13 +271,13 @@ export function _renderGpuToggles(system) {
             quantSel.value = 'Q4_K_M'; // ROCm default stays GGUF/local-safe; AWQ is explicit only
           } else {
             quantSel.value = 'AWQ-4bit'; // Multi-GPU -> AWQ for vLLM
-}
-}
-}
-    _hwfitCache = null;
-    _hwfitFetch(true);
-  });
-}
+          }
+        }
+      }
+      _hwfitCache = null;
+      _hwfitFetch();
+    });
+  }
 }
 
 // --- Scan persistence (survives page reloads) ----------------------------
@@ -296,7 +296,7 @@ const _SCAN_CACHE_TTL = 6 * 3600 * 1000; // 6 h — hardware rarely changes
 // _CTX_PRESETS; _ctxValue() resolves it to a token count (0 = "Max"). The label
 // next to the slider re-renders to "8k" / "16k" / … / "Max".
 function _ctxLabel(value) {
-  for (const n of validCounts) {
+  const n = Number(value) || 0;
   if (!n) return 'Max';
   return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
 }
@@ -383,7 +383,7 @@ function _manualDisplaySystem(sys, manual) {
   if (manual.ramGb) {
     base.available_ram_gb = Number(manual.ramGb);
     base.total_ram_gb = Number(manual.ramGb);
-}
+  }
   if (manual.mode === 'ram') {
     // RAM-only simulation — wipe GPU side so the chip display matches
     // what the server is ranking against (CPU/RAM paths only).
@@ -392,7 +392,7 @@ function _manualDisplaySystem(sys, manual) {
     base.gpu_vram_gb = 0;
     base.gpu_count = 0;
     return base;
-}
+  }
   if (manual.mode !== 'ram') {
     const count = Number(manual.gpuCount || 1);
     const vram = Number(manual.vramGb || 8);
@@ -401,7 +401,7 @@ function _manualDisplaySystem(sys, manual) {
     base.gpu_vram_gb = Math.round(vram * count * 10) / 10;
     base.gpu_count = count;
     base.backend = manual.backend || 'cuda';
-}
+  }
   return base;
 }
 
@@ -423,7 +423,7 @@ function _scanSig() {
     gg: (tc && tc._activeGroup) ? String(tc._activeGroup) : '',
     m: _manualHwParams(),
     d: Array.from(_dismissedHwChips).sort(),
-  };
+  });
 }
 
 function _readScanCache(sig) {
@@ -443,7 +443,7 @@ function _writeScanCache(sig, data) {
     if (keys.length > _SCAN_CACHE_MAX) {
       keys.sort((a, b) => (all[a].ts || 0) - (all[b].ts || 0));
       for (const k of keys.slice(0, keys.length - _SCAN_CACHE_MAX)) delete all[k];
-}
+    }
     localStorage.setItem(_SCAN_CACHE_KEY, JSON.stringify(all));
   } catch {}
 }
@@ -478,7 +478,7 @@ function _applyEngineFilter(models) {
   if (!want || !Array.isArray(models)) return models || [];
   return models.filter(m => {
     try { return _detectBackend(m).backend === want; } catch { return true; }
-  };
+  });
 }
 
 // Ollama library cache (per-page). Filled lazily on first _hwfitFetch; the raw
@@ -490,7 +490,7 @@ async function _ensureOllamaLib() {
   if (_ollamaLibCache) return _ollamaLibCache;
   try {
     const res = await fetch('/api/cookbook/ollama/library');
-    let data = await res.json();
+    const data = await res.json();
     _ollamaLibCache = Array.isArray(data?.models) ? data.models : [];
   } catch { _ollamaLibCache = []; }
   return _ollamaLibCache;
@@ -528,7 +528,7 @@ function _ollamaToHwfitRows(libModels, vramAvail, ramAvail) {
         else fitLevel = 'too_tight';
       } else if (vramGb && ramAvail && vramGb <= ramAvail) {
         fitLevel = 'marginal';
-}
+      }
       const tag = `${m.name}:${sz}`;
       const paramsLabel = params
         ? (params >= 1 ? params.toFixed(params >= 10 ? 0 : 1) + 'B' : (params * 1000).toFixed(0) + 'M')
@@ -555,9 +555,9 @@ function _ollamaToHwfitRows(libModels, vramAvail, ramAvail) {
         _olName: m.name,
         _olSize: sz,
         _description: m.description || '',
-  });
-}
-}
+      });
+    }
+  }
   return out;
 }
 
@@ -578,11 +578,13 @@ export async function _hwfitFetch(fresh = false) {
   const _cached = fresh ? null : _readScanCache(_sig);
   const wp = spinnerModule.createWhirlpool(18);
   if (_cached) {
-    _hwfitCache = _cached;
+    // Tag the restored cache with its host too (scan-sig keys cache per
+    // host, so a hit here is always for the current remoteHost).
+    _hwfitCache = { ..._cached, _scannedHost: remoteHost || '' };
     _hwfitRenderHw(hw, _cached.system);
     if (!remoteHost && _cached.system && _cached.system.platform) {
       _envState.platform = _cached.system.platform;
-}
+    }
     _hwfitRenderList(list, _applyEngineFilter(_cached.models));
   } else {
     // Show spinner while scanning — stack the spinner above a text label
@@ -602,7 +604,7 @@ export async function _hwfitFetch(fresh = false) {
     list.innerHTML = '';
     list.appendChild(loadingDiv);
     _hwfitCache = null;   // no instant paint — clear until the fetch returns
-}
+  }
   // Only fetch cached model IDs when server changes, not on every search/sort
   const remoteKey = _currentServerValue();
   if (!_cachedModelIds || _lastCacheHost() !== remoteKey) {
@@ -614,7 +616,7 @@ export async function _hwfitFetch(fresh = false) {
       _cacheParams.set('host', remoteHost);
       if (_cachePort) _cacheParams.set('ssh_port', _cachePort);
       if (_cacheSrv?.platform) _cacheParams.set('platform', _cacheSrv.platform);
-}
+    }
     fetch(`/api/model/cached?${_cacheParams}`, { credentials: 'same-origin' })
       .then(r => r.json())
       .then(d => {
@@ -628,11 +630,11 @@ export async function _hwfitFetch(fresh = false) {
             const nameEl = row.querySelector('.hwfit-name');
             if (nameEl && !nameEl.querySelector('.hwfit-dl-dot')) {
               nameEl.insertAdjacentHTML('beforeend', '<span class="hwfit-dl-dot" title="Downloaded">\u25CF</span>');
-}
-}
+            }
+          }
         });
       }).catch(() => {});
-}
+  }
   try {
     const sortBy = document.getElementById('hwfit-sort')?.value || 'newest';
     const quantPref = document.getElementById('hwfit-quant')?.value || '';
@@ -642,12 +644,12 @@ export async function _hwfitFetch(fresh = false) {
     let gpuCountOverride = '';
     if (!hasManualOrDismissed && toggleContainer && typeof toggleContainer._activeCount === 'number') {
       gpuCountOverride = String(toggleContainer._activeCount);
-}
+    }
     // Which homogeneous GPU pool to rank against (heterogeneous boxes only).
     let gpuGroupOverride = '';
     if (!hasManualOrDismissed && toggleContainer && toggleContainer._activeGroup) {
       gpuGroupOverride = String(toggleContainer._activeGroup);
-}
+    }
     const params = new URLSearchParams({ limit: '80', sort: sortBy });
     if (fresh) params.set('fresh', '1');   // bypass the hardware-scan cache
     if (search) params.set('search', search);
@@ -657,7 +659,7 @@ export async function _hwfitFetch(fresh = false) {
       const _hp = _srv?.port || '';
       if (_hp) params.set('ssh_port', _hp);
       if (_srv?.platform) params.set('platform', _srv.platform);
-}
+    }
     if (gpuCountOverride !== '') params.set('gpu_count', gpuCountOverride);
     if (gpuGroupOverride !== '') params.set('gpu_group', gpuGroupOverride);
     if (_dismissedHwChips.has('gpu') || _dismissedHwChips.has('vram')) params.set('ignore_detected_gpu', 'true');
@@ -665,7 +667,7 @@ export async function _hwfitFetch(fresh = false) {
     const manualParams = _manualHwParams();
     Object.entries(manualParams).forEach(([k, v]) => {
       if (v !== '') params.set(k, v);
-  });
+    });
     if (hasManualOrDismissed) params.set('_hw_override_ts', String(Date.now()));
     // Image models use a separate registry/endpoint
     const isImageMode = useCase === 'image_gen';
@@ -676,7 +678,7 @@ export async function _hwfitFetch(fresh = false) {
       // Fit-only filter — set by the dot in the Fit column header.
       const _fitOnly = (() => { try { return localStorage.getItem('hwfit_fit_only_v1') === '1'; } catch { return false; } })();
       if (_fitOnly) params.set('fit_only', '1');
-}
+    }
     const endpoint = isImageMode ? `/api/hwfit/image-models?${params}` : `/api/hwfit/models?${params}`;
     const res = await fetch(endpoint);
     // A newer scan started while this one was in flight (user switched servers
@@ -685,15 +687,15 @@ export async function _hwfitFetch(fresh = false) {
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       let msg = '';
-  try {
+      try {
         const payload = JSON.parse(body);
         msg = payload && (payload.detail || payload.error || payload.message);
       } catch {
         msg = body;
-}
+      }
       msg = typeof msg === 'string' ? msg.trim() : '';
       throw new Error(`HTTP ${res.status} ${res.statusText}${msg ? `: ${msg}` : ''}`);
-}
+    }
     let data = await res.json();
     if (_tk !== _hwfitFetchToken) { try { wp.destroy(); } catch {} return; }
     if (!isImageMode && quantPref && !data.error && Array.isArray(data.models) && data.models.length === 0) {
@@ -707,9 +709,9 @@ export async function _hwfitFetch(fresh = false) {
           data = fallbackData;
           const quantSel = document.getElementById('hwfit-quant');
           if (quantSel) quantSel.value = '';
-}
-}
-}
+        }
+      }
+    }
     // Normalize image model fields to match LLM renderer expectations
     if (isImageMode && data.models) {
       data.models = data.models.map(m => ({
@@ -725,14 +727,14 @@ export async function _hwfitFetch(fresh = false) {
         quant: m.quant || m.default_quant || 'BF16',
         quant_repo: m.quant_repo || null,
       }));
-}
+    }
     wp.destroy();
     if (data.error) {
       // Keep the instantly-painted cache if we had one — don't replace good data
       // with an error on a transient probe failure (stale-while-revalidate).
       if (!_cached) { _hwfitShowError(list, remoteHost, data.error); if (hw) hw.innerHTML = ''; }
-          return (
-}
+      return;
+    }
     // Merge Ollama library rows into the main list so they appear with the
     // same Fit/Param/Quant/VRAM/Mode columns as HF results and respond to the
     // Engine filter. Skipped in image-gen mode (Ollama doesn't serve diffusers).
@@ -749,19 +751,23 @@ export async function _hwfitFetch(fresh = false) {
         ? _olRows.filter(r => r.name.toLowerCase().includes(_s) || (r._description || '').toLowerCase().includes(_s))
         : _olRows;
       data.models = (data.models || []).concat(_olFiltered);
-}
-    _hwfitCache = data;
+    }
+    // Tag the cache with the host this scan was for, so downstream
+    // code (_gpuEnvVarName, backend-aware command builders) can avoid
+    // trusting a stale scan when the user switches the server picker
+    // to a different target without re-running hwfit.
+    _hwfitCache = { ...data, _scannedHost: remoteHost || '' };
     _hwfitRenderHw(hw, data.system);
     // Propagate local platform from hardware probe so _isWindows(task) works
     // for local tasks (menu items, shell commands, etc.).
     if (!remoteHost && data.system && data.system.platform) {
       _envState.platform = data.system.platform;
-}
+    }
     // Sort client-side by the active column so the highest↔lowest toggle is
     // deterministic (the previous array .reverse() didn't reliably flip).
     // 1st click on a column = highest first; clicking it again = lowest first.
     if (!isImageMode) {
-  const slider = document.getElementById('hwfit-context');
+      const sortSel = document.getElementById('hwfit-sort');
       const sortKey = sortSel?.value || 'newest';
       const asc = sortSel?.dataset.reverse === '1';   // reversed → ascending (lowest first)
       if (sortKey === 'fit') {
@@ -793,8 +799,8 @@ export async function _hwfitFetch(fresh = false) {
           const av = Number(a[field]) || 0, bv = Number(b[field]) || 0;
           return asc ? av - bv : bv - av;
         });
-}
-}
+      }
+    }
     _hwfitRenderList(list, _applyEngineFilter(data.models));
     // Persist this result so the next page load can paint it instantly.
     _writeScanCache(_sig, data);
@@ -804,14 +810,14 @@ export async function _hwfitFetch(fresh = false) {
       if (toggleContainer._activeCount === undefined) {
         toggleContainer._originalSystem = { ...data.system };
         _renderGpuToggles(toggleContainer._originalSystem);
-}
-}
+      }
+    }
   } catch (e) {
     wp.destroy();
     // Same stale-while-revalidate rule: only surface the error if we have nothing
     // already on screen from the cache.
     if (!_cached) _hwfitShowError(list, remoteHost, e.message);
-}
+  }
 }
 
 // Renders a non-blocking hardware visibility warning when Cookbook is using
@@ -829,14 +835,14 @@ function _renderHwVisibilityWarning(sys) {
   if (!warning) {
     if (box) box.remove();
     return;
-}
+  }
 
   if (!box) {
     box = document.createElement('div');
     box.id = 'hwfit-hw-visibility-warning';
     box.className = 'hwfit-loading hwfit-hw-visibility-warning';
     row.insertAdjacentElement('afterend', box);
-}
+  }
 
   box.innerHTML = `
     <div class="hwfit-hw-visibility-warning-title">${esc(warning.title || 'Hardware visibility note')}</div>
@@ -854,14 +860,14 @@ function _renderHwVisibilityWarning(sys) {
     document.getElementById('hwfit-hw-manual-btn')?.scrollIntoView?.({
       behavior: 'smooth',
       block: 'center',
+    });
   });
-  };
 
   box.querySelector('[data-hw-action="rescan"]')?.addEventListener('click', () => {
     _resetGpuToggleState();
     _hwfitCache = null;
     _hwfitFetch(true);
-  };
+  });
 
   box.querySelector('[data-hw-action="copy"]')?.addEventListener('click', () => {
     // Keep diagnostics copy/paste friendly for GitHub issues and Docker support.
@@ -885,7 +891,7 @@ function _renderHwVisibilityWarning(sys) {
     ].join('\n');
 
     _copyText(text);
-  };
+  });
 }
 
 export function _hwfitRenderHw(el, sys) {
@@ -939,7 +945,7 @@ export function _hwfitRenderHw(el, sys) {
       label = `${gpuCount}× ${esc(sys.gpu_name)}`;
     } else {
       label = esc(sys.gpu_name);
-}
+    }
     const gpus = Array.isArray(sys.gpus) ? sys.gpus : [];
     const tip = gpus.length
       ? gpus.map(g => `GPU ${g.index}: ${g.name} · ${(+g.vram_gb).toFixed(1)} GB`).join('\n')
@@ -959,7 +965,7 @@ export function _hwfitRenderHw(el, sys) {
         })();
   } else {
     gpuChip = chip('gpu', 'No GPU');
-}
+  }
   const vram = sys.gpu_vram_gb ? `${sys.gpu_vram_gb.toFixed(1)} GB VRAM` : '';
   const ram = `${sys.available_ram_gb?.toFixed(1) || '?'} / ${sys.total_ram_gb?.toFixed(1) || '?'} GB RAM`;
   const cores = `${sys.cpu_cores || '?'} cores`;
@@ -994,12 +1000,12 @@ export function _hwfitRenderHw(el, sys) {
       } else {
         _dismissedHwChips.add(key);
         row?.classList.add('hwfit-hw-chip-off');
-}
+      }
       _resetGpuToggleState(false);
-    _hwfitCache = null;
+      _hwfitCache = null;
       _hwfitFetch(true);
+    });
   });
-  };
   // × button → fully remove the chip from view AND treat it as
   // dismissed for ranking purposes (until next rescan).
   el.querySelectorAll('.hwfit-hw-chip-x').forEach(btn => {
@@ -1016,18 +1022,18 @@ export function _hwfitRenderHw(el, sys) {
         btn.closest('.hwfit-hw-chip-row')?.remove();
         document.getElementById('hwfit-manual-panel')?.classList.add('hidden');
         _resetGpuToggleState();
-    _hwfitCache = null;
+        _hwfitCache = null;
         _hwfitFetch(true);
         return;
-}
+      }
       _removedHwChips.add(key);
       _dismissedHwChips.add(key);
       btn.closest('.hwfit-hw-chip-row')?.remove();
       _resetGpuToggleState(false);
-    _hwfitCache = null;
+      _hwfitCache = null;
       _hwfitFetch(true);
+    });
   });
-  };
   _wireManualHardwareControls(el);
 }
 
@@ -1048,7 +1054,7 @@ function _wireManualHardwareControls(el) {
   if (manual) {
     panel.querySelector('.hwfit-manual-mode').value = manual.mode || 'gpu';
     panel.querySelector('.hwfit-manual-backend').value = manual.backend || 'cuda';
-}
+  }
   const syncMode = () => {
     const isRam = panel.querySelector('.hwfit-manual-mode')?.value === 'ram';
     panel.querySelector('.hwfit-manual-gpus')?.closest('label')?.style.setProperty('display', isRam ? 'none' : '');
@@ -1061,12 +1067,12 @@ function _wireManualHardwareControls(el) {
     btn.addEventListener('click', () => {
       panel.classList.toggle('hidden');
       syncMode();
-  });
-}
+    });
+  }
   el.querySelector('.hwfit-hw-chip-toggle[data-hw-chip="manual"]')?.addEventListener('click', () => {
     panel.classList.remove('hidden');
     syncMode();
-  };
+  });
   if (!panel._hwfitManualBound) {
     panel._hwfitManualBound = true;
     panel.querySelector('.hwfit-manual-mode')?.addEventListener('change', syncMode);
@@ -1078,14 +1084,14 @@ function _wireManualHardwareControls(el) {
       const backend = panel.querySelector('.hwfit-manual-backend')?.value || 'cuda';
       const manual = { mode, gpuCount, vramGb, ramGb, backend };
       _saveManualHwState(manual);
-  const s = _manualHwState();
-    _hwfitCache = null;
+      _resetGpuToggleState();
+      _hwfitCache = null;
       panel.classList.add('hidden');
       _hwfitRenderHw(el, _manualDisplaySystem(window._hwfitSystemCache, manual));
       _hwfitFetch(true);
-  });
+    });
     panel.querySelector('.hwfit-hw-manual-clear')?.addEventListener('click', clearManual);
-}
+  }
   syncMode();
 }
 
@@ -1135,7 +1141,7 @@ export function _hwfitRenderList(el, models) {
     else msg = 'No models fit your hardware';
     el.innerHTML = `<div class="hwfit-loading">${msg}</div>`;
     return;
-}
+  }
   const sortSel = document.getElementById('hwfit-sort');
   const currentSort = sortSel?.value || 'newest';
   const isReversed = sortSel?.dataset.reverse === '1';
@@ -1155,7 +1161,7 @@ export function _hwfitRenderList(el, models) {
       // \u25BC = highest first (default), \u25B2 = reversed (lowest first) \u2014 uniform
       // across all columns now.
       arrow = isReversed ? ' \u25B2' : ' \u25BC';
-}
+    }
     const dataAttr = col.key ? ` data-sort="${col.key}"` : '';
     // Fit column gets a small dot to its left that toggles "show only models
     // that fit" — replaces the old Fits On/Off button next to the toolbar.
@@ -1165,16 +1171,16 @@ export function _hwfitRenderList(el, models) {
       label = `<span class="hwfit-fit-dot${_fitOnly ? ' active' : ''}" title="${_fitOnly ? 'Showing only models that fit. Click to also show too-tight rows.' : 'Click to show only models that fit your hardware.'}" data-fit-dot>●</span>${col.label}`;
       // (Budget tag removed — the GPU/RAM/N-GPU suffix next to "Fit" was noise;
       // the toggle row already shows which budget is active.)
-}
+    }
     // The Model column's "(newest)" / "(oldest)" suffix flips with the sort
     // direction so the user can see at a glance which way they're sorted.
     if (col.key === 'newest' && col.key === currentSort) {
       label = isReversed ? 'Model (oldest)' : 'Model (latest)';
     } else if (col.key === 'newest') {
       label = 'Model (latest)';
-}
+    }
     html += `<span class="hwfit-col ${col.cls}${sortable}${active}"${dataAttr}>${label}${arrow}</span>`;
-}
+  }
   html += '</div>';
   for (const m of models) {
     const fitColor = _fitColors[m.fit_level] || 'var(--fg-muted)';
@@ -1208,8 +1214,8 @@ export function _hwfitRenderList(el, models) {
         let _display = _remaining.join('-');
         if (_display.length > 9) _display = _display.slice(0, 9) + '…';
         _quantSuffix = ` <span class="hwfit-name-quant" title="${esc(_quantTag)} — full storage format">(${esc(_display)})</span>`;
-}
-}
+      }
+    }
     html += `<span class="hwfit-col hwfit-name">${modelLogo(m.name)}${esc(_short)}${_quantSuffix}${moeBadge}${imgBadge}${dlDot}</span>`;
     html += `<span class="hwfit-col hwfit-c-params">${esc(pcount)}</span>`;
     // Truncate the Quant cell to 9 chars + ellipsis so long tags like
@@ -1223,7 +1229,7 @@ export function _hwfitRenderList(el, models) {
     html += `<span class="hwfit-col hwfit-c-score">${score}</span>`;
     html += `<span class="hwfit-col hwfit-c-mode" title="${_requiresAcceleratorBackend(m) ? 'Requires vLLM or SGLang with a visible CUDA/ROCm accelerator. llama.cpp and Ollama need GGUF files.' : ''}">${esc(modeLabel)}</span>`;
     html += `</div>`;
-}
+  }
   el.innerHTML = html;
   // Click row → expand inline action panel. Exception: Ollama rows skip the
   // expand panel (no HF metadata to power it) and just fill the Download
@@ -1242,7 +1248,7 @@ export function _hwfitRenderList(el, models) {
         if (dlBody && dlBody.style.display === 'none') {
           dlBody.style.display = 'block';
           if (dlArrow) dlArrow.style.transform = 'rotate(90deg)';
-}
+        }
         const dlInput = document.getElementById('cookbook-dl-repo');
         if (dlInput) {
           dlInput.value = modelData.name;
@@ -1252,12 +1258,12 @@ export function _hwfitRenderList(el, models) {
           dlInput.classList.add('cookbook-dl-flash');
           setTimeout(() => dlInput.classList.remove('cookbook-dl-flash'), 800);
           dlInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
+        }
         return;
-}
+      }
       _expandModelRow(row, modelData);
+    });
   });
-  };
   // Clickable header columns → sort (click again to toggle direction)
   el.querySelectorAll('.hwfit-header .hwfit-sortable').forEach(col => {
     col.addEventListener('click', (e) => {
@@ -1274,12 +1280,12 @@ export function _hwfitRenderList(el, models) {
           if (sortSel) {
             sortSel.value = 'vram';
             sortSel.dataset.reverse = '0';   // descending (biggest first)
-}
-}
-    _hwfitCache = null;
-    _hwfitFetch(true);
+          }
+        }
+        _hwfitCache = null;
+        _hwfitFetch();
         return;
-}
+      }
       const sortKey = col.dataset.sort;
       if (!sortKey) return;
       const sel = document.getElementById('hwfit-sort');
@@ -1290,10 +1296,10 @@ export function _hwfitRenderList(el, models) {
       } else {
         sel.value = sortKey;
         sel.dataset.reverse = '0';
-}
-    _hwfitFetch(true);
+      }
+      _hwfitFetch();
+    });
   });
-  };
 }
 
 // Read the server currently selected in the scan dropdown and make it the
@@ -1321,8 +1327,8 @@ function _syncHostFromScanDropdown() {
       _envState.env = s.env;
       _envState.envPath = s.envPath;
       _envState.platform = s.platform || '';
-}
-}
+    }
+  }
   try { _persistEnvState(); } catch {}
   return host;
 }
@@ -1349,7 +1355,7 @@ function _minBackendVersion(modelName, backend) {
     if (n.includes('gpt-oss')) return '0.10.0';
     // Llama-4 multimodal — landed in 0.7.0
     if (n.includes('llama-4') || n.includes('llama4')) return '0.7.0';
-}
+  }
   return null;
 }
 
@@ -1361,7 +1367,7 @@ function _cmpSemver(a, b) {
   for (let i = 0; i < Math.max(A.length, B.length); i++) {
     const av = A[i] || 0, bv = B[i] || 0;
     if (av !== bv) return av - bv;
-}
+  }
   return 0;
 }
 
@@ -1415,30 +1421,18 @@ export function _expandModelRow(row, modelData) {
 
   const dlSource = _downloadSourceRepo(modelData, backend);
   const hfUrl = `https://huggingface.co/${dlSource.repo}`;
-  // Official vendor recipe deep-links. These point to vLLM / SGLang's curated
-  // hardware-specific launch-command pages. They 404 for uncatalogued models \u2014
-  // a known tradeoff; user just gets the vendor's "model not found" page.
-  const _recipeRepo = modelData.name || '';
-  const _vllmUrl = _recipeRepo ? `https://recipes.vllm.ai/${_recipeRepo}` : '';
-  const _sglangUrl = _recipeRepo ? `https://docs.sglang.io/cookbook/autoregressive/${_recipeRepo}${_sglangHashFor(modelData)}` : '';
   let html = `<div class="hwfit-action-panel" data-model-name="${esc(modelData.name)}">`;
   html += `<div class="hwfit-panel-header">`;
   html += `<span class="hwfit-panel-model">${esc(modelData.name)}${dlSource.kind ? ` <span style="opacity:0.5;font-size:10px;">(${esc(dlSource.kind)} ${esc(modelData.quant || '')})</span>` : (modelData.quant_repo ? ` <span style="opacity:0.5;font-size:10px;">(${esc(modelData.quant)})</span>` : '')}</span>`;
   html += `<span class="hwfit-panel-badge">${esc(label)}</span>`;
   html += `<a href="${esc(hfUrl)}" target="_blank" rel="noopener" class="hwfit-panel-hf-link" title="View download source on HuggingFace">HF \u2197</a>`;
-  if (backend === 'vllm' && _vllmUrl) {
-    html += `<a href="${esc(_vllmUrl)}" target="_blank" rel="noopener" class="hwfit-panel-hf-link" title="vLLM official recipe (curated launch command). 404s if this model isn't in vLLM's recipes catalog.">vLLM \u2197</a>`;
-}
-  if (backend === 'sglang' && _sglangUrl) {
-    html += `<a href="${esc(_sglangUrl)}" target="_blank" rel="noopener" class="hwfit-panel-hf-link" title="SGLang cookbook (hash pre-filled with your detected hardware). 404s if this model isn't in SGLang's cookbook catalog.">SGLang \u2197</a>`;
-}
   html += `</div>`;
   html += `<div class="hwfit-panel-actions">`;
   html += `<button class="cookbook-btn hwfit-dl-btn">Download</button>`;
   if (!modelData.is_image_gen) {
     html += `<button class="cookbook-btn cookbook-run-btn hwfit-quickrun-btn" title="Download + launch with smart defaults">Run</button>`;
     html += `<button class="cookbook-btn hwfit-serve-expand-btn" title="Configure & serve">Configure</button>`;
-}
+  }
   html += `</div>`;
   if (modelData.is_image_gen) {
     html += `<div style="font-size:10px;opacity:0.5;margin-top:4px;">${esc((modelData.capabilities || []).join(' \u00B7 ') || '')}${modelData.description ? ' \u2014 ' + esc(modelData.description) : ''}</div>`;
@@ -1452,8 +1446,8 @@ export function _expandModelRow(row, modelData) {
     const _hasGpuAccel = !!_sys.has_gpu && (_backend === 'cuda' || _backend === 'rocm');
     if (!_hasGpuAccel) {
       html += `<div class="hwfit-panel-note">This is a safetensors GPU-serving format. Use vLLM/SGLang with a visible CUDA/ROCm accelerator, or pick a GGUF download for llama.cpp/Ollama.</div>`;
-}
-}
+    }
+  }
   html += `</div>`;
 
   row.insertAdjacentHTML('afterend', html);
@@ -1468,9 +1462,9 @@ export function _expandModelRow(row, modelData) {
         _runPanelCmd(panel, _buildDownloadCmd(modelData, backend), { timeout: 0 });
       } else {
         _runModelDownload(panel, modelData, backend, host);
-}
-  });
-}
+      }
+    });
+  }
 
   // Wire quick-run button — download + launch with smart defaults
   const quickRunBtn = panel.querySelector('.hwfit-quickrun-btn');
@@ -1485,27 +1479,27 @@ export function _expandModelRow(row, modelData) {
       // gate on the cached-model list — mirror that here. When the model isn't
       // present, honor the button's "Download" half by kicking off the download
       // instead, then the user can Run again to serve once it finishes.
-      const btn = e.target.closest('.hwfit-gpu-btn');
+      const _short = modelData.name.split('/').pop();
       const _downloaded = _cachedModelIds && (
         _cachedModelIds.has(modelData.name)
         || [..._cachedModelIds].some(id => id === modelData.name || id.endsWith('/' + _short))
-    });
+      );
       if (_cachedModelIds && !_downloaded) {
         uiModule.showToast('Model not downloaded yet — starting download. Run again to serve once it finishes.');
-          if (count <= 1) {
+        if (backend === 'ollama') {
           _runPanelCmd(panel, _buildDownloadCmd(modelData, backend), { timeout: 0 });
-      } else {
+        } else {
           _runModelDownload(panel, modelData, backend, _qrHost);
-}
+        }
         return;
-}
+      }
 
       // ─── Pre-launch: stop the model already serving on this host ───────
       // Two servers can't share port 8000. Without this, the new launch
       // silently collided and the user saw no feedback. We surface the
       // conflict and offer to kill the running one first as the default
       // action (it's almost always what the user wants).
-  try {
+      try {
         const _qrHostStr = _envState.remoteHost || '';
         const _activeServes = _loadTasks().filter(t =>
           t && t.type === 'serve'
@@ -1540,12 +1534,12 @@ export function _expandModelRow(row, modelData) {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ command: _tmuxGracefulKill(t) }),
                 });
-}
+              }
             } catch (_killErr) { /* best-effort */ }
-}
+          }
           // Give the OS a beat to release port 8000.
           await new Promise(r => setTimeout(r, 2500));
-}
+        }
       } catch (_e) { /* best-effort */ }
 
       // ─── Pre-launch driver check ─────────────────────────────────────
@@ -1563,12 +1557,12 @@ export function _expandModelRow(row, modelData) {
         if (_sys.gpu_error) {
           uiModule.showError(`Can't launch: GPU driver error — ${_sys.gpu_error}. Reinstall or repair the NVIDIA driver, then re-scan.`);
           return;
-}
+        }
         if (!_sys.has_gpu || !(_sys.gpu_count > 0)) {
           uiModule.showError(`Can't launch: no GPU detected by nvidia-smi. ${_qrRunBackend === 'vllm' ? 'vLLM' : 'SGLang'} needs a working CUDA or ROCm device.`);
           return;
-}
-}
+        }
+      }
 
       // ─── Pre-launch install + version check ─────────────────────────
       // Catches:
@@ -1593,7 +1587,7 @@ export function _expandModelRow(row, modelData) {
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command: _wrappedCheck, timeout: 10 }),
-  });
+          });
           if (_chkRes.ok) {
             const _chk = await _chkRes.json();
             const _stdout = String(_chk.stdout || '').trim();
@@ -1606,7 +1600,7 @@ export function _expandModelRow(row, modelData) {
                 : "pip install -U 'sglang[all]'";
               uiModule.showError(`Can't launch: ${_pkg} isn't installed${_qrHostStr ? ' on ' + _qrHostStr : ''}. Install it first:\n${_hint}`);
               return;
-}
+            }
             // Version-floor check. _minBackendVersion returns null when this
             // model has no known requirement — in which case any installed
             // version passes.
@@ -1620,12 +1614,12 @@ export function _expandModelRow(row, modelData) {
                 : "pip install -U 'sglang[all]'";
               uiModule.showError(`Can't launch: ${modelData.name} needs ${_pkg} ≥ ${_minVer}, but ${_curVer} is installed${_qrHostStr ? ' on ' + _qrHostStr : ''}. Upgrade:\n${_hint}`);
               return;
-}
-}
+            }
+          }
         } catch (_e) {
           // Network/exec failed — fall through and let the launch try.
-}
-}
+        }
+      }
 
       quickRunBtn.disabled = true;
       quickRunBtn.textContent = 'Starting...';
@@ -1679,7 +1673,7 @@ export function _expandModelRow(row, modelData) {
       } else if (runBackend === 'llamacpp') {
         const dir = `"$HOME/.cache/huggingface/hub/models--${modelData.name.replace(/\//g, '--')}/snapshots"`;
         const ggufPath = `$({ find ${dir} -name '*-00001-of-*.gguf' 2>/dev/null | sort; find ${dir} -name '*.gguf' 2>/dev/null | sort; } | head -1)`;
-        cmd = `MODEL_FILE=${ggufPath} && { [ -n "$MODEL_FILE" ] && [ -f "$MODEL_FILE" ]; } || { echo "ERROR: No GGUF found on this host. Download a GGUF quant or switch backend."; exit 1; } && llama-server --model "$MODEL_FILE" --host 0.0.0.0 --port 8080 -ngl 99 -c ${maxCtx} || python3 -m llama_cpp.server --model "$MODEL_FILE" --host 0.0.0.0 --port 8080 --n_gpu_layers 99 --n_ctx ${maxCtx}`;
+        cmd = `llama-server --model "${ggufPath}" --host 0.0.0.0 --port 8080 -ngl 99 -c ${maxCtx} --flash-attn auto`;
       } else {
         cmd = `vllm serve ${modelData.name} --host 0.0.0.0 --port ${port}`;
         cmd += ` --tensor-parallel-size ${tp}`;
@@ -1689,7 +1683,7 @@ export function _expandModelRow(row, modelData) {
         cmd += ' --enforce-eager';
         cmd += ' --trust-remote-code';
         cmd += ` --enable-auto-tool-choice --tool-call-parser ${parser}`;
-}
+      }
 
       // Build env prefix
       let envPrefix = '';
@@ -1698,7 +1692,7 @@ export function _expandModelRow(row, modelData) {
         envPrefix = 'source ' + _shellQuote(p.endsWith('/bin/activate') ? p : p + '/bin/activate');
       } else if (_envState.env === 'conda' && _envState.envPath) {
         envPrefix = 'eval "$(conda shell.bash hook)" && conda activate ' + _shellQuote(_envState.envPath);
-}
+      }
 
       // Launch via serve API. Field names must match the backend ServeRequest
       // schema (repo_id + cmd) — sending `command`/`model` failed Pydantic
@@ -1714,12 +1708,12 @@ export function _expandModelRow(row, modelData) {
         (_srv && _srv.port) || undefined,
         _envState.envPath || '',
         modelData.name,
-    });
+      );
       if (!_ok) {
         quickRunBtn.disabled = false;
         quickRunBtn.textContent = 'Run';
         return;
-}
+      }
 
       const payload = {
         repo_id: modelData.name,
@@ -1732,7 +1726,7 @@ export function _expandModelRow(row, modelData) {
         platform: _envState.platform || undefined,
       };
 
-  try {
+      try {
         const res = await fetch('/api/model/serve', {
           method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -1747,16 +1741,16 @@ export function _expandModelRow(row, modelData) {
           // Switch to Running tab
           const runTab = document.querySelector('.cookbook-tab[data-backend="Running"]');
           if (runTab) runTab.click();
-      } else {
+        } else {
           uiModule.showError('Launch failed: ' + (data.error || ''));
-}
+        }
       } catch (e) {
         uiModule.showError('Launch failed: ' + e.message);
-}
+      }
       quickRunBtn.disabled = false;
       quickRunBtn.textContent = 'Run';
-  });
-}
+    });
+  }
 
   // Wire configure button — open the model's Serve panel.
   const configBtn = panel.querySelector('.hwfit-serve-expand-btn');
@@ -1771,75 +1765,75 @@ export function _expandModelRow(row, modelData) {
       const downloaded = _cachedModelIds && (
         _cachedModelIds.has(repo)
         || [..._cachedModelIds].some(id => id === repo || id.endsWith('/' + short))
-    });
+      );
       if (_cachedModelIds && !downloaded) {
         uiModule.showToast('Download the model first, then configure from Serve tab');
         return;
-}
+      }
       // Downloaded (or cache state unknown) — open the Serve panel, which switches
       // to the Serve tab, fetches the cached list, and expands this model's card.
-  try {
+      try {
         const { openServePanelForRepo } = await import('./cookbookServe.js');
         await openServePanelForRepo(repo);
       } catch (e) {
         uiModule.showToast('Could not open Serve: ' + (e && e.message ? e.message : e));
-}
-  });
-}
+      }
+    });
+  }
 
 }
 
-function _manualHwState() {
-  const slider = document.getElementById('hwfit-context');
-  const slider = document.getElementById('hwfit-context');
-  const slider = document.getElementById('hwfit-context');
-  const slider = document.getElementById('hwfit-context');
-  const label = document.getElementById('hwfit-context-label');
-  const slider = document.getElementById('hwfit-context');
-  const slider = document.getElementById('hwfit-context');
-function _syncCtxControl() {
+export function _hwfitInit() {
+  const uc = document.getElementById('hwfit-usecase');
+  const sort = document.getElementById('hwfit-sort');
+  const qpref = document.getElementById('hwfit-quant');
+  const ctx = document.getElementById('hwfit-context');
+  const ctxLabel = document.getElementById('hwfit-context-label');
+  const search = document.getElementById('hwfit-search');
+  const remote = document.getElementById('hwfit-host');
+  _syncCtxControl();
   if (uc) uc.addEventListener('change', () => _hwfitFetch());
   if (sort) sort.addEventListener('change', () => _hwfitFetch());
   if (qpref) qpref.addEventListener('change', () => _hwfitFetch());
   // Engine filter is a pure client-side view filter over the already-fetched
   // list (HF + Ollama merged), so just re-render from cache.
-  const slider = document.getElementById('hwfit-context');
+  const engine = document.getElementById('hwfit-engine');
   if (engine) engine.addEventListener('change', () => {
-  const slider = document.getElementById('hwfit-context');
+    const list = document.getElementById('hwfit-list');
     if (list && _hwfitCache && Array.isArray(_hwfitCache.models)) {
       _hwfitRenderList(list, _applyEngineFilter(_hwfitCache.models));
     } else {
-    _hwfitFetch(true);
-}
-  };
+      _hwfitFetch();
+    }
+  });
   if (ctx && !ctx.dataset.bound) {
     ctx.dataset.bound = '1';
     ctx.addEventListener('input', () => {
-  if (label) label.textContent = _ctxLabel(_ctxValue());
-  });
+      if (ctxLabel) ctxLabel.textContent = _ctxLabel(_ctxValue());
+    });
     ctx.addEventListener('change', () => {
-  const s = _manualHwState();
-    else localStorage.setItem(_MANUAL_HW_KEY, JSON.stringify(s));
+      const targetCtx = _ctxValue();
+      try { localStorage.setItem(_CTX_KEY, String(targetCtx)); } catch {}
       // Ctx drag affects sort mode: a specific ctx target (anything < Max)
       // implies "what runs at this context length" — sort by VRAM ascending
       // so the cheapest-fitting models surface first. Dragging back to Max
       // releases the constraint → go back to the default score ranking.
-  const slider = document.getElementById('hwfit-context');
+      const sortSel = document.getElementById('hwfit-sort');
       if (sortSel) {
         if (targetCtx) {
           sortSel.value = 'vram';
           sortSel.dataset.reverse = '1';   // ascending = smallest VRAM first
-      } else {
+        } else {
           sortSel.value = 'score';
           sortSel.dataset.reverse = '';
-}
-}
-    _hwfitCache = null;
-    _hwfitFetch(true);
-  });
-}
+        }
+      }
+      _hwfitCache = null;
+      _hwfitFetch();
+    });
+  }
   // Rescan — force a fresh hardware probe (bypasses the per-host cache).
-  const slider = document.getElementById('hwfit-context');
+  const rescan = document.getElementById('hwfit-rescan');
   if (rescan && !rescan.dataset.bound) {
     rescan.dataset.bound = '1';
     rescan.addEventListener('click', async () => {
@@ -1858,8 +1852,8 @@ function _syncCtxControl() {
       rescan.appendChild(wp.element);
       rescan.appendChild(document.createTextNode('RESCAN'));
       // Reset toggle state (no flicker — buttons stay until the fresh scan swaps them).
-  const s = _manualHwState();
-  try {
+      _resetGpuToggleState();
+      try {
         await _hwfitFetch(true);
       } finally {
         try { wp.destroy(); } catch {}
@@ -1867,13 +1861,13 @@ function _syncCtxControl() {
         rescan.disabled = false;
         rescan.style.opacity = '';
         delete rescan.dataset.scanning;
-}
-  });
-}
+      }
+    });
+  }
   if (search) search.addEventListener('input', () => {
     clearTimeout(_hwfitDebounce);
     _hwfitDebounce = setTimeout(() => _hwfitFetch(), 400);
-  };
+  });
   // HF token save is owned by cookbook.js (_wireTabEvents) — do not wire a
   // second change/input handler here. The old duplicate ran after cookbook.js
   // cleared the input on save and overwrote _envState.hfToken with "", so the
@@ -1893,11 +1887,11 @@ function _syncCtxControl() {
         if (!s.host) return;
         const label = s.name || s.host || `Server ${i + 1}`;
         html += `<option value="${i}">${uiModule.esc(label)}</option>`;
-  });
-    base.gpu_name = null;
-    base.has_gpu = false;
-}
-}
+      });
+      sel.innerHTML = html;
+      sel.value = currentVal;
+    }
+  }
 
   // Servers — sync changes, add, remove
   function _syncServers() {
@@ -1908,7 +1902,7 @@ function _syncCtxControl() {
       if (!row) return;
       const nameEl = row.querySelector('.cookbook-srv-name');
       const hostEl = row.querySelector('.cookbook-srv-host');
-    const count = Number(manual.gpuCount || 1);
+      const name = nameEl?.value.trim() || '';
       const host = (hostEl?.disabled || hostEl?.readOnly) ? '' : (hostEl?.value.trim() || '');
       const port = row.querySelector('.cookbook-srv-port')?.value.trim() || '';
       const env = row.querySelector('.cookbook-srv-env')?.value || 'none';
@@ -1921,14 +1915,14 @@ function _syncCtxControl() {
       dirTags.forEach(tag => {
         const d = (tag.dataset.dir || '').replaceAll('\u2715', '').replaceAll('\u2716', '').trim();
         if (d) modelDirs.push(d);
-  });
+      });
       if (!modelDirs.length) modelDirs.push('~/.cache/huggingface/hub');
       // Which dir (if any) is flagged as the download target. '' = HF cache.
       const dlEl = entry.querySelector('.cookbook-modeldir-dl.active');
       const downloadDir = dlEl ? (dlEl.dataset.dlDir || '') : '';
-    const vram = Number(manual.vramGb || 8);
+      const platform = entry.dataset.platform || '';
       _envState.servers.push({ name, host: host || '', port, env, envPath, modelDirs, modelDir: modelDirs.filter(d => d !== '~/.cache/huggingface/hub')[0] || modelDirs[0], downloadDir, platform });
-  });
+    });
     // Do NOT auto-change the selected host here. _syncServers can run while the
     // servers DOM is mid-render — host fields that are disabled/readonly read as
     // empty (see above), which made the rebuilt list temporarily miss the
@@ -1940,11 +1934,11 @@ function _syncCtxControl() {
     const sel = _serverByVal(_envState.remoteServerKey || _envState.remoteHost);
     if (sel) { _envState.env = sel.env; _envState.envPath = sel.envPath; }
     _persistEnvState();
-}
+  }
 
   async function _testServerConnection(entry) {
-    s: document.getElementById('hwfit-search')?.value?.trim() || '',
-    s: document.getElementById('hwfit-search')?.value?.trim() || '',
+    const host = entry.querySelector('.cookbook-srv-host')?.value?.trim();
+    const port = entry.querySelector('.cookbook-srv-port')?.value?.trim() || '';
     const dot = entry.querySelector('.cookbook-srv-status');
     const msg = entry.querySelector('.cookbook-srv-test-msg');
     const setMsg = (text, color = '') => {
@@ -1953,26 +1947,26 @@ function _syncCtxControl() {
       msg.title = text || '';
       msg.style.color = color || '';
       msg.style.opacity = text ? '0.75' : '0.55';
-  });
-  return base;
+    };
+    if (!dot) return;
     if (!host) {
       dot.className = 'cookbook-srv-status';
       dot.title = 'Enter user@host to test';
       setMsg('');
-          return (
-}
-  div.className = 'hwfit-loading';
+      return;
+    }
+    dot.className = 'cookbook-srv-status testing';
     dot.title = 'Testing SSH…';
     setMsg('Testing SSH...');
     const pf = port && port !== '22' ? `-p ${port} ` : '';
     const cmd = `ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new ${pf}${host} "echo ok"`;
-    const data = await res.json();
-      ? ''
-    const res = await fetch('/api/cookbook/ollama/library');
+    const t0 = Date.now();
+    try {
+      const res = await fetch('/api/shell/exec', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: cmd, timeout: 8 }),
-  });
+      });
       const data = await res.json();
       const ms = Date.now() - t0;
       const out = (data.stdout || '').trim();
@@ -1985,94 +1979,94 @@ function _syncCtxControl() {
         const err = (data.stderr || data.stdout || `exit ${data.exit_code}`).toString().trim().slice(0, 240);
         dot.title = `SSH failed: ${err}`;
         setMsg(`Failed · ${err}`, 'var(--red,#e06c75)');
-}
-      : (() => {
+      }
+    } catch (e) {
       dot.className = 'cookbook-srv-status fail';
       dot.title = `Test failed: ${e.message || e}`;
       setMsg(`Failed · ${e.message || e}`, 'var(--red,#e06c75)');
-}
-}
+    }
+  }
 
   function _singleQuote(value) {
     return `'${String(value || '').replace(/'/g, `'\"'\"'`)}'`;
-}
+  }
 
   function _serverKeyCommand(host, port, publicKey) {
     const pf = port && port !== '22' ? `-p ${port} ` : '';
-    if (remoteHost) {
+    const remote = [
       `KEY=${_singleQuote(publicKey)}`,
       'mkdir -p ~/.ssh',
       'chmod 700 ~/.ssh',
       'touch ~/.ssh/authorized_keys',
       '(grep -qxF "$KEY" ~/.ssh/authorized_keys || printf "%s\\n" "$KEY" >> ~/.ssh/authorized_keys)',
       'chmod 600 ~/.ssh/authorized_keys',
-        });
+    ].join(' && ');
     return `ssh -o StrictHostKeyChecking=accept-new ${pf}${host} ${_singleQuote(remote)}`;
-}
+  }
 
   async function _fetchCookbookSshKey(generate = false) {
     const res = await fetch('/api/cookbook/ssh-key', {
       method: generate ? 'POST' : 'GET',
       credentials: 'same-origin',
-  });
-    let data = await res.json();
+    });
+    const data = await res.json();
     if (generate && !data.ok) throw new Error(data.error || 'Failed to generate SSH key');
-      const _s = (search || '').trim().toLowerCase();
-}
+    return (data.public_key || '').trim();
+  }
 
   async function _populateServerKeyPanel(entry, generate = false) {
     const panel = entry.querySelector('.cookbook-server-key-panel');
     const cmdBox = entry.querySelector('.cookbook-server-key-command');
     const copyBtn = entry.querySelector('.cookbook-server-key-copy');
     const genBtn = entry.querySelector('.cookbook-server-key-gen');
-  if (!el || !sys) return;
+    if (!panel || !cmdBox) return;
     const host = entry.querySelector('.cookbook-srv-host')?.value?.trim() || '';
-    s: document.getElementById('hwfit-search')?.value?.trim() || '',
+    const port = entry.querySelector('.cookbook-srv-port')?.value?.trim() || '';
     if (!host || !host.includes('@')) {
       cmdBox.value = 'Enter the server as user@host first.';
       if (copyBtn) copyBtn.disabled = true;
-          return (
-}
+      return;
+    }
     if (!/^[A-Za-z0-9._~-]+@[A-Za-z0-9._:-]+$/.test(host) || (port && !/^\d{1,5}$/.test(port))) {
       cmdBox.value = 'Use a plain SSH target like user@host and an optional numeric port.';
       if (copyBtn) copyBtn.disabled = true;
-          return (
-}
-  } else if (sys.gpu_error) {
+      return;
+    }
+    if (genBtn) {
       genBtn.disabled = true;
       genBtn.textContent = generate ? 'Generating...' : 'Loading...';
-}
-      ? ''
+    }
+    try {
       let publicKey = await _fetchCookbookSshKey(generate);
       if (!publicKey && !generate) publicKey = await _fetchCookbookSshKey(true);
       cmdBox.value = _serverKeyCommand(host, port, publicKey);
       if (copyBtn) copyBtn.disabled = false;
       if (genBtn) genBtn.textContent = 'Key ready';
-      : (() => {
+    } catch (e) {
       cmdBox.value = e.message || String(e);
       if (copyBtn) copyBtn.disabled = true;
       if (genBtn) genBtn.textContent = 'Generate key';
-  } else {
+    } finally {
       if (genBtn) genBtn.disabled = false;
-}
-}
+    }
+  }
 
   function _wireServerEntry(entry) {
     // Idempotency guard: _hwfitInit() can run more than once per panel open,
     // and re-wiring would stack duplicate listeners on every control (e.g. the
     // model-dir "+" button would add two tags per click, change handlers fire
     // twice). Bind each entry exactly once.
-      const key = btn.dataset.hwChip;
-      const key = btn.dataset.hwChip;
+    if (entry.dataset.wired) return;
+    entry.dataset.wired = '1';
     // Inject the status dot once if missing — into the card header next to the
     // server name (was previously the first child of the input row).
-      const row = btn.closest('.hwfit-hw-chip-row');
+    const row = entry.querySelector('.cookbook-server-row');
     const titleEl = entry.querySelector('.cookbook-server-title');
     if (!entry.querySelector('.cookbook-srv-status')) {
-      const row = btn.closest('.hwfit-hw-chip-row');
+      const dot = document.createElement('span');
       dot.className = 'cookbook-srv-status';
       dot.title = 'Click to test SSH';
-    btn.addEventListener('click', (e) => {
+      dot.addEventListener('click', (e) => { e.stopPropagation(); _testServerConnection(entry); });
       if (titleEl) titleEl.insertBefore(dot, titleEl.firstChild);
       else if (row) row.insertBefore(dot, row.firstChild);
       // The local server (readonly host) is always reachable — show it green
@@ -2081,27 +2075,27 @@ function _syncCtxControl() {
       if (_hostEl && (_hostEl.readOnly || _hostEl.disabled)) {
         dot.className = 'cookbook-srv-status ok';
         dot.title = 'Local (this machine)';
-}
-}
+      }
+    }
     const checkBtn = entry.querySelector('.cookbook-server-check-btn');
     if (checkBtn && !checkBtn.dataset.bound) {
       checkBtn.dataset.bound = '1';
       checkBtn.addEventListener('click', (e) => {
-      _resetGpuToggleState(false);
-      _hwfitFetch(true);
-  });
-}
+        e.stopPropagation();
+        _testServerConnection(entry);
+      });
+    }
     // Default-server toggle: exclusive checkmark in the entry title. The chosen
     // server is what Cookbook lands on (all dropdowns) on the next open.
     const _defBtn = entry.querySelector('.cookbook-srv-default');
     if (_defBtn && !_defBtn.dataset.bound) {
       _defBtn.dataset.bound = '1';
       _defBtn.addEventListener('click', (e) => {
-      _resetGpuToggleState(false);
+        e.stopPropagation();
         const key = _defBtn.dataset.srvKey || '';
         // Toggle off if it's already the default; otherwise make it the default.
         _envState.defaultServer = (_envState.defaultServer === key) ? '' : key;
-      _resetGpuToggleState(false);
+        _persistEnvState();
         document.querySelectorAll('.cookbook-srv-default').forEach(b => {
           const on = !!_envState.defaultServer && b.dataset.srvKey === _envState.defaultServer;
           b.classList.toggle('active', on);
@@ -2115,17 +2109,17 @@ function _syncCtxControl() {
         if (_dk) {
           if (_dk === 'local') { _envState.remoteHost = ''; _envState.remoteServerKey = ''; _envState.env = 'none'; _envState.envPath = ''; _envState.platform = ''; }
           else { const _s = _serverByVal(_dk); if (_s) { _envState.remoteHost = _s.host; _envState.remoteServerKey = _serverKey(_s); _envState.env = _s.env || 'none'; _envState.envPath = _s.envPath || ''; _envState.platform = _s.platform || ''; } }
-      _resetGpuToggleState(false);
+          _persistEnvState();
           document.querySelectorAll('#hwfit-server-select, #hwfit-dl-server, #hwfit-cache-server, #hwfit-deps-server').forEach(sel => {
             if (sel && sel.tagName === 'SELECT') sel.value = _currentServerValue();
-  });
-}
+          });
+        }
         const defaultSrv = _serverByVal(_envState.defaultServer);
         uiModule.showToast(_envState.defaultServer
           ? 'Default server: ' + (_envState.defaultServer === 'local' ? 'Local' : (defaultSrv?.name || defaultSrv?.host || 'selected server'))
           : 'Default server cleared');
-  });
-}
+      });
+    }
     const keyBtn = entry.querySelector('.cookbook-server-key-btn');
     if (keyBtn && !keyBtn.dataset.bound) {
       keyBtn.dataset.bound = '1';
@@ -2136,13 +2130,13 @@ function _syncCtxControl() {
         panel.classList.toggle('hidden', !willOpen);
         panel.style.display = willOpen ? 'flex' : '';
         if (willOpen) await _populateServerKeyPanel(entry, false);
-  });
-}
+      });
+    }
     const keyGenBtn = entry.querySelector('.cookbook-server-key-gen');
     if (keyGenBtn && !keyGenBtn.dataset.bound) {
       keyGenBtn.dataset.bound = '1';
       keyGenBtn.addEventListener('click', () => _populateServerKeyPanel(entry, true));
-}
+    }
     const keyCopyBtn = entry.querySelector('.cookbook-server-key-copy');
     if (keyCopyBtn && !keyCopyBtn.dataset.bound) {
       keyCopyBtn.dataset.bound = '1';
@@ -2151,8 +2145,8 @@ function _syncCtxControl() {
         if (!cmd || cmd.startsWith('Enter ')) return;
         await _copyText(cmd);
         uiModule.showToast('SSH setup command copied');
-  });
-}
+      });
+    }
     entry.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', () => {
         const selectedBefore = _envState.remoteHost || '';
@@ -2160,38 +2154,38 @@ function _syncCtxControl() {
         _syncServers();
         _rebuildServerSelect();
         if (selectedBefore && selectedBefore === entryHost) {
-      _hwfitCache = null;
-      _hwfitFetch(true);
-}
+          _hwfitCache = null;
+          _hwfitFetch();
+        }
         if (!entry.querySelector('.cookbook-server-key-panel')?.classList.contains('hidden')) {
-      _resetGpuToggleState(false);
-}
-  });
-  });
+          _populateServerKeyPanel(entry, false);
+        }
+      });
+    });
     // Auto-test when host or port blur
-  el.querySelectorAll('.hwfit-hw-chip-x').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-  });
+    entry.querySelectorAll('.cookbook-srv-host, .cookbook-srv-port').forEach(el => {
+      el.addEventListener('blur', () => _testServerConnection(entry));
+    });
     // Initial test for pre-filled rows (existing servers on tab load)
     if (entry.querySelector('.cookbook-srv-host')?.value?.trim() && !entry.dataset.tested) {
       entry.dataset.tested = '1';
       _testServerConnection(entry);
-}
+    }
     // Cancel button on a brand-new server entry: discard it (no confirm — it's
     // unsaved) and re-sync so the dropped blank server doesn't linger.
-  const btn = document.getElementById('hwfit-hw-manual-btn');
+    const cancelBtn = entry.querySelector('.cookbook-server-cancel-btn');
     if (cancelBtn && !cancelBtn.dataset.bound) {
       cancelBtn.dataset.bound = '1';
       cancelBtn.addEventListener('click', () => {
         entry.remove();
         _syncServers();
         _rebuildServerSelect();
-    _hwfitCache = null;
-    _hwfitFetch(true);
-  });
-}
+        _hwfitCache = null;
+        _hwfitFetch();
+      });
+    }
     // Save button on a brand-new server entry: persist + confirm with a check.
-  const btn = document.getElementById('hwfit-hw-manual-btn');
+    const saveBtn = entry.querySelector('.cookbook-server-save-btn');
     if (saveBtn && !saveBtn.dataset.bound) {
       saveBtn.dataset.bound = '1';
       saveBtn.addEventListener('click', () => {
@@ -2204,71 +2198,71 @@ function _syncCtxControl() {
         try {
           document.dispatchEvent(new CustomEvent('cookbook:servers-changed', {
             detail: { servers: _envState.servers.slice() },
-  });
+          }));
         } catch (_) {}
-    panel.classList.add('hidden');
+        saveBtn.classList.add('saved');
         saveBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#50fa7b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>Saved';
-  });
-}
+      });
+    }
     const rmBtn = entry.querySelector('.cookbook-server-rm');
     if (rmBtn) rmBtn.addEventListener('click', async () => {
-    el.querySelector('.hwfit-hw-chip-manual')?.remove();
+      const name = entry.querySelector('.cookbook-srv-name')?.value?.trim()
                 || entry.querySelector('.cookbook-srv-host')?.value?.trim()
                 || 'this server';
-    _hwfitFetch(true);
+      let ok = true;
       if (uiModule && uiModule.styledConfirm) {
         ok = await uiModule.styledConfirm(`Remove "${name}"?`, { confirmText: 'Remove', danger: true });
       } else {
         ok = confirm(`Remove "${name}"?`);
-}
-  if (!btn || !panel) return;
+      }
+      if (!ok) return;
       entry.remove();
       _syncServers();
       _rebuildServerSelect();
-  try {
+      try {
         document.dispatchEvent(new CustomEvent('cookbook:servers-changed', {
           detail: { servers: _envState.servers.slice() },
-  });
+        }));
       } catch (_) {}
-    _hwfitCache = null;
-    _hwfitFetch(true);
-  });
+      _hwfitCache = null;
+      _hwfitFetch();
+    });
     // Setup is owned by cookbook.js's delegated handler (Settings behavior:
     // select server + open the Dependencies tab). Don't bind the inline-install
     // handler here too, or one click would do two conflicting things.
-    _hwfitCache = null;
-  if (manual) {
+    const setupBtn = null;
+    if (setupBtn) {
       setupBtn.addEventListener('click', async () => {
         const host = entry.querySelector('.cookbook-srv-host')?.value?.trim();
-    panel.querySelector('.hwfit-manual-mode').value = manual.mode || 'gpu';
-  if (!btn || !panel) return;
+        const port = entry.querySelector('.cookbook-srv-port')?.value?.trim() || '';
+        if (!host) return;
         setupBtn.disabled = true;
         const origText = setupBtn.textContent;
-  btn.textContent = t('common.edit');
+        setupBtn.textContent = 'Installing...';
         try {
           const res = await fetch('/api/cookbook/setup', {
             method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ host, ssh_port: port || undefined }),
-  });
-  const manual = _manualHwState();
-  if (manual) {
-  btn.textContent = t('common.edit');
+          });
+          const data = await res.json();
+          if (data.ok) {
+            setupBtn.textContent = '\u2713 Done';
             setupBtn.style.color = '#50fa7b';
             uiModule.showToast(`Setup complete (${data.platform})`);
             // Store detected platform on the server entry
-  if (manual) {
+            if (data.platform) {
               entry.dataset.platform = data.platform;
               _syncServers();
               // Show platform badge
               const existingBadge = entry.querySelector('.cookbook-platform-badge');
               if (existingBadge) existingBadge.remove();
-  const panel = document.getElementById('hwfit-manual-panel');
+              const badge = document.createElement('span');
               badge.className = 'cookbook-platform-badge';
               badge.style.cssText = 'font-size:8px;padding:1px 5px;border-radius:3px;border:1px solid ' + (data.platform === 'windows' ? 'var(--cyan,#56b6c2)' : 'var(--green,#98c379)') + ';color:' + (data.platform === 'windows' ? 'var(--cyan,#56b6c2)' : 'var(--green,#98c379)') + ';opacity:0.7;white-space:nowrap;flex-shrink:0;';
               badge.textContent = data.platform;
               setupBtn.parentNode.insertBefore(badge, setupBtn);
-}
+            }
             // Auto-set Termux model dir
             if (data.platform === 'termux') {
               const container = entry.querySelector('.cookbook-modeldirs');
@@ -2276,7 +2270,7 @@ function _syncCtxControl() {
                 const existing = [...container.querySelectorAll('.cookbook-modeldir-tag')].map(t => t.textContent.replace('\u2716', '').replace('\u2715', '').trim());
                 const termuxDir = '/data/data/com.termux/files/home/models';
                 if (!existing.includes(termuxDir)) {
-  const panel = document.getElementById('hwfit-manual-panel');
+                  const tag = document.createElement('span');
                   tag.className = 'cookbook-modeldir-tag';
                   tag.dataset.dirIdx = existing.length;
                   tag.innerHTML = `${uiModule.esc(termuxDir)} <span class="cookbook-modeldir-rm" title="Remove">\u2715</span>`;
@@ -2285,34 +2279,34 @@ function _syncCtxControl() {
                   if (addBtn) container.insertBefore(tag, addBtn);
                   else container.appendChild(tag);
                   _syncServers();
-}
-}
-}
+                }
+              }
+            }
           } else {
-  btn.textContent = t('common.edit');
+            setupBtn.textContent = 'Failed';
             setupBtn.style.color = 'var(--red)';
             uiModule.showError(data.error || data.output || 'Setup failed');
-}
+          }
         } catch (e) {
-  btn.textContent = t('common.edit');
+          setupBtn.textContent = 'Error';
           setupBtn.style.color = 'var(--red)';
           uiModule.showError(e.message);
-}
+        }
         setTimeout(() => { setupBtn.disabled = false; setupBtn.textContent = origText; setupBtn.style.color = ''; }, 3000);
-  });
-}
+      });
+    }
     // Model dir add/remove
     const addDirBtn = entry.querySelector('.cookbook-modeldir-add');
     if (addDirBtn) addDirBtn.addEventListener('click', () => {
       const raw = prompt('Model directory path:', '/data/models');
-  if (!btn || !panel) return;
+      if (!raw) return;
       const dir = raw.replaceAll('\u2715', '').replaceAll('\u2716', '').trim();
-  if (!btn || !panel) return;
+      if (!dir) return;
       // Don't add duplicates
       const existing = [...entry.querySelectorAll('.cookbook-modeldir-tag')].some(t => (t.dataset.dir || t.textContent.trim()) === dir);
-  if (!btn || !panel) return;
+      if (existing) return;
       const container = entry.querySelector('.cookbook-modeldirs');
-  const panel = document.getElementById('hwfit-manual-panel');
+      const tag = document.createElement('span');
       tag.className = 'cookbook-modeldir-tag';
       tag.dataset.dirIdx = container.querySelectorAll('.cookbook-modeldir-tag').length;
       tag.dataset.dir = dir;
@@ -2321,14 +2315,14 @@ function _syncCtxControl() {
       _wireModelDirTarget(entry, tag.querySelector('.cookbook-modeldir-dl'));
       container.insertBefore(tag, addDirBtn);
       _syncServers();
-  });
-    el.querySelector('.hwfit-hw-chip-manual')?.remove();
+    });
+    entry.querySelectorAll('.cookbook-modeldir-rm').forEach(rm => {
       rm.addEventListener('click', () => { rm.closest('.cookbook-modeldir-tag').remove(); _syncServers(); });
-  });
+    });
     // Download-target toggles: clicking one makes that dir the sole target for
     // this server (or the default HF cache if it's the default dir).
     entry.querySelectorAll('.cookbook-modeldir-dl').forEach(dl => _wireModelDirTarget(entry, dl));
-}
+  }
 
   // Mark a model-dir tag as this server's download target (exclusive), then
   // persist. Clicking ANYWHERE on the tag (not just the check) selects it \u2014
@@ -2346,16 +2340,16 @@ function _syncCtxControl() {
         d.classList.remove('active');
         d.innerHTML = _MODELDIR_CHECK_OFF;          // uncheck the others
         d.closest('.cookbook-modeldir-tag')?.classList.remove('cookbook-modeldir-target');
-        d.title = t('cookbook.send_downloads_here');
-  });
+        d.title = 'Send downloads here';
+      });
       dlEl.classList.add('active');
       dlEl.innerHTML = _MODELDIR_CHECK_ON;           // check the chosen one
       tag.classList.add('cookbook-modeldir-target');
-      dlEl.title = t('cookbook.downloads_go_here');
+      dlEl.title = 'Downloads go here';
       _syncServers();
-      uiModule.showToast((dlEl.dataset.dlDir ? t('cookbook.downloads_to', { dir: dlEl.dataset.dlDir }) : t('cookbook.downloads_default_hf')));
-  });
-}
+      uiModule.showToast((dlEl.dataset.dlDir ? 'Downloads \u2192 ' + dlEl.dataset.dlDir : 'Downloads \u2192 default HF cache'));
+    });
+  }
 
   document.querySelectorAll('.cookbook-server-entry').forEach(_wireServerEntry);
 
@@ -2379,8 +2373,8 @@ function _syncCtxControl() {
       // Also refresh the server select dropdown
       _rebuildServerSelect();
       entry.querySelector('.cookbook-srv-host')?.focus();
-  });
-}
+    });
+  }
 
   // Server selector dropdown
   const serverSelect = document.getElementById('hwfit-server-select');
@@ -2400,22 +2394,22 @@ function _syncCtxControl() {
           _envState.remoteServerKey = _serverKey(s);
           _envState.env = s.env;
           _envState.envPath = s.envPath;
-}
-}
+        }
+      }
       _persistEnvState();
-      // 保持其他服务器下拉菜单（Download / Cache / Deps）同步。
-      // download-input 按钮直接读取 #hwfit-dl-server
+      // Keep the other server dropdowns (Download / Cache / Deps) in sync. The
+      // download-input button reads #hwfit-dl-server *directly*, so without this
       // it kept its old value and downloads went to the wrong host even
       // though the scan here correctly switched to the selected server.
       document.querySelectorAll('#hwfit-dl-server, #hwfit-cache-server, #hwfit-deps-server').forEach(sel => {
         if (!sel || sel.tagName !== 'SELECT') return;
         sel.value = _currentServerValue();
-  });
-    _hwfitCache = null;
+      });
+      _hwfitCache = null;
       // Reset GPU-toggle state (no flicker) so the new server's hardware re-renders.
-  const s = _manualHwState();
-    _hwfitFetch(true);
-  });
-}
+      _resetGpuToggleState();
+      _hwfitFetch();
+    });
+  }
 
 }

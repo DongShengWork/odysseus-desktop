@@ -1,15 +1,20 @@
+import json
+import os
 import re
+import shlex
+import subprocess
 from copy import deepcopy
 
 from fastapi import APIRouter, HTTPException
 
+from core.platform_compat import run_ssh_command
 from routes._validators import validate_remote_host, validate_ssh_port
 
 
-# 手动硬件模拟器接受的后端。必须是
-# services.hwfit.fit 能理解的子集，确保模拟与真实机器排名一致：
-# "metal" 走 Apple Silicon 路径（仅 GGUF，llama.cpp/Ollama），
-# CPU 后端走 RAM/offload 路径，cuda/rocm 走 vLLM。
+# Backends the manual hardware simulator accepts. Must stay a subset of what
+# services.hwfit.fit understands so a simulated box ranks like a real one:
+# "metal" routes through the Apple-Silicon path (GGUF-only, llama.cpp/Ollama),
+# the CPU backends through the RAM/offload path, cuda/rocm through vLLM.
 _MANUAL_BACKENDS = {"cuda", "rocm", "metal", "cpu_x86", "cpu_arm"}
 
 
@@ -42,14 +47,14 @@ def _apply_manual_hardware(system, manual_mode="", manual_gpu_count="", manual_v
     override_ram_gb = max(0.0, override_ram_gb)
     if override_ram_gb:
         # Replace RAM, don't add. The number in the field is the
-        # 用户想要模拟的系统总内存。
+        # TOTAL system memory the user wants to simulate.
         system["available_ram_gb"] = round(override_ram_gb, 1)
         system["total_ram_gb"] = round(override_ram_gb, 1)
     system["manual_hardware"] = True
 
     if manual_mode == "ram":
-        # 纯 RAM 模拟 — 完全清除 GPU 数据，使排名器使用
-        # CPU/RAM 路径。
+        # RAM-only simulation — wipe GPU entirely so the ranker uses
+        # CPU/RAM paths.
         system["has_gpu"] = False
         system["gpu_name"] = None
         system["gpu_vram_gb"] = 0
@@ -83,10 +88,10 @@ def _apply_manual_hardware(system, manual_mode="", manual_gpu_count="", manual_v
         {"index": i, "name": gpu_name, "vram_gb": vram_each}
         for i in range(count)
     ]
-    # 单个同构池 — vram_each 是用户输入的每 GPU 实际
+    # Single homogeneous pool — vram_each here is the ACTUAL per-GPU
     # VRAM the user entered, not an average. That's the whole point:
-    # 提升 vram_each 会将每 GPU 上限（GGUF、张量并行）
-    # 拉高到底，而非仅微调一小部分。
+    # raising vram_each lifts the per-GPU cap (GGUF, tensor-parallel
+    # math) all the way up, not just by a small fraction.
     system["gpu_groups"] = [{
         "name": gpu_name,
         "vram_each": vram_each,
@@ -96,10 +101,10 @@ def _apply_manual_hardware(system, manual_mode="", manual_gpu_count="", manual_v
     }]
     system["homogeneous"] = True
     system["backend"] = backend
-    # Apple Silicon 与 GPU 共享统一内存池；标记此以便
-    # API/UI 按真实 Metal 检测方式报告。独立 GPU
-    # （cuda/rocm）和 CPU 后端使用独立 VRAM，因此清除
-    # 先前检测留下的过时标记。
+    # Apple Silicon shares one unified memory pool with the GPU; flag it so
+    # the API/UI report it the way real Metal detection does. Discrete GPUs
+    # (cuda/rocm) and the CPU backends carry separate VRAM, so clear any
+    # stale flag a previous detection left on the dict.
     if backend == "metal":
         system["unified_memory"] = True
     else:
@@ -107,25 +112,92 @@ def _apply_manual_hardware(system, manual_mode="", manual_gpu_count="", manual_v
     return system
 
 
+def _run_model_probe(host: str, ssh_port: str, cmd: str) -> str:
+    try:
+        if host:
+            r = run_ssh_command(
+                host,
+                ssh_port or None,
+                cmd,
+                timeout=15,
+                connect_timeout=5,
+                strict_host_key_checking=False,
+                text=True,
+            )
+        else:
+            r = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True, timeout=15)
+        if r.returncode == 0:
+            return (r.stdout or "").strip()
+    except Exception:
+        return ""
+    return ""
+
+
+def _inspect_model_path(model_path: str, host: str = "", ssh_port: str = "") -> dict:
+    """Read lightweight metadata from a local or SSH-visible HF model folder."""
+    path = (model_path or "").strip()
+    if not path or path.startswith(("http://", "https://")):
+        return {}
+    if not (path.startswith("/") or path.startswith("~")):
+        return {}
+
+    qpath = shlex.quote(path)
+    qconfig = shlex.quote(os.path.join(path, "config.json"))
+    out = {}
+    exists = _run_model_probe(host, ssh_port, f"test -d {qpath} && printf found || printf missing")
+    if exists != "found":
+        target = host or "local container"
+        out["model_probe_error"] = f"Model path is not visible on {target}: {path}"
+        return out
+    raw_config = _run_model_probe(host, ssh_port, f"test -f {qconfig} && sed -n '1,240p' {qconfig}")
+    if raw_config:
+        try:
+            cfg = json.loads(raw_config)
+        except Exception:
+            cfg = {}
+        for key in ("context_length", "max_position_embeddings", "n_ctx_train", "model_max_length", "max_seq_len"):
+            value = cfg.get(key)
+            if isinstance(value, (int, float)) and value > 0:
+                out["model_ctx_max"] = int(value)
+                break
+    else:
+        out["model_probe_error"] = f"config.json not found in model path: {path}"
+
+    size_cmd = (
+        f"find {qpath} -type f \\( -name '*.safetensors' -o -name '*.bin' -o -name '*.gguf' \\) "
+        "-printf '%s\\n' 2>/dev/null | awk '{s+=$1} END {if (s>0) printf \"%.6f\", s/1073741824}'"
+    )
+    weights = _run_model_probe(host, ssh_port, size_cmd)
+    try:
+        weights_gb = float(weights)
+    except Exception:
+        weights_gb = 0.0
+    if weights_gb > 0:
+        out["model_weights_gb"] = round(weights_gb, 3)
+    elif "model_probe_error" not in out:
+        out["model_probe_error"] = f"No model weight files found in: {path}"
+    return out
+
+
 def setup_hwfit_routes():
     router = APIRouter(prefix="/api/hwfit", tags=["hwfit"])
 
     @router.get("/system")
     def get_system(host: str = "", ssh_port: str = "", platform: str = "", fresh: bool = False):
-        """检测并返回当前系统硬件信息。远程时传入 host=user@server。
-        fresh=true 绕过每主机缓存（重新扫描按钮）。"""
+        """Detect and return current system hardware info. Pass host=user@server for remote.
+        fresh=true bypasses the per-host cache (the Rescan button)."""
         from services.hwfit.hardware import detect_system
         host, ssh_port = _validate_detection_target(host, ssh_port)
         return detect_system(host=host, ssh_port=ssh_port, platform=platform, fresh=fresh)
 
     @router.get("/models")
     def get_models(use_case: str = "", sort: str = "newest", limit: int = 50, search: str = "", host: str = "", quant: str = "", ctx: str = "", gpu_count: str = "", gpu_group: str = "", ssh_port: str = "", platform: str = "", fresh: bool = False, manual_mode: str = "", manual_gpu_count: str = "", manual_vram_gb: str = "", manual_ram_gb: str = "", manual_backend: str = "", ignore_detected_gpu: bool = False, ignore_detected_ram: bool = False, fit_only: bool = False):
-        """根据检测到的硬件对 LLM 模型评分并返回结果。
+        """Rank LLM models against detected hardware and return scored results.
         gpu_count: override GPU count (0 = CPU only, 1-N = simulate N GPUs of the
-            的活跃组）。gpu_group: system.gpu_groups 中的索引（同构池），
-            目标池 — 空/auto = 最大池。vLLM 只能
-            在相同 GPU 上进行张量并行，因此从不混合池。
-        fresh=true 绕过硬件检测缓存。"""
+            active group). gpu_group: index into system.gpu_groups (the homogeneous
+            pools) to target — empty/auto = the largest pool. vLLM can only
+            tensor-parallel across identical GPUs, so we never mix pools.
+        fresh=true bypasses the hardware-detection cache."""
         from services.hwfit.hardware import detect_system
         from services.hwfit.fit import rank_models
         from services.hwfit.models import get_models, model_catalog_path
@@ -154,13 +226,13 @@ def setup_hwfit_routes():
         system = _apply_manual_hardware(system, manual_mode, manual_gpu_count, manual_vram_gb, manual_ram_gb, manual_backend)
 
         # Keep the raw detection around so the UI can still show the box's full
-        # GPU 配置，即使我们正针对单个同构池进行排名。
+        # GPU complement even while we rank against one homogeneous pool.
         system["detected_gpu_vram_gb"] = system.get("gpu_vram_gb")
         system["detected_gpu_count"] = system.get("gpu_count")
 
         groups = system.get("gpu_groups") or []
-        # 解析目标同构池。默认（auto）= 最大池，
-        # 对于均匀机器即「所有 GPU」— 行为不变。
+        # Resolve the target homogeneous pool. Default (auto) = the largest pool,
+        # which for a uniform box is simply "all the GPUs" — no behaviour change.
         grp = None
         if groups:
             try:
@@ -186,7 +258,7 @@ def setup_hwfit_routes():
             n = None
         if n is not None:
             if n == 0:
-                # RAM 模式：按系统内存排名，允许卸载。
+                # RAM-only mode: rank against system memory, offload allowed.
                 system["has_gpu"] = False
                 system["gpu_vram_gb"] = 0
                 system["gpu_count"] = 0
@@ -196,15 +268,15 @@ def setup_hwfit_routes():
                 _apply_group(grp, n)
                 system["gpu_only"] = True
             else:
-                # 无每 GPU 详情（旧版检测）— 假设均匀分配。
+                # No per-GPU detail (older detection) — assume uniform split.
                 single_vram = (system.get("gpu_vram_gb") or 0) / (system.get("gpu_count") or 1)
                 system["gpu_count"] = max(1, n)
                 system["gpu_vram_gb"] = round(single_vram * max(1, n), 1)
                 system["gpu_only"] = True
         elif grp:
-            # 无显式计数，但仍固定到一个池，以便异构
-            # 机器按真实可混合组排名，而非虚构的 VRAM 总和。
-            # 此处 gpu_only 保持关闭，让默认视图仍显示卸载选项。
+            # No explicit count, but we still pin to one pool so heterogeneous
+            # boxes rank against a real mixable group, not a fictional VRAM sum.
+            # gpu_only stays off here so the default view still surfaces offload.
             _apply_group(grp, grp["count"])
 
         try:
@@ -235,14 +307,14 @@ def setup_hwfit_routes():
         return {"system": system, "models": results}
 
     @router.get("/profiles")
-    def get_serve_profiles(model: str = "", host: str = "", ssh_port: str = "", platform: str = "", fresh: bool = False, serve_weights_gb: float = 0.0, serve_quant: str = ""):
+    def get_serve_profiles(model: str = "", model_path: str = "", host: str = "", ssh_port: str = "", platform: str = "", fresh: bool = False, serve_weights_gb: float = 0.0, serve_quant: str = ""):
         """Compute llama.cpp serve profiles (Quality/Balanced/Speed) for `model`
         against the detected hardware on `host` (or local). Returns concrete
-        标志（n_gpu_layers、n_cpu_moe、cache_type、ctx），服务 UI 可应用。
+        flags (n_gpu_layers, n_cpu_moe, cache_type, ctx) the serve UI can apply.
 
         `model` is matched against the catalog by name; if it's not in the
-        目录中（例如临时 HF 仓库），通过最小合成条目传递足够提示
-        在此不可行，因此返回 []，UI 保留手动标志。
+        catalog (e.g. an ad-hoc HF repo), pass enough hints via a minimal synthetic
+        entry isn't possible here, so we return [] and the UI keeps manual flags.
         """
         from services.hwfit.hardware import detect_system
         from services.hwfit.models import get_models
@@ -254,14 +326,29 @@ def setup_hwfit_routes():
         catalog = {m.get("name"): m for m in (get_models() or [])}
 
         def _norm(s):
-            # 标准化用于匹配：去除 org/ 前缀、末尾的 -GGUF/-gguf
-            # 标记和任何量化标签，小写。因此 "DeepSeek-Coder-V2-Lite-
-            # Instruct-GGUF"（本地文件夹名）匹配目录条目
-            # "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"。
+            # Normalize for matching: drop org/ prefix, a trailing -GGUF/-gguf
+            # marker, and any quant tag, lowercase. So "DeepSeek-Coder-V2-Lite-
+            # Instruct-GGUF" (a local folder name) matches catalog entry
+            # "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct".
             s = (s or "").lower().strip()
-            s = s.split("/")[-1]                     # 去除 org 前缀
-            s = re.sub(r"[-_.]?gguf$", "", s)        # 去除末尾 gguf 标记
-            s = re.sub(r"[-_.](q\d[^/]*|iq\d[^/]*|fp8|bf16|f16|awq[^/]*|gptq[^/]*)$", "", s)
+            s = s.split("/")[-1]                     # drop org prefix
+            for suffix in ("-gguf", "_gguf", ".gguf", "gguf"):
+                if s.endswith(suffix):
+                    s = s[: -len(suffix)]
+                    break
+            cut_at = None
+            for idx, ch in enumerate(s):
+                if ch not in "-_." or idx + 1 >= len(s):
+                    continue
+                suffix = s[idx + 1:]
+                if (
+                    suffix in {"fp8", "bf16", "f16"}
+                    or suffix.startswith(("awq", "gptq", "iq"))
+                    or (suffix.startswith("q") and len(suffix) > 1 and suffix[1].isdigit())
+                ):
+                    cut_at = idx
+            if cut_at is not None:
+                s = s[:cut_at]
             return s
 
         m = catalog.get(model)
@@ -272,17 +359,35 @@ def setup_hwfit_routes():
                 if nn and (nn == want or want.endswith(nn) or nn.endswith(want)):
                     m = entry
                     break
+        path_meta = _inspect_model_path(model_path or model, host=host, ssh_port=ssh_port)
         if m is None:
-            return {"system": system, "profiles": [], "error": "model not in catalog"}
+            return {
+                "system": system,
+                "profiles": [],
+                "error": "model not in catalog",
+                "model_ctx_max": int(path_meta.get("model_ctx_max") or 0),
+                "model_weights_gb": float(path_meta.get("model_weights_gb") or 0),
+                "model_probe_error": path_meta.get("model_probe_error") or "",
+            }
         # Surface the model's trained context limit so the serve UI can clamp a
-        # 用户输入的上下文限制在此之下（请求 ctx > n_ctx_train 会溢出，
-        # 且配合量化 KV 缓存可能导致 GPU 崩溃）。
+        # user-typed context down to it (asking for ctx > n_ctx_train overflows
+        # and, with a quantized KV cache, can crash the GPU).
         model_ctx_max = 0
         for k in ("context_length", "max_position_embeddings", "n_ctx_train", "context"):
             v = m.get(k)
             if isinstance(v, (int, float)) and v > 0:
                 model_ctx_max = int(v)
                 break
+        path_ctx_max = int(path_meta.get("model_ctx_max") or 0)
+        if path_ctx_max > 0:
+            model_ctx_max = max(model_ctx_max, path_ctx_max)
+        model_weights_gb = float(path_meta.get("model_weights_gb") or 0)
+        if model_weights_gb <= 0:
+            for k in ("min_vram_gb", "required_gb", "size_gb", "recommended_ram_gb", "min_ram_gb"):
+                v = m.get(k)
+                if isinstance(v, (int, float)) and v > 0:
+                    model_weights_gb = float(v)
+                    break
         return {
             "system": system,
             "profiles": compute_serve_profiles(
@@ -291,11 +396,13 @@ def setup_hwfit_routes():
                 serve_quant=(serve_quant or None),
             ),
             "model_ctx_max": model_ctx_max,
+            "model_weights_gb": model_weights_gb,
+            "model_probe_error": path_meta.get("model_probe_error") or "",
         }
 
     @router.get("/image-models")
     def get_image_models(sort: str = "fit", search: str = "", host: str = "", gpu_count: str = "", ssh_port: str = "", platform: str = "", fresh: bool = False, manual_mode: str = "", manual_gpu_count: str = "", manual_vram_gb: str = "", manual_ram_gb: str = "", manual_backend: str = "", ignore_detected_gpu: bool = False, ignore_detected_ram: bool = False):
-        """根据检测到的硬件对图像生成模型评分。"""
+        """Rank image generation models against detected hardware."""
         from services.hwfit.hardware import detect_system
         from services.hwfit.image_models import rank_image_models
         host, ssh_port = _validate_detection_target(host, ssh_port)
@@ -313,7 +420,7 @@ def setup_hwfit_routes():
             system["available_ram_gb"] = 0
             system["total_ram_gb"] = 0
         system = _apply_manual_hardware(system, manual_mode, manual_gpu_count, manual_vram_gb, manual_ram_gb, manual_backend)
-        # 图像模型使用单个 GPU — 始终使用每 GPU VRAM
+        # Image models use a single GPU — always use per-GPU VRAM
         gpu_vrams = [float(g.get("vram_gb") or 0) for g in (system.get("gpus") or []) if isinstance(g, dict)]
         single_vram = max(gpu_vrams) if gpu_vrams else ((system.get("gpu_vram_gb") or 0) / max(system.get("gpu_count") or 1, 1))
         system["gpu_vram_gb"] = single_vram
