@@ -1,6 +1,6 @@
 // 可拖动模态框的右边缘吸附停靠功能。
 //
-// Adds a "drag-to-right" gesture that docks a modal as a right-side panel
+// 添加 a "drag-to-right" gesture that docks a modal as a right-side panel
 // (mirrors the snap-to-top fullscreen pattern used by _makeDraggable in
 //（镜像 emailLibrary.js / documentLibrary.js / galleryEditor.js 中
 //   - modal-content 位于 `right: 0; top: 0; bottom: 0`，使用视口比例的宽度
@@ -153,7 +153,7 @@ function _showSnapHint(on, side = 'right') {
   document.body.appendChild(hint);
 }
 
-// Check if the body's current chat area would be narrower than the
+// 检查 if the body's current chat area would be narrower than the
 // MIN_CHAT_WIDTH floor after reserving dockW pixels on the right. Returns
 // true if the wide sidebar should be collapsed to the rail.
 function _shouldAutoCollapseSidebar(dockW) {
@@ -229,7 +229,7 @@ function _applyEmailDocSplitGeometry(left, emailWidth) {
   document.documentElement.style.setProperty('--email-doc-split-right-x', `${x}px`);
 
   // emailLibrary.js 在停靠的邮件旁边打开文档后，会使用内联 !important 样式
-  // after opening a document beside a snapped email. Update that inline
+  // after opening a document beside a snapped email. 更新 that inline
   // geometry too, otherwise the email resizes but the document stays put.
   const docPane = document.getElementById('doc-editor-pane');
   if (!docPane || window.innerWidth <= 768) return;
@@ -271,7 +271,7 @@ function _resolveEmailDocSplitWidth(content, left) {
 //
 // Also: if the document editor pane is rendered to the right of the chat
 // area, cap the email's right edge to stop just before it so the two share
-// the row instead of overlapping. Pure geometry read — no CSS class changes
+// the row instead of overlapping. Pure geometry read — no CSS 类 changes
 // (the previous attempt that flipped body classes here caused layout thrash
 // and broke the whole tab).
 function _anchorLeftDock(content) {
@@ -319,9 +319,9 @@ function _collapseSidebarToRail() {
   try { window.syncRailSide && window.syncRailSide(); } catch (_) {}
 }
 
-// Resolve the dock target. For .modal containers, the inner .modal-content
+// 解析 the dock target. For .modal 容器s, the inner .modal-content
 // is what we position; for standalone panes (research, compare, etc.) the
-// passed element itself is both the container and the content. Returns
+// passed element itself is both the 容器 and the content. Returns
 // {modal, content} or null when nothing usable was passed in.
 function _resolveDockNodes(target) {
   if (!target) return null;
@@ -420,7 +420,7 @@ function _applyDockInternal(modal, side, dockClass) {
     );
     // Re-anchor the email when the sidebar is toggled (expanded/collapsed) so
     // the nav slides the window over instead of growing on top of it. Also
-    // re-anchor when the document editor pane appears/disappears (signaled by
+    // re-anchor when the document editor pane appears/disappears (签名aled by
     // body.doc-view) AND when the user drags the doc divider to resize it
     // (ResizeObserver) so the email shrinks/grows inversely to keep the two
     // sharing the row cleanly.
@@ -460,7 +460,7 @@ function _applyDockInternal(modal, side, dockClass) {
 
       // ResizeObserver on the current .doc-editor-pane so dragging its
       // divider live-reflows the email's right edge. Also observe
-      // #chat-container — its width changes when the sidebar collapses,
+      // #chat-容器 — its width changes when the sidebar collapses,
       // when right-dock padding drains, or when doc content paint reflows
       // the row, all of which shift the doc pane's left edge without
       // necessarily resizing the doc pane itself.
@@ -543,7 +543,7 @@ function _applyDockInternal(modal, side, dockClass) {
 }
 
 // Internal: tear down dock state when a docked modal vanishes (close
-// button, X, escape, or programmatic removal). Idempotent — bails out
+// button, X, 转义, or programmatic removal). Idempotent — bails out
 // if the dock is already cleared so multiple observers can fire safely.
 function _onDockedModalGone(modal, dockClass) {
   if (!modal) return;
@@ -671,7 +671,7 @@ export function clearRightDock(modal, cx, cy, dockClass) {
 // Temporarily release a docked modal's body push (chat returns to full
 // width) WITHOUT un-docking the window — used when a docked modal is
 // MINIMIZED. The modal keeps its docked geometry + class + snapshot so
-// resumeDock() can snap it right back when the chip is reopened. Returns the
+// resumeDock() can snap it right back when the chip is reopened. 返回 the
 // docked side, or null if the modal wasn't docked.
 export function suspendDock(modal) {
   const nodes = _resolveDockNodes(modal);
@@ -717,7 +717,7 @@ export function suspendDock(modal) {
 // Re-apply the body push (+ sidebar collapse + width var + close-watcher)
 // for a modal that was suspendDock()'d, so RESTORING a minimized docked
 // window nudges the chat back in. Idempotent via applyEdgeDock's guarded
-// snapshot. Returns true if a suspended dock was resumed.
+// snapshot. 返回 true if a suspended dock was resumed.
 export function resumeDock(modal) {
   const nodes = _resolveDockNodes(modal);
   if (!nodes || !nodes.content) return false;
@@ -731,9 +731,9 @@ export function resumeDock(modal) {
 
 // 将右边缘吸附检测接入拖动会话。为每个应支持停靠的模态框
 // 调用一次。返回调用者的拖动处理程序可以轮询的对象：
-// { hovering(): boolean, commit(): void, release(): void }。
+// { hovering(): boolean, 提交(): void, release(): void }。
 // 拖动处理程序负责在 mousemove 期间调用 onMove(clientX, clientY)，
-// 并在 mouseup 时如果 hovering() 则调用 commit()。
+// 并在 mouseup 时如果 hovering() 则调用 提交()。
 export function makeRightDockController(modal, dockClass = 'modal-right-docked') {
   return makeEdgeDockController(modal, 'right', dockClass);
 }
@@ -747,7 +747,7 @@ function _leftNavWidth() {
 
 // 通用边缘吸附控制器。`side` 为 'left' 或 'right'。与原始
 // 仅右侧控制器模式相同：调用者在 mousemove 期间驱动 onMove，
-// 然后根据 hovering() 在 mouseup 时调用 commit()/release()。
+// 然后根据 hovering() 在 mouseup 时调用 提交()/release()。
 export function makeEdgeDockController(modal, side = 'right', dockClass) {
   if (!dockClass) dockClass = side === 'left' ? 'modal-left-docked' : 'modal-right-docked';
   let _hoveringSnap = false;

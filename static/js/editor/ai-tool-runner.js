@@ -66,7 +66,7 @@ export function createApplyImageTool({
     } catch { btn.textContent = busyLabel; }
     // Tool-specific model picker — pulled from the per-tool select
     // (harmonize/style) if available, otherwise the global
-    // fallback. Derived from the endpoint URL.
+    // 回退. Derived from the 端点地址.
     if (!extraPayload._endpoint) {
       const m = /\/api\/image\/([\w-]+)/.exec(endpoint || '');
       const type = m ? m[1].replace('upscale-ai', 'upscale').replace('remove-bg', 'rembg') : null;
@@ -106,7 +106,7 @@ export function createApplyImageTool({
       img.onerror = () => { if (uiModule) uiModule.showToast('加载结果失败', 6000); };
       img.src = 'data:image/png;base64,' + data.image;
     } catch (e) {
-      // 检测已知的失败模式并弹出操作 toast。
+      // 检测已知的失败模式并弹出操作 提示条。
       const msg = (e?.message || '').toLowerCase();
       const needsImg2Img = (
         msg.includes('img2img') ||

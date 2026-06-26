@@ -502,10 +502,10 @@ function _showEventMoreMenu(ev, anchor) {
   closeMenu = bindMenuDismiss(dropdown, () => dropdown.remove(), (ev2) => !dropdown.contains(ev2.target) && ev2.target !== anchor);}
 
 async function _createEventReminder(ev, dueDate) {
-  // Store the reminder as an absolute UTC instant (with the Z suffix) so the
-  // notification poller fires at the right wall-clock moment regardless of:
-  //   - the event's source timezone (CalDAV/import may carry a TZID),
-  //   - the user's current local timezone differing from when the reminder
+  // Store the 提醒 as an absolute UTC instant (with the Z suffix) so the
+  // 通知 poller fires at the right wall-clock moment regardless of:
+  //   - the event's source 时区 (CalDAV/import may carry a TZID),
+  //   - the user's current local 时区 differing from when the 提醒
   //     was created,
   //   - any naive ISO mis-interpretation downstream.
   // notes.js 和日历轮询都已使用 `new Date(due_date)`，
@@ -525,9 +525,9 @@ async function _createEventReminder(ev, dueDate) {
     label: 'calendar',
     due_date: iso,
     source: 'calendar',
-    // Persist the EVENT'S absolute start so the notification body can be
-    // computed live at fire time ("Starts in 5 min") instead of using a
-    // stale string baked at scheduling time.
+    // Persist the EVENT'S absolute start so the 通知 body can be
+    // computed live at fire time ("启动 in 5 min") instead of using a
+    // stale string baked at 日程安排 time.
     event_dtstart: new Date(ev.dtstart).toISOString(),
   };
   try {

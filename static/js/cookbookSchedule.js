@@ -3,15 +3,15 @@
 // 创建一个 action=cookbook_serve 的 ScheduledTask。从两个入口挂载：
 //
 //   1. The ^ button next to Launch in a serve panel.
-//   2. The "Schedule…" entry in the cached-model ⋯ dropdown menu (which
+//   2. The "Schedule…" entry in the cached-model ⋯ 下拉菜单 (which
 //      programmatically clicks the ^ button so this module owns the
 //      single source of truth).
 //
-// Feedback uses uiModule.showToast() — the same toast the rest of the
+// Feedback uses uiModule.showToast() — the same 提示条 the rest of the
 // app uses for "Saved", "Favorited", etc. — so the success message
-// doesn't introduce a parallel notification style.
+// doesn't introduce a parallel 通知 style.
 //
-// To remove: delete this file + the <script> tag in index.html + the
+// To remove: delete this file + the <script> tag in 索引.html + the
 // ^ button in cookbookServe.js + the "cookbook_serve" entry in
 // src/cookbook_serve_lifecycle.py + app.py 中对应的注册行。
 // registration line in app.py.
@@ -50,7 +50,7 @@ try { (function () {
     try { console.log("[toast]", msg); } catch (_) {}
   }
 
-  // Cached handle to the tasks module so the success toast's "Open"
+  // Cached handle to the tasks module so the success 提示条's "Open"
   // action can jump straight to the new task in the Tasks tab.
   let _tasksMod = null;
   async function _getTasksMod() {
@@ -78,8 +78,8 @@ try { (function () {
   ];
   const WEEKDAYS = new Set(["MO","TU","WE","TH","FR"]);
 
-  // Resolve the model identity from the closest .memory-item card —
-  // that's the canonical container the cookbook serve UI uses, with
+  // 解析 the model identity from the closest .memory-item card —
+  // that's the canonical 容器 the cookbook serve UI uses, with
   // the model repo on data-repo. We do NOT grab the title via
   // textContent, because the title row also contains inline status
   // 因为标题行也包含内联状态标签（"running"、"downloading"）和 "HF ↗" 链接 ——
@@ -94,7 +94,7 @@ try { (function () {
       || "";
     // Title = last segment of the repo (after the final /), which is
     // exactly what the cookbook UI renders in the card title and what
-    // the preset registry uses as its short name. e.g.
+    // the preset 仓库 uses as its short name. e.g.
     //   cyankiwi/Qwen3.5-397B-A17B-AWQ → Qwen3.5-397B-A17B-AWQ
     // Falls back to data-modelName or the bare repo for ollama-style
     // entries that don't have a slash.
@@ -336,7 +336,7 @@ try { (function () {
             const evData = evRes.ok ? await evRes.json() : null;
             // 将事件 uid + 日历 href 存储到任务的 prompt JSON 中，以便任务删除钩子
             // JSON so the task-delete hook can cascade the calendar
-            // cleanup. PATCH the task with an updated prompt.
+            // 清理. PATCH the task with an updated prompt.
             if (evData && (evData.uid || evData.id)) {
               const eventUid = evData.uid || evData.id;
               try {

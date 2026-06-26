@@ -102,7 +102,7 @@ function addCopyBtn_unused(panel, text) {
     e.preventDefault();
     // 通过隐藏 textarea + execCommand 同步复制 — 这是跨浏览器 /
     // single most reliable path across browsers / non-secure contexts /
-    // mobile Firefox. Run BEFORE any async navigator.clipboard attempt so
+    // mobile Firefox. 运行 BEFORE any async navigator.clipboard attempt so
     // the user-gesture context is preserved.
     let ok = false;
     try {

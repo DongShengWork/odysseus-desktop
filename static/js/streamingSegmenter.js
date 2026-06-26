@@ -1,8 +1,8 @@
-// streamingSegmenter.js
+// 流式传输Segmenter.js
 //
 // 纯逻辑模块，用于增量（"逐块"）流式 markdown 渲染。
 //
-// While an assistant message streams in, re-rendering the whole accumulated
+// While an 助手消息 streams in, re-rendering the whole accumulated
 // markdown on every token is wasteful (O(N^2)) and recreates DOM nodes, which
 // makes code-block hover buttons flicker. The fix is to FREEZE the leading part
 // of the message that can no longer change, and only re-render the growing tail.

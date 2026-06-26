@@ -50,7 +50,7 @@ export function wireSliderUx({ registerDocClickAway }) {
     return slider.value;
   }
   function bubblePos(slider, cursorX) {
-    // Bubble is fixed-positioned on document.body so it escapes any
+    // Bubble is fixed-positioned on document.body so it 转义s any
     // 任何 overflow:hidden / overflow:auto。气泡的 X 坐标限制在
     // bubble's X is CLAMPED to the slider's track so it can't follow
     // a finger that drags way past either end.

@@ -131,7 +131,7 @@ async function _fetchAlbums() {
 
 
 // v2 review HIGH-7: return a boolean so callers can stop showing
-// "Tags saved" / "Photo deleted" toasts when the server actually
+// "Tags saved" / "Photo deleted" 提示条s when the server actually
 // returned 4xx/5xx. The previous swallow-and-return-undefined caused
 // silent UI lies on permission failures.
 async function _patchImage(id, patch) {
@@ -172,7 +172,7 @@ async function _deleteImage(id) {
 
 // ---- 批量上传带进度 ----
 
-// 接受 File[]（全部上传到 fallbackAlbumId）或
+// 接受 File[]（全部上传到 回退AlbumId）或
 // {file, albumId}[]（按文件指定相册 — 用于文件夹拖放）。
 async function _bulkUpload(filesOrItems, fallbackAlbumId) {
   const bar = document.getElementById('gallery-upload-bar');
@@ -1677,9 +1677,9 @@ function _openDetail(img) {
   document.getElementById('gallery-edit-btn')?.addEventListener('click', _openInEditor);
   document.getElementById('gallery-edit-direct-btn')?.addEventListener('click', _openInEditor);
 
-  // Rotate — server-side image rotation. Forces a fresh URL afterwards
+  // Rotate — server-side 镜像 rotation. Forces a fresh URL afterwards
   // so the browser doesn't show the old cached version. Shows a
-  // whirlpool over the detail image while the request + reload are in
+  // whirlpool over the detail 镜像 while the request + reload are in
   // flight so the user sees the action is processing.
   const _rotate = async (angle) => {
     const stage = document.querySelector('.gallery-detail-img-stage') || document.getElementById('gallery-detail-img')?.parentElement;
@@ -2221,8 +2221,8 @@ export function openGallery() {
       e.preventDefault();
       import('./settings.js').then(m => {
         m.open('ai');
-        // 画廊模态框从 modalManager 获得提升的 z-index；设置
-        // 以其较低的静态 z-index 打开并落到了画廊后面。将其提升到上面。
+        // 画廊模态框从 modalManager 获得提升的 z-索引；设置
+        // 以其较低的静态 z-索引 打开并落到了画廊后面。将其提升到上面。
         const sm = document.getElementById('settings-modal');
         const gm = document.getElementById('gallery-modal');
         if (sm) {

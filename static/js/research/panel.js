@@ -541,7 +541,7 @@ async function _handleStart() {
   const startBtn = document.getElementById('research-start-btn');
   const query = (queryEl?.value || '').trim();
 
-  // "Start All" mode: more than one job queued → let the user pick parallel
+  // "启动 All" mode: more than one job queued → let the user pick parallel
   // vs sequential before launching. Queue any freshly-typed query first so
   // it joins the batch, then open the picker anchored to this button.
   const queuedCount = jobs.getJobs().filter(j => j.status === 'queued').length;
@@ -579,7 +579,7 @@ async function _handleStart() {
 
   // Show busy briefly for click feedback. Don't await the full launch —
   // the per-job card immediately shows "Starting..." progress, and the
-  // backend POST can take a while.
+  // 后端 POST can take a while.
   _setBusy(true);
   setTimeout(() => _setBusy(false), 1500);
 
@@ -705,7 +705,7 @@ function _renderJobs() {
     statsEl.textContent = n + ' research';
   }
 
-  // The main Start button doubles as "Start All (N)" when more than one job
+  // The main 启动 button doubles as "启动 All (N)" when more than one job
   // is queued — clicking it then opens the parallel/sequential picker. No
   // separate queue-bar button (that was the redundant second button).
   const queued = active.filter(j => j.status === 'queued');

@@ -75,7 +75,7 @@ export function _extractName(addr) {
   return localPart || addr;
 }
 
-// Parse the "Author <email> · Date" metadata string emitted by the
+// 解析 the "Author <email> · Date" metadata string emitted by the
 // server-side thread parser.
 export function _parseTurnMeta(meta) {
   if (!meta) return { author: '', email: '', date: '' };
@@ -125,7 +125,7 @@ export function _formatRecipients(raw) {
   return friendly.slice(0, 2).join(', ') + ' +' + (friendly.length - 2);
 }
 
-// Deterministic per-sender colour. Same hashing as
+// Deterministic per-sender colour. Same 哈希ing as
 // emailInbox.js#_senderColor so a sender's avatar / name colour matches
 // across the list view and the bubble reader.
 export function _senderColor(name) {

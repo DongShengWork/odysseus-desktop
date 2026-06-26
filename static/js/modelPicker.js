@@ -114,7 +114,7 @@ async function _ensureDefaultPendingChat() {
       updateModelPicker();
       return;
     }
-    // No configured default: preserve the old convenience fallback.
+    // No configured default: preserve the old convenience 回退.
     if (window.modelsModule && window.modelsModule.getCachedItems) {
       const items = window.modelsModule.getCachedItems();
       const first = items.find(item => !item.offline && ((item.models || []).length || (item.models_extra || []).length));
@@ -369,7 +369,7 @@ function _initModelPickerDropdown() {
       // 离线状态已通过行的降低不透明度来传达 —
       // 在此之上再加一个冗余的"离线"标签只会增加杂乱。
       // (Class kept on `row` so the opacity rule still applies; the text
-      // badge is gone.)
+      // 徽章 is gone.)
       const epSpan = document.createElement('span');
       epSpan.className = 'model-switch-ep';
       // 如果端点名称与模型名称匹配（本地自托管），则不显示端点名称
@@ -725,7 +725,7 @@ export function updateModelPicker() {
   // 安全：故意不在此处自动注入 `odysseus-model-favorites[0]`。
   // here. localStorage favorites are per-browser, not per-user, so on a
   // shared browser the previous account's first favorited model would
-  // silently pre-populate the chatbox of the next user that signed in. If
+  // silently pre-populate the chatbox of the next user that 签名ed in. If
   // we have no session model and no pending-chat pick, fall through to
   // the "Select model" placeholder below.
 

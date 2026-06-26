@@ -1,4 +1,4 @@
-// compare/stream.js — SSE streaming to panes
+// compare/stream.js — SSE 流ing to panes
 import state from './state.js';
 import { addFinishBadge } from './vote.js';
 import { getModelCost, safeDisplayImageSrc } from '../chatRenderer.js';
@@ -74,7 +74,7 @@ function _renderSearchResults(data) {
 
 /** Run synthesis for a search pane — sends search results to an LLM for analysis. */
 async function _runSynthForPane(modelToUse, synthPrompt, synthBody, spinner, hist) {
-  // Create temp session for synthesis
+  // 创建 temp session for synthesis
   const fd = new FormData();
   fd.append('name', 'Synthesis');
   fd.append('endpoint_url', modelToUse.endpoint || '');
@@ -165,9 +165,9 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
   let timedOut = false;
   let streamOk = false;
   let currentToolBlock = null;  // track active agent tool block
-  // Idle timeout — abort only if no data is received for this many seconds.
+  // Idle 超时 — abort only if no data is received for this many seconds.
   // Long generations (SVG, big code) are fine as long as the stream stays
-  // active. opts.timeout may still tighten this for specific paths.
+  // active. opts.超时 may still tighten this for specific paths.
   const effectiveTimeout = opts.timeout || state._timeout;
   let timeoutId = setTimeout(() => { timedOut = true; ac.abort(); }, effectiveTimeout * 1000);
   const _resetIdleTimeout = () => {
@@ -233,7 +233,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
       fd.append('use_research', 'true');
     } else {
       // Chat/Image: pure chat only — no tools, no search, no bash, no RAG.
-      // Explicitly send mode='chat' so the backend's compare_mode strip
+      // Explicitly send mode='chat' so the 后端's compare_mode strip
       // (chat_routes.py line 385) actually triggers — otherwise the form
       // field was missing and chat_mode defaulted to "", which meant
       // bash/python/web_search were never added to disabled_tools and
@@ -248,7 +248,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
     // Disable document tool and memory injection in compare mode
     fd.append('no_documents', 'true');
     fd.append('no_memory', 'true');
-    // Tell backend this is compare mode — strip all non-toggled tools
+    // Tell 后端 this is compare mode — strip all non-toggled tools
     fd.append('compare_mode', 'true');
     // Forward preset if selected
     if (presetsModule && presetsModule.getSelectedPreset()) {
@@ -282,7 +282,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
           if (json.type === 'metrics') {
             metrics = json.data;
 
-          // ── Research progress (spinner updates) ──
+          // ── Research progress (加载指示器 updates) ──
           } else if (json.type === 'research_progress') {
             const rp = json.data;
             const spinner = aiMsgEl._spinner;
@@ -311,7 +311,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
               box.className = 'compare-sources-box';
               box.innerHTML = '<span class="sources-label">' + sources.length + ' ' + label + ' sources</span>';
               box.title = sources.map(s => s.title || s.url).join('\n');
-              // Replace spinner with sources + new spinner
+              // Replace 加载指示器 with sources + new 加载指示器
               aiBody.innerHTML = '';
               aiBody.appendChild(box);
               if (spinnerModule) {
@@ -322,7 +322,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
               }
             }
 
-          // ── Tool start (bash, web search agent tool) ──
+          // ── Tool start (bash, web search 智能体工具) ──
           } else if (json.type === 'tool_start') {
             // Finalize any accumulated text before the tool block
             if (accumulated.trim() && aiMsgEl._textEl) {
@@ -332,17 +332,17 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
                 if (window.hljs) aiMsgEl._textEl.querySelectorAll('pre code:not(.hljs)').forEach(b => window.hljs.highlightElement(b));
               }
             }
-            // Destroy spinner if still present
+            // Destroy 加载指示器 if still present
             if (aiMsgEl._spinner && aiMsgEl._spinner.element) {
               aiMsgEl._spinner.destroy();
               aiMsgEl._spinner = null;
-              // Clean up spinner element but keep sources box + text
+              // Clean up 加载指示器 element but keep sources box + text
               const spinnerEl = aiBody.querySelector('.spinner-wrapper, .mini-spinner');
               if (spinnerEl) spinnerEl.remove();
             }
             const toolName = json.tool || 'tool';
             const cmd = json.command || '';
-            // Image generation: show ASCII spinner instead of compact tool block
+            // Image generation: show ASCII 加载指示器 instead of compact tool block
             if (toolName === 'generate_image' && spinnerModule) {
               aiBody.innerHTML = '';
               const imgSpinner = spinnerModule.create('Generating image...', 'right');
@@ -371,10 +371,10 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
             }
             if (hist) hist.scrollTop = hist.scrollHeight;
 
-          // ── Tool output (image or non-image) ──
+          // ── Tool output (镜像 or non-镜像) ──
           } else if (json.type === 'tool_output') {
             if (json.image_url) {
-              // Stop image spinner and render generated image in pane
+              // 停止 镜像 加载指示器 and render generated 镜像 in pane
               if (aiMsgEl._imgSpinner) { aiMsgEl._imgSpinner.destroy(); aiMsgEl._imgSpinner = null; }
               const safeImageUrl = safeDisplayImageSrc(json.image_url);
               aiBody.innerHTML = '';
@@ -394,7 +394,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
                   caption.textContent = json.image_prompt;
                   aiBody.appendChild(caption);
                 }
-                // Show model name below image (hidden in blind mode until vote)
+                // Show model name below 镜像 (hidden in blind mode until vote)
                 if (json.image_model && !state._blindMode) {
                   const modelLabel = document.createElement('div');
                   modelLabel.style.cssText = 'font-size:0.75em;color:color-mix(in srgb, var(--fg) 40%, transparent);margin-top:4px;';
@@ -404,7 +404,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
                 aiMsgEl._imageData = { url: safeImageUrl, prompt: json.image_prompt, model: json.image_model, size: json.image_size, quality: json.image_quality };
               }
             } else if (currentToolBlock) {
-              // Stop wave animation
+              // 停止 wave animation
               if (currentToolBlock._waveInterval) { clearInterval(currentToolBlock._waveInterval); currentToolBlock._waveInterval = null; }
               const ok = (json.exit_code === 0 || json.exit_code == null);
               const cmd = json.command || '';
@@ -419,17 +419,17 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
               currentToolBlock.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${escapeHtml(tLabel)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${cmdHtml}${outHtml}</div>`;
               currentToolBlock.querySelector('.agent-thread-header').addEventListener('click', () => currentToolBlock.classList.toggle('open'));
               currentToolBlock = null;
-              // Reset text element so next deltas create a fresh container
+              // Reset text element so next deltas create a fresh 容器
               aiMsgEl._textEl = null;
               accumulated = '';
             }
             if (hist) hist.scrollTop = hist.scrollHeight;
           } else if (json.delta) {
-            // Skip text deltas if we already rendered an image
+            // Skip text deltas if we already rendered an 镜像
             if (aiMsgEl._imageData) continue;
             // Capture TTFT on very first text delta
             if (!accumulated && !_ttft) _ttft = performance.now() - _timerStart;
-            // On first delta, destroy spinner and prepare text area
+            // On first delta, destroy 加载指示器 and prepare text area
             if (!accumulated && aiMsgEl._spinner) {
               if (aiMsgEl._spinner.element) aiMsgEl._spinner.destroy();
               aiMsgEl._spinner = null;
@@ -437,13 +437,13 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
               const srcBox = aiBody.querySelector('.compare-sources-box');
               aiBody.innerHTML = '';
               if (srcBox) aiBody.appendChild(srcBox);
-              // Add text container
+              // 添加 text 容器
               const textEl = document.createElement('div');
               textEl.className = 'compare-text-content';
               aiBody.appendChild(textEl);
               aiMsgEl._textEl = textEl;
             }
-            // After a tool block, create a new text container for continuing text
+            // After a tool block, create a new text 容器 for continuing text
             if (!accumulated && !aiMsgEl._textEl) {
               const textEl = document.createElement('div');
               textEl.className = 'compare-text-content';
@@ -459,7 +459,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
     }
 
     streamOk = true;
-    // Destroy any remaining spinner
+    // Destroy any remaining 加载指示器
     if (aiMsgEl._spinner && aiMsgEl._spinner.element) aiMsgEl._spinner.destroy();
     aiMsgEl._spinner = null;
     // Final render
@@ -478,7 +478,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
 
     // Metrics footer
     if (aiMsgEl && aiMsgEl._imageData) {
-      // Image-specific footer with actions + metrics
+      // Image-specific footer with actions + 指标
       const imgD = aiMsgEl._imageData;
       const footer = document.createElement('div');
       footer.className = 'msg-footer';
@@ -575,10 +575,10 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
       if (responseTime != null && responseTime !== 'undefined' && parts.length === 0) {
         parts.push(responseTime + 's');
       }
-      // Add per-request cost and cost per 1000
+      // 添加 per-request cost and cost per 1000
       const _model = metrics.model || (state._selectedModels[paneIdx] && state._selectedModels[paneIdx].model) || '';
       const _cost = getModelCost(_model, metrics.input_tokens || 0, metrics.output_tokens || 0);
-      // Build the metrics span with optional cost and context
+      // 构建 the 指标 span with optional cost and context
       span.textContent = parts.join(' | ');
       if (_cost !== null) {
         const _cost1k = _cost * 1000;
@@ -662,7 +662,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
         } else {
           // Sequential: panes run one after another, so "first to
           // finish" is meaningless (it's just whoever ran first).
-          // Wait until all panes are done, then badge whichever had
+          // Wait until all panes are done, then 徽章 whichever had
           // the lowest measured per-pane elapsed time.
           const total = state._selectedModels.length;
           const finished = state._paneElapsed.filter(v => typeof v === 'number').length;
@@ -676,7 +676,7 @@ async function streamToPane(paneIdx, sessionId, message, aiMsgEl, opts) {
           }
         }
       } else {
-        // Timed out or errored — show failed badge
+        // Timed out or errored — show failed 徽章
         const badge = document.getElementById('cmp-badge-' + paneIdx);
         if (badge) { badge.textContent = timedOut ? 'Timeout' : 'Failed'; badge.style.color = 'var(--color-error)'; }
       }
@@ -707,7 +707,7 @@ function _stampGradeBadge(paneIdx, response, expected) {
 
   let pass = r.includes(e);
   if (!pass) {
-    // Numeric fallback — find first number in expected, look for it standalone in response
+    // Numeric 回退 — find first number in expected, look for it standalone in response
     const m = expected.match(/-?\d[\d,]*(?:\.\d+)?/);
     if (m) {
       const n = m[0].replace(/,/g, '');
@@ -720,14 +720,14 @@ function _stampGradeBadge(paneIdx, response, expected) {
   if (!paneEl) return;
   const header = paneEl.querySelector('.pane-header');
   if (!header) return;
-  // Remove any prior grade badge (re-roll case)
+  // 移除 any prior grade 徽章 (re-roll case)
   const prev = header.querySelector('.pane-grade-badge');
   if (prev) prev.remove();
   const badge = document.createElement('span');
   badge.className = 'pane-grade-badge ' + (pass ? 'pass' : 'fail');
   badge.title = pass ? 'Response contains the expected answer' : 'Expected answer not found in response';
   badge.textContent = pass ? '✓' : '✗';
-  // Insert just before the finish badge if present, else after the title
+  // Insert just before the finish 徽章 if present, else after the title
   const finBadge = header.querySelector('.pane-finish-badge');
   if (finBadge) header.insertBefore(badge, finBadge);
   else header.appendChild(badge);

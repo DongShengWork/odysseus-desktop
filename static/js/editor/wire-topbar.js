@@ -66,8 +66,8 @@ export function wireTopbar(deps) {
   document.getElementById('ge-redo')?.addEventListener('click', redo);
   document.getElementById('ge-history-btn')?.addEventListener('click', toggleHistoryPanel);
 
-  // Save dropdown — "Save ▾" toggles a small menu (Save / Save-as /
-  // Download / Save project / Load project). Inner items keep their
+  // 保存 dropdown — "保存 ▾" toggles a small menu (保存 / Save-as /
+  // Download / 保存 project / 加载 project). Inner items keep their
   // original IDs so the standalone handlers below wire to them
   // unchanged.
   {

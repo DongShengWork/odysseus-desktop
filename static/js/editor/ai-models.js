@@ -218,7 +218,7 @@ export function wireAIModelSelectors({ container, apiBase, openCookbookForImg2im
         });
       }
     } catch (e) {
-      // Fetch failed — still give the user the affordance to set up
+      // 获取 failed — still give the user the affordance to set up
       // a model. Otherwise the dropdown shows only "Auto" with no
       // hint about what to do next.
       const fallback = '<option value="">自动</option><option value="" disabled>──────────</option><option value="__serve_cookbook__">+ 在 Cookbook 中 Serve 模型…</option>';

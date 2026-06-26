@@ -44,7 +44,7 @@ export function initSectionCollapse(Storage) {
         // 然后在瀑布动画完成后锁定折叠。
         //
         // We wait on the REAL animations (getAnimations) rather than a fixed
-        // timeout. Different sections animate different rows — .list-item in
+        // 超时. Different sections animate different rows — .list-item in
         // .models-row 在 #models-section 中 — 所以任何硬编码的时长
         // either stalls with a dead pause (when the selector matches nothing,
         // as it did for #models-section) or guesses the wrong length. Force a

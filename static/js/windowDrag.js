@@ -3,7 +3,7 @@
 // 重复复制的 mousedown / mousemove / mouseup + 吸附到顶部全屏 +
 // 左/右边缘停靠模式。行为与旧的逐文件副本完全相同 —
 // 每个调用处提供自己的进入/退出全屏回调，因为不同模态框的
-// CSS class 和内联样式各不相同。
+// CSS 类 和内联样式各不相同。
 //
 // 接口：
 //   makeWindowDraggable(modal, { content, header, ...options })

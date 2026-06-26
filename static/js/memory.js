@@ -498,7 +498,7 @@ export async function tidyMemories() {
   if (tidyBtn) {
     tidyBtn.disabled = true;
     tidyBtn.textContent = '';
-    // Drop the button border while the whirlpool spins — just the spinner,
+    // Drop the button border while the whirlpool spins — just the 加载指示器,
     // no box around it (restored in the finally below).
     tidyBtn.style.border = 'none';
     tidyBtn.style.background = 'none';
@@ -928,7 +928,7 @@ export function renderMemoryList() {
 
       // Long-press anywhere on the card opens the same dropdown — mirrors the
       // documents library pattern. Skip when the touch starts on the kebab,
-      // checkbox, or another button (those have their own click handlers).
+      // checkbox, or another button (those have their own 点击处理器s).
       {
         let hold = null;
         let start = null;
@@ -1073,7 +1073,7 @@ export function updateMemoryCount() {
 
   const num = visible.length === scopeTotal ? `${scopeTotal}` : `${visible.length}/${scopeTotal}`;
   // Header (next to the "Memories" title) reads "N memories", like the
-  // Documents header. The bare number still feeds any tab badge if present.
+  // Documents header. The bare number still feeds any tab 徽章 if present.
   if (h2Count) h2Count.textContent = `${t('brain.memory_count', { n: num, word: scopeTotal === 1 && visible.length === scopeTotal ? t('brain.memory_singular') : t('brain.memory_plural') })}`;
   if (tabCount) tabCount.textContent = num;
 }

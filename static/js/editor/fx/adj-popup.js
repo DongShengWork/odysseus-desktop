@@ -634,7 +634,7 @@ export function createAdjPopupSystem({ composite, saveState, renderLayerPanel })
             const span = Math.max(1, xW - xB);
             let t = (x - xB) / span;
             t = Math.max(0.01, Math.min(0.99, t));
-            // 反转 placeHandles 映射：t = 1 - (log10(g)*0.5+0.5)。
+            // 反转 place处理 映射：t = 1 - (log10(g)*0.5+0.5)。
             const log10g = -((t - 0.5) * 2);
             p.gamma = Math.pow(10, log10g);
           }

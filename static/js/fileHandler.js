@@ -172,10 +172,10 @@ export async function uploadPending() {
     });
     if (!res.ok) {
       // Surface the failure instead of swallowing it. Previously a non-OK
-      // response (e.g. 429 rate limit, 413 too large) was ignored: the files
+      // response (e.g. 429 速率限制, 413 too large) was ignored: the files
       // silently vanished and the chat sent with no attachments, so the model
       // "didn't even see them" (issue #1346). Show the server's reason and keep
-      // pendingFiles so the strip re-renders for a retry (see finally below).
+      // pendingFiles so the strip re-renders for a 重试 (see finally below).
       let detail = '';
       try { const e = await res.json(); detail = e.detail || e.error || ''; } catch (_) {}
       _showToast(t('file.upload_failed') + (detail ? ': ' + detail : ` (HTTP ${res.status})`));

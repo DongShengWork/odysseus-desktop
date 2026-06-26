@@ -128,7 +128,7 @@ async function showModelSelector() {
         diceBtn.classList.remove('active');
       }
       renderModelRows();
-      // 移动端隐藏按钮标签 — 通过 toast 显示新状态。
+      // 移动端隐藏按钮标签 — 通过 提示条 显示新状态。
       uiModule.showToast(state._blindMode ? t('compare.blind_on') : t('compare.blind_off'));
       _updateModeLabel();
       _setModeHint(state._blindMode
@@ -886,7 +886,7 @@ async function showModelSelector() {
       }
       resolve(result);
     }
-    // （cancelBtn 已移除 — 覆盖层 X / 外部点击 / Esc 仍会调用 cleanup）
+    // （cancelBtn 已移除 — 覆盖层 X / 外部点击 / Esc 仍会调用 清理）
     startBtn.addEventListener('click', async () => {
       if (!_modelsLoaded) return;
       let selected = selections.filter(Boolean);
@@ -964,10 +964,10 @@ async function showModelSelector() {
       });
       probeCard.appendChild(skipBtn);
       probeOverlay.appendChild(probeCard);
-      // .compare-probe-overlay 的 CSS z-index 为 300，但 modalManager
+      // .compare-probe-overlay 的 CSS z-索引 为 300，但 modalManager
       // 在每次聚焦时会将每个打开的工具弹窗提升到该值之上（_modalTopZ
       // 从 300 开始递增）。因此 compare 弹窗通常会在探测覆盖层
-      // 之上，将其遮挡。从 compare 弹窗的当前有效 z-index 重新计算，
+      // 之上，将其遮挡。从 compare 弹窗的当前有效 z-索引 重新计算，
       // 使探测始终位于其上方一层。
       const _cmpModal = document.getElementById('compare-model-overlay');
       if (_cmpModal) {
@@ -1257,7 +1257,7 @@ async function showModelSelector() {
             setTimeout(() => { _clearProbeWaves(); probeOverlay.remove(); cleanup(true); if (window._updateCheckBtnState) window._updateCheckBtnState(); }, 300);
           }, 400);
         } else {
-          // 失败 — Skip 按钮被 Go Back / Start Anyway 行替换。
+          // 失败 — Skip 按钮被 Go Back / 启动 Anyway 行替换。
           skipBtn.style.display = 'none';
           // 部分失败 — 显示哪些失败了
           const failedNames = [];

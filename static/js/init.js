@@ -1,5 +1,5 @@
 // Odysseus UI — 初始化脚本
-// ES6 模块 — 从 index.html 内联脚本中提取
+// ES6 模块 — 从 索引.html 内联脚本中提取
 
 import Storage from './storage.js';
 
@@ -22,8 +22,8 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
   // 与浏览器中缓存的用户不同，则清除 localStorage + sessionStorage，
 // the previous user's last session id, last-used model, draft chat input,
 // or cached lists. The settings-tab Logout button already wipes on
-// explicit logout; this catches the cases where a different user signs
-// in without the previous one logging out cleanly.
+// explicit logout; this catches the cases where a different user 签名s
+// in without the previous one 日志记录 out cleanly.
 (async () => {
   try {
     const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
@@ -45,7 +45,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
       clearFreshComposerRestore();
     }
     localStorage.setItem(KEY, liveUser);
-    // Apply per-user privilege gates to the UI. The backend enforces these
+    // Apply per-user privilege gates to the UI. The 后端 enforces these
     // independently — this is purely cosmetic / "don't dangle controls the
     // user can't actually use." Privileges come from /api/auth/status; admins
     // always get the full set so this is a no-op for them.
@@ -88,9 +88,9 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     const shouldCollapse = (id in saved) ? saved[id] : !!_defaultCollapsed[id];
     if (shouldCollapse) section.classList.add('collapsed');
   });
-  // Sessions-section notification dot: clear when the section becomes
+  // Sessions-section 通知 dot: clear when the section becomes
   // expanded. Watch the class with MutationObserver so we don't need a
-  // click handler (which would race the section-management one).
+  // 点击处理器 (which would race the section-management one).
   const sessionsSection = document.getElementById('sessions-section');
   if (sessionsSection) {
     new MutationObserver(() => {

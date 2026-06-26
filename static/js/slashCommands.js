@@ -339,7 +339,7 @@ function _submitComposedMessage(text) {
   const msgInput = document.getElementById('message');
   const form = document.getElementById('chat-form');
   if (!msgInput || !form) return false;
-  // The slash handler and app-level form debounce must both release before
+  // The slash handler and app-level form 防抖 must both release before
   // sending the pinned prompt, otherwise the follow-up submit is dropped.
   setTimeout(() => {
     msgInput.value = text;
@@ -1245,8 +1245,8 @@ async function _cmdWorkspace(args, ctx) {
   }
   if (sub === 'set' || sub === 'cd' || sub === 'use') {
     if (!rest) { slashReply('Usage: <code>/workspace set /absolute/path</code>'); return true; }
-    // Validate server-side before persisting so the pill never claims a
-    // workspace the backend will refuse to bind (typo, file path, deleted
+    // 验证 server-side before persisting so the pill never claims a
+    // workspace the 后端 will refuse to bind (typo, 文件路径, deleted
     // folder, sensitive dir, filesystem root).
     workspaceModule.vetAndSetWorkspace(rest).then(({ ok, path }) => {
       if (ok) slashReply(`Workspace set: <code>${uiModule.esc(path)}</code>`);
@@ -2114,7 +2114,7 @@ async function _cmdDemo(args, ctx) {
     // Keep the draft-restore mechanism alive for a few seconds AFTER the
     // tour visually ends, because the closing `typewriterReply` and any
     // async stragglers can clear #message in between resolve('next') and
-    // the user actually reading the text. Hand-off to a deferred cleanup.
+    // the user actually reading the text. Hand-off to a deferred 清理.
     setTimeout(() => {
       if (_msgEl && _onTyped) _msgEl.removeEventListener('input', _onTyped);
       if (_draftObserver) _draftObserver.disconnect();
@@ -2262,7 +2262,7 @@ async function _cmdDemo(args, ctx) {
 
   // 浮动光环覆盖层 — 通过 getBoundingClientRect 定位到目标上。
   // 返回一个带有 .update() 和 .destroy() 的句柄。我们使用这个而不是
-  // 目标上的 CSS class，因为每个目标的样式（outline、box-shadow）
+  // 目标上的 CSS 类，因为每个目标的样式（outline、box-shadow）
   // 和裁剪祖先会吞掉光晕。
   function makeHalo(target) {
     const halo = document.createElement('div');
@@ -2363,13 +2363,13 @@ async function _cmdDemo(args, ctx) {
         });
         if (!matches) return;
         _advanced = true;
-        // 先 resolve — 即使 cleanup 中抛出异常，我们仍然推进。
+        // 先 resolve — 即使 清理 中抛出异常，我们仍然推进。
         resolve('clicked');
         try { cleanup(); } catch (err) { console.warn('tour cleanup:', err); }
       };
       // Advance on Enter so the user can hit "send" naturally to finish
       // the tour. We deliberately do NOT advance on every input event —
-      // doing so used to tear down the tooltip's click handler the moment
+      // doing so used to tear down the 提示's 点击处理器 the moment
       // the user typed a single character, leaving the `→` button visible
       // but unclickable, and the typed draft vulnerable to later clears.
       // 我们还对 Enter 执行 stopPropagation+preventDefault，使其
@@ -2381,7 +2381,7 @@ async function _cmdDemo(args, ctx) {
         const ta = document.getElementById('message');
         if (!ta || !ta.value.trim()) return;
         // 快照用户输入的内容。如果有任何异步操作在现在和下一次
-        // 绘制之间清除 textarea（typewriterReply、submit-debounce 重置等），
+        // 绘制之间清除 textarea（typewriterReply、submit-防抖 重置等），
         // 我们显式地将其恢复。
         const saved = ta.value;
         e.preventDefault();
@@ -2441,7 +2441,7 @@ async function _cmdDemo(args, ctx) {
         // 在捕获阶段同时监听 click + pointerdown + mousedown，
         // 在 document 和目标上都监听，这样即使上游的任何处理器
         // 调用了 preventDefault/stopPropagation，我们仍然能捕获到。
-        // 通过 cleanup() 内部的 resolved 守卫，我们只 resolve 一次。
+        // 通过 清理() 内部的 resolved 守卫，我们只 resolve 一次。
         ['click', 'pointerdown', 'mousedown'].forEach(evt => {
           document.addEventListener(evt, onDocClickCapture, true);
           targets.forEach(t => t.addEventListener(evt, onDocClickCapture, true));
@@ -2476,7 +2476,7 @@ async function _cmdDemo(args, ctx) {
     _st.web_agent = false;
     Storage.setJSON(Storage.KEYS.TOGGLES, _st);
     // If the web button is currently on, click it to fully unwind it via the
-    // existing handler (covers any state the click handler tracks that we
+    // existing handler (covers any state the 点击处理器 tracks that we
     // can't see from here).
     const _wbtn = document.getElementById('web-toggle-btn');
     if (_wbtn && _wbtn.classList.contains('active')) _wbtn.click();
@@ -2704,7 +2704,7 @@ async function _cmdTourCompare(args, ctx) {
 
   // ── 阶段 1：模型选择器模态框 ──
   // 将每个选择器限定在 #compare-model-overlay 内，以免意外
-  // 匹配 Group Chat 面板的 .compare-parallel-toggle（index.html 第 1053 行），
+  // 匹配 Group Chat 面板的 .compare-parallel-toggle（索引.html 第 1053 行），
   // 它具有相同的类名并且是隐藏的 — 其零边界矩形
   // 将工具提示放在了左上角。
   const phase1 = [
@@ -4865,7 +4865,7 @@ async function _cmdTourLibrary(args, ctx) {
 
 async function _cmdPrompt(args, ctx) {
   // 从 compare 模板中拉取适合聊天的提示。跳过
-  // `image` 分类（原始图片生成提示 — 不适合文本聊天）
+  // `镜像` 分类（原始图片生成提示 — 不适合文本聊天）
   // 和 `search`（裸关键词查询，不是完整提示）。
   const CHAT_CATS = ['chat', 'code', 'agent', 'html'];
   const all = [];

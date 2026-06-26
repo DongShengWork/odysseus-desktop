@@ -336,7 +336,7 @@ async function _addPane(anchorBtn) {
 
   // Position dropdown relative to the viewport (position: fixed) so it
   // can't end up off-screen even when the toolbar has scrolled or the
-  // chat-container is wider than the viewport.
+  // chat-容器 is wider than the viewport.
   const btnRect = anchorBtn.getBoundingClientRect();
   dropdown.style.position = 'fixed';
   const vw = window.innerWidth;
@@ -344,7 +344,7 @@ async function _addPane(anchorBtn) {
   const margin = 8;
   // 先渲染到屏幕外来测量下拉菜单的实际大小。
   // 提前将宽度限制在视口范围内，避免长模型名将下拉菜单推到屏幕边缘之外，
-  // 并将 z-index 提升到窗格之上。
+  // 并将 z-索引 提升到窗格之上。
   dropdown.style.left = '-9999px';
   dropdown.style.top = '0';
   dropdown.style.maxWidth = (vw - margin * 2) + 'px';

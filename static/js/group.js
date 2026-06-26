@@ -623,11 +623,11 @@ export async function startGroup(models, parentSessionId) {
     // 它选中的不是父会话，那么中间的选择会话调用
     // 会调用 stopGroup()（清除 GROUP_STATE_KEY）——所以
     // 下面明确的 selectSession 会发现没有状态，从而进入普通聊天。
-    // loadSessions 的目标解析优先级为：URL hash → currentSessionId →
-    // lastSaved → 最近会话。将 hash 和 currentSessionId 
+    // loadSessions 的目标解析优先级为：URL 哈希 → currentSessionId →
+    // lastSaved → 最近会话。将 哈希 和 currentSessionId
     // 都指向父会话，使它确定性地定位到群组会话，
     // 不会触发中间的选择来清除群组状态。（仅设置 currentSessionId
-    // 是不够的——旧的 hash 优先级比它高。）
+    // 是不够的——旧的 哈希 优先级比它高。）
     try { history.replaceState(null, '', '#' + _parentSessionId); } catch (e) {}
     window.sessionModule.setCurrentSessionId(_parentSessionId);
     await window.sessionModule.loadSessions();

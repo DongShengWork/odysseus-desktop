@@ -126,7 +126,7 @@ export function wireKeyboardShortcuts(deps) {
         e.stopPropagation();
         addEmptyLayer();
       }
-      // 魔棒选区：Delete = 擦除像素。Ctrl+X = 剪切到
+      // 魔棒选区：删除 = 擦除像素。Ctrl+X = 剪切到
       // 剪贴板 + 新建图层 + 擦除。Ctrl+C = 复制。
       // （旧代码中的 `&& !_wandActive` 子句引用了一个未声明的
       // 变量 — 已移除；魔棒仅用于选区，没有

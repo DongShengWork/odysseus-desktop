@@ -652,7 +652,7 @@ export function applyModelColor(roleEl, modelName) {
       } else if (info && info.ctx) {
         html += '<div><span class="ctx-label">Context</span> <span id="_ctx-val">' + _fmtCtx(info.ctx) + ' tokens</span></div>';
       }
-      // Fetch real context from server async
+      // 获取 real context from server async
       if (!_realCtx && window.sessionModule) {
         const _sid = window.sessionModule.getCurrentSessionId();
         if (_sid) {
@@ -671,7 +671,7 @@ export function applyModelColor(roleEl, modelName) {
           }).catch(() => {});
         }
       }
-      // Show configured max tokens if set
+      // Show configured 最大令牌数 if set
       if (window.presetsModule) {
         const _pid = window.presetsModule.getSelectedPreset();
         const _preset = _pid ? window.presetsModule.getPreset(_pid) : null;
@@ -722,10 +722,10 @@ export function isLocalEndpoint(url) {
   if (!host) return true;
   if (host === 'localhost' || host === '0.0.0.0' || host === 'host.docker.internal' || host.endsWith('.local')) return true;
   if (typeof window !== 'undefined' && window.location && host === window.location.hostname) return true;
-  // A single-label hostname (no dot) is an internal/Docker service name
+  // A single-label hostname (no dot) is an internal/Docker 服务 name
   // (e.g. "nim-nano", "llamaswap", "nemotron-super-49b") or a LAN shortname —
   // never a public API, which always needs an FQDN. Treat as local → free.
-  // (Without this, container-name endpoints get billed at cloud rates because
+  // (Without this, 容器-name endpoints get billed at cloud rates because
   // the pricing table matches on a name substring, e.g. "nemotron".)
   if (!host.includes('.')) return true;
   if (/^127\./.test(host)) return true;
@@ -806,7 +806,7 @@ export function resetSessionCost(sessionId) {
 export function updateSessionCostUI() {
   const el = document.getElementById('session-cost-display');
   if (!el) return;
-  // Non-billable endpoint? Hide the badge and clear stale cost that a previous
+  // Non-billable endpoint? Hide the 徽章 and clear stale cost that a previous
   // cloud-rate calculation may have left in localStorage for this session.
   const _url = _currentEndpointUrl();
   if (!isCostTrackedEndpoint(_url)) {
@@ -1079,7 +1079,7 @@ document.addEventListener('click', function(e) {
 document.addEventListener('click', function(e) {
   // Walk past Text nodes — clicking link text yields a Text node target
   // whose .closest is undefined, so preventDefault never fires and the
-  // browser performs a default hash-navigation that resets the session.
+  // browser performs a default 哈希-navigation that resets the session.
   let _t = e.target;
   while (_t && _t.nodeType === Node.TEXT_NODE) _t = _t.parentElement;
   const a = _t && _t.closest && _t.closest('a[href]');
@@ -1236,7 +1236,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
         import('./gallery.js'),
         import('./galleryEditor.js'),
       ]);
-      // Ensure the Gallery modal is open so the editor has a container
+      // Ensure the Gallery modal is open so the editor has a 容器
       // to render into; switch its tabs to the Edit tab.
       galleryMod.default.openGallery();
       const modal = document.getElementById('gallery-modal');
@@ -1314,7 +1314,7 @@ export function hideWelcomeScreen() {
   const cc = document.getElementById('chat-container');
   if (ws) ws.classList.add('hidden');
   if (cc) cc.classList.remove('welcome-active');
-  // Update send button — switches from muted arrow to + Chat
+  // 更新 send button — switches from muted arrow to + Chat
   if (window._updateSendBtnIcon) setTimeout(window._updateSendBtnIcon, 50);
   const ib = document.getElementById('incognito-btn');
   if (ib) ib.style.display = ib.classList.contains('active') ? '' : 'none';
@@ -1342,11 +1342,11 @@ export function showWelcomeScreen() {
   const wn = document.querySelector('.welcome-name');
   if (wn) {
     wn.style.animation = 'none';
-    // force reflow so the next assignment registers as a new animation
+    // force reflow so the next as签名ment registers as a new animation
     void wn.offsetHeight;
     wn.style.animation = '';
   }
-  // Update send button — switches from + Chat to muted arrow on empty session
+  // 更新 send button — switches from + Chat to muted arrow on empty session
   if (window._updateSendBtnIcon) setTimeout(window._updateSendBtnIcon, 50);
   const ib = document.getElementById('incognito-btn');
   const _researchChk = document.getElementById('research-toggle');
@@ -1416,10 +1416,10 @@ export function createMsgFooter(msgElement) {
     }},
   ];
 
-  // Filter out unavailable actions (e.g. TTS when not enabled)
+  // 过滤 out unavailable actions (e.g. TTS when not enabled)
   const availableActions = allActions.filter(a => !a.available || a.available());
 
-  // Determine which 3 to show: use recent order, fallback to defaults
+  // Determine which 3 to show: use recent order, 回退 to defaults
   const recent = _getRecentActions();
   const defaults = ['copy', 'delete', 'fork'];
   const order = recent.length > 0 ? recent : defaults;
@@ -1433,7 +1433,7 @@ export function createMsgFooter(msgElement) {
   const visible = sorted.slice(0, _MAX_VISIBLE);
   const overflow = sorted.slice(_MAX_VISIBLE);
 
-  // Render visible buttons
+  // 渲染 visible buttons
   function _addBtn(action, container) {
     const btn = _makeActionBtn(action.cls, action.title, action.html ? '' : action.icon, (e) => {
       _trackAction(action.id);
@@ -1456,7 +1456,7 @@ export function createMsgFooter(msgElement) {
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       // Toggle overflow menu — close any existing one first (through its own
-      // dismiss so the Escape registry entry goes with it).
+      // dismiss so the Escape 仓库 entry goes with it).
       const existing = document.querySelector('.msg-overflow-menu');
       if (existing) {
         if (typeof existing._dismiss === 'function') existing._dismiss(); else existing.remove();
@@ -1704,10 +1704,10 @@ export function displayMetrics(messageElement, metrics) {
   const model = metrics.model || 'Unknown';
   const cost = _billableCost(model, inputTokens, outputTokens);
 
-  // Nothing useful to show — bail out (only if ALL metrics are missing)
+  // Nothing useful to show — bail out (only if ALL 指标 are missing)
   if (!responseTime && !outputTokens && tps == null && !ctxPct) return;
 
-  // Accumulate session cost (only on fresh metrics, not history reload)
+  // Accumulate session cost (only on fresh 指标, not history reload)
   if (!metrics._fromHistory) {
     const _sid = window.sessionModule && window.sessionModule.getCurrentSessionId();
     if (_sid && cost !== null) {
@@ -1805,7 +1805,7 @@ export function displayMetrics(messageElement, metrics) {
     bindMenuDismiss(popup, () => popup.remove());
   });
 
-  // Store real context length for model info popup
+  // Store real 上下文长度 for model info popup
   if (metrics.context_length && metrics.model) {
     if (!window._realContextLengths) window._realContextLengths = {};
     window._realContextLengths[metrics.model] = metrics.context_length;
@@ -1867,7 +1867,7 @@ export function displayMetrics(messageElement, metrics) {
           if (!sid) return;
           popup.remove();
 
-          // Add a spinner bubble at the bottom of chat
+          // 添加 a 加载指示器 bubble at the bottom of chat
           const chatBox = document.getElementById('chat-history');
           if (!chatBox) return;
           const compactMsg = document.createElement('div');
@@ -2023,7 +2023,7 @@ export function addMessage(role, content, modelName, metadata) {
           wrap.appendChild(roleEl);
           const body = document.createElement('div');
           body.className = 'body';
-          // Check if this is the last text round — sources go on top of final response
+          // 检查 if this is the last text round — sources go on top of final response
           var agentSourcesPrefix = '';
           var isLastTextRound = true;
           for (let rr = r + 1; rr < maxRound; rr++) {
@@ -2089,7 +2089,7 @@ export function addMessage(role, content, modelName, metadata) {
                 let cls = 'diff-ctx', text = line;
                 if (line.startsWith('+++') || line.startsWith('---')) cls = 'diff-meta';
                 else if (line.startsWith('@@')) cls = 'diff-hunk';
-                // Drop the leading diff marker (+/-/space) — colour encodes add/del.
+                // Drop the leading diff marker (+/-/space) — colour 编码s add/del.
                 else if (line.startsWith('+')) { cls = 'diff-add'; text = line.slice(1); }
                 else if (line.startsWith('-')) { cls = 'diff-del'; text = line.slice(1); }
                 else if (line.startsWith(' ')) { text = line.slice(1); }
@@ -2105,7 +2105,7 @@ export function addMessage(role, content, modelName, metadata) {
             // Click handling is delegated globally \u2014 see chat.js init.
             threadWrap.appendChild(node);
           }
-          // Check if next round has text — extend line down to connect
+          // 检查 if next round has text — extend line down to connect
           const nextTxt = (roundTexts[r + 1] || '').trim();
           if (nextTxt) threadWrap.classList.add('has-bottom');
           lastWrap = threadWrap;
@@ -2135,7 +2135,7 @@ export function addMessage(role, content, modelName, metadata) {
     // --- Wake-task / supervisor system check-in ---
     // The self-wake mechanism injects "Did you finish?" as a user message
     // (or persisted history shows a "[Task] Self-check: <id>" envelope)
-    // so the agent loop re-enters and re-checks status. Render as a
+    // so the 智能体循环 re-enters and re-checks status. 渲染 as a
     // normal user-style bubble — same chrome as a real user message,
     // just with role "Supervisor" and a short summary body — instead of
     // a slim system chip. Matches chat style and integrates cleanly
@@ -2149,7 +2149,7 @@ export function addMessage(role, content, modelName, metadata) {
       }
     }
     if (_isWakeCheck) {
-      // Supervisor self-check messages are an internal control signal —
+      // Supervisor self-check messages are an internal control 签名al —
       // skip rendering entirely so they don't show up in the conversation.
       return null;
     }
@@ -2187,8 +2187,8 @@ export function addMessage(role, content, modelName, metadata) {
 
     let text = markdownModule.squashOutsideCode(stripToolBlocks(textRaw || ''));
 
-    // For user messages, pull out vision-model image descriptions ([Image: name]\n
-    // <multi-line desc>) into a collapsible "image description" section. Done for
+    // For user messages, pull out vision-model 镜像 descriptions ([Image: name]\n
+    // <multi-line desc>) into a collapsible "镜像 description" section. Done for
     // ALL user messages (not just ones with attachment metadata) so it rebuilds
     // from the stored text even after a browser restart drops the cached attachments.
     const attachments = metadata?.attachments;
@@ -2199,7 +2199,7 @@ export function addMessage(role, content, modelName, metadata) {
         (_m, name, desc) => { const d = desc.trim(); if (d) _visionBlocks.push({ name: name, desc: d }); return ''; }
       );
     }
-    // With attachments present, also strip the embedded file/PDF/image-marker text.
+    // With attachments present, also strip the embedded file/PDF/镜像-marker text.
     if (role === 'user' && attachments?.length) {
       // Strip === File: ... === blocks, [PDF content]: blocks, and [Image attached: ...] lines
       text = text
@@ -2240,13 +2240,13 @@ export function addMessage(role, content, modelName, metadata) {
     }
 
     // The vision/OCR caption is stripped from the displayed text above (so the
-    // bubble doesn't show the raw model output) but no longer rendered as an
+    // bubble doesn't show the raw 模型输出) but no longer rendered as an
     // inline collapsible — the user can still view/edit it via the "Caption"
     // button on the photo thumbnail. _visionBlocks is intentionally left unused
     // so the parsing-and-strip side-effect on `text` still happens.
     void _visionBlocks;
 
-    // Add "Open Visual Report" button for persisted research messages
+    // 添加 "Open Visual Report" button for persisted research messages
     if (role === 'assistant' && metadata?.research) {
       var _sid = window.sessionModule?.getCurrentSessionId?.();
       if (_sid) _appendReportButton(b, _sid);
@@ -2264,13 +2264,13 @@ export function addMessage(role, content, modelName, metadata) {
       const rawDocMatch = b.innerHTML.match(/In the document, edit this specific text \((lines? [\d–\-]+)\)/);
       if (rawDocMatch) {
         const lineRef = rawDocMatch[1];
-        // Extract instruction text (after "Instruction: ")
+        // 提取 instruction text (after "Instruction: ")
         const instrMatch = b.textContent.match(/Instruction:\s*([\s\S]*)$/);
         const instrText = instrMatch ? instrMatch[1].trim() : '';
         b.innerHTML = '<span class="doc-edit-tag">Doc edit: ' + lineRef + '</span> ' + markdownModule.processWithThinking(instrText);
       }
 
-      // Render attachment cards
+      // 渲染 attachment cards
       if (attachments?.length) {
         b.appendChild(buildAttachCards(attachments));
       }
@@ -2279,7 +2279,7 @@ export function addMessage(role, content, modelName, metadata) {
     wrap.appendChild(r);
     wrap.appendChild(b);
 
-    // Add stopped indicator + continue button for messages that were stopped by user
+    // 添加 stopped indicator + continue button for messages that were stopped by user
     if (role === 'assistant' && metadata?.stopped) {
       const stoppedIndicator = document.createElement('div');
       stoppedIndicator.className = 'stopped-indicator';
@@ -2344,7 +2344,7 @@ export function addMessage(role, content, modelName, metadata) {
         wrap.dataset.raw = v.raw;
       }
 
-      // Render nav
+      // 渲染 nav
       const nav = document.createElement('span');
       nav.className = 'variant-nav';
       nav.addEventListener('click', (e) => e.stopPropagation());
@@ -2418,12 +2418,12 @@ export function addMessage(role, content, modelName, metadata) {
       // The "N pinned" / "N recalled" pill in the footer reads from
       // wrap._memoriesUsed — propagate it from saved metadata so the pill
       // survives a page refresh (live-stream path sets it via SSE, but
-      // history reloads need this assignment).
+      // history reloads need this as签名ment).
       if (metadata?.memories_used?.length) wrap._memoriesUsed = metadata.memories_used;
       wrap.appendChild(createMsgFooter(wrap));
       if (metadata) displayMetrics(wrap, metadata);
     } else {
-      // Add timestamp to user header (like AI messages)
+      // 添加 时间戳 to user header (like AI messages)
       r.appendChild(roleTimestamp(metadata?.timestamp));
 
       wrap.appendChild(createUserMsgFooter(wrap));

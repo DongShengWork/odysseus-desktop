@@ -24,7 +24,7 @@ import {
 } from './cookbook.js';
 import uiModule from './ui.js';
 
-// Tiny HTML-escape — keeps the file standalone instead of leaning on a
+// Tiny HTML-转义 — keeps the file standalone instead of leaning on a
 // shared helper that may not be exported from this module's import surface.
 function _diagEsc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -66,7 +66,7 @@ import spinnerModule from './spinner.js';
 // ── Error diagnosis ──
 
 // Re-exported so callers (Launch-tab pre-flight) can deep-link into the
-// Dependencies tab + auto-expand a specific backend's recipe panel and
+// Dependencies tab + auto-expand a specific 后端's recipe panel and
 // pre-select the model they were trying to launch.
 export function openCookbookDependencies(pkgName = '', opts = {}) {
   _openCookbookDependencies(pkgName, opts);
@@ -266,7 +266,7 @@ export const ERROR_PATTERNS = [
   {
     pattern: /403 Forbidden|401 Unauthorized|Access to model.*is restricted|gated repo|not in the authorized list|awaiting a review/i,
     message: 'Gated model. Your HF token IS being sent — but its account must be granted access first: open the model page, accept the license, and wait for approval (Meta models can take a while).',
-    // Extract repo name from error text to build HF link
+    // 提取 repo name from error text to build HF link
     _repoPattern: /Access to model\s+(\S+)\s+is restricted|gated repo.*?huggingface\.co\/([^\s/]+\/[^\s/]+)/i,
     fixes: [
       { label: 'Request access on HF', action: (panel, _text) => {
@@ -286,7 +286,7 @@ export const ERROR_PATTERNS = [
     message: 'Single-file checkpoint needs a base model for missing components (text encoder, VAE). The base model may be gated — accept the license and set your HF token.',
     fixes: [
       { label: 'Request access to base model', action: (panel, _text) => {
-        // Extract gated repo from error, or infer from model name
+        // 提取 gated repo from error, or infer from model name
         const gated = _text && _text.match(/Access to model\s+(\S+)\s+is restricted/i);
         const base = _text && _text.match(/config=([^\s,)]+)/i);
         const model = _text && _text.match(/load model from\s+(\S+)/i);
@@ -570,7 +570,7 @@ export const ERROR_PATTERNS = [
     // use. If the system /usr/bin/nvcc is older than CUDA 11.8 it can't
     // target sm_89/sm_90 (Ada/Hopper), and the engine workers die before
     // they can report a useful traceback. Two quick paths out: pick a
-    // non-flashinfer attention backend, or set CUDACXX to a newer nvcc
+    // non-flashinfer attention 后端, or set CUDACXX to a newer nvcc
     // (vLLM installs nvidia-cuda-nvcc into the venv — point at that).
     pattern: /nvcc fatal\s+:\s+Unsupported gpu architecture 'compute_\d+'/i,
     message: 'FlashInfer is JIT-compiling sampling kernels with an nvcc too old for this GPU (no sm_89 / sm_90 support — pre-CUDA 11.8). Changing the attention backend does not help — flashinfer JITs the SAMPLER too. The clean fix is to set VLLM_USE_FLASHINFER_SAMPLER=0 so vLLM uses its native sampler instead.',
@@ -578,7 +578,7 @@ export const ERROR_PATTERNS = [
     fixes: [
       { label: 'Retry with VLLM_USE_FLASHINFER_SAMPLER=0', action: (panel) => _serveAutoRetryReplace(panel, '', 'VLLM_USE_FLASHINFER_SAMPLER=0 ', { prepend: true }) },
       { label: 'Uninstall flashinfer-python', action: () => {
-        // Hard fallback: vLLM 0.22 reaches into flashinfer for sampling kernels
+        // Hard 回退: vLLM 0.22 reaches into flashinfer for sampling kernels
         // even with VLLM_USE_FLASHINFER_SAMPLER=0 in some configs. Removing
         // the package forces it onto the native sampler.
         const _vp = (_envState.env === 'venv' && _envState.envPath)
@@ -618,7 +618,7 @@ export const ERROR_PATTERNS = [
     // problem, so it must never suggest killing vLLM.
     match: (text) => {
       const TAIL = text.slice(-6000);
-      // A serve script can run a fallback build and then start serving fine —
+      // A serve script can run a 回退 build and then start serving fine —
       // don't flag a stale build error once the server is up.
       if (/Application startup complete|"(?:GET|POST)\s+\/v1\/[^"]+ HTTP\/[\d.]+"\s*2\d\d|Uvicorn running on|server is listening on https?:\/\//i.test(TAIL)) return false;
       return /Failed to build\b|subprocess-exited-with-error|Could not build wheels|metadata-generation-failed/i.test(TAIL);

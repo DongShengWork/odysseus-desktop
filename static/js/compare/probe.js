@@ -30,7 +30,7 @@ async function _checkUnprobed() {
     } catch (_) { /* spinner 尽力而为 */ }
   }
 
-  // 快速内联探测 — 用 toast 显示结果
+  // 快速内联探测 — 用 提示条 显示结果
   const isBlind = state._blindMode;
   let ok = 0, fail = 0;
   try {

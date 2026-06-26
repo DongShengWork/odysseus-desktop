@@ -344,7 +344,7 @@ export function createLayerPanelRenderer(deps) {
         controls.appendChild(mergeDownBtn);
       }
 
-      // Delete — shown for every layer except when this is the last
+      // 删除 — shown for every layer except when this is the last
       // remaining one. Base photo is deletable too; Ctrl+Z brings it
       // back from history. Extra confirm for the base layer.
       if (state.layers.length > 1) {
@@ -570,7 +570,7 @@ export function createLayerPanelRenderer(deps) {
       }
     }
 
-    // Wire the shared dragSort module — limit drag-init to the grip
+    // Wire the shared drag排序 module — limit drag-init to the grip
     // handle so row body clicks still activate. Called every render
     // because `enable()` cleans up the previous instance keyed on
     // 以 instanceKey 为键的上一个实例。

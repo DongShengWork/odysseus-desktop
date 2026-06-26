@@ -108,7 +108,7 @@ function _cleanAllowedHtmlOnce(htmlString) {
     }
     for (const attr of Array.from(el.attributes)) {
       const name = attr.name.toLowerCase();
-      // Drop every inline event handler (onerror, onclick, onmouseover, ...)
+      // Drop every inline 事件处理器 (onerror, onclick, onmouseover, ...)
       // and srcdoc (a frame-less script vector).
       if (name.startsWith('on') || name === 'srcdoc') {
         el.removeAttribute(attr.name);
@@ -243,7 +243,7 @@ function normalizePlainThinking(text) {
  * Extract all complete thinking blocks and remaining content
  */
 export function extractThinkingBlocks(text) {
-  // Handle malformed patterns: <think></think>\n...actual thinking...\n</think>
+  // 处理 malformed patterns: <think></think>\n...actual thinking...\n</think>
   // Some models emit an empty <think></think> then put thinking text outside,
   // closed by a second orphaned </think>.
   let normalized = normalizePlainThinking(text);
@@ -253,10 +253,10 @@ export function extractThinkingBlocks(text) {
     return '<think>' + content.trim() + '</think>';
   });
 
-  // Merge consecutive <think> blocks (some models split thinking across multiple tags)
+  // 合并 consecutive <think> blocks (some models split thinking across multiple tags)
   normalized = normalized.replace(/<\/think(?:ing)?>\s*<think(?:ing)?(?:\s+[^>]*)?>/gi, '\n\n');
 
-  // Extract thinking time attribute if present
+  // 提取 thinking time attribute if present
   const timeMatch = normalized.match(/<think(?:ing)?\s+time="([\d.]+)"/i);
   const thinkingTime = timeMatch ? timeMatch[1] : null;
   // Strip time attribute for content extraction
@@ -266,13 +266,13 @@ export function extractThinkingBlocks(text) {
   const thinkingBlocks = [];
   let match;
 
-  // Extract all complete thinking blocks
+  // 提取 all complete thinking blocks
   while ((match = thinkRegex.exec(normalized)) !== null) {
     const content = match[1].trim();
     if (content) thinkingBlocks.push(content);
   }
 
-  // Remove all complete <think>/<thinking> blocks
+  // 移除 all complete <think>/<thinking> blocks
   let cleanContent = normalized.replace(thinkRegex, '');
 
   // If there's an unclosed tag, decide between two cases:
@@ -302,7 +302,7 @@ export function extractThinkingBlocks(text) {
     }
   }
 
-  // Handle orphaned </think> with no opening tag — text before it is leaked thinking
+  // 处理 orphaned </think> with no opening tag — text before it is leaked thinking
   const orphanMatch = cleanContent.match(/^([\s\S]+?)<\/think(?:ing)?>/i);
   if (orphanMatch && orphanMatch[1].trim()) {
     thinkingBlocks.push(orphanMatch[1].trim());
@@ -312,7 +312,7 @@ export function extractThinkingBlocks(text) {
   // Strip any remaining orphaned closing tags
   cleanContent = cleanContent.replace(/<\/think(?:ing)?>/gi, '');
 
-  // Merge all thinking blocks into one — no reason to show multiple dropdowns
+  // 合并 all thinking blocks into one — no reason to show multiple dropdowns
   const mergedBlocks = thinkingBlocks.length > 1
     ? [thinkingBlocks.join('\n\n')]
     : thinkingBlocks;
@@ -402,7 +402,7 @@ function _useSvgEmoji() {
 }
 
 // `opts.shortcodes` (default true) controls the issue-#345 `:name:` → emoji
-// expansion. Chat passes it through as true; document/email body renderers pass
+// expansion. Chat passes it through as true; document/邮件正文 renderers pass
 // false so author-typed `:shortcode:` text stays literal (see mdToHtml callers).
 // The Unicode-emoji → monochrome-SVG pass always runs regardless, so a real 😀
 // in a document still renders as the themed line icon as it always has.
@@ -460,12 +460,12 @@ export function processWithThinking(text) {
   const doneOnly = /^\s*\[DONE\]\s*$/i.test(visibleContent);
   const hadTrailingDone = !doneOnly && /(?:^|\n)\s*\[DONE\]\s*$/i.test(visibleContent);
 
-  // Add thinking sections (collapsed by default)
+  // 添加 thinking sections (collapsed by default)
   thinkingBlocks.forEach((block, index) => {
     html += createThinkingSection(block, index, thinkingTime);
   });
 
-  // Add the actual content
+  // 添加 the actual content
   if (doneOnly) {
     html += createTaskCompletedMarker();
   } else {
@@ -486,8 +486,8 @@ export function mdToHtml(src, opts) {
   const mermaidBlocks = [];
   let s = (src ?? '');
 
-  // Extract fenced code blocks before any markdown/HTML preservation passes.
-  // Otherwise placeholders from the allowed-HTML sanitizer (e.g.
+  // 提取 fenced 代码块s before any markdown/HTML preservation passes.
+  // Otherwise placeholders from the allowed-HTML 净化r (e.g.
   // ___ALLOWED_HTML_0___) can leak into quoted HTML/JS samples, because the
   // placeholder gets captured as literal code content and never restored inside
   // the final <pre><code> block.
@@ -498,7 +498,7 @@ export function mdToHtml(src, opts) {
       .replace(/^\s*\n+/, '')
       .replace(/\n+\s*$/g, '');
 
-    // Mermaid diagrams: render as diagram instead of code block
+    // Mermaid diagrams: render as diagram instead of 代码块
     if (lang && lang.toLowerCase() === 'mermaid') {
       const mermaidId = 'mermaid-' + Date.now() + '-' + mermaidBlocks.length;
       const raw = cleaned.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -539,7 +539,7 @@ export function mdToHtml(src, opts) {
     new RegExp(`\\[#(${ANCHOR_KIND}-[A-Za-z0-9_-]+)\\]`, 'g'),
     '[→ open](#$1)',
   );
-  // Case C: bare `#kind-id` in plain text — only when it's word-
+  // Case C: bare `#kind-id` in 纯文本 — only when it's word-
   // boundary delimited and NOT already inside a markdown link or
   // anchor syntax. Use a lookbehind for `](` or `[` to skip those.
   s = s.replace(
@@ -547,14 +547,14 @@ export function mdToHtml(src, opts) {
     '$1[#$2](#$2)',
   );
 
-  // Convert markdown images before links so ![alt](url) does not become
+  // 转换 markdown 镜像s before links so ![alt](url) does not become
   // literal "!" plus a normal link.
   s = s.replace(/!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (match, alt, url, title) => {
     return imageHtml(alt, url, title);
   });
 
-  // Convert markdown links [text](url) to clickable links
-  // Internal #hash links navigate in-page; external links open in new tab
+  // 转换 markdown links [text](url) to clickable links
+  // Internal #哈希 links navigate in-page; external links open in new tab
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
     return linkHtml(text, url);
   });
@@ -566,13 +566,13 @@ export function mdToHtml(src, opts) {
     (match, prefix, url) => `${prefix}${linkHtml(url, url)}`
   );
 
-  // Autolink scheme-less domains the model often emits as plain text
+  // Autolink scheme-less domains the model often emits as 纯文本
   // (e.g. "techcrunch.com/ai", "perplexity.ai", "www.wired.com"). The TLD
-  // allowlist keeps it from matching file names / versions ("package.json",
+  // allowlist keeps it from matching 文件名s / versions ("package.json",
   // "node.js", "v1.2.3"); the required start/[\s(<] prefix means domains
   // already inside an http link (preceded by "//") or an email ("@") are
   // skipped. Require the TLD to end at a real domain boundary so dotted code
-  // identifiers like `sklearn.metrics` do not link `sklearn.me` and leave
+  // identifiers like `sklearn.指标` do not link `sklearn.me` and leave
   // placeholder fragments in the remaining text.
   s = s.replace(
     /(^|[\s(<])((?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)*\.(?:com|org|net|io|ai|co|dev|app|gov|edu|news|info|tech|xyz|me)(?=$|[\/\s<>"'`\]).,;:!?])(?:\/[^\s<>"'`\])]*)?)/gi,
@@ -583,7 +583,7 @@ export function mdToHtml(src, opts) {
     }
   );
 
-  // Extract <details>...</details> blocks and replace with placeholders
+  // 提取 <details>...</details> blocks and replace with placeholders
   // Default to open so agent output is visible
   s = s.replace(/<details>([\s\S]*?)<\/details>/gi, (match) => {
     const placeholder = `___ALLOWED_HTML_${allowedHtmlBlocks.length}___`;
@@ -599,16 +599,16 @@ export function mdToHtml(src, opts) {
     return placeholder;
   });
 
-  // Now escape everything else
+  // Now 转义 everything else
   s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   s = s.replace(/\n{3,}/g, '\n\n');
 
-  // KaTeX math rendering (after code blocks are extracted, so math in code is safe)
+  // KaTeX math rendering (after 代码块s are extracted, so math in code is safe)
   const mathBlocks = [];
   if (window.katex) {
     // Display math: \[ ... \]  — GPT-style delimiter (gpt-5.x, Claude, etc.).
-    // Handle before $$/$ so all common delimiters render.
+    // 处理 before $$/$ so all common delimiters render.
     s = s.replace(/\\\[([\s\S]*?)\\\]/g, (match, math) => {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -618,7 +618,7 @@ export function mdToHtml(src, opts) {
       } catch (e) { return match; }
     });
     // Inline math: \( ... \)  — GPT-style inline delimiter. Single-line only
-    // ([^\n]) so a stray escaped paren in prose can't swallow across lines.
+    // ([^\n]) so a stray 转义d paren in prose can't swallow across lines.
     s = s.replace(/\\\(([^\n]*?)\\\)/g, (match, math) => {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -647,7 +647,7 @@ export function mdToHtml(src, opts) {
     });
   }
 
-  // Handle pipe tables
+  // 处理 pipe tables
   s = s.replace(/(?:^|\n)([^\n]*\|[^\n]*\|[^\n]*)(?:\n([^\n]*\|[^\n]*\|[^\n]*))*/g, (table) => {
     if (table.includes('___CODE_BLOCK_') || table.includes('___ALLOWED_HTML_')) return table;
 
@@ -723,7 +723,7 @@ export function mdToHtml(src, opts) {
   s = s.replace(/(?:^|\n)(<bq>[\s\S]*?)(?=\n(?!<bq>)|$)/g, m =>
     `<blockquote>${m.trim().replace(/<\/?bq>/g, (t) => t === '<bq>' ? '<p>' : '</p>')}</blockquote>`);
 
-  // Paragraphs - but NOT for code block placeholders or allowed HTML
+  // Paragraphs - but NOT for 代码块 placeholders or allowed HTML
   s = s.replace(/^(?!<h\d|<ul>|<ol>|<li|<oli>|<\/li>|<pre>|<blockquote>|<bq>|<hr>|___CODE_BLOCK_|___ALLOWED_HTML_|___MATH_BLOCK_|___MERMAID_BLOCK_)([^\n]+)$/gm, '<p>$1</p>');
 
   // Line breaks within paragraphs
@@ -733,7 +733,7 @@ export function mdToHtml(src, opts) {
     return `<p>${withLineBreaks}</p>`;
   });
 
-  // Remove empty paragraphs
+  // 移除 empty paragraphs
   s = s.replace(/<p><\/p>/g, '');
 
   // CRITICAL: Restore allowed HTML blocks first
@@ -751,7 +751,7 @@ export function mdToHtml(src, opts) {
     s = s.replace(`___MERMAID_BLOCK_${index}___`, block);
   });
 
-  // CRITICAL: Restore code blocks at the end
+  // CRITICAL: Restore 代码块s at the end
   codeBlocks.forEach((block, index) => {
     s = s.replace(`___CODE_BLOCK_${index}___`, block);
   });
@@ -831,9 +831,9 @@ window.odysseusInitMermaid = initMermaid;
 initMermaid();
 
 // Persist which thinking sections were expanded across page refreshes.
-// IDs are render-generated (Date.now-based) so we key by a stable hash of
-// the inner text content instead — same content reproduces the same hash on
-// reload. LocalStorage holds a Set of expanded hashes; we observe the chat
+// IDs are render-generated (Date.now-based) so we key by a stable 哈希 of
+// the inner 文本内容 instead — same content reproduces the same 哈希 on
+// reload. LocalStorage holds a 设置 of expanded 哈希es; we observe the chat
 // history and re-expand matching sections as they're inserted.
 const THINK_EXPANDED_KEY = 'odysseus-thinking-expanded';
 function _loadExpandedSet() {
@@ -869,7 +869,7 @@ function _setThinkingExpanded(content, toggle, header, expanded) {
   }
 }
 
-// Delegated click handler for thinking toggle (CSP-safe, no inline onclick)
+// Delegated 点击处理器 for thinking toggle (CSP-safe, no inline onclick)
 document.addEventListener('click', function(e) {
   const header = e.target.closest('.thinking-header[data-thinking-id]');
   if (!header) return;
@@ -881,7 +881,7 @@ document.addEventListener('click', function(e) {
   const willExpand = !content.classList.contains('expanded');
   _setThinkingExpanded(content, toggle, header, willExpand);
 
-  // Persist by content hash so the choice survives a refresh.
+  // Persist by content 哈希 so the choice survives a refresh.
   const hash = _hashThinkingContent(content);
   if (!hash) return;
   const set = _loadExpandedSet();
@@ -891,7 +891,7 @@ document.addEventListener('click', function(e) {
 });
 
 // Watch the chat history; whenever a thinking section appears, expand it if
-// its hash matches one the user previously expanded.
+// its 哈希 matches one the user previously expanded.
 (function _watchThinking() {
   if (window._thinkingWatcherWired) return;
   window._thinkingWatcherWired = true;

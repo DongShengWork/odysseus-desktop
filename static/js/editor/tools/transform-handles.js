@@ -244,7 +244,7 @@ export function getHandleAt(x, y) {
   const baseInnerR = (state.transformPendingH || h) / 2;
   const knob = knobPosition(cxh, cyh, rotRad, baseInnerR, rotOffset);
 
-  // 围绕中心旋转角点 — 必须与 drawHandles 匹配。
+  // 围绕中心旋转角点 — 必须与 draw处理 匹配。
   const preW = state.transformPendingW || w;
   const preH = state.transformPendingH || h;
   const cosA = Math.cos(rotRad);

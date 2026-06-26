@@ -216,7 +216,7 @@ function _applySnap(content, rect, zoneName) {
 function _unsnap(content) {
   const pre = content.dataset._tilePreSnap;
   if (!pre) return;
-  // 先清除 !important 吸附属性 — Object.assign 无法覆盖它们。
+  // 先清除 !important 吸附属性 — Object.as签名 无法覆盖它们。
   ['position', 'left', 'top', 'width', 'height', 'max-height', 'margin', 'transform']
     .forEach(p => content.style.removeProperty(p));
   try {

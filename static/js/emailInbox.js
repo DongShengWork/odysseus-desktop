@@ -109,7 +109,7 @@ export function init(documentModule) {
             applyEdgeDock(emailModal, 'left');
           }
           // Mobile: do NOT pre-mount the pane here. The load path (open/inject)
-          // mounts it exactly once when the doc is ready; the doc-view z-index
+          // mounts it exactly once when the doc is ready; the doc-view z-索引
           // rule slides it up OVER the email (which stays behind). Pre-mounting
           // here caused a double-mount — the early pane was torn down by the
           // compose session-switch, then remounted, which looked like a doc
@@ -633,7 +633,7 @@ function _createEmailItem(em) {
 async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', noteHint = '', prefilledBody = '') {
   const aiReplyMode = mode === 'ai-reply-fast' ? 'fast' : (mode === 'ai-reply-full' ? 'full' : '');
   const wantsAiReply = mode === 'ai-reply' || !!aiReplyMode;
-  // Body pre-fill from the agent's open_email_reply tool call takes the
+  // Body pre-fill from the agent's open_email_reply 工具调用 takes the
   // same insertion slot as an AI-suggested body — both land just before
   // the quoted-original block.
   let aiSuggestedBody = (typeof prefilledBody === 'string' && prefilledBody.trim()) ? prefilledBody.trim() : null;
@@ -830,9 +830,9 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
         let activeSid = '';
         try { activeSid = sessionModule?.getCurrentSessionId?.() || ''; } catch {}
         if (!activeSid) {
-          // No chat in flight — keep the old behavior of creating a scoped
+          // No chat in flight — keep the old behavior of creating a 权限范围d
           // email-thread chat, then RE-READ the now-current session id. The
-          // POST below requires a session_id (backend 400s without one), and
+          // POST below requires a session_id (后端 400s without one), and
           // the freshly-created chat is what should own the reply draft.
           await _createEmailChat(data);
           try { activeSid = sessionModule?.getCurrentSessionId?.() || ''; } catch {}
@@ -888,8 +888,8 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
           await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
           // Use the doc dict from the POST directly — avoids a 404 race
           // when the GET fires before the new row is visible to the read
-          // connection (or when caching is interfering). loadDocument's
-          // GET path can still be used as a fallback.
+          // connection (or when 缓存 is interfering). loadDocument's
+          // GET path can still be used as a 回退.
           if (_docModule.injectFreshDoc) {
             _docModule.injectFreshDoc(doc);
           } else {
@@ -1156,7 +1156,7 @@ async function _composeNew() {
   // 在 injectFreshDoc 处，会话 + 文档存在之后挂载一次。
   try {
     // /api/document 需要 session_id（如果为 null 返回 400），因此如果有活动聊天则复用 —
-    // the active chat if there is one — otherwise spin up an email-scoped
+    // the active chat if there is one — otherwise spin up an email-权限范围d
     // chat first, same pattern the reply path uses.
     let sid = '';
     try { sid = sessionModule?.getCurrentSessionId?.() || ''; } catch (_) {}

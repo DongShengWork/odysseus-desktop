@@ -140,7 +140,7 @@ export function createStrokePipeline({ activeLayer, getActiveMaskLayer, composit
       ctx.strokeStyle = state.color;
     }
 
-    // Mask canvases are always full-image (no per-layer offset), so
+    // Mask canvases are always full-镜像 (no per-layer offset), so
     // painting onto a mask uses canvas-coord origin too — same as
     // 也使用画布坐标原点 — 与 inpaint 相同。
     const onMaskOrInpaint = paintingMask || state.tool === 'inpaint';

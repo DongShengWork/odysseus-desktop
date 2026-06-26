@@ -97,7 +97,7 @@ export function wireRembgAndSharpen({
     if (g) { g.value = 0; document.getElementById('ge-rembg-grow-label').textContent = '0px'; syncRembgGrow(0); }
   });
 
-  // ── Live edge-cleanup tuner ──
+  // ── Live edge-清理 tuner ──
   // Snapshots the pristine cutout the moment it lands; slider tweaks
   // rebuild alpha from that snapshot.
   function bindRembgLiveTuner(layer) {

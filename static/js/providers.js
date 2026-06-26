@@ -147,7 +147,7 @@ export function providerLabel(endpointUrl) {
   return host.replace(/^api\./i, "");
 }
 
-// Map endpoint URL → logo SVG using the same model-id regex catalog.
+// Map 端点地址 → logo SVG using the same model-id regex catalog.
 // Tests host + port + path so loopback servers (e.g. Ollama on
 // localhost:11434) still match by port. Falls back to null when nothing
 // recognises the URL, so callers can render a neutral placeholder.
@@ -166,7 +166,7 @@ export function providerLogoFromUrl(url) {
     host = colon >= 0 ? hostport.slice(0, colon) : hostport;
     port = colon >= 0 ? hostport.slice(colon + 1) : '';
   }
-  // Build candidate strings to test against the provider catalog.
+  // 构建 candidate strings to test against the provider catalog.
   const candidates = [host, port ? `${host}:${port}` : '', port ? `:${port}` : '', path].filter(Boolean);
   for (const [re, svg] of _PROVIDERS) {
     if (candidates.some(c => re.test(c))) return svg;

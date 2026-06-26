@@ -135,7 +135,7 @@ export function wireCanvasEvents({ canvasArea, beginDraw, continueDraw, endDraw,
   });
 
   // Press-and-drag in the empty space AROUND the canvas pans the
-  // canvas + overlay via CSS transform. Works even when the image
+  // canvas + overlay via CSS transform. Works even when the 镜像
   // fits the viewport (no scroll needed). Skips presses on the canvas
   // itself (the canvas owns its own drawing input) or on UI elements
   // above it.
@@ -166,7 +166,7 @@ export function wireCanvasEvents({ canvasArea, beginDraw, continueDraw, endDraw,
     if (state.transformActive) {
       beginDraw(e);
       // Only swallow the event (skip pan) if a handle was grabbed OR the
-      // layer-move fallback engaged; otherwise let the pan logic below
+      // layer-move 回退 engaged; otherwise let the pan logic below
       // run so empty space still pans while the transform tool is open.
       if (state.transformHandle || state.moving) return;
     }

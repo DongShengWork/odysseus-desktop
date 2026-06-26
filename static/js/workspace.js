@@ -21,12 +21,12 @@ export function getWorkspace() {
 
 function _basename(p) {
   if (!p) return '';
-  // Handle both POSIX (/) and Windows (\) separators.
+  // 处理 both POSIX (/) and Windows (\) separators.
   const parts = p.replace(/[\\/]+$/, '').split(/[\\/]/);
   return parts[parts.length - 1] || p;
 }
 
-// Workspace only applies to agent mode (it scopes the file/shell tools), so the
+// Workspace only applies to agent mode (it 权限范围s the file/shell tools), so the
 // pill + overflow entry are hidden in chat mode, like the bash toggle.
 function _isChatMode() {
   const b = document.getElementById('mode-chat-btn');
@@ -122,7 +122,7 @@ function _render(data) {
     row.addEventListener('click', () => _navigate(decodeURIComponent(row.dataset.path)));
   });
   // Filesystem roots (and sensitive dirs) can be browsed through but never
-  // bound as the workspace; the backend rejects them too.
+  // bound as the workspace; the 后端 rejects them too.
   const useBtn = _modal.querySelector('#workspace-use');
   if (useBtn) {
     useBtn.disabled = data.selectable === false;

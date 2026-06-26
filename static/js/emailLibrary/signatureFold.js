@@ -1,11 +1,11 @@
-// static/js/emailLibrary/signatureFold.js
+// static/js/emailLibrary/签名atureFold.js
 //
 // 将原始 HTML 邮件正文转换为折叠结构的启发式算法 —
 // "Earlier reply" details 折叠引用的历史记录，以及 "Signature"
 // details 折叠尾部的公司免责声明/样板文本。
 //
 // All pure functions of HTML strings (and one DOM-mutating exception:
-// `_harvestAttribution` peels nodes off a container). No module state,
+// `_harvestAttribution` peels nodes off a 容器). No module state,
 // 无 fetch、无全局变量。图标（`_SIG_ICON`、`_QUOTE_ICON`）也放在这里，
 // since `_foldSummary` is the only caller and other modules pass them in
 // via that helper.
@@ -28,10 +28,10 @@ function _esc(text) {
   return div.innerHTML;
 }
 
-// Looks like a signature / corporate disclaimer rather than a quoted email.
+// Looks like a 签名ature / corporate disclaimer rather than a quoted email.
 // Heuristic: scores known "this is a disclaimer" tells against
 // "this is a real email" tells. 3+ disclaimer hits with ≤1 conversational
-// hit → signature.
+// hit → 签名ature.
 export function _looksLikeSignature(html) {
   if (!html) return false;
   const txt = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -224,7 +224,7 @@ export function _isBloatedSig(htmlFragment) {
   return plain.length >= _SIG_BLOAT_MIN_CHARS;
 }
 
-// 尝试使用按发件人缓存的签名（由 `learn_sender_signatures` 操作构建）
+// 尝试使用按发件人缓存的签名（由 `learn_sender_签名atures` 操作构建）
 // 进行折叠。当缓存的文本在 `html` 末尾附近找到时，在该位置切片
 // 并将尾部包裹在 details 折叠中。
 // 当提示不适用时，返回包裹后的 HTML 或 null。
@@ -279,8 +279,8 @@ export function _tryFoldHintSig(html, hintSig) {
     + sigSection + '</details>';
 }
 
-// Top-level signature fold — runs through several detection strategies
-// in priority order. Returns the original html unchanged when no
+// Top-level 签名ature fold — runs through several detection strategies
+// in priority order. 返回 the original html unchanged when no
 // strategy fires.
 export function _foldSignature(html, hintSig) {
   if (!html || typeof html !== 'string') return html;

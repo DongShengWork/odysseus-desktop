@@ -31,7 +31,7 @@ export const POOL_STORAGE_KEY = 'odysseus-shuffle-pool-excluded';
 
 // ── 评测提示模板 ──
 //
-// Five high-signal prompts per category — each picked to differentiate models
+// Five high-签名al prompts per category — each picked to differentiate models
 // on a distinct capability. The Visual / SVG-render prompt in `chat` ends with
 // the subject as the last words, so swapping "a pelican riding a bicycle" for
 // anything else is a one-line edit.

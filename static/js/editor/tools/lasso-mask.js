@@ -33,7 +33,7 @@ export function lassoOffsetPoints(points, grow) {
     const e2x = c.x - b.x, e2y = c.y - b.y;
     const l1 = Math.hypot(e1x, e1y) || 1;
     const l2 = Math.hypot(e2x, e2y) || 1;
-    // 垂线 (dy, -dx)；通过 `sign` 翻转向外方向。
+    // 垂线 (dy, -dx)；通过 `签名` 翻转向外方向。
     const n1x = (e1y / l1) * sign, n1y = (-e1x / l1) * sign;
     const n2x = (e2y / l2) * sign, n2y = (-e2x / l2) * sign;
     const nx = (n1x + n2x) / 2;

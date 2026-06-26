@@ -922,7 +922,7 @@ function initEndpointForm() {
     if (!/^https?:\/\//.test(u)) u = 'http://' + u;
     // 移除尾部斜杠
     u = u.replace(/\/+$/, '');
-    // 移除不应出现在 base URL 中的尾部路径
+    // 移除不应出现在 基础地址 中的尾部路径
     u = u.replace(/\/v1\/(models|chat\/completions|completions|messages)\/?$/i, '/v1');
     u = u.replace(/\/(models|chat\/completions|completions|v1\/messages)\/?$/i, '');
     u = u.replace(/\/api\/(chat|tags|generate)\/?$/i, '/api');
@@ -1342,7 +1342,7 @@ function initEndpointForm() {
   })();
 
   // Local card "..." kebab: holds Scan network / Ollama / API key reveal.
-  // Item buttons keep their own click handlers; the helper just handles
+  // Item buttons keep their own 点击处理器s; the helper just handles
   // open/close + outside-click + Esc.
   _wireKebab('adm-epLocalMoreBtn', 'adm-epLocalMoreMenu');
 
@@ -1474,7 +1474,7 @@ function initEndpointForm() {
     }
   } catch (_) {}
 
-  // 本地"添加"按钮 — 自托管 base URL 的并行表单。
+  // 本地"添加"按钮 — 自托管 基础地址 的并行表单。
   const localAddBtn = el('adm-epLocalAddBtn');
   const localTestBtn = el('adm-epLocalTestBtn');
   if (localTestBtn) {
@@ -2348,7 +2348,7 @@ function initRag() {
    系统标签 — 令牌
    ═══════════════════════════════════════════ */
 // Catalog mirrors the one in settings.js integration form. Keep keys in
-// sync with the backend scope allowlist.
+// sync with the 后端 权限范围 allowlist.
 const _TOKEN_SCOPES = [
   { key: 'todos:read',        label: 'Todos read',        detail: 'Read notes and checklists' },
   { key: 'todos:write',       label: 'Todos write',       detail: 'Create, update, delete, and toggle todo items' },
@@ -2447,7 +2447,7 @@ async function loadTokens() {
       input.addEventListener('blur', commit);
       input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
     });
-    // Scope toggle change → PATCH the whole scopes array for this token.
+    // Scope toggle change → PATCH the whole 权限范围s array for this token.
     list.querySelectorAll('.adm-tok-scope').forEach(cb => {
       cb.addEventListener('change', async () => {
         const tokenId = cb.dataset.tokenId;
@@ -2810,12 +2810,12 @@ function renderLogs(isAutoPoll = false) {
 
   let logs = cachedLogs;
 
-  // Filter by level locally
+  // 过滤 by level locally
   if (levelFilter !== 'ALL') {
     logs = logs.filter(line => line.includes(` - ${levelFilter} - `));
   }
 
-  // Filter by search query locally
+  // 过滤 by search query locally
   if (searchQuery) {
     logs = logs.filter(line => line.toLowerCase().includes(searchQuery));
   }
@@ -2841,7 +2841,7 @@ function renderLogs(isAutoPoll = false) {
       levelClass = 'log-line-debug';
     }
 
-    // XSS safe escape
+    // XSS safe 转义
     const escaped = line
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -2933,7 +2933,7 @@ function startLogsPolling() {
     const modal = el('settings-modal');
     const systemPanel = el('settings-modal')?.querySelector('[data-settings-panel="system"]');
 
-    // Safe self-cleanup if modal or panel is hidden/closed
+    // Safe self-清理 if modal or panel is hidden/closed
     if (!modal || modal.classList.contains('hidden') || !systemPanel || systemPanel.classList.contains('hidden')) {
       stopLogsPolling();
       return;

@@ -637,7 +637,7 @@ export function openCustomPresetModal() {
       label = changed ? 'Save & Start Persona' : 'Start Persona';
     }
     btn.textContent = label;
-    // Show a "Cancel" button next to Start when the active tab's feature is
+    // Show a "Cancel" button next to 启动 when the active tab's feature is
     // currently ON, so the user can turn it off here instead of hunting the
     // tiny X on the chat bar.
     const cancelBtn = document.getElementById('cancel-custom-preset');
@@ -804,9 +804,9 @@ export async function saveCustomPreset(showToast, showError) {
       // The custom preset must be the SELECTED preset for its values to reach
       // the model — chat.js only sends `preset_id` when getSelectedPreset() is
       // truthy. Activate it when there's a persona (name/prompt) OR when the
-      // user has dialed in non-default tuning (temperature / max tokens) — the
-      // "Inject" tab's plain-chat case. Without the tuning check, "just set
-      // temp + max tokens" would silently do nothing.
+      // user has dialed in non-default tuning (温度 / 最大令牌数) — the
+      // "注入" tab's plain-chat case. Without the tuning check, "just set
+      // temp + 最大令牌数" would silently do nothing.
       const _hasTuning = (config.temperature !== 1.0) || (config.max_tokens !== 0);
       const _hasInject = !!(config.inject_prefix || config.inject_suffix);
       const _hasContent = !!(system_prompt || name || _hasTuning || _hasInject);

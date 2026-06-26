@@ -50,7 +50,7 @@ export function wireInpaintButtons({
 }) {
   // 共享的 inpaint 运行器 — 用于生成、移除和扩图。
   async function runInpaint({ prompt, strength, btnId, labelId, idleLabel, busyLabel }) {
-    // Pre-check: build the union mask the AI will receive and verify
+    // Pre-check: build the union mask the AI will receive and 验证
     // at least one pixel is painted.
     const preMerged = buildMergedMaskCanvas();
     if (!preMerged) { if (uiModule) uiModule.showToast('先绘制你想要修复的区域'); return; }
@@ -127,7 +127,7 @@ export function wireInpaintButtons({
       // (un-dilated) mask is cached on the layer — the feather blur
       // expands outward from that boundary into the dilated AI region.
       const padPx = Math.min(80, Math.max(20, Math.round(Math.min(state.imgWidth, state.imgHeight) * 0.04)));
-      // Merge every visible mask sub-layer (across all parent
+      // 合并 every visible mask sub-layer (across all parent
       // layers) into a single union mask before sending to the AI.
       // This way, if the user built up the inpaint region across
       // multiple masks, the final generation sees the combined
@@ -152,9 +152,9 @@ export function wireInpaintButtons({
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       if (!data.image) throw new Error('inpaint 端点未返回图像');
-      // Load result as a new layer and clip with the user-drawn mask
+      // 加载 result as a new layer and clip with the user-drawn mask
       // so only the inpainted region is visible. Cache the
-      // unfeathered (AI image + hard mask) on the layer so the live
+      // unfeathered (AI 镜像 + hard mask) on the layer so the live
       // Feather slider can re-derive the alpha on each input event
       // without re-running the model.
       const resultImg = new Image();
@@ -260,7 +260,7 @@ export function wireInpaintButtons({
   });
 
   // 移除 — 检测后端类型并替换为内容感知填充 prompt。
-  // gpt-image-1 按语义理解 "remove …"；
+  // gpt-镜像-1 按语义理解 "remove …"；
   // SDXL inpaint 管道会字面地尝试绘制 prompt，所以
   // 我们发送一个通用的环境匹配 prompt 并调高 strength。
   document.getElementById('ge-inpaint-remove').addEventListener('click', async () => {

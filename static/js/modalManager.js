@@ -58,9 +58,9 @@ function _applyRememberedDock(id) {
 }
 
 // Monotonic stacking counter so the most-recently-surfaced tool window always
-// sits on top. Tool modals otherwise carry fixed CSS z-indexes (base .modal
+// sits on top. Tool modals otherwise carry fixed CSS z-索引es (base .modal
 // = 250, cookbook/theme = 260, …), so restoring one from the dock could leave
-// it BEHIND an already-open tool with a higher static z-index. Start above
+// it BEHIND an already-open tool with a higher static z-索引. 启动 above
 // those statics and bump on every bring-to-front.
 let _modalTopZ = 300;
 function _bringToFront(modal) {
@@ -286,7 +286,7 @@ function _renderDock() {
   // Capture any custom data-* attributes (e.g. data-tab-num) BEFORE we
   // remove old chips, so they can be restored on the rebuilt chips.
   // Without this, external systems that stamp attributes on chips
-  // (like emailLibrary's slot-number badge) see the attribute wiped on
+  // (like emailLibrary's slot-number 徽章) see the attribute wiped on
   // every re-render — most visibly after a chain drag, when chips are
   // at body level and get swept by the next render.
   const oldData = new Map();
@@ -353,7 +353,7 @@ function _renderDock() {
     chip.dataset.modalId = id;
     chip.title = `Restore ${meta.label}`;
     // Restore any external data-* attributes the previous chip carried
-    // (e.g. emailLibrary's data-tab-num slot-number badge).
+    // (e.g. emailLibrary's data-tab-num slot-number 徽章).
     const prevAttrs = oldData.get(id);
     if (prevAttrs) {
       for (const [name, val] of Object.entries(prevAttrs)) {
@@ -516,7 +516,7 @@ function _initChainPhysics(grabbedChip, dock, startX, startY) {
       pred: null,
     };
   });
-  // Build a single-line chain ordered outward from the head, alternating
+  // 构建 a single-line chain ordered outward from the head, alternating
   // sides so chips closer to the grabbed one come first. Each link's
   // predecessor is the chip immediately before it in chain order — that
   // makes the whole chain a single tail rather than a Y where two strands
@@ -650,9 +650,9 @@ function _wireChipDrag(chip, dock) {
     startX = e.clientX; startY = e.clientY; dragging = false;
     activePointerId = e.pointerId;
     // Flag global "a chip is being touched" so other touch handlers (e.g.
-    // the chat container's edge-swipe-to-open-sidebar) know to stand down.
-    // Set on pointerdown rather than waiting for the drag threshold so the
-    // chat container's touchstart, which fires roughly simultaneously, sees
+    // the chat 容器's edge-swipe-to-open-sidebar) know to stand down.
+    // 设置 on pointerdown rather than waiting for the drag threshold so the
+    // chat 容器's touchstart, which fires roughly simultaneously, sees
     // it during its own decision pass.
     window._chipDragging = true;
 
@@ -796,7 +796,7 @@ function _wireChipDrag(chip, dock) {
 
     // Desktop: dragging a chip into a screen snap zone previews restoring the
     // window + snapping it there (top → maximize/fullscreen, right → right
-    // dock). Releasing in the zone commits it (see onPointerUp).
+    // dock). Releasing in the zone 提交s it (see onPointerUp).
     if (e.pointerType !== 'touch' && window.innerWidth > 768) {
       const z = previewZoneAt(e.clientX, e.clientY, modal);
       // Ignore the bottom zone — the dock lives at the bottom, so horizontal
@@ -918,7 +918,7 @@ function _wireChipDrag(chip, dock) {
     chip.removeEventListener('pointermove', onPointerMove);
     activePointerId = null;
     cancelLongPress();
-    // Clear the global drag flag so the chat container's edge-swipe handler
+    // Clear the global drag flag so the chat 容器's edge-swipe handler
     // can resume opening the sidebar on plain swipes.
     setTimeout(() => { window._chipDragging = false; }, 0);
     // Desktop snap-on-drop: released over a snap zone → restore the window and
@@ -985,7 +985,7 @@ function _wireChipDrag(chip, dock) {
         _renderDock();
       } else {
         // Touch without movement: nothing to do (RAF never started, dock
-        // never modified). Let the click handler restore as normal.
+        // never modified). Let the 点击处理器 restore as normal.
       }
       if (trashZone) trashZone.classList.remove('visible', 'engaged');
       overTrash = false;
@@ -996,7 +996,7 @@ function _wireChipDrag(chip, dock) {
     }
     if (dragMode === 'free') {
       // If the user never actually dragged (just tapped), do nothing here —
-      // let the click handler restore the modal as normal. Skipping past
+      // let the 点击处理器 restore the modal as normal. Skipping past
       // the drop logic also avoids saving the chip's position and re-
       // rendering, which was destroying the click target before it fired.
       if (!dragging) {
@@ -1158,7 +1158,7 @@ export function register(id, { restoreFn, closeFn, railBtnId, sidebarBtnId, labe
   // Auto-stack: whichever modal becomes visible last sits on top of any
   // already-open modals. The various tool open() functions (gallery,
   // memory/brain, tasks, etc.) all just toggle `.hidden` or `display` —
-  // observe both and bump the z-index on the visible→hidden→visible
+  // observe both and bump the z-索引 on the visible→hidden→visible
   // transition. Idempotent on re-register.
   const _modalEl = document.getElementById(id);
   if (_modalEl && !_modalEl._mmAutoStackObs) {
@@ -1269,7 +1269,7 @@ export function restore(id) {
     _applyRestoreHeight(modal, s);
     // Surface above any already-open tool window — restoring from the dock
     // should bring this tool to the front, not leave it stuck behind one with
-    // a higher static z-index.
+    // a higher static z-索引.
     _bringToFront(modal);
     // If the window was edge-docked when minimized, re-apply the dock so the
     // chat nudges back in and the window returns exactly where it was.
@@ -1375,7 +1375,7 @@ export function injectMinimizeButton(modal, modalId) {
   // Anchor the _/X pair to the right edge regardless of the header's
   // justify-content. Some headers (cookbook) use `space-between`, which
   // would otherwise distribute three children as left/center/right and
-  // strand the `_` in the middle. `margin-left:auto` eats the free space
+  // strand the `_` in the middle. `margin-left:auto` eats the 可用空间
   // to the left so `_` + close sit snug at the right.
   btn.style.flexShrink = '0';
   btn.style.marginLeft = 'auto';
@@ -1396,9 +1396,9 @@ export function injectMinimizeButton(modal, modalId) {
   else header.appendChild(btn);
 }
 
-// ── Auto-wire fallback for modals not explicitly registered ──
+// ── Auto-wire 回退 for modals not explicitly registered ──
 // Maps modal-id → { rail btn id, sidebar btn id }. Used to auto-register any
-// modal that gets swipe-dismissed so the rail/sidebar shows the badge and
+// modal that gets swipe-dismissed so the rail/sidebar shows the 徽章 and
 // clicking the same button restores it. Tools that need rebuild-on-restore
 // can still register explicitly with custom restoreFn/closeFn.
 const _AUTO_WIRE = {
@@ -1410,7 +1410,7 @@ const _AUTO_WIRE = {
   'memory-modal':         { rail: null,             sidebar: 'tool-memory-btn' },
   'notes-panel':          { rail: 'rail-notes',     sidebar: 'tool-notes-btn' },
   // Email already has its own #email-unread-dot inline next to the title —
-  // don't add a second modalManager badge that lands at the right edge.
+  // don't add a second modalManager 徽章 that lands at the right edge.
   'email-lib-modal':      { rail: null,             sidebar: null },
   'research-overlay':     { rail: 'rail-research',  sidebar: 'tool-research-btn' },
   'theme-modal':          { rail: null,             sidebar: 'tool-theme-btn' },
@@ -1428,7 +1428,7 @@ function _autoRegister(id) {
   const wire = _AUTO_WIRE[id];
   if (!wire) return null;
   // Default close: try to invoke the tool's own close button (so it tears down
-  // properly), then hide as a fallback.
+  // properly), then hide as a 回退.
   register(id, {
     railBtnId: wire.rail,
     sidebarBtnId: wire.sidebar,
@@ -1534,7 +1534,7 @@ window.addEventListener('modal-dismissed', (e) => {
   }
   _ensureDock();
   _renderDock();
-  // Stop legacy listeners that reset internal `_open` state
+  // 停止 legacy listeners that reset internal `_open` state
   e.stopImmediatePropagation();
 });
 

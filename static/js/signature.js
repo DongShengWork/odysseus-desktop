@@ -1,4 +1,4 @@
-// static/js/signature.js
+// static/js/签名ature.js
 //
 // 可复用的签名模块。两个入口点：
 //   capture(opts)  — 打开绘图弹窗，返回 Promise<Signature|null>
@@ -9,7 +9,7 @@
 // Drawing uses a per-stroke smoother: each quadratic-bezier segment is anchored
 // at the previous point with control points at midpoints, which yields a
 // Catmull-Rom-like curve without external deps. Variable stroke width is
-// derived from pointer velocity (slower → thicker), which gives signatures
+// derived from pointer velocity (slower → thicker), which gives 签名atures
 // their characteristic ink-bleed feel.
 
 const API_BASE = window.location.origin;
@@ -44,7 +44,7 @@ class SmoothPad {
     this.color = opts.color ?? '#111';
     this.bgColor = opts.bgColor ?? '#fff';
     // Heavy-smoothing knobs (much smoother than v1):
-    //  - minDistance: jitter floor (px) — bigger = more aggressive thinning
+    //  - minDistance: 抖动 floor (px) — bigger = more aggressive thinning
     //  - emaAlpha: live EMA on incoming points (lower = smoother, laggier)
     //  - chaikinIters: 笔划重绘结束时的 Chaikin 切角迭代次数
     //    (each pass roughly doubles segment count and rounds every corner;

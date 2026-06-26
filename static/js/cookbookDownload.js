@@ -1,6 +1,6 @@
 // ============================================
 // COOKBOOK DOWNLOAD SUB-MODULE
-// Download tab: SSE streaming, model download,
+// Download tab: SSE 流ing, 模型下载,
 // panel rendering, command building
 // ============================================
 

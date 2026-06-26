@@ -290,7 +290,7 @@ export function applyColors(colors) {
   _updateFavicon(colors.red || '#e06c75');
 }
 
-// 各路由的 SVG 形状注册表 — 与 index.html 中的内联 favicon 脚本保持同步，
+// 各路由的 SVG 形状注册表 — 与 索引.html 中的内联 favicon 脚本保持同步，
 // 确保主题切换时保留路由图标而非默认小船。
 // 返回以 `fg` 着色的内部 SVG 标记。
 const _ROUTE_FAVICON_SHAPES = {

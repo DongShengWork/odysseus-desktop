@@ -1,4 +1,4 @@
-// static/js/spinner.js
+// static/js/加载指示器.js
 
 /**
  * ASCII 加载动画模块，用于 AI 思考/处理状态
@@ -371,7 +371,7 @@ export function createWhirlpool(size = 24) {
   const sp = new Spinner('', 'clean', 'whirlpool');
   sp._wpSize = size;
   const el = sp.createElement();
-  // 包裹在匹配 .spinner 布局的 div 中
+  // 包裹在匹配 .加载指示器 布局的 div 中
   const wrap = document.createElement('div');
   wrap.className = 'spinner-whirlpool';
   wrap.style.cssText = `width:${size}px;height:${size}px;margin:8px auto;`;

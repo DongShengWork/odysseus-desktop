@@ -1206,7 +1206,7 @@ function _setCardRunning(card, on) {
     wp.element.style.cssText = 'display:inline-flex;width:12px;height:12px;margin:0 0 0 7px;vertical-align:middle;flex-shrink:0;';
     // 追加到 <code> 名称内部（inline-flow），而非其后面。textcol
     // 是 flex column，所以后面的兄弟元素会独占一行 —
-    // 将 spinner 放在内联 code 内使其保持在标题行上。
+    // 将 加载指示器 放在内联 code 内使其保持在标题行上。
     nameEl.appendChild(wp.element);
     card._testSpinner = wp;
   } else if (card._testSpinner) {
@@ -1273,7 +1273,7 @@ function _applyVerdictToHeader(card, verdict) {
     }
     if (ICON) {
       // 完整的“已检查”徽章 — 位于草稿/已发布徽章左侧，
-      // 样式与其他 memory-cat-badges 一致，看起来像真实的芯片。
+      // 样式与其他 memory-cat-徽章s 一致，看起来像真实的芯片。
       const span = document.createElement('span');
       span.className = 'memory-cat-badge skill-pill-verdict';
       span.title = 'Audited: ' + verdict.replace(/_/g, ' ');
@@ -1824,7 +1824,7 @@ async function _showSkillSource(name) {
     try {
       // We use the manage_skills-style edit by going through PUT with a
       // single 'content' field. The route doesn't accept that yet — use the
-      // tool call instead. We have a /api/skills/{name} PUT for fields, but
+      // 工具调用 instead. We have a /api/skills/{name} PUT for fields, but
       // a full SKILL.md replace is simpler via the parsed-then-PUT approach
       // below: parse client-side by uploading via the tool route.
       const res = await fetch(`${API}/api/skills/${encodeURIComponent(name)}/markdown`, {

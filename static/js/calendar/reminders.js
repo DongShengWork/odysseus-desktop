@@ -1,10 +1,10 @@
-// static/js/calendar/reminders.js
+// static/js/calendar/提醒s.js
 //
 // 日历提醒笔记的浏览器通知轮询器。自包含：
-// 模块私有的 `_notifFired` Set 跟踪哪些笔记 ID 我们已经
+// 模块私有的 `_notifFired` 设置 跟踪哪些笔记 ID 我们已经
 // 通知过，持久化到 localStorage。每 60 秒轮询 `/api/notes?label=calendar`
 // 并对于任何 `due_date` 已过去但在过期窗口内的笔记
-// 触发 Notification + toast 通知。
+// 触发 Notification + 提示条 通知。
 //
 // `start()` kicks off the poll loop + permission request. Call once from
 // the calendar's entry module.

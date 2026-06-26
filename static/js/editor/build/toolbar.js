@@ -51,7 +51,7 @@ export function buildToolbar({ currentTool, onSelectTool, onClearSelection }) {
     // glance now that the "AI Tools" separator is gone.
     const aiStar = t.ai ? '<span class="ge-tool-ai" title="AI">✦</span>' : '';
     btn.classList.toggle('is-ai', !!t.ai);
-    // Selection-clear badge — rendered only for tools that can hold a
+    // Selection-clear 徽章 — rendered only for tools that can hold a
     // selection (lasso, wand). Inpaint masks are first-class sub-layers
     // now so they get their own delete-X in the layer panel.
     const clearBadge = (t.id === 'lasso' || t.id === 'wand')

@@ -1,11 +1,11 @@
-// streamingRenderer.js
+// 流式传输Renderer.js
 //
-// The DOM shell for incremental streaming markdown rendering. One instance owns
-// the DOM of one streaming assistant message and is the only thing that writes to
+// The DOM shell for incremental 流式传输 markdown rendering. One instance owns
+// the DOM of one 流式传输 助手消息 and is the only thing that writes to
 // it while it streams.
 //
 // It keeps the message as two regions, separated by an invisible comment marker so
-// the rendered blocks are direct children of the container (no wrapper elements to
+// the rendered blocks are direct children of the 容器 (no wrapper elements to
 // disturb CSS):
 //
 //     [ 已冻结块 ][ 已冻结块 ] <!--tail--> [ 实时尾部 ]
@@ -155,7 +155,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
       // Self-heal: if our DOM was replaced out from under us — chat.js writes
       // contentEl.innerHTML directly for thinking indicators and tool blocks, and
       // finalize() removes the marker — our tail marker is no longer a child of the
-      // container. Rebuild from scratch so we never append onto foreign content or
+      // 容器. Rebuild from scratch so we never append onto foreign content or
       // touch a detached marker.
       if (started && (!tailMarker || tailMarker.parentNode !== contentEl)) {
         started = false;
@@ -180,7 +180,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
   }
 
   // Stream finished: freeze whatever is left canonically and flatten away the
-  // marker so the container holds exactly what a single full render would produce.
+  // marker so the 容器 holds exactly what a single full render would produce.
   // chat.js currently re-renders the finished message from source for its own
   // reasons and so doesn't call this, but it completes the renderer's lifecycle and
   // is exercised by the tests.

@@ -1414,12 +1414,12 @@ export async function loadSessions() {
 
     // Fresh login: prefer a default-model session so a brand-new user lands
     // ready to chat. CRITICAL: only do this when there's NO session to return
-    // to (no hash / lastSessionId / existing chat resolved into targetId).
+    // to (no 哈希 / lastSessionId / existing chat resolved into targetId).
     // Otherwise a fresh page load — which a server restart triggers — would
     // spin up a new empty default-model chat and shadow the user's last
     // conversation, making it look like the chat "lost its context" (and the
     // picker would still show the old model's name from cached state). See
-    // 解析顺序（hash → currentSession → lastSessionId → 最近一条）。
+    // 解析顺序（哈希 → currentSession → lastSessionId → 最近一条）。
     // most-recent).
     const _isFirstLoad = !sessionStorage.getItem('ody-session-active');
     if (_isFirstLoad) {
@@ -1506,14 +1506,14 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     currentSessionId = id;
     // Identify Assistant / task-output sessions so we don't "trap" the user
     // there on return. Skipped from both `lastSessionId` persistence and the
-    // URL hash — the user complained that coming back to Odysseus kept
+    // URL 哈希 — the user complained that coming back to Odysseus kept
     // landing them on the auto-firing task-log chat instead of their last
     // real conversation.
     const _meta = sessions.find(s => s.id === id);
     const _isTransientChat = !!_meta && (_meta.folder === 'Assistant' || _meta.folder === 'Tasks');
     if (!_isTransientChat) {
       Storage.set('lastSessionId', id);
-      // 更新 URL hash 但不触发 hashchange 处理器
+      // 更新 URL 哈希 但不触发 哈希change 处理器
       if (window.location.hash !== '#' + id) {
         history.replaceState(null, '', '#' + id);
       }
@@ -1596,7 +1596,7 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       msgHistory = data.history || [];
       modelName = data.model || null;
       // The model returned by /api/history is the authoritative one the
-      // backend will use for this session. Write it back into the cached
+      // 后端 will use for this session. Write it back into the cached
       // session meta and refresh the picker so the displayed model can
       // never diverge from what's actually sent (the "picker says Minimax
       // but it used the default" bug after a restart / stale cache).
@@ -1917,7 +1917,7 @@ export function setCurrentSessionId(id) {
   }
 }
 
-// 会话列表键盘导航：方向键移动，Delete 删除
+// 会话列表键盘导航：方向键移动，删除 删除
 async function _onSessionListKeydown(e) {
   const item = e.target.closest('.list-item[data-session-id]');
   if (!item) return;
@@ -2000,7 +2000,7 @@ export function initDragSort() {
 }
 
 // 基于 Hash 的路由：使用浏览器前进/后退在会话间导航。
-// 跳过实体前缀的 hash（document-、note- 等）— 这些由
+// 跳过实体前缀的 哈希（document-、note- 等）— 这些由
 // chatRenderer.js 中自己的点击处理器处理，不能触发
 // 会话导航（否则会重置当前活跃聊天）。
 window.addEventListener('hashchange', () => {
@@ -2162,13 +2162,13 @@ async function _checkServerStream(sessionId) {
     if (info.mode === 'research' || info.is_research) return;
 
     // 实时恢复被移除的运行：重播其缓冲区然后流式传输实时 token
-    // (#2539)。如果不可用则回退到下方的 spinner+轮询路径。
+    // (#2539)。如果不可用则回退到下方的 加载指示器+轮询路径。
     if (window.chatModule && window.chatModule.resumeStream) {
       const attached = await window.chatModule.resumeStream(sessionId);
       if (attached) return;
     }
 
-    // 回退方案：服务器仍在流式传输，显示 spinner 并轮询。
+    // 回退方案：服务器仍在流式传输，显示 加载指示器 并轮询。
     const box = document.getElementById('chat-history');
     if (!box) return;
 

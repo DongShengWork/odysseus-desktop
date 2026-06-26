@@ -1,6 +1,6 @@
 // ============================================
 // COOKBOOK RUNNING SUB-MODULE
-// Running tasks tab: task cards, status monitoring,
+// Running tasks tab: task cards, status 监控,
 // stop/restart, diagnosis, auto-fix, background monitor
 // ============================================
 
@@ -9,7 +9,7 @@ import { _diagnose, _showDiagnosis, _clearDiagnosis } from './cookbook-diagnosis
 import { registerMenuDismiss } from './escMenuStack.js';
 import { computeProgressSignal } from './cookbookProgressSignal.js';
 
-// Human-friendly badge label for a task's internal status. Avoids surfacing
+// Human-friendly 徽章 label for a task's internal status. Avoids surfacing
 // the word "error" in the sidebar — a server the user stopped or one that
 // quit cleanly reads as "stopped", not "error".
 function _statusLabel(status, type) {
@@ -19,11 +19,11 @@ function _statusLabel(status, type) {
   return status || '';
 }
 
-// Single source of truth for what a task's status badge shows + its style class.
+// Single source of truth for what a task's status 徽章 shows + its style class.
 // Crucially, a serve task that's still coming up shows its live phase
 // ("loading 45%", "warming up", …) rather than the generic "running" — they're
-// the same state, so the badge shouldn't flip between two different labels on
-// every re-render. Returns { text, cls } where cls is appended after
+// the same state, so the 徽章 shouldn't flip between two different labels on
+// every re-render. 返回 { text, cls } where cls is appended after
 // "cookbook-task-status" ('' = the neutral loading style).
 function _taskBadge(task) {
   if (task._unreachable && task.status === 'running') return { text: 'unreachable', cls: 'cookbook-task-error' };
@@ -194,9 +194,9 @@ function _terminalServeDiagnosis(task, outputText) {
   if (!task || task.type !== 'serve' || !['stopped', 'error', 'crashed', 'failed'].includes(task.status) || !out.trim()) return null;
   // Suppress the crash diagnosis when the output proves the server
   // actually became reachable — e.g. an early `exit 127` from a failed
-  // build attempt was followed by the shim/Python fallback successfully
+  // build attempt was followed by the shim/Python 回退 successfully
   // starting Uvicorn. Without this, the user sees a confusing "build
-  // stopped before the server became reachable" toast while the server
+  // stopped before the server became reachable" 提示条 while the server
   // is right there serving requests.
   if (_serveOutputLooksReady(task)) return null;
   // Pip tasks (Reinstall vLLM, Upgrade torch, etc.) ride on the serve task
@@ -367,7 +367,7 @@ const TASKS_KEY = 'cookbook-tasks';
 const STORAGE_KEY = 'cookbook-presets';
 const SERVE_STATE_KEY = 'cookbook-serve-state';
 
-// Polling / timeout intervals
+// Polling / 超时 intervals
 const TASK_POLL_INTERVAL_MS = 3000;       // delay between reconnect-loop iterations
 const BG_MONITOR_INTERVAL_MS = 5000;      // background task status poll
 const STALE_PROGRESS_MS = 5 * 60 * 1000;  // download with no progress this long = stale
@@ -382,7 +382,7 @@ export function _parseServePhase(snapshot) {
   const loadMatches = [...flat.matchAll(/Loading safetensors.*?(\d+)%/g)];
   // "Downloading (incomplete total...)" tracks real aggregate bytes; prefer it
   // over "Fetching N files" which only counts fully-closed files and lags badly
-  // with hf_transfer's parallel-chunk strategy (often sits at 0/N for most of the run).
+  // with hf_transfer's parallel-数据块 strategy (often sits at 0/N for most of the run).
   const downloadingMatches = [...flat.matchAll(/Downloading.*?(\d+)%/g)];
   const fetchingMatches = [...flat.matchAll(/Fetching.*?(\d+)%/g)];
   const dlMatches = downloadingMatches.length ? downloadingMatches : fetchingMatches;
@@ -467,7 +467,7 @@ function _nextAvailablePort() {
   return String(port);
 }
 
-// ── Endpoint cleanup ──
+// ── Endpoint 清理 ──
 
 async function _removeEndpointByUrl(baseUrl) {
   try {
@@ -572,7 +572,7 @@ async function _startQueuedDownload(task) {
     return;
   }
   // Flip to 'running' SYNCHRONOUSLY (before the async POST) so a concurrent
-  // _processQueue — or a second "Start now" — can't see it as still 'queued' and
+  // _processQueue — or a second "启动 now" — can't see it as still 'queued' and
   // launch the same download a second time. Without this, finishing another
   // download mid-POST re-queued this one into a duplicate task.
   {
@@ -977,7 +977,7 @@ export function _tmuxForceKill(task) {
   return inner;
 }
 
-// Returns a shell snippet that prints "ALIVE" if the tmux session still
+// 返回 a shell snippet that prints "ALIVE" if the tmux session still
 // exists (or its main PID is still listed in /proc), "DEAD" otherwise.
 // Used by the Stop-all escalation to decide whether to force-kill.
 export function _tmuxIsAliveCheck(task) {
@@ -1142,7 +1142,7 @@ function _presetsForModelLocal(presets, repo) {
   });
 }
 
-// Build a short auto-label from the launched command so an auto-saved config is
+// 构建 a short auto-label from the launched command so an auto-saved config is
 // recognizable in the Saved dropdown (e.g. "TP2 · 16k ctx · AWQ").
 function _autoConfigLabel(task) {
   const cmd = task.payload?._cmd || '';
@@ -1158,13 +1158,13 @@ function _autoConfigLabel(task) {
 
 // Auto-save a serve config the moment its endpoint registers successfully, and
 // flag it confirmed-working. Dedups by exact command: if the same settings are
-// already saved we just upgrade that slot's badge instead of duplicating it.
-// Runs at most once per task.
+// already saved we just upgrade that slot's 徽章 instead of duplicating it.
+// 运行 at most once per task.
 function _autoSaveWorkingConfig(task) {
   if (!task || task.type !== 'serve' || !task.payload?._cmd) return;
   if (task._autoSaved) return;
   const cmd = task.payload._cmd;
-  // Diffusion/image servers aren't vLLM presets — skip them.
+  // Diffusion/镜像 servers aren't vLLM presets — skip them.
   if (cmd.includes('diffusion_server')) { task._autoSaved = true; return; }
   const model = task.payload.repo_id || task.name;
   const presets = _loadPresets();
@@ -1310,13 +1310,13 @@ export async function _syncFromServer() {
 
 // ── Retry download ──
 
-// Bounded auto-retry counter for downloads, keyed by model — network blips on
-// big multi-file downloads are common and HF resumes from the .incomplete parts.
+// Bounded auto-重试 counter for downloads, keyed by model — network blips on
+// big multi-文件下载s are common and HF resumes from the .incomplete parts.
 const _dlRetryCount = new Map();
 const _DL_MAX_AUTO_RETRY = 2;
 
 // Kill + relaunch a task (download or serve). Shared by the ⋮ → Restart action
-// and the click-to-retry on a stalled download badge.
+// and the click-to-重试 on a stalled download 徽章.
 async function _retryTask(el, task) {
   if (el && el._abort) el._abort.abort();
   const badge = el?.querySelector('.cookbook-task-status');
@@ -1346,7 +1346,7 @@ async function _retryTask(el, task) {
 
 async function _retryDownload(name, payload, replaceSessionId = '') {
   try {
-    // A retry means the fast hf_transfer path already failed once — fall back to
+    // A 重试 means the fast hf_transfer path already failed once — fall back to
     // the plain, reliable downloader for this and any further attempt (it resumes
     // from the cached .incomplete files, so no progress is lost).
     const _payload = { ...(payload || {}), disable_hf_transfer: true };
@@ -1397,7 +1397,7 @@ async function _retryDownload(name, payload, replaceSessionId = '') {
 // ── Serve auto-fix (kill + relaunch with env var) ──
 
 // Block stacked retries: once any "Retry with X" is clicked for a task, ignore
-// every further retry click for it. Each retry fires its own _launchServeTask,
+// every further 重试 click for it. Each 重试 fires its own _launchServeTask,
 // so clicking several options — or one repeatedly during the fade-out / while a
 // relaunch was loading — used to stack up multiple servers (e.g. 6 launches).
 // The flag rides on the card element (removed right after), so it can't re-arm.
@@ -1449,7 +1449,7 @@ export async function _serveAutoFix(panel, envVar) {
 
 // Open the Serve panel pre-filled for a task — the same flow as the task's
 // Edit button, but optionally with a modified command (used by the diagnosis
-// "Retry with X" buttons so a retry lands in the editable Serve panel with the
+// "Retry with X" buttons so a 重试 lands in the editable Serve panel with the
 // adjusted setting, instead of blindly relaunching).
 async function _openServeEditForTask(task, cmdOverride, fieldOverrides = null) {
   const repo = task.payload?.repo_id;
@@ -1465,7 +1465,7 @@ async function _openServeEditForTask(task, cmdOverride, fieldOverrides = null) {
   fields = { ...(fields || {}), _replaceTaskId: task.sessionId };
   // Switch the active server to the exact profile this serve ran on. The
   // dropdown stores stable srv: keys, not raw host strings, so preserving only
-  // task.remoteHost can relaunch against the local container by accident.
+  // task.remoteHost can relaunch against the local 容器 by accident.
   _selectTaskServer(task);
   try {
     const { openServePanelForRepo } = await import('./cookbookServe.js');
@@ -1582,7 +1582,7 @@ export async function _serveAutoRetry(panel, flag) {
 
 // ── Edit-command prompt ──
 // Shows a small modal with a textarea pre-filled with the current serve cmd.
-// Resolves to the edited string on Save, or null on Cancel.
+// 解析 to the edited string on Save, or null on Cancel.
 function _promptEditServeCmd(currentCmd) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -1693,8 +1693,8 @@ export async function _launchServeTask(shortName, repo, cmd, fields, hostOverrid
   }
 
   // Replace any serve already targeting this same host:port — you can't run two
-  // servers on one port, so re-serving (or retrying) should stop & remove the
-  // old one instead of leaving a dead duplicate behind. (The retry buttons
+  // servers on one port, so re-serving (or 重试ing) should stop & remove the
+  // old one instead of leaving a dead duplicate behind. (The 重试 buttons
   // already removed their own task, so this is a no-op for them.)
   try {
     const _pm = cmd.match(/--port[=\s]+(\d+)/) || cmd.match(/(?:^|\s)-p[=\s]+(\d+)/);
@@ -1785,7 +1785,7 @@ export async function _launchServeTask(shortName, repo, cmd, fields, hostOverrid
   }
 }
 
-// ── Render Running tab ──
+// ── 渲染 Running tab ──
 
 export function _renderRunningTab() {
   // Auto-clear the sidebar notif (the bright-icon highlight) when no tasks
@@ -2029,7 +2029,7 @@ export function _renderRunningTab() {
     });
   });
 
-  // Wire "Stop all" buttons — stop every running task on that server.
+  // Wire "停止 all" buttons — stop every running task on that server.
   group.querySelectorAll('[data-stop-server]').forEach(btn => {
     if (btn._bound) return;
     btn._bound = true;
@@ -2040,9 +2040,9 @@ export function _renderRunningTab() {
       if (!running.length) { uiModule.showToast(`Nothing running on ${_serverName(host)}`); return; }
       if (!await window.styledConfirm(`Stop ${running.length} running task${running.length > 1 ? 's' : ''} on ${_serverName(host)}?`, { confirmText: 'Stop all' })) return;
       // Mark every task as user-stopped BEFORE firing the kills so that the
-      // download auto-retry logic never restarts a task the user just stopped.
+      // download auto-重试 logic never restarts a task the user just stopped.
       running.forEach(t => _updateTask(t.sessionId, { _userStopped: true }));
-      // Reuse each task's own Stop action so it does the full teardown
+      // Reuse each task's own 停止 action so it does the full teardown
       // (send C-c, drop the endpoint, mark stopped) consistently.
       running.forEach(t => {
         const el = document.querySelector(`.cookbook-task[data-task-id="${t.sessionId}"]`);
@@ -2080,7 +2080,7 @@ export function _renderRunningTab() {
     if (task) {
       el.dataset.status = task.status;
       const isDone = task.status === 'done';
-      // Type chip doubles as the "finished" badge once a task completes — both
+      // Type chip doubles as the "finished" 徽章 once a task completes — both
       // download and serve show the same green FINISHED chip.
       const typeChip = el.querySelector('.cookbook-task-type');
       if (typeChip) {
@@ -2127,7 +2127,7 @@ export function _renderRunningTab() {
     }
   });
 
-  // Add new task entries
+  // 添加 new task entries
   for (const task of tasks) {
     if (existingIds.has(task.sessionId)) continue;
 
@@ -2175,7 +2175,7 @@ export function _renderRunningTab() {
           ? `${_prefix}: ${h}h ${String(m).padStart(2,'0')}m`
           : `${_prefix}: ${m}m ${String(s).padStart(2,'0')}s`;
         // ETA — only for downloads, only when we have a meaningful overall %.
-        // Reads the badge text (which already shows the true overall % we
+        // Reads the 徽章 text (which already shows the true overall % we
         // compute in the live-polling block) and back-derives a remaining-time
         // estimate from elapsed/done. Hidden until pct >= 3% so the early-job
         // wild estimates don't show.
@@ -2330,7 +2330,7 @@ export function _renderRunningTab() {
         dropdown.className = 'cookbook-task-dropdown';
 
         const items = [];
-        // ── Run section ─────────────────────────────────────────────
+        // ── 运行 section ─────────────────────────────────────────────
         // Queued download: let the user jump the queue and start it immediately
         // (downloads otherwise run one-at-a-time per server).
         if (task.type === 'download' && task.status === 'queued') {
@@ -2359,8 +2359,8 @@ export function _renderRunningTab() {
           }});
         }
         // ── Endpoint section ────────────────────────────────────────
-        // Manual endpoint registration — fallback for when auto-add fails
-        // (e.g. probe timeout on a remote that's slow). Forces adding this
+        // Manual endpoint registration — 回退 for when auto-add fails
+        // (e.g. probe 超时 on a remote that's slow). Forces adding this
         // serve to the model-endpoints list regardless of prior flag state.
         if (task.type === 'serve' && task.payload?._cmd) {
           items.push({ group: 'endpoint', label: 'Register endpoint', action: 'register-endpoint', custom: async () => {
@@ -2369,7 +2369,7 @@ export function _renderRunningTab() {
             const port = portMatch ? portMatch[1] : '8000';
             const baseUrl = `http://${host}:${port}/v1`;
             try {
-              // Check existing first — offer to overwrite if present
+              // 检查 existing first — offer to overwrite if present
               const eps = await (await fetch('/api/model-endpoints', { credentials: 'same-origin' })).json();
               const existing = eps.find(e => e.base_url === baseUrl);
               if (existing) {
@@ -2479,7 +2479,7 @@ export function _renderRunningTab() {
         let _lastGroup = null;
         for (const item of items) {
           // Insert a thin divider whenever the group changes, so the
-          // user can visually scan Run / Edit / Endpoint / Copy / Danger
+          // user can visually scan 运行 / Edit / Endpoint / Copy / Danger
           // blocks instead of one long undifferentiated list.
           if (item.group && _lastGroup && item.group !== _lastGroup) {
             const sep = document.createElement('div');
@@ -2579,14 +2579,14 @@ export function _renderRunningTab() {
     el.querySelector('.cookbook-task-action-stop').addEventListener('click', async () => {
       // Abort the reconnect loop before sending kill so that a DOWNLOAD_FAILED
       // marker written by the shell wrapper (on SIGINT/non-zero exit) cannot
-      // trigger an auto-retry after a manual stop.
+      // trigger an auto-重试 after a manual stop.
       if (el._abort) el._abort.abort();
       const badge = el.querySelector('.cookbook-task-status');
       if (badge) { badge.textContent = 'stopping...'; badge.className = 'cookbook-task-status cookbook-task-stopping'; }
       el.dataset.status = 'stopped';
       _updateTask(task.sessionId, { _userStopped: true });
       const outputText = el.querySelector('.cookbook-output-pre')?.textContent || task.output || '';
-      // Drop the model endpoint so the picker stops listing it.
+      // Drop the 模型端点 so the picker stops listing it.
       if (task.type === 'serve' && task.payload) {
         _removeEndpointByUrl(_endpointUrlForTask(task, outputText));
       }
@@ -2609,7 +2609,7 @@ export function _renderRunningTab() {
         });
       } catch {}
       // ...then smoothly fade/slide the card out and auto-remove it — no manual
-      // ⋮ → Remove needed.
+      // ⋮ → 移除 needed.
       _animateOutThenRemove(el, task.sessionId);
     });
 
@@ -2680,7 +2680,7 @@ export function _renderRunningTab() {
       _animateOutThenRemove(el, task.sessionId);
     });
 
-    // Wire retry
+    // Wire 重试
     el.querySelector('.cookbook-task-action-retry').addEventListener('click', () => _retryTask(el, task));
 
     // Wire copy button
@@ -2710,7 +2710,7 @@ export function _renderRunningTab() {
     // session could still be alive — not just 'running'. Scheduler-
     // launched serves transition to 'ready' as soon as /v1/models
     // responds; without this, the user opens the Running tab and sees
-    // only the placeholder ("Launched by scheduled task …") because
+    // only the placeholder ("Launched by 定时任务 …") because
     // _reconnectTask never fires for status 'ready'/'loading'/'warming'.
     if (['running', 'ready', 'loading', 'warming', 'starting'].includes(task.status)) {
       _reconnectTask(el, task);
@@ -2789,7 +2789,7 @@ async function _reconnectTask(el, task) {
         // Pip tasks (Reinstall vLLM / Upgrade torch / etc.) must skip the
         // generic serve `_diagnose` step. Their output is pip's own and the
         // error patterns there (torch ABI traceback, "No module named torch",
-        // etc.) are routinely matched against the previous tmux scrollback,
+        // etc.) are routinely matched against the previous tmux sc回滚,
         // tagging a clean pip success as a crashed serve. Detection is the
         // same shape as the looksSuccessful branch below.
         const _isPipTaskDiag = ((task.payload?.repo_id || '').startsWith('pip-'))
@@ -2933,9 +2933,9 @@ async function _reconnectTask(el, task) {
             // downloader wrapper AFTER the model snapshot is on disk, and
             // `/snapshots/` only appears once HF has resolved the cached
             // tree. Either is conclusive. Finalize as done immediately, skip
-            // the 30s debounce — the debounce only exists to guard against
+            // the 30s 防抖 — the 防抖 only exists to guard against
             // ambiguous markers (bare "100%" / "Download complete") which can
-            // appear mid-stream during multi-file downloads.
+            // appear mid-stream during multi-文件下载s.
             const _strongDone = task.type === 'download'
               && (lastOutput.includes('DOWNLOAD_OK') || lastOutput.includes('/snapshots/'));
             if (_strongDone) {
@@ -2952,11 +2952,11 @@ async function _reconnectTask(el, task) {
               break;
             }
             // Debounce the done flip. Tmux capture-pane can fail transiently
-            // (network blip, ssh reconnect), and the verify has-session right
+            // (network blip, ssh reconnect), and the 验证 has-session right
             // above can briefly report dead even when the session is in the
             // middle of finalizing. Marking done immediately + the periodic
             // _selfHealStaleTasks then flipping back to running causes the
-            // status badge to oscillate between Finished and Downloading.
+            // status 徽章 to oscillate between Finished and Downloading.
             // Wait 30s and re-probe: only finalize as done if tmux is STILL
             // gone. If the session resurfaces, restart _reconnectTask so live
             // capture resumes without the user seeing a fake "done" first.
@@ -3044,11 +3044,11 @@ async function _reconnectTask(el, task) {
 
             // Stale download detection.
             // Use the DOWNLOADED-BYTE count ("1.81G" from "1.81G/2.49G") as the
-            // progress signal: it climbs continuously while transferring (even when
-            // the % plateaus during a big hf_transfer chunk) and FREEZES when stuck.
+            // progress 签名al: it climbs continuously while transferring (even when
+            // the % plateaus during a big hf_transfer 数据块) and FREEZES when stuck.
             // The % alone plateaus (false stall), and a frozen frame still shows a
             // stale speed/ETA — so keying off speed masked real stalls (that's why a
-            // 97%-stuck download went undetected). Bytes are the honest signal; fall
+            // 97%-stuck download went undetected). Bytes are the honest 签名al; fall
             // back to %/aggregate only when no byte counter is present.
             const _byteMatches = [...snapshot.matchAll(/([\d.]+\s?[KMGT])B?\s*\/\s*[\d.]+\s?[KMGT]B?/gi)];
             const _bytes = _byteMatches.length ? _byteMatches[_byteMatches.length - 1][1].replace(/\s/g, '') : null;
@@ -3068,8 +3068,8 @@ async function _reconnectTask(el, task) {
               el._lastProgressTime = Date.now();
             } else if (!isPipDep && Date.now() - (el._lastProgressTime || 0) > _STALE_TIMEOUT && task._autoRestarted) {
               const mins = Math.floor((Date.now() - (el._lastProgressTime || 0)) / 60000);
-              // Already auto-restarted once and stalled again — make the badge a
-              // one-click retry (resumes from the cached partial files) so the
+              // Already auto-restarted once and stalled again — make the 徽章 a
+              // one-click 重试 (resumes from the cached partial files) so the
               // user doesn't have to dig into the ⋮ menu.
               badge.textContent = `stalled ${mins}m ↻`;
               badge.className = 'cookbook-task-status cookbook-task-error';
@@ -3157,7 +3157,7 @@ async function _reconnectTask(el, task) {
               badge.textContent = text;
               badge.className = 'cookbook-task-status cookbook-task-running';
             } else if (_dlAgg != null) {
-              // Real aggregate byte progress — most accurate; take the max of all signals.
+              // Real aggregate byte progress — most accurate; take the max of all 签名als.
               let pct = _dlAgg;
               if (_fetchPct != null) pct = Math.max(pct, _fetchPct);
               let text = `${pct}%`;
@@ -3186,14 +3186,14 @@ async function _reconnectTask(el, task) {
               // The wrapper prints DOWNLOAD_FAILED but exits 0, and per-file
               // "Download complete"/"100%" lines make it look successful — so
               // catch the explicit failure marker and handle it.
-              // A gated/auth failure can NEVER be fixed by retrying (the HF token
+              // A gated/auth failure can NEVER be fixed by 重试ing (the HF token
               // is sent, but its account isn't approved for this repo) — skip the
               // auto-retries and surface the gated diagnosis straight away.
               const _accessDenied = /Access to model.*is restricted|gated repo|GatedRepoError|401 Unauthorized|403 Forbidden|not in the authorized list|awaiting a review|must (?:be authenticated|have access)/i.test(snapshot);
               const _dlKey = task.payload?.repo_id || task.name;
               const _dlN = _dlRetryCount.get(_dlKey) || 0;
               if (!controller.signal.aborted && !_accessDenied && task.type === 'download' && task.payload && _dlN < _DL_MAX_AUTO_RETRY) {
-                // Auto-retry: kill the dead session and re-launch (resumes from
+                // Auto-重试: kill the dead session and re-launch (resumes from
                 // the cached .incomplete files) after a short delay.
                 _dlRetryCount.set(_dlKey, _dlN + 1);
                 badge.textContent = `retrying (${_dlN + 1}/${_DL_MAX_AUTO_RETRY})…`;
@@ -3236,7 +3236,7 @@ async function _reconnectTask(el, task) {
               badge.textContent = _statusLabel('done', task.type);
               badge.className = 'cookbook-task-status cookbook-task-done';
               // Flip the type chip from "download" to the green "finished"
-              // badge so the header reads as completed without a stale label.
+              // 徽章 so the header reads as completed without a stale label.
               const _typeChip = el.querySelector('.cookbook-task-type');
               if (_typeChip) { _typeChip.textContent = 'finished'; _typeChip.classList.add('cookbook-task-type-done'); }
               _updateTask(task.sessionId, { status: 'done' });
@@ -3284,8 +3284,8 @@ async function _reconnectTask(el, task) {
                 _refreshServerDots();
               }
               // Persist the loading phase so a re-render keeps showing "loading 45%"
-              // instead of resetting the badge to the generic "running". Clear it
-              // once ready so the badge falls back to "running".
+              // instead of resetting the 徽章 to the generic "running". Clear it
+              // once ready so the 徽章 falls back to "running".
               if (info.status !== 'ready') {
                 if (task.progress !== info.phase) _updateTask(task.sessionId, { progress: info.phase });
               } else if (task.progress) {
@@ -3295,7 +3295,7 @@ async function _reconnectTask(el, task) {
           }
         }
 
-        // Run error diagnosis on serve tasks
+        // 运行 error diagnosis on serve tasks
         const diag = _diagnose(snapshot);
         if (diag) {
           let diagEl = el.querySelector('.cookbook-diagnosis');
@@ -3306,9 +3306,9 @@ async function _reconnectTask(el, task) {
           }
           _showDiagnosis(el, diag, snapshot);
         }
-        // Detect serve ready — auto-add to model endpoints. Don't flip
+        // Detect serve ready — auto-add to 模型端点s. Don't flip
         // `_endpointAdded` until the POST succeeds; otherwise a transient
-        // error silently prevents any future retry. An in-flight guard
+        // error silently prevents any future 重试. An in-flight guard
         // prevents a second poll from firing a duplicate POST before the
         // first one's dedup check can observe the newly-added row.
         if (task.type === 'serve' && !task._endpointAdded && !task._endpointAddInFlight && task._serveReady) {
@@ -3334,8 +3334,8 @@ async function _reconnectTask(el, task) {
               // because other endpoints may happen to share a model name.
               const exists = eps.some(e => e.base_url === baseUrl);
               if (exists) {
-                // Already registered — e.g. the backend pre-registers diffusion
-                // endpoints server-side. Mark so we don't retry, but STILL
+                // Already registered — e.g. the 后端 pre-registers diffusion
+                // endpoints server-side. Mark so we don't 重试, but STILL
                 // refresh the picker (and probe until online) so the new model
                 // shows up without the user having to manually refresh.
                 task._endpointAdded = true;
@@ -3466,7 +3466,7 @@ async function _checkServeReachability() {
     const pr = probe[ep.id];
     if (!pr || pr.alive === undefined) continue;  // not probed (non-local) — skip
     // Record the first time it actually answers. Until then the server is still
-    // LOADING/warming (the endpoint can get registered on the 300s timeout for a
+    // LOADING/warming (the endpoint can get registered on the 300s 超时 for a
     // big model that hasn't finished loading), and a not-yet-answering server is
     // not "unreachable" — flagging it as such while you're launching is a false
     // alarm. Only treat it as unreachable once it has been reachable at least once.
@@ -3573,7 +3573,7 @@ function _refreshServerDots() {
 // the task isn't actually finished, the cookbook just lost the in-flight
 // status during restart — flip status back to 'running' so _reconnectTask
 // picks it up. The one-shot guard is enforced by callers (open path) or
-// time-throttled inside (background-monitor path).
+// time-节流d inside (background-monitor path).
 let _selfHealRan = false;
 let _selfHealLastTs = 0;
 export async function _selfHealStaleTasks(opts = {}) {
@@ -3582,7 +3582,7 @@ export async function _selfHealStaleTasks(opts = {}) {
     if (_selfHealRan) return;
     _selfHealRan = true;
   } else {
-    // Background-monitor call: throttle to once every 8s (the bg monitor
+    // Background-monitor call: 节流 to once every 8s (the bg monitor
     // itself fires every 10s, so this almost always fires too, but the
     // guard keeps a fast manual call from doubling up).
     const now = Date.now();
@@ -3602,7 +3602,7 @@ export async function _selfHealStaleTasks(opts = {}) {
     // downloading oscillation on a flaky connection.
     if (t.status === 'done' && /DOWNLOAD_OK|\/snapshots\//.test(t.output || '')) return false;
     // Cooldown: never flip the same task more than once every 45s. A flapping
-    // SSH connection used to drive the badge back-and-forth on every probe
+    // SSH connection used to drive the 徽章 back-and-forth on every probe
     // cycle; this enforces a stable view between flaps.
     if (t._lastStatusFlipAt && (Date.now() - t._lastStatusFlipAt < 45000)) return false;
     return true;
@@ -3654,7 +3654,7 @@ export function _startBackgroundMonitor() {
     _checkServeReachability();
     // Auto-reconnect: every cycle, look for download tasks marked finished/
     // crashed/etc. whose tmux session is actually still running, and flip
-    // them back to running. Internally throttled to 8s so a manual call from
+    // them back to running. Internally 节流d to 8s so a manual call from
     // the open path or a fast invocation doesn't double up.
     _selfHealStaleTasks().catch(() => {});
   }, BG_MONITOR_INTERVAL_MS);
@@ -3675,7 +3675,7 @@ function _stopBackgroundMonitor() {
 // A model that just reached "ready" in the cookbook often can't satisfy
 // the 1s add-time probe (remote, weights still mmap-ing), so it's added
 // offline. This polls the per-endpoint /probe (which uses a longer
-// server-side timeout + persists cached_models) every few seconds until
+// server-side 超时 + persists cached_models) every few seconds until
 // the endpoint reports models, then refreshes the picker. Bounded so a
 // genuinely-dead server doesn't poll forever.
 async function _probeEndpointUntilOnline(epId, host, port) {
@@ -3689,7 +3689,7 @@ async function _probeEndpointUntilOnline(epId, host, port) {
     await new Promise(r => setTimeout(r, interval));
     try {
       // Hit the probe endpoint — it re-probes server-side and updates
-      // cached_models. We consume (and discard) the SSE stream.
+      // cached_models. We consume (and discard) the SSE 流.
       const probeRes = await fetch(`/api/model-endpoints/${epId}/probe`, { credentials: 'same-origin' }).catch(() => null);
       if (probeRes && probeRes.status === 404) return;
       if (probeRes) await probeRes.text().catch(() => {});
@@ -3757,18 +3757,18 @@ async function _pollBackgroundStatus() {
         if (!live) continue;
         const updates = {};
         // A finished dependency install whose tmux pane is gone is reported
-        // "stopped" by the backend (its pip package is never in the HF cache the
+        // "stopped" by the 后端 (its pip package is never in the HF cache the
         // dead-session check inspects). Recover "done" from the retained output's
         // exit-0 sentinel so a clean install isn't downgraded to crashed.
         const depDone = !!task.payload?._dep && _depInstallSucceeded(task.output);
-        // A finished model download whose tmux pane is gone is also reported
+        // A finished 模型下载 whose tmux pane is gone is also reported
         // "stopped" (the dead-session check can miss the landed snapshot).
         // Recover "done" from the terminal `DOWNLOAD_OK` sentinel — emitted
         // only after the runner exits 0 — so a completed download isn't
         // downgraded to crashed. This background poll runs blind (no live
-        // stream to debounce against), so unlike the reconnect loop it keys
+        // stream to 防抖 against), so unlike the reconnect loop it keys
         // off the conclusive exit sentinel only, never the `/snapshots/` path,
-        // which can be printed mid-stream for multi-file downloads.
+        // which can be printed mid-stream for multi-文件下载s.
         const downloadDone = task.type === 'download'
           && String(task.output || '').includes('DOWNLOAD_OK');
         const nextStatus = live.status === 'completed'
@@ -3850,7 +3850,7 @@ async function _pollBackgroundStatus() {
       // vLLM emits OpenAI-style tool_calls only when launched with
       // `--enable-auto-tool-choice`; local-only models otherwise
       // hallucinate a fake [TOOL_CALL]...[/TOOL_CALL] text format
-      // the backend can't parse.
+      // the 后端 can't parse.
       const _cmd = localTask?.payload?._cmd || '';
       const _supportsTools = _cmd.includes('--enable-auto-tool-choice') || _isDiffusion === false && /(?:^|\s)(?:deepseek|gpt-[45o]|claude|gemini|qwen3|qwen2\.5|mixtral|llama-[34]|minimax|kimi|hermes|glm-4)/i.test(t.model);
 
@@ -3906,7 +3906,7 @@ async function _pollBackgroundStatus() {
         const t = activeTasks[0];
         if (t.type === 'serve') {
           if (t.progress) {
-            // Show serve phase from backend (e.g. "loading 45%", "warming up", "idle", "12.5 tok/s")
+            // Show serve phase from 后端 (e.g. "loading 45%", "warming up", "idle", "12.5 tok/s")
             statusEl.textContent = t.progress;
           } else if (t.status === 'ready') {
             statusEl.textContent = 'ready';
@@ -3986,5 +3986,5 @@ export function initRunning(shared) {
   })();
 }
 
-// Also export _retryDownload and _nextAvailablePort for use by other modules
+// Also export _重试Download and _nextAvailablePort for use by other modules
 export { _retryDownload, _nextAvailablePort, _processQueue };

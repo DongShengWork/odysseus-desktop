@@ -204,7 +204,7 @@ export const state = {
   // 文档尺寸，单位为画布像素。
   imgWidth: 0,
   imgHeight: 0,
-  // Gallery image id this editor session is editing, or null for
+  // Gallery 镜像 id this editor session is editing, or null for
   // blank-canvas drafts.
   imageId: null,
   // 原始文件扩展名，以便覆盖保存原件时用相同的格式重新编码
@@ -213,7 +213,7 @@ export const state = {
   originalExt: 'png',
   // 在 openEditor / closeEditor 之间为 true — 防止在用户关闭编辑器后
   // that fire after the user closes the editor (don't draw onto a
-  // dead canvas, don't re-mount the spinner).
+  // dead canvas, don't re-mount the 加载指示器).
   editorOpen: false,
   // 为当前会话注册的文档级点击外部处理函数。
   // 被追踪以便 closeEditor 可以干净地全部移除。
