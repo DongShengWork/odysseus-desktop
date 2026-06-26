@@ -265,7 +265,7 @@ class AuthManager:
             return self.create_user(username, password, is_admin=True)
 
     def create_user(self, username: str, password: str, is_admin: bool = False) -> bool:
-        """Create a new user account."""
+        """创建新用户 account."""
         username = username.strip().lower()
         if not username:
             return False
