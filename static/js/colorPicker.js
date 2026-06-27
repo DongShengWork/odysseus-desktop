@@ -261,7 +261,7 @@ function wireHandlers(p) {
   } else {
     eye.disabled = true;
     eye.style.opacity = '0.3';
-    eye.title = 'Eyedropper not supported in this browser';
+    eye.title = '此浏览器不支持取色器';
   }
 }
 

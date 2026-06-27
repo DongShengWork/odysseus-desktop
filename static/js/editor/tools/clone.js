@@ -50,7 +50,7 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
         state.cloneSourceY = coords.y;
         state.cloneSourceLayerId = (layer && layer.id) || state.activeLayerId;
         state.cloneSourceSnapshot = null; // captured at first stroke
-        showToast('Clone source set');
+        showToast('已设置克隆采样源');
         return;
       }
       if (state.cloneSourceX === null || state.cloneSourceY === null) {

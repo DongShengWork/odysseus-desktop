@@ -266,7 +266,7 @@ async function _createEvent(data) {
   }).catch((e) => {
     delete _allEvents[tempUid];
     if (_open) _render();
-    if (window.uiModule) window.uiModule.showError('Failed to create event: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError('创建事件失败: ' + (e?.message || 'unknown'));
   });
   return { uid: tempUid };
 }
@@ -295,7 +295,7 @@ async function _updateEvent(uid, data) {
     if (_preMergeBackup) _allEvents[uid] = _preMergeBackup;
     else delete _allEvents[uid];
     if (_open) _render();
-    if (window.uiModule) window.uiModule.showError('Failed to update event: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError('更新事件失败: ' + (e?.message || 'unknown'));
   });
   return { ok: true };
 }
@@ -347,7 +347,7 @@ async function _deleteEvent(uid) {
       _allEvents[k] = ev;
       if (Array.isArray(_events)) _events.push(ev);
     }
-    if (window.uiModule) window.uiModule.showError('Failed to delete event: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError('删除事件失败: ' + (e?.message || 'unknown'));
     if (_open) _render();
   });
   return { ok: true };
@@ -490,7 +490,7 @@ function _showEventMoreMenu(ev, anchor) {
   dropdown.appendChild(_item(_trashIcon, 'Delete', async () => {
     closeMenu();
     const name = ev.summary ? `"${ev.summary}"` : 'this event';
-    const ok = await uiModule.styledConfirm(`Delete ${name}?`, { confirmText: 'Delete', danger: true });
+    const ok = await uiModule.styledConfirm(`Delete ${name}?`, { confirmText: '删除', danger: true });
     if (!ok) return;
     try { await _deleteEvent(ev.uid); setTimeout(() => _render(), 100); } catch (_) {}
   }, true));
@@ -538,13 +538,13 @@ async function _createEventReminder(ev, dueDate) {
     });
     if (!res.ok) throw new Error('Failed');
     const fmt = dueDate.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-    if (uiModule.showToast) uiModule.showToast(`Reminder set for ${fmt}`);
+    if (uiModule.showToast) uiModule.showToast(`提醒已设置： ${fmt}`);
     try { window.notesModule?.refreshDueBadge?.({ force: true }); } catch {}
     if ('Notification' in window && Notification.permission === 'default') {
       try { Notification.requestPermission(); } catch {}
     }
   } catch (e) {
-    if (uiModule.showError) uiModule.showError('Failed to create reminder');
+    if (uiModule.showError) uiModule.showError('创建提醒失败');
   }
 }
 
@@ -609,7 +609,7 @@ function _getModal() {
   _modal.innerHTML = `
     <div class="modal-content cal-modal-content">
       <div class="modal-header">
-        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Calendar</h4>
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>日历</h4>
         <button class="close-btn" id="cal-close">✖</button>
       </div>
       <div class="modal-body" id="cal-body"></div>
@@ -771,16 +771,16 @@ function _renderEmpty() {
         <line x1="8" y1="2" x2="8" y2="6"/>
         <line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
-      <div class="cal-empty-title">${hasError ? 'Calendar unavailable' : 'No calendars yet'}</div>
-      <div class="cal-empty-msg">${hasError ? _e(_calendarsError) : 'Create a local calendar, import an .ics file, or sync via CalDAV.'}</div>
+      <div class="cal-empty-title">${hasError ? '日历不可用' : '暂无日历'}</div>
+      <div class="cal-empty-msg">${hasError ? _e(_calendarsError) : '创建本地日历、导入 .ics 文件或通过 CalDAV 同步。'}</div>
       ${hasError ? `
-        <button class="cal-btn cal-btn-primary" id="cal-goto-settings">Open Settings</button>
+        <button class="cal-btn cal-btn-primary" id="cal-goto-settings">打开设置</button>
       ` : `
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px;">
-          <button class="cal-btn cal-btn-primary" id="cal-empty-new">New calendar</button>
-          <button class="cal-btn" id="cal-empty-import">Import .ics</button>
+          <button class="cal-btn cal-btn-primary" id="cal-empty-new">新建日历</button>
+          <button class="cal-btn" id="cal-empty-import">导入 .ics</button>
         </div>
-        <div style="margin-top:10px;font-size:11px;opacity:0.55;">Or <a href="#" id="cal-empty-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">set up CalDAV sync</a>.</div>
+        <div style="margin-top:10px;font-size:11px;opacity:0.55;">或 <a href="#" id="cal-empty-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">设置 CalDAV 同步</a>。</div>
       `}
     </div>`;
   document.getElementById('cal-goto-settings')?.addEventListener('click', () => {
@@ -844,20 +844,20 @@ function _headerHTML() {
   return `<div class="cal-toolbar">
     <div class="cal-toolbar-nav">
       <button class="cal-nav" id="cal-prev">&larr;</button>
-      <button class="cal-nav cal-today-btn" id="cal-today">Today</button>
-      <span class="cal-title">${_view === 'agenda' ? 'Upcoming' : MONTHS[_currentDate.getMonth()] + ' ' + _currentDate.getFullYear()}${weekSuffix}</span>
+      <button class="cal-nav cal-today-btn" id="cal-today">今天</button>
+      <span class="cal-title">${_view === 'agenda' ? '即将到来' : MONTHS[_currentDate.getMonth()] + ' ' + _currentDate.getFullYear()}${weekSuffix}</span>
       <button class="cal-nav" id="cal-next">&rarr;</button>
     </div>
     <div class="cal-toolbar-right">
       <div class="cal-view-toggle">
-        ${['week', 'month', 'year', 'agenda'].map(v =>
-          `<button class="cal-view-btn${_view === v ? ' active' : ''}" data-view="${v}">${v[0].toUpperCase() + v.slice(1)}</button>`
-        ).join('')}
+        ${(() => { const labels = { week: '周', month: '月', year: '年', agenda: '日程' }; return ['week', 'month', 'year', 'agenda'].map(v =>
+          `<button class="cal-view-btn${_view === v ? ' active' : ''}" data-view="${v}">${labels[v]}</button>`
+        ).join(''); })()}
       </div>
-      <button class="cal-nav" id="cal-settings" title="Calendar settings" style="position:relative;top:-3px;"><svg width="13" height="13" style="position:relative;top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.68 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-      <button class="cal-nav${window._calSyncing ? ' cal-syncing' : ''}${window._calSyncDone ? ' cal-sync-done' : ''}" id="cal-sync" title="Refresh from database" style="position:relative;top:-3px;">${window._calSyncDone ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>'}</button>
+      <button class="cal-nav" id="cal-settings" title="日历设置" style="position:relative;top:-3px;"><svg width="13" height="13" style="position:relative;top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.68 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <button class="cal-nav${window._calSyncing ? ' cal-syncing' : ''}${window._calSyncDone ? ' cal-sync-done' : ''}" id="cal-sync" title="从数据库刷新" style="position:relative;top:-3px;">${window._calSyncDone ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>'}</button>
       ${_filtersToggleHTML()}
-      <button class="cal-add-btn cal-add-btn-text" id="cal-add" title="New event"><span class="cal-add-plus">+</span><span class="cal-add-label">New</span></button>
+      <button class="cal-add-btn cal-add-btn-text" id="cal-add" title="新建事件"><span class="cal-add-plus">+</span><span class="cal-add-label">新建</span></button>
     </div>
   </div>
   <div class="cal-quickadd-row" id="cal-quickadd-row">
@@ -868,7 +868,7 @@ function _headerHTML() {
       placeholder=" "
       autocomplete="off"
     />
-    <span class="cal-quickadd-hint" id="cal-quickadd-hint" aria-hidden="true"><span class="qa-hint-accent">Quick add</span> — <span class="qa-hint-example" id="qa-hint-example">return home to Ithaca 1pm tmrw</span> <svg class="qa-hint-enter" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg></span>
+    <span class="cal-quickadd-hint" id="cal-quickadd-hint" aria-hidden="true"><span class="qa-hint-accent">快速添加</span> — <span class="qa-hint-example" id="qa-hint-example">return home to Ithaca 1pm tmrw</span> <svg class="qa-hint-enter" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg></span>
     <span class="cal-quickadd-status" id="cal-quickadd-status"></span>
   </div>`;
 }
@@ -893,14 +893,14 @@ function _filtersData() {
     if (!presentTypes.has(t)) continue;
     const off = (t === '!') ? false : _hiddenTypes.has(t);
     const active = (t === '!') && _onlyImportant;
-    const label = t === '!' ? '! important' : t;
+    const label = t === '!' ? '! 重要' : t;
     typeFilters += `<label class="cal-filter-item${off ? ' cal-filter-off' : ''}${active ? ' cal-filter-active' : ''}${t === '!' ? ' cal-filter-important' : ''}" data-type="${t}">
       <span class="cal-filter-dot" style="background:${_TYPE_PALETTE[t]}"></span>${label}</label>`;
   }
   if (hasUntagged) {
     const off = _hiddenTypes.has('__untagged__');
     typeFilters += `<label class="cal-filter-item${off ? ' cal-filter-off' : ''}" data-type="__untagged__">
-      <span class="cal-filter-dot" style="background:${_TYPE_PALETTE.untagged}"></span>untagged</label>`;
+      <span class="cal-filter-dot" style="background:${_TYPE_PALETTE.untagged}"></span>未分类</label>`;
   }
   return { calFilters, typeFilters };
 }
@@ -909,7 +909,7 @@ function _filtersToggleHTML() {
   // Inline toolbar button only. The chip row renders separately below.
   const { calFilters, typeFilters } = _filtersData();
   if (!calFilters && !typeFilters) return '';
-  return `<button class="cal-filter-toggle" id="cal-filter-toggle" title="${_filtersCollapsed ? 'Show filters' : 'Hide filters'}">${_filtersCollapsed ? '+ tags' : '− tags'}</button>`;
+  return `<button class="cal-filter-toggle" id="cal-filter-toggle" title="${_filtersCollapsed ? '显示筛选' : '隐藏筛选'}">${_filtersCollapsed ? '+ 标签' : '− 标签'}</button>`;
 }
 
 function _filtersRowHTML() {
@@ -1013,7 +1013,7 @@ async function _renderMonth() {
             <span class="cal-event-row-name">${_impMark}${_e(ev.summary)}</span>
           </div>`;
         }
-        if (singles.length > maxInline) h += `<div class="cal-event-more">+${singles.length - maxInline} more</div>`;
+        if (singles.length > maxInline) h += `<div class="cal-event-more">+${singles.length - maxInline} 更多</div>`;
       }
       h += '</div>';
     }
@@ -1212,8 +1212,8 @@ async function _renderWeek() {
   // (toolbar is already crowded — this empty 56-px corner is a free home).
   let railHtml = `<div class="cal-wk-rail">
     <div class="cal-wk-rail-spacer">
-      <button class="cal-wk-zoom" id="cal-wk-zoom-out" title="Zoom out (–)" aria-label="Zoom out">−</button>
-      <button class="cal-wk-zoom" id="cal-wk-zoom-in" title="Zoom in (+)" aria-label="Zoom in">+</button>
+      <button class="cal-wk-zoom" id="cal-wk-zoom-out" title="缩小" aria-label="缩小">−</button>
+      <button class="cal-wk-zoom" id="cal-wk-zoom-in" title="放大" aria-label="放大">+</button>
     </div>`;
   for (let h = WEEK_HOUR_START; h < WEEK_HOUR_END; h++) {
     railHtml += `<div class="cal-wk-rail-cell" style="height:${WEEK_HOUR_PX}px;"><span>${_wkFormatHourLabel(h)}</span></div>`;
@@ -1268,7 +1268,7 @@ async function _renderWeek() {
       colsHtml += `<div class="cal-wk-block" data-uid="${_e(ev.uid)}" style="top:${top}px;height:${height}px;border-left-color:${_calColor(ev)};${bgDecl}">`;
       colsHtml += `<div class="cal-wk-block-name">${_e(ev.summary)}</div>`;
       colsHtml += `<div class="cal-wk-block-time">${t}</div>`;
-      colsHtml += `<div class="cal-wk-block-resize" title="Drag to resize"></div>`;
+      colsHtml += `<div class="cal-wk-block-resize" title="拖拽调整时长"></div>`;
       colsHtml += `</div>`;
     }
     colsHtml += `</div></div>`;  // /cal-wk-grid /cal-wk-col
@@ -1410,7 +1410,7 @@ async function _renderWeek() {
         try {
           await _updateEvent(uid, { dtstart: newDtstart, dtend: newDtend });
           _render();
-          _showCalUndoToast('Moved event', async () => {
+          _showCalUndoToast('已移动事件', async () => {
             try {
               await _updateEvent(uid, { dtstart: prevDtstart, dtend: prevDtend });
               _render();
@@ -1468,7 +1468,7 @@ async function _renderWeek() {
         try {
           await _updateEvent(uid, { dtend: newDtend });
           _render();
-          _showCalUndoToast('Resized event', async () => {
+          _showCalUndoToast('已调整事件', async () => {
             try {
               await _updateEvent(uid, { dtend: prevDtend });
               _render();
@@ -1615,23 +1615,23 @@ async function _renderAgenda() {
     // Empty-state mirrors the email panel: short message + a Settings ›
     // Integrations link to set up CalDAV, OR a quick "Create event" action.
     h += '<div class="cal-empty" style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">' +
-      '<span>No upcoming events</span>' +
+      '<span>无即将发生的事件</span>' +
       '<span style="opacity:0.7;font-size:11px;">' +
-        '<a href="#" data-cal-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">Settings &rsaquo; Integrations</a>' +
+        '<a href="#" data-cal-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">设置 &rsaquo; 集成</a>' +
         ' &middot; ' +
-        '<a href="#" data-cal-create-event="1" style="color:var(--accent,var(--red));text-decoration:underline;">Create event</a>' +
+        '<a href="#" data-cal-create-event="1" style="color:var(--accent,var(--red));text-decoration:underline;">创建事件</a>' +
       '</span>' +
     '</div>';
   } else {
     for (const date of dates) {
       const evs = byDate.get(date);
-      const todayBadge = (date === today) ? ' <span class="cal-agenda-today-badge">Today</span>' : '';
+      const todayBadge = (date === today) ? ' <span class="cal-agenda-today-badge">今天</span>' : '';
       h += `<div class="cal-agenda-day${date === today ? ' is-today' : ''}"><div class="cal-agenda-date">${_fmtDate(date)}${todayBadge}</div>`;
       if (!evs.length) {
-        h += '<div class="cal-agenda-empty">No events</div>';
+        h += '<div class="cal-agenda-empty">无事件</div>';
       }
       for (const ev of evs) {
-        const t = ev.all_day ? 'All day' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
+        const t = ev.all_day ? '全天' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
         const _typeTag = ev.event_type
           ? `<span class="cal-event-tag" style="color:${_TYPE_PALETTE[ev.event_type] || _TYPE_PALETTE.other};border-color:${_TYPE_PALETTE[ev.event_type] || _TYPE_PALETTE.other}">#${_e(ev.event_type)}</span>`
           : '';
@@ -1643,7 +1643,7 @@ async function _renderAgenda() {
             <div class="cal-event-name">${_impMark}${_e(ev.summary)} ${_typeTag}</div>
             <div class="cal-event-time">${t}${ev.location ? ' · ' + _locHTML(ev.location) : ''}</div>
           </div>
-          <button class="cal-event-more" data-uid="${_e(ev.uid)}" title="More">${_moreIcon}</button>
+          <button class="cal-event-more" data-uid="${_e(ev.uid)}" title="更多">${_moreIcon}</button>
         </div>`;
       }
       h += '</div>';
@@ -1696,20 +1696,20 @@ async function _renderSearch() {
     .sort((a, b) => a.dtstart < b.dtstart ? -1 : 1);
 
   let h = _headerHTML() + _filtersRowHTML() + '<div class="cal-search-results">';
-  h += `<div class="cal-search-count">${results.length} result${results.length !== 1 ? 's' : ''} for "${_e(_searchQuery)}"</div>`;
+  h += `<div class="cal-search-count">关于 "${_e(_searchQuery)}" 共 ${results.length} 条结果</div>`;
   if (!results.length) {
-    h += '<div class="cal-empty">No events match your search</div>';
+    h += '<div class="cal-empty">无匹配事件</div>';
   } else {
     for (const ev of results) {
       const evDate = _localDateOf(ev.dtstart);
-      const t = ev.all_day ? 'All day' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
+      const t = ev.all_day ? '全天' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
       h += `<div class="cal-agenda-event" data-uid="${_e(ev.uid)}">
         <div class="cal-event-dot" style="background:${_calColor(ev)}"></div>
         <div class="cal-event-info">
           <div class="cal-event-name">${_e(ev.summary)}</div>
           <div class="cal-event-time">${_fmtDate(evDate)} · ${t}${ev.location ? ' · ' + _locHTML(ev.location) : ''}</div>
         </div>
-        <button class="cal-event-more" data-uid="${_e(ev.uid)}" title="More">${_moreIcon}</button>
+        <button class="cal-event-more" data-uid="${_e(ev.uid)}" title="更多">${_moreIcon}</button>
       </div>`;
     }
   }
@@ -1802,14 +1802,14 @@ function _dayDetailHTML(dateStr) {
   // Magnifying-glass icon inside the search field via a wrapper + padding-left.
   const searchInput = `<div class="cal-search-wrap">
     <svg class="cal-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="search" class="cal-search-input cal-day-search" id="cal-search" placeholder="Search all events…" value="${_e(_searchQuery)}" />
+    <input type="search" class="cal-search-input cal-day-search" id="cal-search" placeholder="搜索所有事件…" value="${_e(_searchQuery)}" />
   </div>`;
-  let h = `<div class="cal-splitter" role="separator" aria-orientation="horizontal" tabindex="0" title="Drag to resize"><div class="cal-splitter-grip"></div></div>
+  let h = `<div class="cal-splitter" role="separator" aria-orientation="horizontal" tabindex="0" title="拖拽调整大小"><div class="cal-splitter-grip"></div></div>
     <div class="cal-day-detail">
     ${searchInput}
     <div class="cal-detail-header">
-      <span>${_fmtDate(dateStr)}${isToday ? ' <span style="color:var(--accent, var(--red));font-weight:600;">(Today)</span>' : ''}</span>
-      <button class="cal-add-btn cal-add-btn-text cal-add-btn-sm" id="cal-add-day" title="New event"><span class="cal-add-plus">+</span><span class="cal-add-label">New</span></button>
+      <span>${_fmtDate(dateStr)}${isToday ? ' <span style="color:var(--accent, var(--red));font-weight:600;">(今天)</span>' : ''}</span>
+      <button class="cal-add-btn cal-add-btn-text cal-add-btn-sm" id="cal-add-day" title="新建事件"><span class="cal-add-plus">+</span><span class="cal-add-label">新建</span></button>
     </div>`;
   if (_searchQuery) {
     const q = _searchQuery.toLowerCase();
@@ -1821,13 +1821,13 @@ function _dayDetailHTML(dateStr) {
         (e.location || '').toLowerCase().includes(q)
       )
       .sort((a, b) => (a.dtstart || '').localeCompare(b.dtstart || ''));
-    h += `<div class="cal-day-search-meta">${results.length} result${results.length !== 1 ? 's' : ''}</div>`;
+    h += `<div class="cal-day-search-meta">${results.length} 条结果</div>`;
     if (!results.length) {
-      h += '<div class="cal-empty">No events match</div>';
+      h += '<div class="cal-empty">无匹配事件</div>';
     } else {
       results.forEach(ev => {
         const date = ev.all_day ? ev.dtstart : _localDateOf(ev.dtstart);
-        const t = ev.all_day ? 'All day' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
+        const t = ev.all_day ? '全天' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
         const bgStyle = _calItemBgStyle(ev);
         h += `<div class="cal-event-item${bgStyle ? ' cal-event-item-bg' : ''}" data-uid="${_e(ev.uid)}"${bgStyle ? ` style="${bgStyle}"` : ''}>
           <div class="cal-event-dot" style="background:${_calColor(ev)}"></div>
@@ -1836,7 +1836,7 @@ function _dayDetailHTML(dateStr) {
             <div class="cal-event-time">${_fmtDate(date)} · ${t}</div>
             ${ev.location ? `<div class="cal-event-loc">${_locHTML(ev.location)}</div>` : ''}
           </div>
-          <button class="cal-event-more" data-uid="${_e(ev.uid)}" title="More">${_moreIcon}</button>
+          <button class="cal-event-more" data-uid="${_e(ev.uid)}" title="更多">${_moreIcon}</button>
         </div>`;
       });
     }
@@ -1845,9 +1845,9 @@ function _dayDetailHTML(dateStr) {
   const evs = _eventsForDay(dateStr);
   if (!evs.length) h += '<div class="cal-empty">No events</div>';
   else evs.forEach(ev => {
-    const t = ev.all_day ? 'All day' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
+    const t = ev.all_day ? '全天' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
     const _bgStyle = _calItemBgStyle(ev);
-    h += `<div class="cal-event-item${_bgStyle ? ' cal-event-item-bg' : ''}" data-uid="${_e(ev.uid)}"${_bgStyle ? ` style="${_bgStyle}"` : ''}><div class="cal-event-dot" style="background:${_calColor(ev)}"></div><div class="cal-event-info"><div class="cal-event-name">${_e(ev.summary)}</div><div class="cal-event-time">${t}</div>${ev.location ? `<div class="cal-event-loc">${_locHTML(ev.location)}</div>` : ''}</div><button class="cal-event-more" data-uid="${_e(ev.uid)}" title="More">${_moreIcon}</button></div>`;
+    h += `<div class="cal-event-item${_bgStyle ? ' cal-event-item-bg' : ''}" data-uid="${_e(ev.uid)}"${_bgStyle ? ` style="${_bgStyle}"` : ''}><div class="cal-event-dot" style="background:${_calColor(ev)}"></div><div class="cal-event-info"><div class="cal-event-name">${_e(ev.summary)}</div><div class="cal-event-time">${t}</div>${ev.location ? `<div class="cal-event-loc">${_locHTML(ev.location)}</div>` : ''}</div><button class="cal-event-more" data-uid="${_e(ev.uid)}" title="更多">${_moreIcon}</button></div>`;
   });
   return h + '</div>';
 }
@@ -1959,7 +1959,7 @@ function _wireAll(body) {
             _qaStatus.appendChild(_qaSpin.element);
           }, 250);
         } catch {
-          _qaSpinTimer = setTimeout(() => { if (_qaStatus) _qaStatus.textContent = 'parsing…'; }, 250);
+          _qaSpinTimer = setTimeout(() => { if (_qaStatus) _qaStatus.textContent = '解析中…'; }, 250);
         }
       }
       try {
@@ -1974,7 +1974,7 @@ function _wireAll(body) {
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
           if (_qaStatus) _qaStatus.textContent = '';
-          uiModule.showError('Quick-add: ' + (data.error || data.detail || `HTTP ${res.status}`));
+          uiModule.showError('快速添加: ' + (data.error || data.detail || `HTTP ${res.status}`));
           return;
         }
         // Open the bespoke event form, then push the parsed fields in.
@@ -2007,7 +2007,7 @@ function _wireAll(body) {
         // Reset for next quick add.
         _qaInput.value = '';
       } catch (e) {
-        uiModule.showError('Quick-add failed: ' + e.message);
+        uiModule.showError('快速添加失败: ' + e.message);
       } finally {
         _qaSubmitting = false;
         clearTimeout(_qaSpinTimer);
@@ -2166,7 +2166,7 @@ function _wireAll(body) {
         window._calSyncDone = false;
         if (_open) _render();
       }, 900);
-      if (uiModule?.showToast) uiModule.showToast('Calendar refreshed');
+      if (uiModule?.showToast) uiModule.showToast('日历已刷新');
     }
   });
   // Brief spin on the "+" glyph before the new-event form opens. The
@@ -2406,7 +2406,7 @@ function _wireAll(body) {
       _pushCalUndo({ label: 'move', run: () => _updateEvent(undoSnap.uid, { dtstart: undoSnap.dtstart, dtend: undoSnap.dtend || undefined }).then(_render) });
       await _updateEvent(ev.uid, { dtstart: _shiftDT(ev.dtstart, diff), dtend: ev.dtend ? _shiftDT(ev.dtend, diff) : undefined });
       _render();
-      uiModule.showToast?.('Moved', { duration: 4000, action: 'Undo', actionHint: 'Ctrl+Z', onAction: _popAndRunCalUndo });
+      uiModule.showToast?.('已移动', { duration: 4000, action: 'Undo', actionHint: 'Ctrl+Z', onAction: _popAndRunCalUndo });
     });
   });
 }
@@ -2455,18 +2455,18 @@ async function _showCalSettings() {
   overlay.innerHTML = `
     <div class="modal-content" style="width:420px;max-width:92vw;">
       <div class="modal-header">
-        <h4>Calendar Settings</h4>
+        <h4>日历设置</h4>
         <button class="close-btn" id="cal-settings-close">\u2716</button>
       </div>
       <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:16px;">
         <div>
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Your calendars</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">你的日历</div>
           <div id="cal-settings-list" style="display:flex;flex-direction:column;gap:4px;">
             ${cals.map(c => `
               <div class="cal-settings-row" data-id="${_e(c.href)}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:color-mix(in srgb, var(--fg) 4%, transparent);">
                 <input type="color" value="${c.color || '#5b8abf'}" class="cal-s-color" style="width:24px;height:24px;border:none;background:none;cursor:pointer;padding:0;border-radius:50%;overflow:hidden;" />
                 <input type="text" value="${_e(c.name)}" class="cal-s-name" style="flex:1;background:none;border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--fg);font-size:12px;" />
-                <button class="cal-s-del" title="Delete calendar" style="background:none;border:none;color:var(--accent, var(--red));opacity:0.75;cursor:pointer;padding:2px;display:flex;position:relative;top:4px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+                <button class="cal-s-del" title="删除日历" style="background:none;border:none;color:var(--accent, var(--red));opacity:0.75;cursor:pointer;padding:2px;display:flex;position:relative;top:4px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
               </div>
             `).join('')}
           </div>
@@ -2476,19 +2476,19 @@ async function _showCalSettings() {
           </button>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Import calendar</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">导入日历</div>
           <div style="display:flex;gap:8px;align-items:center;">
             <label class="memory-toolbar-btn" style="cursor:pointer;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:5px;margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span style="position:relative;top:4px;">Import .ics</span>
+              <span style="position:relative;top:4px;">导入 .ics</span>
               <input type="file" accept=".ics,.ical" id="cal-import-file" style="display:none;" />
             </label>
             <span id="cal-import-status" style="font-size:11px;opacity:0.6;"></span>
           </div>
-          <div style="font-size:10px;opacity:0.4;margin-top:4px;">Upload a .ics file to import events. Google Calendar, Apple Calendar, and Outlook all export .ics files.</div>
+          <div style="font-size:10px;opacity:0.4;margin-top:4px;">上传 .ics 文件以导入事件。Google 日历、Apple 日历和 Outlook 均可导出 .ics 文件。</div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Export calendar</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">导出日历</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             ${cals.map(c => `
               <button class="memory-toolbar-btn cal-s-export-chip" data-id="${_e(c.href)}" title="Download ${_e(c.name)}.ics" style="cursor:pointer;">
@@ -2497,13 +2497,13 @@ async function _showCalSettings() {
               </button>
             `).join('')}
           </div>
-          <div style="font-size:10px;opacity:0.4;margin-top:4px;">Download a calendar as .ics for backup or to import into another app.</div>
+          <div style="font-size:10px;opacity:0.4;margin-top:4px;">将日历下载为 .ics 文件用于备份或导入到其他应用。</div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Week starts on</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">每周起始日</div>
           <div style="display:flex;gap:6px;">
-            <button id="cal-wstart-mon" type="button" style="font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:${!_weekStartSun ? 'color-mix(in srgb, var(--accent,var(--red)) 18%, var(--panel))' : 'var(--panel)'};color:var(--fg);cursor:pointer;transition:background 0.1s,border-color 0.1s;outline:none;">Monday</button>
-            <button id="cal-wstart-sun" type="button" style="font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:${_weekStartSun ? 'color-mix(in srgb, var(--accent,var(--red)) 18%, var(--panel))' : 'var(--panel)'};color:var(--fg);cursor:pointer;transition:background 0.1s,border-color 0.1s;outline:none;">Sunday</button>
+            <button id="cal-wstart-mon" type="button" style="font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:${!_weekStartSun ? 'color-mix(in srgb, var(--accent,var(--red)) 18%, var(--panel))' : 'var(--panel)'};color:var(--fg);cursor:pointer;transition:background 0.1s,border-color 0.1s;outline:none;">周一</button>
+            <button id="cal-wstart-sun" type="button" style="font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:${_weekStartSun ? 'color-mix(in srgb, var(--accent,var(--red)) 18%, var(--panel))' : 'var(--panel)'};color:var(--fg);cursor:pointer;transition:background 0.1s,border-color 0.1s;outline:none;">周日</button>
           </div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
@@ -2511,11 +2511,11 @@ async function _showCalSettings() {
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <button class="memory-toolbar-btn" id="cal-settings-sync-now" style="cursor:pointer;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:2px;margin-right:3px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              <span style="position:relative;top:1px;">Sync now</span>
+              <span style="position:relative;top:1px;">立即同步</span>
             </button>
             <span id="cal-settings-sync-status" style="font-size:11px;opacity:0.6;"></span>
           </div>
-          <div style="font-size:10px;opacity:0.4;margin-top:4px;">Pulls events from your CalDAV server. To connect or change CalDAV credentials, open <a href="#" id="cal-settings-open-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">Settings → Integrations</a>.</div>
+          <div style="font-size:10px;opacity:0.4;margin-top:4px;">从 CalDAV 服务器拉取事件 server. To connect or change CalDAV credentials, open <a href="#" id="cal-settings-open-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">设置 → 集成</a>.</div>
         </div>
       </div>
     </div>
@@ -2557,7 +2557,7 @@ async function _showCalSettings() {
     try {
       const r = await fetch(`${API_BASE}/api/calendar/calendars?name=${encodeURIComponent('New calendar')}&color=${encodeURIComponent(color)}`, { method: 'POST', credentials: 'same-origin' });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.ok) throw new Error(d.error || 'Failed to create calendar');
+      if (!r.ok || !d.ok) throw new Error(d.error || '创建日历失败');
       _calendars.push({ name: d.name, href: d.id, color: d.color });
       _allEvents = {}; _fetchedRanges = []; localStorage.removeItem(LS_KEY);
       _render();
@@ -2572,7 +2572,7 @@ async function _showCalSettings() {
       }, 30);
     } catch (err) {
       btn.disabled = false;
-      if (window.showError) window.showError(err.message || 'Failed to create calendar');
+      if (window.showError) window.showError(err.message || '创建日历失败');
       else console.error(err);
     }
   });
@@ -2612,7 +2612,7 @@ async function _showCalSettings() {
 
     delBtn.addEventListener('click', async () => {
       const name = nameInput.value;
-      if (!await window.styledConfirm(`Delete calendar "${name}" and all its events?`, { confirmText: 'Delete', danger: true })) return;
+      if (!await window.styledConfirm(`删除日历 "${name}" 及其所有事件?`, { confirmText: '删除', danger: true })) return;
       await fetch(`${API_BASE}/api/calendar/calendars/${id}`, { method: 'DELETE' });
       row.remove();
       _allEvents = {}; _fetchedRanges = []; localStorage.removeItem(LS_KEY);
@@ -2626,7 +2626,7 @@ async function _showCalSettings() {
     const file = e.target.files[0];
     if (!file) return;
     const status = overlay.querySelector('#cal-import-status');
-    status.textContent = 'Importing...';
+    status.textContent = '正在导入…';
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -2637,18 +2637,18 @@ async function _showCalSettings() {
       let data = null, raw = '';
       try { data = await res.clone().json(); } catch (_) { raw = await res.text().catch(() => ''); }
       if (res.ok && data && data.ok) {
-        status.textContent = `${data.imported} events imported to "${data.calendar}"` + (data.skipped ? ` (${data.skipped} skipped)` : '');
+        status.textContent = `${data.imported} 个事件已导入 to "${data.calendar}"` + (data.skipped ? ` (${data.skipped} 已跳过)` : '');
         _allEvents = {}; _fetchedRanges = []; localStorage.removeItem(LS_KEY);
         await _fetchCalendars();
         _render();
       } else {
         // FastAPI HTTPException → {detail}; some routes use {error}.
         const reason = (data && (data.detail || data.error)) || raw.slice(0, 200) || `HTTP ${res.status}`;
-        status.textContent = `Import failed: ${reason}`;
+        status.textContent = `导入失败: ${reason}`;
         console.error('Calendar import failed', res.status, data || raw);
       }
     } catch (err) {
-      status.textContent = `Import failed: ${err.message || err}`;
+      status.textContent = `导入失败: ${err.message || err}`;
       console.error('Calendar import threw', err);
     }
     e.target.value = '';
@@ -2667,15 +2667,15 @@ async function _showCalSettings() {
     const btn = e.currentTarget;
     const status = overlay.querySelector('#cal-settings-sync-status');
     btn.disabled = true;
-    status.textContent = 'Syncing…';
+    status.textContent = '正在同步…';
     const data = await _syncCaldav(true) || {};
     if (data.errors && data.errors.length) {
-      status.textContent = `Sync failed: ${data.errors[0]}`;
+      status.textContent = `同步失败: ${data.errors[0]}`;
     } else {
       const parts = [];
       if (data.events) parts.push(`${data.events} events`);
       if (data.deleted) parts.push(`${data.deleted} removed`);
-      status.textContent = parts.length ? `Synced — ${parts.join(', ')}` : 'Synced — no changes';
+      status.textContent = parts.length ? `Synced — ${parts.join(', ')}` : '已同步 — 无变化';
       _allEvents = {}; _fetchedRanges = [];
       try { localStorage.removeItem(LS_KEY); } catch (_) {}
       await _fetchCalendars();
@@ -2688,7 +2688,7 @@ async function _showCalSettings() {
     btn.disabled = false;
   });
 
-  // Integrations link — close this overlay and open Settings → Integrations.
+  // Integrations link — close this overlay and open 设置 → 集成.
   overlay.querySelector('#cal-settings-open-caldav')?.addEventListener('click', (e) => {
     e.preventDefault();
     cleanup();
@@ -2758,21 +2758,21 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   const _expandedAtStart = isEdit && _hasDetails;
 
   body.innerHTML = `<div class="cal-form cal-form-bespoke${_expandedAtStart ? ' is-expanded' : ''}">
-    <button type="button" class="cal-form-mobile-cancel" id="cal-form-mobile-cancel" title="Cancel" aria-label="Cancel event">
+    <button type="button" class="cal-form-mobile-cancel" id="cal-form-mobile-cancel" title="取消" aria-label="取消事件">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
     <div class="cal-form-today" id="cal-form-today">Today is <span id="cal-form-today-text">${_clockDate(_today())} · ${_nowClock()}</span></div>
     <div class="cal-hero">
-      <button type="button" class="cal-hero-time" id="cal-hero-time" title="Change time">
+      <button type="button" class="cal-hero-time" id="cal-hero-time" title="更改时间">
         <span class="cal-hero-clock" id="cal-hero-clock">${_clockFace(ad ? '' : st)}</span>
         <span class="cal-hero-ampm" id="cal-hero-ampm">${_clockAmpm(ad ? '' : st)}</span>
       </button>
-      <button type="button" class="cal-hero-date" id="cal-hero-date" title="Change date">${_clockDate(ds)}</button>
+      <button type="button" class="cal-hero-date" id="cal-hero-date" title="更改日期">${_clockDate(ds)}</button>
     </div>
 
     <div class="cal-title-wrap">
       <input type="text" id="cal-f-sum" placeholder=" " value="${_e(existing?.summary || '')}" class="cal-input cal-hero-title" autocomplete="off" />
-      <span class="cal-title-hint" aria-hidden="true">${isEdit ? 'Event title' : 'What’s happening?'}<svg class="cal-title-enter-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg></span>
+      <span class="cal-title-hint" aria-hidden="true">${isEdit ? '事件标题' : 'What’s happening?'}<svg class="cal-title-enter-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg></span>
     </div>
 
     <div class="cal-form-details" id="cal-form-details" aria-hidden="${_expandedAtStart ? 'false' : 'true'}">
@@ -2781,7 +2781,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         <span style="opacity:0.3">to</span>
         <input type="date" id="cal-f-date-end" value="${de}" class="cal-input" />
         <div class="cal-allday-ctrl">
-          <span class="cal-allday-label">All day</span>
+          <span class="cal-allday-label">全天</span>
           <label class="admin-switch cal-allday-switch"><input type="checkbox" id="cal-f-allday" ${ad ? 'checked' : ''} /><span class="admin-slider"></span></label>
         </div>
       </div>
@@ -2791,20 +2791,20 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         <input type="time" id="cal-f-end" value="${et}" class="cal-input cal-input-time" />
       </div>
       <div class="cal-loc-row">
-        <input type="text" id="cal-f-loc" placeholder="Location" value="${_e(existing?.location || '')}" class="cal-input" />
-        <a id="cal-f-loc-map" class="cal-loc-map" href="#" target="_blank" rel="noopener noreferrer" title="Open in Maps" aria-label="Open in Apple Maps" tabindex="-1">
+        <input type="text" id="cal-f-loc" placeholder="地点" value="${_e(existing?.location || '')}" class="cal-input" />
+        <a id="cal-f-loc-map" class="cal-loc-map" href="#" target="_blank" rel="noopener noreferrer" title="在地图中打开" aria-label="在地图中打开" tabindex="-1">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         </a>
       </div>
       <select id="cal-f-rrule" class="cal-input">
-        <option value="" ${!existing?.rrule ? 'selected' : ''}>Does not repeat</option>
-        <option value="FREQ=DAILY" ${existing?.rrule === 'FREQ=DAILY' ? 'selected' : ''}>Daily</option>
-        <option value="FREQ=WEEKLY" ${existing?.rrule === 'FREQ=WEEKLY' ? 'selected' : ''}>Weekly</option>
-        <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" ${existing?.rrule === 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' ? 'selected' : ''}>Weekdays</option>
-        <option value="FREQ=MONTHLY" ${existing?.rrule === 'FREQ=MONTHLY' ? 'selected' : ''}>Monthly</option>
-        <option value="FREQ=YEARLY" ${existing?.rrule === 'FREQ=YEARLY' ? 'selected' : ''}>Yearly</option>
+        <option value="" ${!existing?.rrule ? 'selected' : ''}>不重复</option>
+        <option value="FREQ=DAILY" ${existing?.rrule === 'FREQ=DAILY' ? 'selected' : ''}>每天</option>
+        <option value="FREQ=WEEKLY" ${existing?.rrule === 'FREQ=WEEKLY' ? 'selected' : ''}>每周</option>
+        <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" ${existing?.rrule === 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' ? 'selected' : ''}>工作日</option>
+        <option value="FREQ=MONTHLY" ${existing?.rrule === 'FREQ=MONTHLY' ? 'selected' : ''}>每月</option>
+        <option value="FREQ=YEARLY" ${existing?.rrule === 'FREQ=YEARLY' ? 'selected' : ''}>每年</option>
       </select>
-      <textarea id="cal-f-desc" placeholder="Description" class="cal-input" rows="2">${_e(existing?.description || '')}</textarea>
+      <textarea id="cal-f-desc" placeholder="描述" class="cal-input" rows="2">${_e(existing?.description || '')}</textarea>
       ${(() => {
         // Cookbook-task back-link. When the description carries a
         // "cookbook_task_id: <id>" marker (set by cookbookSchedule.js
@@ -2822,29 +2822,29 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
               <path d="M9 11l3 3L22 4"/>
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
-            <span>Open in Tasks</span>
+            <span>在任务中打开</span>
           </button>
-          <span style="font-size:11px;opacity:0.5;">Linked to a Cookbook scheduled task</span>
+          <span style="font-size:11px;opacity:0.5;">已关联到 Cookbook 计划任务</span>
         </div>`;
       })()}
       <div class="cal-form-row" style="align-items:center;gap:8px;">
         <label style="font-size:11px;display:flex;align-items:center;gap:4px;"><svg class="cal-remind-bell" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent, var(--red))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span style="opacity:0.5;">Reminder</span></label>
         <select id="cal-f-remind" class="cal-input" style="flex:1;">
-          <option value="" ${isEdit ? 'selected' : ''}>No reminder</option>
-          <option value="0">At event time</option>
-          <option value="5">5 minutes before</option>
-          <option value="10">10 minutes before</option>
-          <option value="15" ${!isEdit ? 'selected' : ''}>15 minutes before</option>
-          <option value="30">30 minutes before</option>
-          <option value="60">1 hour before</option>
+          <option value="" ${isEdit ? 'selected' : ''}>无提醒</option>
+          <option value="0">事件开始时</option>
+          <option value="5">5 分钟前</option>
+          <option value="10">10 分钟前</option>
+          <option value="15" ${!isEdit ? 'selected' : ''}>15 分钟前</option>
+          <option value="30">30 分钟前</option>
+          <option value="60">1 小时前</option>
           <option value="120">2 hours before</option>
-          <option value="1440">1 day before</option>
-          <option value="custom">Exact time...</option>
+          <option value="1440">1 天前</option>
+          <option value="custom">自定义时间...</option>
         </select>
         <input type="datetime-local" id="cal-f-remind-custom" class="cal-input" style="flex:1;display:none;" />
       </div>
       <div class="cal-form-row" style="align-items:center;gap:8px;">
-        <label style="font-size:11px;opacity:0.5;">Color</label>
+        <label style="font-size:11px;opacity:0.5;">颜色</label>
         <div class="note-color-picker" id="cal-f-colors">
           ${CAL_COLORS.map(c => {
             const cur = existing?.color || '';
@@ -3041,7 +3041,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     const customInput = document.getElementById('cal-f-remind-custom');
     if (e.target.value === 'custom') {
       customInput.style.display = '';
-      // Default to 1 hour before event
+      // Default to 1 小时前 event
       const dv = document.getElementById('cal-f-date')?.value || _today();
       const st = document.getElementById('cal-f-start')?.value || '09:00';
       const eventDt = new Date(`${dv}T${st}:00`);
@@ -3067,7 +3067,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   document.getElementById('cal-form-mobile-cancel')?.addEventListener('click', _cancelEventForm);
   document.getElementById('cal-f-save')?.addEventListener('click', async () => {
     const summary = document.getElementById('cal-f-sum').value.trim();
-    if (!summary) { uiModule.showToast('Title required'); return; }
+    if (!summary) { uiModule.showToast('标题为必填项'); return; }
     const dv = document.getElementById('cal-f-date').value;
     const dvEnd = document.getElementById('cal-f-date-end').value || dv;
     const isAD = document.getElementById('cal-f-allday').checked;
@@ -3103,7 +3103,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       const endDt = new Date(`${dvEnd}T${endVal}:00`);
 
       if (endDt <= startDt) {
-        uiModule.showToast('End time must be after start time');
+        uiModule.showToast('结束时间必须晚于开始时间');
         return;
       }
     }
@@ -3138,14 +3138,14 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         }
       }
       _selectedDay = dv; _render();
-    } catch (e) { uiModule.showToast('Failed to save'); }
+    } catch (e) { uiModule.showToast('保存失败'); }
   });
   document.getElementById('cal-f-del')?.addEventListener('click', async () => {
     const name = existing && existing.summary ? `"${existing.summary}"` : 'this event';
-    const ok = await uiModule.styledConfirm(`Delete ${name}?`, { confirmText: 'Delete', danger: true });
+    const ok = await uiModule.styledConfirm(`Delete ${name}?`, { confirmText: '删除', danger: true });
     if (!ok) return;
     try { await _deleteEvent(existing.uid); _render(); }
-    catch (e) { uiModule.showToast('Failed to delete'); }
+    catch (e) { uiModule.showToast('删除失败'); }
   });
   // ── Bespoke-form behavior ──────────────────────────────────────────
   const formEl = body.querySelector('.cal-form');
@@ -3261,7 +3261,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     const clockEl = document.getElementById('cal-hero-clock');
     const ampmEl = document.getElementById('cal-hero-ampm');
     const dateEl = document.getElementById('cal-hero-date');
-    if (clockEl) clockEl.innerHTML = allday ? '<span class="cal-hero-clock-allday">All day</span>' : _clockFace(startVal);
+    if (clockEl) clockEl.innerHTML = allday ? '<span class="cal-hero-clock-allday">全天</span>' : _clockFace(startVal);
     if (ampmEl) ampmEl.textContent = allday ? '' : _clockAmpm(startVal);
     if (dateEl) dateEl.textContent = _clockDate(dateVal);
   };

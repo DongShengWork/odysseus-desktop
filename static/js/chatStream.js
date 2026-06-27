@@ -203,8 +203,8 @@ export function notifyStreamComplete(sessionId, query) {
   var isOtherSession = sessionModule && sessionModule.getCurrentSessionId() !== sessionId;
   if (!isHidden && !isOtherSession) return;
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  var body = query ? 'Response to "' + query.substring(0, 60) + '" is ready' : 'Your chat response has completed';
-  var notification = new Notification('Response Complete', {
+  var body = query ? '对 "' + query.substring(0, 60) + '" 的回复已就绪' : '您的聊天回复已完成';
+  var notification = new Notification('回复完成', {
     body: body,
     tag: 'stream-' + sessionId,
   });
@@ -226,13 +226,13 @@ export function insertStreamDoneToast(sessionId, query) {
   if (!box) return;
   var sessions = sessionModule ? sessionModule.getSessions() : [];
   var sess = sessions.find(function(s) { return s.id === sessionId; });
-  var name = sess ? sess.name : 'another session';
+  var name = sess ? sess.name : '另一个会话';
   var preview = query ? '"' + query.substring(0, 50) + (query.length > 50 ? '...' : '') + '"' : '';
   var div = document.createElement('div');
   div.className = 'msg msg-system stream-done-toast';
   div.innerHTML = '<div class="body">'
     + '<span class="stream-done-indicator">●</span>'
-    + '<span>Response ready in <strong>' + (name || 'session').replace(/</g, '&lt;') + '</strong>'
+    + '<span>回复已在 <strong>' + (name || '会话').replace(/</g, '&lt;') + '</strong> 中就绪'
     + (preview ? ' &mdash; ' + preview.replace(/</g, '&lt;') : '')
     + '</span>'
     + '</div>';
@@ -251,8 +251,8 @@ export function notifyResearchComplete(sessionId, query) {
   var isOtherSession = sessionModule && sessionModule.getCurrentSessionId() !== sessionId;
   if (!isHidden && !isOtherSession) return;
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  var body = query ? 'Research on "' + query.substring(0, 60) + '" is ready' : 'Your deep research has completed';
-  var notification = new Notification('Research Complete', {
+  var body = query ? '关于 "' + query.substring(0, 60) + '" 的研究已就绪' : '您的深度研究已完成';
+  var notification = new Notification('研究完成', {
     body: body,
     tag: 'research-' + sessionId,
   });

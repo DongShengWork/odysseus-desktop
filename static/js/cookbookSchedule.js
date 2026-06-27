@@ -272,7 +272,7 @@ try { (function () {
       };
       const saveBtn = form.querySelector(".hwfit-sched-save");
       saveBtn.disabled = true;
-      saveBtn.textContent = "Saving…";
+      saveBtn.textContent = "保存中…";
       try {
         const r = await fetch("/api/tasks", {
           method: "POST", credentials: "same-origin",
@@ -283,7 +283,7 @@ try { (function () {
         if (!r.ok || data.error) {
           fail(data.error || data.detail || `HTTP ${r.status}`);
           saveBtn.disabled = false;
-          saveBtn.textContent = "Save schedule";
+          saveBtn.textContent = "保存计划";
           toast(`Schedule save failed: ${data.error || data.detail || r.status}`);
           return;
         }

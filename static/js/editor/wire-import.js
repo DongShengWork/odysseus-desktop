@@ -63,7 +63,7 @@ export function wireImport({ container, saveState, createLayer, composite, rende
     if (importSec) importSec.style.display = 'none';
     composite();
     renderLayerPanel();
-    if (uiModule) uiModule.showToast('Image imported — drag to position');
+    if (uiModule) uiModule.showToast('图片已导入 — 拖动以定位');
   }
 
   importFileInput.addEventListener('change', (e) => {
@@ -90,14 +90,14 @@ export function wireImport({ container, saveState, createLayer, composite, rende
         const imgType = item.types.find(t => t.startsWith('image/'));
         if (imgType) { blob = await item.getType(imgType); break; }
       }
-      if (!blob) { if (uiModule) uiModule.showToast('No image found in clipboard'); return; }
+      if (!blob) { if (uiModule) uiModule.showToast('剪贴板中未找到图片'); return; }
       const url = URL.createObjectURL(blob);
       const img = new Image();
       img.onload = () => { handleImportedImage(img); URL.revokeObjectURL(url); };
-      img.onerror = () => { URL.revokeObjectURL(url); if (uiModule) uiModule.showToast('Failed to load clipboard image'); };
+      img.onerror = () => { URL.revokeObjectURL(url); if (uiModule) uiModule.showToast('加载剪贴板图片失败'); };
       img.src = url;
     } catch (e) {
-      if (uiModule) uiModule.showToast('Clipboard access denied or no image available');
+      if (uiModule) uiModule.showToast('剪贴板访问被拒绝或无可用图片');
     }
   });
 
@@ -108,14 +108,14 @@ export function wireImport({ container, saveState, createLayer, composite, rende
       const res = await fetch('/api/gallery/library?limit=50', { credentials: 'same-origin' });
       const data = await res.json();
       const items = data.items || [];
-      if (!items.length) { if (uiModule) uiModule.showToast('No images in gallery'); return; }
+      if (!items.length) { if (uiModule) uiModule.showToast('画廊中没有图片'); return; }
 
       // Picker overlay.
       const overlay = document.createElement('div');
       overlay.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;';
       const panel = document.createElement('div');
       panel.style.cssText = 'background:var(--panel,#1e1e1e);border-radius:12px;padding:16px;max-width:500px;max-height:70vh;overflow-y:auto;width:90%;';
-      panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:13px;font-weight:600;">Pick from Gallery</span><button id="ge-gallery-close" style="background:none;border:none;color:var(--fg);cursor:pointer;font-size:18px;">✕</button></div>';
+      panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:13px;font-weight:600;">从画廊选择</span><button id="ge-gallery-close" style="background:none;border:none;color:var(--fg);cursor:pointer;font-size:18px;">✕</button></div>';
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;';
       for (const item of items) {
@@ -129,7 +129,7 @@ export function wireImport({ container, saveState, createLayer, composite, rende
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => handleImportedImage(img);
-          img.onerror = () => { if (uiModule) uiModule.showToast('Failed to load gallery image'); };
+          img.onerror = () => { if (uiModule) uiModule.showToast('加载画廊图片失败'); };
           img.src = item.url;
         });
         grid.appendChild(thumb);
@@ -140,7 +140,7 @@ export function wireImport({ container, saveState, createLayer, composite, rende
       overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
       panel.querySelector('#ge-gallery-close').addEventListener('click', () => overlay.remove());
     } catch (e) {
-      if (uiModule) uiModule.showToast('Failed to load gallery: ' + e.message);
+      if (uiModule) uiModule.showToast('加载画廊失败: ' + e.message);
     }
   });
 

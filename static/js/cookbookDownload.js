@@ -299,8 +299,8 @@ export function _wirePanelEvents(panel, model, backend) {
     copyBtn.addEventListener('click', () => {
       const cmd = panel.querySelector('.hwfit-panel-cmd')?.textContent || '';
       _copyText(cmd).then(() => {
-        copyBtn.textContent = 'Copied';
-        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        copyBtn.textContent = '已复制';
+        setTimeout(() => { copyBtn.textContent = '复制'; }, 1500);
       });
     });
   }
@@ -310,13 +310,13 @@ export function _wirePanelEvents(panel, model, backend) {
   if (saveBtn) {
     saveBtn.addEventListener('click', () => {
       const shortName = model.name.split('/').pop() || model.name;
-      const name = prompt('Preset name:', shortName);
+      const name = prompt('预设名称:', shortName);
       if (!name) return;
       const fields = _getPanelFields(panel);
       const presets = _loadPresets();
       presets.push({ name, model: model.name, backend, fields });
       _savePresets(presets);
-      uiModule.showToast('Preset saved');
+      uiModule.showToast('预设已保存');
     });
   }
 
@@ -619,7 +619,7 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
       return;
     }
     _addTask(data.session_id, taskName, 'download', payload);
-    uiModule.showToast(`Downloading ${taskName}...`);
+    uiModule.showToast(`下载中 ${taskName}...`);
   } catch (e) {
     uiModule.showToast('Download failed: ' + e.message, 9000);
   }

@@ -195,16 +195,16 @@ export function formatElapsed(ms) {
 }
 
 export function formatPhase(progress, maxRounds) {
-  if (!progress || !progress.phase) return 'Starting...';
+  if (!progress || !progress.phase) return '正在启动...';
   const p = progress;
-  const rn = p.round ? (maxRounds ? `Round ${p.round}/${maxRounds}: ` : `Round ${p.round}: `) : '';
+  const rn = p.round ? (maxRounds ? `第 ${p.round}/${maxRounds} 轮：` : `第 ${p.round} 轮：`) : '';
   switch (p.phase) {
-    case 'probing': return 'Probing model...';
-    case 'planning': return 'Planning research strategy...';
-    case 'searching': return `${rn}Searching (${p.queries || 0} queries)`;
-    case 'reading': return `${rn}Reading ${p.total_sources || 0} sources`;
-    case 'analyzing': return `${rn}Analyzing ${p.total_findings || 0} findings`;
-    case 'writing': return `Writing report -- ${p.total_sources || 0} sources`;
+    case 'probing': return '正在探测模型...';
+    case 'planning': return '正在规划研究策略...';
+    case 'searching': return `${rn}正在搜索（${p.queries || 0} 次查询）`;
+    case 'reading': return `${rn}正在阅读 ${p.total_sources || 0} 个来源`;
+    case 'analyzing': return `${rn}正在分析 ${p.total_findings || 0} 条发现`;
+    case 'writing': return `正在撰写报告 — ${p.total_sources || 0} 个来源`;
     default: return p.phase;
   }
 }
@@ -307,7 +307,7 @@ function _finishJob(job, status) {
   job.elapsed = Date.now() - (job.startedAt || Date.now());
   if (status === 'done') {
     if ('Notification' in window && Notification.permission === 'granted') {
-      try { new Notification('Research Complete', { body: job.query.slice(0, 80) }); } catch {}
+      try { new Notification('研究完成', { body: job.query.slice(0, 80) }); } catch {}
     }
     if (_onCompleteCb) _onCompleteCb(job);
   }

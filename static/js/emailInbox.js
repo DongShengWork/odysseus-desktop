@@ -15,7 +15,7 @@ const _acct = () => window.__odysseusActiveEmailAccount
   ? `&account_id=${encodeURIComponent(window.__odysseusActiveEmailAccount)}`
   : '';
 
-const _emailSetupHint = () => '<div style="margin-top:6px;opacity:0.72;font-size:11px;">Setup: <span style="color:var(--accent,var(--red));">Settings &rsaquo; Integrations</span></div>';
+const _emailSetupHint = () => '<div style="margin-top:6px;opacity:0.72;font-size:11px;">设置方式: <span style="color:var(--accent,var(--red));">设置 &rsaquo; 集成</span></div>';
 
 // SVG icons matching sessions.js dropdown style
 const _replyIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
@@ -26,7 +26,7 @@ const _starIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 const _starFilledIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
 const _bellIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
 const _icon = (svg) => `<span class="dropdown-icon">${svg}</span>`;
-const _replySeparator = '---------- Previous message ----------';
+const _replySeparator = '---------- 上一条消息 ----------';
 
 function _cleanAiReplyText(text) {
   if (!text) return '';
@@ -328,7 +328,7 @@ export async function loadEmails(append = false) {
     console.error('Failed to load emails:', e);
     if (_listSpinner) { _listSpinner.destroy(); _listSpinner = null; }
     if (!append && list) {
-      const msg = e && e.message ? `Failed to load: ${e.message}` : 'Failed to load';
+      const msg = e && e.message ? `加载失败: ${e.message}` : '加载失败';
       list.innerHTML = `<div class="email-loading">${msg.replace(/&/g, '&amp;').replace(/</g, '&lt;')}${_emailSetupHint()}</div>`;
     }
   } finally {
@@ -374,14 +374,14 @@ export function sortedFolders(folders) {
 export function folderDisplayName(folder) {
   const raw = String(folder || '');
   const f = raw.toLowerCase();
-  if (f === 'inbox') return 'INBOX';
-  if (f.includes('all mail')) return 'Archive / All Mail';
-  if (f.includes('archive')) return 'Archive';
-  if (f.includes('spam')) return 'Spam';
-  if (f.includes('junk')) return 'Junk';
-  if (f.includes('trash') || f.includes('bin') || f.includes('deleted')) return 'Trash';
-  if (f.includes('sent')) return 'Sent';
-  if (f.includes('draft')) return 'Drafts';
+  if (f === 'inbox') return '收件箱';
+  if (f.includes('all mail')) return '归档 / 全部邮件';
+  if (f.includes('archive')) return '归档';
+  if (f.includes('spam')) return '垃圾邮件';
+  if (f.includes('junk')) return '垃圾邮件';
+  if (f.includes('trash') || f.includes('bin') || f.includes('deleted')) return '回收站';
+  if (f.includes('sent')) return '已发送';
+  if (f.includes('draft')) return '草稿';
   return raw;
 }
 
@@ -421,7 +421,7 @@ function _renderList() {
   if (_senderFilter) {
     const chip = document.createElement('div');
     chip.className = 'email-filter-chip';
-    chip.innerHTML = `<span class="email-filter-chip-label">From: ${_esc(_senderFilterLabel || _senderFilter)}</span><button class="email-filter-chip-clear" title="Clear filter">&times;</button>`;
+    chip.innerHTML = `<span class="email-filter-chip-label">发件人: ${_esc(_senderFilterLabel || _senderFilter)}</span><button class="email-filter-chip-clear" title="清除筛选">&times;</button>`;
     chip.querySelector('.email-filter-chip-clear').addEventListener('click', () => _clearSenderFilter());
     list.appendChild(chip);
   }
@@ -429,7 +429,7 @@ function _renderList() {
   if (_emails.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'email-loading';
-    empty.textContent = _senderFilter ? `No emails from ${_senderFilterLabel || _senderFilter}` : 'No emails';
+    empty.textContent = _senderFilter ? `来自 ${_senderFilterLabel || _senderFilter} 的邮件为空` : '无邮件';
     list.appendChild(empty);
     return;
   }
@@ -483,7 +483,7 @@ function _createEmailItem(em) {
   const color = _senderColor(senderName);
 
   const attachIcon = em.has_attachments
-    ? '<span title="Has attachments" style="opacity:0.6;display:inline-flex;flex-shrink:0;margin-left:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>'
+    ? '<span title="有附件" style="opacity:0.6;display:inline-flex;flex-shrink:0;margin-left:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>'
     : '';
 
   // Per-row dot tint: if the urgency scanner flagged this UID, override the
@@ -491,7 +491,7 @@ function _createEmailItem(em) {
   // ending in `:<uid>` since the per_uid map is keyed `<account_id>:<uid>`
   // and the inbox list doesn't surface the account id per row.
   let _unreadColor = color;
-  let _unreadTitle = 'Unread';
+  let _unreadTitle = '未读';
   try {
     const us = window._emailUrgencyState;
     if (us && us.per_uid && em.uid != null) {
@@ -500,8 +500,8 @@ function _createEmailItem(em) {
         if (k.endsWith(suffix)) {
           const v = us.per_uid[k] || {};
           const score = v.score || 0;
-          if (score >= 3) { _unreadColor = 'var(--color-error, #e06c75)'; _unreadTitle = 'Urgent — ' + (v.reason || 'needs reply now'); }
-          else if (score === 2) { _unreadColor = '#f0ad4e'; _unreadTitle = 'Reply soon — ' + (v.reason || ''); }
+          if (score >= 3) { _unreadColor = 'var(--color-error, #e06c75)'; _unreadTitle = '紧急 — ' + (v.reason || '需要立即回复'); }
+          else if (score === 2) { _unreadColor = '#f0ad4e'; _unreadTitle = '尽快回复 — ' + (v.reason || ''); }
           break;
         }
       }
@@ -517,7 +517,7 @@ function _createEmailItem(em) {
     : '';
 
   const spamTag = em.is_spam_verdict
-    ? `<span class="email-tag email-tag-spam" title="AI flagged as spam — click ✓ to unflag">spam <button class="email-spam-unflag" data-uid="${em.uid}" title="Not spam">\u2713</button></span>`
+    ? `<span class="email-tag email-tag-spam" title="AI 标记为垃圾邮件 — 点击 ✓ 取消标记">垃圾邮件 <button class="email-spam-unflag" data-uid="${em.uid}" title="不是垃圾邮件">\u2713</button></span>`
     : '';
 
   const senderAddr = (em.from_address || '').toLowerCase();
@@ -525,7 +525,7 @@ function _createEmailItem(em) {
     <span class="email-avatar" style="background:${color}">${initial}</span>
     <div class="email-item-content">
       <div class="email-item-top">
-        <span class="email-sender email-sender-clickable" style="color:${color}" data-from-addr="${_esc(senderAddr)}" data-from-name="${_esc(senderName)}" title="Show all emails from ${_esc(senderName)}">${_esc(senderName)}</span>
+        <span class="email-sender email-sender-clickable" style="color:${color}" data-from-addr="${_esc(senderAddr)}" data-from-name="${_esc(senderName)}" title="显示来自 ${_esc(senderName)} 的所有邮件">${_esc(senderName)}</span>
         <span class="email-date">${_esc(dateStr)}</span>
       </div>
       <div class="email-subject">${_esc(em.subject)}${unreadIcon}${attachIcon}${tagPills}${spamTag}</div>
@@ -671,7 +671,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
       } else {
         let draftToastTimer = null;
         draftToastTimer = setTimeout(() => {
-          import('./ui.js').then(m => m.showToast && m.showToast('Drafting AI reply', { duration: 3000, leadingIcon: 'spinner' })).catch(() => {});
+          import('./ui.js').then(m => m.showToast && m.showToast('AI 回复起草中', { duration: 3000, leadingIcon: 'spinner' })).catch(() => {});
         }, 450);
         try {
           let currentModel = '';
@@ -701,15 +701,15 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
           if (result.success && result.reply) {
             aiSuggestedBody = _cleanAiReplyText(result.reply);
           } else {
-            const _msg = result.error || 'AI reply could not be generated';
+            const _msg = result.error || 'AI 回复无法生成';
             console.error('AI reply generation failed:', _msg);
-            import('./ui.js').then(m => m.showError && m.showError('AI reply failed: ' + _msg)).catch(() => {});
+            import('./ui.js').then(m => m.showError && m.showError('AI 回复失败: ' + _msg)).catch(() => {});
             return;
           }
         } catch (e) {
           if (draftToastTimer) clearTimeout(draftToastTimer);
           console.error('AI reply generation failed:', e);
-          import('./ui.js').then(m => m.showError && m.showError('AI reply failed: ' + (e.message || e))).catch(() => {});
+          import('./ui.js').then(m => m.showError && m.showError('AI 回复失败: ' + (e.message || e))).catch(() => {});
           return;
         }
       }
@@ -790,7 +790,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
     }
 
     if (mode === 'forward') {
-      content += `\n\n---------- Forwarded message ----------\n`;
+      content += `\n\n---------- 转发邮件 ----------\n`;
       content += `From: ${data.from_name} <${data.from_address}>\n`;
       content += `Date: ${niceDate}\n`;
       content += `Subject: ${data.subject}\n`;
@@ -878,7 +878,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
           // import pattern the rest of this file uses. (Previously this
           // referenced a bare `uiModule`, throwing a ReferenceError that
           // the outer catch swallowed → reply silently did nothing.)
-          import('./ui.js').then(m => m.showError && m.showError('Failed to create reply draft (' + docRes.status + ')')).catch(() => {});
+          import('./ui.js').then(m => m.showError && m.showError('创建回复草稿失败 (' + docRes.status + ')')).catch(() => {});
           return;
         }
         const doc = await docRes.json();
@@ -904,7 +904,7 @@ async function _openEmail(em, itemEl, preloadedData = null, mode = 'reply', note
     // look like "nothing happened". Dynamic import — uiModule isn't a
     // static import in this file.
     const msg = e && e.message ? e.message : String(e);
-    import('./ui.js').then(m => m.showError && m.showError('Reply failed: ' + msg)).catch(() => {});
+    import('./ui.js').then(m => m.showError && m.showError('回复失败: ' + msg)).catch(() => {});
   } finally {
     if (spinner) { spinner.destroy(); spinner.element.remove(); }
     if (itemEl) {
@@ -921,10 +921,10 @@ function _showEmailMenu(em, anchor, itemEl) {
   dropdown.className = 'dropdown email-dropdown show';
 
   const actions = [
-    { label: 'Open', icon: _replyIcon, action: () => _openEmail(em, itemEl) },
-    { label: 'Remind to reply', icon: _bellIcon, submenu: 'remind' },
-    { label: 'Archive', icon: _archiveIcon, action: () => _archiveEmail(em) },
-    { label: 'Delete', icon: _deleteIcon, danger: true, action: () => _deleteEmail(em) },
+    { label: '打开', icon: _replyIcon, action: () => _openEmail(em, itemEl) },
+    { label: '提醒回复', icon: _bellIcon, submenu: 'remind' },
+    { label: '归档', icon: _archiveIcon, action: () => _archiveEmail(em) },
+    { label: '删除', icon: _deleteIcon, danger: true, action: () => _deleteEmail(em) },
   ];
 
   for (const a of actions) {
@@ -963,7 +963,7 @@ function _showRemindSubmenu(em, parentDropdown) {
   const header = document.createElement('div');
   header.className = 'dropdown-item-compact';
   header.style.cssText = 'opacity:0.5;font-size:10px;pointer-events:none;text-transform:uppercase;letter-spacing:0.5px;padding-top:6px;';
-  header.innerHTML = '<span>Remind me</span>';
+  header.innerHTML = '<span>提醒我</span>';
   parentDropdown.appendChild(header);
 
   const now = new Date();
@@ -977,9 +977,9 @@ function _showRemindSubmenu(em, parentDropdown) {
   const nextWeek = new Date(now); nextWeek.setDate(now.getDate() + daysUntilMon); nextWeek.setHours(8, 0, 0, 0);
 
   const presets = [
-    { label: 'Later today', sub: laterToday.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), date: laterToday },
-    { label: 'Tomorrow', sub: tomorrow.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), date: tomorrow },
-    { label: 'Next week', sub: nextWeek.toLocaleDateString([], { weekday: 'short' }) + ' ' + nextWeek.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), date: nextWeek },
+    { label: '今天晚些', sub: laterToday.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), date: laterToday },
+    { label: '明天', sub: tomorrow.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), date: tomorrow },
+    { label: '下周', sub: nextWeek.toLocaleDateString([], { weekday: 'short' }) + ' ' + nextWeek.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), date: nextWeek },
   ];
   for (const p of presets) {
     const item = document.createElement('div');
@@ -994,7 +994,7 @@ function _showRemindSubmenu(em, parentDropdown) {
   }
   const customItem = document.createElement('div');
   customItem.className = 'dropdown-item-compact';
-  customItem.innerHTML = '<span>Pick date and time…</span>';
+  customItem.innerHTML = '<span>选择日期和时间…</span>';
   customItem.addEventListener('click', async (e) => {
     e.stopPropagation();
     parentDropdown.remove();
@@ -1040,10 +1040,10 @@ function _showRemindSubmenu(em, parentDropdown) {
 async function _createReplyReminder(em, dueDate) {
   const pad = n => String(n).padStart(2, '0');
   const iso = `${dueDate.getFullYear()}-${pad(dueDate.getMonth()+1)}-${pad(dueDate.getDate())}T${pad(dueDate.getHours())}:${pad(dueDate.getMinutes())}`;
-  const from = em.from || em.sender || 'someone';
+  const from = em.from || em.sender || '某人';
   const payload = {
-    title: `Reply: ${em.subject || '(no subject)'}`,
-    content: `From: ${from}\n\nRemember to reply to this email.`,
+    title: `回复: ${em.subject || '(无主题)'}`,
+    content: `发件人: ${from}\n\n请记得回复这封邮件。`,
     note_type: 'note',
     label: 'email',
     due_date: iso,
@@ -1058,14 +1058,14 @@ async function _createReplyReminder(em, dueDate) {
     if (!res.ok) throw new Error('Failed');
     const { showToast } = await import('./ui.js');
     const fmt = dueDate.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    showToast(`Reminder set for ${fmt}`);
+    showToast(`提醒已设置为 ${fmt}`);
     // Request notification permission if needed
     if ('Notification' in window && Notification.permission === 'default') {
       try { Notification.requestPermission(); } catch {}
     }
   } catch (e) {
     const { showError } = await import('./ui.js');
-    showError('Failed to create reminder');
+    showError('创建提醒失败');
   }
 }
 
@@ -1080,9 +1080,9 @@ async function _archiveEmail(em) {
 }
 
 async function _deleteEmail(em) {
-  const subject = em.subject || '(no subject)';
+  const subject = em.subject || '(无主题)';
   const { styledConfirm } = await import('./ui.js');
-  const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
+  const ok = await styledConfirm(`删除 "${subject}"？`, { confirmText: '删除', cancelText: '取消', danger: true });
   if (!ok) return;
   try {
     await fetch(`${API_BASE}/api/email/delete/${em.uid}?folder=${encodeURIComponent(_currentFolder)}${_acct()}`, { method: 'DELETE' });
@@ -1189,7 +1189,7 @@ async function _composeNew() {
     }
     if (!sid) {
       console.error('compose: could not obtain a session_id');
-      import('./ui.js').then(m => m.showError && m.showError('Could not start a new email (no session).')).catch(() => {});
+      import('./ui.js').then(m => m.showError && m.showError('无法创建新邮件（无会话）。')).catch(() => {});
       return;
     }
     const res = await fetch(`${API_BASE}/api/document`, {
@@ -1204,7 +1204,7 @@ async function _composeNew() {
     });
     if (!res.ok) {
       console.error('compose POST failed', res.status, await res.text().catch(() => ''));
-      import('./ui.js').then(m => m.showError && m.showError('Failed to create new email (' + res.status + ')')).catch(() => {});
+      import('./ui.js').then(m => m.showError && m.showError('创建新邮件失败 (' + res.status + ')')).catch(() => {});
       return;
     }
     const doc = await res.json();

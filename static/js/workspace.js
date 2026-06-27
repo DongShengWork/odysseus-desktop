@@ -41,7 +41,7 @@ export function syncWorkspaceIndicator(path) {
   if (pill) {
     pill.style.display = (path && !chat) ? '' : 'none';
     pill.classList.toggle('active', !!path);
-    if (path) pill.title = `Workspace: ${path}\nFile tools are confined here; shell commands start here but are not sandboxed and can reach outside it.\nClick to clear.`;
+    if (path) pill.title = `工作区: ${path}\n文件工具限定于此目录；Shell 命令从此处开始但不限于此目录，可以访问外部。\n点击清除。`;
   }
   if (name) name.textContent = path ? _basename(path) : '';
   if (overflow) {
@@ -86,7 +86,7 @@ export async function vetAndSetWorkspace(path) {
 
 export function clearWorkspace() {
   setWorkspace('');
-  if (uiModule && uiModule.showToast) uiModule.showToast('Workspace cleared');
+  if (uiModule && uiModule.showToast) uiModule.showToast('工作区已清除');
 }
 
 async function _load(path) {
@@ -114,10 +114,10 @@ function _render(data) {
     rows += `<div class="workspace-row" data-path="${encodeURIComponent(d.path)}">${_FOLDER_SVG}<span>${uiModule.esc(d.name)}</span></div>`;
   }
   if (data.truncated) {
-    rows += '<div class="workspace-empty">Too many folders to list. Type or paste a path above to jump in.</div>';
+    rows += '<div class="workspace-empty">文件夹过多无法列出。请在上方输入或粘贴路径以跳转。</div>';
   }
-  if (!data.dirs.length && !data.parent) rows = '<div class="workspace-empty">No subfolders</div>';
-  body.innerHTML = rows || '<div class="workspace-empty">No subfolders</div>';
+  if (!data.dirs.length && !data.parent) rows = '<div class="workspace-empty">无子文件夹</div>';
+  body.innerHTML = rows || '<div class="workspace-empty">无子文件夹</div>';
   body.querySelectorAll('.workspace-row').forEach((row) => {
     row.addEventListener('click', () => _navigate(decodeURIComponent(row.dataset.path)));
   });
@@ -126,7 +126,7 @@ function _render(data) {
   const useBtn = _modal.querySelector('#workspace-use');
   if (useBtn) {
     useBtn.disabled = data.selectable === false;
-    useBtn.title = data.selectable === false ? 'This folder cannot be used as a workspace' : '';
+    useBtn.title = data.selectable === false ? '此文件夹无法用作工作区' : '';
   }
 }
 
@@ -134,7 +134,7 @@ async function _navigate(path) {
   try {
     _render(await _load(path));
   } catch (e) {
-    if (uiModule && uiModule.showError) uiModule.showError('Could not open folder');
+    if (uiModule && uiModule.showError) uiModule.showError('无法打开文件夹');
   }
 }
 
@@ -147,17 +147,17 @@ function _getModal() {
   _modal.innerHTML = `
     <div class="modal-content">
       <div class="modal-header">
-        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Select workspace</h4>
-        <button class="close-btn" id="workspace-close" aria-label="Close">✖</button>
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>选择工作区</h4>
+        <button class="close-btn" id="workspace-close" aria-label="关闭">✖</button>
       </div>
       <input type="text" class="styled-prompt-input workspace-cur" id="workspace-cur-path"
              spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"
-             placeholder="Type or paste a folder path, then press Enter" />
-      <p class="muted workspace-note">File tools are <strong>confined</strong> to this folder. Shell commands start here but are <strong>not sandboxed</strong> and can reach outside it. A workspace scopes the tools; it is not a security boundary.</p>
+             placeholder="输入或粘贴文件夹路径，然后按 Enter" />
+      <p class="muted workspace-note">文件工具<strong>限定</strong>于此文件夹。Shell 命令从此处开始但<strong>不受沙箱限制</strong>，可以访问外部。工作区仅限定工具范围，并非安全边界。</p>
       <div class="modal-body workspace-body" id="workspace-body"></div>
       <div class="modal-footer workspace-footer">
-        <button type="button" class="confirm-btn confirm-btn-secondary" id="workspace-cancel">Cancel</button>
-        <button type="button" class="confirm-btn confirm-btn-primary" id="workspace-use">Use this folder</button>
+        <button type="button" class="confirm-btn confirm-btn-secondary" id="workspace-cancel">取消</button>
+        <button type="button" class="confirm-btn confirm-btn-primary" id="workspace-use">使用此文件夹</button>
       </div>
     </div>`;
   document.body.appendChild(_modal);
@@ -173,7 +173,7 @@ function _getModal() {
   });
   _modal.querySelector('#workspace-use').addEventListener('click', () => {
     setWorkspace(_curPath);
-    if (uiModule && uiModule.showToast) uiModule.showToast(`Workspace set: ${_basename(_curPath)}`);
+    if (uiModule && uiModule.showToast) uiModule.showToast(`工作区已设置: ${_basename(_curPath)}`);
     closeWorkspaceBrowser();
   });
   const content = _modal.querySelector('.modal-content');
@@ -188,7 +188,7 @@ export async function openWorkspaceBrowser() {
   try {
     _render(await _load(getWorkspace() || ''));
   } catch (e) {
-    if (uiModule && uiModule.showError) uiModule.showError('Could not browse folders');
+    if (uiModule && uiModule.showError) uiModule.showError('无法浏览文件夹');
   }
 }
 

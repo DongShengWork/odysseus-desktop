@@ -297,7 +297,7 @@ const _SCAN_CACHE_TTL = 6 * 3600 * 1000; // 6 h — hardware rarely changes
 // next to the slider re-renders to "8k" / "16k" / … / "Max".
 function _ctxLabel(value) {
   const n = Number(value) || 0;
-  if (!n) return 'Max';
+  if (!n) return '最大';
   return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
 }
 
@@ -597,10 +597,10 @@ export async function _hwfitFetch(fresh = false) {
     // Text label like the other cookbook tabs: "Loading…", then if the scan runs
     // long (remote SSH hardware probe), switch to "Scanning hardware…".
     const loadingLbl = document.createElement('div');
-    loadingLbl.textContent = 'Loading…';
+    loadingLbl.textContent = '加载中…';
     loadingLbl.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;';
     loadingDiv.appendChild(loadingLbl);
-    setTimeout(() => { if (loadingLbl.isConnected) loadingLbl.textContent = 'Scanning hardware…'; }, 2000);
+    setTimeout(() => { if (loadingLbl.isConnected) loadingLbl.textContent = '正在扫描硬件…'; }, 2000);
     list.innerHTML = '';
     list.appendChild(loadingDiv);
     _hwfitCache = null;   // no instant paint — clear until the fetch returns
@@ -872,7 +872,7 @@ function _renderHwVisibilityWarning(sys) {
   box.querySelector('[data-hw-action="copy"]')?.addEventListener('click', () => {
     // Keep diagnostics copy/paste friendly for GitHub issues and Docker support.
     const text = [
-      'Odysseus Cookbook hardware diagnostics',
+      'Odysseus 图谱硬件诊断',
       `probe_scope=${sys?.probe_scope || ''}`,
       `containerized=${sys?.containerized === true}`,
       `backend=${sys?.backend || ''}`,
@@ -884,7 +884,7 @@ function _renderHwVisibilityWarning(sys) {
       `cpu_cores=${sys?.cpu_cores || ''}`,
       `cpu_name=${sys?.cpu_name || ''}`,
       '',
-      'Useful checks:',
+      '有用检查：',
       'docker compose exec odysseus nvidia-smi -L',
       'docker compose exec odysseus cat /proc/meminfo | head',
       'docker compose exec odysseus python -c "from services.hwfit.hardware import detect_system; import json; print(json.dumps(detect_system(fresh=True), indent=2))"',
@@ -909,7 +909,7 @@ export function _hwfitRenderHw(el, sys) {
   // separate × button (fully remove from view + treat as dismissed for
   // ranking). The body's "off" state is just visually dimmed — the
   // chip stays visible so you can flip it back on without re-scanning.
-  const chip = (key, label, title = 'Click to toggle off (X to hide)') => {
+  const chip = (key, label, title = '点击关闭（X 隐藏）') => {
     if (_removedHwChips.has(key)) return '';
     const dim = _dismissedHwChips.has(key) ? ' hwfit-hw-chip-off' : '';
     return (
@@ -964,7 +964,7 @@ export function _hwfitRenderHw(el, sys) {
           );
         })();
   } else {
-    gpuChip = chip('gpu', 'No GPU');
+    gpuChip = chip('gpu', '无 GPU');
   }
   const vram = sys.gpu_vram_gb ? `${sys.gpu_vram_gb.toFixed(1)} GB VRAM` : '';
   const ram = `${sys.available_ram_gb?.toFixed(1) || '?'} / ${sys.total_ram_gb?.toFixed(1) || '?'} GB RAM`;
@@ -1050,7 +1050,7 @@ function _wireManualHardwareControls(el) {
     _hwfitFetch(true);
   };
   const manual = _manualHwState();
-  btn.textContent = 'EDIT';
+  btn.textContent = '编辑';
   if (manual) {
     panel.querySelector('.hwfit-manual-mode').value = manual.mode || 'gpu';
     panel.querySelector('.hwfit-manual-backend').value = manual.backend || 'cuda';
@@ -1112,15 +1112,15 @@ function _modeLabel(model) {
 }
 
 export const _hwfitColumns = [
-  { key: 'fit', label: 'Fit',    cls: 'hwfit-fit' },
-  { key: 'newest', label: 'Model (latest)',  cls: 'hwfit-name' },
-  { key: 'params',label: 'Param', cls: 'hwfit-c-params' },
-  { key: null,    label: 'Quant',  cls: 'hwfit-c-quant' },
+  { key: 'fit', label: '适配',    cls: 'hwfit-fit' },
+  { key: 'newest', label: '模型 (最新)',  cls: 'hwfit-name' },
+  { key: 'params',label: '参数量', cls: 'hwfit-c-params' },
+  { key: null,    label: '量化',  cls: 'hwfit-c-quant' },
   { key: 'vram',  label: 'VRAM',   cls: 'hwfit-c-vram' },
-  { key: 'context',label: 'Ctx',   cls: 'hwfit-c-ctx' },
-  { key: 'speed', label: 'Speed',  cls: 'hwfit-c-speed' },
-  { key: 'score', label: 'Score',  cls: 'hwfit-c-score' },
-  { key: null,    label: 'Mode',   cls: 'hwfit-c-mode' },
+  { key: 'context',label: '上下文',   cls: 'hwfit-c-ctx' },
+  { key: 'speed', label: '速度',  cls: 'hwfit-c-speed' },
+  { key: 'score', label: '评分',  cls: 'hwfit-c-score' },
+  { key: null,    label: '模式',   cls: 'hwfit-c-mode' },
 ];
 
 export function _hwfitRenderList(el, models) {
@@ -1136,9 +1136,9 @@ export function _hwfitRenderList(el, models) {
       || document.getElementById('hwfit-quant')?.value
       || document.getElementById('hwfit-engine')?.value);
     let msg;
-    if (hasFilters) msg = 'No models match these filters — try clearing the search, use-case, quant, or engine.';
-    else if (hasHw) msg = 'No models fit — the hardware probe may have under-reported. Try Rescan.';
-    else msg = 'No models fit your hardware';
+    if (hasFilters) msg = '没有模型匹配这些筛选条件 — 尝试清除搜索、用例、量化或引擎。';
+    else if (hasHw) msg = '无合适模型 — 硬件探测可能低估了。尝试重新扫描。';
+    else msg = '没有适配您硬件的模型';
     el.innerHTML = `<div class="hwfit-loading">${msg}</div>`;
     return;
   }
@@ -1175,9 +1175,9 @@ export function _hwfitRenderList(el, models) {
     // The Model column's "(newest)" / "(oldest)" suffix flips with the sort
     // direction so the user can see at a glance which way they're sorted.
     if (col.key === 'newest' && col.key === currentSort) {
-      label = isReversed ? 'Model (oldest)' : 'Model (latest)';
+      label = isReversed ? '模型 (最早)' : '模型 (最新)';
     } else if (col.key === 'newest') {
-      label = 'Model (latest)';
+      label = '模型 (最新)';
     }
     html += `<span class="hwfit-col ${col.cls}${sortable}${active}"${dataAttr}>${label}${arrow}</span>`;
   }
@@ -1485,7 +1485,7 @@ export function _expandModelRow(row, modelData) {
         || [..._cachedModelIds].some(id => id === modelData.name || id.endsWith('/' + _short))
       );
       if (_cachedModelIds && !_downloaded) {
-        uiModule.showToast('Model not downloaded yet — starting download. Run again to serve once it finishes.');
+        uiModule.showToast('模型尚未下载 — 正在启动下载。下载完成后再次运行即可服务。');
         if (backend === 'ollama') {
           _runPanelCmd(panel, _buildDownloadCmd(modelData, backend), { timeout: 0 });
         } else {
@@ -1510,14 +1510,14 @@ export function _expandModelRow(row, modelData) {
           const _names = _activeServes.map(t => t.payload?.repo_id || t.repo || t.name || '?').filter(Boolean);
           const _ok = await window.styledConfirm?.(
             `${_names.length} model${_names.length === 1 ? '' : 's'} already serving on ${_qrHostStr || 'local'} (${_names.join(', ')}). Port 8000 will collide. Stop the running model and launch this one?`,
-            { confirmText: 'Stop & launch', cancelText: 'Cancel' }
+            { confirmText: '停止并启动', cancelText: '取消' }
           );
           if (!_ok) return;
           // Mark + kill each running serve, then wait briefly for the
           // tmux session to actually go down before we kick off the new
           // launch. Otherwise vLLM still races against the dying socket.
           quickRunBtn.disabled = true;
-          quickRunBtn.textContent = 'Stopping…';
+          quickRunBtn.textContent = '停止中…';
           for (const t of _activeServes) {
             try {
               // Use that task's own Stop button if it's rendered (handles
@@ -1622,7 +1622,7 @@ export function _expandModelRow(row, modelData) {
       }
 
       quickRunBtn.disabled = true;
-      quickRunBtn.textContent = 'Starting...';
+      quickRunBtn.textContent = '启动中...';
 
       // Smart defaults based on hardware and model
       const system = _hwfitCache?.system || {};
@@ -1711,7 +1711,7 @@ export function _expandModelRow(row, modelData) {
       );
       if (!_ok) {
         quickRunBtn.disabled = false;
-        quickRunBtn.textContent = 'Run';
+        quickRunBtn.textContent = '运行';
         return;
       }
 
@@ -1737,18 +1737,18 @@ export function _expandModelRow(row, modelData) {
           const shortName = modelData.name.split('/').pop();
           _addTask(data.session_id, shortName, 'serve', { _cmd: cmd, model: modelData.name, backend: runBackend, remote_host: host });
           _renderRunningTab();
-          uiModule.showToast(`Launching ${shortName}...`);
+          uiModule.showToast(`正在启动 ${shortName}...`);
           // Switch to Running tab
           const runTab = document.querySelector('.cookbook-tab[data-backend="Running"]');
           if (runTab) runTab.click();
         } else {
-          uiModule.showError('Launch failed: ' + (data.error || ''));
+          uiModule.showError('启动失败: ' + (data.error || ''));
         }
       } catch (e) {
-        uiModule.showError('Launch failed: ' + e.message);
+        uiModule.showError('启动失败: ' + e.message);
       }
       quickRunBtn.disabled = false;
-      quickRunBtn.textContent = 'Run';
+      quickRunBtn.textContent = '运行';
     });
   }
 
@@ -1767,7 +1767,7 @@ export function _expandModelRow(row, modelData) {
         || [..._cachedModelIds].some(id => id === repo || id.endsWith('/' + short))
       );
       if (_cachedModelIds && !downloaded) {
-        uiModule.showToast('Download the model first, then configure from Serve tab');
+        uiModule.showToast('请先下载模型，然后从服务标签页配置');
         return;
       }
       // Downloaded (or cache state unknown) — open the Serve panel, which switches
@@ -1776,7 +1776,7 @@ export function _expandModelRow(row, modelData) {
         const { openServePanelForRepo } = await import('./cookbookServe.js');
         await openServePanelForRepo(repo);
       } catch (e) {
-        uiModule.showToast('Could not open Serve: ' + (e && e.message ? e.message : e));
+        uiModule.showToast('无法打开服务面板: ' + (e && e.message ? e.message : e));
       }
     });
   }
@@ -1951,13 +1951,13 @@ export function _hwfitInit() {
     if (!dot) return;
     if (!host) {
       dot.className = 'cookbook-srv-status';
-      dot.title = 'Enter user@host to test';
+      dot.title = '输入 user@host 以测试';
       setMsg('');
       return;
     }
     dot.className = 'cookbook-srv-status testing';
-    dot.title = 'Testing SSH…';
-    setMsg('Testing SSH...');
+    dot.title = '正在测试 SSH…';
+    setMsg('正在测试 SSH...');
     const pf = port && port !== '22' ? `-p ${port} ` : '';
     const cmd = `ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new ${pf}${host} "echo ok"`;
     const t0 = Date.now();
@@ -2010,7 +2010,7 @@ export function _hwfitInit() {
       credentials: 'same-origin',
     });
     const data = await res.json();
-    if (generate && !data.ok) throw new Error(data.error || 'Failed to generate SSH key');
+    if (generate && !data.ok) throw new Error(data.error || '生成 SSH 密钥失败');
     return (data.public_key || '').trim();
   }
 
@@ -2023,29 +2023,29 @@ export function _hwfitInit() {
     const host = entry.querySelector('.cookbook-srv-host')?.value?.trim() || '';
     const port = entry.querySelector('.cookbook-srv-port')?.value?.trim() || '';
     if (!host || !host.includes('@')) {
-      cmdBox.value = 'Enter the server as user@host first.';
+      cmdBox.value = '请先以 user@host 格式输入服务器。';
       if (copyBtn) copyBtn.disabled = true;
       return;
     }
     if (!/^[A-Za-z0-9._~-]+@[A-Za-z0-9._:-]+$/.test(host) || (port && !/^\d{1,5}$/.test(port))) {
-      cmdBox.value = 'Use a plain SSH target like user@host and an optional numeric port.';
+      cmdBox.value = '请使用普通 SSH 目标，如 user@host 和可选的数字端口。';
       if (copyBtn) copyBtn.disabled = true;
       return;
     }
     if (genBtn) {
       genBtn.disabled = true;
-      genBtn.textContent = generate ? 'Generating...' : 'Loading...';
+      genBtn.textContent = generate ? '生成中...' : '加载中...';
     }
     try {
       let publicKey = await _fetchCookbookSshKey(generate);
       if (!publicKey && !generate) publicKey = await _fetchCookbookSshKey(true);
       cmdBox.value = _serverKeyCommand(host, port, publicKey);
       if (copyBtn) copyBtn.disabled = false;
-      if (genBtn) genBtn.textContent = 'Key ready';
+      if (genBtn) genBtn.textContent = '密钥已就绪';
     } catch (e) {
       cmdBox.value = e.message || String(e);
       if (copyBtn) copyBtn.disabled = true;
-      if (genBtn) genBtn.textContent = 'Generate key';
+      if (genBtn) genBtn.textContent = '生成密钥';
     } finally {
       if (genBtn) genBtn.disabled = false;
     }
@@ -2065,7 +2065,7 @@ export function _hwfitInit() {
     if (!entry.querySelector('.cookbook-srv-status')) {
       const dot = document.createElement('span');
       dot.className = 'cookbook-srv-status';
-      dot.title = 'Click to test SSH';
+      dot.title = '点击测试 SSH';
       dot.addEventListener('click', (e) => { e.stopPropagation(); _testServerConnection(entry); });
       if (titleEl) titleEl.insertBefore(dot, titleEl.firstChild);
       else if (row) row.insertBefore(dot, row.firstChild);
@@ -2074,7 +2074,7 @@ export function _hwfitInit() {
       const _hostEl = entry.querySelector('.cookbook-srv-host');
       if (_hostEl && (_hostEl.readOnly || _hostEl.disabled)) {
         dot.className = 'cookbook-srv-status ok';
-        dot.title = 'Local (this machine)';
+        dot.title = '本地（本机）';
       }
     }
     const checkBtn = entry.querySelector('.cookbook-server-check-btn');
@@ -2101,7 +2101,7 @@ export function _hwfitInit() {
           b.classList.toggle('active', on);
           // Keep the "default" label after the icon (don't overwrite it).
           b.innerHTML = (on ? _MODELDIR_CHECK_ON : _MODELDIR_CHECK_OFF) + '<span class="cookbook-srv-default-label">default</span>';
-          b.title = on ? 'Default server — Cookbook opens here' : 'Make this the default server';
+          b.title = on ? '默认服务器 — 图谱由此打开' : '将此设为默认服务器';
         });
         // Apply immediately so the dropdowns reflect it without reopening
         // (inline — _applyServerSelection lives in cookbook.js and isn't imported here).
@@ -2238,7 +2238,7 @@ export function _hwfitInit() {
         if (!host) return;
         setupBtn.disabled = true;
         const origText = setupBtn.textContent;
-        setupBtn.textContent = 'Installing...';
+        setupBtn.textContent = '安装中...';
         try {
           const res = await fetch('/api/cookbook/setup', {
             method: 'POST', credentials: 'same-origin',
@@ -2283,12 +2283,12 @@ export function _hwfitInit() {
               }
             }
           } else {
-            setupBtn.textContent = 'Failed';
+            setupBtn.textContent = '失败';
             setupBtn.style.color = 'var(--red)';
-            uiModule.showError(data.error || data.output || 'Setup failed');
+            uiModule.showError(data.error || data.output || '设置失败');
           }
         } catch (e) {
-          setupBtn.textContent = 'Error';
+          setupBtn.textContent = '错误';
           setupBtn.style.color = 'var(--red)';
           uiModule.showError(e.message);
         }

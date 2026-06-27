@@ -300,7 +300,7 @@ export function createAdjPopupSystem({ composite, saveState, renderLayerPanel })
       <span class="ge-adj-icon">${ADJ_ICONS[type] || ''}</span>
       <span class="ge-adj-title">${adjLayerLabel(type)}</span>
       <span class="ge-head-btns">
-        <button class="ge-adj-min" type="button" title="Minimise">&minus;</button>
+        <button class="ge-adj-min" type="button" title="最小化">&minus;</button>
       </span>
     </div>
     <div class="ge-adj-body" data-adj-body></div>
@@ -395,7 +395,7 @@ export function createAdjPopupSystem({ composite, saveState, renderLayerPanel })
       e.preventDefault();
       e.stopPropagation();
       suppressLayerGhostTap();
-      saveState(editing ? `Edit ${adjLayerLabel(type)}` : `Add ${adjLayerLabel(type)}`);
+      saveState(editing ? `编辑 ${adjLayerLabel(type)}` : `添加 ${adjLayerLabel(type)}`);
       const params = layer._stagedAdj.params;
       layer._stagedAdj = null;
       if (editing) {
@@ -439,7 +439,7 @@ export function createAdjPopupSystem({ composite, saveState, renderLayerPanel })
         <label>${label}</label>
         <input type="range" min="${min}" max="${max}" value="${value}" data-key="${key}" />
         <span class="ge-adj-value">${value}${suffix || ''}</span>
-        <button class="ge-adj-revert" type="button" title="Reset this slider" data-revert-key="${key}">${revertIcon}</button>
+        <button class="ge-adj-revert" type="button" title="重置此滑块" data-revert-key="${key}">${revertIcon}</button>
       </div>
     `;
     if (type === 'brightness-contrast') {
@@ -469,9 +469,9 @@ export function createAdjPopupSystem({ composite, saveState, renderLayerPanel })
         <div class="ge-adj-hist-wrap">
           <canvas class="ge-adj-histogram" width="280" height="80"></canvas>
           <div class="ge-adj-hist-handles">
-            <div class="ge-adj-hist-handle hist-h-black"  data-handle="inBlack"  title="Input black — drag"></div>
-            <div class="ge-adj-hist-handle hist-h-gamma"  data-handle="gamma"    title="Gamma — drag"></div>
-            <div class="ge-adj-hist-handle hist-h-white"  data-handle="inWhite"  title="Input white — drag"></div>
+            <div class="ge-adj-hist-handle hist-h-black"  data-handle="inBlack"  title="输入黑点 — 拖动"></div>
+            <div class="ge-adj-hist-handle hist-h-gamma"  data-handle="gamma"    title="伽马 — 拖动"></div>
+            <div class="ge-adj-hist-handle hist-h-white"  data-handle="inWhite"  title="输入白点 — 拖动"></div>
           </div>
         </div>
       </details>
@@ -497,7 +497,7 @@ export function createAdjPopupSystem({ composite, saveState, renderLayerPanel })
         <input type="range" min="-100" max="100" value="${value}" data-key="${key}" />
         <span class="ge-adj-cb-dot" style="background:${rightCol}"></span>
         <span class="ge-adj-value">${value}</span>
-        <button class="ge-adj-revert" type="button" title="Reset this slider" data-revert-key="${key}">${revertIcon}</button>
+        <button class="ge-adj-revert" type="button" title="重置此滑块" data-revert-key="${key}">${revertIcon}</button>
       </div>
     `;
       // Tone picker: one tone group visible at a time. Remember the

@@ -197,8 +197,8 @@ export function initKeyboardShortcuts(modules) {
       if (!sid) return;
       const s = sessionModule.getSessions().find(x => x.id === sid);
       if (!s) return;
-      if (s.is_important) { uiModule.showToast('Unstar before deleting'); return; }
-      uiModule.styledConfirm('Delete this session?', { confirmText: 'Delete', danger: true }).then(ok => {
+      if (s.is_important) { uiModule.showToast('删除前请先取消星标'); return; }
+      uiModule.styledConfirm('删除此会话？', { confirmText: '删除', danger: true }).then(ok => {
         if (!ok) return;
         const allSessions = sessionModule.getSessions();
         const idx = allSessions.findIndex(x => x.id === sid);
@@ -211,7 +211,7 @@ export function initKeyboardShortcuts(modules) {
           } else {
             sessionModule.setCurrentSessionId(null);
             el('chat-history').innerHTML = '';
-            el('current-meta').textContent = 'Odysseus Chat';
+            el('current-meta').textContent = 'Odysseus 对话';
             Storage.remove('lastSessionId');
             if (chatModule && chatModule.showWelcomeScreen) chatModule.showWelcomeScreen();
           }

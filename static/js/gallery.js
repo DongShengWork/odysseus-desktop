@@ -22,7 +22,7 @@ let _totalTagged = 0;
 // Update the "X/Y tagged" badge in the AI-tagging settings header.
 function _updateTagCount() {
   const el = document.getElementById('gallery-tag-count');
-  if (el) el.textContent = _total ? `${_totalTagged}/${_total} tagged` : '';
+  if (el) el.textContent = _total ? `${_totalTagged}/${_total} 已标记` : '';
 }
 let _search = '';
 // Stack of active tag filters. Multiple tags AND together — the user
@@ -212,14 +212,14 @@ async function _bulkUpload(filesOrItems, fallbackAlbumId) {
       } catch (e) { errors++; }
       done++;
       if (progress) progress.style.width = `${(done / total) * 100}%`;
-      if (status) status.textContent = `${done}/${total}${dupes ? ` (${dupes} duplicates)` : ''}`;
+      if (status) status.textContent = `${done}/${total}${dupes ? ` (${dupes} 个重复)` : ''}`;
     }
   }
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, worker));
 
-  const msg = `${done - dupes - errors} imported` +
-    (dupes ? `, ${dupes} duplicates skipped` : '') +
-    (errors ? `, ${errors} errors` : '');
+  const msg = `${done - dupes - errors} 已导入` +
+    (dupes ? `, ${dupes} 个重复已跳过` : '') +
+    (errors ? `, ${errors} 个错误` : '');
   if (status) status.textContent = msg;
   uiModule.showToast(msg);
   setTimeout(() => { bar.style.display = 'none'; }, 3000);
@@ -333,9 +333,9 @@ async function _handleGalleryDrop(e) {
     dtItems.some(it => it.kind === 'string')
   );
   if (looksLikeFolderUri) {
-    uiModule.showError('Browsers can’t read folders dropped from native file managers (Thunar/Nautilus). Use the "Upload album" tile in the Albums tab instead.');
+    uiModule.showError('浏览器无法读取从原生文件管理器(Thunar/Nautilus)拖放的文件夹。请使用"上传相册"按钮。');
   } else if (entries.length || dtItems.length) {
-    uiModule.showToast('No images found in that drop');
+    uiModule.showToast('在拖放内容中未找到图片');
   }
 }
 
@@ -343,7 +343,7 @@ async function _handleGalleryDrop(e) {
 
 function _renderStats() {
   const el = document.getElementById('gallery-stats');
-  if (el) el.textContent = `${_total} photo${_total !== 1 ? 's' : ''}`;
+  if (el) el.textContent = `${_total} 张图片`;
 }
 
 function _renderTags(tags) {
@@ -359,7 +359,7 @@ function _renderTags(tags) {
 function _renderModels(models) {
   const sel = document.getElementById('gallery-model-filter');
   if (!sel) return;
-  let html = '<option value="">All sources</option>';
+  let html = '<option value="">所有来源</option>';
   models.forEach(m => {
     const selected = _activeModel === m ? ' selected' : '';
     html += `<option value="${_esc(m)}"${selected}>${_esc(m)}</option>`;
@@ -377,17 +377,17 @@ function _renderAlbums() {
     // Order: All, then the heart, then any active tag chips (to the right of
     // both), then the active-album chip. No favorites-within-an-album view, so
     // the heart is hidden while an album is active.
-    let fhtml = `<button class="gallery-chip${!_activeAlbum && !_favoritesOnly ? ' active' : ''}" data-album="">All</button>`;
+    let fhtml = `<button class="gallery-chip${!_activeAlbum && !_favoritesOnly ? ' active' : ''}" data-album="">全部</button>`;
     if (!_activeAlbum) {
-      fhtml += `<button class="gallery-chip gallery-chip-fav${_favoritesOnly ? ' active' : ''}" data-fav="true" title="Favorites">&#9829;</button>`;
+      fhtml += `<button class="gallery-chip gallery-chip-fav${_favoritesOnly ? ' active' : ''}" data-fav="true" title="收藏">&#9829;</button>`;
     }
     _activeTags.forEach(t => {
-      fhtml += `<span class="gallery-chip gallery-chip-active-album" title="Filtered to tag — click × to remove"><span>#${_esc(t)}</span><button class="gallery-chip-clear" data-clear-tag="${_esc(t)}" aria-label="Remove tag filter">&times;</button></span>`;
+      fhtml += `<span class="gallery-chip gallery-chip-active-album" title="已按标签筛选 — 点击 × 移除"><span>#${_esc(t)}</span><button class="gallery-chip-clear" data-clear-tag="${_esc(t)}" aria-label="移除标签筛选">&times;</button></span>`;
     });
     if (_activeAlbum) {
       const a = _albums.find(x => x.id === _activeAlbum);
       if (a) {
-        fhtml += `<span class="gallery-chip gallery-chip-active-album" title="Currently showing this album — click X to clear"><span>${_esc(a.name)}</span><button class="gallery-chip-clear" data-clear="album" aria-label="Clear album filter">&times;</button></span>`;
+        fhtml += `<span class="gallery-chip gallery-chip-active-album" title="当前正在显示此相册 — 点击 X 清除"><span>${_esc(a.name)}</span><button class="gallery-chip-clear" data-clear="album" aria-label="清除相册筛选">&times;</button></span>`;
       }
     }
     filterC.innerHTML = fhtml;
@@ -448,15 +448,15 @@ function _ensureAlbumsToolbar(container) {
   container.innerHTML = `
     <div class="gallery-toolbar" id="gallery-albums-toolbar">
       <div class="gallery-search-wrap">
-        <input type="text" class="gallery-search" id="gallery-albums-search" placeholder="Search albums..." />
+        <input type="text" class="gallery-search" id="gallery-albums-search" placeholder="搜索相册..." />
       </div>
-      <button class="gallery-select-btn gallery-toolbar-action" id="gallery-albums-select-btn" title="Select for bulk actions" style="position:relative;top:2px;"><span style="position:relative;top:1px;">Select</span></button>
+      <button class="gallery-select-btn gallery-toolbar-action" id="gallery-albums-select-btn" title="选择以进行批量操作" style="position:relative;top:2px;"><span style="position:relative;top:1px;">选择</span></button>
     </div>
     <div class="memory-bulk-bar hidden" id="gallery-albums-bulk-bar">
-      <label class="memory-bulk-check-all" style="position:relative;top:-1px;"><input type="checkbox" id="gallery-albums-bulk-all"> All</label>
-      <span id="gallery-albums-bulk-count" style="position:relative;top:-1px;">0 selected</span>
-      <button class="memory-toolbar-btn" id="gallery-albums-bulk-delete" title="Delete selected" style="margin-left:auto;color:var(--color-error, #f44);position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>
-      <button class="memory-toolbar-btn" id="gallery-albums-bulk-cancel" title="Cancel (Esc)" style="margin-left:4px;padding:3px 6px;position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <label class="memory-bulk-check-all" style="position:relative;top:-1px;"><input type="checkbox" id="gallery-albums-bulk-all"> 全选</label>
+      <span id="gallery-albums-bulk-count" style="position:relative;top:-1px;">已选择 0 个</span>
+      <button class="memory-toolbar-btn" id="gallery-albums-bulk-delete" title="删除选中" style="margin-left:auto;color:var(--color-error, #f44);position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除</button>
+      <button class="memory-toolbar-btn" id="gallery-albums-bulk-cancel" title="取消 (Esc)" style="margin-left:4px;padding:3px 6px;position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div id="gallery-albums-grid-wrap"></div>
   `;
@@ -489,7 +489,7 @@ function _ensureAlbumsToolbar(container) {
   });
   container.querySelector('#gallery-albums-bulk-delete').addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!_albumSelected.size) { uiModule.showToast('Select albums first'); return; }
+    if (!_albumSelected.size) { uiModule.showToast('请先选择相册'); return; }
     _bulkDeleteAlbums([..._albumSelected]);
   });
 }
@@ -498,7 +498,7 @@ function _setAlbumSelectMode(on) {
   _albumSelectMode = on;
   if (!on) _albumSelected.clear();
   const container = document.getElementById('gallery-albums-container');
-  container.querySelector('#gallery-albums-select-btn span').textContent = on ? 'Cancel' : 'Select';
+  container.querySelector('#gallery-albums-select-btn span').textContent = on ? '取消' : '选择';
   container.querySelector('#gallery-albums-select-btn').classList.toggle('active', on);
   container.querySelector('#gallery-albums-bulk-bar').classList.toggle('hidden', !on);
   _renderAlbumsGrid();
@@ -509,7 +509,7 @@ function _updateAlbumBulkCount() {
   if (!container) return;
   const sel = _albumSelected.size;
   const cnt = container.querySelector('#gallery-albums-bulk-count');
-  if (cnt) cnt.textContent = sel + ' selected';
+  if (cnt) cnt.textContent = sel + ' 已选择';
   const all = container.querySelector('#gallery-albums-bulk-all');
   const total = _filteredAlbums().length;
   if (all) { all.checked = total > 0 && sel === total; all.indeterminate = sel > 0 && sel < total; }
@@ -527,14 +527,14 @@ function _renderAlbumsGrid() {
   if (!_albums.length) {
     wrap.innerHTML = `
       <div class="gallery-albums-empty">
-        <p>No albums yet.</p>
-        <button class="gallery-select-btn" id="gallery-albums-new">+ New album</button>
+        <p>暂无相册。</p>
+        <button class="gallery-select-btn" id="gallery-albums-new">+ 新建相册</button>
       </div>`;
     _wireAlbumsEvents(wrap);
     return;
   }
   if (!albums.length) {
-    wrap.innerHTML = `<div class="gallery-albums-empty"><p>No albums match "${_esc(_albumSearch)}".</p></div>`;
+    wrap.innerHTML = `<div class="gallery-albums-empty"><p>未找到匹配"${_esc(_albumSearch)}"的相册。</p></div>`;
     return;
   }
 
@@ -549,7 +549,7 @@ function _renderAlbumsGrid() {
           <div class="gallery-album-placeholder">+</div>
         </div>
         <div class="gallery-album-info">
-          <div class="gallery-album-name">New album</div>
+          <div class="gallery-album-name">新建相册</div>
         </div>
       </div>
       <div class="gallery-album-card gallery-album-card-add" id="gallery-albums-upload">
@@ -559,8 +559,8 @@ function _renderAlbumsGrid() {
           </div>
         </div>
         <div class="gallery-album-info">
-          <div class="gallery-album-name">Upload album</div>
-          <div class="gallery-album-count">Pick a folder</div>
+          <div class="gallery-album-name">上传相册</div>
+          <div class="gallery-album-count">选择一个文件夹</div>
         </div>
       </div>`;
   }
@@ -581,27 +581,27 @@ function _renderAlbumsGrid() {
     html += `
       <div class="${cls}" data-album="${_esc(a.id)}">
         ${dot}
-        <button class="gallery-album-menu-btn" data-album="${_esc(a.id)}" title="Options" aria-label="Album options"${_albumSelectMode ? ' style="display:none"' : ''}>
+        <button class="gallery-album-menu-btn" data-album="${_esc(a.id)}" title="操作" aria-label="相册选项"${_albumSelectMode ? ' style="display:none"' : ''}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="position:relative;top:2px;"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
         </button>
         <div class="gallery-album-menu-pop dropdown" data-album="${_esc(a.id)}" hidden>
           <div class="dropdown-item-compact" data-action="upload">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
-            <span>Upload here</span>
+            <span>上传到此处</span>
           </div>
           <div class="dropdown-item-compact" data-action="rename">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
-            <span>Rename</span>
+            <span>重命名</span>
           </div>
           <div class="dropdown-item-compact dropdown-item-danger" data-action="delete">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></span>
-            <span>Delete</span>
+            <span>删除</span>
           </div>
         </div>
         <div class="gallery-album-cover">${cover}</div>
         <div class="gallery-album-info">
           <div class="gallery-album-name">${_esc(a.name)}</div>
-          <div class="gallery-album-count">${a.count} photo${a.count === 1 ? '' : 's'}</div>
+          <div class="gallery-album-count">${a.count} 张图片</div>
         </div>
       </div>`;
   });
@@ -695,7 +695,7 @@ function _wireAlbumsEvents(scope) {
       e.stopPropagation();
       pop.hidden = true;
       const album = _albums.find(a => a.id === id);
-      const newName = prompt('Rename album:', album?.name || '');
+      const newName = prompt('重命名相册：', album?.name || '');
       if (!newName || !newName.trim() || newName.trim() === album?.name) return;
       const r = await fetch(`${API_BASE}/api/gallery/albums/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -704,9 +704,9 @@ function _wireAlbumsEvents(scope) {
       if (r.ok) {
         await _fetchAlbums();
         _renderAlbumsTab();
-        if (uiModule) uiModule.showToast('Album renamed');
+        if (uiModule) uiModule.showToast('相册已重命名');
       } else if (uiModule) {
-        uiModule.showError('Rename failed');
+        uiModule.showError('重命名失败');
       }
     });
     pop.querySelector('[data-action="delete"]')?.addEventListener('click', async (e) => {
@@ -714,8 +714,8 @@ function _wireAlbumsEvents(scope) {
       pop.hidden = true;
       const album = _albums.find(a => a.id === id);
       const ok = await uiModule.styledConfirm(
-        `Delete album "${album?.name || ''}"? Photos inside will stay in your library.`,
-        { confirmText: 'Delete', danger: true },
+        `删除相册"${album?.name || ''}"？其中的图片将保留在您的资料库中。`,
+        { confirmText: '删除', danger: true },
       );
       if (!ok) return;
       const r = await fetch(`${API_BASE}/api/gallery/albums/${id}`, {
@@ -726,17 +726,17 @@ function _wireAlbumsEvents(scope) {
         await _fetchAlbums();
         _renderAlbumsTab();
         _renderAlbums();
-        if (uiModule) uiModule.showToast('Album deleted');
+        if (uiModule) uiModule.showToast('相册已删除');
       } else if (uiModule) {
-        uiModule.showError('Delete failed');
+        uiModule.showError('删除失败');
       }
     });
   });
 
   document.getElementById('gallery-albums-new')?.addEventListener('click', async () => {
     const name = (uiModule.styledPrompt
-      ? await uiModule.styledPrompt('Name your new album.', { title: 'New album', placeholder: 'e.g. Vacation 2026', confirmText: 'Create' })
-      : prompt('Album name:'));
+      ? await uiModule.styledPrompt('为你的新相册命名。', { title: '新建相册', placeholder: '例如：2026旅行', confirmText: '创建' })
+      : prompt('相册名称：'));
     if (!name?.trim()) return;
     await fetch(`${API_BASE}/api/gallery/albums`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -759,7 +759,7 @@ function _wireAlbumsEvents(scope) {
       const images = all.filter(_isMediaFile);
       picker.remove();
       if (!images.length) {
-        if (uiModule) uiModule.showToast('No images or videos in that folder');
+        if (uiModule) uiModule.showToast('文件夹中没有图片或视频');
         return;
       }
       // Derive folder name from the first file's relative path (e.g.
@@ -767,7 +767,7 @@ function _wireAlbumsEvents(scope) {
       const rel = images[0].webkitRelativePath || '';
       let folderName = rel.split('/')[0] || '';
       if (!folderName) {
-        folderName = prompt('Album name for these photos:') || '';
+        folderName = prompt('为这些图片输入相册名称:') || '';
         if (!folderName.trim()) return;
       }
       // Reuse an existing album with the same name; otherwise create one.
@@ -784,7 +784,7 @@ function _wireAlbumsEvents(scope) {
         }
       }
       if (!album) {
-        if (uiModule) uiModule.showError('Could not create album');
+        if (uiModule) uiModule.showError('无法创建相册');
         return;
       }
       await _bulkUpload(images, album.id);
@@ -799,8 +799,8 @@ function _wireAlbumsEvents(scope) {
 async function _bulkDeleteAlbums(ids) {
   if (!ids.length) return;
   const ok = await uiModule.styledConfirm(
-    `Delete ${ids.length} album${ids.length > 1 ? 's' : ''}? Photos inside will stay in your library.`,
-    { confirmText: 'Delete', danger: true },
+    `删除 ${ids.length} 个相册？其中的图片将保留在您的资料库中。`,
+    { confirmText: '删除', danger: true },
   );
   if (!ok) return;
   let failed = 0;
@@ -811,8 +811,8 @@ async function _bulkDeleteAlbums(ids) {
     if (!r.ok) failed++;
     else if (_activeAlbum === id) _activeAlbum = null;
   }
-  if (failed) uiModule.showError(`Failed to delete ${failed} of ${ids.length} albums`);
-  else if (uiModule) uiModule.showToast(`Deleted ${ids.length} album${ids.length > 1 ? 's' : ''}`);
+  if (failed) uiModule.showError(`无法删除 ${ids.length} 个相册中的 ${failed} 个`);
+  else if (uiModule) uiModule.showToast(`已删除 ${ids.length} 个相册`);
   _setAlbumSelectMode(false);
   await _fetchAlbums();
   _renderAlbumsTab();
@@ -836,7 +836,7 @@ function _draftsShowLoading(section) {
       _draftsSpinner.element.style.cssText = 'width:28px;height:28px;margin:0;';
       ov.appendChild(_draftsSpinner.element);
     } catch (_) {
-      ov.textContent = 'Loading…';
+      ov.textContent = '加载中…';
     }
     section.appendChild(ov);
   }
@@ -918,14 +918,14 @@ function _draftsPaint() {
       ? `<span class="gallery-select-dot${checked ? ' selected' : ''}" data-draft-id="${_esc(d.id)}"></span>`
       : '';
     return `
-      <div class="gallery-editor-draft-card${checked ? ' selected' : ''}${_draftsSelectMode ? ' select-mode' : ''}" data-draft-id="${_esc(d.id)}" tabindex="0" title="Resume ${_esc(d.name || 'project')}">
+      <div class="gallery-editor-draft-card${checked ? ' selected' : ''}${_draftsSelectMode ? ' select-mode' : ''}" data-draft-id="${_esc(d.id)}" tabindex="0" title="恢复 ${_esc(d.name || '项目')}">
         ${checkbox}
         ${thumb}
         <div class="gallery-editor-draft-info">
-          <div class="gallery-editor-draft-name">${_esc(d.name || 'Untitled')}</div>
+          <div class="gallery-editor-draft-name">${_esc(d.name || '未命名')}</div>
           <div class="gallery-editor-draft-meta">${_esc([dims, updated].filter(Boolean).join(' · '))}</div>
         </div>
-        <button class="gallery-editor-draft-delete" data-draft-id="${_esc(d.id)}" title="Delete project" aria-label="Delete project">×</button>
+        <button class="gallery-editor-draft-delete" data-draft-id="${_esc(d.id)}" title="删除项目" aria-label="删除项目">×</button>
       </div>`;
   }).join('');
   grid.querySelectorAll('.gallery-editor-draft-card').forEach(card => {
@@ -954,8 +954,8 @@ function _draftsPaint() {
       e.stopPropagation();
       const id = btn.dataset.draftId;
       if (!id) return;
-      const ok = await uiModule.styledConfirm('Delete this project?', {
-        confirmText: 'Delete', cancelText: 'Cancel', danger: true,
+      const ok = await uiModule.styledConfirm('删除此项目？', {
+        confirmText: '删除', cancelText: '取消', danger: true,
       });
       if (!ok) return;
       // Graceful exit: fade + shrink the card before the grid re-renders.
@@ -979,9 +979,9 @@ function _draftsSyncBulkBar() {
   const countEl = document.getElementById('gallery-editor-drafts-bulk-count');
   const selectBtn = document.getElementById('gallery-editor-drafts-select');
   if (bar) bar.classList.toggle('hidden', !_draftsSelectMode);
-  if (countEl) countEl.textContent = `${_draftsSelected.size} selected`;
+  if (countEl) countEl.textContent = `${_draftsSelected.size} 已选择`;
   if (selectBtn) {
-    selectBtn.textContent = _draftsSelectMode ? 'Cancel' : 'Select';
+    selectBtn.textContent = _draftsSelectMode ? '取消' : '选择';
     selectBtn.classList.toggle('active', _draftsSelectMode);
   }
   // "All" checkbox state — checked when all visible drafts are selected,
@@ -1026,8 +1026,8 @@ function _draftsWireOnce() {
   document.getElementById('gallery-editor-drafts-bulk-delete')?.addEventListener('click', async () => {
     if (!_draftsSelected.size) return;
     const n = _draftsSelected.size;
-    const ok = await uiModule.styledConfirm(`Delete ${n} project${n === 1 ? '' : 's'}?`, {
-      confirmText: 'Delete', cancelText: 'Cancel', danger: true,
+    const ok = await uiModule.styledConfirm(`删除 ${n} 个项目？`, {
+      confirmText: '删除', cancelText: '取消', danger: true,
     });
     if (!ok) return;
     const ids = [..._draftsSelected];
@@ -1049,10 +1049,10 @@ function _draftsWireOnce() {
 // Human-readable "x minutes ago" / "y days ago" for the drafts list.
 function _humanRelativeDate(when) {
   const diff = (Date.now() - when.getTime()) / 1000;
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-  if (diff < 86400 * 30) return Math.floor(diff / 86400) + 'd ago';
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+  if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+  if (diff < 86400 * 30) return Math.floor(diff / 86400) + '天前';
   return when.toLocaleDateString();
 }
 
@@ -1083,30 +1083,30 @@ function _renderEditorLanding() {
   container.innerHTML = `
     <div class="gallery-editor-landing">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-      <h3>Image Editor <span class="ge-alpha-tag">Alpha</span></h3>
-      <p>Start a blank canvas, or open a photo from your gallery to edit it.</p>
+      <h3>图片编辑器 <span class="ge-alpha-tag">Alpha</span></h3>
+      <p>从空白画布开始，或从画廊中打开一张图片进行编辑。</p>
       <div class="gallery-editor-landing-actions">
-        <button class="gallery-select-btn" id="gallery-editor-new">New canvas...</button>
-        <button class="gallery-select-btn" id="gallery-editor-pick">Browse photos</button>
+        <button class="gallery-select-btn" id="gallery-editor-new">新建画布...</button>
+        <button class="gallery-select-btn" id="gallery-editor-pick">浏览图片</button>
       </div>
       <label class="gallery-editor-template-label">
-        Or pick a template
+        或选择模板
         <select class="gallery-editor-template-select" id="gallery-editor-template">
-          <option value="">Select a size…</option>
+          <option value="">选择尺寸…</option>
           ${optionsHtml}
         </select>
       </label>
       <div class="gallery-editor-drafts" id="gallery-editor-drafts" hidden>
         <div class="gallery-editor-drafts-header">
-          <h4 class="gallery-editor-drafts-title">Saved projects</h4>
-          <input type="search" class="gallery-editor-drafts-search" id="gallery-editor-drafts-search" placeholder="Search projects…" autocomplete="off" />
-          <button class="gallery-select-btn" id="gallery-editor-drafts-select" title="Toggle multi-select">Select</button>
+          <h4 class="gallery-editor-drafts-title">已保存的项目</h4>
+          <input type="search" class="gallery-editor-drafts-search" id="gallery-editor-drafts-search" placeholder="搜索项目…" autocomplete="off" />
+          <button class="gallery-select-btn" id="gallery-editor-drafts-select" title="切换多选">选择</button>
         </div>
         <div class="gallery-bulk-bar hidden" id="gallery-editor-drafts-bulk">
-          <label class="memory-bulk-check-all"><input type="checkbox" id="gallery-editor-drafts-select-all"> All</label>
-          <span class="gallery-bulk-count" id="gallery-editor-drafts-bulk-count">0 selected</span>
-          <button class="gallery-bulk-delete" id="gallery-editor-drafts-bulk-delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete selected</button>
-          <button class="memory-toolbar-btn" id="gallery-editor-drafts-bulk-cancel" title="Cancel (Esc)" style="margin-left:4px;padding:3px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <label class="memory-bulk-check-all"><input type="checkbox" id="gallery-editor-drafts-select-all"> 全选</label>
+          <span class="gallery-bulk-count" id="gallery-editor-drafts-bulk-count">已选择 0 个</span>
+          <button class="gallery-bulk-delete" id="gallery-editor-drafts-bulk-delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除所选</button>
+          <button class="memory-toolbar-btn" id="gallery-editor-drafts-bulk-cancel" title="取消 (Esc)" style="margin-left:4px;padding:3px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="gallery-editor-drafts-grid" id="gallery-editor-drafts-grid"></div>
       </div>
@@ -1125,7 +1125,7 @@ function _renderEditorLanding() {
     // openEditor() now returns a Promise — it's async because the size
     // prompt is a styled modal. Await it before checking whether the
     // editor actually opened (the user may have cancelled).
-    await openEditor(null, null, null, 'New canvas');
+    await openEditor(null, null, null, '新建画布');
     if (!isEditorOpen()) _renderEditorLanding();
   });
   document.getElementById('gallery-editor-pick')?.addEventListener('click', () => {
@@ -1173,15 +1173,15 @@ function _renderGrid() {
   // tile in the Albums tab so the upload entry point is consistent across
   // both grids.
   const uploadTile = `
-    <div class="gallery-card gallery-card-upload" id="gallery-upload-tile" title="Upload photos or videos">
+    <div class="gallery-card gallery-card-upload" id="gallery-upload-tile" title="上传图片或视频">
       <div class="gallery-card-upload-inner">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        <div class="gallery-card-upload-label">Upload</div>
+        <div class="gallery-card-upload-label">上传</div>
       </div>
     </div>`;
 
   if (_items.length === 0) {
-    grid.innerHTML = uploadTile + '<div class="gallery-empty">No photos yet. Click Upload or drag-and-drop to get started!</div>';
+    grid.innerHTML = uploadTile + '<div class="gallery-empty">暂无图片。点击上传或拖放图片即可开始！</div>';
     _wireUploadTile();
     if (loadMore) loadMore.style.display = 'none';
     return;
@@ -1201,14 +1201,14 @@ function _renderGrid() {
       .replace(/\.[^.]+$/, '')       // drop extension
       .replace(/[_-]+/g, ' ')
       .trim();
-    const labelText = (img.prompt || '').trim() || fallbackName || 'Photo';
+    const labelText = (img.prompt || '').trim() || fallbackName || '照片';
     const promptPreview = labelText.length > 60 ? labelText.substring(0, 58) + '...' : labelText;
     const favCls = img.favorite ? ' gallery-fav-active' : '';
     html += `
       <div class="gallery-card" data-id="${_esc(img.id)}">
         <span class="gallery-select-dot" style="display:none;"></span>
-        <button class="gallery-fav-btn${favCls}" data-id="${_esc(img.id)}" title="Favorite">&#9829;</button>
-        <button class="gallery-dl-btn" data-id="${_esc(img.id)}" data-url="${_esc(img.url)}" data-filename="${_esc(img.filename || '')}" title="Download">
+        <button class="gallery-fav-btn${favCls}" data-id="${_esc(img.id)}" title="收藏">&#9829;</button>
+        <button class="gallery-dl-btn" data-id="${_esc(img.id)}" data-url="${_esc(img.url)}" data-filename="${_esc(img.filename || '')}" title="下载">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </button>
         ${_isVideoUrl(img.url)
@@ -1313,21 +1313,21 @@ function _openDetail(img) {
     if (!d || isNaN(d.getTime())) return '';
     const secs = (Date.now() - d.getTime()) / 1000;
     if (secs < 0) return '';
-    if (secs < 60) return 'just now';
-    if (secs < 3600) { const m = Math.floor(secs / 60); return `${m} minute${m !== 1 ? 's' : ''} ago`; }
-    if (secs < 86400) { const h = Math.floor(secs / 3600); return `${h} hour${h !== 1 ? 's' : ''} ago`; }
-    if (secs < 86400 * 7) { const d2 = Math.floor(secs / 86400); return `${d2} day${d2 !== 1 ? 's' : ''} ago`; }
-    if (secs < 86400 * 30) { const w = Math.floor(secs / (86400 * 7)); return `${w} week${w !== 1 ? 's' : ''} ago`; }
-    if (secs < 86400 * 365) { const mo = Math.floor(secs / (86400 * 30)); return `${mo} month${mo !== 1 ? 's' : ''} ago`; }
+    if (secs < 60) return '刚刚';
+    if (secs < 3600) { const m = Math.floor(secs / 60); return `${m} 分钟前`; }
+    if (secs < 86400) { const h = Math.floor(secs / 3600); return `${h} 小时前`; }
+    if (secs < 86400 * 7) { const d2 = Math.floor(secs / 86400); return `${d2} 天前`; }
+    if (secs < 86400 * 30) { const w = Math.floor(secs / (86400 * 7)); return `${w} 周前`; }
+    if (secs < 86400 * 365) { const mo = Math.floor(secs / (86400 * 30)); return `${mo} 个月前`; }
     const y = Math.floor(secs / (86400 * 365));
-    return `${y} year${y !== 1 ? 's' : ''} ago`;
+    return `${y} 年前`;
   };
   const date = _dateObj
     ? `${_dateObj.toLocaleString()}<span class="gallery-date-rel"> (${_relAgo(_dateObj)})</span>`
-    : 'Unknown';
+    : '未知';
   const userTags = img.user_tags || img.tags || '';
   const aiTags = img.ai_tags || '';
-  const dims = img.width && img.height ? `${img.width} x ${img.height}` : (img.size || 'Unknown');
+  const dims = img.width && img.height ? `${img.width} x ${img.height}` : (img.size || '未知');
   const fileSize = img.file_size ? _humanSize(img.file_size) : '';
   // "Edited" row: only show when updated_at is meaningfully later than
   // created_at (>10s). Every photo bumps updated_at on insert via the
@@ -1337,58 +1337,58 @@ function _openDetail(img) {
     const u = new Date(img.updated_at);
     const c = new Date(img.created_at);
     if (!isNaN(u) && !isNaN(c) && (u.getTime() - c.getTime() > 10000)) {
-      editedHtml = `<div class="gallery-detail-section"><label>Edited</label><div>${u.toLocaleString()}<span class="gallery-date-rel"> (${_relAgo(u)})</span></div></div>`;
+      editedHtml = `<div class="gallery-detail-section"><label>已编辑</label><div>${u.toLocaleString()}<span class="gallery-date-rel"> (${_relAgo(u)})</span></div></div>`;
     }
   }
 
   detail.innerHTML = `
     <div class="gallery-detail-header">
-      <button class="gallery-detail-back" id="gallery-detail-back">&larr; Back</button>
+      <button class="gallery-detail-back" id="gallery-detail-back">&larr; 返回</button>
       <div style="flex:1"></div>
-      <button class="gallery-detail-back" id="gallery-edit-direct-btn" title="Edit (E)" aria-label="Edit photo" style="display:inline-flex;align-items:center;gap:4px;">
+      <button class="gallery-detail-back" id="gallery-edit-direct-btn" title="编辑 (E)" aria-label="编辑照片" style="display:inline-flex;align-items:center;gap:4px;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-        Edit
+        编辑
       </button>
-      <button class="gallery-detail-back gallery-detail-fav-header${img.favorite ? ' active' : ''}" id="gallery-detail-fav-header" title="${img.favorite ? 'Unfavorite' : 'Favorite'}" aria-label="Favorite" aria-pressed="${img.favorite ? 'true' : 'false'}" style="display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;">
+      <button class="gallery-detail-back gallery-detail-fav-header${img.favorite ? ' active' : ''}" id="gallery-detail-fav-header" title="${img.favorite ? '取消收藏' : '收藏'}" aria-label="收藏" aria-pressed="${img.favorite ? 'true' : 'false'}" style="display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="${img.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </button>
       <div class="gallery-detail-menu-wrap">
-        <button class="gallery-detail-action gallery-detail-menu-btn" id="gallery-detail-menu-btn" title="Actions" aria-label="Photo actions">
+        <button class="gallery-detail-action gallery-detail-menu-btn" id="gallery-detail-menu-btn" title="操作" aria-label="照片操作">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
         </button>
         <div class="gallery-detail-menu dropdown" id="gallery-detail-menu" hidden>
           <button class="dropdown-item-compact" id="gallery-fav-detail">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="${img.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
-            ${img.favorite ? 'Favorited' : 'Favorite'}
+            ${img.favorite ? '已收藏' : '收藏'}
           </button>
           <button class="dropdown-item-compact" id="gallery-ai-tag-btn" data-mode="${aiTags ? 'clear' : 'tag'}">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
-            ${aiTags ? 'Clear AI tags' : 'AI Tag'}
+            ${aiTags ? '清除 AI 标签' : 'AI 标签'}
           </button>
           <button class="dropdown-item-compact" id="gallery-download-btn">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-            Download
+            下载
           </button>
           ${img.album_id ? `<button class="dropdown-item-compact" id="gallery-set-cover-btn">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></span>
-            Set as album cover
+            设为相册封面
           </button>` : ''}
           <button class="dropdown-item-compact dropdown-item-danger" id="gallery-delete-btn">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></span>
-            Delete
+            删除
           </button>
         </div>
       </div>
     </div>
     <div class="gallery-detail-body">
       <div class="gallery-detail-image" id="gallery-detail-image-wrap" style="position:relative">
-        <button class="gallery-detail-rotate gallery-detail-rotate-ccw" id="gallery-rotate-ccw-btn" title="Rotate 90° counter-clockwise" aria-label="Rotate left">
+        <button class="gallery-detail-rotate gallery-detail-rotate-ccw" id="gallery-rotate-ccw-btn" title="逆时针旋转 90°" aria-label="逆时针旋转">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
         </button>
-        <button class="gallery-detail-rotate gallery-detail-rotate-cw" id="gallery-rotate-btn" title="Rotate 90° clockwise" aria-label="Rotate right">
+        <button class="gallery-detail-rotate gallery-detail-rotate-cw" id="gallery-rotate-btn" title="顺时针旋转 90°" aria-label="顺时针旋转">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
-        <button class="gallery-detail-nav gallery-detail-nav-prev" id="gallery-detail-prev" title="Previous (←)" aria-label="Previous">
+        <button class="gallery-detail-nav gallery-detail-nav-prev" id="gallery-detail-prev" title="上一张 (←)" aria-label="上一张">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <div class="gallery-detail-img-frame">
@@ -1397,52 +1397,52 @@ function _openDetail(img) {
             : `<img id="gallery-detail-img" src="${_esc(img.url)}" alt="${_esc(img.prompt)}" />`}
           <div id="gallery-detail-face-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></div>
         </div>
-        <button class="gallery-detail-nav gallery-detail-nav-next" id="gallery-detail-next" title="Next (→)" aria-label="Next">
+        <button class="gallery-detail-nav gallery-detail-nav-next" id="gallery-detail-next" title="下一张 (→)" aria-label="下一张">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
       <div class="gallery-detail-sidebar">
         <div class="gallery-detail-section">
-          <label>Name</label>
+          <label>名称</label>
           <div class="gallery-name-wrap">
             <input type="text" class="gallery-detail-name-input" id="gallery-detail-name-input"
-              value="${_esc(img.prompt || '')}" placeholder="Untitled photo (press Enter to save)" />
+              value="${_esc(img.prompt || '')}" placeholder="未命名照片（按 Enter 保存）" />
             <svg class="gallery-name-enter" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
           </div>
         </div>
-        ${img.prompt && img.model !== 'imported' ? `<div class="gallery-detail-section"><label>Prompt</label><div class="gallery-detail-prompt">${_esc(img.prompt)}</div></div>` : ''}
+        ${img.prompt && img.model !== 'imported' ? `<div class="gallery-detail-section"><label>提示词</label><div class="gallery-detail-prompt">${_esc(img.prompt)}</div></div>` : ''}
         <div class="gallery-detail-section gallery-detail-section-date">
-          <label>Date</label>
+          <label>日期</label>
           <div>${date}</div>
         </div>
         ${editedHtml}
         <div class="gallery-detail-section">
-          <label>Dimensions</label>
+          <label>尺寸</label>
           <div>${dims}${fileSize ? ` (${fileSize})` : ''}</div>
         </div>
-        ${img.camera ? `<div class="gallery-detail-section"><label>Camera</label><div>${_esc(img.camera)}</div></div>` : ''}
-        ${img.gps ? `<div class="gallery-detail-section"><label>Location</label><div>${img.gps.lat}, ${img.gps.lng}</div></div>` : ''}
-        ${img.model ? `<div class="gallery-detail-section"><label>Source</label><div>${_esc(img.model)}</div></div>` : ''}
-        ${img.session_name ? `<div class="gallery-detail-section"><label>Session</label><div>${_esc(img.session_name)}</div></div>` : ''}
-        ${aiTags ? `<div class="gallery-detail-section"><label>AI Tags</label><div class="gallery-ai-tags">${aiTags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<button class="gallery-ai-chip gallery-aitag-chip" data-tag-filter="${_esc(t)}" title="AI-generated tag — click to filter to photos tagged “${_esc(t)}”"><span class="gallery-aitag-mark" aria-hidden="true">✦</span>${_esc(t)}</button>`).join('')}</div></div>` : ''}
+        ${img.camera ? `<div class="gallery-detail-section"><label>相机</label><div>${_esc(img.camera)}</div></div>` : ''}
+        ${img.gps ? `<div class="gallery-detail-section"><label>位置</label><div>${img.gps.lat}, ${img.gps.lng}</div></div>` : ''}
+        ${img.model ? `<div class="gallery-detail-section"><label>来源</label><div>${_esc(img.model)}</div></div>` : ''}
+        ${img.session_name ? `<div class="gallery-detail-section"><label>会话</label><div>${_esc(img.session_name)}</div></div>` : ''}
+        ${aiTags ? `<div class="gallery-detail-section"><label>AI 标签</label><div class="gallery-ai-tags">${aiTags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<button class="gallery-ai-chip gallery-aitag-chip" data-tag-filter="${_esc(t)}" title="AI 生成标签 — 点击筛选标记为 “${_esc(t)}” 的照片"><span class="gallery-aitag-mark" aria-hidden="true">✦</span>${_esc(t)}</button>`).join('')}</div></div>` : ''}
         <div class="gallery-detail-section">
-          <label>Tags</label>
-          <div class="gallery-ai-tags" id="gallery-user-tag-chips">${userTags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<button class="gallery-ai-chip gallery-user-chip" data-tag-filter="${_esc(t)}" title="Filter to photos tagged “${_esc(t)}”">${_esc(t)}<span class="gallery-tag-x" title="Remove tag" aria-label="Remove tag">×</span></button>`).join('')}</div>
+          <label>标签</label>
+          <div class="gallery-ai-tags" id="gallery-user-tag-chips">${userTags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<button class="gallery-ai-chip gallery-user-chip" data-tag-filter="${_esc(t)}" title="筛选标记为 “${_esc(t)}” 的照片">${_esc(t)}<span class="gallery-tag-x" title="移除标签" aria-label="移除标签">×</span></button>`).join('')}</div>
           <div class="gallery-tag-input-wrap">
             <input type="text" class="gallery-tag-input" id="gallery-tag-input"
-              value="" placeholder="Add a tag" title="Type a tag and press Enter to add it" />
+              value="" placeholder="添加标签" title="输入标签并按 Enter 添加" />
             <span class="gallery-tag-enter-hint" aria-hidden="true">↵</span>
           </div>
         </div>
         <div class="gallery-detail-section">
-          <label>Album</label>
+          <label>相册</label>
           <select id="gallery-detail-album" class="gallery-tag-input" style="padding:4px 6px;">
-            <option value="">None</option>
+            <option value="">无</option>
             ${_albums.map(a => `<option value="${a.id}" ${img.album_id === a.id ? 'selected' : ''}>${_esc(a.name)}</option>`).join('')}
           </select>
         </div>
         <div class="gallery-detail-section" id="gallery-detail-people-section" style="display:none">
-          <label>People in this photo</label>
+          <label>照片中的人物</label>
           <div id="gallery-detail-people-list" class="gallery-detail-people"></div>
         </div>
       </div>
@@ -1463,7 +1463,7 @@ function _openDetail(img) {
     const remaining = existing.filter(e => e.toLowerCase() !== String(tag).toLowerCase());
     const cleaned = remaining.join(', ');
     const ok = await _patchImage(img.id, { tags: cleaned });
-    if (!ok) { if (uiModule) uiModule.showError('Failed to remove tag'); return; }
+    if (!ok) { if (uiModule) uiModule.showError('移除标签失败'); return; }
     img.tags = cleaned;
     img.user_tags = cleaned;
     chip.remove();
@@ -1514,11 +1514,11 @@ function _openDetail(img) {
     if (!data.ok) return;
     img.favorite = data.favorite;
     const menuItem = document.getElementById('gallery-fav-detail');
-    if (menuItem) menuItem.innerHTML = data.favorite ? '&#9829; Favorited' : '&#9825; Favorite';
+    if (menuItem) menuItem.innerHTML = data.favorite ? '&#9829; 已收藏' : '&#9825; 收藏';
     const headerBtn = document.getElementById('gallery-detail-fav-header');
     if (headerBtn) {
       headerBtn.setAttribute('aria-pressed', data.favorite ? 'true' : 'false');
-      headerBtn.setAttribute('title', data.favorite ? 'Unfavorite' : 'Favorite');
+      headerBtn.setAttribute('title', data.favorite ? '取消收藏' : '收藏');
       const svg = headerBtn.querySelector('svg');
       if (svg) svg.setAttribute('fill', data.favorite ? 'currentColor' : 'none');
     }
@@ -1541,10 +1541,10 @@ function _openDetail(img) {
         spinner.element.style.cssText = 'width:36px;height:36px;margin:0;';
         overlay.appendChild(spinner.element);
         const label = document.createElement('div');
-        label.textContent = clearMode ? 'Clearing…' : 'AI tagging…';
+        label.textContent = clearMode ? '正在清除…' : 'AI 标签生成中…';
         label.style.cssText = 'font-size:11px;opacity:0.7;';
         overlay.appendChild(label);
-      } catch (_) { overlay.textContent = clearMode ? 'Clearing…' : 'AI tagging…'; }
+      } catch (_) { overlay.textContent = clearMode ? '正在清除…' : 'AI 标签生成中…'; }
       if (getComputedStyle(stage).position === 'static') stage.style.position = 'relative';
       stage.appendChild(overlay);
     }
@@ -1558,14 +1558,14 @@ function _openDetail(img) {
       cleanup();
       if (data.ok) {
         img.ai_tags = clearMode ? '' : data.ai_tags;
-        uiModule.showToast(clearMode ? 'AI tags cleared' : 'AI tags added');
+        uiModule.showToast(clearMode ? 'AI 标签已清除' : 'AI 标签已添加');
         _openDetail(img); // re-render detail
       } else {
-        uiModule.showError(data.error || (clearMode ? 'Clear failed' : 'AI tagging failed'));
+        uiModule.showError(data.error || (clearMode ? '清除失败' : 'AI 标签生成失败'));
       }
     } catch (e2) {
       cleanup();
-      uiModule.showError(clearMode ? 'Clear failed' : 'AI tagging failed');
+      uiModule.showError(clearMode ? '清除失败' : 'AI 标签生成失败');
     }
   });
 
@@ -1667,11 +1667,11 @@ function _openDetail(img) {
       const editorContainer = document.getElementById('gallery-editor-container');
       if (editorContainer) editorContainer.style.display = 'flex';
       const baseFilename = (img.filename || '').replace(/\.[^.]+$/, '');
-      const label = img.prompt?.trim() || baseFilename || 'Photo';
+      const label = img.prompt?.trim() || baseFilename || '照片';
       openEditor(img.url, img.id, null, label);
     } catch (e) {
       console.error('[edit] failed:', e);
-      if (uiModule) uiModule.showError('Failed to open editor: ' + (e?.message || 'unknown'));
+      if (uiModule) uiModule.showError('无法打开编辑器: ' + (e?.message || '未知错误'));
     }
   };
   document.getElementById('gallery-edit-btn')?.addEventListener('click', _openInEditor);
@@ -1693,7 +1693,7 @@ function _openDetail(img) {
         spinner = spinnerModule.createWhirlpool(36);
         spinner.element.style.cssText = 'width:36px;height:36px;margin:0;';
         overlay.appendChild(spinner.element);
-      } catch (_) { overlay.textContent = 'Rotating…'; }
+      } catch (_) { overlay.textContent = '正在旋转…'; }
       if (getComputedStyle(stage).position === 'static') stage.style.position = 'relative';
       stage.appendChild(overlay);
     }
@@ -1708,7 +1708,7 @@ function _openDetail(img) {
         credentials: 'same-origin',
         body: JSON.stringify({ angle }),
       });
-      if (!r.ok) { cleanup(); uiModule.showError('Rotate failed'); return; }
+      if (!r.ok) { cleanup(); uiModule.showError('旋转失败'); return; }
       // Cache-bust the image in the detail view, then wait for the new
       // image to actually load before clearing the spinner so the user
       // doesn't see a flash of the old/blank image.
@@ -1721,11 +1721,11 @@ function _openDetail(img) {
         });
       }
       cleanup();
-      uiModule.showToast('Rotated');
+      uiModule.showToast('已旋转');
       _fetchLibrary(false);
     } catch (e) {
       cleanup();
-      uiModule.showError('Rotate failed');
+      uiModule.showError('旋转失败');
     }
   };
   document.getElementById('gallery-rotate-btn')?.addEventListener('click', () => _rotate(90));
@@ -1742,21 +1742,21 @@ function _openDetail(img) {
         body: JSON.stringify({ cover_id: img.id }),
       });
       if (r.ok) {
-        uiModule.showToast('Album cover updated');
+        uiModule.showToast('相册封面已更新');
         await _fetchAlbums();
       } else {
-        uiModule.showError('Failed to set cover');
+        uiModule.showError('设为封面失败');
       }
     } catch (e) {
-      uiModule.showError('Failed to set cover');
+      uiModule.showError('设为封面失败');
     }
   });
 
   document.getElementById('gallery-delete-btn').addEventListener('click', async () => {
-    if (!await uiModule.styledConfirm('Delete this photo? This cannot be undone.', { confirmText: 'Delete', danger: true })) return;
+    if (!await uiModule.styledConfirm('删除这张照片？此操作无法撤销。', { confirmText: '删除', danger: true })) return;
     const ok = await _deleteImage(img.id);
     if (!ok) {
-      uiModule.showError('Failed to delete photo');
+      uiModule.showError('删除照片失败');
       return;
     }
     detail.style.display = 'none';
@@ -1764,7 +1764,7 @@ function _openDetail(img) {
     _total = Math.max(0, _total - 1);
     _renderGrid();
     _renderStats();
-    if (uiModule) uiModule.showToast('Photo deleted');
+    if (uiModule) uiModule.showToast('照片已删除');
   });
 
   // Tag input — Enter saves; also strips a leading '#' from each tag so
@@ -1785,10 +1785,10 @@ function _openDetail(img) {
         });
         if (!r.ok) throw new Error('Failed');
         img.prompt = newName;
-        if (uiModule) uiModule.showToast('Renamed');
+        if (uiModule) uiModule.showToast('已重命名');
         window.dispatchEvent(new CustomEvent('gallery-refresh'));
       } catch {
-        if (uiModule) uiModule.showError('Failed to rename');
+        if (uiModule) uiModule.showError('重命名失败');
       }
     };
     _nameInput.addEventListener('keydown', (e) => {
@@ -1830,7 +1830,7 @@ function _openDetail(img) {
       if (!added.length) return;
       const cleaned = merged.join(', ');
       const ok = await _patchImage(img.id, { tags: cleaned });
-      if (!ok) { if (uiModule) uiModule.showError('Failed to save tags'); return; }
+      if (!ok) { if (uiModule) uiModule.showError('保存标签失败'); return; }
       img.tags = cleaned;
       img.user_tags = cleaned;
       const chips = document.getElementById('gallery-user-tag-chips');
@@ -1839,12 +1839,12 @@ function _openDetail(img) {
           const b = document.createElement('button');
           b.className = 'gallery-ai-chip gallery-user-chip';
           b.dataset.tagFilter = t;
-          b.title = `Filter to photos tagged “${t}”`;
+          b.title = `筛选标记为 "${t}" 的照片`;
           b.textContent = t;
           const x = document.createElement('span');
           x.className = 'gallery-tag-x';
-          x.title = 'Remove tag';
-          x.setAttribute('aria-label', 'Remove tag');
+          x.title = '移除标签';
+          x.setAttribute('aria-label', '移除标签');
           x.textContent = '×';
           b.appendChild(x);
           chips.appendChild(b);
@@ -1862,9 +1862,9 @@ function _openDetail(img) {
   document.getElementById('gallery-detail-album').addEventListener('change', async (e) => {
     const albumId = e.target.value;
     const ok = await _patchImage(img.id, { album_id: albumId || '' });
-    if (!ok) { uiModule.showError('Failed to update album'); return; }
+    if (!ok) { uiModule.showError('更新相册失败'); return; }
     img.album_id = albumId || null;
-    uiModule.showToast(albumId ? 'Added to album' : 'Removed from album');
+    uiModule.showToast(albumId ? '已添加到相册' : '已从相册移除');
   });
 }
 
@@ -1910,26 +1910,26 @@ export function openGallery() {
   modal.innerHTML = `
     <div class="modal-content gallery-modal-content">
       <div class="modal-header">
-        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Gallery <span id="gallery-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal;margin-left:8px"></span></h4>
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>画廊 <span id="gallery-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal;margin-left:8px"></span></h4>
         <button class="modal-close" id="gallery-close">&times;</button>
       </div>
       <div class="gallery-tabs">
         <button class="gallery-tab active" data-tab="images">
           <span class="gallery-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
-          <span class="gallery-tab-label">Photos</span>
+          <span class="gallery-tab-label">照片</span>
         </button>
         <button class="gallery-tab" data-tab="albums">
           <span class="gallery-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
-          <span class="gallery-tab-label">Albums</span>
+          <span class="gallery-tab-label">相册</span>
         </button>
         <button class="gallery-tab" data-tab="editor" id="gallery-editor-tab">
           <span class="gallery-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
-          <span class="gallery-tab-label">Edit</span>
-          <span class="gallery-tab-close" id="gallery-editor-tab-close" title="Close edit" aria-label="Close edit">×</span>
+          <span class="gallery-tab-label">编辑</span>
+          <span class="gallery-tab-close" id="gallery-editor-tab-close" title="关闭编辑" aria-label="关闭编辑">×</span>
         </button>
         <button class="gallery-tab" data-tab="settings">
           <span class="gallery-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-          <span class="gallery-tab-label">Settings</span>
+          <span class="gallery-tab-label">设置</span>
         </button>
       </div>
       <div class="modal-body">
@@ -1944,52 +1944,52 @@ export function openGallery() {
         <div class="gallery-album-chips gallery-people-chips" id="gallery-people-chips" style="display:none"></div>
         <div class="gallery-toolbar">
           <div class="gallery-search-wrap">
-            <input type="text" class="gallery-search" id="gallery-search" placeholder="Search photos, tags..." />
-            <span class="gallery-search-enter-hint" aria-hidden="true"><svg class="gallery-enter-key" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>to tag</span>
+            <input type="text" class="gallery-search" id="gallery-search" placeholder="搜索照片、标签..." />
+            <span class="gallery-search-enter-hint" aria-hidden="true"><svg class="gallery-enter-key" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>添加标签</span>
           </div>
           <span class="gallery-toolbar-break" aria-hidden="true"></span>
           <select class="gallery-model-filter" id="gallery-model-filter">
-            <option value="">All sources</option>
+            <option value="">所有来源</option>
           </select>
           <select class="gallery-sort" id="gallery-sort">
-            <option value="shuffle">Random</option>
-            <option value="recent">Recent</option>
-            <option value="oldest">Oldest</option>
+            <option value="shuffle">随机</option>
+            <option value="recent">最近</option>
+            <option value="oldest">最早</option>
           </select>
-          <button class="gallery-select-btn gallery-toolbar-action" id="gallery-select-btn" title="Select for bulk actions"><span style="position:relative;top:1px;">Select</span></button>
+          <button class="gallery-select-btn gallery-toolbar-action" id="gallery-select-btn" title="选择以进行批量操作"><span style="position:relative;top:1px;">选择</span></button>
         </div>
         <div class="gallery-album-chips" id="gallery-filter-chips" style="margin-top:0;"></div>
         <div class="memory-bulk-bar hidden" id="gallery-bulk-bar" style="margin-bottom:4px;">
-          <label class="memory-bulk-check-all" style="position:relative;top:-1px;"><input type="checkbox" id="gallery-bulk-select-all"> All</label>
-          <span id="gallery-bulk-count" style="position:relative;top:-1px;">0 selected</span>
-          <button class="memory-toolbar-btn" id="gallery-bulk-actions" style="position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Actions <span style="opacity:0.55;font-size:9px;">▼</span></button>
-          <button class="memory-toolbar-btn" id="gallery-bulk-cancel" title="Cancel (Esc)" style="margin-left:4px;padding:3px 6px;position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <label class="memory-bulk-check-all" style="position:relative;top:-1px;"><input type="checkbox" id="gallery-bulk-select-all"> 全选</label>
+          <span id="gallery-bulk-count" style="position:relative;top:-1px;">已选择 0 个</span>
+          <button class="memory-toolbar-btn" id="gallery-bulk-actions" style="position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>操作 <span style="opacity:0.55;font-size:9px;">▼</span></button>
+          <button class="memory-toolbar-btn" id="gallery-bulk-cancel" title="取消 (Esc)" style="margin-left:4px;padding:3px 6px;position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="gallery-tag-chips" id="gallery-tag-chips"></div>
         <div class="gallery-grid" id="gallery-grid"></div>
-        <button class="gallery-load-more" id="gallery-load-more" style="display:none">Load more</button>
+        <button class="gallery-load-more" id="gallery-load-more" style="display:none">加载更多</button>
         <div class="gallery-detail" id="gallery-detail" style="display:none"></div>
         </div>
         <div class="gallery-albums-container" id="gallery-albums-container" style="display:none;"></div>
         <div class="gallery-editor-container" id="gallery-editor-container" style="display:none;"></div>
         <div class="gallery-settings-container" id="gallery-settings-container" style="display:none;">
           <div class="admin-card">
-            <h2>AI Tagging <span id="gallery-tag-count" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal;"></span></h2>
-            <p class="memory-desc doclib-desc">Auto-tag photos by content with your <a href="#" id="gallery-vision-link" class="ge-vision-link">vision model</a>. Your own tags are kept.</p>
+            <h2>AI 标签 <span id="gallery-tag-count" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal;"></span></h2>
+            <p class="memory-desc doclib-desc">使用您的 <a href="#" id="gallery-vision-link" class="ge-vision-link">视觉模型</a> 自动为照片内容打标签。您自己的标签将被保留。</p>
             <div id="gallery-tag-bar" style="display:none;padding:8px 0 0;">
               <div style="background:var(--border);border-radius:4px;overflow:hidden;height:6px;">
                 <div id="gallery-tag-progress" style="height:100%;background:var(--accent, var(--red));width:0%;transition:width 0.2s;"></div>
               </div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
                 <div id="gallery-tag-status" style="font-size:10px;opacity:0.5;"></div>
-                <button id="gallery-tag-cancel" class="gallery-select-btn" style="font-size:10px;padding:1px 6px;">Cancel</button>
+                <button id="gallery-tag-cancel" class="gallery-select-btn" style="font-size:10px;padding:1px 6px;">取消</button>
               </div>
             </div>
             <div class="memory-toolbar" style="display:flex;flex-direction:row;gap:6px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:32px;">
-              <button class="memory-toolbar-btn" id="gallery-clear-ai-tags-btn" title="Remove all AI-generated tags from every photo">Clear AI tags</button>
-              <button class="memory-toolbar-btn" id="gallery-tag-all-btn" title="AI-tag all untagged photos (in the current album, if any)">
+              <button class="memory-toolbar-btn" id="gallery-clear-ai-tags-btn" title="从所有照片中移除 AI 生成的标签">清除 AI 标签</button>
+              <button class="memory-toolbar-btn" id="gallery-tag-all-btn" title="为所有未标记照片打 AI 标签（如有当前相册则仅限于该相册）">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px;"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                Start AI tag
+                开始 AI 标签
               </button>
             </div>
           </div>
@@ -2014,8 +2014,8 @@ export function openGallery() {
   document.getElementById('gallery-close').addEventListener('click', async () => {
     if (isEditorOpen()) {
       const ok = await uiModule.styledConfirm(
-        'Close Gallery and the active edit?',
-        { confirmText: 'Close', danger: true },
+        '关闭画廊和正在进行的编辑？',
+        { confirmText: '关闭', danger: true },
       );
       if (!ok) return;
       window.__galleryAllowCloseEditor = true;
@@ -2035,8 +2035,8 @@ export function openGallery() {
       e.stopPropagation();
       if (isEditorOpen()) {
         const ok = await uiModule.styledConfirm(
-          'Close the edit? Any unsaved changes will be lost.',
-          { confirmText: 'Close', danger: true },
+          '关闭编辑？所有未保存的更改将会丢失。',
+          { confirmText: '关闭', danger: true },
         );
         if (!ok) return;
       }
@@ -2054,12 +2054,12 @@ export function openGallery() {
     editorTab.addEventListener('dblclick', (e) => {
       e.stopPropagation();
       const labelEl = editorTab.querySelector('.gallery-tab-label') || editorTab;
-      const current = labelEl.textContent.replace(/^Edit:\s*/, '');
+      const current = labelEl.textContent.replace(/^编辑:\s*/, '');
       const oldText = labelEl.textContent;
       const input = document.createElement('input');
       input.type = 'text';
-      input.value = current === 'Edit' ? '' : current;
-      input.placeholder = 'Edit name';
+      input.value = current === '编辑' ? '' : current;
+      input.placeholder = '编辑名称';
       input.className = 'gallery-tab-rename-input';
       // Replace only the label span's contents so the icon SVG next to
       // it stays visible during the rename.
@@ -2069,7 +2069,7 @@ export function openGallery() {
       input.select();
       const finish = (commit) => {
         if (commit && input.value.trim()) {
-          labelEl.textContent = `Edit: ${input.value.trim().slice(0, 24)}`;
+          labelEl.textContent = `编辑: ${input.value.trim().slice(0, 24)}`;
         } else {
           labelEl.textContent = oldText;
         }
@@ -2244,15 +2244,15 @@ export function openGallery() {
       if (_tagging) {
         _tagCancelRequested = true;
         const _se = document.getElementById('gallery-tag-status');
-        if (_se) _se.textContent = 'Cancelling…';
-        tagAllBtn.textContent = 'Cancelling…';
+        if (_se) _se.textContent = '取消中…';
+        tagAllBtn.textContent = '取消中…';
         tagAllBtn.disabled = true;
         return;
       }
       if (tagAllBtn.disabled) return;
       const scope = _activeAlbum
-        ? (_albums.find(a => a.id === _activeAlbum)?.name || 'this album')
-        : 'entire gallery';
+        ? (_albums.find(a => a.id === _activeAlbum)?.name || '此相册')
+        : '整个画廊';
       const params = new URLSearchParams();
       if (_activeAlbum) params.set('album_id', _activeAlbum);
       let listRes;
@@ -2261,16 +2261,16 @@ export function openGallery() {
           method: 'POST', credentials: 'same-origin',
         });
         listRes = await r.json();
-      } catch (e) { uiModule.showError('Failed to fetch tag queue'); return; }
+      } catch (e) { uiModule.showError('获取标签队列失败'); return; }
       if (!listRes.ok || !Array.isArray(listRes.image_ids) || listRes.image_ids.length === 0) {
-        uiModule.showToast(`No untagged photos in ${scope}`);
+        uiModule.showToast(`${scope}中没有未标记的照片`);
         return;
       }
       const total = listRes.image_ids.length;
       const untagged = listRes.total_untagged || total;
       if (!await uiModule.styledConfirm(
-        `Tag ${total} of ${untagged} untagged photo${total > 1 ? 's' : ''} in ${scope}?`,
-        { confirmText: 'Tag All' }
+        `在 ${scope} 中为 ${total}/${untagged} 张未标记照片打标签？`,
+        { confirmText: '全部标记' }
       )) return;
 
       const bar = document.getElementById('gallery-tag-bar');
@@ -2284,9 +2284,9 @@ export function openGallery() {
       _tagging = true;
       _tagCancelRequested = false;
       tagAllBtn.classList.add('active', 'gallery-tag-cancelling');
-      tagAllBtn.textContent = 'Cancel';
+      tagAllBtn.textContent = '取消';
       if (cancelBtn) cancelBtn.style.display = 'none';   // start button covers it now
-      cancelBtn.onclick = () => { _tagCancelRequested = true; statusEl.textContent = 'Cancelling...'; };
+      cancelBtn.onclick = () => { _tagCancelRequested = true; statusEl.textContent = '正在取消...'; };
 
       let done = 0, failed = 0;
       for (const id of listRes.image_ids) {
@@ -2300,12 +2300,12 @@ export function openGallery() {
         } catch (_) { failed++; }
         done++;
         progEl.style.width = `${Math.round((done / total) * 100)}%`;
-        statusEl.textContent = `Tagging ${done}/${total}${failed ? ` — ${failed} failed` : ''}`;
+        statusEl.textContent = `正在标记 ${done}/${total}${failed ? ` — ${failed} 失败` : ''}`;
       }
 
       statusEl.textContent = _tagCancelRequested
-        ? `Cancelled after ${done}/${total}${failed ? ` (${failed} failed)` : ''}`
-        : `Done — tagged ${done - failed}/${total}${failed ? ` (${failed} failed)` : ''}`;
+        ? `已取消，已完成 ${done}/${total}${failed ? ` (${failed} 失败)` : ''}`
+        : `完成 — 已标记 ${done - failed}/${total}${failed ? ` (${failed} 失败)` : ''}`;
       // Restore the Start button.
       _tagging = false;
       tagAllBtn.disabled = false;
@@ -2314,7 +2314,7 @@ export function openGallery() {
       if (cancelBtn) cancelBtn.style.display = '';
       setTimeout(() => { bar.style.display = 'none'; }, 3000);
       await _fetchLibrary(false);
-      if (uiModule) uiModule.showToast(`Tagged ${done - failed} photo${(done - failed) !== 1 ? 's' : ''}`);
+      if (uiModule) uiModule.showToast(`已标记 ${done - failed} 张照片`);
     });
   }
 
@@ -2342,8 +2342,8 @@ export function openGallery() {
       if (clearAiTagsBtn.disabled) return;
       if (moreMenu) { moreMenu.hidden = true; moreMenu.style.display = 'none'; }
       if (!await uiModule.styledConfirm(
-        'Remove all AI-generated tags from every photo? Your own tags are kept.',
-        { confirmText: 'Clear AI Tags', danger: true }
+        '移除所有照片的 AI 生成标签？您自己的标签将被保留。',
+        { confirmText: '清除 AI 标签', danger: true }
       )) return;
       clearAiTagsBtn.disabled = true;
       try {
@@ -2351,11 +2351,11 @@ export function openGallery() {
           method: 'POST', credentials: 'same-origin',
         });
         const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Clear failed');
-        uiModule.showToast(`Cleared AI tags on ${d.cleared} photo${d.cleared === 1 ? '' : 's'}`);
+        if (!d.ok) throw new Error(d.error || '清除失败');
+        uiModule.showToast(`已清除 ${d.cleared} 张照片的 AI 标签`);
         await _fetchLibrary(false);
       } catch (e) {
-        uiModule.showError(`Failed to clear AI tags: ${e.message || e}`);
+        uiModule.showError(`清除 AI 标签失败: ${e.message || e}`);
       } finally {
         clearAiTagsBtn.disabled = false;
       }
@@ -2375,7 +2375,7 @@ export function openGallery() {
     const sel = document.querySelectorAll('.gallery-select-dot.selected').length;
     const total = document.querySelectorAll('.gallery-select-dot').length;
     const el = document.getElementById('gallery-bulk-count');
-    if (el) el.textContent = sel + ' selected';
+    if (el) el.textContent = sel + ' 已选择';
     const all = document.getElementById('gallery-bulk-select-all');
     if (all) { all.checked = total > 0 && sel === total; all.indeterminate = sel > 0 && sel < total; }
     // When something's selected, brighten Actions to the same full --fg color as
@@ -2388,7 +2388,7 @@ export function openGallery() {
     _selectMode = on;
     selectBtn.classList.toggle('active', on);
     // The Select button doubles as Cancel while active (mirrors the library).
-    selectBtn.textContent = on ? 'Cancel' : 'Select';
+    selectBtn.textContent = on ? '取消' : '选择';
     bulkBar.classList.toggle('hidden', !on);
     // Body-level signal so the CSS rule that hides per-thumbnail overlay
     // buttons (favorite/download) applies to every card — including cards
@@ -2530,12 +2530,12 @@ export function openGallery() {
     const _delIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
     const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
     const items = [
-      { label: 'Favorite', icon: _favIco, action: () => _bulkFavorite(_selectedIds()) },
-      { label: 'Add tag…', icon: _tagIco, action: () => _bulkTag(_selectedIds()) },
-      { label: 'Download', icon: _dlIco, action: () => _bulkDownload(_selectedIds()) },
-      { label: 'Delete', icon: _delIco, danger: true, action: () => _bulkDelete(_selectedIds()) },
+      { label: '收藏', icon: _favIco, action: () => _bulkFavorite(_selectedIds()) },
+      { label: '添加标签…', icon: _tagIco, action: () => _bulkTag(_selectedIds()) },
+      { label: '下载', icon: _dlIco, action: () => _bulkDownload(_selectedIds()) },
+      { label: '删除', icon: _delIco, danger: true, action: () => _bulkDelete(_selectedIds()) },
       { separator: true },
-      { label: 'Cancel', icon: _cancelIco, action: () => _exitSelectMode() },
+      { label: '取消', icon: _cancelIco, action: () => _exitSelectMode() },
     ];
     for (const a of items) {
       if (a.separator) {
@@ -2568,20 +2568,20 @@ export function openGallery() {
     // the anchor, so the button itself has to do its own dismiss.
     const existing = document.querySelector('.gallery-bulk-menu');
     if (existing) { existing.remove(); return; }
-    if (!_selectedIds().length) { uiModule.showToast('Select photos first'); return; }
+    if (!_selectedIds().length) { uiModule.showToast('请先选择照片'); return; }
     _showGalleryBulkMenu(e.currentTarget);
   });
 
   async function _bulkDelete(ids) {
     if (!ids.length) return;
-    if (!await uiModule.styledConfirm(`Delete ${ids.length} photo${ids.length > 1 ? 's' : ''}? This cannot be undone.`, { confirmText: 'Delete', danger: true })) return;
+    if (!await uiModule.styledConfirm(`删除 ${ids.length} 张照片？此操作无法撤销。`, { confirmText: '删除', danger: true })) return;
     const deleted = [], failed = [];
     for (const id of ids) { const ok = await _deleteImage(id); (ok ? deleted : failed).push(id); }
-    if (failed.length) uiModule.showError(`Failed to delete ${failed.length} of ${ids.length} photos`);
+    if (failed.length) uiModule.showError(`无法删除 ${ids.length} 张照片中的 ${failed.length} 张`);
     _items = _items.filter(i => !deleted.includes(i.id));
     _total = Math.max(0, _total - deleted.length);
     _exitSelectMode();
-    if (uiModule) uiModule.showToast(`${deleted.length} photo${deleted.length > 1 ? 's' : ''} deleted`);
+    if (uiModule) uiModule.showToast(`${deleted.length} 张照片已删除`);
     // If we just emptied a FILTERED view (e.g. deleted every photo under a tag),
     // drop the filters and reload the full library so the user isn't stranded on
     // a blank screen with a now-empty tag/album/favorites filter still active.
@@ -2602,7 +2602,7 @@ export function openGallery() {
     // flood of individual downloads.
     if (ids.length > 5) {
       try {
-        if (uiModule) uiModule.showToast(`Zipping ${ids.length} photos…`);
+        if (uiModule) uiModule.showToast(`正在压缩 ${ids.length} 张照片…`);
         const res = await fetch(`${API_BASE}/api/gallery/download-zip`, {
           method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -2619,9 +2619,9 @@ export function openGallery() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(objUrl), 2000);
         _exitSelectMode();
-        if (uiModule) uiModule.showToast(`Downloaded ${ids.length} photos (zip)`);
+        if (uiModule) uiModule.showToast(`已下载 ${ids.length} 张照片 (zip)`);
       } catch (e) {
-        if (uiModule) uiModule.showError('Failed to create zip');
+        if (uiModule) uiModule.showError('创建 zip 失败');
       }
       return;
     }
@@ -2647,7 +2647,7 @@ export function openGallery() {
       } catch (_) { /* skip failures */ }
     }
     _exitSelectMode();
-    if (uiModule) uiModule.showToast(`Downloading ${n} photo${n === 1 ? '' : 's'}`);
+    if (uiModule) uiModule.showToast(`正在下载 ${n} 张照片`);
   }
 
   async function _bulkFavorite(ids) {
@@ -2659,11 +2659,11 @@ export function openGallery() {
       }
     }
     _renderGrid(); _exitSelectMode();
-    if (uiModule) uiModule.showToast(`Favorited ${n} photo${n > 1 ? 's' : ''}`);
+    if (uiModule) uiModule.showToast(`${n} 张照片已收藏`);
   }
 
   async function _bulkTag(ids) {
-    const tag = (await uiModule.styledPrompt('', { title: 'Add tag to selected', placeholder: 'tag', confirmText: 'Add', maxLength: 60 }) || '').trim().replace(/^#+/, '').trim();
+    const tag = (await uiModule.styledPrompt('', { title: '为选定项添加标签', placeholder: '标签', confirmText: '添加', maxLength: 60 }) || '').trim().replace(/^#+/, '').trim();
     if (!tag) return;
     let n = 0;
     for (const id of ids) {
@@ -2677,7 +2677,7 @@ export function openGallery() {
       }
     }
     _exitSelectMode();
-    if (uiModule) uiModule.showToast(`Tagged ${n} photo${n === 1 ? '' : 's'} “${tag}”`);
+    if (uiModule) uiModule.showToast(`${n} 张照片已标记 "${tag}"`);
   }
 
   modal.addEventListener('click', (e) => {
@@ -2759,7 +2759,7 @@ export function openGallery() {
 function _doCloseGallery() {
   const editorMounted = !!document.querySelector('#gallery-editor-container .gallery-editor');
   if ((window.__galleryEditLive || isEditorOpen() || editorMounted) && !window.__galleryAllowCloseEditor) {
-    if (uiModule) uiModule.showToast('Close the edit tab first');
+    if (uiModule) uiModule.showToast('请先关闭编辑标签页');
     return;
   }
   _open = false;

@@ -16,6 +16,18 @@ export const _prefEnabled = () => {
   }
 };
 
+// User-friendly Chinese labels for sensitive item types
+const LABEL_ZH = {
+  'email': '邮箱',
+  'api-key': 'API 密钥',
+  'token': '令牌',
+  'credential': '凭证',
+  'private-key': '私钥',
+  'hash': '哈希',
+  'jwt': 'JWT',
+  'internal-ip': '内网 IP',
+};
+
 // Patterns that indicate sensitive data
 const PATTERNS = [
   // Emails
@@ -177,7 +189,7 @@ function _processElement(el) {
       const span = document.createElement('span');
       span.className = 'censored-item';
       span.dataset.type = match.label;
-      span.title = 'Click to reveal ' + match.label;
+      span.title = '点击显示' + (LABEL_ZH[match.label] || match.label);
       span.textContent = match.text;
       frag.appendChild(span);
       lastIdx = match.end;
@@ -216,7 +228,7 @@ function _contextCensor(el) {
           const span = document.createElement('span');
           span.className = 'censored-item';
           span.dataset.type = 'credential';
-          span.title = 'Click to reveal credential';
+          span.title = '点击显示凭据';
           span.textContent = sibling.textContent;
           sibling.parentNode.replaceChild(span, sibling);
           censored = true;
@@ -261,7 +273,7 @@ function _contextCensor(el) {
             const span = document.createElement('span');
             span.className = 'censored-item';
             span.dataset.type = 'credential';
-            span.title = 'Click to reveal credential';
+            span.title = '点击显示凭据';
             span.textContent = child.textContent;
             child.parentNode.replaceChild(span, child);
             break;

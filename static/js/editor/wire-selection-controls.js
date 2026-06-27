@@ -159,7 +159,7 @@ export function wireSelectionControls({
   document.getElementById('ge-wand-rembg')?.addEventListener('click', async () => {
     const btn = document.getElementById('ge-wand-rembg');
     const hint = buildSelectionHintMask();
-    if (!hint) { if (uiModule) uiModule.showToast('Click to make a wand selection first'); return; }
+    if (!hint) { if (uiModule) uiModule.showToast('请先用魔棒创建选区'); return; }
     await applyImageTool('/api/image/remove-bg', { hint_mask: hint }, 'BG Removed', btn);
     wandClear();
   });

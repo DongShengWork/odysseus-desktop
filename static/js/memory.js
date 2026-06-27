@@ -274,11 +274,11 @@ async function syncPrefSlider(elementId, prefKey, labelId, defaultVal) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: pref })
         });
-        if (!res.ok) { showError('Failed to save preference'); return; }
+        if (!res.ok) { showError('无法保存偏好设置'); return; }
         showToast(pref === 0 ? 'Skill confidence: All' : `Skill confidence ≥ ${Math.round(pref * 100)}%`);
       } catch (e) {
         console.error(`Failed to save ${prefKey} pref:`, e);
-        showError('Failed to save preference');
+        showError('无法保存偏好设置');
       }
     });
   }
@@ -316,11 +316,11 @@ async function syncPrefNumber(elementId, prefKey, defaultVal) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: v })
         });
-        if (!res.ok) { showError('Failed to save preference'); return; }
+        if (!res.ok) { showError('无法保存偏好设置'); return; }
         showToast(v === 0 ? 'No skills injected' : `Max injected skills: ${v}`);
       } catch (e) {
         console.error(`Failed to save ${prefKey} pref:`, e);
-        showError('Failed to save preference');
+        showError('无法保存偏好设置');
       }
     });
   }
@@ -353,7 +353,7 @@ async function syncPrefToggle(elementId, prefKey, onMsg, offMsg, dimBelow = true
           console.error(`PUT ${prefKey} returned ${res.status}`);
           toggle.checked = !toggle.checked; // revert
           if (dimBelow) syncToggleDim(toggle);
-          showError('Failed to save preference');
+          showError('无法保存偏好设置');
           return;
         }
         showToast(toggle.checked ? onMsg : offMsg);
@@ -361,7 +361,7 @@ async function syncPrefToggle(elementId, prefKey, onMsg, offMsg, dimBelow = true
         console.error(`Failed to save ${prefKey} pref:`, e);
         toggle.checked = !toggle.checked; // revert
         if (dimBelow) syncToggleDim(toggle);
-        showError('Failed to save preference');
+        showError('无法保存偏好设置');
       }
     });
   }
@@ -527,7 +527,7 @@ export async function tidyMemories() {
     if ((data.removed || 0) === 0) {
       if (tidySpinner) tidySpinner.destroy();
       if (tidyBtn) { tidyBtn.disabled = false; tidyBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;color:var(--accent, var(--red));"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> Tidy'; }
-      showToast('Already clean');
+      showToast('已整洁');
       return;
     }
 
@@ -562,7 +562,7 @@ export async function tidyMemories() {
     showToast(`Tidied: ${data.removed} removed (${data.before} \u2192 ${data.after})`);
   } catch (error) {
     console.error('Tidy failed:', error);
-    showError('Tidy failed — check console');
+    showError('整理失败 — 请查看控制台');
   } finally {
     if (tidySpinner) tidySpinner.destroy();
     if (tidyBtn) {
@@ -802,7 +802,7 @@ export function renderMemoryList() {
       const menuBtn = document.createElement('button');
       menuBtn.className = 'memory-menu-btn';
       menuBtn.innerHTML = '\u22EE';
-      menuBtn.title = 'Actions';
+      menuBtn.title = '操作';
 
       const dropdown = document.createElement('div');
       dropdown.className = 'memory-item-dropdown';
@@ -1043,14 +1043,14 @@ async function saveInlineEdit(id, newText, newCategory) {
 
     if (response.ok) {
       await loadMemories();
-      showToast('Memory updated');
+      showToast('记忆已更新');
     } else {
       const errorData = await response.json();
       throw new Error(errorData.detail || 'Failed to update memory');
     }
   } catch (error) {
     console.error('Error updating memory:', error);
-    showError('Failed to update memory');
+    showError('更新记忆失败');
   }
 }
 
@@ -1084,7 +1084,7 @@ export async function addNewMemory() {
   const category = _readNewMemoryCategory();
 
   if (!text) {
-    showError('Memory text cannot be empty');
+    showError('记忆内容不能为空');
     return;
   }
 
@@ -1103,15 +1103,15 @@ export async function addNewMemory() {
     if (response.ok) {
       input.value = '';
       await loadMemories();
-      showToast('Memory added');
+      showToast('记忆已添加');
     } else {
       const errorData = await response.json();
       console.error('Server error details:', errorData);
-      throw new Error(errorData.detail || 'Failed to add memory');
+      throw new Error(errorData.detail || '添加记忆失败');
     }
   } catch (error) {
     console.error('Error adding memory:', error);
-    showError('Failed to add memory');
+    showError('添加记忆失败');
   }
 }
 
@@ -1139,7 +1139,7 @@ async function togglePin(id, pinned) {
     }
   } catch (e) {
     console.error('Failed to toggle pin:', e);
-    showError('Failed to update pin');
+    showError('更新置顶失败');
   }
 }
 
@@ -1157,12 +1157,12 @@ export async function deleteMemory(id) {
     if (response.ok) {
       await animateMemoryRemoval([id]);
       await loadMemories();
-      showToast('Memory deleted');
+      showToast('记忆已删除');
     } else {
-      throw new Error('Failed to delete');
+      throw new Error('删除失败');
     }
   } catch (error) {
-    showError('Failed to delete memory');
+    showError('删除记忆失败');
   }
 }
 
@@ -1172,7 +1172,7 @@ export async function extractMemory(sessionId) {
     body: new URLSearchParams({ session: sessionId })
   });
   if (!res.ok) {
-    showError('Failed to extract memory suggestions');
+    showError('提取记忆建议失败');
     return;
   }
   const data = await res.json();
@@ -1225,7 +1225,7 @@ export async function extractMemory(sessionId) {
         });
         btn.disabled = true;
         btn.textContent = 'saved';
-        showToast('Saved to memory');
+        showToast('已保存到记忆');
       });
       div.appendChild(txt);
       div.appendChild(btn);
@@ -1240,7 +1240,7 @@ export async function extractMemory(sessionId) {
 
 export function exportMemories() {
   if (!memories || memories.length === 0) {
-    showToast('No memories to export');
+    showToast('没有可导出的记忆');
     return;
   }
   const data = JSON.stringify(memories, null, 2);
@@ -1398,7 +1398,7 @@ async function handleImportFile(file) {
           updateHeaderTitle();
           btn.disabled = true;
           btn.textContent = 'saved';
-          showToast('Saved to memory');
+          showToast('已保存到记忆');
         });
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'memory-item-btn delete';
@@ -1421,7 +1421,7 @@ async function handleImportFile(file) {
     document.querySelector('.memory-tab[data-memory-tab="browse"]')?.click();
   } catch (error) {
     console.error('Import failed:', error);
-    showError('Import failed — ' + error.message);
+    showError('导入失败 — ' + error.message);
   } finally {
     if (importSpin) importSpin.destroy();
     if (importBtn) {

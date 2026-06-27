@@ -50,7 +50,7 @@ export function showScoreboard() {
   const header = document.createElement('div');
   header.className = 'modal-header';
   const title = document.createElement('h3');
-  title.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Scoreboard';
+  title.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>积分榜';
   title.style.margin = '0';
   const closeX = document.createElement('button');
   closeX.className = 'close-btn';
@@ -72,7 +72,7 @@ export function showScoreboard() {
 
   // Mode tabs
   const modes = ['chat', 'agent', 'search', 'research'];
-  const modeLabels = { chat: 'Chat', agent: 'Agent', search: 'Search', research: 'Research' };
+  const modeLabels = { chat: '聊天', agent: '智能体', search: '搜索', research: '研究' };
   const tabBar = document.createElement('div');
   tabBar.className = 'compare-mode-tabs';
   tabBar.style.marginBottom = '12px';
@@ -121,13 +121,14 @@ export function showScoreboard() {
     if (sorted.length === 0) {
       const empty = document.createElement('p');
       empty.style.cssText = 'color:color-mix(in srgb, var(--fg) 50%, transparent);text-align:center;padding:24px 0;';
-      empty.textContent = 'No ' + activeMode + ' votes yet. Run a comparison and vote!';
+      const modeZh = modeLabels[activeMode] || activeMode;
+      empty.textContent = '尚没有 ' + modeZh + ' 投票记录。运行对比并投票吧！';
       wrap.appendChild(empty);
     } else {
       const table = document.createElement('table');
       table.className = 'scoreboard-table';
       const thead = document.createElement('thead');
-      thead.innerHTML = '<tr><th>Model</th><th>Win%</th><th>W</th><th>L</th><th>T</th><th>Games</th><th>$/1k</th></tr>';
+      thead.innerHTML = '<tr><th>模型</th><th>胜率</th><th>胜</th><th>负</th><th>平</th><th>场次</th><th>$/千次</th></tr>';
       table.appendChild(thead);
       const tbody = document.createElement('tbody');
       for (const [name, s] of sorted) {
@@ -140,7 +141,7 @@ export function showScoreboard() {
           '<td class="scoreboard-pct"><strong>' + pct + '%</strong></td>' +
           '<td>' + s.wins + '</td><td>' + s.losses + '</td><td>' + s.ties + '</td>' +
           '<td>' + s.games + '</td>' +
-          '<td style="color:var(--color-success, #4caf50);" title="Avg estimated cost per 1,000 responses">' + costStr + '</td>';
+          '<td style="color:var(--color-success, #4caf50);" title="每千次回复的平均预估费用">' + costStr + '</td>';
         tbody.appendChild(tr);
       }
       table.appendChild(tbody);
@@ -149,7 +150,7 @@ export function showScoreboard() {
 
     const total = document.createElement('div');
     total.style.cssText = 'font-size:0.8em;color:color-mix(in srgb, var(--fg) 40%, transparent);margin-top:12px;text-align:center;';
-    total.textContent = filtered.length + ' vote' + (filtered.length !== 1 ? 's' : '') + ' recorded';
+    total.textContent = filtered.length + ' 次投票记录';
     wrap.appendChild(total);
 
     // Move clear button into wrap so it stays at bottom
@@ -178,7 +179,7 @@ export function showScoreboard() {
   // Clear history button
   const clearBtn = document.createElement('button');
   clearBtn.className = 'scoreboard-clear-btn';
-  clearBtn.textContent = 'Clear History';
+  clearBtn.textContent = '清除历史';
   clearBtn.style.cssText = 'display:block;margin:16px 0 4px auto;padding:4px 12px;background:none;border:1px solid var(--border);color:var(--fg);border-radius:4px;cursor:pointer;font-size:11px;opacity:0.4;transition:opacity 0.15s;';
   clearBtn.addEventListener('mouseenter', () => { clearBtn.style.opacity = '1'; });
   clearBtn.addEventListener('mouseleave', () => { clearBtn.style.opacity = '0.6'; });
@@ -188,9 +189,9 @@ export function showScoreboard() {
     confirmRow.style.cssText = 'display:flex;gap:8px;justify-content:center;align-items:center;margin-top:8px;padding:8px 12px;border:1px solid color-mix(in srgb, var(--red) 40%, var(--border));border-radius:6px;background:color-mix(in srgb, var(--red) 5%, transparent);';
     const confirmLabel = document.createElement('span');
     confirmLabel.style.cssText = 'font-size:12px;opacity:0.7;';
-    confirmLabel.textContent = 'Clear all vote history?';
+    confirmLabel.textContent = '清除所有投票记录？';
     const yesBtn = document.createElement('button');
-    yesBtn.textContent = 'Clear';
+    yesBtn.textContent = '确认清除';
     yesBtn.style.cssText = 'padding:4px 12px;background:var(--red);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;';
     yesBtn.addEventListener('click', () => {
       Storage.setJSON(VOTES_STORAGE_KEY, []);
@@ -198,7 +199,7 @@ export function showScoreboard() {
       showScoreboard();
     });
     const noBtn = document.createElement('button');
-    noBtn.textContent = 'Cancel';
+    noBtn.textContent = '取消';
     noBtn.className = 'cmp-btn-secondary';
     noBtn.style.cssText = 'padding:4px 12px;border-radius:4px;font-size:12px;';
     noBtn.addEventListener('click', () => confirmRow.remove());

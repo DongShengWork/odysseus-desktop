@@ -138,7 +138,7 @@ export function providerLabel(endpointUrl) {
   }
   if (!host) return null;
   if (/^(localhost|127\.|0\.0\.0\.0|::1|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(host)) {
-    return "Local";
+    return "本地";
   }
   for (const [re, label] of _ENDPOINT_LABELS) {
     if (re.test(host)) return label;

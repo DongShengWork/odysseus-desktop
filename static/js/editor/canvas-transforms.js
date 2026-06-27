@@ -32,8 +32,8 @@ export function createCanvasTransforms({ saveState, composite, fitZoom, showCanv
      */
     rotateAll(deg) {
       if (!state.layers.length) return;
-      saveState(`Rotate ${deg}°`);
-      showCanvasLoading('Rotating…');
+      saveState(`旋转 ${deg}°`);
+      showCanvasLoading('正在旋转…');
       const oldW = state.imgWidth, oldH = state.imgHeight;
       const swap = (deg === 90 || deg === 270);
       const newW = swap ? oldH : oldW;
@@ -102,7 +102,7 @@ export function createCanvasTransforms({ saveState, composite, fitZoom, showCanv
      */
     flipAll(axis) {
       if (!state.layers.length) return;
-      saveState(axis === 'h' ? 'Flip horizontal' : 'Flip vertical');
+      saveState(axis === 'h' ? '水平翻转' : '垂直翻转');
       for (const layer of state.layers) {
         const lw = layer.canvas.width, lh = layer.canvas.height;
         const tmp = document.createElement('canvas');

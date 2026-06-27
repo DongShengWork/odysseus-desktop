@@ -98,7 +98,7 @@ import * as Modals from './modalManager.js';
     const accounts = await _getEmailAccountsCached();
     const activeAccount = accounts.find(a => String(a.id) === String(activeAccountId));
     if (!activeAccount || _accountCanSend(activeAccount)) return activeAccountId;
-    if (uiModule) uiModule.showToast('Selected email account is receive-only; using your SMTP account.');
+    if (uiModule) uiModule.showToast('所选邮箱账户仅用于接收，将使用您的 SMTP 账户发送。');
     return null;
   }
 
@@ -165,7 +165,7 @@ import * as Modals from './modalManager.js';
           await newDocument();
         } catch (err) {
           console.error('Failed to create document from sidebar button:', err);
-          if (uiModule) uiModule.showError('Failed to create document');
+          if (uiModule) uiModule.showError('创建文档失败');
         }
       });
     }
@@ -279,7 +279,7 @@ import * as Modals from './modalManager.js';
     const paneEl = document.querySelector('.doc-editor-pane');
     const isDocLeft = paneEl && paneEl.classList.contains('doc-left');
     let html = '';
-    html += '<button class="doc-tab-arrow doc-tab-arrow-left" id="doc-tab-left" title="Scroll left">&#x2039;</button>';
+    html += '<button class="doc-tab-arrow doc-tab-arrow-left" id="doc-tab-left" title="向左滚动">&#x2039;</button>';
     html += '<div class="doc-tab-scroll" id="doc-tab-scroll">';
     const curSession = sessionModule?.getCurrentSessionId() || '';
     let _anyTab = false;
@@ -288,11 +288,11 @@ import * as Modals from './modalManager.js';
       if (doc.sessionId && curSession && doc.sessionId !== curSession) continue;
       _anyTab = true;
       const isActive = id === activeDocId;
-      const title = doc.title || 'Untitled';
+      const title = doc.title || '未命名';
       const shortTitle = title.length > 24 ? title.slice(0, 22) + '...' : title;
-      const menuBtn = `<button class="doc-tab-menu-btn" data-doc-id="${id}" title="Document actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="19" r="2.5"/></svg></button>`;
+      const menuBtn = `<button class="doc-tab-menu-btn" data-doc-id="${id}" title="文档操作"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="19" r="2.5"/></svg></button>`;
       const ver = doc.version || doc.version_count || 1;
-      const verChip = `<span class="doc-tab-version" data-doc-id="${id}" title="Version history">v${ver}</span>`;
+      const verChip = `<span class="doc-tab-version" data-doc-id="${id}" title="版本历史">v${ver}</span>`;
       // Language icon before the title — same family as the meta-line / picker
       // icons. Hidden via :empty CSS when the doc has no useful language.
       const lic = (doc.language && doc.language !== 'text')
@@ -301,17 +301,17 @@ import * as Modals from './modalManager.js';
       const langChip = `<span class="doc-tab-lang">${lic}</span>`;
       html += `<div class="doc-tab${isActive ? ' active' : ''}" draggable="true" data-doc-id="${id}" title="${_esc(title)}">
         ${verChip}${langChip}<span class="doc-tab-title">${_esc(shortTitle)}</span>
-        <button class="doc-tab-close" data-doc-id="${id}" title="Unlink from chat (kept in the Library)">&times;</button>
+        <button class="doc-tab-close" data-doc-id="${id}" title="从聊天中取消关联（保留在文档库中）">&times;</button>
       </div>`;
     }
     // Empty state (panel open, no doc yet): show a ghost "Untitled" tab so it's
     // obvious you're in a fresh document rather than staring at a blank pane.
     if (!_anyTab && isOpen && !activeDocId) {
-      html += `<div class="doc-tab active doc-tab-ghost" title="New document — start typing"><span class="doc-tab-title">Untitled</span></div>`;
+      html += `<div class="doc-tab active doc-tab-ghost" title="新建文档 — 开始输入"><span class="doc-tab-title">未命名</span></div>`;
     }
-    html += `<button class="doc-tab-new" id="doc-tab-new-btn" title="New document"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
+    html += `<button class="doc-tab-new" id="doc-tab-new-btn" title="新建文档"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
     html += '</div>';
-    html += '<button class="doc-tab-arrow doc-tab-arrow-right" id="doc-tab-right" title="Scroll right">&#x203A;</button>';
+    html += '<button class="doc-tab-arrow doc-tab-arrow-right" id="doc-tab-right" title="向右滚动">&#x203A;</button>';
     tabBar.innerHTML = html;
 
     // Wire scroll arrows
@@ -546,7 +546,7 @@ import * as Modals from './modalManager.js';
     const badge = document.getElementById('doc-version-badge');
 
     if (textarea) textarea.value = '';
-    if (textarea) textarea.placeholder = 'Start typing or paste text to create a document...';
+    if (textarea) textarea.placeholder = '开始输入或粘贴文本以创建文档...';
     if (textarea) textarea.disabled = false;
     if (langSelect) langSelect.value = '';
     if (badge) badge.textContent = '';
@@ -625,8 +625,8 @@ import * as Modals from './modalManager.js';
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
-      if (uiModule) uiModule.showError('Export failed: ' + e.message);
-      else alert('Export failed: ' + e.message);
+      if (uiModule) uiModule.showError('导出失败: ' + e.message);
+      else alert('导出失败: ' + e.message);
     }
   }
 
@@ -677,7 +677,7 @@ import * as Modals from './modalManager.js';
         </div>
         <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid var(--border);margin-top:6px;align-items:center;">
           <span id="pdf-export-status" style="font-size:0.75rem;opacity:0.7;margin-right:auto;"></span>
-          <button id="pdf-export-cancel" class="confirm-btn confirm-btn-secondary">Cancel</button>
+          <button id="pdf-export-cancel" class="confirm-btn confirm-btn-secondary">取消</button>
           <button id="pdf-export-download" class="confirm-btn confirm-btn-primary" disabled>Download PDF</button>
         </div>
       </div>
@@ -737,14 +737,14 @@ import * as Modals from './modalManager.js';
       sep.textContent = '|';
       jumpBar.appendChild(sep);
       const topBtn = document.createElement('button');
-      topBtn.textContent = '↑ Top';
+      topBtn.textContent = '↑ 顶部';
       topBtn.className = _smallBtnClass;
       topBtn.style.cssText = _smallBtnStyle;
       topBtn.addEventListener('click', () => body.scrollTo({ top: 0, behavior: 'smooth' }));
       jumpBar.appendChild(topBtn);
       const botBtn = document.createElement('button');
-      botBtn.textContent = '↓ Bottom';
-      botBtn.title = 'Jump to the last page (signature fields are usually here)';
+      botBtn.textContent = '↓ 底部';
+      botBtn.title = '跳转到最后一页（签名字段通常在此处）';
       botBtn.className = _smallBtnClass;
       botBtn.style.cssText = _smallBtnStyle;
       botBtn.addEventListener('click', () => body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' }));
@@ -778,7 +778,7 @@ import * as Modals from './modalManager.js';
             thumb.style.cssText = 'max-height:32px;max-width:140px;object-fit:contain;border:1px solid var(--border);border-radius:3px;background:#fff;display:none;';
             const clearBtn = document.createElement('button');
             clearBtn.textContent = '×';
-            clearBtn.title = 'Remove signature from this field';
+            clearBtn.title = '移除此字段的签名';
             clearBtn.className = 'confirm-btn confirm-btn-secondary';
             clearBtn.style.cssText = 'padding:0 8px;font-size:0.85rem;line-height:1;display:none;';
             const apply = (sig) => {
@@ -786,16 +786,16 @@ import * as Modals from './modalManager.js';
               thumb.src = sig.dataUrl;
               thumb.style.display = '';
               clearBtn.style.display = '';
-              btn.textContent = 'Change';
+              btn.textContent = '更换';
             };
             const clear = () => {
               delete wrap.dataset.signatureId;
               thumb.removeAttribute('src');
               thumb.style.display = 'none';
               clearBtn.style.display = 'none';
-              btn.textContent = 'Sign here';
+              btn.textContent = '在此签名';
             };
-            btn.textContent = 'Sign here';
+            btn.textContent = '在此签名';
             btn.addEventListener('click', async () => {
               const sig = await signatureModule.pick();
               if (sig) apply(sig);
@@ -820,7 +820,7 @@ import * as Modals from './modalManager.js';
             ti.dataset.fieldName = f.name;
             ti.dataset.fieldType = f.type;
             const today = document.createElement('button');
-            today.textContent = 'Today';
+            today.textContent = '今天';
             today.title = "Set to today's date";
             today.className = 'confirm-btn confirm-btn-secondary';
             today.style.cssText = 'padding:3px 8px;font-size:0.72rem;';
@@ -843,7 +843,7 @@ import * as Modals from './modalManager.js';
             input.className = 'pdf-export-input';
             const blank = document.createElement('option');
             blank.value = '';
-            blank.textContent = '— (none) —';
+            blank.textContent = '—（无）—';
             input.appendChild(blank);
             for (const o of f.options) {
               const opt = document.createElement('option');
@@ -885,7 +885,7 @@ import * as Modals from './modalManager.js';
           }
         }
         downloadBtn.disabled = true;
-        overlay.querySelector('#pdf-export-status').textContent = 'Building PDF…';
+        overlay.querySelector('#pdf-export-status').textContent = '正在生成 PDF…';
         try {
           const r = await fetch(`${API_BASE}/api/document/${activeDocId}/export-pdf`, {
             method: 'POST',
@@ -910,7 +910,7 @@ import * as Modals from './modalManager.js';
           setTimeout(() => URL.revokeObjectURL(url), 1000);
           close();
         } catch (e) {
-          overlay.querySelector('#pdf-export-status').textContent = 'Error: ' + e.message;
+          overlay.querySelector('#pdf-export-status').textContent = '错误: ' + e.message;
           downloadBtn.disabled = false;
         }
       });
@@ -1240,7 +1240,7 @@ import * as Modals from './modalManager.js';
               el.style.background = 'color-mix(in srgb, var(--accent, var(--red)) 10%, transparent)';
               const span = document.createElement('span');
               span.style.cssText = 'color:var(--accent, var(--red));font-size:11px;';
-              span.textContent = 'Sign here';
+              span.textContent = '在此签名';
               el.appendChild(span);
             }
           };
@@ -1298,7 +1298,7 @@ import * as Modals from './modalManager.js';
         if (isDate) {
           const today = document.createElement('button');
           today.type = 'button';
-          today.textContent = 'Today';
+          today.textContent = '今天';
           today.title = "Set to today's date";
           today.style.cssText = `position:absolute;left:calc(${lPct}% + ${wPct}%);top:${tPct}%;height:${hPct}%;margin-left:4px;padding:0 6px;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 55%, transparent);background:rgba(255,255,255,0.95);color:var(--accent, var(--red));border-radius:3px;cursor:pointer;font-size:10px;line-height:1;white-space:nowrap;`;
           today.addEventListener('click', () => {
@@ -1394,7 +1394,7 @@ import * as Modals from './modalManager.js';
     } else if (kind === 'signature') {
       input = document.createElement('div');
       input.style.cssText = `width:100%;height:100%;box-sizing:border-box;border:1px dashed color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:color-mix(in srgb, var(--accent, var(--red)) 10%, transparent);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;font-size:10px;color:var(--accent, var(--red));`;
-      input.textContent = (ann.value && ann.value.startsWith('signature:')) ? '' : 'Sign here';
+      input.textContent = (ann.value && ann.value.startsWith('signature:')) ? '' : '在此签名';
       input.dataset.signatureId = (ann.value && ann.value.startsWith('signature:')) ? ann.value.slice(10) : '';
     } else {
       // Multi-line text input. Browser resize disabled — we use the custom
@@ -1405,7 +1405,7 @@ import * as Modals from './modalManager.js';
       // a fullscreen toggle.
       input = document.createElement('textarea');
       input.value = ann.value || '';
-      input.placeholder = 'Type…';
+      input.placeholder = '输入…';
       input.rows = 1;
       input.spellcheck = false;
       const lh = ann.lineHeight || 1.3;
@@ -1426,18 +1426,18 @@ import * as Modals from './modalManager.js';
     const del = document.createElement('button');
     del.type = 'button';
     del.textContent = '✖';
-    del.title = 'Delete annotation';
+    del.title = '删除批注';
     del.style.cssText = `position:absolute;top:${OFF}px;right:${OFF}px;width:${HS}px;height:${HS}px;padding:0 0 0 1px;border:1px solid var(--accent, var(--red));background:#fff;color:var(--accent, var(--red));border-radius:50%;cursor:pointer;font-size:11px;line-height:1;display:${HIDE};font-weight:bold;touch-action:none;`;
 
     // ☰ drag handle — same size as the × button.
     const grip = document.createElement('div');
-    grip.title = 'Drag to move';
+    grip.title = '拖动以移动';
     grip.textContent = '☰';
     grip.style.cssText = `position:absolute;top:${OFF}px;left:${OFF}px;width:${HS}px;height:${HS}px;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:#fff;color:var(--accent, var(--red));border-radius:3px;cursor:move;font-size:11px;line-height:${HS - 2}px;text-align:center;display:${HIDE};touch-action:none;`;
 
     // ↘ resize handle — same size as the × button.
     const resize = document.createElement('div');
-    resize.title = 'Drag to resize';
+    resize.title = '拖动以调大小';
     resize.style.cssText = `position:absolute;bottom:${OFF}px;right:${OFF}px;width:${HS}px;height:${HS}px;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:#fff;color:var(--accent, var(--red));border-radius:3px;cursor:nwse-resize;display:${HIDE};touch-action:none;`;
     resize.innerHTML = '<svg width="14" height="14" viewBox="0 0 10 10" style="display:block;margin:auto;height:100%;"><path d="M2 8 L8 2 M5 8 L8 5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>';
 
@@ -1446,7 +1446,7 @@ import * as Modals from './modalManager.js';
       menuBtn = document.createElement('button');
       menuBtn.type = 'button';
       menuBtn.textContent = '…';
-      menuBtn.title = 'Text annotation options';
+      menuBtn.title = '文本批注选项';
       menuBtn.style.cssText = `position:absolute;bottom:${OFF}px;left:${OFF}px;width:${HS}px;height:${HS}px;padding:0;border:1px solid color-mix(in srgb, var(--accent, var(--red)) 65%, transparent);background:#fff;color:var(--accent, var(--red));border-radius:50%;cursor:pointer;font-size:15px;line-height:0.8;display:${HIDE};font-weight:bold;touch-action:none;`;
     }
 
@@ -1483,7 +1483,7 @@ import * as Modals from './modalManager.js';
           input.style.background = 'color-mix(in srgb, var(--accent, var(--red)) 10%, transparent)';
           input.style.border = '1px dashed color-mix(in srgb, var(--accent, var(--red)) 65%, transparent)';
           const span = document.createElement('span');
-          span.textContent = 'Sign here';
+          span.textContent = '在此签名';
           input.appendChild(span);
           return;
         }
@@ -1775,7 +1775,7 @@ import * as Modals from './modalManager.js';
 
     _setPdfSaveStatus('saving');
     const btn = document.getElementById('doc-pdf-ai-fill-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Thinking…'; }
+    if (btn) { btn.disabled = true; btn.textContent = '思考中…'; }
     try {
       const res = await fetch(`${API_BASE}/api/document/${docId}/ai-fill-annotations`, {
         method: 'POST',
@@ -1790,7 +1790,7 @@ import * as Modals from './modalManager.js';
       const proposed = (data && data.annotations) || [];
       if (!proposed.length) {
         _setPdfSaveStatus('idle');
-        if (uiModule && uiModule.showToast) uiModule.showToast('AI found nothing to fill');
+        if (uiModule && uiModule.showToast) uiModule.showToast('AI 未找到需要填写的内容');
         return;
       }
       // Merge into markdown via the same _writeAnnotations path: parse current,
@@ -1828,7 +1828,7 @@ import * as Modals from './modalManager.js';
       console.error('AI fill failed:', e);
       _setPdfSaveStatus('error', `AI fill failed: ${e.message || e}`);
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'AI fill'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'AI 填写'; }
     }
   }
 
@@ -2054,11 +2054,11 @@ import * as Modals from './modalManager.js';
       const _replyable = !!(_ad && _ad.sourceEmailUid && _ad.sourceEmailFolder);
       if (_replyable && _copyBtn.dataset.mode !== 'reply') {
         _copyBtn.dataset.mode = 'reply';
-        _copyBtn.title = 'Reply to the sender with this filled file attached';
+        _copyBtn.title = '将填写后的文件作为附件回复给发件人';
         _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Attach';
       } else if (!_replyable && _copyBtn.dataset.mode !== 'copy') {
         _copyBtn.dataset.mode = 'copy';
-        _copyBtn.title = 'Copy document';
+        _copyBtn.title = '复制文档';
         _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy';
       }
     }
@@ -2131,13 +2131,13 @@ import * as Modals from './modalManager.js';
         let icon, title;
         if (lang === 'csv') {
           icon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>';
-          title = 'Table view';
+          title = '表格视图';
         } else if (_isRenderLang(lang)) {
           icon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-          title = 'Preview';
+          title = '预览';
         } else {
           icon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
-          title = 'Run';
+          title = '运行';
         }
         if (runBtn.dataset.lastIcon !== lang) {
           runBtn.innerHTML = icon;
@@ -2153,7 +2153,7 @@ import * as Modals from './modalManager.js';
         const codeIco = (lang === 'csv')
           ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>'
           : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
-        const codeTitle = (lang === 'csv') ? 'Edit' : 'Edit code';
+        const codeTitle = (lang === 'csv') ? '编辑' : '编辑代码';
         if (codeBtn.dataset.lastIcon !== lang) {
           codeBtn.innerHTML = codeIco;
           codeBtn.title = codeTitle;
@@ -2184,7 +2184,7 @@ import * as Modals from './modalManager.js';
     } else if (lang === 'csv') {
       show = true;
       actionBtn.innerHTML = _csvActive ? _penIco : '<span style="font-size:12px;font-weight:600;">⊞</span>';
-      actionBtn.title = _csvActive ? 'Edit' : 'Table View';
+      actionBtn.title = _csvActive ? '编辑' : '表格视图';
       if (_csvActive) actionBtn.classList.add('active');
     } else if (_isRenderLang(lang)) {
       // SVG/HTML/XML use the segmented Code </> | Run ▶ light-switch toggle
@@ -2197,7 +2197,7 @@ import * as Modals from './modalManager.js';
     } else if (canRun) {
       show = true;
       actionBtn.innerHTML = _outputActive ? _codeIco : _playIco;
-      actionBtn.title = _outputActive ? 'Hide output' : 'Run';
+      actionBtn.title = _outputActive ? '隐藏输出' : '运行';
       if (_outputActive) actionBtn.classList.add('active');
     }
 
@@ -2457,7 +2457,7 @@ import * as Modals from './modalManager.js';
     header.classList.toggle('doc-email-header-collapsed', !!collapsed);
     if (btn) {
       btn.setAttribute('aria-expanded', String(!collapsed));
-      btn.title = collapsed ? 'Show email fields' : 'Hide email fields';
+      btn.title = collapsed ? '显示邮件字段' : '隐藏邮件字段';
     }
     const doc = activeDocId && docs.get(activeDocId);
     if (doc && manual) doc._emailHeaderCollapsed = !!collapsed;
@@ -2577,12 +2577,12 @@ import * as Modals from './modalManager.js';
                 if (data.doc_id) {
                   await loadDocument(data.doc_id);
                 } else if (uiModule) {
-                  uiModule.showError(data.error || 'Failed to open PDF');
+                  uiModule.showError(data.error || '打开 PDF 失败');
                   window.open(`${API_BASE}/api/email/attachment/${encodeURIComponent(fields.sourceUid)}/${att.index}?folder=${folderQs}`, '_blank');
                 }
               } catch (e) {
                 console.error('Open PDF attachment failed:', e);
-                if (uiModule) uiModule.showError('Failed to open PDF');
+                if (uiModule) uiModule.showError('打开 PDF 失败');
               }
             }));
             attDiv.appendChild(chip);
@@ -2611,7 +2611,7 @@ import * as Modals from './modalManager.js';
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
               } catch (e) {
                 console.error('Download attachment failed:', e);
-                if (uiModule) uiModule.showError('Download failed: ' + e.message);
+                if (uiModule) uiModule.showError('下载失败: ' + e.message);
               }
             }));
             attDiv.appendChild(chip);
@@ -2689,7 +2689,7 @@ import * as Modals from './modalManager.js';
           if (uiModule) uiModule.showError(`Failed to upload ${file.name}: ${data.error || ''}`);
         }
       } catch (err) {
-        if (uiModule) uiModule.showError(`Failed to upload ${file.name}`);
+        if (uiModule) uiModule.showError(`上传失败 ${file.name}`);
       }
     }
     _renderComposeAttachments();
@@ -2764,11 +2764,11 @@ import * as Modals from './modalManager.js';
   async function _uploadMarkdownImages(files) {
     const images = Array.from(files || []).filter(_isMarkdownImageFile);
     if (!images.length) {
-      if (uiModule) uiModule.showError('Choose an image file');
+      if (uiModule) uiModule.showError('请选择图片文件');
       return;
     }
     if (_activeDocLanguage() !== 'markdown') {
-      if (uiModule) uiModule.showError('Switch the document to markdown before inserting images');
+      if (uiModule) uiModule.showError('插入图片前请将文档切换为 Markdown');
       return;
     }
 
@@ -2786,10 +2786,10 @@ import * as Modals from './modalManager.js';
       const uploaded = Array.isArray(data?.files) ? data.files : [];
       if (!uploaded.length) throw new Error('No uploaded files returned');
       _insertMarkdownImages(uploaded);
-      if (uiModule) uiModule.showToast(images.length === 1 ? 'Image inserted' : 'Images inserted');
+      if (uiModule) uiModule.showToast(images.length === 1 ? '图片已插入' : '图片已插入');
     } catch (err) {
       console.error('Failed to insert markdown image:', err);
-      if (uiModule) uiModule.showError('Failed to insert image');
+      if (uiModule) uiModule.showError('插入图片失败');
     }
   }
 
@@ -3061,11 +3061,11 @@ import * as Modals from './modalManager.js';
     const doc = docs.get(activeDocId);
     const attachments = (doc?._composeAtts || []).map(a => a.token);
     if (!to || !body) {
-      if (uiModule) uiModule.showError('To and body are required');
+      if (uiModule) uiModule.showError('收件人和正文为必填项');
       return;
     }
     if (inReplyTo && !_emailReplyOwnText(body)) {
-      if (uiModule) uiModule.showError('Reply body is empty');
+      if (uiModule) uiModule.showError('回复正文为空');
       return;
     }
     // Warn if body mentions attachments but none are actually attached
@@ -3085,15 +3085,15 @@ import * as Modals from './modalManager.js';
       sendSpinner.element.style.cssText = 'display:inline-block;vertical-align:-2px;margin-right:6px;width:14px;height:14px;';
       btn.innerHTML = '';
       btn.appendChild(sendSpinner.element);
-      btn.appendChild(document.createTextNode('Sending'));
+      btn.appendChild(document.createTextNode('发送中'));
     }
     try {
       let canceled = false;
       if (uiModule) {
-        uiModule.showToast('Sending', {
+        uiModule.showToast('发送中', {
           duration: 3200,
           leadingIcon: 'spinner',
-          action: 'Cancel',
+          action: '取消',
           onAction: () => { canceled = true; },
         });
       }
@@ -3103,7 +3103,7 @@ import * as Modals from './modalManager.js';
       if (canceled) {
         _restoreDetachedEmailDoc(detachedEmailDoc);
         detachedEmailDoc = null;
-        if (uiModule) uiModule.showToast('Send canceled');
+        if (uiModule) uiModule.showToast('发送已取消');
         return;
       }
 
@@ -3129,7 +3129,7 @@ import * as Modals from './modalManager.js';
       if (!res.ok && data && !data.error) data.error = `Send failed (${res.status})`;
       if (data.success) {
         if (uiModule) {
-          uiModule.showToast('Message sent', {
+          uiModule.showToast('消息已发送', {
             duration: 7000,
             leadingIcon: 'check',
             action: 'View Message',
@@ -3138,7 +3138,7 @@ import * as Modals from './modalManager.js';
                 const open = mod.openEmailLibrary || (mod.default && mod.default.openEmailLibrary);
                 if (open) open({
                   account_id: data.account_id || activeAccountId || null,
-                  folder: data.sent_folder || 'Sent',
+                  folder: data.sent_folder || '已发送',
                   uid: data.sent_uid || null,
                 });
               }).catch(() => {});
@@ -3190,12 +3190,12 @@ import * as Modals from './modalManager.js';
       } else {
         _restoreDetachedEmailDoc(detachedEmailDoc);
         detachedEmailDoc = null;
-        if (uiModule) uiModule.showError(data.error || 'Failed to send');
+        if (uiModule) uiModule.showError(data.error || '发送失败');
       }
     } catch (e) {
       _restoreDetachedEmailDoc(detachedEmailDoc);
       detachedEmailDoc = null;
-      if (uiModule) uiModule.showError(e?.message ? `Failed to send email: ${e.message}` : 'Failed to send email');
+      if (uiModule) uiModule.showError(e?.message ? `发送邮件失败: ${e.message}` : '发送邮件失败');
     } finally {
       if (sendSpinner) sendSpinner.destroy();
       if (btn) {
@@ -3218,7 +3218,7 @@ import * as Modals from './modalManager.js';
     const body = (_rich ? (_rich.innerText || _rich.textContent || '') : (textarea?.value || '')).trim();
     const bodyHtml = _rich ? _rich.innerHTML : null;
     const btn = document.getElementById('doc-email-draft-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+    if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 18000);
     try {
@@ -3240,7 +3240,7 @@ import * as Modals from './modalManager.js';
       });
       const data = await res.json();
       if (data.success) {
-        if (uiModule) uiModule.showToast('Draft saved to mailbox');
+        if (uiModule) uiModule.showToast('草稿已保存到邮箱');
       } else {
         if (uiModule) uiModule.showError(data.error || 'Failed to save draft');
       }
@@ -3249,7 +3249,7 @@ import * as Modals from './modalManager.js';
       if (uiModule) uiModule.showError(timedOut ? 'Saving draft timed out' : 'Failed to save draft');
     } finally {
       clearTimeout(timeout);
-      if (btn) { btn.disabled = false; btn.textContent = 'Draft'; }
+      if (btn) { btn.disabled = false; btn.textContent = '草稿'; }
     }
   }
 
@@ -3500,7 +3500,7 @@ import * as Modals from './modalManager.js';
         if (uiModule) uiModule.showError(data.error || 'Failed to generate reply');
       }
     } catch (e) {
-      if (uiModule) uiModule.showError('Failed to generate AI reply');
+      if (uiModule) uiModule.showError('AI 回复生成失败');
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:var(--accent, var(--red));flex-shrink:0;position:relative;top:-1px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg><span style="font-size:11px;margin-left:4px;">Reply</span>'; }
     }
@@ -3523,11 +3523,11 @@ import * as Modals from './modalManager.js';
     const attachments = (doc?._composeAtts || []).map(a => a.token);
 
     if (!to || !body) {
-      if (uiModule) uiModule.showError('To and body are required');
+      if (uiModule) uiModule.showError('收件人和正文为必填项');
       return;
     }
     if (inReplyTo && !_emailReplyOwnText(body)) {
-      if (uiModule) uiModule.showError('Reply body is empty');
+      if (uiModule) uiModule.showError('回复正文为空');
       return;
     }
     if (attachments.length === 0 && _bodyMentionsAttachment(body)) {
@@ -3542,7 +3542,7 @@ import * as Modals from './modalManager.js';
     overlay.innerHTML = `
       <div class="modal-content schedule-send-modal" style="width:400px;max-width:92vw;">
         <div class="modal-header">
-          <h4>Schedule Send</h4>
+          <h4>定时发送</h4>
           <button class="close-btn" id="sched-close" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body schedule-send-body">
@@ -3557,7 +3557,7 @@ import * as Modals from './modalManager.js';
           <input type="datetime-local" id="sched-datetime" class="schedule-send-datetime" />
         </div>
         <div class="modal-footer schedule-send-footer">
-          <button class="memory-toolbar-btn" id="sched-cancel">Cancel</button>
+          <button class="memory-toolbar-btn" id="sched-cancel">取消</button>
           <button class="memory-toolbar-btn schedule-send-confirm" id="sched-confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Schedule</button>
         </div>
       </div>
@@ -3617,7 +3617,7 @@ import * as Modals from './modalManager.js';
 
     overlay.querySelector('#sched-confirm').addEventListener('click', async () => {
       const localDt = dtInput.value;
-      if (!localDt) { if (uiModule) uiModule.showError('Please pick a time'); return; }
+      if (!localDt) { if (uiModule) uiModule.showError('请选择一个时间'); return; }
       // Convert local datetime to UTC ISO
       const utcIso = new Date(localDt).toISOString();
       try {
@@ -3641,10 +3641,10 @@ import * as Modals from './modalManager.js';
           // Close the document
           _closeWithoutDeleting(true);
         } else {
-          if (uiModule) uiModule.showError(data.error || 'Failed to schedule');
+          if (uiModule) uiModule.showError(data.error || '定时发送设置失败');
         }
       } catch (e) {
-        if (uiModule) uiModule.showError('Failed to schedule');
+        if (uiModule) uiModule.showError('定时发送设置失败');
       }
     });
   }
@@ -3812,7 +3812,7 @@ import * as Modals from './modalManager.js';
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: '' }),
       }).then(() => {
-        if (toast && uiModule) uiModule.showToast('Document unlinked from session');
+        if (toast && uiModule) uiModule.showToast('文档已从会话中取消关联');
       }).catch(() => {});
     } else {
       fetch(`${API_BASE}/api/document/${docId}`, { method: 'DELETE' }).catch(() => {});
@@ -3879,7 +3879,7 @@ import * as Modals from './modalManager.js';
       // Update textarea (keep existing content the user typed)
       const textarea = document.getElementById('doc-editor-textarea');
       if (textarea) {
-        textarea.placeholder = 'Document content...';
+        textarea.placeholder = '文档内容...';
       }
       syncHighlighting();
       renderTabs();
@@ -4025,12 +4025,12 @@ import * as Modals from './modalManager.js';
       <input type="hidden" id="doc-title-input" value="" />
       <div class="doc-mobile-grabber" id="doc-mobile-grabber" aria-hidden="true"></div>
       <div class="doc-editor-header" id="doc-editor-actions">
-        <button id="doc-undo-btn" class="doc-action-icon-btn" title="Undo (Ctrl+Z)" style="gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span style="font-size:11px;">Undo</span></button>
-        <button id="doc-header-preview-btn" class="doc-action-icon-btn" title="Run / Preview" style="display:none;opacity:0.85;gap:4px;"></button>
-        <span id="doc-stream-indicator" class="doc-stream-indicator" style="display:none"><span class="doc-stream-dot"></span> editing</span>
-        <span id="doc-version-badge" class="doc-version-badge" title="Version history" style="display:none">v1</span>
+        <button id="doc-undo-btn" class="doc-action-icon-btn" title="撤销（Ctrl+Z）" style="gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span style="font-size:11px;">撤销</span></button>
+        <button id="doc-header-preview-btn" class="doc-action-icon-btn" title="运行 / 预览" style="display:none;opacity:0.85;gap:4px;"></button>
+        <span id="doc-stream-indicator" class="doc-stream-indicator" style="display:none"><span class="doc-stream-dot"></span> 编辑中</span>
+        <span id="doc-version-badge" class="doc-version-badge" title="版本歷史" style="display:none">v1</span>
         <span style="flex:1"></span>
-        <button id="doc-export-pdf-btn" class="doc-action-icon-btn" title="Export PDF" style="display:none;opacity:0.7;gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg> <span style="font-size:11px;">Export PDF</span></button>
+        <button id="doc-export-pdf-btn" class="doc-action-icon-btn" title="导出 PDF" style="display:none;opacity:0.7;gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg> <span style="font-size:11px;">导出 PDF</span></button>
         <button id="doc-pdf-view-btn" class="doc-action-icon-btn" title="Toggle PDF view" style="display:none;opacity:0.7;gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> <span style="font-size:11px;">PDF</span></button>
         <select id="doc-language-select" class="doc-language-select">
           <option value="python">python</option>
@@ -4070,24 +4070,24 @@ import * as Modals from './modalManager.js';
         </button>
         <div id="doc-email-fields" class="doc-email-fields">
           <div class="email-field" style="position:relative">
-            <span class="email-field-prefix">To</span>
-            <input type="text" id="doc-email-to" placeholder="recipient@example.com" autocomplete="off" />
+            <span class="email-field-prefix">收件人</span>
+            <input type="text" id="doc-email-to" placeholder="收件人@示例邮箱.com" autocomplete="off" />
             <div id="doc-email-to-suggestions" class="email-autocomplete" style="display:none"></div>
-            <button type="button" id="doc-email-show-cc" class="email-cc-toggle" title="Show Cc/Bcc">Cc</button>
+            <button type="button" id="doc-email-show-cc" class="email-cc-toggle" title="Show Cc/Bcc">抄送</button>
           </div>
           <div class="email-field" id="doc-email-cc-row" style="display:none;position:relative">
-            <span class="email-field-prefix">Cc</span>
-            <input type="text" id="doc-email-cc" placeholder="cc@example.com, example2" autocomplete="off" />
+            <span class="email-field-prefix">抄送</span>
+            <input type="text" id="doc-email-cc" placeholder="抄送@示例邮箱.com, 示例2" autocomplete="off" />
             <div id="doc-email-cc-suggestions" class="email-autocomplete" style="display:none"></div>
-            <button type="button" class="email-cc-close" data-cc-close title="Hide Cc/Bcc" aria-label="Hide Cc/Bcc"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button type="button" class="email-cc-close" data-cc-close title="隐藏抄送/密送" aria-label="隐藏抄送/密送"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
           <div class="email-field" id="doc-email-bcc-row" style="display:none;position:relative">
-            <span class="email-field-prefix">Bcc</span>
-            <input type="text" id="doc-email-bcc" placeholder="bcc@example.com" autocomplete="off" />
+            <span class="email-field-prefix">密送</span>
+            <input type="text" id="doc-email-bcc" placeholder="密送@示例邮箱.com" autocomplete="off" />
             <div id="doc-email-bcc-suggestions" class="email-autocomplete" style="display:none"></div>
-            <button type="button" class="email-cc-close" data-cc-close title="Hide Cc/Bcc" aria-label="Hide Cc/Bcc"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button type="button" class="email-cc-close" data-cc-close title="隐藏抄送/密送" aria-label="隐藏抄送/密送"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
-          <div class="email-field" style="position:relative"><span class="email-field-prefix">Subject</span><input type="text" id="doc-email-subject" placeholder="" /></div>
+          <div class="email-field" style="position:relative"><span class="email-field-prefix">主题</span><input type="text" id="doc-email-subject" placeholder="" /></div>
           <div id="doc-email-attachments" class="email-attachments" style="display:none"></div>
           <div id="doc-email-compose-atts" class="email-compose-atts" style="display:none"></div>
         </div>
@@ -4100,15 +4100,15 @@ import * as Modals from './modalManager.js';
       <input type="file" id="doc-md-image-input" accept="image/*" multiple style="display:none" />
       <div class="doc-md-toolbar" id="doc-md-toolbar" style="display:none">
         <div class="md-toolbar-items" id="md-toolbar-items">
-          <span class="md-view-toggle" id="doc-md-view-toggle" style="display:none" role="group" aria-label="Edit or preview">
+          <span class="md-view-toggle" id="doc-md-view-toggle" style="display:none" role="group" aria-label="编辑或预览">
             <button type="button" class="md-view-opt" data-mdview="edit" title="Edit source (Ctrl+Alt+M to toggle)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
             <button type="button" class="md-view-opt" data-mdview="preview" title="Preview (Ctrl+Alt+M to toggle)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
           </span>
-          <span class="md-view-toggle" id="doc-render-view-toggle" style="display:none" role="group" aria-label="Code or run">
+          <span class="md-view-toggle" id="doc-render-view-toggle" style="display:none" role="group" aria-label="代码或运行">
             <button type="button" class="md-view-opt" data-renderview="code" title="Edit code"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
-            <button type="button" class="md-view-opt" data-renderview="run" title="Run / Preview"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+            <button type="button" class="md-view-opt" data-renderview="run" title="运行 / 预览"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
           </span>
-          <button id="doc-email-ai-reply-btn" class="doc-action-icon-btn md-toolbar-email-only" type="button" title="Draft a reply with AI (Fast / Full + optional context)" style="display:none;align-items:center;gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:var(--accent, var(--red));flex-shrink:0;position:relative;top:-1px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg><span style="font-size:11px;">Reply</span></button>
+          <button id="doc-email-ai-reply-btn" class="doc-action-icon-btn md-toolbar-email-only" type="button" title="用 AI 起草回复（快速 / 完整 + 可选上下文）" style="display:none;align-items:center;gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:var(--accent, var(--red));flex-shrink:0;position:relative;top:-1px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg><span style="font-size:11px;">回复</span></button>
           <button id="doc-fontsize-btn" class="doc-action-icon-btn" title="Font size" style="position:relative;width:28px;height:26px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg><span class="doc-fontsize-levels"><i data-sz="s">S</i><i data-sz="m">M</i><i data-sz="l">L</i></span></button>
           <button id="doc-diff-toggle-btn" class="doc-action-icon-btn" title="Compare changes" style="opacity:0.7;display:none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 12H2l5-5 5 5H9"/><path d="M19 12h3l-5 5-5-5h3"/></svg></button>
           <span class="md-toolbar-sep"></span>
@@ -4128,7 +4128,7 @@ import * as Modals from './modalManager.js';
           <span class="md-toolbar-sep md-toolbar-pdf-only" style="display:none"></span>
           <button type="button" id="doc-pdf-add-text-btn" class="md-toolbar-pdf-only" title="Add text box (then click on PDF)" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg></button>
           <button type="button" id="doc-pdf-add-check-btn" class="md-toolbar-pdf-only" title="Add checkmark (then click on PDF)" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-          <button type="button" id="doc-pdf-add-sign-btn" class="md-toolbar-pdf-only" title="Add signature (then click on PDF)" style="display:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3l6 6-9 9-3-3z"/><path d="M9 15l-3 1 1-3"/><path d="M4 18l3-3"/><path d="M3 20l3-3"/><path d="M5 22l3-3"/></svg><span class="doc-pdf-sign-label">sign</span></button>
+          <button type="button" id="doc-pdf-add-sign-btn" class="md-toolbar-pdf-only" title="Add signature (then click on PDF)" style="display:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3l6 6-9 9-3-3z"/><path d="M9 15l-3 1 1-3"/><path d="M4 18l3-3"/><path d="M3 20l3-3"/><path d="M5 22l3-3"/></svg><span class="doc-pdf-sign-label">签名</span></button>
           <button type="button" id="doc-pdf-refresh-btn" class="md-toolbar-pdf-only" title="Reload PDF view" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
         </div>
         <div class="md-toolbar-overflow-wrapper" id="md-toolbar-overflow-wrapper" style="display:none">
@@ -4139,7 +4139,7 @@ import * as Modals from './modalManager.js';
         <button type="button" class="md-scroll-arrow md-scroll-right" id="md-scroll-right" title="Scroll right" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
       </div>
       <div id="doc-find-bar" class="doc-find-bar" style="display:none">
-        <input id="doc-find-input" class="doc-find-input" type="text" placeholder="Find..." />
+        <input id="doc-find-input" class="doc-find-input" type="text" placeholder="查找..." />
         <span id="doc-find-count" class="doc-find-count"></span>
         <button id="doc-find-prev" class="doc-find-nav" title="Previous">&uarr;</button>
         <button id="doc-find-next" class="doc-find-nav" title="Next">&darr;</button>
@@ -4156,15 +4156,15 @@ import * as Modals from './modalManager.js';
            the existing send/draft/change-detection paths keep working. -->
       <div id="doc-email-richbody" class="doc-email-richbody" contenteditable="true" spellcheck="true" style="display:none" data-no-swipe-dismiss></div>
       <div id="doc-email-actions" class="doc-email-actions" style="display:none">
-        <button id="doc-email-discard-btn" class="email-discard-btn" title="Close email" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span>Close</span></button>
+        <button id="doc-email-discard-btn" class="email-discard-btn" title="Close email" style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span>关闭</span></button>
         <span style="flex:1"></span>
         <div class="email-send-split">
-          <button id="doc-email-send-btn" class="email-send-btn email-send-main" title="Send email (Ctrl+Enter)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send</button>
+          <button id="doc-email-send-btn" class="email-send-btn email-send-main" title="Send email (Ctrl+Enter)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>发送</button>
           <button id="doc-email-send-caret" class="email-send-btn email-send-caret" title="More send options" aria-haspopup="true" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
           <div id="doc-email-more-menu" class="email-more-menu" style="display:none">
-            <div class="dropdown-item-compact" id="doc-email-draft-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>Save Draft</div>
-            <div class="dropdown-item-compact" id="doc-email-schedule-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>Schedule Send...</div>
-            <div class="dropdown-item-compact" id="doc-email-unread-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>Mark Unread</div>
+            <div class="dropdown-item-compact" id="doc-email-draft-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>保存草稿</div>
+            <div class="dropdown-item-compact" id="doc-email-schedule-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>定时发送...</div>
+            <div class="dropdown-item-compact" id="doc-email-unread-btn"><span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>标记为未读</div>
           </div>
         </div>
       </div>
@@ -4179,21 +4179,21 @@ import * as Modals from './modalManager.js';
            csv / html / pdf) is the one growing to fill. -->
       <div id="doc-actions-footer" class="doc-email-actions">
         <span class="email-send-split" id="doc-copy-export-split">
-          <button type="button" id="doc-footer-copy-btn" class="email-send-btn email-send-main" title="Copy document"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button>
-          <button type="button" id="doc-footer-export-btn" class="email-send-btn email-send-caret" title="Export as…" aria-label="Export options"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg></button>
+          <button type="button" id="doc-footer-copy-btn" class="email-send-btn email-send-main" title="复制文档"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</button>
+          <button type="button" id="doc-footer-export-btn" class="email-send-btn email-send-caret" title="Export as…" aria-label="导出选项"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg></button>
         </span>
       </div>
       <div id="doc-version-panel" class="doc-version-panel hidden">
         <div class="doc-version-header">
-          <span>Version History</span>
+          <span>版本历史</span>
           <button id="doc-version-close" class="doc-action-icon-btn" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div id="doc-version-list" class="doc-version-list"></div>
       </div>
       <div id="doc-mobile-footer" class="doc-mobile-footer">
-        <button id="doc-mobile-close" class="doc-mobile-footer-btn" type="button">Unlink</button>
+        <button id="doc-mobile-close" class="doc-mobile-footer-btn" type="button">取消关联</button>
         <span style="flex:1"></span>
-        <button id="doc-mobile-copy" class="doc-mobile-footer-btn" type="button">Copy</button>
+        <button id="doc-mobile-copy" class="doc-mobile-footer-btn" type="button">复制</button>
       </div>
     `;
 
@@ -4302,7 +4302,7 @@ import * as Modals from './modalManager.js';
         if (isFull) {
           if (_divCollapse.dataset.mode !== 'unfullscreen') {
             _divCollapse.dataset.mode = 'unfullscreen';
-            _divCollapse.title = 'Exit fullscreen';
+            _divCollapse.title = '退出全屏';
           }
           return;
         }
@@ -4312,10 +4312,10 @@ import * as Modals from './modalManager.js';
         const cur = _divCollapse.dataset.mode;
         if (ev.clientX > midX + HYSTERESIS && cur !== 'collapse') {
           _divCollapse.dataset.mode = 'collapse';
-          _divCollapse.title = 'Collapse panel';
+          _divCollapse.title = '折叠面板';
         } else if (ev.clientX < midX - HYSTERESIS && cur !== 'fullscreen') {
           _divCollapse.dataset.mode = 'fullscreen';
-          _divCollapse.title = 'Fullscreen';
+          _divCollapse.title = '全屏';
         }
       };
       const _onMove = (ev) => _applyMode(ev);
@@ -4890,18 +4890,18 @@ import * as Modals from './modalManager.js';
         if (!res.ok) throw new Error('Failed');
         const versions = await res.json();
         if (versions.length < 2) {
-          if (uiModule) uiModule.showToast('No previous version to compare');
+          if (uiModule) uiModule.showToast('没有可比较的之前版本');
           return;
         }
         // versions are sorted desc — [0] is latest, [1] is previous
         const prevContent = versions[1].content || '';
         if (prevContent === current) {
-          if (uiModule) uiModule.showToast('No changes from previous version');
+          if (uiModule) uiModule.showToast('与之前版本相比没有变化');
           return;
         }
         enterDiffMode(prevContent, current);
       } catch {
-        if (uiModule) uiModule.showError('Failed to load version history');
+        if (uiModule) uiModule.showError('加载版本历史失败');
       }
     });
 
@@ -5226,14 +5226,14 @@ import * as Modals from './modalManager.js';
       overlay.className = 'modal';
       overlay.innerHTML =
         '<div class="modal-content styled-confirm-box styled-prompt-box">' +
-          '<div class="modal-header"><h4>Insert link</h4></div>' +
+          '<div class="modal-header"><h4>插入链接</h4></div>' +
           '<div class="modal-body">' +
-            '<input type="text" id="doc-link-text" class="styled-prompt-input" placeholder="Link text (optional)" maxlength="500" />' +
-            '<input type="url" id="doc-link-url" class="styled-prompt-input" placeholder="https://example.com" maxlength="2048" style="margin-top:8px;" />' +
+            '<input type="text" id="doc-link-text" class="styled-prompt-input" placeholder="链接文本（可选）" maxlength="500" />' +
+            '<input type="url" id="doc-link-url" class="styled-prompt-input" placeholder="https://示例网址.com" maxlength="2048" style="margin-top:8px;" />' +
           '</div>' +
           '<div class="modal-footer">' +
-            '<button id="doc-link-cancel" class="confirm-btn confirm-btn-secondary">Cancel</button>' +
-            '<button id="doc-link-ok" class="confirm-btn confirm-btn-primary">Insert</button>' +
+            '<button id="doc-link-cancel" class="confirm-btn confirm-btn-secondary">取消</button>' +
+            '<button id="doc-link-ok" class="confirm-btn confirm-btn-primary">插入</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -5612,9 +5612,9 @@ import * as Modals from './modalManager.js';
     _mdDdOpenedAt = now;
 
     const groups = {
-      heading: [['h1', 'Heading 1', 'H1'], ['h2', 'Heading 2', 'H2'], ['h3', 'Heading 3', 'H3']],
-      code: [['code', 'Inline code', '`'], ['codeblock', 'Code block', '```']],
-      list: [['ul', 'Bullet list', '•'], ['ol', 'Numbered list', '1.']],
+      heading: [['h1', '标题 1', 'H1'], ['h2', '标题 2', 'H2'], ['h3', '标题 3', 'H3']],
+      code: [['code', '行内代码', '`'], ['codeblock', '代码块', '`{3}']],
+      list: [['ul', 'Bullet list', '•'], ['ol', '有序列表', '1.']],
     };
     const items = groups[kind];
     if (!items) return;
@@ -6135,7 +6135,7 @@ import * as Modals from './modalManager.js';
       let textarea = document.getElementById('doc-editor-textarea');
       if (textarea) {
         textarea.disabled = false;
-        textarea.placeholder = 'Document content...';
+        textarea.placeholder = '文档内容...';
       }
       // Capture text typed during the round-trip (only when starting from the
       // empty editor — don't steal another doc's content).
@@ -6154,7 +6154,7 @@ import * as Modals from './modalManager.js';
       if (textarea) textarea.focus();
     } catch (e) {
       console.error('Failed to create document:', e);
-      if (uiModule) uiModule.showError('Failed to create document');
+      if (uiModule) uiModule.showError('创建文档失败');
     } finally {
       _creatingDoc = false;
     }
@@ -6194,7 +6194,7 @@ import * as Modals from './modalManager.js';
     const quote = quoteIdx >= 0 ? lines.slice(quoteIdx).join('\n') : '';
     const ownText = _emailReplyOwnText(fields.body || '');
     if (ownText && !/^(\[AI reply draft will appear here\]|Drafting AI reply)/i.test(ownText)) {
-      if (uiModule) uiModule.showToast('AI reply ready, but draft was edited');
+      if (uiModule) uiModule.showToast('AI 回复已就绪，但草稿已被编辑');
       return;
     }
     const body = String(replyText || '').trim() + (quote ? `\n\n${quote}` : '');
@@ -7611,7 +7611,7 @@ import * as Modals from './modalManager.js';
 
     if (_diffChunks.length === 0) {
       _diffModeActive = false;
-      if (uiModule) uiModule.showToast('No changes');
+      if (uiModule) uiModule.showToast('无变化');
       return;
     }
 
@@ -7712,12 +7712,12 @@ import * as Modals from './modalManager.js';
 
     const acceptAll = document.createElement('button');
     acceptAll.className = 'diff-toolbar-btn diff-toolbar-btn-accept';
-    acceptAll.textContent = 'Accept All';
+    acceptAll.textContent = '全部接受';
     acceptAll.addEventListener('click', () => _resolveAllChunks(true));
 
     const rejectAll = document.createElement('button');
     rejectAll.className = 'diff-toolbar-btn diff-toolbar-btn-reject';
-    rejectAll.textContent = 'Reject All';
+    rejectAll.textContent = '全部拒绝';
     rejectAll.addEventListener('click', () => _resolveAllChunks(false));
 
     toolbar.appendChild(status);
@@ -7754,13 +7754,13 @@ import * as Modals from './modalManager.js';
 
         const acceptBtn = document.createElement('button');
         acceptBtn.className = 'diff-chunk-btn diff-chunk-btn-accept';
-        acceptBtn.title = 'Accept change';
+        acceptBtn.title = '接受更改';
         acceptBtn.innerHTML = '✓';
         acceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _resolveChunk(chunk.id, true); });
 
         const rejectBtn = document.createElement('button');
         rejectBtn.className = 'diff-chunk-btn diff-chunk-btn-reject';
-        rejectBtn.title = 'Reject change';
+        rejectBtn.title = '拒绝更改';
         rejectBtn.innerHTML = '✗';
         rejectBtn.addEventListener('click', (e) => { e.stopPropagation(); _resolveChunk(chunk.id, false); });
 
@@ -8148,7 +8148,7 @@ import * as Modals from './modalManager.js';
         await navigator.clipboard.writeText(textarea.value);
       } catch (e) { /* ignore */ }
     }
-    if (uiModule) uiModule.showToast('Copied to clipboard');
+    if (uiModule) uiModule.showToast('已复制到剪贴板');
   }
 
   /* ---- Per-tab context menu ---- */
@@ -8206,9 +8206,9 @@ import * as Modals from './modalManager.js';
     const _mdActive = _mdPreview && _mdPreview.style.display !== 'none';
     const _csvActive = _csvPreview && _csvPreview.style.display !== 'none';
     const _htmlActive = _htmlPreview && _htmlPreview.style.display !== 'none';
-    if (lang === 'markdown') { previewIcon = 'MD'; previewLabel = _mdActive ? 'Edit' : 'Preview'; }
-    else if (lang === 'csv') { previewIcon = '⊞'; previewLabel = _csvActive ? 'Edit' : 'Table View'; }
-    else if (_isRenderLang(lang)) { previewIcon = '▶'; previewLabel = _htmlActive ? 'Edit' : 'Run / Preview'; }
+    if (lang === 'markdown') { previewIcon = 'MD'; previewLabel = _mdActive ? '编辑' : '预览'; }
+    else if (lang === 'csv') { previewIcon = '⊞'; previewLabel = _csvActive ? '编辑' : '表格视图'; }
+    else if (_isRenderLang(lang)) { previewIcon = '▶'; previewLabel = _htmlActive ? '编辑' : '运行 / 预览'; }
 
     const _di = (svg) => `<span class="dropdown-icon">${svg}</span>`;
     const _saveIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
@@ -8218,25 +8218,25 @@ import * as Modals from './modalManager.js';
     const _deleteIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';
 
     let items = '';
-    items += `<div class="dropdown-item-compact doc-tab-action" data-action="save">${_di(_saveIco)}<span>Save</span></div>`;
-    items += `<div class="dropdown-item-compact doc-tab-action" data-action="copy">${_di(_copyIco)}<span>Copy</span></div>`;
+    items += `<div class="dropdown-item-compact doc-tab-action" data-action="save">${_di(_saveIco)}<span>保存</span></div>`;
+    items += `<div class="dropdown-item-compact doc-tab-action" data-action="copy">${_di(_copyIco)}<span>复制</span></div>`;
     if (canRun) {
-      items += `<div class="dropdown-item-compact doc-tab-action" data-action="run">${_di(_runIco)}<span>Run</span></div>`;
+      items += `<div class="dropdown-item-compact doc-tab-action" data-action="run">${_di(_runIco)}<span>运行</span></div>`;
     }
     if (previewLabel) {
       items += `<div class="dropdown-item-compact doc-tab-action" data-action="preview"><span class="dropdown-icon">${previewIcon}</span><span>${previewLabel}</span></div>`;
     }
     const _downloadIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-    items += `<div class="dropdown-item-compact doc-tab-action" data-action="download">${_di(_downloadIco)}<span>Download</span></div>`;
+    items += `<div class="dropdown-item-compact doc-tab-action" data-action="download">${_di(_downloadIco)}<span>下载</span></div>`;
     // "Send signed reply" — only if this doc was opened from an email attachment
     if (doc.sourceEmailUid && doc.sourceEmailFolder) {
       const _sendBackIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
-      items += `<div class="dropdown-item-compact doc-tab-action" data-action="signed-reply">${_di(_sendBackIco)}<span>Send signed reply</span></div>`;
+      items += `<div class="dropdown-item-compact doc-tab-action" data-action="signed-reply">${_di(_sendBackIco)}<span>发送签名回复</span></div>`;
     }
     const _closeIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-    items += `<div class="dropdown-item-compact doc-tab-action" data-action="close">${_di(_closeIco)}<span>Close</span></div>`;
+    items += `<div class="dropdown-item-compact doc-tab-action" data-action="close">${_di(_closeIco)}<span>关闭</span></div>`;
     items += `<div class="dropdown-divider"></div>`;
-    items += `<div class="dropdown-item-compact doc-tab-action doc-tab-action-delete" data-action="delete">${_di(_deleteIco)}<span>Delete</span></div>`;
+    items += `<div class="dropdown-item-compact doc-tab-action doc-tab-action-delete" data-action="delete">${_di(_deleteIco)}<span>删除</span></div>`;
 
     _docTabMenu.innerHTML = items;
     _docTabMenu.style.display = 'block';
@@ -8306,7 +8306,7 @@ import * as Modals from './modalManager.js';
   async function _sendSignedReply(docId) {
     const doc = docs.get(docId);
     if (!doc || !doc.sourceEmailUid) return;
-    if (uiModule) uiModule.showToast('Preparing signed reply…');
+    if (uiModule) uiModule.showToast('正在准备签名回复…');
     let result;
     try {
       const res = await fetch(`${API_BASE}/api/document/${encodeURIComponent(docId)}/prepare-signed-reply`, {
@@ -8424,7 +8424,7 @@ import * as Modals from './modalManager.js';
         docs.get(activeDocId).content = textarea.value;
       }
       _syncDocIndicator();
-      if (!silent && uiModule) uiModule.showToast('Document saved');
+      if (!silent && uiModule) uiModule.showToast('文档已保存');
     } catch (e) {
       console.error('Failed to save document:', e);
       const now = Date.now();
@@ -8444,7 +8444,7 @@ import * as Modals from './modalManager.js';
       const s = document.createElement('script');
       s.src = '/static/lib/docx.umd.min.js';
       s.onload = resolve;
-      s.onerror = () => reject(new Error('Failed to load DOCX library'));
+      s.onerror = () => reject(new Error('加载 DOCX 库失败'));
       document.head.appendChild(s);
     });
     return _docxReady;
@@ -8458,7 +8458,7 @@ import * as Modals from './modalManager.js';
       const s = document.createElement('script');
       s.src = '/static/lib/html2pdf.bundle.min.js';
       s.onload = resolve;
-      s.onerror = () => reject(new Error('Failed to load PDF library'));
+      s.onerror = () => reject(new Error('加载 PDF 库失败'));
       document.head.appendChild(s);
     });
     return _html2pdfReady;
@@ -8579,7 +8579,7 @@ import * as Modals from './modalManager.js';
           }
         }
       } catch (err) {
-        if (uiModule && uiModule.showError) uiModule.showError('Import failed: ' + (err.message || err));
+        if (uiModule && uiModule.showError) uiModule.showError('导入失败: ' + (err.message || err));
       } finally {
         fi.value = '';
         fi.remove();
@@ -8634,9 +8634,9 @@ import * as Modals from './modalManager.js';
     options.push({ label: 'Import from device', fn: () => _importFromDevice(), _divider: true });
     if (isForm) options.push({ label: 'Filled PDF (.pdf)', fn: _downloadFilledPdf });
     options.push(
-      { label: 'Export Markdown', fn: exportDocument },
-      { label: 'Print as PDF', fn: exportAsPdf },
-      { label: 'Export as Word', fn: exportAsDocx },
+      { label: '导出 Markdown', fn: exportDocument },
+      { label: '打印为 PDF', fn: exportAsPdf },
+      { label: '导出为 Word', fn: exportAsDocx },
     );
 
     options.forEach(opt => {
@@ -8699,7 +8699,7 @@ import * as Modals from './modalManager.js';
     a.download = _getExportBaseName() + '.html';
     a.click();
     URL.revokeObjectURL(a.href);
-    if (uiModule) uiModule.showToast('Exported as HTML');
+    if (uiModule) uiModule.showToast('已导出为 HTML');
   }
 
   async function exportAsPdf() {
@@ -8709,7 +8709,7 @@ import * as Modals from './modalManager.js';
     try {
       await ensureHtml2Pdf();
     } catch (e) {
-      if (uiModule) uiModule.showError('Failed to load PDF library');
+      if (uiModule) uiModule.showError('加载 PDF 库失败');
       return;
     }
     const lang = document.getElementById('doc-language-select')?.value || '';
@@ -8733,7 +8733,7 @@ import * as Modals from './modalManager.js';
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
     }).from(container).save();
-    if (uiModule) uiModule.showToast('Exporting PDF...');
+    if (uiModule) uiModule.showToast('正在导出 PDF...');
   }
 
   async function exportAsDocx() {
@@ -8743,7 +8743,7 @@ import * as Modals from './modalManager.js';
     try {
       await ensureDocx();
     } catch (e) {
-      if (uiModule) uiModule.showError('Failed to load DOCX library');
+      if (uiModule) uiModule.showError('加载 DOCX 库失败');
       return;
     }
     const text = textarea.value || '';
@@ -8781,7 +8781,7 @@ import * as Modals from './modalManager.js';
     a.download = baseName + '.docx';
     a.click();
     URL.revokeObjectURL(a.href);
-    if (uiModule) uiModule.showToast('Exported as DOCX');
+    if (uiModule) uiModule.showToast('已导出为 DOCX');
   }
 
   /** Delete the active document */
@@ -8790,8 +8790,8 @@ import * as Modals from './modalManager.js';
     const doc = docs.get(activeDocId);
     const name = doc ? doc.title : 'this document';
     const ok = uiModule && uiModule.styledConfirm
-      ? await uiModule.styledConfirm(`Delete "${name}"?`, { confirmText: 'Delete', danger: true })
-      : confirm(`Delete "${name}"?`);
+      ? await uiModule.styledConfirm(`删除"${name}"？`, { confirmText: '删除', danger: true })
+      : confirm(`删除"${name}"？`);
     if (!ok) return;
     try {
       const res = await fetch(`${API_BASE}/api/document/${activeDocId}`, { method: 'DELETE' });
@@ -8808,10 +8808,10 @@ import * as Modals from './modalManager.js';
         activeDocId = null;
         closePanel();
       }
-      if (uiModule) uiModule.showToast('Document deleted');
+      if (uiModule) uiModule.showToast('文档已删除');
     } catch (e) {
       console.error('Failed to delete document:', e);
-      if (uiModule) uiModule.showError('Failed to delete document');
+      if (uiModule) uiModule.showError('删除文档失败');
     }
   }
 
@@ -9363,7 +9363,7 @@ import * as Modals from './modalManager.js';
     const textarea = document.getElementById('doc-editor-textarea');
     if (textarea) {
       textarea.disabled = false;
-      textarea.placeholder = 'Document content...';
+      textarea.placeholder = '文档内容...';
       textarea.value = '';
     }
     // Show streaming indicator
@@ -9642,7 +9642,7 @@ import * as Modals from './modalManager.js';
     // Re-enable editor if it was in empty state
     if (textarea) {
       textarea.disabled = false;
-      textarea.placeholder = 'Document content...';
+      textarea.placeholder = '文档内容...';
     }
     if (badge) badge.textContent = `v${data.version || 1}`;
     if (data.title && titleInput) titleInput.value = data.title;
@@ -9924,7 +9924,7 @@ import * as Modals from './modalManager.js';
       if (uiModule) uiModule.showToast(`Restored to v${num}`);
     } catch (e) {
       console.error('Failed to restore version:', e);
-      if (uiModule) uiModule.showError('Failed to restore version');
+      if (uiModule) uiModule.showError('恢复版本失败');
     }
   }
 

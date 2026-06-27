@@ -195,7 +195,7 @@ function _recipientChipHtml(full, label, extraClass = '') {
   const addr = _emailAddressFromRecipientText(fullText);
   const labelText = String(label || addr || fullText || '').trim();
   const cls = `recipient-chip${extraClass ? ` ${extraClass}` : ''}`;
-  return `<span class="${cls}" data-full="${_esc(fullText || labelText)}" data-email="${_esc(addr)}" title="Click for details"><span class="recipient-chip-label">${_esc(labelText)}</span><button type="button" class="recipient-chip-copy" title="Copy email" aria-label="Copy email" hidden>${_COPY_EMAIL_ICON}</button></span>`;
+  return `<span class="${cls}" data-full="${_esc(fullText || labelText)}" data-email="${_esc(addr)}" title="点击查看详情"><span class="recipient-chip-label">${_esc(labelText)}</span><button type="button" class="recipient-chip-copy" title="复制邮箱" aria-label="复制邮箱" hidden>${_COPY_EMAIL_ICON}</button></span>`;
 }
 
 function _wireRecipientChips(root) {
@@ -214,13 +214,13 @@ function _wireRecipientChips(root) {
         if (!copied) throw new Error('copy failed');
         copyBtn.classList.add('copied');
         copyBtn.title = 'Copied';
-        showToast?.('Email copied');
+        showToast?.('邮箱已复制');
         setTimeout(() => {
           copyBtn.classList.remove('copied');
           copyBtn.title = 'Copy email';
         }, 900);
       } catch (_) {
-        showToast?.('Copy failed');
+        showToast?.('复制失败');
       }
       return;
     }
@@ -566,8 +566,8 @@ function _wireUnreadTabClick() {
 async function _deleteEmailAndAdvance(em, card, opts = {}) {
   if (!em || em.uid == null) return;
   if (opts.confirm !== false) {
-    const subject = em.subject || '(no subject)';
-    const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
+    const subject = em.subject || '(无主题)';
+    const ok = await styledConfirm(`删除 "${subject}"？`, { confirmText: '删除', cancelText: '取消', danger: true });
     if (!ok) return;
   }
   const wasExpanded = !!card?.classList?.contains('doclib-card-expanded');
@@ -579,7 +579,7 @@ async function _deleteEmailAndAdvance(em, card, opts = {}) {
     await fetch(`${API_BASE}/api/email/delete/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
   } catch (err) {
     console.error('Failed to delete email:', err);
-    showToast('Failed to delete email');
+    showToast('删除邮件失败');
     return;
   }
   await _animateEmailCardRemoval([em.uid]);
@@ -588,7 +588,7 @@ async function _deleteEmailAndAdvance(em, card, opts = {}) {
   _updateBulkBar();
   _renderGrid();
   _libCacheWriteBack();
-  showToast('Moved to Trash');
+  showToast('已移至回收站');
   if (!wasExpanded || !nextUid) return;
   const grid = document.getElementById('email-lib-grid');
   const nextCard = grid?.querySelector(`.doclib-card[data-uid="${CSS.escape(String(nextUid))}"]`);
@@ -648,7 +648,7 @@ function _openSettingsTab(tab) {
 
 function _emailSetupHintHtml() {
   return '<div style="margin-top:6px;opacity:0.72;font-size:11px;">' +
-    'Setup: <a href="#" data-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">Settings &rsaquo; Integrations</a>' +
+    '设置方式: <a href="#" data-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">设置 &rsaquo; 集成</a>' +
     '</div>';
 }
 
@@ -716,7 +716,7 @@ function _resetEmailListForFreshLoad() {
   const grid = document.getElementById('email-lib-grid');
   if (grid) _renderEmailLoading(grid);
   const stats = document.getElementById('email-lib-stats');
-  if (stats) stats.textContent = 'Loading...';
+  if (stats) stats.textContent = '加载中...';
 }
 
 function _loadEmailsFresh() {
@@ -866,7 +866,7 @@ export function openEmailLibrary(opts = {}) {
             <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
           </svg>
           Email
-          <span id="email-lib-unread-badge" class="email-lib-unread-badge" role="button" tabindex="0" title="Show unread emails" style="display:none"></span>
+          <span id="email-lib-unread-badge" class="email-lib-unread-badge" role="button" tabindex="0" title="显示未读邮件" style="display:none"></span>
           <span id="email-lib-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal;margin-left:8px;position:relative;top:-2px"></span>
         </h4>
         <div class="email-lib-header-actions" style="display:flex;align-items:center;gap:8px;">
@@ -879,48 +879,48 @@ export function openEmailLibrary(opts = {}) {
             <div id="email-lib-accounts" style="display:flex;gap:4px;flex:1;min-width:0;"></div>
             <button class="memory-toolbar-btn email-compose-jiggle" id="email-lib-compose-btn">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-              New
+              新建
             </button>
           </div>
           <div class="memory-toolbar">
             <div class="memory-category-filters">
               <select class="memory-sort-select" id="email-lib-folder" style="flex:1;min-width:0;text-overflow:ellipsis;">
-                <option value="INBOX">Inbox</option>
+                <option value="INBOX">收件箱</option>
               </select>
               <!-- Hidden native select kept as the source of truth — all
                    existing change handlers still fire via the custom picker
                    dispatching 'change' on it. -->
               <select class="memory-sort-select" id="email-lib-filter" style="display:none;">
-                <option value="all">All</option>
-                <option value="unread">Unread</option>
-                <option value="favorites">Favorites</option>
-                <option value="undone">Undone</option>
-                <option value="reminders">Reminders</option>
-                <option value="unanswered">Unanswered</option>
-                <option value="pending_30d">Pending · 30d</option>
-                <option value="stale_30d">Stale · &gt;30d</option>
-                <optgroup label="Tags">
-                  <option value="tag:urgent">Urgent</option>
-                  <option value="tag:reply-soon">Reply soon</option>
-                  <option value="tag:spam">Spam</option>
-                  <option value="tag:newsletter">Newsletter</option>
-                  <option value="tag:marketing">Marketing</option>
+                <option value="all">全部</option>
+                <option value="unread">未读</option>
+                <option value="favorites">收藏</option>
+                <option value="undone">未完成</option>
+                <option value="reminders">提醒</option>
+                <option value="unanswered">未回复</option>
+                <option value="pending_30d">待处理 · 30天</option>
+                <option value="stale_30d">陈旧 · &gt;30天</option>
+                <optgroup label="标签">
+                  <option value="tag:urgent">紧急</option>
+                  <option value="tag:reply-soon">需尽快回复</option>
+                  <option value="tag:spam">垃圾邮件</option>
+                  <option value="tag:newsletter">订阅</option>
+                  <option value="tag:marketing">营销</option>
                 </optgroup>
               </select>
               <div class="email-filter-picker" id="email-filter-picker" style="flex:1;min-width:0;position:relative;">
                 <button type="button" class="email-filter-btn" id="email-filter-btn" aria-haspopup="listbox" aria-expanded="false">
-                  <span class="email-filter-current"><span class="email-filter-icon"></span><span class="email-filter-label">All</span></span>
+                  <span class="email-filter-current"><span class="email-filter-icon"></span><span class="email-filter-label">全部</span></span>
                   <svg class="email-filter-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
                 <div class="email-filter-menu" id="email-filter-menu" role="listbox" hidden></div>
               </div>
-              <button class="memory-toolbar-btn email-filter-select-btn" id="email-lib-select-btn"><svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>Select</button>
-              <button class="memory-toolbar-btn email-filter-refresh-btn" id="email-lib-refresh-btn" title="Refresh">
+              <button class="memory-toolbar-btn email-filter-select-btn" id="email-lib-select-btn"><svg class="memory-select-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>选择</button>
+              <button class="memory-toolbar-btn email-filter-refresh-btn" id="email-lib-refresh-btn" title="刷新">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
               </button>
-              <button class="memory-toolbar-btn email-reminders-clear-btn hidden" id="email-reminders-clear-btn" title="Permanently delete Odysseus reminder emails">
+              <button class="memory-toolbar-btn email-reminders-clear-btn hidden" id="email-reminders-clear-btn" title="永久删除 Odyssey 提醒邮件">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                Clear
+                清除
               </button>
             </div>
             <div class="email-search-row" style="display:flex;gap:6px;align-items:flex-start;">
@@ -928,32 +928,32 @@ export function openEmailLibrary(opts = {}) {
               <div class="email-lib-chip-bar memory-search-input" id="email-lib-chip-bar" style="width:100%;padding-right:96px;padding-left:26px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;cursor:text;min-height:30px;position:relative;">
                 <svg class="email-lib-chip-bar-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--accent, var(--red));"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
                 <span id="email-lib-pills" style="display:contents"></span>
-                <input type="text" id="email-lib-search" placeholder="Search by name or text" autocomplete="off" style="flex:1;min-width:80px;border:0;outline:none;background:transparent;color:inherit;font:inherit;padding:0;position:relative;top:-1px;" />
+                <input type="text" id="email-lib-search" placeholder="按名称或内容搜索" autocomplete="off" style="flex:1;min-width:80px;border:0;outline:none;background:transparent;color:inherit;font:inherit;padding:0;position:relative;top:-1px;" />
               </div>
               <div id="email-lib-suggest" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;z-index:60;background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,0.25);max-height:240px;overflow-y:auto;"></div>
-              <button class="memory-toolbar-btn email-undone-toggle email-undone-toggle-inline" id="email-undone-btn" title="Show only emails not marked as done (undone)">
+              <button class="memory-toolbar-btn email-undone-toggle email-undone-toggle-inline" id="email-undone-btn" title="仅显示未标记为已完成的邮件">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
-              <button class="memory-toolbar-btn email-reminder-toggle-inline hidden" id="email-reminder-btn" title="Show Odysseus reminder emails">
+              <button class="memory-toolbar-btn email-reminder-toggle-inline hidden" id="email-reminder-btn" title="显示 Odyssey 提醒邮件">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>
               </button>
-              <button class="memory-toolbar-btn email-attach-toggle email-attach-toggle-inline" id="email-attach-btn" title="Show only emails with attachments">
+              <button class="memory-toolbar-btn email-attach-toggle email-attach-toggle-inline" id="email-attach-btn" title="仅显示带附件的邮件">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
               </button>
             </div>
             </div>
           </div>
           <div id="email-lib-bulk" class="memory-bulk-bar hidden" style="margin-bottom:5px;">
-            <label class="memory-bulk-check-all" style="position:relative;top:0px;"><input type="checkbox" id="email-lib-select-all"> All</label>
-            <span id="email-lib-selected-count" style="position:relative;top:1px;">0 Selected</span>
-            <button class="memory-toolbar-btn" id="email-lib-bulk-actions" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Actions <span style="opacity:0.55;font-size:9px;">▼</span></button>
-            <button class="memory-toolbar-btn" id="email-lib-bulk-delete" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>
-            <button class="memory-toolbar-btn" id="email-lib-bulk-cancel" title="Cancel (Esc)" style="margin-left:4px;padding:3px 6px;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <label class="memory-bulk-check-all" style="position:relative;top:0px;"><input type="checkbox" id="email-lib-select-all"> 全选</label>
+            <span id="email-lib-selected-count" style="position:relative;top:1px;">已选 0</span>
+            <button class="memory-toolbar-btn" id="email-lib-bulk-actions" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>操作 <span style="opacity:0.55;font-size:9px;">▼</span></button>
+            <button class="memory-toolbar-btn" id="email-lib-bulk-delete" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除</button>
+            <button class="memory-toolbar-btn" id="email-lib-bulk-cancel" title="取消 (Esc)" style="margin-left:4px;padding:3px 6px;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
           <div id="email-lib-grid" class="doclib-grid"></div>
-          <button class="email-lib-fab" id="email-lib-fab" type="button" aria-label="New email">
+          <button class="email-lib-fab" id="email-lib-fab" type="button" aria-label="新建邮件">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 6.5l9 6 9-6"/></svg>
-            <span class="email-lib-fab-label">New</span>
+            <span class="email-lib-fab-label">新建</span>
           </button>
         </div>
       </div>
@@ -1085,9 +1085,9 @@ export function openEmailLibrary(opts = {}) {
     _loadEmailsFresh();
   });
   document.getElementById('email-reminders-clear-btn')?.addEventListener('click', async () => {
-    const ok = await styledConfirm('Permanently delete all Odysseus reminder emails?', {
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
+    const ok = await styledConfirm('永久删除所有 Odyssey 提醒邮件？', {
+      confirmText: '删除',
+      cancelText: '取消',
       danger: true,
     });
     if (!ok) return;
@@ -1097,7 +1097,7 @@ export function openEmailLibrary(opts = {}) {
         credentials: 'same-origin',
       });
       const data = await res.json().catch(() => ({}));
-      showToast(`Deleted ${data.deleted || 0} reminder email${(data.deleted || 0) === 1 ? '' : 's'}`);
+      showToast(`已删除 ${data.deleted || 0} 封提醒邮件`);
       if ((data.deleted || 0) > 0) {
         const visibleUids = Array.from(document.querySelectorAll('#email-lib-grid .doclib-card[data-uid]'))
           .map(card => card.dataset.uid)
@@ -1112,7 +1112,7 @@ export function openEmailLibrary(opts = {}) {
       _loadEmailsFresh();
     } catch (err) {
       console.error(err);
-      showToast('Failed to clear reminder emails');
+      showToast('清除提醒邮件失败');
     }
   });
   document.getElementById('email-undone-btn')?.addEventListener('click', () => {
@@ -1291,8 +1291,8 @@ export function openEmailLibrary(opts = {}) {
   const _setSelectBtnState = (on) => {
     const btn = document.getElementById('email-lib-select-btn');
     if (!btn) return;
-    if (on) { btn.classList.add('active'); btn.innerHTML = _SELECT_BTN_X_SVG + 'Cancel'; }
-    else { btn.classList.remove('active'); btn.innerHTML = _SELECT_BTN_DOT_SVG + 'Select'; }
+    if (on) { btn.classList.add('active'); btn.innerHTML = _SELECT_BTN_X_SVG + '取消'; }
+    else { btn.classList.remove('active'); btn.innerHTML = _SELECT_BTN_DOT_SVG + '选择'; }
   };
   document.getElementById('email-lib-select-btn').addEventListener('click', () => {
     state._selectMode = !state._selectMode;
@@ -1326,7 +1326,7 @@ export function openEmailLibrary(opts = {}) {
   document.getElementById('email-lib-bulk-actions').addEventListener('click', (e) => {
     e.stopPropagation();
     if (state._selectedUids.size === 0) {
-      showToast('Select emails first');
+      showToast('请先选择邮件');
       return;
     }
     _showBulkActionsMenu(e.currentTarget);
@@ -1334,7 +1334,7 @@ export function openEmailLibrary(opts = {}) {
   document.getElementById('email-lib-bulk-delete')?.addEventListener('click', (e) => {
     e.stopPropagation();
     if (state._selectedUids.size === 0) {
-      showToast('Select emails first');
+      showToast('请先选择邮件');
       return;
     }
     _bulkAction('delete');
@@ -1712,7 +1712,7 @@ async function _loadFolders({ resetMissing = false } = {}) {
     sel.appendChild(sep2);
     const schedOpt = document.createElement('option');
     schedOpt.value = '__scheduled__';
-    schedOpt.textContent = 'Scheduled';
+    schedOpt.textContent = '定时发送';
     if (state._libFolder === '__scheduled__') schedOpt.selected = true;
     sel.appendChild(schedOpt);
     sel.value = state._libFolder;
@@ -1799,19 +1799,19 @@ function _scoreSuggestion(s, needle) {
 // corresponding filter row with its icon; picking it pins a filter
 // pill that drives state._libFilter or the has-attachments toggle.
 const _LIB_FILTER_OPTIONS = [
-  { value: 'filter:has-attachments', label: 'Has attachments', keywords: ['attachment', 'attachments', 'has attachment', 'attach'] },
-  { value: 'filter:unread',          label: 'Unread',          keywords: ['unread', 'new', 'unseen'] },
-  { value: 'filter:favorites',       label: 'Favorites',       keywords: ['favorite', 'favorites', 'starred', 'star', 'flagged'] },
-  { value: 'filter:undone',          label: 'Undone',          keywords: ['undone', 'pending', 'todo'] },
-  { value: 'filter:reminders',       label: 'Reminders',       keywords: ['reminder', 'reminders'] },
-  { value: 'filter:unanswered',      label: 'Unanswered',      keywords: ['unanswered', 'unreplied', 'no reply'] },
-  { value: 'filter:pending_30d',     label: 'Pending · 30d',   keywords: ['pending 30d', 'pending', 'recent pending'] },
-  { value: 'filter:stale_30d',       label: 'Stale · >30d',    keywords: ['stale', 'old', 'stale 30d'] },
-  { value: 'filter:tag:urgent',      label: 'Urgent',          keywords: ['urgent', 'critical'] },
-  { value: 'filter:tag:reply-soon',  label: 'Reply soon',      keywords: ['reply soon', 'reply', 'follow up'] },
-  { value: 'filter:tag:spam',        label: 'Spam',            keywords: ['spam', 'junk'] },
-  { value: 'filter:tag:newsletter',  label: 'Newsletter',      keywords: ['newsletter', 'newsletters', 'subscriptions'] },
-  { value: 'filter:tag:marketing',   label: 'Marketing',       keywords: ['marketing', 'promo', 'promotional'] },
+  { value: 'filter:has-attachments', label: '有附件', keywords: ['attachment', 'attachments', 'has attachment', 'attach'] },
+  { value: 'filter:unread',          label: '未读',          keywords: ['unread', 'new', 'unseen'] },
+  { value: 'filter:favorites',       label: '收藏',       keywords: ['favorite', 'favorites', 'starred', 'star', 'flagged'] },
+  { value: 'filter:undone',          label: '未完成',          keywords: ['undone', 'pending', 'todo'] },
+  { value: 'filter:reminders',       label: '提醒',       keywords: ['reminder', 'reminders'] },
+  { value: 'filter:unanswered',      label: '未回复',      keywords: ['unanswered', 'unreplied', 'no reply'] },
+  { value: 'filter:pending_30d',     label: '待处理 · 30天',   keywords: ['pending 30d', 'pending', 'recent pending'] },
+  { value: 'filter:stale_30d',       label: '陈旧 · >30天',    keywords: ['stale', 'old', 'stale 30d'] },
+  { value: 'filter:tag:urgent',      label: '紧急',          keywords: ['urgent', 'critical'] },
+  { value: 'filter:tag:reply-soon',  label: '需尽快回复',      keywords: ['reply soon', 'reply', 'follow up'] },
+  { value: 'filter:tag:spam',        label: '垃圾邮件',            keywords: ['spam', 'junk'] },
+  { value: 'filter:tag:newsletter',  label: '订阅',      keywords: ['newsletter', 'newsletters', 'subscriptions'] },
+  { value: 'filter:tag:marketing',   label: '营销',       keywords: ['marketing', 'promo', 'promotional'] },
 ];
 
 function _libFilterIconFor(value) {
@@ -1964,13 +1964,13 @@ function _renderSearchPills() {
       const titleAttr = `${(p.label || p.value).replace(/"/g, '&quot;')}`;
       return `<span class="email-lib-pill" data-pill-idx="${i}" title="${titleAttr}" style="display:inline-flex;align-items:center;gap:2px;padding:0 4px 0 6px;border-radius:999px;background:color-mix(in srgb, var(--accent, var(--red)) 14%, transparent);color:var(--accent, var(--red));line-height:18px;height:18px;flex-shrink:0;">
         <span style="display:inline-flex;align-items:center;width:11px;height:11px;flex-shrink:0;">${_libFilterIconFor(p.value)}</span>
-        <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="Remove" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
+        <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="移除" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
       </span>`;
     }
     const label = p.type === 'contact' ? (p.name || p.email || '?') : (p.text || '');
     return `<span class="email-lib-pill" data-pill-idx="${i}" style="display:inline-flex;align-items:center;gap:3px;padding:0 4px 0 6px;border-radius:999px;background:color-mix(in srgb, var(--accent, var(--red)) 14%, transparent);color:var(--accent, var(--red));font-size:10px;line-height:18px;height:18px;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;">
       <span style="overflow:hidden;text-overflow:ellipsis;">${esc(label)}</span>
-      <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="Remove" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
+      <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="移除" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:11px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-4px;">×</button>
     </span>`;
   }).join('');
   wrap.querySelectorAll('.email-lib-pill-x').forEach(btn => {
@@ -2363,9 +2363,9 @@ async function _doSearch() {
   // the server search is still grinding.
   const stats = document.getElementById('email-lib-stats');
   const originalStatsText = stats?.textContent || '';
-  if (stats) stats.textContent = 'Searching…';
+  if (stats) stats.textContent = '搜索中…';
   _libSearchInFlight = true;
-  // Force a re-render so the "Searching…" empty-state shows (and any
+  // Force a re-render so the "搜索中…" empty-state shows (and any
   // existing "No emails" gets replaced) while the fetch is in flight.
   _renderGrid();
 
@@ -2535,7 +2535,7 @@ function _renderEmailLoading(grid) {
   } catch (_) {}
   const label = document.createElement('div');
   label.className = 'email-loading-label';
-  label.textContent = 'Loading emails';
+  label.textContent = '加载邮件';
   wrap.appendChild(label);
   grid.appendChild(wrap);
   return sp;
@@ -2563,12 +2563,12 @@ async function _refreshUnreadBadge() {
         const allRes = await fetch(`${API_BASE}/api/email/list?folder=${encodeURIComponent(folder)}${_acct()}&limit=1&filter=all`);
         const allData = await allRes.json();
         const t = allData.total || 0;
-        badge.textContent = `${t} all`;
-        badge.title = 'Show all emails';
+        badge.textContent = `${t} 全部`;
+        badge.title = '显示全部邮件';
         badge.style.display = '';
       } catch (_) {
-        badge.textContent = 'Show all';
-        badge.title = 'Show all emails';
+        badge.textContent = '显示全部';
+        badge.title = '显示全部邮件';
         badge.style.display = '';
       }
     } else if (n > 0) {
@@ -2659,7 +2659,7 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
         _renderGrid();
       }
       const stats = document.getElementById('email-lib-stats');
-      if (stats) stats.textContent = `${state._libTotal} emails`;
+      if (stats) stats.textContent = `${state._libTotal} 封邮件`;
       _refreshUnreadBadge();
       if (cacheable) _libCachePut(ck, { emails: state._libEmails.slice(), total: state._libTotal });
     }
@@ -2669,7 +2669,7 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
     // If we already painted the cached list, leave it on screen — beats
     // wiping it for "Failed to load" when there's still readable content.
     if (!cached) {
-      const msg = e && e.message ? `Failed to load: ${e.message}` : 'Failed to load';
+      const msg = e && e.message ? `加载失败: ${e.message}` : '加载失败';
       grid.innerHTML = `<div class="email-loading">${_esc(msg)}${_emailSetupHintHtml()}</div>`;
       _wireEmailSetupHint(grid);
     }
@@ -2685,10 +2685,10 @@ async function _loadScheduled(grid, sp) {
   const items = data.scheduled || [];
   grid.innerHTML = '';
   const stats = document.getElementById('email-lib-stats');
-  if (stats) stats.textContent = `${items.length} scheduled`;
+  if (stats) stats.textContent = `${items.length} 封定时`;
 
   if (items.length === 0) {
-    grid.innerHTML = '<div class="email-loading">No scheduled emails</div>';
+    grid.innerHTML = '<div class="email-loading">没有定时邮件</div>';
     return;
   }
 
@@ -2704,7 +2704,7 @@ async function _loadScheduled(grid, sp) {
     const content = document.createElement('div');
     content.style.cssText = 'flex:1;min-width:0;';
     const subject = it.subject || '(no subject)';
-    const toDisplay = it.to || '(no recipient)';
+    const toDisplay = it.to || '(无收件人)';
 
     content.innerHTML = `
       <div style="display:flex;align-items:center;gap:6px;">
@@ -2712,7 +2712,7 @@ async function _loadScheduled(grid, sp) {
         ${it.status === 'failed' ? '<span style="font-size:9px;color:var(--red);border:1px solid var(--red);padding:1px 4px;border-radius:4px;">FAILED</span>' : '<span style="font-size:9px;opacity:0.6;border:1px solid var(--border);padding:1px 4px;border-radius:4px;">PENDING</span>'}
       </div>
       <div style="font-size:10px;opacity:0.7;margin-top:2px;">
-        To: ${_esc(toDisplay)} · Sends ${_esc(dateStr)}
+        To: ${_esc(toDisplay)} · 发送时间 ${_esc(dateStr)}
       </div>
       ${it.error ? `<div style="font-size:10px;color:var(--red);margin-top:2px;">${_esc(it.error)}</div>` : ''}
     `;
@@ -2721,12 +2721,12 @@ async function _loadScheduled(grid, sp) {
     // Cancel button
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'memory-item-btn';
-    cancelBtn.title = 'Cancel scheduled send';
+    cancelBtn.title = '取消定时发送';
     cancelBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
     cancelBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const { styledConfirm } = await import('./ui.js');
-      const ok = await styledConfirm(`Cancel scheduled email "${subject}"?`, { confirmText: 'Cancel Send', cancelText: 'Keep', danger: true });
+      const ok = await styledConfirm(`取消定时邮件 "${subject}"？`, { confirmText: '取消发送', cancelText: '保留', danger: true });
       if (!ok) return;
       try {
         await fetch(`${API_BASE}/api/email/scheduled/${it.id}`, { method: 'DELETE' });
@@ -2765,7 +2765,7 @@ function _renderGrid() {
 
   if (filtered.length === 0) {
     // Active search — don't flash "No emails": the IMAP fetch is still
-    // running. Show a "Searching…" placeholder until _doSearch resolves
+    // running. Show a "搜索中…" placeholder until _doSearch resolves
     // and renders again. Without this the user saw an empty state
     // smiley for ~500ms between the optimistic pill-filter clear and
     // the server response landing.
@@ -2783,10 +2783,10 @@ function _renderGrid() {
         w.element.style.cssText = 'margin:0;display:block;';
         wrap.appendChild(w.element);
         const lbl = document.createElement('span');
-        lbl.textContent = 'Searching…';
+        lbl.textContent = '搜索中…';
         wrap.appendChild(lbl);
       }).catch(() => {
-        wrap.textContent = 'Searching…';
+        wrap.textContent = '搜索中…';
       });
       return;
     }
@@ -2805,9 +2805,9 @@ function _renderGrid() {
     if (_isTrulyEmpty) {
       grid.innerHTML =
         '<div class="email-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;">' +
-          '<span>No emails' + _smileyIco + '</span>' +
+          '<span>无邮件' + _smileyIco + '</span>' +
           '<span style="opacity:0.7;font-size:11px;">' +
-            'Set up at: <a href="#" data-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">Settings &rsaquo; Integrations</a>' +
+            '设置方式: <a href="#" data-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">设置 &rsaquo; 集成</a>' +
           '</span>' +
         '</div>';
       const _link = grid.querySelector('[data-open-settings]');
@@ -2818,7 +2818,7 @@ function _renderGrid() {
     } else {
       grid.innerHTML =
         '<div class="email-loading" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">' +
-          '<span>No emails' + _smileyIco + '</span>' +
+          '<span>无邮件' + _smileyIco + '</span>' +
         '</div>';
     }
     return;
@@ -2886,7 +2886,7 @@ function _createCard(em) {
   let senderName;
   let senderAddress;
   if (isSentFolderEarly) {
-    senderName = _formatRecipients(em.to) || em.to || '(no recipient)';
+    senderName = _formatRecipients(em.to) || em.to || '(无收件人)';
     // First address out of em.to for click-to-pill targeting.
     const _firstTo = String(em.to || '').split(',')[0] || '';
     const _m = _firstTo.match(/<([^>]+)>/);
@@ -2919,7 +2919,7 @@ function _createCard(em) {
 
   const titleEl = document.createElement('span');
   titleEl.className = 'memory-item-title';
-  titleEl.textContent = em.subject || '(no subject)';
+  titleEl.textContent = em.subject || '(无主题)';
   // Hover preview: surface the cached AI summary directly on the title via
   // a native browser tooltip — no need to open the email to skim it.
   if (em.cached_summary) {
@@ -2998,7 +2998,7 @@ function _createCard(em) {
 
   if (em.is_flagged) {
     const star = document.createElement('span');
-    star.title = 'Favorited';
+    star.title = '已收藏';
     star.style.cssText = 'color:var(--accent, var(--red));opacity:0.85;flex-shrink:0;display:inline-flex;';
     star.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     titleRow.appendChild(star);
@@ -3010,8 +3010,8 @@ function _createCard(em) {
   const navArrows = document.createElement('span');
   navArrows.className = 'email-card-nav-arrows';
   navArrows.innerHTML = `
-    <button type="button" class="email-card-nav-btn" data-nav-dir="-1" title="Previous email"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
-    <button type="button" class="email-card-nav-btn" data-nav-dir="1" title="Next email"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+    <button type="button" class="email-card-nav-btn" data-nav-dir="-1" title="上一封"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <button type="button" class="email-card-nav-btn" data-nav-dir="1" title="下一封"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
   `;
   navArrows.addEventListener('click', async (ev) => {
     const btn = ev.target.closest('.email-card-nav-btn');
@@ -3248,7 +3248,7 @@ async function _toggleCardPreview(card, em) {
       return;
     }
     if (data.error) {
-      reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">Error: ${_esc(data.error)}</div>`;
+      reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">错误: ${_esc(data.error)}</div>`;
       return;
     }
 
@@ -3295,21 +3295,21 @@ async function _toggleCardPreview(card, em) {
       <div class="email-reader-header">
         <div class="email-reader-meta">
           <div class="email-reader-meta-row email-reader-meta-from">
-            <strong>From:</strong>
-            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="Show recipients"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
+            <strong>发件人:</strong>
+            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="显示收件人"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
           </div>
           ${(data.to || data.cc) ? `<div class="email-reader-meta-details" hidden>
-            ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${buildRecipients(data.to)}</span></div>` : ''}
-            ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${buildRecipients(data.cc)}</span></div>` : ''}
+            ${data.to ? `<div class="email-reader-meta-row"><strong>收件人:</strong><span class="recipient-chips">${buildRecipients(data.to)}</span></div>` : ''}
+            ${data.cc ? `<div class="email-reader-meta-row"><strong>抄送:</strong><span class="recipient-chips">${buildRecipients(data.cc)}</span></div>` : ''}
           </div>` : ''}
           <div class="email-reader-actions-inline">
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply (suggest a draft)'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="Reply"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">Reply</span></button>
-            ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="Reply All"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">Reply all</span></button>` : ''}
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="Forward"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">Forward</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="Summarize">${_summaryIcon(data)}<span class="reader-btn-label">Summary</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI回复（草稿已缓存）' : 'AI回复（建议草稿）'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI回复</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="回复"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">回复</span></button>
+            ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="回复全部"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">回复全部</span></button>` : ''}
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="转发"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">转发</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="摘要">${_summaryIcon(data)}<span class="reader-btn-label">摘要</span></button>
             <div class="email-reader-more-wrap" style="position:relative">
-              <button class="memory-toolbar-btn reader-icon-btn" data-act="more" title="More actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><span class="reader-btn-label">More</span></button>
+              <button class="memory-toolbar-btn reader-icon-btn" data-act="more" title="更多操作"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><span class="reader-btn-label">更多</span></button>
             </div>
           </div>
         </div>
@@ -3472,7 +3472,7 @@ async function _toggleCardPreview(card, em) {
     // Always stop bubbling so the card's click doesn't fire while reading.
     reader.addEventListener('click', (ev) => { ev.stopPropagation(); });
   } catch (e) {
-    reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">Failed to load email</div>`;
+    reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">加载邮件失败</div>`;
   }
 }
 
@@ -3689,12 +3689,12 @@ function _renderTurnsAsBubbles(turns, data) {
     let isMine, author, date;
     if (t.level === 0) {
       isMine = lvl0Mine;
-      author = lvl0Author || 'Me';
+      author = lvl0Author || '我';
       date = lvl0Date;
     } else {
       const p = _parseTurnMeta(t.meta || '');
       isMine = !!p.email && mineSet.has(p.email);
-      author = p.author || (t.meta || 'Earlier reply');
+      author = p.author || (t.meta || '更早的回复');
       date = p.date;
     }
     // No-self fallback: route by per-sender side mapping.
@@ -3736,7 +3736,7 @@ function _renderTurnsFromServer(turns) {
   const stack = []; // [{ level, html }]
   const wrap = (t) =>
     `<details class="email-thread-turn email-quote-fold" open>`
-    + _foldSummary('Earlier reply', _QUOTE_ICON, t.meta || '')
+    + _foldSummary('更早的回复', _QUOTE_ICON, t.meta || '')
     + `<div class="email-thread-turn-body">${t.html}</div>`
     + '</details>';
 
@@ -3857,7 +3857,7 @@ function _renderThreadStructure(html) {
     const isLast = i === tops.length - 1;
     turnsHtml.push(
       `<details class="email-thread-turn email-quote-fold${isLast ? ' last-fold' : ''}" ${i === 0 ? '' : 'open'}>`
-        + _foldSummary('Earlier reply', _QUOTE_ICON, meta || '')
+        + _foldSummary('更早的回复', _QUOTE_ICON, meta || '')
         + `<div class="email-thread-turn-body">${bodyHtml}</div>`
       + '</details>'
     );
@@ -3949,7 +3949,7 @@ function _renderPlaintextThread(text) {
   const stack = [];
   const wrapTurn = (t) =>
     `<details class="email-thread-turn email-quote-fold" open>`
-    + _foldSummary('Earlier reply', _QUOTE_ICON, t.meta || '')
+    + _foldSummary('更早的回复', _QUOTE_ICON, t.meta || '')
     + `<div class="email-thread-turn-body">${t.html}</div>`
     + '</details>';
 
@@ -4100,7 +4100,7 @@ function _showCachedSummary(reader, summary, btn) {
   if (btn) {
     btn.classList.add('active');
     const label = btn.querySelector('.btn-label');
-    if (label) label.textContent = 'Summary';
+    if (label) label.textContent = '摘要';
   }
 }
 
@@ -4140,7 +4140,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
 
   const fromAddr = String(data.from_address || '').trim();
   if (!fromAddr) {
-    if (typeof showError === 'function') showError('No sender address available');
+    if (typeof showError === 'function') showError('无发件人地址');
     return;
   }
 
@@ -4151,14 +4151,14 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   panel.innerHTML = `
     <div class="from-sender-header">
       <span class="from-sender-chips"></span>
-      <span class="from-sender-header-empty" hidden>All senders</span>
-      <button type="button" class="from-sender-toggle" data-toggle="attachments" title="Show only emails with attachments" aria-pressed="false">
+      <span class="from-sender-header-empty" hidden>所有发件人</span>
+      <button type="button" class="from-sender-toggle" data-toggle="attachments" title="仅显示带附件的邮件" aria-pressed="false">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
       </button>
-      <button type="button" class="from-sender-close" title="Close" aria-label="Close sender panel">&times;</button>
+      <button type="button" class="from-sender-close" title="关闭" aria-label="关闭发件人面板">&times;</button>
     </div>
     <div class="from-sender-search-wrap">
-      <input type="text" class="from-sender-search" placeholder="Search ${_esc(firstName)}…" autocomplete="off" />
+      <input type="text" class="from-sender-search" placeholder="搜索 ${_esc(firstName)}…" autocomplete="off" />
       <div class="from-sender-suggest" hidden></div>
     </div>
     <div class="from-sender-list">
@@ -4201,7 +4201,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     chipsContainer.innerHTML = panel._tags.map((t, i) => `
       <span class="from-sender-chip" title="${_esc(t.address)}" data-tag-index="${i}">
         <span class="from-sender-chip-name">${_esc(t.name || t.address)}</span>
-        <button class="from-sender-chip-x" type="button" title="Remove" aria-label="Remove ${_esc(t.name || t.address)}">&times;</button>
+        <button class="from-sender-chip-x" type="button" title="移除" aria-label="移除 ${_esc(t.name || t.address)}">&times;</button>
       </span>
     `).join('');
     if (emptyLabel) emptyLabel.hidden = panel._tags.length > 0;
@@ -4232,8 +4232,8 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     if (panel._attachmentsOnly) view = view.filter(e => e.has_attachments);
     if (!view.length) {
       const why = panel._attachmentsOnly
-        ? 'No emails with attachments in this view.'
-        : (panel._tags.length > 1 ? 'No emails involve all those people.' : 'No matches.');
+        ? '此视图中没有带附件的邮件。'
+        : (panel._tags.length > 1 ? '没有邮件涉及所有这些联系人。' : '无匹配结果。');
       listEl.innerHTML = `<div class="from-sender-empty">${why}</div>`;
     } else {
       _renderFromSenderRows(view, listEl, reader, { showFolder: !!panel._lastShowFolder });
@@ -4278,12 +4278,12 @@ async function _toggleFromSenderPanel(reader, data, btn) {
     emails = raw;
 
     if (!emails.length) {
-      listEl.innerHTML = `<div class="from-sender-empty">No other emails from this sender in ${_esc(state._libFolder || 'INBOX')}.</div>`;
+      listEl.innerHTML = `<div class="from-sender-empty">此发件人没有其他邮件在 ${_esc(state._libFolder || 'INBOX')}。</div>`;
     } else {
       panel._setResults(emails, { showFolder: false });
     }
   } catch (err) {
-    listEl.innerHTML = `<div class="from-sender-empty" style="color:var(--red, #e55)">Failed to load: ${_esc(String(err))}</div>`;
+    listEl.innerHTML = `<div class="from-sender-empty" style="color:var(--red, #e55)">加载失败: ${_esc(String(err))}</div>`;
   }
   const updatePlaceholder = () => {
     if (!searchEl) return;
@@ -4326,7 +4326,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
       updatePlaceholder();
     } catch (err) {
       if (myToken !== _recentToken) return;
-      listEl.innerHTML = `<div class="from-sender-empty" style="color:var(--red, #e55)">Failed to load: ${_esc(String(err))}</div>`;
+      listEl.innerHTML = `<div class="from-sender-empty" style="color:var(--red, #e55)">加载失败: ${_esc(String(err))}</div>`;
     }
   };
 
@@ -4374,13 +4374,13 @@ async function _toggleFromSenderPanel(reader, data, btn) {
           return db - da;
         });
         if (!merged.length) {
-          listEl.innerHTML = `<div class="from-sender-empty">No matches for "${_esc(q)}".</div>`;
+          listEl.innerHTML = `<div class="from-sender-empty">搜索"${_esc(q)}"无结果。</div>`;
           return;
         }
         panel._setResults(merged, { showFolder: true });
       } catch (err) {
         if (myToken !== searchToken) return;
-        listEl.innerHTML = `<div class="from-sender-empty" style="color:var(--red, #e55)">Search failed: ${_esc(String(err))}</div>`;
+        listEl.innerHTML = `<div class="from-sender-empty" style="color:var(--red, #e55)">搜索失败: ${_esc(String(err))}</div>`;
       }
     };
 
@@ -4504,7 +4504,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
   panel._originalEmails = (typeof emails !== 'undefined') ? emails : [];
 }
 
-const _ATT_ICON = '<svg class="from-sender-att" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Has attachments"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+const _ATT_ICON = '<svg class="from-sender-att" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="有附件"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
 
 function _renderFromSenderRows(emails, listEl, reader, opts = {}) {
   const { showFolder = false } = opts;
@@ -4526,7 +4526,7 @@ function _renderFromSenderRows(emails, listEl, reader, opts = {}) {
           ${folderChip}
         </span>
       </button>
-      <button class="from-sender-row-more" type="button" title="More actions" aria-label="More actions">
+      <button class="from-sender-row-more" type="button" title="更多操作" aria-label="更多操作">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
       </button>
     </div>`;
@@ -4612,7 +4612,7 @@ function _wireAttachmentHandlers(reader, folder) {
           }
         } catch (e) {
           console.error('Open document failed:', e);
-          try { const { showError } = await import('./ui.js'); showError('Document opened but panel could not mount'); } catch (_) {}
+          try { const { showError } = await import('./ui.js'); showError('文档已打开但无法挂载侧面板'); } catch (_) {}
         }
       } catch (e) {
         console.error('attachment-as-doc error', e);
@@ -4727,7 +4727,7 @@ function _buildAttsHtmlFor(uid, data) {
     const chipUid = a.source_uid || a.uid || uid;
     const chipFolder = a.source_folder || data.folder || state._libFolder || 'INBOX';
     const openBtn = openable
-      ? `<span class="email-attachment-open" title="Open in document editor" data-open-uid="${_esc(chipUid)}" data-open-index="${a.index}" data-open-name="${_esc(a.filename)}" data-open-folder="${_esc(chipFolder)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg><span class="email-attachment-open-label">Open</span></span>`
+      ? `<span class="email-attachment-open" title="在文档编辑器中打开" data-open-uid="${_esc(chipUid)}" data-open-index="${a.index}" data-open-name="${_esc(a.filename)}" data-open-folder="${_esc(chipFolder)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg><span class="email-attachment-open-label">打开</span></span>`
       : '';
     return `<button type="button" class="email-attachment-chip${extraClass}" data-att-uid="${_esc(chipUid)}" data-att-index="${a.index}" data-att-name="${_esc(a.filename)}" data-att-folder="${_esc(chipFolder)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span>${_esc(a.filename)}</span><span class="att-size">${Math.round((a.size||0)/1024)} KB</span>${openBtn}</button>`;
   };
@@ -4871,8 +4871,8 @@ async function _openEmailAsTab(em, folder) {
         <h4 style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:8px;">${_esc(em.subject || '(no subject)')}</span>
         </h4>
-        <button class="minimize-btn" type="button" title="Minimize">_</button>
-        <button class="close-btn" type="button" title="Close">&#x2716;</button>
+        <button class="minimize-btn" type="button" title="最小化">_</button>
+        <button class="close-btn" type="button" title="关闭">&#x2716;</button>
       </div>
       <div class="modal-body email-reader-tab-body" style="display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:0;padding:0;">
         <div class="email-card-reader email-card-expanded" style="flex:1;min-height:0;display:flex;flex-direction:column;">
@@ -5001,7 +5001,7 @@ async function _openEmailAsTab(em, folder) {
     const res = await fetch(`${API_BASE}/api/email/read/${em.uid}?folder=${encodeURIComponent(useFolder)}${_acct()}`);
     const data = await res.json();
     if (data.error) {
-      reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">Error: ${_esc(data.error)}</div>`;
+      reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">错误: ${_esc(data.error)}</div>`;
       return;
     }
     _syncEmailReadState(em.uid, true);
@@ -5020,22 +5020,22 @@ async function _openEmailAsTab(em, folder) {
       <div class="email-reader-header">
         <div class="email-reader-meta">
           <div class="email-reader-meta-row email-reader-meta-from">
-            <strong>From:</strong>
-            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="Show recipients"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
+            <strong>发件人:</strong>
+            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="显示收件人"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
           </div>
           ${(data.to || data.cc) ? `<div class="email-reader-meta-details" hidden>
-            ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${buildChips(data.to)}</span></div>` : ''}
-            ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${buildChips(data.cc)}</span></div>` : ''}
+            ${data.to ? `<div class="email-reader-meta-row"><strong>收件人:</strong><span class="recipient-chips">${buildChips(data.to)}</span></div>` : ''}
+            ${data.cc ? `<div class="email-reader-meta-row"><strong>抄送:</strong><span class="recipient-chips">${buildChips(data.cc)}</span></div>` : ''}
           </div>` : ''}
           <div class="email-reader-actions-inline">
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="Reply"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">Reply</span></button>
-            ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="Reply All"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">Reply all</span></button>` : ''}
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="Forward"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">Forward</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="Summarize">${_summaryIcon(data)}<span class="reader-btn-label">Summary</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="from-sender" title="Search text in this thread"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="reader-btn-label">Search</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI回复（草稿已缓存）' : 'AI回复'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="回复"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">回复</span></button>
+            ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="回复全部"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">回复全部</span></button>` : ''}
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="转发"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">转发</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="摘要">${_summaryIcon(data)}<span class="reader-btn-label">摘要</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="from-sender" title="在此串邮件中搜索文本"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="reader-btn-label">搜索</span></button>
             <div class="email-reader-more-wrap" style="position:relative">
-              <button class="memory-toolbar-btn reader-icon-btn" data-act="more" title="More actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><span class="reader-btn-label">More</span></button>
+              <button class="memory-toolbar-btn reader-icon-btn" data-act="more" title="更多操作"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><span class="reader-btn-label">更多</span></button>
             </div>
           </div>
         </div>
@@ -5081,7 +5081,7 @@ async function _openEmailAsTab(em, folder) {
       try { _showReaderMoreMenu(em, modal, reader, ev.currentTarget); } catch {}
     });
   } catch (err) {
-    reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">Failed to load: ${_esc(String(err))}</div>`;
+    reader.innerHTML = `<div style="padding:20px;color:var(--red,#e55)">加载失败: ${_esc(String(err))}</div>`;
   }
 }
 
@@ -5107,7 +5107,7 @@ async function _openEmailWindow(em, folder) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           <span class="email-window-subject" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(em.subject || '(no subject)')}</span>
         </h4>
-        <button class="close-btn" type="button" title="Close">&#x2716;</button>
+        <button class="close-btn" type="button" title="关闭">&#x2716;</button>
       </div>
       <div class="modal-body email-window-body" style="overflow:auto;padding:14px 16px;flex:1;min-height:0;">
         <div class="email-window-loading" style="display:flex;justify-content:center;padding:24px;"></div>
@@ -5176,21 +5176,21 @@ async function _openEmailWindow(em, folder) {
       <div class="email-reader-header">
         <div class="email-reader-meta">
           <div class="email-reader-meta-row email-reader-meta-from">
-            <strong>From:</strong>
-            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="Show recipients"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
+            <strong>发件人:</strong>
+            <span class="recipient-chips">${fromChip}${(data.to || data.cc) ? `<button class="email-reader-meta-toggle" type="button" aria-expanded="false" title="显示收件人"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}</span>
           </div>
           ${(data.to || data.cc) ? `<div class="email-reader-meta-details" hidden>
-            ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${_chipsFor(data.to)}</span></div>` : ''}
-            ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${_chipsFor(data.cc)}</span></div>` : ''}
+            ${data.to ? `<div class="email-reader-meta-row"><strong>收件人:</strong><span class="recipient-chips">${_chipsFor(data.to)}</span></div>` : ''}
+            ${data.cc ? `<div class="email-reader-meta-row"><strong>抄送:</strong><span class="recipient-chips">${_chipsFor(data.cc)}</span></div>` : ''}
           </div>` : ''}
           <div class="email-reader-actions-inline">
             <button class="memory-toolbar-btn reader-icon-btn" data-act="ai-reply" title="${data.cached_ai_reply ? 'AI Reply (cached draft ready)' : 'AI Reply (suggest a draft)'}">${_aiReplyIcon(data)}<span class="reader-btn-label">AI reply</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="Reply"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">Reply</span></button>
-            ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="Reply All"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">Reply all</span></button>` : ''}
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="Forward"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">Forward</span></button>
-            <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="Summarize">${_summaryIcon(data)}<span class="reader-btn-label">Summary</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="reply" title="回复"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="reader-btn-label">回复</span></button>
+            ${_hasMultipleRecipients(data) ? `<button class="memory-toolbar-btn reader-icon-btn" data-act="reply-all" title="回复全部"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 2 12 7 7"/><polyline points="12 17 7 12 12 7"/><path d="M22 18v-2a4 4 0 0 0-4-4H7"/></svg><span class="reader-btn-label">回复全部</span></button>` : ''}
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="forward" title="转发"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="reader-btn-label">转发</span></button>
+            <button class="memory-toolbar-btn reader-icon-btn" data-act="summarize" title="摘要">${_summaryIcon(data)}<span class="reader-btn-label">摘要</span></button>
             <div class="email-reader-more-wrap" style="position:relative">
-              <button class="memory-toolbar-btn reader-icon-btn" data-act="more" title="More actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><span class="reader-btn-label">More</span></button>
+              <button class="memory-toolbar-btn reader-icon-btn" data-act="more" title="更多操作"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><span class="reader-btn-label">更多</span></button>
             </div>
           </div>
         </div>
@@ -5241,7 +5241,7 @@ async function _openEmailWindow(em, folder) {
       try { _showReaderMoreMenu(em, modal, bodyEl, ev.currentTarget); } catch {}
     });
   } catch (err) {
-    bodyEl.innerHTML = `<div style="color:var(--red,#e55);padding:16px;">Failed to load: ${_esc(String(err))}</div>`;
+    bodyEl.innerHTML = `<div style="color:var(--red,#e55);padding:16px;">加载失败: ${_esc(String(err))}</div>`;
   }
 }
 
@@ -5282,11 +5282,11 @@ async function _swapReaderToUid(reader, uid, folder) {
       };
       const fromChip = _recipientChipHtml(`${data.from_name || ''} <${data.from_address || ''}>`, data.from_name || data.from_address, 'from-chip');
       headerMeta.innerHTML = `
-        <div class="email-reader-meta-row"><strong>Subject:</strong> ${_esc(subj)}</div>
-        <div class="email-reader-meta-row"><strong>From:</strong><span class="recipient-chips">${fromChip}</span></div>
-        ${data.to ? `<div class="email-reader-meta-row"><strong>To:</strong><span class="recipient-chips">${chipsFor(data.to)}</span></div>` : ''}
-        ${data.cc ? `<div class="email-reader-meta-row"><strong>Cc:</strong><span class="recipient-chips">${chipsFor(data.cc)}</span></div>` : ''}
-        ${date ? `<div class="email-reader-meta-row"><strong>Date:</strong> ${_esc(date)}</div>` : ''}
+        <div class="email-reader-meta-row"><strong>主题:</strong> ${_esc(subj)}</div>
+        <div class="email-reader-meta-row"><strong>发件人:</strong><span class="recipient-chips">${fromChip}</span></div>
+        ${data.to ? `<div class="email-reader-meta-row"><strong>收件人:</strong><span class="recipient-chips">${chipsFor(data.to)}</span></div>` : ''}
+        ${data.cc ? `<div class="email-reader-meta-row"><strong>抄送:</strong><span class="recipient-chips">${chipsFor(data.cc)}</span></div>` : ''}
+        ${date ? `<div class="email-reader-meta-row"><strong>日期:</strong> ${_esc(date)}</div>` : ''}
       `;
       _wireRecipientChips(reader);
     }
@@ -5345,13 +5345,13 @@ async function _summarizeEmail(reader, data, btn) {
       existing.style.display = '';
       if (btn) {
         btn.classList.add('active');
-        btn.querySelector('.btn-label').textContent = 'Summary';
+        btn.querySelector('.btn-label').textContent = '摘要';
       }
     } else {
       existing.style.display = 'none';
       if (btn) {
         btn.classList.remove('active');
-        btn.querySelector('.btn-label').textContent = 'Summary';
+        btn.querySelector('.btn-label').textContent = '摘要';
       }
     }
     return;
@@ -5368,12 +5368,12 @@ async function _summarizeEmail(reader, data, btn) {
         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>
         <span>Summary</span>
       </div>
-      <div class="email-summary-content" style="white-space:normal;display:flex;align-items:center;flex-wrap:wrap;gap:6px;"><span style="opacity:0.65">No AI summary generated.</span><button class="memory-toolbar-btn" data-act="summary-generate" style="font-size:10px;margin-left:auto;">Generate now</button></div>`;
+      <div class="email-summary-content" style="white-space:normal;display:flex;align-items:center;flex-wrap:wrap;gap:6px;"><span style="opacity:0.65">尚未生成 AI 摘要。</span><button class="memory-toolbar-btn" data-act="summary-generate" style="font-size:10px;margin-left:auto;">立即生成</button></div>`;
     body.insertBefore(prompt, body.firstChild);
     if (btn) {
       btn.classList.add('active');
       const label = btn.querySelector('.btn-label');
-      if (label) label.textContent = 'Summary';
+      if (label) label.textContent = '摘要';
     }
     // No Cancel button — toggling the Summary button again hides this panel
     // (handled by the existing-panel branch above), so it'd be redundant.
@@ -5445,16 +5445,16 @@ async function _generateSummary(reader, data, btn) {
       if (btn) {
         btn.classList.add('active');
         const label = btn.querySelector('.btn-label');
-        if (label) label.textContent = 'Summary';
+        if (label) label.textContent = '摘要';
       }
     } else {
-      content.innerHTML = `<span style="color:var(--red)">${_esc(result.error || 'Failed to summarize')}</span>`;
+      content.innerHTML = `<span style="color:var(--red)">${_esc(result.error || '摘要失败')}</span>`;
       panel.remove();
     }
   } catch (e) {
     sp.destroy();
     panel.remove();
-    if (uiModule) uiModule.showError?.('Failed to summarize');
+    if (uiModule) uiModule.showError?.('摘要失败');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -5590,7 +5590,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       // sidebar-pin / favorites filter so the visual language stays
       // consistent. Toggling updates em.is_flagged and re-sorts via
       // _renderGrid (favorited rows are always pinned at the top).
-      label: em.is_flagged ? 'Unfavorite' : 'Favorite (pin to top)',
+      label: em.is_flagged ? '取消收藏' : '收藏（置顶）',
       icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (em.is_flagged ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
       action: async () => {
         const next = !em.is_flagged;
@@ -5607,7 +5607,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: em.is_answered ? 'Mark as Not Done' : 'Mark as Done',
+      label: em.is_answered ? '标记为未完成' : '标记为已完成',
       icon: _checkIcon,
       action: async () => {
         const newState = !em.is_answered;
@@ -5625,7 +5625,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: 'Move to Archive',
+      label: '移至归档',
       icon: _archIcon,
       action: async () => {
         try {
@@ -5637,12 +5637,12 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
     {
       // Save the sender to CardDAV contacts. Pulls name + address off the
       // list-item (em); falls back to splitting the local-part for a name.
-      label: 'Save sender to contacts',
+      label: '保存发件人到通讯录',
       icon: _contactIcon,
       action: async () => {
         const email = (em.from_address || em.from || '').trim();
         if (!email) {
-          import('./ui.js').then(m => m.showError && m.showError('No sender address')).catch(() => {});
+          import('./ui.js').then(m => m.showError && m.showError('无发件人地址')).catch(() => {});
           return;
         }
         const name = (em.from_name || '').trim() || email.split('@')[0];
@@ -5655,18 +5655,18 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
           const d = await r.json();
           import('./ui.js').then(m => {
             if (!m.showToast) return;
-            if (d.success && d.message === 'Already exists') m.showToast('Already in contacts');
-            else if (d.success) m.showToast('Saved to contacts');
-            else m.showError && m.showError('Failed to save contact');
+            if (d.success && d.message === 'Already exists') m.showToast('已在通讯录中');
+            else if (d.success) m.showToast('已保存到通讯录');
+            else m.showError && m.showError('保存联系人失败');
           }).catch(() => {});
         } catch (_) {
-          import('./ui.js').then(m => m.showError && m.showError('Failed to save contact')).catch(() => {});
+          import('./ui.js').then(m => m.showError && m.showError('保存联系人失败')).catch(() => {});
         }
       },
     },
     { separator: true },
     {
-      label: 'Move to Spam',
+      label: '移至垃圾邮件',
       icon: _spamIcon,
       action: async () => {
         try {
@@ -5676,7 +5676,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: 'Move to Trash',
+      label: '移至回收站',
       icon: _trashIcon,
       action: async () => {
         try {
@@ -5686,14 +5686,14 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
       },
     },
     {
-      label: 'Delete Permanently',
+      label: '永久删除',
       icon: _deleteForeverIcon,
       danger: true,
       action: async () => {
-        const subject = em.subject || '(no subject)';
+        const subject = em.subject || '(无主题)';
         const ok = await styledConfirm(
-          `Permanently delete "${subject}"? This cannot be undone.`,
-          { confirmText: 'Delete', cancelText: 'Cancel', danger: true }
+          `永久删除 "${subject}"？此操作不可撤销。`,
+          { confirmText: '删除', cancelText: '取消', danger: true }
         );
         if (!ok) return;
         try {
@@ -5732,7 +5732,7 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
   const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelItem.innerHTML = _icon(_cancelIco) + '<span>Cancel</span>';
+  cancelItem.innerHTML = _icon(_cancelIco) + '<span>取消</span>';
   cancelItem.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.remove();
@@ -5772,21 +5772,21 @@ function _showCardMenu(em, anchor) {
 
   const _newTabIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
   const actions = [
-    { label: 'Open', icon: _replyIcon, action: async () => {
+    { label: '打开', icon: _replyIcon, action: async () => {
       // Just expand inline (same as tapping the row).
       const card = anchor.closest('.doclib-card');
       if (card && !card.classList.contains('doclib-card-expanded')) {
         await _toggleCardPreview(card, em);
       }
     }},
-    { label: 'Open in new tab', icon: _newTabIcon, action: async () => {
+    { label: '在新标签中打开', icon: _newTabIcon, action: async () => {
       // Open this email as its own in-app modal that registers a dock
       // chip — multiple emails can be opened simultaneously, each gets
       // its own chip in the minimized dock.
       const folder = state._libFolder || 'INBOX';
       await _openEmailAsTab(em, folder);
     }},
-    { label: 'Remind to reply', icon: _cardBellIcon, submenu: 'remind' },
+    { label: '提醒回复', icon: _cardBellIcon, submenu: 'remind' },
   ];
 
   if (!isSentFolder) {
@@ -5797,7 +5797,7 @@ function _showCardMenu(em, anchor) {
     const _checkForLabel = _cardForLabel ? _cardForLabel.querySelector('.email-card-done') : null;
     const _currentlyDone = _checkForLabel ? _checkForLabel.classList.contains('active') : !!em.is_answered;
     actions.push({
-      label: _currentlyDone ? 'Not Done' : 'Done',
+      label: _currentlyDone ? '未完成' : '已完成',
       icon: _checkIcon,
       action: async () => {
         const card = anchor.closest('.doclib-card');
@@ -5821,7 +5821,7 @@ function _showCardMenu(em, anchor) {
       },
     });
     actions.push({
-      label: em.is_flagged ? 'Unfavorite' : 'Favorite (pin to top)',
+      label: em.is_flagged ? '取消收藏' : '收藏（置顶）',
       icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (em.is_flagged ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
       action: async () => {
         const next = !em.is_flagged;
@@ -5837,7 +5837,7 @@ function _showCardMenu(em, anchor) {
       },
     });
     actions.push({
-      label: 'Archive',
+      label: '归档',
       icon: _archIcon,
       action: async () => {
         await fetch(`${API_BASE}/api/email/archive/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
@@ -5849,7 +5849,7 @@ function _showCardMenu(em, anchor) {
     });
   } else {
     actions.push({
-      label: em.is_flagged ? 'Unfavorite' : 'Favorite (pin to top)',
+      label: em.is_flagged ? '取消收藏' : '收藏（置顶）',
       icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="' + (em.is_flagged ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
       action: async () => {
         const next = !em.is_flagged;
@@ -5865,7 +5865,7 @@ function _showCardMenu(em, anchor) {
       },
     });
     actions.push({
-      label: 'Archive',
+      label: '归档',
       icon: _archIcon,
       action: async () => {
         await fetch(`${API_BASE}/api/email/archive/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
@@ -5884,7 +5884,7 @@ function _showCardMenu(em, anchor) {
   // center lines up with the SVG icons above (which sit a bit higher).
   const _selectIcon = '<span style="font-size:16px;line-height:1;position:relative;top:-2px;">●</span>';
   actions.push({
-    label: 'Select',
+    label: '选择',
     icon: _selectIcon,
     action: () => {
       state._selectMode = true;
@@ -5895,9 +5895,9 @@ function _showCardMenu(em, anchor) {
   });
 
   actions.push(
-    { label: 'Delete', icon: _delIcon, danger: true, action: async () => {
-      const subject = em.subject || '(no subject)';
-      const ok = await styledConfirm(`Delete "${subject}"?`, { confirmText: 'Delete', cancelText: 'Cancel', danger: true });
+    { label: '删除', icon: _delIcon, danger: true, action: async () => {
+      const subject = em.subject || '(无主题)';
+      const ok = await styledConfirm(`删除 "${subject}"？`, { confirmText: '删除', cancelText: '取消', danger: true });
       if (!ok) return;
       await fetch(`${API_BASE}/api/email/delete/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'DELETE' });
       await _animateEmailCardRemoval([em.uid]);
@@ -5929,7 +5929,7 @@ function _showCardMenu(em, anchor) {
   const _cancelIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelItem.innerHTML = _icon(_cancelIco) + '<span>Cancel</span>';
+  cancelItem.innerHTML = _icon(_cancelIco) + '<span>取消</span>';
   cancelItem.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.remove();
@@ -5960,9 +5960,9 @@ function _showBulkActionsMenu(anchor) {
   const _unreadIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
   const _doneIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
   const items = [
-    { label: 'Done', icon: _doneIco, action: () => _bulkAction('done') },
-    { label: 'Mark Read', icon: _readIco, action: () => _bulkAction('read') },
-    { label: 'Mark Unread', icon: _unreadIco, action: () => _bulkAction('unread') },
+    { label: '完成', icon: _doneIco, action: () => _bulkAction('done') },
+    { label: '标记已读', icon: _readIco, action: () => _bulkAction('read') },
+    { label: '标记未读', icon: _unreadIco, action: () => _bulkAction('unread') },
   ];
   for (const a of items) {
     const it = document.createElement('div');
@@ -5975,7 +5975,7 @@ function _showBulkActionsMenu(anchor) {
   const _cancelIco2 = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelIt = document.createElement('div');
   cancelIt.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelIt.innerHTML = `<span class="dropdown-icon">${_cancelIco2}</span><span>Cancel</span>`;
+  cancelIt.innerHTML = `<span class="dropdown-icon">${_cancelIco2}</span><span>取消</span>`;
   cancelIt.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.remove();
@@ -6003,11 +6003,11 @@ function _updateBulkBar() {
   const selectBtn = document.getElementById('email-lib-select-btn');
   if (bar) bar.classList.toggle('hidden', !state._selectMode);
   if (selectBtn) {
-    selectBtn.textContent = state._selectMode ? 'Cancel' : 'Select';
+    selectBtn.textContent = state._selectMode ? '取消' : '选择';
     selectBtn.classList.toggle('active', state._selectMode);
   }
   const count = document.getElementById('email-lib-selected-count');
-  if (count) count.textContent = `${state._selectedUids.size} Selected`;
+  if (count) count.textContent = `${state._selectedUids.size} 已选`;
   const all = document.getElementById('email-lib-select-all');
   if (all) all.checked = state._libEmails.length > 0 && state._libEmails.every(e => state._selectedUids.has(e.uid));
   // When something's selected, brighten Actions to the same full --fg color as
@@ -6024,8 +6024,8 @@ async function _bulkAction(action) {
   let failedReadSync = 0;
   if (action === 'delete') {
     const ok = await styledConfirm(
-      `Delete ${uids.length} selected email${uids.length === 1 ? '' : 's'}?`,
-      { confirmText: 'Delete', cancelText: 'Cancel', danger: true },
+      `删除 ${uids.length} 封已选邮件？`,
+      { confirmText: '删除', cancelText: '取消', danger: true },
     );
     if (!ok) return;
   }
@@ -6164,7 +6164,7 @@ async function _bulkAction(action) {
   _updateBulkBar();
   _renderGrid();
   if (failedReadSync > 0) {
-    showToast(`Failed to update ${failedReadSync} email${failedReadSync === 1 ? '' : 's'}`);
+    showToast(`同步 ${failedReadSync} 封邮件失败`);
   }
   // Sync successful local mutations into the SWR cache so reopen doesn't
   // briefly show the pre-bulk state.
@@ -6254,15 +6254,15 @@ function _showAiReplyChoice(btn, em, data) {
   // filled circle so it reads as a complement to the lightning, not as a "stop".
   menu.innerHTML = `
     <div class="email-ai-reply-row" style="display:flex;flex-direction:column;gap:6px;min-width:180px;">
-      <textarea data-note-input rows="2" placeholder="Add context (optional)" style="width:100%;box-sizing:border-box;resize:vertical;min-height:42px;font-family:inherit;font-size:11px;padding:5px 6px;border-radius:5px;border:1px solid var(--border,#333);background:var(--bg-elev,#1a1a1a);color:var(--fg);"></textarea>
+      <textarea data-note-input rows="2" placeholder="添加上下文（可选）" style="width:100%;box-sizing:border-box;resize:vertical;min-height:42px;font-family:inherit;font-size:11px;padding:5px 6px;border-radius:5px;border:1px solid var(--border,#333);background:var(--bg-elev,#1a1a1a);color:var(--fg);"></textarea>
       <div style="display:flex;align-items:center;gap:4px;">
-        <button class="memory-toolbar-btn" data-mode="ai-reply-fast" title="Shorter, faster draft" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
+        <button class="memory-toolbar-btn" data-mode="ai-reply-fast" title="更短、更快的草稿" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--accent, var(--red))" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          Fast
+          快速
         </button>
-        <button class="memory-toolbar-btn" data-mode="ai-reply-full" title="Uses the fuller reply context" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
+        <button class="memory-toolbar-btn" data-mode="ai-reply-full" title="使用更完整的回复上下文" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="color:var(--accent, var(--red));"><circle cx="12" cy="12" r="6"/></svg>
-          Full
+          完整
         </button>
       </div>
     </div>
@@ -6344,7 +6344,7 @@ function _showLibRemindSubmenu(em, parentDropdown) {
   const header = document.createElement('div');
   header.className = 'dropdown-item-compact';
   header.style.cssText = 'opacity:0.5;font-size:10px;pointer-events:none;text-transform:uppercase;letter-spacing:0.5px;padding-top:6px;';
-  header.innerHTML = '<span>Remind me</span>';
+  header.innerHTML = '<span>提醒我</span>';
   parentDropdown.appendChild(header);
 
   const now = new Date();
@@ -6357,9 +6357,9 @@ function _showLibRemindSubmenu(em, parentDropdown) {
   const nextWeek = new Date(now); nextWeek.setDate(now.getDate()+daysUntilMon); nextWeek.setHours(8,0,0,0);
 
   const presets = [
-    { label: 'Later today', sub: laterToday.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }), date: laterToday },
-    { label: 'Tomorrow', sub: tomorrow.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }), date: tomorrow },
-    { label: 'Next week', sub: nextWeek.toLocaleDateString([], { weekday:'short' }) + ' ' + nextWeek.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }), date: nextWeek },
+    { label: '今天晚些', sub: laterToday.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }), date: laterToday },
+    { label: '明天', sub: tomorrow.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }), date: tomorrow },
+    { label: '下周', sub: nextWeek.toLocaleDateString([], { weekday:'short' }) + ' ' + nextWeek.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }), date: nextWeek },
   ];
   for (const p of presets) {
     const item = document.createElement('div');
@@ -6374,7 +6374,7 @@ function _showLibRemindSubmenu(em, parentDropdown) {
   }
   const customItem = document.createElement('div');
   customItem.className = 'dropdown-item-compact';
-  customItem.innerHTML = '<span>Pick date and time…</span>';
+  customItem.innerHTML = '<span>选择日期和时间…</span>';
   customItem.addEventListener('click', (e) => {
     e.stopPropagation();
     parentDropdown.remove();
@@ -6398,7 +6398,7 @@ function _showLibRemindSubmenu(em, parentDropdown) {
   // due_date, so no timer/reminder fires.
   const noteItem = document.createElement('div');
   noteItem.className = 'dropdown-item-compact';
-  noteItem.innerHTML = '<span>Note</span>';
+  noteItem.innerHTML = '<span>备注</span>';
   noteItem.addEventListener('click', (e) => {
     e.stopPropagation();
     parentDropdown.remove();
@@ -6414,11 +6414,11 @@ function _promptEmailNote(em) {
   card.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;min-width:280px;max-width:min(420px, 92vw);display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 32px rgba(0,0,0,0.4);';
   const subject = em.subject || '(no subject)';
   card.innerHTML = `
-    <div style="font-size:11px;opacity:0.6;">Note about ${_esc(subject)}</div>
-    <textarea data-note placeholder="Write your note…" rows="4" style="resize:vertical;min-height:80px;font-family:inherit;font-size:12px;padding:7px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-elev,#1a1a1a);color:var(--fg);box-sizing:border-box;width:100%;"></textarea>
+    <div style="font-size:11px;opacity:0.6;">关于 ${_esc(subject)} 的备注</div>
+    <textarea data-note placeholder="写备注…" rows="4" style="resize:vertical;min-height:80px;font-family:inherit;font-size:12px;padding:7px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-elev,#1a1a1a);color:var(--fg);box-sizing:border-box;width:100%;"></textarea>
     <div style="display:flex;gap:6px;justify-content:flex-end;">
-      <button class="memory-toolbar-btn" data-act="cancel">Cancel</button>
-      <button class="memory-toolbar-btn active" data-act="save">Save</button>
+      <button class="memory-toolbar-btn" data-act="cancel">取消</button>
+      <button class="memory-toolbar-btn active" data-act="save">保存</button>
     </div>
   `;
   overlay.appendChild(card);
@@ -6447,7 +6447,7 @@ async function _createEmailReplyReminder(em, dueDate, customText = '') {
     : null;
   const fullFrom = em.from || em.sender || '';
   // Extract just the first name from "First Last <email@x>" or fall back to email local part
-  let from = 'someone';
+  let from = '某人';
   if (fullFrom) {
     const fullName = _extractName(fullFrom);
     if (fullName) {
@@ -6459,14 +6459,14 @@ async function _createEmailReplyReminder(em, dueDate, customText = '') {
   const subject = em.subject || '(no subject)';
   const folder = state._libFolder || 'INBOX';
   const deepLink = `${window.location.origin}/#email=${encodeURIComponent(folder)}:${em.uid}`;
-  const itemText = customText || `Reply to ${from}: ${subject}`;
+  const itemText = customText || `回复给 ${from}: ${subject}`;
   const payload = {
-    title: `Reply: ${subject}`,
+    title: `回复: ${subject}`,
     note_type: 'todo',
     items: [
       { text: itemText, checked: false },
     ],
-    content: `Open email: ${deepLink}`,
+    content: `打开邮件: ${deepLink}`,
     label: 'email reminder',
     source: 'email',
   };
@@ -6481,16 +6481,16 @@ async function _createEmailReplyReminder(em, dueDate, customText = '') {
     const { showToast } = await import('./ui.js');
     if (dueDate) {
       const fmt = dueDate.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-      showToast(`Todo reminder set for ${fmt}`);
+      showToast(`提醒已设置为 ${fmt}`);
     } else {
-      showToast('Reply note saved');
+      showToast('回复备注已保存');
     }
     if ('Notification' in window && Notification.permission === 'default') {
       try { Notification.requestPermission(); } catch {}
     }
   } catch (e) {
     const { showError } = await import('./ui.js');
-    showError('Failed to create reminder');
+    showError('创建提醒失败');
   }
 }
 

@@ -268,7 +268,7 @@ export function createLayerPanelRenderer(deps) {
         state.activeLayerId = copy.id;
         composite();
         render();
-        if (uiModule) uiModule.showToast('Layer duplicated');
+        if (uiModule) uiModule.showToast('图层已复制');
       });
       controls.appendChild(dupBtn);
 
@@ -339,7 +339,7 @@ export function createLayerPanelRenderer(deps) {
           mergeLayerDownAtIndex(i);
           composite();
           render();
-          uiModule.showToast('Layer merged down');
+          uiModule.showToast('图层已向下合并');
         });
         controls.appendChild(mergeDownBtn);
       }

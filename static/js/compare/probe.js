@@ -12,7 +12,7 @@ function _clearProbeWaves() {
 async function _checkUnprobed() {
   const unprobed = state._selectedModels.filter(m => !state._probed.has(m.model));
   if (unprobed.length === 0) {
-    if (uiModule) uiModule.showToast('All models verified');
+    if (uiModule) uiModule.showToast('所有模型已验证');
     return;
   }
 
@@ -54,15 +54,15 @@ async function _checkUnprobed() {
         ok++;
       } else {
         fail++;
-        const name = isBlind ? 'a model' : (m.name || m.model.split('/').pop());
-        if (uiModule) uiModule.showToast(`${name} failed: ${result?.error || 'unknown'}`, 5000);
+        const name = isBlind ? '某个模型' : (m.name || m.model.split('/').pop());
+        if (uiModule) uiModule.showToast(`${name} 失败: ${result?.error || '未知'}`, 5000);
       }
     } catch (e) {
       fail++;
     }
   }
   if (fail === 0) {
-    if (uiModule) uiModule.showToast(`${ok} model${ok > 1 ? 's' : ''} verified`);
+    if (uiModule) uiModule.showToast(`${ok} 个模型已通过验证`);
   }
   } finally {
     // Restore the Probe button (its label/visibility is refreshed below).

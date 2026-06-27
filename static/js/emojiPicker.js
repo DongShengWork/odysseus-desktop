@@ -18,7 +18,7 @@ const VS15 = '\uFE0E';
 
 const EMOJI_GROUPS = [
   {
-    name: 'Faces & Hearts',
+    name: '表情与心形',
     // Only chars with a genuine monochrome (text) presentation. VS15 is appended
     // on insert (see _insertEmoji) so they render flat for the recipient too.
     // Pure-emoji faces (grin/cry/sunglasses/thumbs) have no text form, so they're
@@ -33,7 +33,7 @@ const EMOJI_GROUPS = [
     ],
   },
   {
-    name: 'Checks & Marks',
+    name: '勾选与标记',
     items: [
       ['✓', 'check', I('<polyline points="20 6 9 17 4 12"/>')],
       ['✗', 'cross', I('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>')],
@@ -50,7 +50,7 @@ const EMOJI_GROUPS = [
     ],
   },
   {
-    name: 'Arrows',
+    name: '箭头',
     items: [
       ['→', 'arrow-right', I('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>')],
       ['←', 'arrow-left', I('<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>')],
@@ -61,7 +61,7 @@ const EMOJI_GROUPS = [
     ],
   },
   {
-    name: 'Math & Punctuation',
+    name: '数学与标点',
     items: [
       ['±', 'plus-minus', I('<line x1="4" y1="10" x2="20" y2="10"/><line x1="12" y1="2" x2="12" y2="18"/><line x1="4" y1="20" x2="20" y2="20"/>')],
       ['×', 'multiply', I('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>')],
@@ -87,7 +87,7 @@ const EMOJI_GROUPS = [
     ],
   },
   {
-    name: 'Currency & Misc',
+    name: '货币与杂项',
     items: [
       ['€', 'euro', I('<text x="12" y="16" font-size="16" text-anchor="middle" fill="currentColor" stroke="none">€</text>')],
       ['£', 'pound', I('<text x="12" y="16" font-size="16" text-anchor="middle" fill="currentColor" stroke="none">£</text>')],
@@ -117,7 +117,7 @@ export function createEmojiButton(target) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'emoji-picker-btn';
-  btn.title = 'Insert icon';
+  btn.title = '插入图标';
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>';
   // Don't steal focus from the editor on press — keeps the caret/selection so
   // the emoji lands where the user was typing.
@@ -214,7 +214,7 @@ function _buildPicker() {
 
   const search = document.createElement('input');
   search.type = 'text';
-  search.placeholder = 'Search…';
+  search.placeholder = '搜索…';
   search.className = 'emoji-picker-search';
   el.appendChild(search);
 

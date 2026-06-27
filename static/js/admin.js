@@ -35,9 +35,9 @@ async function loadUsers() {
   const list = el('adm-userList');
   try {
     const res = await fetch('/api/auth/users', { credentials: 'same-origin' });
-    if (res.status === 401 || res.status === 403) { list.innerHTML = '<div class="admin-empty">Access denied</div>'; return; }
+    if (res.status === 401 || res.status === 403) { list.innerHTML = '<div class="admin-empty">访问被拒绝</div>'; return; }
     const data = await res.json();
-    if (!data.users || data.users.length === 0) { list.innerHTML = '<div class="admin-empty">No users found</div>'; return; }
+    if (!data.users || data.users.length === 0) { list.innerHTML = '<div class="admin-empty">未找到用户</div>'; return; }
     list.innerHTML = '';
     data.users.forEach(u => {
       const row = document.createElement('div');
@@ -52,11 +52,11 @@ async function loadUsers() {
           <div style="width:28px;height:28px;border-radius:50%;background:color-mix(in srgb, var(--accent) 20%, var(--panel));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;color:var(--accent);">${esc(initial)}</div>
           <div>
             <span class="admin-user-name">${esc(u.username)}</span>
-            ${u.is_admin ? '<span class="admin-badge" style="margin-left:6px;">ADMIN</span>' : '<span style="font-size:10px;opacity:0.4;display:block;">Click to manage privileges</span>'}
+            ${u.is_admin ? '<span class="admin-badge" style="margin-left:6px;">管理员</span>' : '<span style="font-size:10px;opacity:0.4;display:block;">点击管理权限</span>'}
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button class="admin-btn-sm" data-adm-toggle-admin="${esc(u.username)}" data-make-admin="${u.is_admin ? '0' : '1'}" style="font-size:11px;">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
+          <button class="admin-btn-sm" data-adm-toggle-admin="${esc(u.username)}" data-make-admin="${u.is_admin ? '0' : '1'}" style="font-size:11px;">${u.is_admin ? '撤销管理员' : '设为管理员'}</button>
           <button class="admin-btn-sm" data-adm-rename-user="${esc(u.username)}" style="font-size:11px;">Rename</button>
           ${u.is_admin ? '' : `<button class="admin-btn-delete" data-adm-del-user="${esc(u.username)}" style="font-size:11px;">Remove</button>`}
           ${u.is_admin ? '' : '<svg class="admin-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>'}
@@ -145,7 +145,7 @@ async function loadUsers() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ [key]: value }),
               });
-            } catch (e) { uiModule.showError('Failed to update privilege'); }
+            } catch (e) { uiModule.showError('更新权限失败'); }
           };
           if (input.type === 'checkbox') input.addEventListener('change', handler);
           else input.addEventListener('change', handler);
@@ -160,7 +160,7 @@ async function loadUsers() {
           const oldUsername = renameBtn.dataset.admRenameUser;
           const next = await uiModule.styledPrompt(`Rename "${oldUsername}"`, {
             defaultValue: oldUsername,
-            placeholder: 'New username',
+            placeholder: '新用户名',
             confirmText: 'Rename',
           });
           const username = (next || '').trim();
@@ -174,7 +174,7 @@ async function loadUsers() {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-              uiModule.showError(data.detail || 'Failed to rename user');
+              uiModule.showError(data.detail || '重命名用户失败');
               return;
             }
             if (data.renamed_self) {
@@ -183,7 +183,7 @@ async function loadUsers() {
             }
             loadUsers();
           } catch (err) {
-            uiModule.showError('Failed to rename user');
+            uiModule.showError('重命名用户失败');
           }
         });
       }
@@ -197,7 +197,7 @@ async function loadUsers() {
           if (!await uiModule.styledConfirm(`Remove user "${username}"?`, { confirmText: 'Remove', danger: true })) return;
           const res = await fetch('/api/auth/users', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
           if (res.ok) loadUsers();
-          else uiModule.showError('Failed to delete user');
+          else uiModule.showError('删除用户失败');
         });
       }
 
@@ -222,7 +222,7 @@ async function loadUsers() {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-              uiModule.showError(data.detail || 'Failed to change admin status');
+              uiModule.showError(data.detail || '更新权限状态失败');
               adminToggleBtn.disabled = false;
               return;
             }
@@ -231,7 +231,7 @@ async function loadUsers() {
             if (data.self) { window.location.reload(); return; }
             loadUsers();
           } catch (err) {
-            uiModule.showError('Failed to change admin status');
+            uiModule.showError('更新权限状态失败');
             adminToggleBtn.disabled = false;
           }
         });
@@ -359,16 +359,16 @@ function initAddUser() {
     const username = el('adm-newUsername').value.trim();
     const password = el('adm-newPassword').value;
     const is_admin = el('adm-newIsAdmin').checked;
-    if (!username) { msg.textContent = 'Username required'; msg.className = 'admin-error'; return; }
-    if (password.length < _authPolicy.password_min_length) { msg.textContent = `Password must be at least ${_authPolicy.password_min_length} characters`; msg.className = 'admin-error'; return; }
-    if (_authPolicy.reserved_usernames.includes(username.toLowerCase())) { msg.textContent = 'This username is reserved'; msg.className = 'admin-error'; return; }
+    if (!username) { msg.textContent = '请输入用户名'; msg.className = 'admin-error'; return; }
+    if (password.length < _authPolicy.password_min_length) { msg.textContent = `密码长度至少需要 ${_authPolicy.password_min_length} 个字符`; msg.className = 'admin-error'; return; }
+    if (_authPolicy.reserved_usernames.includes(username.toLowerCase())) { msg.textContent = '此用户名已被保留'; msg.className = 'admin-error'; return; }
     el('adm-addBtn').disabled = true;
     try {
       const res = await fetch('/api/auth/users', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password, is_admin }) });
       const data = await res.json();
-      if (res.ok) { msg.textContent = 'User created'; msg.className = 'admin-success'; el('adm-newUsername').value = ''; el('adm-newPassword').value = ''; el('adm-newIsAdmin').checked = false; loadUsers(); }
-      else { msg.textContent = data.detail || 'Failed'; msg.className = 'admin-error'; }
-    } catch (e) { msg.textContent = 'Request failed'; msg.className = 'admin-error'; }
+      if (res.ok) { msg.textContent = '用户创建成功'; msg.className = 'admin-success'; el('adm-newUsername').value = ''; el('adm-newPassword').value = ''; el('adm-newIsAdmin').checked = false; loadUsers(); }
+      else { msg.textContent = data.detail || '失败'; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = '请求失败'; msg.className = 'admin-error'; }
     el('adm-addBtn').disabled = false;
   });
 }
@@ -470,9 +470,9 @@ async function loadEndpoints() {
       try { data = await res.json(); } catch { data = []; }
     }
     if (!Array.isArray(data) || data.length === 0) {
-      const empty = '<div class="admin-empty">None</div>';
+      const empty = '<div class="admin-empty">无</div>';
       if (listLocal) listLocal.innerHTML = empty;
-      if (listApi) listApi.innerHTML = '<div class="admin-empty">None</div>';
+      if (listApi) listApi.innerHTML = '<div class="admin-empty">无</div>';
       if (listLegacy) listLegacy.innerHTML = empty;
       return;
     }
@@ -484,10 +484,10 @@ async function loadEndpoints() {
       // un-hide them. Gate on the total instead.
       const hasModels = ep.online && totalCount > 0;
       const statusBadge = ep.status === 'empty'
-        ? '<span class="admin-badge">no models</span>'
+        ? '<span class="admin-badge">无模型</span>'
         : ep.online
-          ? `<span class="admin-badge">${visibleCount}/${totalCount} models enabled</span>`
-          : '<span class="admin-badge admin-badge-off">offline</span>';
+          ? `<span class="admin-badge">${visibleCount}/${totalCount} 个模型已启用</span>`
+          : '<span class="admin-badge admin-badge-off">离线</span>';
       const justAddedClass = (_recentlyAddedEpId && String(ep.id) === _recentlyAddedEpId) ? ' adm-ep-just-added' : '';
       const category = ep.category || (_isLocalEndpoint(ep.base_url) ? 'local' : 'api');
       const kindLabel = ep.endpoint_kind && ep.endpoint_kind !== 'auto' ? ep.endpoint_kind.toUpperCase() : '';
@@ -500,19 +500,19 @@ async function loadEndpoints() {
             <div class="admin-user-info" style="flex:1;flex-wrap:wrap;gap:0.3rem;align-items:center;">
               <span class="adm-ep-row-logo" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex-shrink:0;opacity:0.9;">${providerLogoFromUrl(ep.base_url) || ''}</span>
               <span class="admin-user-name">${esc(ep.name)}</span>
-              ${ep.model_type === 'image' ? '<span class="admin-badge" style="background:color-mix(in srgb, var(--accent) 20%, transparent);color:var(--accent);">Image</span>' : ''}
+              ${ep.model_type === 'image' ? '<span class="admin-badge" style="background:color-mix(in srgb, var(--accent) 20%, transparent);color:var(--accent);">图片</span>' : ''}
               ${kindLabel ? `<span class="admin-badge">${esc(kindLabel)}</span>` : ''}
               ${statusBadge}
-              ${ep.is_enabled ? '' : '<span class="admin-badge admin-badge-off">disabled</span>'}
-              ${hasModels ? `<span style="font-size:10px;opacity:0.4;${category === 'api' ? 'flex-basis:100%;' : ''}">Click to manage models</span>` : ''}
+              ${ep.is_enabled ? '' : '<span class="admin-badge admin-badge-off">已禁用</span>'}
+              ${hasModels ? `<span style="font-size:10px;opacity:0.4;${category === 'api' ? 'flex-basis:100%;' : ''}">点击管理模型</span>` : ''}
             </div>
             <div style="display:flex;gap:4px;align-items:center;">
-              <button class="admin-btn-sm" data-adm-toggle-ep="${ep.id}">${ep.is_enabled ? 'Disable' : 'Enable'}</button>
-              <button class="admin-btn-delete" data-adm-del-ep="${ep.id}" data-adm-ep-online="${ep.online ? '1' : '0'}">Delete</button>
+              <button class="admin-btn-sm" data-adm-toggle-ep="${ep.id}">${ep.is_enabled ? '禁用' : '启用'}</button>
+              <button class="admin-btn-delete" data-adm-del-ep="${ep.id}" data-adm-ep-online="${ep.online ? '1' : '0'}">删除</button>
               ${hasModels ? '<svg class="admin-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>' : ''}
             </div>
           </div>
-          <div class="admin-ep-detail">${esc(ep.base_url)}${category === 'local' ? `<button type="button" class="admin-ep-copy-btn" data-adm-copy-url="${esc(ep.base_url)}" title="Copy URL" aria-label="Copy URL" style="background:none;border:none;padding:0 2px;margin-left:6px;cursor:pointer;color:inherit;opacity:0.45;vertical-align:-2px;line-height:1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : ''}${keyLabel}</div>
+          <div class="admin-ep-detail">${esc(ep.base_url)}${category === 'local' ? `<button type="button" class="admin-ep-copy-btn" data-adm-copy-url="${esc(ep.base_url)}" title="复制 URL" aria-label="复制 URL" style="background:none;border:none;padding:0 2px;margin-left:6px;cursor:pointer;color:inherit;opacity:0.45;vertical-align:-2px;line-height:1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : ''}${keyLabel}</div>
           ${hasModels ? `<div class="mcp-tools-panel hidden" data-adm-ep-models-panel="${ep.id}"></div>` : ''}
         </div>`;
     });
@@ -644,7 +644,7 @@ async function loadEndpoints() {
             const attachRefresh = () => {
               panel.querySelector(`[data-ep-refresh-models="${epId}"]`)?.addEventListener('click', async (e) => {
                 e.preventDefault();
-                panel.innerHTML = _loadingHtml('Refreshing models...');
+                panel.innerHTML = _loadingHtml('刷新模型中...');
                 try {
                   const res = await fetch(`/api/model-endpoints/${epId}/models?refresh=true&refresh_timeout=60`, { credentials: 'same-origin' });
                   const refreshWarning = res.headers.get('X-Model-Refresh-Warning') || '';
@@ -653,7 +653,7 @@ async function loadEndpoints() {
                   renderModels(refreshedModels, refreshWarning);
                   if (refreshWarning && uiModule?.showToast) uiModule.showToast(refreshWarning, 6000);
                 } catch (_) {
-                  renderModels(sortedModels, 'Model refresh failed; kept cached models.');
+                  renderModels(sortedModels, '模型刷新失败，保留了缓存的模型。');
                 }
               });
             };
@@ -745,7 +745,7 @@ async function _saveEpModelState(epId, panel) {
     const row = panel.closest('[data-adm-ep-id]');
     if (row) {
       const badge = row.querySelector('.admin-badge');
-      if (badge && !badge.classList.contains('admin-badge-off')) badge.textContent = `${total - hidden.length}/${total} models enabled`;
+      if (badge && !badge.classList.contains('admin-badge-off')) badge.textContent = `${total - hidden.length}/${total} 个模型已启用`;
     }
     if (settingsModule && typeof settingsModule.refreshAiModelEndpoints === 'function') {
       settingsModule.refreshAiModelEndpoints();
@@ -795,7 +795,7 @@ function initEndpointForm() {
       urlInput.readOnly = true;
       if (apiKey) {
         apiKey.value = '';
-        apiKey.placeholder = 'No API key needed';
+        apiKey.placeholder = '无需 API 密钥';
         apiKey.disabled = true;
       }
       if (testBtn) {
@@ -805,7 +805,7 @@ function initEndpointForm() {
       }
       if (addBtn) {
         addBtn.disabled = false;
-        addBtn.textContent = 'Add';
+        addBtn.textContent = '添加';
         addBtn.style.width = '55px';
         addBtn.style.display = '';
       }
@@ -815,10 +815,10 @@ function initEndpointForm() {
         msg.className = '';
       }
     } else {
-      urlInput.placeholder = 'Base URL or pick provider';
+      urlInput.placeholder = '选择提供商或输入基础 URL';
       urlInput.readOnly = false;
       if (apiKey) {
-        apiKey.placeholder = 'API key';
+        apiKey.placeholder = 'API 密钥';
         apiKey.disabled = false;
       }
       if (testBtn) {
@@ -828,7 +828,7 @@ function initEndpointForm() {
       }
       if (addBtn) {
         addBtn.disabled = false;
-        addBtn.textContent = 'Add';
+        addBtn.textContent = '添加';
         addBtn.style.width = '55px';
         addBtn.style.display = '';
       }
@@ -961,7 +961,7 @@ function initEndpointForm() {
 
   function _renderEndpointTestResult(msg, res, d) {
     if (res.ok && d.status === 'empty') {
-      msg.textContent = 'Online — no models found';
+      msg.textContent = '在线 — 未找到模型';
       msg.className = 'admin-success';
       return;
     }
@@ -972,7 +972,7 @@ function initEndpointForm() {
       msg.className = 'admin-success';
       return;
     }
-    msg.textContent = (d && d.detail) || (d && d.ping_error ? `Offline — ${d.ping_error}` : 'Offline');
+    msg.textContent = (d && d.detail) || (d && d.ping_error ? `离线 — ${d.ping_error}` : '离线');
     msg.className = 'admin-error';
   }
 
@@ -995,12 +995,12 @@ function initEndpointForm() {
       msg.textContent = ''; msg.className = '';
       const rawUrl = (urlInput.value || provider.value).trim();
       const apiKey = el('adm-epApiKey').value.trim();
-      if (!rawUrl) { msg.textContent = 'Select a provider or enter a base URL'; msg.className = 'admin-error'; return; }
-      if (provider.value && !apiKey) { msg.textContent = 'API key is required for cloud providers'; msg.className = 'admin-error'; return; }
+      if (!rawUrl) { msg.textContent = '选择提供商或输入基础 URL'; msg.className = 'admin-error'; return; }
+      if (provider.value && !apiKey) { msg.textContent = '云提供商需要 API 密钥'; msg.className = 'admin-error'; return; }
       const url = provider.value && rawUrl === provider.value ? rawUrl : _normalizeBaseUrl(rawUrl);
       apiTestController = new AbortController();
       apiTestBtn.disabled = true;
-      apiTestBtn.textContent = 'Testing...';
+      apiTestBtn.textContent = '测试中...';
       if (apiCancelTestBtn) apiCancelTestBtn.classList.remove('hidden');
       try {
         const fd = new FormData();
@@ -1018,16 +1018,16 @@ function initEndpointForm() {
         _renderEndpointTestResult(msg, res, d);
       } catch (e) {
         if (e && e.name === 'AbortError') {
-          msg.textContent = 'Test canceled';
+          msg.textContent = '测试已取消';
           msg.className = '';
         } else {
-          msg.textContent = 'Test failed: ' + (e && e.message ? e.message : 'request failed');
+          msg.textContent = '测试失败：' + (e && e.message ? e.message : '失败的请求');
           msg.className = 'admin-error';
         }
       }
       apiTestController = null;
       apiTestBtn.disabled = false;
-      apiTestBtn.textContent = 'Test';
+      apiTestBtn.textContent = '测试';
       if (apiCancelTestBtn) apiCancelTestBtn.classList.add('hidden');
     });
   }
@@ -1047,12 +1047,12 @@ function initEndpointForm() {
     msg.textContent = ''; msg.className = '';
     const rawUrl = (urlInput.value || provider.value).trim();
     const apiKey = el('adm-epApiKey').value.trim();
-    if (!rawUrl) { msg.textContent = 'Select a provider or enter a base URL'; msg.className = 'admin-error'; return; }
-    if (provider.value && !apiKey) { msg.textContent = 'API key is required for cloud providers'; msg.className = 'admin-error'; return; }
+    if (!rawUrl) { msg.textContent = '选择提供商或输入基础 URL'; msg.className = 'admin-error'; return; }
+    if (provider.value && !apiKey) { msg.textContent = '云提供商需要 API 密钥'; msg.className = 'admin-error'; return; }
     // Normalize URL (fix typos, add /v1, strip wrong paths)
     const url = provider.value && rawUrl === provider.value ? rawUrl : _normalizeBaseUrl(rawUrl);
     const btn = el('adm-epAddBtn');
-    btn.disabled = true; btn.textContent = 'Adding...';
+    btn.disabled = true; btn.textContent = '添加中...';
     try {
       const fd = new FormData();
       fd.append('base_url', url);
@@ -1081,17 +1081,17 @@ function initEndpointForm() {
         await _selectAddedModelInChat(d);
         const goLink = ' <a href="#" data-go-added-models style="margin-left:6px;text-decoration:underline;color:inherit;font-weight:600;">Added Models →</a>';
         if (!d.online) {
-          msg.innerHTML = 'Added (endpoint offline — will retry on next load)' + goLink;
+          msg.innerHTML = '已添加（端点离线 — 下次加载时将重试）' + goLink;
           msg.className = 'admin-error';
         } else if (d.status === 'empty') {
-          msg.innerHTML = 'Added — endpoint reachable, no models found' + goLink;
+          msg.innerHTML = '已添加 — 端点可访问，但未找到模型' + goLink;
           msg.className = 'admin-success';
         } else {
           msg.innerHTML = `Added — found ${count} model${count !== 1 ? 's' : ''}` + goLink;
           msg.className = 'admin-success';
         }
-      } else { msg.textContent = d.detail || 'Failed'; msg.className = 'admin-error'; }
-    } catch (e) { msg.textContent = 'Request failed'; msg.className = 'admin-error'; }
+      } else { msg.textContent = d.detail || '失败'; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = '请求失败'; msg.className = 'admin-error'; }
     btn.disabled = false; btn.textContent = 'Add';
   });
 
@@ -1111,7 +1111,7 @@ function initEndpointForm() {
       const retry = document.createElement('button');
       retry.type = 'button';
       retry.className = 'admin-btn-sm';
-      retry.textContent = 'Try again';
+      retry.textContent = '再试一次';
       retry.addEventListener('click', () => { _startProviderDeviceAuth(providerKey, triggerEl); });
       status.appendChild(retry);
     };
@@ -1127,7 +1127,7 @@ function initEndpointForm() {
     status.className = 'adm-ep-inline-msg';
     if (triggerEl) {
       triggerEl.disabled = true;
-      triggerEl.textContent = 'Starting...';
+      triggerEl.textContent = '启动中...';
     }
     deviceAuthPolling = true;
     _setApiFormForProvider();
@@ -1137,7 +1137,7 @@ function initEndpointForm() {
       const result = await runProviderDeviceFlow(providerKey, {
         openWindow: () => {},
         onStart: ({ start, authUrl }) => {
-          if (triggerEl) triggerEl.textContent = 'Waiting...';
+          if (triggerEl) triggerEl.textContent = '等待中...';
           status.className = '';
           const authLabel = providerKey === 'copilot' ? 'Authorize on GitHub' : 'Authorize with OpenAI';
           const waitLabel = providerKey === 'copilot' ? 'Waiting for GitHub authorization...' : 'Waiting for ChatGPT authorization...';
@@ -1175,8 +1175,8 @@ function initEndpointForm() {
               try { ok = document.execCommand('copy'); } catch (e) {}
               ta.remove();
             }
-            copyBtn.textContent = ok ? 'Copied' : 'Failed';
-            setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+            copyBtn.textContent = ok ? '已复制' : '失败';
+            setTimeout(() => { copyBtn.textContent = '复制'; }, 1500);
           });
         },
       });
@@ -1406,7 +1406,7 @@ function initEndpointForm() {
         })());
         await Promise.all(workers);
         await loadEndpoints();
-        if (uiModule && uiModule.showToast) uiModule.showToast('Endpoint status refreshed', 1800);
+        if (uiModule && uiModule.showToast) uiModule.showToast('端点状态已刷新', 1800);
       } finally {
         if (_wp) { try { _wp.destroy(); } catch (_) {} }
         probeAllBtn.innerHTML = origHTML;
@@ -1422,7 +1422,7 @@ function initEndpointForm() {
       const ids = offlineBtns.map(b => b.getAttribute('data-adm-del-ep')).filter(Boolean);
       if (!ids.length) {
         if (uiModule && uiModule.showToast) {
-          uiModule.showToast('No offline endpoints — nothing to clear', 1800);
+          uiModule.showToast('没有离线端点 — 无需清理', 1800);
         }
         return;
       }
@@ -1446,7 +1446,7 @@ function initEndpointForm() {
       ));
       try { await loadEndpoints(); } catch (_) {}
       _refreshOfflineCount();
-      if (uiModule && uiModule.showToast) uiModule.showToast(`Removed ${ids.length} offline endpoint${ids.length === 1 ? '' : 's'}`, 1800);
+      if (uiModule && uiModule.showToast) uiModule.showToast(`已移除 ${ids.length} 个离线端点`, 1800);
     });
   }
 
@@ -1497,7 +1497,7 @@ function initEndpointForm() {
         const d = await res.json();
         _renderEndpointTestResult(msg, res, d);
       } catch (e) {
-        msg.textContent = 'Test failed: ' + (e && e.message ? e.message : 'request failed');
+        msg.textContent = '测试失败：' + (e && e.message ? e.message : '失败的请求');
         msg.className = 'admin-error';
       }
       localTestBtn.disabled = false;
@@ -1542,8 +1542,8 @@ function initEndpointForm() {
             : 'Added (offline — will retry on next load)';
           msg.innerHTML = `${baseText} <a href="#" data-go-added-models style="margin-left:6px;text-decoration:underline;color:inherit;font-weight:600;">Added Models →</a>`;
           msg.className = d.online ? 'admin-success' : 'admin-error';
-        } else { msg.textContent = d.detail || 'Failed'; msg.className = 'admin-error'; }
-      } catch (e) { msg.textContent = 'Request failed'; msg.className = 'admin-error'; }
+        } else { msg.textContent = d.detail || '失败'; msg.className = 'admin-error'; }
+      } catch (e) { msg.textContent = '请求失败'; msg.className = 'admin-error'; }
       localAddBtn.disabled = false;
       localAddBtn.innerHTML = addOriginalHtml;
     });
@@ -1921,8 +1921,8 @@ async function loadMcpServers() {
           <div style="display:flex;gap:4px;align-items:center;">
             ${s.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${s.id}" target="_blank" class="admin-btn-sm" style="background:var(--red);color:#fff;text-decoration:none;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;">Authorize</a>` : ''}
             <button class="admin-btn-sm" data-adm-mcp-reconnect="${s.id}">Reconnect</button>
-            <button class="admin-btn-delete" style="border-color:${s.is_enabled ? 'color-mix(in srgb, var(--red) 30%, transparent)' : 'color-mix(in srgb, var(--fg) 30%, transparent)'};color:${s.is_enabled ? 'var(--red)' : 'var(--fg)'};" data-adm-mcp-toggle="${s.id}" data-adm-mcp-enable="${!s.is_enabled}">${s.is_enabled ? 'Disable' : 'Enable'}</button>
-            <button class="admin-btn-delete" data-adm-mcp-delete="${s.id}">Delete</button>
+            <button class="admin-btn-delete" style="border-color:${s.is_enabled ? 'color-mix(in srgb, var(--red) 30%, transparent)' : 'color-mix(in srgb, var(--fg) 30%, transparent)'};color:${s.is_enabled ? 'var(--red)' : 'var(--fg)'};" data-adm-mcp-toggle="${s.id}" data-adm-mcp-enable="${!s.is_enabled}">${s.is_enabled ? '禁用' : '启用'}</button>
+            <button class="admin-btn-delete" data-adm-mcp-delete="${s.id}">删除</button>
             ${hasTools ? '<svg class="admin-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>' : ''}
           </div>
         </div>
@@ -1931,7 +1931,7 @@ async function loadMcpServers() {
     }).join('');
     list.querySelectorAll('[data-adm-mcp-reconnect]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const msg = el('adm-mcpMsg'); msg.textContent = 'Reconnecting...'; msg.className = '';
+        const msg = el('adm-mcpMsg'); msg.textContent = '重新连接...'; msg.className = '';
         try {
           const res = await fetch(`/api/mcp/servers/${btn.dataset.admMcpReconnect}/reconnect`, { method: 'POST', credentials: 'same-origin' });
           const data = await res.json();
@@ -1950,7 +1950,7 @@ async function loadMcpServers() {
     });
     list.querySelectorAll('[data-adm-mcp-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!await uiModule.styledConfirm('Delete this MCP server?', { confirmText: 'Delete', danger: true })) return;
+        if (!await uiModule.styledConfirm('删除此 MCP 服务器？', { confirmText: 'Delete', danger: true })) return;
         await fetch(`/api/mcp/servers/${btn.dataset.admMcpDelete}`, { method: 'DELETE', credentials: 'same-origin' });
         loadMcpServers();
       });
@@ -2218,7 +2218,7 @@ function initMcpForm() {
     if (_activeOauth) {
       fd.append('oauth_config', JSON.stringify(_activeOauth));
     }
-    msg.textContent = 'Adding...'; msg.className = '';
+    msg.textContent = '添加中...'; msg.className = '';
     try {
       const res = await fetch('/api/mcp/servers', { method: 'POST', body: fd, credentials: 'same-origin' });
       const data = await res.json();
@@ -2257,9 +2257,9 @@ async function loadRag() {
           btn.disabled = true; btn.textContent = '...';
           try {
             const res = await fetch('/api/personal/remove_directory?directory=' + encodeURIComponent(btn.dataset.admRagDir), { method: 'DELETE' });
-            if (res.ok) { ragMsg('Directory removed'); loadRag(); }
-            else { const e = await res.json(); ragMsg(e.detail || 'Failed', true); }
-          } catch (e) { ragMsg('Error: ' + e.message, true); }
+            if (res.ok) { ragMsg('目录已移除'); loadRag(); }
+            else { const e = await res.json(); ragMsg(e.detail || '失败', true); }
+          } catch (e) { ragMsg('错误：' + e.message, true); }
         });
       });
     }
@@ -2269,7 +2269,7 @@ async function loadRag() {
     else {
       fileList.innerHTML = files.map(f => {
         const size = f.size ? (f.size > 1024 ? (f.size / 1024).toFixed(1) + ' KB' : f.size + ' B') : '';
-        return `<div class="admin-rag-item"><span class="admin-rag-item-name" title="${esc(f.path || f.name)}">${esc(f.name)}</span><span class="admin-rag-item-meta">${size}</span><button class="admin-btn-delete" data-adm-rag-file="${esc(f.path || f.name)}">Delete</button></div>`;
+        return `<div class="admin-rag-item"><span class="admin-rag-item-name" title="${esc(f.path || f.name)}">${esc(f.name)}</span><span class="admin-rag-item-meta">${size}</span><button class="admin-btn-delete" data-adm-rag-file="${esc(f.path || f.name)}">删除</button></div>`;
       }).join('');
       fileList.querySelectorAll('[data-adm-rag-file]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -2277,9 +2277,9 @@ async function loadRag() {
           btn.disabled = true; btn.textContent = '...';
           try {
             const res = await fetch('/api/personal/file?filepath=' + encodeURIComponent(btn.dataset.admRagFile), { method: 'DELETE' });
-            if (res.ok) { ragMsg('File removed'); loadRag(); }
-            else { const e = await res.json(); ragMsg(e.detail || 'Failed', true); }
-          } catch (e) { ragMsg('Error: ' + e.message, true); }
+            if (res.ok) { ragMsg('文件已移除'); loadRag(); }
+            else { const e = await res.json(); ragMsg(e.detail || '失败', true); }
+          } catch (e) { ragMsg('错误：' + e.message, true); }
         });
       });
     }
@@ -2306,7 +2306,7 @@ async function ragUpload(files) {
     const res = await fetch('/api/personal/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.success) { ragMsg(`Uploaded ${data.uploaded.length} file(s), ${data.indexed_count} chunks indexed`); loadRag(); }
-    else ragMsg(data.detail || 'Upload failed', true);
+    else ragMsg(data.detail || '上传失败', true);
   } catch (e) { ragMsg('Upload error: ' + e.message, true); }
 }
 
@@ -2327,8 +2327,8 @@ function initRag() {
       const res = await fetch('/api/personal/add_directory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory: dir }) });
       const data = await res.json();
       if (data.success) { ragMsg(`Indexed ${data.indexed_count} chunks from directory`); el('adm-ragDirInput').value = ''; loadRag(); }
-      else ragMsg(data.detail || data.message || 'Failed', true);
-    } catch (e) { ragMsg('Error: ' + e.message, true); }
+      else ragMsg(data.detail || data.message || '失败', true);
+    } catch (e) { ragMsg('错误：' + e.message, true); }
     btn.disabled = false; btn.textContent = 'Add Directory';
   });
   el('adm-ragReloadBtn').addEventListener('click', async () => {
@@ -2411,7 +2411,7 @@ async function loadTokens() {
     // Revoke
     list.querySelectorAll('[data-adm-del-token]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!await uiModule.styledConfirm('Revoke this API token? External integrations using it will stop working.', { confirmText: 'Revoke', danger: true })) return;
+        if (!await uiModule.styledConfirm('撤销此 API 令牌？外部集成将停止使用它。', { confirmText: 'Revoke', danger: true })) return;
         await fetch(`/api/tokens/${btn.dataset.admDelToken}`, { method: 'DELETE', credentials: 'same-origin' });
         loadTokens();
         // Codex / Claude integration cards on the Integrations panel are
@@ -2440,7 +2440,7 @@ async function loadTokens() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name }),
           });
-          if (!r.ok) throw new Error('Save failed');
+          if (!r.ok) throw new Error('保存失败');
           loadTokens();
         } catch (_) { input.value = original; }
       };
@@ -2461,11 +2461,11 @@ async function loadTokens() {
             body: JSON.stringify({ scopes }),
           });
           const d = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(d.detail || 'Failed');
-          if (msg) { msg.textContent = 'Saved'; msg.style.color = 'var(--green, #50fa7b)'; setTimeout(() => { msg.textContent = ''; }, 1200); }
+          if (!r.ok) throw new Error(d.detail || '失败');
+          if (msg) { msg.textContent = '已保存'; msg.style.color = 'var(--green, #50fa7b)'; setTimeout(() => { msg.textContent = ''; }, 1200); }
         } catch (err) {
           cb.checked = !cb.checked;
-          if (msg) { msg.textContent = (err && err.message) || 'Failed'; msg.style.color = 'var(--red)'; }
+          if (msg) { msg.textContent = (err && err.message) || '失败'; msg.style.color = 'var(--red)'; }
         }
       });
     });
@@ -2495,8 +2495,8 @@ function initTokenForm() {
         if (el('adm-tokenScopes')) el('adm-tokenScopes').value = '';
         loadTokens();
       }
-      else { msg.textContent = data.detail || 'Failed'; msg.className = 'admin-error'; }
-    } catch (e) { msg.textContent = 'Request failed'; msg.className = 'admin-error'; }
+      else { msg.textContent = data.detail || '失败'; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = '请求失败'; msg.className = 'admin-error'; }
   });
   const TOKEN_COPY_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   const TOKEN_CHECK_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -2533,7 +2533,7 @@ async function loadWebhooks() {
       return `
         <div class="admin-ep-item" style="flex-wrap:wrap;">
           <div class="admin-ep-info" style="flex:1;min-width:200px;">
-            <div class="admin-ep-name">${esc(w.name)} ${w.is_active ? '' : '<span class="admin-badge admin-badge-off">disabled</span>'} ${w.has_secret ? '<span class="admin-badge">signed</span>' : ''}</div>
+            <div class="admin-ep-name">${esc(w.name)} ${w.is_active ? '' : '<span class="admin-badge admin-badge-off">已禁用</span>'} ${w.has_secret ? '<span class="admin-badge">已签名</span>' : ''}</div>
             <div class="admin-ep-detail">${esc(w.url)}</div>
             <div style="margin-top:0.3rem;">${events}</div>
             <div class="admin-ep-detail">Last: ${lastTriggered} ${statusBadge}</div>
@@ -2541,17 +2541,17 @@ async function loadWebhooks() {
           </div>
           <div class="admin-ep-actions">
             <button class="admin-btn-sm" data-adm-wh-test="${w.id}">Test</button>
-            <button class="admin-btn-sm" data-adm-wh-toggle="${w.id}">${w.is_active ? 'Disable' : 'Enable'}</button>
-            <button class="admin-btn-delete" data-adm-wh-delete="${w.id}">Delete</button>
+            <button class="admin-btn-sm" data-adm-wh-toggle="${w.id}">${w.is_active ? '禁用' : '启用'}</button>
+            <button class="admin-btn-delete" data-adm-wh-delete="${w.id}">删除</button>
           </div>
         </div>`;
     }).join('');
     list.querySelectorAll('[data-adm-wh-test]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const msg = el('adm-whMsg'); msg.textContent = 'Sending test...'; msg.className = '';
+        const msg = el('adm-whMsg'); msg.textContent = '发送测试...'; msg.className = '';
         try {
           const res = await fetch(`/api/webhooks/${btn.dataset.admWhTest}/test`, { method: 'POST', credentials: 'same-origin' });
-          msg.textContent = res.ok ? 'Test sent!' : 'Test failed'; msg.className = res.ok ? 'admin-success' : 'admin-error';
+          msg.textContent = res.ok ? '测试已发送' : 'Test failed'; msg.className = res.ok ? 'admin-success' : 'admin-error';
           setTimeout(() => loadWebhooks(), 1000);
         } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
       });
@@ -2583,8 +2583,8 @@ function initWebhookForm() {
     fd.append('name', name); fd.append('url', url); fd.append('secret', secret); fd.append('events', events);
     try {
       const res = await fetch('/api/webhooks', { method: 'POST', body: fd, credentials: 'same-origin' });
-      if (res.ok) { msg.textContent = 'Webhook added'; msg.className = 'admin-success'; el('adm-whName').value = ''; el('adm-whUrl').value = ''; el('adm-whSecret').value = ''; loadWebhooks(); }
-      else { const d = await res.json(); msg.textContent = d.detail || 'Failed'; msg.className = 'admin-error'; }
+      if (res.ok) { msg.textContent = 'Webhook 已添加'; msg.className = 'admin-success'; el('adm-whName').value = ''; el('adm-whUrl').value = ''; el('adm-whSecret').value = ''; loadWebhooks(); }
+      else { const d = await res.json(); msg.textContent = d.detail || '失败'; msg.className = 'admin-error'; }
     } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
   });
 }
@@ -2642,14 +2642,14 @@ function initCalDAV() {
         body: JSON.stringify({ caldav_url: urlIn.value, caldav_username: userIn.value, caldav_password: passIn.value }),
       });
       const d = await res.json();
-      status.textContent = d.ok ? 'Saved' : 'Error';
+      status.textContent = d.ok ? '已保存' : 'Error';
       status.style.color = d.ok ? 'var(--green)' : 'var(--red)';
     } catch (e) { status.textContent = 'Error'; status.style.color = 'var(--red)'; }
     setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 3000);
   });
 
   testBtn.addEventListener('click', async () => {
-    status.textContent = 'Testing...';
+    status.textContent = '测试中...';
     try {
       // Save first
       await fetch(`${API_BASE}/api/calendar/config`, {
@@ -2674,7 +2674,7 @@ function initBackup() {
     btn.disabled = true; btn.textContent = 'Exporting...'; msg.textContent = '';
     try {
       const res = await fetch('/api/export', { credentials: 'same-origin' });
-      if (!res.ok) throw new Error('Export failed');
+      if (!res.ok) throw new Error('导出失败');
       const blob = await res.blob();
       const disposition = res.headers.get('Content-Disposition') || '';
       const match = disposition.match(/filename=(.+)/);
@@ -2712,14 +2712,14 @@ function initBackup() {
       });
       const result = await res.json().catch(() => null);
       if (!result) {
-        throw new Error(`Import failed: server returned ${res.status}`);
+        throw new Error(`导入失败: server returned ${res.status}`);
       }
       if (res.ok && result.ok) {
-        msg.textContent = result.message || 'Import successful.'; msg.className = 'admin-success';
+        msg.textContent = result.message || '导入成功.'; msg.className = 'admin-success';
       } else {
-        msg.textContent = result.message || result.detail || 'Import failed'; msg.className = 'admin-error';
+        msg.textContent = result.message || result.detail || '导入失败'; msg.className = 'admin-error';
       }
-    } catch (e) { msg.textContent = 'Import failed: ' + e.message; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = '导入失败: ' + e.message; msg.className = 'admin-error'; }
     btn.disabled = false; btn.textContent = 'Import Data';
   });
 }
@@ -2779,7 +2779,7 @@ function initDangerZone() {
           if (res.ok) {
             if (_wipeMsg) { _wipeMsg.textContent = `Deleted ${data.count ?? 0} ${label}.`; _wipeMsg.className = 'admin-success'; }
           } else {
-            if (_wipeMsg) { _wipeMsg.textContent = data.detail || 'Failed'; _wipeMsg.className = 'admin-error'; }
+            if (_wipeMsg) { _wipeMsg.textContent = data.detail || '失败'; _wipeMsg.className = 'admin-error'; }
           }
         }
       } catch (e) {
@@ -2883,7 +2883,7 @@ async function loadLogs(isAutoPoll = false) {
         const errDiv = document.createElement('div');
         errDiv.style.color = 'var(--red)';
         errDiv.style.fontWeight = '600';
-        errDiv.textContent = `Failed to load logs: HTTP ${res.status}`;
+        errDiv.textContent = `加载日志失败：HTTP ${res.status}`;
         consoleContainer.appendChild(errDiv);
       }
       return;
@@ -2896,7 +2896,7 @@ async function loadLogs(isAutoPoll = false) {
         const errDiv = document.createElement('div');
         errDiv.style.color = 'var(--red)';
         errDiv.style.fontWeight = '600';
-        errDiv.textContent = 'Failed to parse logs data';
+        errDiv.textContent = '解析日志数据失败';
         consoleContainer.appendChild(errDiv);
       }
       return;
@@ -2913,7 +2913,7 @@ async function loadLogs(isAutoPoll = false) {
       const errDiv = document.createElement('div');
       errDiv.style.color = 'var(--red)';
       errDiv.style.fontWeight = '600';
-      errDiv.textContent = `Error retrieving logs: ${err.message}`;
+      errDiv.textContent = `获取日志出错： ${err.message}`;
       consoleContainer.appendChild(errDiv);
     }
   } finally {

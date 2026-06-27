@@ -13,9 +13,9 @@ import { computeProgressSignal } from './cookbookProgressSignal.js';
 // the word "error" in the sidebar — a server the user stopped or one that
 // quit cleanly reads as "stopped", not "error".
 function _statusLabel(status, type) {
-  if (status === 'running' && type === 'download') return 'downloading';
-  if (status === 'done' && type === 'download') return 'finished';
-  if (status === 'error') return 'stopped';
+  if (status === 'running' && type === 'download') return '下载中';
+  if (status === 'done' && type === 'download') return '已完成';
+  if (status === 'error') return '已停止';
   return status || '';
 }
 
@@ -26,7 +26,7 @@ function _statusLabel(status, type) {
 // every re-render. Returns { text, cls } where cls is appended after
 // "cookbook-task-status" ('' = the neutral loading style).
 function _taskBadge(task) {
-  if (task._unreachable && task.status === 'running') return { text: 'unreachable', cls: 'cookbook-task-error' };
+  if (task._unreachable && task.status === 'running') return { text: '不可达', cls: 'cookbook-task-error' };
   if (task.type === 'download' && task.status === 'running') {
     return { text: _statusLabel(task.status, task.type), cls: 'cookbook-task-downloading' };
   }
@@ -106,8 +106,8 @@ function _canClearTask(task) {
 }
 
 function _clearPillLabel(task) {
-  if (_downloadOutputLooksActive(task)) return 'reconnect';
-  return 'clear';
+  if (_downloadOutputLooksActive(task)) return '重新连接';
+  return '清除';
 }
 
 function _venvRootFromPath(path) {
@@ -209,31 +209,31 @@ function _terminalServeDiagnosis(task, outputText) {
   if (_isPipTask) return null;
   if (_serveTaskLooksAwqOnLocalBackend(task, out)) {
     return {
-      message: 'AWQ/GPTQ/FP8 cannot be served through llama.cpp/Ollama unified-memory mode.',
-      suggestion: 'Suggested action: use vLLM/SGLang on a compatible CUDA/ROCm GPU server, or download a GGUF version for llama.cpp/Ollama/unified-memory serving.',
+      message: 'AWQ/GPTQ/FP8 量化模型无法通过 llama.cpp/Ollama 统一内存模式提供服务。',
+      suggestion: '建议操作: 在兼容的 CUDA/ROCm GPU 服务器上使用 vLLM/SGLang，或下载 GGUF 版本以通过 llama.cpp/Ollama/统一内存模式提供服务。',
       fixes: [
-        { label: 'Find GGUF download', action: () => _openDownloadForGgufTask(task) },
-        { label: 'Edit serve', action: (panel) => _openServeEditForTask(task) },
+        { label: '查找 GGUF 下载', action: () => _openDownloadForGgufTask(task) },
+        { label: '编辑服务', action: (panel) => _openServeEditForTask(task) },
       ],
     };
   }
   if (_serveTaskLooksAwqWithoutUsableAccelerator(task, out)) {
     return {
-      message: 'AWQ/GPTQ/FP8 needs a working vLLM/SGLang accelerator path; this server did not expose one.',
-      suggestion: 'Suggested action: choose a CUDA/ROCm server where vLLM/SGLang can see the GPU, or download a GGUF version and serve it with llama.cpp/Ollama.',
+      message: 'AWQ/GPTQ/FP8 需要可用的 vLLM/SGLang 加速路径；此服务器未提供。',
+      suggestion: '建议操作: 选择 vLLM/SGLang 能识别 GPU 的 CUDA/ROCm 服务器，或下载 GGUF 版本通过 llama.cpp/Ollama 提供服务。',
       fixes: [
         { label: 'Find GGUF download', action: () => _openDownloadForGgufTask(task) },
-        { label: 'Edit serve', action: (panel) => _openServeEditForTask(task) },
+        { label: '编辑服务', action: (panel) => _openServeEditForTask(task) },
       ],
     };
   }
   return _diagnose(out) || {
     message: /Native llama-server not found|building llama-server|llama\.cpp/i.test(out)
-      ? 'llama.cpp build stopped before the server became reachable.'
-      : 'Serve stopped before the model became reachable.',
+      ? 'llama.cpp 构建在服务器可达之前停止。'
+      : '服务在模型可达之前停止。',
     suggestion: /Native llama-server not found|building llama-server|llama\.cpp/i.test(out)
-      ? 'Suggested action: copy the troubleshooting bundle, then edit serve settings. For the quickest local/CPU path, use Ollama or a prebuilt llama-server; source builds can take several minutes and fail if build dependencies are incomplete.'
-      : 'Suggested action: copy the troubleshooting bundle, then edit serve settings or relaunch with a CPU/backend fallback.',
+      ? '建议操作: 复制故障排查信息包，然后编辑服务设置。最快的本地/CPU 路径是使用 Ollama 或预构建的 llama-server；源码构建可能需要数分钟，且如果构建依赖不完整会失败。'
+      : '建议操作: 复制故障排查信息包，然后编辑服务设置或使用 CPU/后端回退方案重新启动。',
     fixes: [{ label: 'Edit serve', action: (panel) => _openServeEditForTask(task) }],
   };
 }
@@ -252,7 +252,7 @@ function _redactCrashReportText(text) {
 
 function _lastLines(text, count = 160) {
   const clean = _redactCrashReportText(text || '').trimEnd();
-  if (!clean) return '(no captured output)';
+  if (!clean) return '(无捕获输出)';
   return clean.split('\n').slice(-count).join('\n');
 }
 
@@ -261,7 +261,7 @@ function _codeFence(text) {
 }
 
 function _taskHostLabel(task) {
-  if (!task?.remoteHost) return 'local';
+  if (!task?.remoteHost) return '本地';
   return task.remoteHost + (task.sshPort ? `:${task.sshPort}` : '');
 }
 
@@ -277,26 +277,26 @@ function _buildCrashReport(task, outputText) {
   const diag = _diagnose(capturedOutput);
   const started = task?.ts ? new Date(task.ts).toISOString() : '';
   const report = [
-    '## Odysseus Cookbook crash report',
+    '## Odysseus 图谱崩溃报告',
     '',
-    'Please review this report for secrets before posting it publicly.',
+    '发布前请检查本报告是否包含敏感信息。',
     '',
-    '### Task',
-    `- ID: \`${task?.sessionId || task?.id || 'unknown'}\``,
-    `- Type: \`${task?.type || 'unknown'}\``,
-    `- Status: \`${task?._unreachable ? 'unreachable' : (task?.status || 'unknown')}\``,
-    `- Model/repo: \`${task?.payload?.repo_id || task?.name || 'unknown'}\``,
-    `- Host: \`${_taskHostLabel(task)}\``,
+    '### 任务',
+    `- ID: \`${task?.sessionId || task?.id || '未知'}\``,
+    `- 类型: \`${task?.type || '未知'}\``,
+    `- 状态: \`${task?._unreachable ? '不可达' : (task?.status || '未知')}\``,
+    `- 模型/仓库: \`${task?.payload?.repo_id || task?.name || '未知'}\``,
+    `- 主机: \`${_taskHostLabel(task)}\``,
   ];
-  if (task?.platform) report.push(`- Platform: \`${task.platform}\``);
-  if (started) report.push(`- Started: \`${started}\``);
+  if (task?.platform) report.push(`- 平台: \`${task.platform}\``);
+  if (started) report.push(`- 启动时间: \`${started}\``);
   const port = _taskPort(task);
-  if (port) report.push(`- Port: \`${port}\``);
-  if (diag?.message) report.push(`- Diagnosis: ${diag.message}`);
+  if (port) report.push(`- 端口: \`${port}\``);
+  if (diag?.message) report.push(`- 诊断: ${diag.message}`);
   if (cmd) {
-    report.push('', '### Command', '```bash', _codeFence(cmd), '```');
+    report.push('', '### 命令', '```bash', _codeFence(cmd), '```');
   }
-  report.push('', '### Last captured output', '```text', _codeFence(_lastLines(capturedOutput)), '```');
+  report.push('', '### 最后捕获的输出', '```text', _codeFence(_lastLines(capturedOutput)), '```');
   return report.join('\n');
 }
 
@@ -488,7 +488,7 @@ function _refreshModelsAfterEndpointChange() {
   const pickerLabel = document.getElementById('model-picker-label');
   if (pickerLabel) {
     pickerLabel.dataset.prevHtml = pickerLabel.innerHTML;
-    pickerLabel.innerHTML = '<span style="opacity:0.4;">refreshing…</span>';
+    pickerLabel.innerHTML = '<span style="opacity:0.4;">刷新中…</span>';
   }
   if (window.modelsModule && window.modelsModule.refreshModels) {
     window.modelsModule.refreshModels(true);
@@ -1187,7 +1187,7 @@ function _autoSaveWorkingConfig(task) {
   }));
   _savePresets(presets.map(_redactPresetForStorage));
   task._autoSaved = true;
-  uiModule.showToast('Saved working config');
+  uiModule.showToast('已保存工作配置');
 }
 
 // ── Cross-device sync ──
@@ -1320,7 +1320,7 @@ const _DL_MAX_AUTO_RETRY = 2;
 async function _retryTask(el, task) {
   if (el && el._abort) el._abort.abort();
   const badge = el?.querySelector('.cookbook-task-status');
-  if (badge) { badge.textContent = 'restarting...'; badge.className = 'cookbook-task-status'; }
+  if (badge) { badge.textContent = '重启中...'; badge.className = 'cookbook-task-status'; }
   try {
     await fetch('/api/shell/exec', {
       method: 'POST', credentials: 'same-origin',
@@ -1333,10 +1333,10 @@ async function _retryTask(el, task) {
       _removeTask(task.sessionId);
       _launchServeTask(task.name, task.payload.repo_id, task.payload._cmd, task.payload._fields, task.remoteHost || '');
     } else {
-      uiModule.showToast('Retrying download — progress may look reset while HuggingFace checks cached files, then it should resume.', 7000);
+      uiModule.showToast('正在重试下载 — 进度可能看似重置，HuggingFace 正在检查缓存文件，之后将自动恢复。', 7000);
       _updateTask(task.sessionId, {
         status: 'running',
-        output: `${task.output || ''}\n\n[odysseus] Retrying download. Progress may briefly look like a fresh download while HuggingFace checks cached/incomplete files; cached partial files will be reused when available.`.trim(),
+        output: `${task.output || ''}\n\n[odysseus] 正在重试下载。进度可能短暂显示为新下载，HuggingFace 正在检查缓存/未完成文件；缓存的局部文件将在可用时复用。`.trim(),
         _retrying: true,
       });
       _retryDownload(task.name, task.payload, task.sessionId);
@@ -1356,13 +1356,13 @@ async function _retryDownload(name, payload, replaceSessionId = '') {
       body: JSON.stringify(_payload),
     });
     if (!res.ok) {
-      uiModule.showToast('Download failed: HTTP ' + res.status);
+      uiModule.showToast('下载失败: HTTP ' + res.status);
       if (replaceSessionId) _updateTask(replaceSessionId, { status: 'crashed', _retrying: false });
       return;
     }
     const data = await res.json();
     if (!data.ok) {
-      uiModule.showToast('Download failed: ' + (data.error || ''));
+      uiModule.showToast('下载失败: ' + (data.error || ''));
       if (replaceSessionId) _updateTask(replaceSessionId, { status: 'crashed', _retrying: false });
       return;
     }
@@ -1387,9 +1387,9 @@ async function _retryDownload(name, payload, replaceSessionId = '') {
     } else {
       _addTask(data.session_id, name, 'download', _payload);
     }
-    uiModule.showToast(`Downloading ${name}...`);
+    uiModule.showToast(`正在下载 ${name}...`);
   } catch (e) {
-    uiModule.showToast('Download failed: ' + e.message);
+    uiModule.showToast('下载失败: ' + e.message);
     if (replaceSessionId) _updateTask(replaceSessionId, { status: 'crashed', _retrying: false });
   }
 }
@@ -1438,7 +1438,7 @@ export async function _serveAutoFix(panel, envVar) {
   const origHost = _envState.remoteHost;
   if (task.remoteHost) _envState.remoteHost = task.remoteHost;
   try {
-    uiModule.showToast(`Retrying with ${envVar}...`);
+    uiModule.showToast(`正在使用 ${envVar} 重试...`);
     await _launchServeTask(task.name, task.payload.repo_id, newCmd);
   } finally {
     // Always restore — otherwise a thrown launch leaves the global host stuck
@@ -1453,7 +1453,7 @@ export async function _serveAutoFix(panel, envVar) {
 // adjusted setting, instead of blindly relaunching).
 async function _openServeEditForTask(task, cmdOverride, fieldOverrides = null) {
   const repo = task.payload?.repo_id;
-  if (!repo) { uiModule.showToast('No model info on this task'); return; }
+  if (!repo) { uiModule.showToast('此任务没有模型信息'); return; }
   const cmd = cmdOverride || task.payload?._cmd;
   // A modified cmd must be re-parsed; otherwise prefer the exact launch fields.
   let fields = cmdOverride
@@ -1472,7 +1472,7 @@ async function _openServeEditForTask(task, cmdOverride, fieldOverrides = null) {
     await openServePanelForRepo(repo, fields);
   } catch (err) {
     console.error('[cookbook] open serve panel failed', err);
-    uiModule.showToast('Could not open serve panel');
+    uiModule.showToast('无法打开服务面板');
   }
 }
 
@@ -1506,7 +1506,7 @@ export async function _serveAutoRetryReplace(panel, flag, value) {
   const origHost = _envState.remoteHost;
   if (task.remoteHost) _envState.remoteHost = task.remoteHost;
   try {
-    uiModule.showToast(`Retrying with ${flag} ${value}...`);
+    uiModule.showToast(`正在使用 ${flag} ${value} 重试...`);
     await _launchServeTask(task.name, task.payload.repo_id, newCmd);
   } finally {
     _envState.remoteHost = origHost;
@@ -1539,7 +1539,7 @@ export async function _serveAutoRetryRemove(panel, flag) {
   const origHost = _envState.remoteHost;
   if (task.remoteHost) _envState.remoteHost = task.remoteHost;
   try {
-    uiModule.showToast(`Retrying without ${flag}...`);
+    uiModule.showToast(`正在不使用 ${flag} 重试...`);
     await _launchServeTask(task.name, task.payload.repo_id, newCmd);
   } finally {
     _envState.remoteHost = origHost;
@@ -1589,11 +1589,11 @@ function _promptEditServeCmd(currentCmd) {
     overlay.className = 'cookbook-edit-overlay';
     overlay.innerHTML = `
       <div class="cookbook-edit-modal">
-        <div class="cookbook-edit-title">Edit serve command</div>
+        <div class="cookbook-edit-title">编辑服务命令</div>
         <textarea class="cookbook-edit-textarea" spellcheck="false"></textarea>
         <div class="cookbook-edit-actions">
-          <button class="cookbook-edit-cancel memory-toolbar-btn">Cancel</button>
-          <button class="cookbook-edit-save memory-toolbar-btn">Save &amp; relaunch</button>
+          <button class="cookbook-edit-cancel memory-toolbar-btn">取消</button>
+          <button class="cookbook-edit-save memory-toolbar-btn">保存并重启</button>
         </div>
       </div>`;
     const ta = overlay.querySelector('.cookbook-edit-textarea');
@@ -1765,7 +1765,7 @@ export async function _launchServeTask(shortName, repo, cmd, fields, hostOverrid
       // + log full payload so the user can copy the error.
       const err = data.error || data.detail || res.statusText || 'unknown';
       console.error('[cookbook] /api/model/serve failed', { status: res.status, body: data });
-      uiModule.showToast('Failed to start: ' + String(err).slice(0, 200), 9000);
+      uiModule.showToast('启动失败: ' + String(err).slice(0, 200), 9000);
       return;
     }
 
@@ -1775,13 +1775,13 @@ export async function _launchServeTask(shortName, repo, cmd, fields, hostOverrid
     // with these precise settings (not just the last-used-for-repo state).
     const payload = { repo_id: repo, remote_host: _host || undefined, remote_server_key: _serverMetaKey || undefined, remote_server_name: _serverMetaName || undefined, ssh_port: _sp || undefined, _cmd: cmd, _fields: fields || undefined, _env: _usedEnv, _envPath: _usedEnvPath, _gpus: _usedGpus };
     _addTask(data.session_id, shortName, 'serve', payload);
-    uiModule.showToast(`Serving ${shortName}...`);
+    uiModule.showToast(`正在服务 ${shortName}...`);
     // Auto-register may have enabled an existing (offline) endpoint for this
     // host:port. Refresh the picker so the row is no longer dimmed, and the
     // user doesn't see "offline" on a serve they just started.
     try { _refreshModelsAfterEndpointChange(); } catch (_) {}
   } catch (e) {
-    uiModule.showToast('Failed: ' + e.message);
+    uiModule.showToast('失败: ' + e.message);
   }
 }
 
@@ -1854,7 +1854,7 @@ export function _renderRunningTab() {
     runTab.className = 'cookbook-tab';
     runTab.dataset.backend = 'Running';
     const _errCount = tasks.filter(t => t.status === 'error' || t.status === 'crashed').length;
-    runTab.innerHTML = `Active${activeCountHtml}${_errCount ? `<span class="cookbook-tab-error-dot"></span>` : ''}`;
+    runTab.innerHTML = `运行中${activeCountHtml}${_errCount ? `<span class="cookbook-tab-error-dot"></span>` : ''}`;
     tabBar.insertBefore(runTab, tabBar.firstChild);
     runTab.addEventListener('click', () => {
       tabBar.querySelectorAll('.cookbook-tab').forEach(t => t.classList.remove('active'));
@@ -1865,7 +1865,7 @@ export function _renderRunningTab() {
     });
   } else if (runTab) {
     const _errCount2 = tasks.filter(t => t.status === 'error' || t.status === 'crashed').length;
-    runTab.innerHTML = tasks.length ? `Active${activeCountHtml}${_errCount2 ? '<span class="cookbook-tab-error-dot"></span>' : ''}` : 'Active';
+    runTab.innerHTML = tasks.length ? `运行中${activeCountHtml}${_errCount2 ? '<span class="cookbook-tab-error-dot"></span>' : ''}` : '运行中';
     if (!hasContent) {
       if (runTab.classList.contains('active')) {
         const wfTab = tabBar.querySelector('.cookbook-tab[data-backend="Search"]');
@@ -1886,9 +1886,9 @@ export function _renderRunningTab() {
     // Sized-to-content means cookbook-body's overflow-y:auto kicks in naturally.
     group.innerHTML = '<div class="admin-card" style="display:flex;flex-direction:column;">' +
       '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">' +
-      '<h2 style="margin:0;padding:0;line-height:1;">Active <span id="running-count" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal">' + activeCount + '</span></h2>' +
+      '<h2 style="margin:0;padding:0;line-height:1;">运行中 <span id="running-count" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal">' + activeCount + '</span></h2>' +
       '</div>' +
-      '<p class="memory-desc doclib-desc" style="margin-top:6px;">Active downloads, installs and model launches.</p>' +
+      '<p class="memory-desc doclib-desc" style="margin-top:6px;">正在进行的下载、安装和模型启动。</p>' +
       '</div>';
     const firstGroup = body.querySelector('.cookbook-group');
     if (firstGroup) body.insertBefore(group, firstGroup);
@@ -1929,11 +1929,11 @@ export function _renderRunningTab() {
       if (task.remoteServerName) return task.remoteServerName;
       const srv = task.remoteServerKey ? _serverByVal(task.remoteServerKey) : null;
       if (srv?.name) return srv.name;
-      if (!task.remoteHost) return 'Local';
+      if (!task.remoteHost) return '本地';
       return (_envState.servers.find(s => s.host === task.remoteHost)?.name) || task.remoteHost;
     }
     const key = keyOrTask || '';
-    if (!key || key === 'local') return 'Local';
+    if (!key || key === 'local') return '本地';
     const srv = _serverByVal(key);
     return srv?.name || key;
   };
@@ -1974,8 +1974,8 @@ export function _renderRunningTab() {
       // Glowy status dot next to the server name (like the Settings server card):
       // green when reachable, red if any serve task on it is crashed/unreachable.
       const _secDot = (key && allTasks.some(_serveTaskFailed)) ? 'fail' : 'ok';
-      const _dotTitle = key ? (_secDot === 'fail' ? 'Server not responding' : 'Reachable') : 'Local (this machine)';
-      sec.insertAdjacentHTML('afterbegin', `<div class="cookbook-section-header" data-collapse="${bodyId}"><svg class="cookbook-section-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg><span class="cookbook-srv-status ${_secDot}" title="${_dotTitle}" style="flex-shrink:0;position:relative;top:0px;"></span><span class="cookbook-section-title" style="margin:0;">${esc(sg.name)}</span><button class="cookbook-btn cookbook-stop-all-btn" data-stop-server="${esc(key)}" title="Stop all running servers"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" style="vertical-align:-1px;margin-right:4px;"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>Stop all</button><button class="cookbook-btn cookbook-clear-btn" data-clear-server="${esc(key)}" title="Clear finished tasks"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:4px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Clear finished</button></div><div id="${bodyId}" class="cookbook-section-body"></div>`);
+      const _dotTitle = key ? (_secDot === 'fail' ? '服务器无响应' : '可访问') : '本地（本机）';
+      sec.insertAdjacentHTML('afterbegin', `<div class="cookbook-section-header" data-collapse="${bodyId}"><svg class="cookbook-section-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg><span class="cookbook-srv-status ${_secDot}" title="${_dotTitle}" style="flex-shrink:0;position:relative;top:0px;"></span><span class="cookbook-section-title" style="margin:0;">${esc(sg.name)}</span><button class="cookbook-btn cookbook-stop-all-btn" data-stop-server="${esc(key)}" title="停止所有运行中的服务器"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" style="vertical-align:-1px;margin-right:4px;"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>全部停止</button><button class="cookbook-btn cookbook-clear-btn" data-clear-server="${esc(key)}" title="清除已完成任务"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:4px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>清除已完成</button></div><div id="${bodyId}" class="cookbook-section-body"></div>`);
     }
   }
 
@@ -1994,13 +1994,13 @@ export function _renderRunningTab() {
       if (!toRemove.length) {
         const stillRunning = allTasks.filter(t => _taskServerKey(t) === host && t.status === 'running').length;
         const _msg = stillRunning
-          ? `No finished tasks on ${_serverName(host)} — ${stillRunning} still running. Stop them first to clear.`
-          : `No finished tasks on ${_serverName(host)}.`;
+          ? `${_serverName(host)} 上没有已完成的任务 — ${stillRunning} 个仍在运行。请先停止后再清除。`
+          : `${_serverName(host)} 上没有已完成的任务。`;
         if (window.uiModule?.showToast) window.uiModule.showToast(_msg);
         else alert(_msg);
         return;
       }
-      if (!await window.styledConfirm(`Clear ${toRemove.length} finished task${toRemove.length === 1 ? '' : 's'} on ${_serverName(host)}?`, { confirmText: 'Clear' })) return;
+      if (!await window.styledConfirm(`清除 ${_serverName(host)} 上 ${toRemove.length} 个已完成任务？`, { confirmText: '清除' })) return;
       toRemove.forEach(t => _tombstoneTask(t.sessionId));
       const remaining = allTasks.filter(t => _taskServerKey(t) !== host || !_canClearTask(t));
       _saveTasks(remaining);
@@ -2037,8 +2037,8 @@ export function _renderRunningTab() {
       e.stopPropagation();  // don't toggle the section collapse
       const host = btn.dataset.stopServer;
       const running = _loadTasks().filter(t => _taskServerKey(t) === host && t.status === 'running');
-      if (!running.length) { uiModule.showToast(`Nothing running on ${_serverName(host)}`); return; }
-      if (!await window.styledConfirm(`Stop ${running.length} running task${running.length > 1 ? 's' : ''} on ${_serverName(host)}?`, { confirmText: 'Stop all' })) return;
+      if (!running.length) { uiModule.showToast(`${_serverName(host)} 上没有运行中的任务`); return; }
+      if (!await window.styledConfirm(`停止 ${_serverName(host)} 上 ${running.length} 个运行中的任务？`, { confirmText: '全部停止' })) return;
       // Mark every task as user-stopped BEFORE firing the kills so that the
       // download auto-retry logic never restarts a task the user just stopped.
       running.forEach(t => _updateTask(t.sessionId, { _userStopped: true }));
@@ -2048,7 +2048,7 @@ export function _renderRunningTab() {
         const el = document.querySelector(`.cookbook-task[data-task-id="${t.sessionId}"]`);
         el?.querySelector('.cookbook-task-action-stop')?.click();
       });
-      uiModule.showToast(`Stopped ${running.length} task${running.length > 1 ? 's' : ''} on ${_serverName(host)}`);
+      uiModule.showToast(`已停止 ${_serverName(host)} 上 ${running.length} 个任务`);
     });
   });
 
@@ -2087,7 +2087,7 @@ export function _renderRunningTab() {
         // Only DOWNLOAD tasks flip to "finished" when done — serve tasks keep
         // saying "serve" because the model is still running on that port.
         const isDoneDl = isDone && task.type === 'download';
-        typeChip.textContent = isDoneDl ? 'finished' : task.type;
+        typeChip.textContent = isDoneDl ? '已完成' : (task.type === 'download' ? '下载' : '服务');
         typeChip.classList.toggle('cookbook-task-type-done', isDoneDl);
       }
       const badge = el.querySelector('.cookbook-task-status');
@@ -2138,18 +2138,18 @@ export function _renderRunningTab() {
     el.dataset.type = task.type || '';
 
     const _bdg = _taskBadge(task);
-    const _bdgTitle = (task._unreachable && task.status === 'running') ? ' title="Server not responding — it may have crashed"' : '';
+    const _bdgTitle = (task._unreachable && task.status === 'running') ? ' title="服务器无响应 — 可能已崩溃"' : '';
     const displayName = _taskDisplayName(task);
     el.innerHTML = `
       <div class="cookbook-task-header">
-        <span class="cookbook-task-type${(task.status === 'done' && task.type === 'download') ? ' cookbook-task-type-done' : ''}" data-type="${esc(task.type)}">${esc((task.status === 'done' && task.type === 'download') ? 'finished' : task.type)}</span>
+        <span class="cookbook-task-type${(task.status === 'done' && task.type === 'download') ? ' cookbook-task-type-done' : ''}" data-type="${esc(task.type)}">${esc((task.status === 'done' && task.type === 'download') ? '已完成' : (task.type === 'download' ? '下载' : '服务'))}</span>
         <span class="cookbook-task-name">${modelLogo(task.name)}${esc(displayName)}</span>
-        <span class="cookbook-task-indicator"><span class="cookbook-task-wave" style="display:${task.status === 'running' ? '' : 'none'}"></span>${_canLaunchDownloadedTask(task) ? '<button type="button" class="cookbook-task-serve-btn" title="Open in Launch"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Launch</span></button>' : ''}<span class="cookbook-task-check" title="Clear" style="display:${_canClearTask(task) ? '' : 'none'}"><svg class="cookbook-task-check-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#50fa7b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><svg class="cookbook-task-clear-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="cookbook-task-done-label">${esc(_clearPillLabel(task))}</span><span class="cookbook-task-clear-label">clear</span></span></span>
-        <button type="button" class="cookbook-task-start-now" title="Start this queued download now" style="display:${(task.type === 'download' && task.status === 'queued') ? '' : 'none'}"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="8 5 19 12 8 19 8 5"/></svg><span>start now</span></button>
+        <span class="cookbook-task-indicator"><span class="cookbook-task-wave" style="display:${task.status === 'running' ? '' : 'none'}"></span>${_canLaunchDownloadedTask(task) ? '<button type="button" class="cookbook-task-serve-btn" title="打开启动面板"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>启动</span></button>' : ''}<span class="cookbook-task-check" title="清除" style="display:${_canClearTask(task) ? '' : 'none'}"><svg class="cookbook-task-check-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#50fa7b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><svg class="cookbook-task-clear-ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="cookbook-task-done-label">${esc(_clearPillLabel(task))}</span><span class="cookbook-task-clear-label">清除</span></span></span>
+        <button type="button" class="cookbook-task-start-now" title="立即开始此排队下载" style="display:${(task.type === 'download' && task.status === 'queued') ? '' : 'none'}"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="8 5 19 12 8 19 8 5"/></svg><span>立即开始</span></button>
         <span class="cookbook-task-status ${_bdg.cls}"${_bdgTitle}>${esc(_bdg.text)}</span>
-        <button class="cookbook-task-menu-btn" title="Actions">&#8942;</button>
+        <button class="cookbook-task-menu-btn" title="操作">&#8942;</button>
       </div>
-      <div class="cookbook-task-sub"><span class="cookbook-task-session">${esc(task.sessionId)}</span><span class="cookbook-task-uptime" style="display:${((task.type === 'serve' || task.type === 'download') && task.status === 'running') ? '' : 'none'}"></span>${(task.type === 'download') ? `<span class="cookbook-task-dldir" title="Download destination" style="font-size:9px;color:var(--fg-muted);font-family:'Fira Code',monospace;opacity:0.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40ch;">Dir: ${esc(task.payload?.local_dir || '~/.cache/huggingface/hub')}</span>` : ''}</div>
+      <div class="cookbook-task-sub"><span class="cookbook-task-session">${esc(task.sessionId)}</span><span class="cookbook-task-uptime" style="display:${((task.type === 'serve' || task.type === 'download') && task.status === 'running') ? '' : 'none'}"></span>${(task.type === 'download') ? `<span class="cookbook-task-dldir" title="下载目标目录" style="font-size:9px;color:var(--fg-muted);font-family:'Fira Code',monospace;opacity:0.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40ch;">目录: ${esc(task.payload?.local_dir || '~/.cache/huggingface/hub')}</span>` : ''}</div>
       <div class="cookbook-output-wrap cookbook-task-collapsible${_mobileCollapseDefault ? ' cookbook-task-collapsed' : ''}"><pre class="cookbook-output-pre">${esc(task.output || '')}</pre><button type="button" class="copy-code cookbook-output-copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
     `;
 
@@ -2165,7 +2165,7 @@ export function _renderRunningTab() {
     const _uptimeEl = el.querySelector('.cookbook-task-uptime');
     if (_uptimeEl && (task.type === 'serve' || task.type === 'download') && task.status === 'running') {
       const _startedAt = task.ts || Date.now();
-      const _prefix = task.type === 'download' ? 'downloading' : 'uptime';
+      const _prefix = task.type === 'download' ? '下载中' : '运行时间';
       el._uptimeInterval = setInterval(() => {
         const secs = Math.floor((Date.now() - _startedAt) / 1000);
         const h = Math.floor(secs / 3600);
@@ -2191,8 +2191,8 @@ export function _renderRunningTab() {
             const _em = Math.floor((_remain % 3600) / 60);
             const _es = _remain % 60;
             _eta = _eh > 0
-              ? ` · ETA ${_eh}h ${String(_em).padStart(2,'0')}m`
-              : (_em > 0 ? ` · ETA ${_em}m ${String(_es).padStart(2,'0')}s` : ` · ETA ${_es}s`);
+              ? ` · 预计 ${_eh}h ${String(_em).padStart(2,'0')}m`
+              : (_em > 0 ? ` · 预计 ${_em}m ${String(_es).padStart(2,'0')}s` : ` · 预计 ${_es}s`);
           }
         }
         _uptimeEl.textContent = _timer + _eta;
@@ -2215,7 +2215,7 @@ export function _renderRunningTab() {
         _serveBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const repo = task.payload?.repo_id || task.name;
-          if (!repo) { uiModule.showToast('No model info on this task'); return; }
+          if (!repo) { uiModule.showToast('此任务无模型信息'); return; }
           // Point the active server at the exact profile it downloaded to.
           _selectTaskServer(task);
           try {
@@ -2224,7 +2224,7 @@ export function _renderRunningTab() {
             // Serving it supersedes the finished download — clear the card from
             // the Running tab (smooth exit) now that we've jumped to Serve.
             _animateOutThenRemove(el, task.sessionId);
-          } catch (err) { uiModule.showToast('Could not open Serve: ' + err.message); }
+          } catch (err) { uiModule.showToast('无法打开服务面板: ' + err.message); }
         });
       }
     }
@@ -2334,27 +2334,27 @@ export function _renderRunningTab() {
         // Queued download: let the user jump the queue and start it immediately
         // (downloads otherwise run one-at-a-time per server).
         if (task.type === 'download' && task.status === 'queued') {
-          items.push({ group: 'run', label: 'Start now', action: 'start-now', custom: () => {
+          items.push({ group: 'run', label: '立即开始', action: 'start-now', custom: () => {
             _startQueuedDownload(task);
             _renderRunningTab();
           }});
         }
         if (task.status !== 'running' && task.status !== 'queued') {
-          items.push({ group: 'run', label: 'Reconnect tmux', action: 'reconnect' });
+          items.push({ group: 'run', label: '重新连接 tmux', action: 'reconnect' });
         }
-        items.push({ group: 'run', label: 'Restart', action: 'retry' });
+        items.push({ group: 'run', label: '重启', action: 'retry' });
         // ── Edit section ────────────────────────────────────────────
         // Merged "Edit & relaunch" — opens the structured serve panel
         // pre-filled with this task's config. The old standalone "Edit
         // cmd & relaunch" raw-text dialog is now reachable from inside
         // that panel (Show command). Single entry-point per task.
         if (task.type === 'serve' && task.payload?.repo_id) {
-          items.push({ group: 'edit', label: 'Edit & relaunch', action: 'edit-panel', tooltip: 'Open the Serve config panel pre-filled with this task — pick a different backend, change GPUs, edit env vars or the raw cmd, then Launch.', custom: () => _openEdit() });
+          items.push({ group: 'edit', label: '编辑并重启', action: 'edit-panel', tooltip: '打开预填充此任务配置的服务面板 — 可选择不同后端、更改GPU、编辑环境变量或原始命令，然后启动。', custom: () => _openEdit() });
         }
         if (task.type === 'serve' && task.payload?._cmd) {
-          items.push({ group: 'edit', label: 'Save serve', action: 'save', custom: () => {
-            if (!_saveTaskAsPreset(task)) { uiModule.showToast('Already saved'); return; }
-            uiModule.showToast('Saved to presets');
+          items.push({ group: 'edit', label: '保存服务', action: 'save', custom: () => {
+            if (!_saveTaskAsPreset(task)) { uiModule.showToast('已保存'); return; }
+            uiModule.showToast('已保存到预设');
             _renderRunningTab();
           }});
         }
@@ -2363,7 +2363,7 @@ export function _renderRunningTab() {
         // (e.g. probe timeout on a remote that's slow). Forces adding this
         // serve to the model-endpoints list regardless of prior flag state.
         if (task.type === 'serve' && task.payload?._cmd) {
-          items.push({ group: 'endpoint', label: 'Register endpoint', action: 'register-endpoint', custom: async () => {
+          items.push({ group: 'endpoint', label: '注册端点', action: 'register-endpoint', custom: async () => {
             const host = _connectHostFromRemote(task.remoteHost);
             const portMatch = task.payload?._cmd?.match(/--port\s+(\d+)/);
             const port = portMatch ? portMatch[1] : '8000';
@@ -2373,7 +2373,7 @@ export function _renderRunningTab() {
               const eps = await (await fetch('/api/model-endpoints', { credentials: 'same-origin' })).json();
               const existing = eps.find(e => e.base_url === baseUrl);
               if (existing) {
-                uiModule.showToast(`Already registered as "${existing.name}"`);
+                uiModule.showToast(`已注册为"${existing.name}"`);
                 task._endpointAdded = true;
                 _updateTask(task.sessionId, { _endpointAdded: true });
                 _refreshModelsAfterEndpointChange();
@@ -2393,7 +2393,7 @@ export function _renderRunningTab() {
               if (res.ok) {
                 task._endpointAdded = true;
                 _updateTask(task.sessionId, { _endpointAdded: true });
-                uiModule.showToast(`Endpoint registered: ${host}:${port}`);
+                uiModule.showToast(`端点已注册: ${host}:${port}`);
                 _refreshModelsAfterEndpointChange();
                 // Added with skip_probe → probe until the (possibly still
                 // warming) server answers, so it flips online on its own.
@@ -2401,10 +2401,10 @@ export function _renderRunningTab() {
                 if (_ep && _ep.id) _probeEndpointUntilOnline(_ep.id, host, port);
               } else {
                 const body = await res.text().catch(() => '');
-                uiModule.showError(`Register failed: ${res.status} ${body.slice(0, 140)}`);
+                uiModule.showError(`注册失败: ${res.status} ${body.slice(0, 140)}`);
               }
             } catch (e) {
-              uiModule.showError(`Register failed: ${e.message || e}`);
+              uiModule.showError(`注册失败: ${e.message || e}`);
             }
           }});
         }
@@ -2415,33 +2415,33 @@ export function _renderRunningTab() {
           const logCmd = host
             ? `ssh ${_sshPrefix(_getPort(task))}${host} "powershell -Command \\"Get-Content '${sd}\\${task.sessionId}.log' -Wait\\""`
             : `powershell -Command "Get-Content (Join-Path $env:TEMP 'odysseus-tmux\\${task.sessionId}.log') -Wait"`;
-          items.push({ group: 'copy', label: 'Copy log cmd', action: 'copy-tmux', custom: () => {
+          items.push({ group: 'copy', label: '复制日志命令', action: 'copy-tmux', custom: () => {
             _copyText(logCmd);
           }});
         } else {
           // Just the tmux command itself — no ssh wrapper.
           const tmuxAttach = `tmux attach -t ${task.sessionId}`;
-          items.push({ group: 'copy', label: 'Copy tmux', action: 'copy-tmux', custom: () => {
+          items.push({ group: 'copy', label: '复制 tmux', action: 'copy-tmux', custom: () => {
             _copyText(tmuxAttach);
           }});
         }
         if (_shouldOfferCrashReport(task)) {
-          items.push({ group: 'copy', label: 'Copy crash report', action: 'copy-crash-report', custom: () => {
+          items.push({ group: 'copy', label: '复制崩溃报告', action: 'copy-crash-report', custom: () => {
             const out = (el.querySelector('.cookbook-output-pre')?.textContent || task.output || '');
             _copyText(_buildCrashReport(task, out));
-            uiModule.showToast('Copied crash report');
+            uiModule.showToast('已复制崩溃报告');
           }});
         }
         // Copy the last 50 lines of the task's output/log.
-        items.push({ group: 'copy', label: 'Copy last 50 lines', action: 'copy-log', custom: () => {
+        items.push({ group: 'copy', label: '复制最后50行', action: 'copy-log', custom: () => {
           const out = (el.querySelector('.cookbook-output-pre')?.textContent || task.output || '');
           const last = out.split('\n').slice(-50).join('\n');
           if (!last.trim()) {
-            uiModule.showToast('No log content available yet');
+            uiModule.showToast('暂无日志内容');
             return;
           }
           _copyText(last);
-          uiModule.showToast('Copied last 50 lines');
+          uiModule.showToast('已复制最后50行');
         }});
         // Label matches behavior — the kill handler ALWAYS first kills
         // the live tmux session and (for serve tasks) deletes the
@@ -2451,15 +2451,15 @@ export function _renderRunningTab() {
         const _isLive = task.type === 'serve' && ['running', 'ready', 'loading', 'warming', 'starting'].includes(task.status || '');
         items.push({
           group: 'danger',
-          label: _isLive ? 'Stop and remove' : 'Remove',
+          label: _isLive ? '停止并移除' : '移除',
           action: 'kill',
           tooltip: _isLive
-            ? 'Kill the live tmux session, deregister the chat endpoint, and remove this row'
-            : 'Remove this row',
+            ? '终止运行中的 tmux 会话，注销聊天端点，并移除此行'
+            : '移除此行',
           danger: true,
         });
         // Cancel = mobile-only dismiss item. Same pattern as the email kebab.
-        items.push({ group: 'danger', label: 'Cancel', action: 'cancel', mobileOnly: true, custom: () => {} });
+        items.push({ group: 'danger', label: '取消', action: 'cancel', mobileOnly: true, custom: () => {} });
 
         const _MENU_ICONS = {
           'start-now': '<polygon points="6 4 20 12 6 20 6 4"/>',
@@ -2582,7 +2582,7 @@ export function _renderRunningTab() {
       // trigger an auto-retry after a manual stop.
       if (el._abort) el._abort.abort();
       const badge = el.querySelector('.cookbook-task-status');
-      if (badge) { badge.textContent = 'stopping...'; badge.className = 'cookbook-task-status cookbook-task-stopping'; }
+      if (badge) { badge.textContent = '停止中...'; badge.className = 'cookbook-task-status cookbook-task-stopping'; }
       el.dataset.status = 'stopped';
       _updateTask(task.sessionId, { _userStopped: true });
       const outputText = el.querySelector('.cookbook-output-pre')?.textContent || task.output || '';
@@ -2661,7 +2661,7 @@ export function _renderRunningTab() {
         }
       } catch (_) { killOk = false; }
       if (!killOk) {
-        try { uiModule.showToast('Kill failed — session may still be running. Check `tmux ls` on the server.', 'error'); } catch (_) {}
+        try { uiModule.showToast('终止失败 — 会话可能仍在运行。请在服务器上检查 `tmux ls`。', 'error'); } catch (_) {}
         return;  // leave the row so the user can retry
       }
       if (task.type === 'serve' && task.payload) {
@@ -2688,7 +2688,7 @@ export function _renderRunningTab() {
       e.stopPropagation();
       const text = el.querySelector('.cookbook-output-pre')?.textContent || '';
       if (!text.trim()) {
-        uiModule.showToast('No log content available yet');
+        uiModule.showToast('暂无日志内容');
         return;
       }
       _copyText(text).then(() => {
@@ -2845,8 +2845,8 @@ async function _reconnectTask(el, task) {
               const _ranOk = /Successfully installed|Requirement already (?:satisfied|up-to-date)/i.test(lastOutput);
               if (!_ranOk) {
                 _showDiagnosis(el, {
-                  message: 'Pip install did not finish with a success marker. Check the output for the underlying error.',
-                  suggestion: 'Suggested action: copy the troubleshooting bundle. Common causes: missing build deps, network blip, mismatched torch ABI.',
+                  message: 'Pip 安装未以成功标记结束。请检查输出中的底层错误。',
+                  suggestion: '建议操作: 复制故障排查信息包。常见原因: 缺少构建依赖、网络波动、torch ABI 不匹配。',
                   fixes: [],
                 }, lastOutput);
               }
@@ -2855,8 +2855,8 @@ async function _reconnectTask(el, task) {
                 message: _serveTaskLooksAwqOnLocalBackend(task, lastOutput)
                   ? 'AWQ/GPTQ/FP8 cannot be served through llama.cpp/Ollama unified-memory mode.'
                   : /Native llama-server not found|building llama-server|llama\.cpp/i.test(lastOutput)
-                  ? 'llama.cpp build stopped before the server became reachable.'
-                  : 'Serve stopped before the model became reachable.',
+                  ? 'llama.cpp 构建在服务器可达之前停止。'
+                  : '服务在模型可达之前停止。',
                 suggestion: _serveTaskLooksAwqOnLocalBackend(task, lastOutput)
                   ? 'Suggested action: use vLLM/SGLang on a compatible CUDA/ROCm GPU server, or download a GGUF version for llama.cpp/Ollama/unified-memory serving.'
                   : /Native llama-server not found|building llama-server|llama\.cpp/i.test(lastOutput)
@@ -2892,23 +2892,23 @@ async function _reconnectTask(el, task) {
               };
               const diag = {
                 message: isDisk
-                  ? 'Download stopped because this server ran out of disk space.'
+                  ? '下载因服务器磁盘空间不足而停止。'
                   : isNetwork
-                  ? 'Download stopped after the HuggingFace connection was interrupted.'
+                  ? '下载因 HuggingFace 连接中断而停止。'
                   : nearDone
-                  ? 'Download stopped near the end before the final completion marker was captured.'
-                  : 'Download stopped before HuggingFace reported completion.',
+                  ? '下载在接近完成时停止，未捕获到最终完成标记。'
+                  : '下载在 HuggingFace 报告完成之前停止。',
                 suggestion: isDisk
-                  ? 'Suggested action: free disk space, then retry the download. HuggingFace resumes incomplete files when possible.'
+                  ? '建议操作: 释放磁盘空间，然后重试下载。HuggingFace 会尽可能续传未完成的文件。'
                   : nearDone
-                  ? 'Suggested action: hit Reconnect first — the download may have finished after the output buffer rolled over. Retry only if reconnect cannot recover.'
-                  : 'Suggested action: hit Reconnect to re-attach to the tmux session. If that fails, retry — HuggingFace resumes incomplete files when possible.',
+                  ? '建议操作: 先尝试重新连接 — 下载可能已在输出缓冲区滚动后完成。仅在重新连接无法恢复时重试。'
+                  : '建议操作: 点击重新连接以重新附加到 tmux 会话。如果失败，请重试 — HuggingFace 会尽可能续传未完成的文件。',
                 fixes: isDisk
                   ? [
-                      { label: 'Retry download', action: () => _retryTask(el, task) },
-                      { label: 'Copy last 50 lines', action: () => {
+                      { label: '重试下载', action: () => _retryTask(el, task) },
+                      { label: '复制最后50行', action: () => {
                         const last = String(lastOutput || '').split('\n').slice(-50).join('\n');
-                        _copyText(last || 'No download log available.');
+                        _copyText(last || '无下载日志可用。');
                       } },
                     ]
                   : [
@@ -3071,9 +3071,9 @@ async function _reconnectTask(el, task) {
               // Already auto-restarted once and stalled again — make the badge a
               // one-click retry (resumes from the cached partial files) so the
               // user doesn't have to dig into the ⋮ menu.
-              badge.textContent = `stalled ${mins}m ↻`;
+              badge.textContent = `已停滞 ${mins}分钟 ↻`;
               badge.className = 'cookbook-task-status cookbook-task-error';
-              badge.title = 'Click to retry — resumes where it stopped';
+              badge.title = '点击重试 — 从中断处继续';
               badge.style.cursor = 'pointer';
               if (!badge._retryBound) {
                 badge._retryBound = true;
@@ -3082,7 +3082,7 @@ async function _reconnectTask(el, task) {
             } else if (!isPipDep && Date.now() - (el._lastProgressTime || 0) > _STALE_TIMEOUT && !task._autoRestarted) {
               task._autoRestarted = true;
               _updateTask(task.sessionId, { _autoRestarted: true });
-              badge.textContent = _startupStalled ? '0% stall — retrying' : 'stale — restarting';
+              badge.textContent = _startupStalled ? '0%停滞 — 重试中' : '停滞 — 重启中';
               badge.className = 'cookbook-task-status cookbook-task-error';
               _showCookbookNotif(true);
               try {
@@ -3115,12 +3115,12 @@ async function _reconnectTask(el, task) {
                   task.sessionId = data.session_id;
                   el._lastProgress = null;
                   el._lastProgressTime = Date.now();
-                  badge.textContent = 'restarted';
+                  badge.textContent = '已重启';
                   badge.className = 'cookbook-task-status cookbook-task-running';
                   continue;
                 }
               } catch {}
-              badge.textContent = 'stale — restart failed';
+              badge.textContent = '停滞 — 重启失败';
               badge.className = 'cookbook-task-status cookbook-task-error';
               _showCookbookNotif(true);
               break;
@@ -3179,7 +3179,7 @@ async function _reconnectTask(el, task) {
               badge.textContent = text;
               badge.className = 'cookbook-task-status cookbook-task-running';
             } else if (completed > 0 && completed >= totalFiles) {
-              badge.textContent = 'finishing';
+              badge.textContent = '完成中';
               badge.className = 'cookbook-task-status cookbook-task-running';
             }
             if (snapshot.includes('DOWNLOAD_FAILED')) {
@@ -3196,9 +3196,9 @@ async function _reconnectTask(el, task) {
                 // Auto-retry: kill the dead session and re-launch (resumes from
                 // the cached .incomplete files) after a short delay.
                 _dlRetryCount.set(_dlKey, _dlN + 1);
-                badge.textContent = `retrying (${_dlN + 1}/${_DL_MAX_AUTO_RETRY})…`;
+                badge.textContent = `重试中 (${_dlN + 1}/${_DL_MAX_AUTO_RETRY})…`;
                 badge.className = 'cookbook-task-status cookbook-task-running';
-                uiModule.showToast(`Download interrupted — retrying (${_dlN + 1}/${_DL_MAX_AUTO_RETRY}), resumes where it stopped…`, 6000);
+                uiModule.showToast(`下载中断 — 正在重试 (${_dlN + 1}/${_DL_MAX_AUTO_RETRY})，从中断处继续…`, 6000);
                 const _p = task.payload, _nm = task.name;
                 try {
                   await fetch('/api/shell/exec', {
@@ -3238,7 +3238,7 @@ async function _reconnectTask(el, task) {
               // Flip the type chip from "download" to the green "finished"
               // badge so the header reads as completed without a stale label.
               const _typeChip = el.querySelector('.cookbook-task-type');
-              if (_typeChip) { _typeChip.textContent = 'finished'; _typeChip.classList.add('cookbook-task-type-done'); }
+              if (_typeChip) { _typeChip.textContent = '已完成'; _typeChip.classList.add('cookbook-task-type-done'); }
               _updateTask(task.sessionId, { status: 'done' });
               const _sb2 = el.querySelector('.cookbook-task-serve-btn'); if (_sb2) _sb2.style.display = '';
               _showCookbookNotif();
@@ -3363,7 +3363,7 @@ async function _reconnectTask(el, task) {
                 task._endpointAdded = true;
                 _updateTask(task.sessionId, { _endpointAdded: true });
                 _autoSaveWorkingConfig(task);   // endpoint live → remember these settings
-                uiModule.showToast(`Model endpoint added: ${host}:${port}`);
+                uiModule.showToast(`模型端点已添加: ${host}:${port}`);
                 // Retry-probe until the warming server answers, so it
                 // flips online without a manual enable/disable toggle.
                 const _epData = await res.json().catch(() => ({}));
@@ -3382,7 +3382,7 @@ async function _reconnectTask(el, task) {
                       if (mid && window.sessionModule?.createDirectChat) {
                         window.sessionModule.createDirectChat(url, mid, item.endpoint_id);
                         if (window.sessionModule?.updateModelPicker) window.sessionModule.updateModelPicker();
-                        uiModule.showToast(`Switched to ${mid.split('/').pop()}`);
+                        uiModule.showToast(`已切换到 ${mid.split('/').pop()}`);
                         return;
                       }
                     }
@@ -3394,17 +3394,17 @@ async function _reconnectTask(el, task) {
               } else if (res && !res.ok) {
                 const body = await res.text().catch(() => '');
                 console.warn('Endpoint auto-add failed', res.status, body);
-                uiModule.showError(`Auto-register endpoint failed (${res.status}). Use ⋮ → Register endpoint to retry.`);
+                uiModule.showError(`自动注册端点失败 (${res.status})。请使用 ⋮ → 注册端点重试。`);
               }
             })
             .catch((e) => {
               console.warn('Endpoint auto-add error', e);
-              uiModule.showError(`Auto-register endpoint error: ${e.message || e}. Use ⋮ → Register endpoint to retry.`);
+              uiModule.showError(`自动注册端点错误: ${e.message || e}。请使用 ⋮ → 注册端点重试。`);
             })
             .finally(() => { task._endpointAddInFlight = false; });
           _updateTask(task.sessionId, { status: 'running' });
           const badge = el.querySelector('.cookbook-task-status');
-          if (badge) { badge.textContent = 'running'; badge.className = 'cookbook-task-status cookbook-task-running'; }
+          if (badge) { badge.textContent = '运行中'; badge.className = 'cookbook-task-status cookbook-task-running'; }
           _showCookbookNotif();
         }
         // Detect process exit
@@ -3485,10 +3485,10 @@ async function _checkServeReachability() {
       const badge = el.querySelector('.cookbook-task-status');
       if (badge) {
         if (unreachable) {
-          badge.textContent = 'unreachable';
+          badge.textContent = '不可达';
           badge.className = 'cookbook-task-status cookbook-task-error';
-          badge.title = pr.error || 'Server not responding — it may have crashed';
-        } else if (badge.textContent === 'unreachable') {
+          badge.title = pr.error || '服务器无响应 — 可能已崩溃';
+        } else if (badge.textContent === '不可达') {
           // Recovered — restore the normal running label.
           badge.textContent = _statusLabel('running', task.type);
           badge.className = 'cookbook-task-status cookbook-task-running';
@@ -3522,7 +3522,7 @@ function _syncSettingsServerDots(byKey) {
 
     const host = hostEl.value?.trim() || '';
     if (!host || hostEl.readOnly || hostEl.disabled) {
-      _setServerDot(dot, false, 'Local (this machine)');
+      _setServerDot(dot, false, '本地（本机）');
       return;
     }
 
@@ -3530,17 +3530,17 @@ function _syncSettingsServerDots(byKey) {
     if (!list.length) return;
 
     const failed = list.some(_serveTaskFailed);
-    _setServerDot(dot, failed, failed ? 'Server not responding - running serve may have crashed' : 'Reachable');
+    _setServerDot(dot, failed, failed ? '服务器无响应 - 运行中的服务可能已崩溃' : '可访问');
     if (!msg) return;
 
     if (failed) {
-      msg.textContent = 'Server not responding';
-      msg.title = 'Server not responding - running serve may have crashed';
+      msg.textContent = '服务器无响应';
+      msg.title = '服务器无响应 - 运行中的服务可能已崩溃';
       msg.style.color = 'var(--red,#e06c75)';
       msg.style.opacity = '0.75';
     } else if (/failed|crashed|not responding|unreachable/i.test(msg.textContent || '')) {
-      msg.textContent = 'Reachable';
-      msg.title = 'Reachable';
+      msg.textContent = '可访问';
+      msg.title = '可访问';
       msg.style.color = 'var(--green,#50fa7b)';
       msg.style.opacity = '0.75';
     }
@@ -3563,7 +3563,7 @@ function _refreshServerDots() {
     const key = header.querySelector('[data-stop-server]')?.dataset.stopServer || '';
     const list = byKey[key] || [];
     const fail = !!key && list.some(_serveTaskFailed);
-    _setServerDot(dot, fail, key ? (fail ? 'Server not responding' : 'Reachable') : 'Local (this machine)');
+    _setServerDot(dot, fail, key ? (fail ? '服务器无响应' : '可访问') : '本地（本机）');
   });
   _syncSettingsServerDots(byKey);
 }
@@ -3701,7 +3701,7 @@ async function _probeEndpointUntilOnline(epId, host, port) {
         window.dispatchEvent(new CustomEvent('ge:model-endpoints-updated', {
           detail: { baseUrl: ep.base_url || `http://${host}:${port}/v1`, host, port, model: (ep.models || [])[0] || '' },
         }));
-        uiModule.showToast(`${host}:${port} is online`);
+        uiModule.showToast(`${host}:${port} 已上线`);
         return;
       }
     } catch (_) { /* keep retrying */ }
@@ -3909,9 +3909,9 @@ async function _pollBackgroundStatus() {
             // Show serve phase from backend (e.g. "loading 45%", "warming up", "idle", "12.5 tok/s")
             statusEl.textContent = t.progress;
           } else if (t.status === 'ready') {
-            statusEl.textContent = 'ready';
+            statusEl.textContent = '就绪';
           } else {
-            statusEl.textContent = 'cooking';
+            statusEl.textContent = '运行中';
           }
         } else {
           var _dlProgress = '';
@@ -3919,15 +3919,15 @@ async function _pollBackgroundStatus() {
             var _pctMatch = t.progress.match(/(\d+)%/);
             _dlProgress = _pctMatch ? ` ${_pctMatch[0]}` : '';
           }
-          statusEl.textContent = `downloading${_dlProgress}`;
+          statusEl.textContent = `下载中${_dlProgress}`;
         }
         statusEl.style.display = '';
       } else if (errorTasks.length > 0) {
-        statusEl.textContent = 'error';
+        statusEl.textContent = '错误';
         statusEl.style.display = '';
         statusEl.style.color = 'var(--color-error, #f44)';
       } else if (completedTasks.length > 0) {
-        statusEl.textContent = 'done';
+        statusEl.textContent = '已完成';
         statusEl.style.display = '';
         statusEl.style.color = 'var(--color-success, #4caf50)';
       } else {

@@ -82,7 +82,7 @@ function _startChat(url, mid, endpointId) {
   if (sessionModule) {
     sessionModule.createDirectChat(url, mid, endpointId);
   } else if (uiModule) {
-    uiModule.showError('Session module not loaded');
+    uiModule.showError('会话模块未加载');
   }
 }
 
@@ -95,7 +95,7 @@ function _buildModelRow(mid, url, displayName, endpointId, offline, modelType) {
   const handle = document.createElement('span');
   handle.className = 'item-drag-handle';
   handle.textContent = '\u22EE\u22EE';
-  handle.title = 'Drag to reorder';
+  handle.title = '拖拽排序';
   row.appendChild(handle);
 
   // Favorite indicator — provider logo or colored dot
@@ -109,12 +109,12 @@ function _buildModelRow(mid, url, displayName, endpointId, offline, modelType) {
   } else {
     fav.className = 'model-fav-btn' + (_isFavorite(mid) ? ' active' : '');
   }
-  fav.title = 'Toggle favorite';
+  fav.title = '切换收藏';
   fav.addEventListener('click', (e) => {
     e.stopPropagation();
     const nowFav = _toggleFavorite(mid);
     fav.classList.toggle('active', nowFav);
-    uiModule.showToast(nowFav ? 'Favorited' : 'Unfavorited');
+    uiModule.showToast(nowFav ? '已收藏' : '已取消收藏');
     refreshModels();
   });
   const span = document.createElement('span');
@@ -124,14 +124,14 @@ function _buildModelRow(mid, url, displayName, endpointId, offline, modelType) {
     const badge = document.createElement('span');
     badge.className = 'model-type-badge';
     badge.textContent = 'IMG';
-    badge.title = 'Image generation model';
+    badge.title = '图像生成模型';
     badge.style.cssText = 'font-size:0.65em;padding:1px 4px;border-radius:3px;background:var(--accent,#7c3aed);color:#fff;margin-left:6px;vertical-align:middle;';
     span.appendChild(badge);
   }
 
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.textContent = offline ? 'Offline' : (modelType === 'image' ? '+ Image' : '+ Chat');
+  btn.textContent = offline ? '离线' : (modelType === 'image' ? '+ 图像' : '+ 聊天');
   btn.className = 'model-chat-btn';
   btn.style.transition = 'all 0.2s ease';
   if (offline) {
@@ -197,7 +197,7 @@ export async function refreshModels(force = false) {
       _cachedItems = data.items || [];
     } catch (e) {
       console.error(e);
-      box.textContent = '(scan failed)';
+      box.textContent = '(扫描失败)';
       return;
     } finally {
       box.innerHTML = '';
@@ -281,7 +281,7 @@ export async function refreshModels(force = false) {
         favToggle.textContent = favCollapsed ? '\u25B6' : '\u25BC';
         favHeader.appendChild(favToggle);
         const favLabel = document.createElement('span');
-        favLabel.textContent = 'Favorites';
+        favLabel.textContent = '收藏';
         favHeader.appendChild(favLabel);
         const favCount = document.createElement('span');
         favCount.className = 'folder-count';
@@ -314,7 +314,7 @@ export async function refreshModels(force = false) {
       Object.keys(groups.local).length > 1 || Object.keys(groups.api).length > 1;
 
     const categoryOrder = [
-      { key: 'local', label: 'Local' },
+      { key: 'local', label: '本地' },
       { key: 'api', label: 'API' },
     ];
 
@@ -384,7 +384,7 @@ export async function refreshModels(force = false) {
           if (isOfflineEndpoint) {
             const badge = document.createElement('span');
             badge.className = 'endpoint-offline-badge';
-            badge.textContent = '(offline)';
+            badge.textContent = '(离线)';
             sub.appendChild(badge);
           }
 
@@ -442,7 +442,7 @@ export async function refreshModels(force = false) {
           const showMoreBtn = document.createElement('div');
           showMoreBtn.className = 'models-show-all-btn';
           showMoreBtn.style.cssText = 'text-align:center;padding:6px;opacity:0.5;cursor:pointer;font-size:0.82em;';
-          showMoreBtn.textContent = `Show ${allHidden.length} more model${allHidden.length === 1 ? '' : 's'}`;
+          showMoreBtn.textContent = `显示 ${allHidden.length} 个更多模型`;
           showMoreBtn._target = target;
           showMoreBtn.addEventListener('click', () => {
             showMoreBtn.remove();
@@ -505,7 +505,7 @@ export async function refreshModels(force = false) {
     if (totalModelCount >= 10) {
       const searchBox = document.createElement('input');
       searchBox.type = 'text';
-      searchBox.placeholder = 'Search models...';
+      searchBox.placeholder = '搜索模型...';
       searchBox.className = 'model-search-input';
       searchBox.addEventListener('click', (e) => e.stopPropagation());
       searchBox.addEventListener('touchstart', (e) => e.stopPropagation());
@@ -548,7 +548,7 @@ export async function refreshModels(force = false) {
         if (searchResults.children.length === 0) {
           const empty = document.createElement('div');
           empty.style.cssText = 'text-align:center;padding:12px;opacity:0.4;';
-          empty.textContent = 'No models match "' + searchBox.value.trim() + '"';
+          empty.textContent = '未找到匹配 "' + searchBox.value.trim() + '" 的模型';
           searchResults.appendChild(empty);
         }
       });
@@ -559,45 +559,45 @@ export async function refreshModels(force = false) {
       const noModels = document.createElement('div');
       noModels.className = 'models-empty-state';
       if (window._isAdmin) {
-        noModels.innerHTML = '<span class="muted">No models found</span><br>'
-          + '<a href="#" onclick="document.getElementById(\'user-bar-admin\')?.click();return false;" class="accent-link">Open Admin to add endpoints</a>'
-          + '<br><span class="muted-sm">Type /setup for Local models or API setup.</span>';
+        noModels.innerHTML = '<span class="muted">未找到模型</span><br>'
+          + '<a href="#" onclick="document.getElementById(\'user-bar-admin\')?.click();return false;" class="accent-link">打开管理面板添加端点</a>'
+          + '<br><span class="muted-sm">输入 /setup 配置本地模型或 API。</span>';
       } else {
-        noModels.innerHTML = '<span class="muted">No models available</span><br>'
-          + '<span class="muted-sm">Ask an admin to configure model endpoints</span>';
+        noModels.innerHTML = '<span class="muted">暂无可用模型</span><br>'
+          + '<span class="muted-sm">请管理员配置模型端点</span>';
       }
       box.appendChild(noModels);
       // No endpoints yet: keep the welcome screen focused on first setup.
       const welcomeSub = document.getElementById('welcome-sub');
       if (welcomeSub) welcomeSub.innerHTML = 'Type <span class="setup-trigger-link" style="color:var(--accent,var(--red));font-weight:600;cursor:pointer;text-decoration:underline;" title="Click to launch setup">/setup</span> to get started.';
       const welcomeTip = document.getElementById('welcome-tip');
-      if (welcomeTip) welcomeTip.textContent = 'Type /setup, then choose Local models or API.';
+      if (welcomeTip) welcomeTip.textContent = '输入 /setup，然后选择本地模型或 API。';
     } else {
       // Configured installs should feel ready, not stuck in onboarding.
       const welcomeSub = document.getElementById('welcome-sub');
-      if (welcomeSub) welcomeSub.textContent = 'Yours for the voyage.';
+      if (welcomeSub) welcomeSub.textContent = '为您保驾护航。';
       const welcomeTip = document.getElementById('welcome-tip');
       if (welcomeTip) {
         const tips = window.innerWidth <= 768
           ? [
-              'Tip: Long-press a session for rename, delete, and memory options.',
-              'Tip: Tap the eye icon for Nobody mode - no history saved.',
-              'Tip: Switch to Agent mode when you want tools.',
-              'Tip: Attach images or files using the + button next to the input.',
+              '提示：长按会话可重命名、删除和管理记忆。',
+              '提示：点击眼睛图标进入隐身模式 - 不保存历史记录。',
+              '提示：需要工具时切换到智能体模式。',
+              '提示：使用输入框旁的 + 按钮附加图片或文件。',
             ]
           : [
-              'Tip: Press Ctrl+K to search across all your conversations.',
-              'Tip: Press Ctrl+B to quickly toggle the sidebar.',
-              'Tip: Shift-click the sidebar toggle to swap it to the other side.',
-              'Tip: Drag and drop files onto the chat to attach them.',
-              'Tip: Right-click a session for rename, delete, and memory options.',
+              '提示：按 Ctrl+K 搜索所有对话。',
+              '提示：按 Ctrl+B 快速切换侧边栏。',
+              '提示：按住 Shift 点击侧边栏切换按钮可换到另一侧。',
+              '提示：拖放文件到聊天中以附加。',
+              '提示：右键点击会话可重命名、删除和管理记忆。',
             ];
         welcomeTip.textContent = tips[Math.floor(Math.random() * tips.length)];
       }
     }
   } catch (e) {
     console.error(e);
-    box.textContent = '(render failed: ' + e.message + ')';
+    box.textContent = '(渲染失败：' + e.message + ')';
   }
 }
 
@@ -628,7 +628,7 @@ export async function refreshProviders() {
     } else {
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = '(OPENAI_API_KEY not set on server)';
+      opt.textContent = '(服务器未设置 OPENAI_API_KEY)';
       sel.appendChild(opt);
     }
   } catch (e) {

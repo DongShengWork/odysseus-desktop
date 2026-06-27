@@ -68,10 +68,10 @@ export function defaultAdjParams(type) {
 /** Human-readable name for an adjustment type. */
 export function adjLayerLabel(type) {
   return {
-    'brightness-contrast': 'Brightness/Contrast',
-    'hue-saturation': 'Hue/Saturation',
-    'levels': 'Levels',
-    'color-balance': 'Color Balance',
+    'brightness-contrast': '亮度/对比度',
+    'hue-saturation': '色相/饱和度',
+    'levels': '色阶',
+    'color-balance': '色彩平衡',
   }[type] || type;
 }
 

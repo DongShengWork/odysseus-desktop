@@ -165,7 +165,7 @@ function initializeEventListeners() {
     const _updateMsgCount = () => {
       _countScheduled = false;
       const n = _chatHistEl.querySelectorAll(':scope > .msg').length;
-      _metaCountEl.textContent = n ? `· ${n} msg${n === 1 ? '' : 's'}` : '';
+      _metaCountEl.textContent = n ? `· ${n} 条消息` : '';
     };
     const _scheduleCount = () => {
       if (_countScheduled) return;
@@ -296,13 +296,13 @@ function initializeEventListeners() {
         const isUser = child.classList.contains('msg-user');
         let label;
         if (isUser) {
-          label = 'User';
+          label = '用户';
         } else {
           const roleEl = child.querySelector('.role');
           const ts = roleEl?.querySelector('.role-timestamp');
           let raw = roleEl ? roleEl.textContent : '';
           if (ts) raw = raw.replace(ts.textContent, '');
-          label = (raw || '').trim() || 'Assistant';
+          label = (raw || '').trim() || '助手';
         }
         const body = child.querySelector('.body');
         // Prefer dataset.raw (original markdown) over innerText (rendered HTML as text)
@@ -310,17 +310,17 @@ function initializeEventListeners() {
         const text = body ? (body.dataset.raw || body.innerText || body.textContent || '').trim() : '';
         if (text) parts.push(`${label}: ${text}`);
       } else if (child.classList?.contains('agent-thread')) {
-        const lines = ['[Tool calls]'];
+        const lines = ['[工具调用]'];
         for (const n of child.querySelectorAll('.agent-thread-node')) {
           const tool = n.querySelector('.agent-thread-tool')?.textContent?.trim() || 'tool';
           const cmd = n.querySelector('.agent-thread-cmd')?.textContent?.trim() || '';
           const output = n.querySelector('.agent-tool-output pre')?.textContent?.trim() || '';
-          const status = n.classList.contains('error') ? 'failed' : 'done';
+          const status = n.classList.contains('error') ? '失败' : '完成';
           let line = `- ${tool} [${status}]`;
-          if (cmd) line += `\n  cmd: ${cmd}`;
+          if (cmd) line += `\n  命令: ${cmd}`;
           if (output) {
             const truncated = output.length > 2000 ? output.slice(0, 2000) + '…' : output;
-            line += `\n  out: ${truncated}`;
+            line += `\n  输出: ${truncated}`;
           }
           lines.push(line);
         }
@@ -339,7 +339,7 @@ function initializeEventListeners() {
       const transcript = _serializeChatTranscript();
       // A new/empty chat has nothing to copy — don't write an empty string and
       // falsely report "Copied".
-      if (!transcript.trim()) { uiModule.showToast('Nothing to copy yet'); return; }
+      if (!transcript.trim()) { uiModule.showToast('暂无内容可复制'); return; }
       await uiModule.copyToClipboard(transcript);
     });
   }
@@ -351,7 +351,7 @@ function initializeEventListeners() {
       e.stopPropagation();
       exportMenu.classList.remove('open');
       const meta = sessionModule.getSessions().find(s => s.id === sessionModule.getCurrentSessionId());
-      const sessionName = meta ? meta.name : 'Odysseus Chat';
+      const sessionName = meta ? meta.name : 'Odysseus 对话';
       const originalTitle = document.title;
       document.title = sessionName;
       const chatHistory = document.getElementById('chat-history');
@@ -379,7 +379,7 @@ function initializeEventListeners() {
         const sessionId = sessionModule.getCurrentSessionId();
         const texts = _serializeChatTranscript();
         const meta = sessionModule.getSessions().find(s => s.id === sessionId);
-        const title = meta?.name || 'Untitled';
+        const title = meta?.name || '未命名';
         const res = await fetch(`${API_BASE}/api/document`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -388,10 +388,10 @@ function initializeEventListeners() {
         if (!res.ok) throw new Error('Failed');
         const doc = await res.json();
         if (documentModule) documentModule.loadDocument(doc.id);
-        uiModule.showToast('Saved to documents');
+        uiModule.showToast('已保存到文档');
       } catch (err) {
         console.error('Save to docs failed:', err);
-        uiModule.showError('Failed to save to documents');
+        uiModule.showError('保存到文档失败');
       }
     });
   }
@@ -438,7 +438,7 @@ function initializeEventListeners() {
           const _m = sessionModule.getSessions().find(s => s.id === sid);
           if (_m) _m.name = newName;
           metaEl.textContent = newName;
-          uiModule.showToast('Renamed');
+          uiModule.showToast('已重命名');
           sessionModule.loadSessions();
         } else {
           metaEl.textContent = origText;
@@ -753,11 +753,11 @@ function initializeEventListeners() {
     if (active) {
       if (welcomeName) {
         if (!welcomeName.dataset.researchOrigHtml) welcomeName.dataset.researchOrigHtml = welcomeName.innerHTML;
-        welcomeName.innerHTML = _resIco + 'Deep Research';
+        welcomeName.innerHTML = _resIco + '深度研究';
       }
       if (welcomeSub) {
         if (!welcomeSub.dataset.researchOrigText) welcomeSub.dataset.researchOrigText = welcomeSub.textContent;
-        welcomeSub.textContent = 'Deep multi-step research with source gathering and synthesis.';
+        welcomeSub.textContent = '深度多步骤研究，包含来源收集与综合分析。';
       }
       if (tipEl) {
         if (!tipEl.dataset.researchOrigTip) tipEl.dataset.researchOrigTip = tipEl.textContent;
@@ -1073,7 +1073,7 @@ function initializeEventListeners() {
         if (documentModule && documentModule.newDocument) await documentModule.newDocument();
       } catch (err) {
         console.error('New document from Library failed:', err);
-        if (uiModule && uiModule.showError) uiModule.showError('Could not create document');
+        if (uiModule && uiModule.showError) uiModule.showError('无法创建文档');
       }
     });
   }
@@ -1202,11 +1202,11 @@ function initializeEventListeners() {
         if (current === mode) {
           sessionModule.setSortMode(null);
           sortDropdown.style.display = 'none';
-          uiModule.showToast('Manual order');
+          uiModule.showToast('手动排序');
         } else {
           sessionModule.setSortMode(mode);
           sortDropdown.style.display = 'none';
-          uiModule.showToast(`Sorted: ${opt.textContent.trim().toLowerCase()}`);
+          uiModule.showToast('已排序：' + opt.textContent.trim().toLowerCase());
         }
         _syncSortChecks();
       });
@@ -1245,7 +1245,7 @@ function initializeEventListeners() {
         const url = `${API_BASE}/api/sessions/auto-sort${skipLlm ? '?skip_llm=true' : ''}`;
         const res = await fetch(url, { method: 'POST' });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Auto-sort failed');
+        if (!res.ok) throw new Error(data.detail || '自动排序失败');
         if (data.status === 'ok') {
           sessionModule.setSortMode(null); // clear sort — tidy creates manual folder order
           _syncSortChecks();
@@ -1253,7 +1253,7 @@ function initializeEventListeners() {
             // No-AI path: just report what got cleaned. No "unfiled
             // remaining" prompt because we never tried to file anything.
             const cleaned = (data.deleted_empty || 0) + (data.deleted_throwaway || 0);
-            uiModule.showToast(cleaned ? `Cleaned ${cleaned} empty/throwaway chat${cleaned === 1 ? '' : 's'}` : 'Already clean');
+            uiModule.showToast(cleaned ? `已清理 ${cleaned} 个空/无用对话` : '已整洁');
           } else {
             // Tidy now works in batches (15 most-recent unfiled per click)
             // so the user gets fast feedback and a manageable LLM call
@@ -1261,21 +1261,21 @@ function initializeEventListeners() {
             const remaining = data.unfiled_remaining || 0;
             let msg;
             if (data.updated > 0) {
-              msg = `Sorted ${data.updated} into ${data.folders.length} folder${data.folders.length === 1 ? '' : 's'}`;
-              if (remaining > 0) msg += ` — ${remaining} unfiled left, hit Group again`;
+              msg = `已整理 ${data.updated} 个对话到 ${data.folders.length} 个文件夹`;
+              if (remaining > 0) msg += ` — 还剩 ${remaining} 个未整理，再次点击分组`;
             } else if (remaining > 0) {
-              msg = `${remaining} unfiled chats — hit Group again`;
+              msg = `${remaining} 个未整理对话 — 再次点击分组`;
             } else {
-              msg = 'All sorted';
+              msg = '已全部整理';
             }
             uiModule.showToast(msg);
           }
           if (sessionModule) await sessionModule.loadSessions();
         } else {
-          uiModule.showToast(data.reason || 'Nothing to sort');
+          uiModule.showToast(data.reason || '无内容可整理');
         }
       } catch (e) {
-        uiModule.showError('Auto-sort: ' + e.message);
+        uiModule.showError('自动排序：' + e.message);
       } finally {
         wp.destroy();
         if (wpEl.parentNode) wpEl.parentNode.removeChild(wpEl);
@@ -1303,7 +1303,7 @@ function initializeEventListeners() {
         Storage.set('odysseus-model-sort', mode);
         if (modelsModule) modelsModule.refreshModels();
         modelSortDropdown.style.display = 'none';
-        uiModule.showToast('Models sorted: ' + opt.textContent.trim().toLowerCase());
+        uiModule.showToast('模型已排序：' + opt.textContent.trim().toLowerCase());
       });
     });
   }
@@ -1393,7 +1393,7 @@ function initializeEventListeners() {
       const newName = aiNameInput.value.trim();
       
       if (!newName) {
-        uiModule.showError('Please enter a name for the AI');
+        uiModule.showError('请输入 AI 名称');
         return;
       }
       
@@ -1406,12 +1406,12 @@ function initializeEventListeners() {
         
         const result = await response.json();
         if (result.success) {
-          uiModule.showToast(`AI renamed to ${newName}`);
+          uiModule.showToast(`AI 已重命名为 ${newName}`);
           renameAiModal.classList.add('hidden');
           aiNameInput.value = '';
         }
       } catch (e) {
-        uiModule.showError('Failed to rename AI: ' + e.message);
+        uiModule.showError('重命名 AI 失败: ' + e.message);
       }
     });
   }
@@ -1453,7 +1453,7 @@ function initializeEventListeners() {
       const newName = sessionNameInput.value.trim();
       
       if (!newName) {
-        uiModule.showError('Please enter a name for the session');
+        uiModule.showError('请输入会话名称');
         return;
       }
       
@@ -1466,7 +1466,7 @@ function initializeEventListeners() {
         
         const result = await response.json();
         if (response.ok) {
-          uiModule.showToast(`Session renamed to ${newName}`);
+          uiModule.showToast(`会话已重命名为 ${newName}`);
           renameSessionModal.classList.add('hidden');
           sessionNameInput.value = '';
           // Update the current session name in the UI
@@ -1474,15 +1474,15 @@ function initializeEventListeners() {
           if (meta) {
             meta.name = newName;
             const ver = window._appVersion ? ` v${window._appVersion}` : '';
-            el('current-meta').textContent = `Session: ${meta.name}${meta.model ? ' ' + meta.model.split('/').pop() : ''}${meta.rag ? ' [RAG]' : ''}${ver}`;
+            el('current-meta').textContent = `会话: ${meta.name}${meta.model ? ' ' + meta.model.split('/').pop() : ''}${meta.rag ? ' [RAG]' : ''}${ver}`;
           }
           // Refresh the sessions list
         await sessionModule.loadSessions();
         } else {
-          throw new Error(result.detail || 'Failed to rename session');
+          throw new Error(result.detail || '重命名会话失败');
         }
       } catch (e) {
-        uiModule.showError('Failed to rename session: ' + e.message);
+        uiModule.showError('重命名会话失败: ' + e.message);
       }
     });
   }
@@ -1558,14 +1558,14 @@ function initializeEventListeners() {
   }
 
   const TOOL_TOGGLE_TOAST_LABELS = {
-    web: 'Web search',
-    bash: 'Shell',
+    web: '网页搜索',
+    bash: '命令行',
   };
 
   function showToolToggleToast(stateKey, active) {
     const label = TOOL_TOGGLE_TOAST_LABELS[stateKey];
     if (!label || !uiModule?.showToast) return;
-    uiModule.showToast(`${label} ${active ? 'on' : 'off'}`, 1800);
+    uiModule.showToast(`${label} ${active ? '已开启' : '已关闭'}`, 1800);
   }
 
   function applyModeToToggles(mode) {
@@ -1631,10 +1631,10 @@ function initializeEventListeners() {
   const SPLASH_COUNT_KEY = 'odysseus-tool-splash-counts';
   const SPLASH_MAX = 2;
   const _toolSplashes = {
-    web: { role: 'Web Search', text: 'Searches the web for relevant information to include in the response. Results are fetched and summarized before the AI answers.' },
-    bash: { role: 'Shell Access', text: 'Gives the AI access to a sandboxed shell for running commands, installing packages, and executing scripts. Use with caution.' },
-    builder: { role: 'Tool Builder', text: 'Create custom mini-apps and tools the AI can use. Describe what you need and the AI will build a tool you can reuse across conversations.' },
-    research: { role: 'Deep Research', text: 'Multi-round web search with source analysis. Takes longer but produces comprehensive, well-sourced answers. Your next message will trigger a deep research cycle.' },
+    web: { role: '网页搜索', text: '搜索网络获取相关信息并整合到回复中。结果会在 AI 回答前抓取并总结。' },
+    bash: { role: '命令行访问', text: '为 AI 提供沙箱化的命令行访问权限，可运行命令、安装包和执行脚本。请谨慎使用。' },
+    builder: { role: '工具构建器', text: '创建 AI 可使用的自定义迷你应用和工具。描述你的需求，AI 将构建一个可在多轮对话中复用的工具。' },
+    research: { role: '深度研究', text: '多轮网络搜索与来源分析。耗时较长但能生成全面、有据可查的答案。你的下一条消息将触发深度研究循环。' },
   };
   function _showToolSplash(key) {
     const splash = _toolSplashes[key];
@@ -2116,7 +2116,7 @@ function initializeEventListeners() {
       pickerWrap.classList.toggle('picker-auto-hidden', w < PICKER_HIDE_WIDTH);
       // Hide placeholder text
       if (textarea) {
-        textarea.setAttribute('placeholder', w < PLACEHOLDER_HIDE_WIDTH ? '' : 'Message Odysseus...');
+        textarea.setAttribute('placeholder', w < PLACEHOLDER_HIDE_WIDTH ? '' : '向 Odysseus 发送消息...');
       }
       // Hide entire bottom toolbar (tools, mode toggle) — only send button remains
       if (inputBottom) {
@@ -2235,7 +2235,7 @@ function initializeEventListeners() {
         // Re-hide picker after everything settles
         const _mpw = el('model-picker-wrap');
         if (_mpw) _mpw.style.display = 'none';
-        uiModule.showToast(`Group chat ready — ${picked.length} models`);
+        uiModule.showToast(`群组对话已就绪 — ${picked.length} 个模型`);
       } else {
         _syncGroupIndicator(false);
         groupModule.stopGroup();
@@ -2280,13 +2280,13 @@ function initializeEventListeners() {
       chk.checked = !chk.checked;
       incognitoBtn.classList.toggle('active', chk.checked);
       const tipEl = el('welcome-tip');
-      incognitoBtn.title = chk.checked ? 'Disable Nobody mode' : 'Enable Nobody mode — no memory, no history saved';
+      incognitoBtn.title = chk.checked ? '禁用无痕模式' : '启用无痕模式 — 不保存记忆和历史记录';
       const welcomeName = document.querySelector('.welcome-name');
       if (chk.checked) {
-        incognitoBtn.innerHTML = INCOGNITO_EYE_CLOSED + '<span class="incognito-label">Nobody</span>';
+        incognitoBtn.innerHTML = INCOGNITO_EYE_CLOSED + '<span class="incognito-label">无名氏</span>';
         if (welcomeName) {
           welcomeName.dataset.originalHtml = welcomeName.innerHTML;
-          welcomeName.innerHTML = '<svg class="welcome-boat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>Nobody';
+          welcomeName.innerHTML = '<svg class="welcome-boat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>无名氏';
           // Restart the L→R clip-wipe reveal on the new label
           welcomeName.style.animation = 'none';
           welcomeName.offsetHeight;
@@ -2296,10 +2296,10 @@ function initializeEventListeners() {
         const welcomeSub = el('welcome-sub');
         if (welcomeSub) {
           if (!welcomeSub.dataset.originalText) welcomeSub.dataset.originalText = welcomeSub.textContent;
-          welcomeSub.textContent = "Who am I? I'm nobody.";
+          welcomeSub.textContent = "我是谁？我是无名氏。";
           welcomeSub.style.display = '';
         }
-        if (tipEl) { tipEl.dataset.originalTip = tipEl.textContent; tipEl.textContent = 'Temporary session \u2014 won\u2019t be saved and no memory activation.'; tipEl.style.opacity = '0.5'; tipEl.style.marginTop = '8px'; }
+        if (tipEl) { tipEl.dataset.originalTip = tipEl.textContent; tipEl.textContent = '临时会话 \u2014 不会保存且无记忆激活。'; tipEl.style.opacity = '0.5'; tipEl.style.marginTop = '8px'; }
         // Default to plain chat: disable tools visually, switch to chat mode.
         // IMPORTANT: don't overwrite the user's persisted per-mode tool prefs
         // (`web_agent`, `bash_agent`, `web_chat`, `bash_chat`). Nobody mode is
@@ -2314,7 +2314,7 @@ function initializeEventListeners() {
         ts.research = false; ts.mode = 'chat';
         Storage.setJSON(Storage.KEYS.TOGGLES, ts);
       } else {
-        incognitoBtn.innerHTML = INCOGNITO_EYE_OPEN + '<span class="incognito-label">Nobody</span>';
+        incognitoBtn.innerHTML = INCOGNITO_EYE_OPEN + '<span class="incognito-label">无名氏</span>';
         if (welcomeName && welcomeName.dataset.originalHtml) {
           welcomeName.innerHTML = welcomeName.dataset.originalHtml;
           // Restart the L→R clip-wipe reveal on the restored label
@@ -2468,7 +2468,7 @@ function initializeEventListeners() {
       saveUIVis(state);
       applyUIVis(state);
       syncRearrangeChecks();
-      uiModule.showToast(!wasOn ? 'Rearrange enabled' : 'Rearrange disabled');
+      uiModule.showToast(!wasOn ? '重排已启用' : '重排已禁用');
       // Close the dropdown the toggle lives in — the sort dropdown's own
       // click-stopPropagation means it won't close on its own.
       const dd = toggle.closest('[id$="-sort-dropdown"]');
@@ -2489,7 +2489,7 @@ function initializeEventListeners() {
     saveUIVis(state);
     applyUIVis(state);
     syncRearrangeChecks();
-    uiModule.showToast('Rearrange disabled');
+    uiModule.showToast('重排已禁用');
   }, true);
   // Sync checkmarks when dropdowns open
   const _sessionSortBtn = el('session-sort-btn');
@@ -2785,7 +2785,7 @@ function initializeEventListeners() {
       const h = modal.querySelector('.modal-header h4, .modal-header h3, .modal-header h2');
       if (h && h.textContent.trim()) return h.textContent.trim();
       if (modal.id) return modal.id.replace(/-modal$|-overlay$|-popup$/, '').replace(/-/g, ' ');
-      return 'Window';
+      return '窗口';
     }
 
     function removeDockEntry(modal) {
@@ -2820,7 +2820,7 @@ function initializeEventListeners() {
       const closeX = document.createElement('button');
       closeX.className = 'modal-dock-close';
       closeX.textContent = '×';
-      closeX.title = 'Close';
+      closeX.title = '关闭';
       closeX.addEventListener('click', (e) => {
         e.stopPropagation();
         modal.classList.remove('minimized');
@@ -2853,7 +2853,7 @@ function initializeEventListeners() {
       const minBtn = document.createElement('button');
       minBtn.className = 'minimize-btn';
       minBtn.type = 'button';
-      minBtn.title = 'Minimize';
+      minBtn.title = '最小化';
       minBtn.textContent = '_';
       minBtn.addEventListener('mousedown', (e) => e.stopPropagation()); // don't start drag
       minBtn.addEventListener('click', (e) => {
@@ -3090,8 +3090,8 @@ function initializeEventListeners() {
       if (!currentId) return;
       const sessions = sessionModule.getSessions();
       const current = sessions.find(s => s.id === currentId);
-      const name = current ? current.name : 'this session';
-      if (!await uiModule.styledConfirm(`Delete "${name}"?`, { confirmText: 'Delete', danger: true })) return;
+      const name = current ? current.name : '此会话';
+      if (!await uiModule.styledConfirm(`删除 "${name}"？`, { confirmText: '删除', danger: true })) return;
       try {
         // Find the next session below the current one before deleting
         const idx = sessions.findIndex(s => s.id === currentId);
@@ -3103,12 +3103,12 @@ function initializeEventListeners() {
           if (nextSession) {
             await sessionModule.selectSession(nextSession.id);
           }
-          uiModule.showToast('Session deleted');
+          uiModule.showToast('会话已删除');
         } else {
-          uiModule.showError('Failed to delete session');
+          uiModule.showError('删除会话失败');
         }
       } catch (e) {
-        uiModule.showError('Failed to delete session: ' + e);
+        uiModule.showError('删除会话失败: ' + e);
       }
     });
   }
@@ -3572,7 +3572,7 @@ function startOdysseusApp() {
     if (!hasText && !hasFiles && _isSttEnabled()) {
       clearTimeout(sendBtn._collapseTimer);
       sendBtn.innerHTML = _micIcon;
-      sendBtn.title = 'Record voice';
+      sendBtn.title = '录制语音';
       newMode = 'mic';
       sendBtn.classList.add('mic-mode');
       sendBtn.classList.remove('newchat-mode', 'newchat-expanded');
@@ -3581,7 +3581,7 @@ function startOdysseusApp() {
       // Group chat: always show send button, never newchat mode
       if (groupModule && groupModule.isActive()) {
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = 'Send to group';
+        sendBtn.title = '发送到群组';
         newMode = 'idle';
         sendBtn.classList.remove('mic-mode', 'newchat-mode', 'newchat-expanded');
       } else {
@@ -3590,14 +3590,14 @@ function startOdysseusApp() {
       if (isEmptySession) {
         // Already on new chat — show arrow in muted style (ready to type)
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = 'Send message';
+        sendBtn.title = '发送消息';
         newMode = 'idle';
         sendBtn.classList.add('newchat-mode'); // muted gray style
         sendBtn.classList.remove('mic-mode', 'newchat-expanded');
         clearTimeout(sendBtn._expandTimer);
       } else {
-        sendBtn.innerHTML = _newChatIcon + '<span class="send-btn-label">+ New</span>';
-        sendBtn.title = 'New chat';
+        sendBtn.innerHTML = _newChatIcon + '<span class="send-btn-label">+ 新建</span>';
+        sendBtn.title = '新对话';
         newMode = 'newchat';
         sendBtn.classList.add('newchat-mode');
         sendBtn.classList.remove('mic-mode');
@@ -3620,14 +3620,14 @@ function startOdysseusApp() {
         setTimeout(() => {
           if (sendBtn.dataset.mode !== 'send') return;
           sendBtn.innerHTML = _sendIcon;
-          sendBtn.title = 'Send message';
+          sendBtn.title = '发送消息';
           sendBtn.classList.remove('mic-mode', 'newchat-mode', 'anim-spin-swap');
           sendBtn.classList.add('anim-spin');
           sendBtn.addEventListener('animationend', () => sendBtn.classList.remove('anim-spin'), { once: true });
         }, delay);
       } else {
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = 'Send message';
+        sendBtn.title = '发送消息';
         sendBtn.classList.remove('mic-mode', 'newchat-mode', 'newchat-expanded', 'anim-spin', 'anim-launch', 'anim-land');
       }
     }
@@ -3680,7 +3680,7 @@ function startOdysseusApp() {
       // If input is empty and STT is enabled, start recording
       if (!hasText && !hasFiles && _isSttEnabled()) {
         sendBtn.innerHTML = _stopIcon;
-        sendBtn.title = 'Stop recording';
+        sendBtn.title = '停止录制';
         sendBtn.dataset.mode = 'recording';
         sendBtn.classList.add('recording');
         voiceRecorderModule.startRecording(
@@ -3794,7 +3794,7 @@ function startOdysseusApp() {
     if (files.length === 0) return;
     fileHandlerModule.addFiles(files);
     fileHandlerModule.renderAttachStrip();
-    uiModule.showToast(`Added ${files.length} file${files.length > 1 ? 's' : ''} to chat`);
+    uiModule.showToast(`已添加 ${files.length} 个文件到对话`);
   });
 
   chatContainer.addEventListener('dragleave', (e) => {
@@ -3817,7 +3817,7 @@ function startOdysseusApp() {
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
 
-    uiModule.showToast(`Added ${files.length} file${files.length > 1 ? 's' : ''} to chat`);
+    uiModule.showToast(`已添加 ${files.length} 个文件到对话`);
 
   });
   
@@ -3861,7 +3861,7 @@ function startOdysseusApp() {
       _box.style.cssText = 'pointer-events:none;border:2px dashed rgba(255,255,255,0.9);' +
         'border-radius:14px;padding:20px 28px;background:rgba(0,0,0,0.4);' +
         'font:600 16px/1.4 system-ui,sans-serif;color:#fff;';
-      _box.textContent = 'Drop files to attach';
+      _box.textContent = '拖放文件以附加';
       _cmpDropShield.appendChild(_box);
       document.body.appendChild(_cmpDropShield);
     }
@@ -3891,7 +3891,7 @@ function startOdysseusApp() {
     if (!files.length) return;
     fileHandlerModule.addFiles(files);
     fileHandlerModule.renderAttachStrip();
-    uiModule.showToast(`Added ${files.length} file${files.length > 1 ? 's' : ''} to attach`);
+    uiModule.showToast(`已添加 ${files.length} 个文件作为附件`);
   }, true);
 
   // Load initial data
@@ -3931,7 +3931,7 @@ function startOdysseusApp() {
     const hasModels = modelsBox && modelsBox.querySelector('.models-row');
     if (!hasModels) {
       const tip = document.getElementById('welcome-tip');
-      if (tip) tip.textContent = 'Add an AI endpoint from Settings in the sidebar, or paste an endpoint/API key into the chat.';
+      if (tip) tip.textContent = '从侧边栏的设置中添加 AI 端点，或者将端点/API 密钥粘贴到对话中。';
     }
   }).catch(() => {});
   modelsModule.refreshProviders();

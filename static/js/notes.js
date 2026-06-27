@@ -411,7 +411,7 @@ function _undoArchive(note, prevIdx) {
     const i = _notes.findIndex(n => n.id === note.id);
     if (i >= 0) _notes.splice(i, 1);
     _renderNotes();
-    uiModule.showError('Undo failed');
+    uiModule.showError('撤销失败');
   });
 }
 
@@ -1327,7 +1327,7 @@ export function openPanel() {
     _exitSelectMode();
     await _fetchNotes();
     _renderNotes();
-    uiModule.showToast(`Archived ${ids.length}`);
+    uiModule.showToast(`已归档 ${ids.length} 个`);
   });
   document.getElementById('notes-bulk-delete').addEventListener('click', async () => {
     const ids = [..._selectedIds];
@@ -1340,7 +1340,7 @@ export function openPanel() {
     _exitSelectMode();
     await _fetchNotes();
     _renderNotes();
-    uiModule.showToast(`Deleted ${ids.length}`);
+    uiModule.showToast(`已删除 ${ids.length} 个`);
   });
   // Escape: exit select mode first (if active), otherwise close the panel.
   // Skip when the user is editing a form field — those have their own
@@ -1430,7 +1430,7 @@ function _enterSelectMode() {
   const bar = document.getElementById('notes-bulk-bar');
   const btn = document.getElementById('notes-select-btn');
   if (bar) bar.classList.remove('hidden');
-  if (btn) { btn.classList.add('active'); btn.textContent = 'Cancel'; }
+  if (btn) { btn.classList.add('active'); btn.textContent = '取消'; }
   _renderNotes();
   _updateBulkBar();
 }
@@ -1442,7 +1442,7 @@ function _exitSelectMode() {
   const btn = document.getElementById('notes-select-btn');
   const all = document.getElementById('notes-select-all');
   if (bar) bar.classList.add('hidden');
-  if (btn) { btn.classList.remove('active'); btn.textContent = 'Select'; }
+  if (btn) { btn.classList.remove('active'); btn.textContent = '选择'; }
   if (all) all.checked = false;
   _renderNotes();
 }
@@ -1483,7 +1483,7 @@ function _isPastReminder(n) {
 async function _clearPastReminders() {
   const targets = _notes.filter(n => !n.archived && _isPastReminder(n));
   if (!targets.length) {
-    uiModule.showToast?.('No past reminders to clear');
+    uiModule.showToast?.('没有可清除的过往提醒');
     return;
   }
   const ok = uiModule?.styledConfirm
@@ -1512,7 +1512,7 @@ function _renderLabels(root = document) {
   const todayCount = _notes.filter(n => n.note_type === 'goal' && !n.archived && _nextGoalStep(n)).length;
   bar.style.display = '';
   const allActive = _activeLabel === null && _activeFilter === null;
-  let html = `<button class="notes-label-chip${allActive ? ' active' : ''}" data-action="all">All</button>`;
+  let html = `<button class="notes-label-chip${allActive ? ' active' : ''}" data-action="all">全部</button>`;
   html += `<button class="notes-label-chip${_activeFilter === 'default' ? ' active' : ''}" data-action="default" title="Show notes without tags">Default <span class="notes-label-chip-count">${defaultCount}</span></button>`;
   if (todayCount > 0) {
     const isOn = _activeFilter === 'today';
@@ -2250,7 +2250,7 @@ function _bindCardEvents(body) {
         note.pinned = prevPinned;
         note.sort_order = prevSortOrder;
         _renderNotes();
-        uiModule.showError('Failed to pin');
+        uiModule.showError('固定失败');
       });
     });
   });
@@ -2266,7 +2266,7 @@ function _bindCardEvents(body) {
       d.style.background = _dotBg(d.dataset.color, newColor);
     });
     try { await _patchNote(id, { color: newColor || null }); const note = _notes.find(n => n.id === id); if (note) note.color = newColor; }
-    catch { uiModule.showError('Failed to update color'); }
+    catch { uiModule.showError('更新颜色失败'); }
   };
   body.querySelectorAll('.note-card-color-dot').forEach(dot => {
     dot.addEventListener('click', (e) => {
@@ -2336,11 +2336,11 @@ function _bindCardEvents(body) {
       const finish = () => {
         _renderNotes();
         _patchNote(id, { archived: true }).then(() => {
-          uiModule.showToast('Archived', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+          uiModule.showToast('已归档', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
         }).catch(() => {
           _notes.splice(idx, 0, removed);
           _renderNotes();
-          uiModule.showError('Failed to archive');
+          uiModule.showError('归档失败');
         });
       };
       if (card) {
@@ -2363,10 +2363,10 @@ function _bindCardEvents(body) {
       if (idx < 0) return;
       const removed = _notes.splice(idx, 1)[0];
       _renderNotes();
-      _patchNote(id, { archived: false }).then(() => uiModule.showToast('Unarchived')).catch(() => {
+      _patchNote(id, { archived: false }).then(() => uiModule.showToast('已取消归档')).catch(() => {
         _notes.splice(idx, 0, removed);
         _renderNotes();
-        uiModule.showError('Failed to unarchive');
+        uiModule.showError('取消归档失败');
       });
     });
   });
@@ -2379,10 +2379,10 @@ function _bindCardEvents(body) {
       if (idx < 0) return;
       const removed = _notes.splice(idx, 1)[0];
       _renderNotes();
-      _deleteNoteApi(id).then(() => uiModule.showToast('Deleted')).catch(() => {
+      _deleteNoteApi(id).then(() => uiModule.showToast('已删除')).catch(() => {
         _notes.splice(idx, 0, removed);
         _renderNotes();
-        uiModule.showError('Failed to delete');
+        uiModule.showError('删除失败');
       });
     });
   });
@@ -2414,11 +2414,11 @@ function _bindCardEvents(body) {
         _pushUndo({ label: 'archive', run: undo });
         const _undoIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>';
         _patchNote(id, { archived: true }).then(() => {
-          uiModule.showToast('Archived', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+          uiModule.showToast('已归档', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
         }).catch(() => {
           _notes.splice(curIdx, 0, removed);
           _renderNotes();
-          uiModule.showError('Failed to archive');
+          uiModule.showError('归档失败');
         });
       };
       if (card) {
@@ -2439,10 +2439,10 @@ function _bindCardEvents(body) {
       if (idx < 0) return;
       const removed = _notes.splice(idx, 1)[0];
       _renderNotes();
-      _patchNote(id, { archived: false }).then(() => uiModule.showToast('Unarchived')).catch(() => {
+      _patchNote(id, { archived: false }).then(() => uiModule.showToast('已取消归档')).catch(() => {
         _notes.splice(idx, 0, removed);
         _renderNotes();
-        uiModule.showError('Failed to unarchive');
+        uiModule.showError('取消归档失败');
       });
     });
   });
@@ -2458,7 +2458,7 @@ function _bindCardEvents(body) {
       _deleteNoteApi(id).catch(() => {
         _notes.splice(idx, 0, removed);
         _renderNotes();
-        uiModule.showError('Failed to delete');
+        uiModule.showError('删除失败');
       });
     });
   });
@@ -2490,8 +2490,8 @@ function _bindCardEvents(body) {
         ta.style.position = 'fixed'; ta.style.left = '-9999px';
         document.body.appendChild(ta);
         ta.select();
-        try { document.execCommand('copy'); uiModule.showToast?.('Copied'); }
-        catch { uiModule.showError?.('Copy failed'); }
+        try { document.execCommand('copy'); uiModule.showToast?.('已复制'); }
+        catch { uiModule.showError?.('复制失败'); }
         ta.remove();
       }
     });
@@ -2512,7 +2512,7 @@ function _bindCardEvents(body) {
       _patchNote(noteId, { items: note.items }).catch(() => {
         note.items.splice(idx, 0, removed);
         _renderNotes();
-        uiModule.showError('Failed to remove item');
+        uiModule.showError('移除条目失败');
       });
     });
   });
@@ -2554,7 +2554,7 @@ function _bindCardEvents(body) {
       _patchNote(noteId, { items }).catch(() => {
         note.items = items.slice(0, -1);
         _renderNotes();
-        uiModule.showError('Failed to add item');
+        uiModule.showError('添加条目失败');
       });
     });
   });
@@ -2862,7 +2862,7 @@ function _buildForm(note = null) {
       <div class="note-form-type-seg${type === 'todo' ? ' is-todo' : type === 'draw' ? ' is-draw' : ''}" role="group">
         <button type="button" class="note-form-type-pill${type === 'note' ? ' active' : ''}" data-type="note">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
-          <span>Note</span>
+          <span>笔记</span>
         </button>
         <button type="button" class="note-form-type-pill${type === 'todo' ? ' active' : ''}" data-type="todo">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -2894,8 +2894,8 @@ function _buildForm(note = null) {
         <button class="note-form-cancel note-form-text-btn note-form-collapsible" title="Cancel">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg><span class="nft-label">Cancel</span>
         </button>
-        <button class="note-form-save note-form-text-btn" title="${isEdit ? 'Update' : 'Save'}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span class="nft-label">${isEdit ? 'Update' : 'Save'}</span>
+        <button class="note-form-save note-form-text-btn" title="${isEdit ? '更新' : 'Save'}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span class="nft-label">${isEdit ? '更新' : 'Save'}</span>
         </button>
       </div>
     </div>
@@ -3436,7 +3436,7 @@ function _buildForm(note = null) {
         form.querySelector('.note-form-header').after(wrap);
         wrap.querySelector('.note-form-image-rm').addEventListener('click', () => { wrap.remove(); currentImageUrl = ''; });
         wrap.querySelector('img').src = currentImageUrl;
-      } catch (err) { uiModule.showError('Image upload failed'); }
+      } catch (err) { uiModule.showError('图片上传失败'); }
       photoInput.value = '';
     });
   }
@@ -3563,7 +3563,7 @@ function _buildForm(note = null) {
       // can't be re-rendered later without the URL.
       const canvas = form.querySelector('.note-form-canvas');
       const url = await _uploadCanvasAsPng(canvas);
-      if (!url) { uiModule.showError('Failed to save drawing'); return; }
+      if (!url) { uiModule.showError('保存绘图失败'); return; }
       payload.image_url = url;
     } else if (currentType === 'goal') {
       // Legacy: existing goal-type notes still edit through this branch.
@@ -3621,7 +3621,7 @@ function _buildForm(note = null) {
         _renderNotes();
       }
     }).catch(err => {
-      uiModule.showError('Save failed: ' + err.message);
+      uiModule.showError('保存失败: ' + err.message);
       _fetchNotes().then(() => _renderNotes());
     });
     } finally {
@@ -3639,14 +3639,14 @@ function _buildForm(note = null) {
     const _saveLabelEl = _saveBtnEl0.querySelector('.nft-label');
     const _enterArchive = () => {
       _saveBtnEl0.classList.add('archive-mode');
-      if (_saveLabelEl) _saveLabelEl.textContent = 'Archive';
-      _saveBtnEl0.title = 'Archive';
+      if (_saveLabelEl) _saveLabelEl.textContent = '归档';
+      _saveBtnEl0.title = '归档';
     };
     const _enterUpdate = () => {
       if (!_saveBtnEl0.classList.contains('archive-mode')) return;
       _saveBtnEl0.classList.remove('archive-mode');
-      if (_saveLabelEl) _saveLabelEl.textContent = 'Update';
-      _saveBtnEl0.title = 'Update';
+      if (_saveLabelEl) _saveLabelEl.textContent = '更新';
+      _saveBtnEl0.title = '更新';
     };
     _enterArchive();
     form.addEventListener('input', _enterUpdate, true);
@@ -3669,11 +3669,11 @@ function _buildForm(note = null) {
     _pushUndo({ label: 'archive', run: undo });
     const _undoIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>';
     _patchNote(id, { archived: true }).then(() => {
-      uiModule.showToast('Archived', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+      uiModule.showToast('已归档', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
     }).catch(() => {
       _notes.splice(idx, 0, removed);
       _renderNotes();
-      uiModule.showError('Failed to archive');
+      uiModule.showError('归档失败');
     });
   });
   form.querySelector('.note-form-delete-btn')?.addEventListener('click', async () => {
@@ -3689,8 +3689,8 @@ function _buildForm(note = null) {
     if (idx >= 0) _notes.splice(idx, 1);
     _editingId = null;
     _renderNotes();
-    _deleteNoteApi(id).then(() => uiModule.showToast('Deleted')).catch(() => {
-      uiModule.showError('Failed to delete');
+    _deleteNoteApi(id).then(() => uiModule.showToast('已删除')).catch(() => {
+      uiModule.showError('删除失败');
       _fetchNotes().then(() => _renderNotes());
     });
   });
@@ -4087,7 +4087,7 @@ function _wireCanvas(container, initialImageUrl) {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'note-form-draw-textinput';
-    input.placeholder = 'type then Enter';
+    input.placeholder = '输入后按 Enter';
     const color = colorInput?.value || '#222';
     const maxW = Math.max(120, Math.floor(r.width - px - 4));
     input.style.cssText = [
@@ -4289,7 +4289,7 @@ function _createNote(type = 'todo') {
   form.classList.add('note-form-new');
   body.prepend(form);
   form.querySelector('.note-form-title').focus();
-  if (restored) uiModule.showToast('Restored unsaved note');
+  if (restored) uiModule.showToast('已恢复未保存的笔记');
 }
 
 // Build the plain-text/markdown form of a note for clipboard copy.
@@ -4417,10 +4417,10 @@ async function _agentSolveNote(id) {
   const note = _notes.find(n => n.id === id);
   if (!note) return;
   const prompt = _noteToAgentPrompt(note);
-  if (!prompt) { uiModule.showToast('Nothing to solve — note is empty'); return; }
+  if (!prompt) { uiModule.showToast('无内容可处理 — 笔记为空'); return; }
   try {
     const dc = await (await fetch(`${API_BASE}/api/default-chat`, { credentials: 'same-origin' })).json();
-    if (!dc.endpoint_url || !dc.model) { uiModule.showError('No default chat model configured'); return; }
+    if (!dc.endpoint_url || !dc.model) { uiModule.showError('未配置默认对话模型'); return; }
 
     // 1. Create the session server-side (no UI switch). skip_validation
     //    avoids re-probing — the default-chat endpoint is already known good.
@@ -4432,7 +4432,7 @@ async function _agentSolveNote(id) {
     if (dc.endpoint_id) csFd.append('endpoint_id', dc.endpoint_id);
     csFd.append('skip_validation', 'true');
     const csRes = await fetch(`${API_BASE}/api/session`, { method: 'POST', credentials: 'same-origin', body: csFd });
-    if (!csRes.ok) { uiModule.showError('Could not create agent session'); return; }
+    if (!csRes.ok) { uiModule.showError('无法创建 Agent 会话'); return; }
     const sess = await csRes.json();
     const sid = sess.id;
 
@@ -4462,9 +4462,9 @@ async function _agentSolveNote(id) {
       })
       .catch(() => {});
 
-    uiModule.showToast('Agent working in background — tap the Agent tag when ready');
+    uiModule.showToast('Agent 正在后台工作 — 准备就绪时点击 Agent 标签');
   } catch (e) {
-    uiModule.showError('Agent failed: ' + (e.message || e));
+    uiModule.showError('Agent 失败: ' + (e.message || e));
   }
 }
 
@@ -4479,7 +4479,7 @@ async function _agentSolveTodoItem(noteId, idx) {
   const item = note.items[idx];
   const itemText = (item && (item.text || '').trim()) || '';
   if (!itemText) {
-    uiModule.showToast('Nothing to solve — item is empty');
+    uiModule.showToast('无内容可处理 — 项目为空');
     return;
   }
   const titleCtx = (note.title || '').trim();
@@ -4488,7 +4488,7 @@ async function _agentSolveTodoItem(noteId, idx) {
     : `Help me with this todo: ${itemText}\n\nThe source note is read-only. Do not edit, replace, or update it.`;
   try {
     const dc = await (await fetch(`${API_BASE}/api/default-chat`, { credentials: 'same-origin' })).json();
-    if (!dc.endpoint_url || !dc.model) { uiModule.showError('No default chat model configured'); return; }
+    if (!dc.endpoint_url || !dc.model) { uiModule.showError('未配置默认对话模型'); return; }
 
     const label = itemText.slice(0, 40);
     const csFd = new FormData();
@@ -4498,7 +4498,7 @@ async function _agentSolveTodoItem(noteId, idx) {
     if (dc.endpoint_id) csFd.append('endpoint_id', dc.endpoint_id);
     csFd.append('skip_validation', 'true');
     const csRes = await fetch(`${API_BASE}/api/session`, { method: 'POST', credentials: 'same-origin', body: csFd });
-    if (!csRes.ok) { uiModule.showError('Could not create agent session'); return; }
+    if (!csRes.ok) { uiModule.showError('无法创建 Agent 会话'); return; }
     const sess = await csRes.json();
     const sid = sess.id;
     const sessionTitle = 'Agent: ' + label;
@@ -4542,9 +4542,9 @@ async function _agentSolveTodoItem(noteId, idx) {
       })
       .catch(() => {});
 
-    uiModule.showToast('Agent working on this item — tap the Agent tag when ready');
+    uiModule.showToast('Agent 正在处理此项目 — 准备就绪时点击 Agent 标签');
   } catch (e) {
-    uiModule.showError('Agent failed: ' + (e.message || e));
+    uiModule.showError('Agent 失败: ' + (e.message || e));
   }
 }
 
@@ -4578,9 +4578,9 @@ async function _copyNote(noteId, btnEl) {
         btnEl._copyFlashing = false;
       }, 1200);
     }
-    uiModule.showToast?.('Copied');
+    uiModule.showToast?.('已复制');
   } else {
-    uiModule.showError?.('Copy failed');
+    uiModule.showError?.('复制失败');
   }
   return ok;
 }
@@ -4596,7 +4596,7 @@ function _editNote(id) {
   const { note: _n, restored } = _applyDraftToNote(note, id);
   const form = _buildForm(_n);
   card.replaceWith(form);
-  if (restored) uiModule.showToast('Restored unsaved changes');
+  if (restored) uiModule.showToast('已恢复未保存的修改');
   // Pinned notes live in the first masonry column — the edit form has
   // column-span:all, which can leave the form rendered above the fold or
   // visually buried under neighboring pinned cards. Bring it into view
@@ -4646,7 +4646,7 @@ async function _deleteNote(id) {
     ? await uiModule.styledConfirm('Delete this note?', { confirmText: 'Delete', danger: true })
     : confirm('Delete this note?');
   if (!ok) return;
-  try { await _deleteNoteApi(id); await _fetchNotes(); _renderNotes(); uiModule.showToast('Deleted'); }
+  try { await _deleteNoteApi(id); await _fetchNotes(); _renderNotes(); uiModule.showToast('已删除'); }
   catch (err) { uiModule.showError(err.message); }
 }
 
@@ -4691,7 +4691,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
   const { note: _n, restored } = _applyDraftToNote(note, id);
   const form = _buildForm(_n);
   body.appendChild(form);
-  if (restored) uiModule.showToast('Restored unsaved changes');
+  if (restored) uiModule.showToast('已恢复未保存的修改');
   document.body.appendChild(overlay);
   _mobileFsOverlay = overlay;
 

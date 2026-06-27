@@ -285,7 +285,7 @@ class AITTSManager {
         button.innerHTML = ICON_LOADING;
         button.classList.add('loading');
         button.style.color = '#ccc';
-        button.title = 'Loading...';
+        button.title = '加载中...';
 
         try {
             if (!this._processing) return;
@@ -297,7 +297,7 @@ class AITTSManager {
             button.innerHTML = ICON_STOP;
             button.classList.remove('loading');
             button.classList.add('playing');
-            button.title = 'Stop';
+            button.title = '停止';
 
             if (this.useBrowserTTS) {
                 const plainText = this.extractPlainText(text);
@@ -476,7 +476,7 @@ export function addAITTSButton(messageElement, text) {
     const playButton = document.createElement('button');
     playButton.className = 'ai-tts-button';
     playButton.type = 'button';
-    playButton.title = 'Read aloud';
+    playButton.title = '朗读';
     playButton.innerHTML = ICON_PLAY;
     playButton.style.cssText = 'background:none;border:none;color:#6b7280;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .15s;line-height:1;display:inline-flex;align-items:center;';
 
@@ -489,7 +489,7 @@ export function addAITTSButton(messageElement, text) {
         playButton.innerHTML = ICON_PLAY;
         playButton.classList.remove('playing', 'loading');
         playButton.style.color = '#6b7280';
-        playButton.title = 'Read aloud';
+        playButton.title = '朗读';
     }
 
     playButton.addEventListener('click', async (e) => {

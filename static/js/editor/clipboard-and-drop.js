@@ -48,7 +48,7 @@ export function wireClipboardAndDrop({
       if (tb) tb.querySelectorAll('.ge-tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === 'move'));
       renderLayerPanel();
       composite();
-      uiModule.showToast('Pasted as new layer');
+      uiModule.showToast('已粘贴为新图层');
     }
 
     // Check internal clipboard first (from Ctrl+C lasso/wand).

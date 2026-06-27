@@ -89,8 +89,8 @@ async function _loadSkillEntries() {
     return (Array.isArray(data.skills) ? data.skills : []).map(s => ({
       token: s.token || `/${s.name}`,
       aliases: [],
-      category: s.category || 'Skills',
-      help: s.help || 'Run skill',
+      category: s.category || '技能',
+      help: s.help || '运行技能',
       usage: s.usage || `${s.token || `/${s.name}`} <request>`,
     })).filter(e => e.token && e.token.startsWith('/'));
   } catch {
@@ -133,7 +133,7 @@ function _ensurePopup(textarea) {
   el.id = POPUP_ID;
   el.className = 'slash-autocomplete-popup';
   el.setAttribute('role', 'listbox');
-  el.setAttribute('aria-label', 'Slash commands');
+  el.setAttribute('aria-label', '斜杠命令');
   document.body.appendChild(el);
   return el;
 }
@@ -158,7 +158,7 @@ function _position(popup, textarea) {
 
 function _render(popup, items, selectedIdx, query) {
   if (!items.length) {
-    popup.innerHTML = `<div class="slash-ac-empty">No commands match <code>${_esc(query)}</code></div>`;
+    popup.innerHTML = `<div class="slash-ac-empty">没有匹配 <code>${_esc(query)}</code> 的命令</div>`;
     return;
   }
   // Group by category for the headers
@@ -167,7 +167,7 @@ function _render(popup, items, selectedIdx, query) {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     if (it.category !== lastCat) {
-      html += `<div class="slash-ac-cat">${_esc(it.category || 'Other')}</div>`;
+      html += `<div class="slash-ac-cat">${_esc(it.category || '其他')}</div>`;
       lastCat = it.category;
     }
     const sel = i === selectedIdx ? ' slash-ac-row-sel' : '';

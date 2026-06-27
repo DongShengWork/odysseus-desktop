@@ -247,8 +247,8 @@ function _detectModelOptimizations(modelName) {
   // Hermes/XML guesses, and the MoE backend should default to expert parallel.
   if (_isStepFunStepModel(modelName)) {
     opts.flags.push('--enable-expert-parallel');
-    opts.tips.push('StepFun Step-3 MoE: expert parallel');
-    opts.tips.push('StepFun parser: step3p5 for native tool calls and reasoning tags');
+    opts.tips.push('StepFun Step-3 MoE: 专家并行');
+    opts.tips.push('StepFun 解析器: step3p5 用于原生工具调用和推理标记');
   }
   // Qwen3.5 MoE models — MoE-specific env vars + expert-parallel.
   // The --reasoning-parser flag is added uniformly below via
@@ -256,7 +256,7 @@ function _detectModelOptimizations(modelName) {
   else if (n.includes('qwen3.5') || n.includes('qwen3-') && (n.includes('a10b') || n.includes('a22b') || n.includes('a3b'))) {
     opts.envVars.push('VLLM_USE_DEEP_GEMM=0', 'VLLM_USE_FLASHINFER_MOE_FP16=1', 'VLLM_USE_FLASHINFER_SAMPLER=0', 'OMP_NUM_THREADS=4');
     opts.flags.push('--enable-expert-parallel');
-    opts.tips.push('MoE optimizations: expert parallel + flashinfer MoE kernels');
+    opts.tips.push('MoE 优化: 专家并行 + flashinfer MoE 内核');
   }
   // Qwen3 MoE (non-3.5)
   else if (n.includes('qwen3') && (n.includes('a10b') || n.includes('a22b') || n.includes('a3b'))) {
@@ -271,7 +271,7 @@ function _detectModelOptimizations(modelName) {
   // the launch crashes otherwise (--kv-cache-dtype auto → bf16 OOMs).
   else if (n.includes('deepseek') && /\b(v[3-9]|v\d{2,}|r[1-9])\b/.test(n)) {
     opts.flags.push('--enable-expert-parallel');
-    opts.tips.push('MoE expert parallel for DeepSeek');
+    opts.tips.push('DeepSeek MoE 专家并行');
     opts.kvCacheDtype = 'fp8';
     opts.tips.push('fp8 KV cache required — bf16 OOMs at usable context');
   }
@@ -282,10 +282,10 @@ function _detectModelOptimizations(modelName) {
   // checkbox in the serve form to render at all.
   else if (n.includes('minimax')) {
     opts.flags.push('--enable-expert-parallel');
-    opts.tips.push('MoE expert parallel for MiniMax');
+    opts.tips.push('MiniMax MoE 专家并行');
     if (/\bm3\b/.test(n)) {
       opts.kvCacheDtype = 'fp8';
-      opts.tips.push('MiniMax M3 defaults: fp8 KV cache, block-size 128, TRITON attention');
+      opts.tips.push('MiniMax M3 默认: fp8 KV 缓存, 块大小 128, TRITON 注意力');
     }
   }
   // Reasoning parser — applies independently of MoE detection. Without this
@@ -878,7 +878,7 @@ async function _fetchDependencies() {
     list.appendChild(_spin.element);
     const label = document.createElement('div');
     label.className = 'hwfit-loading';
-    label.textContent = 'Loading packages…';
+    label.textContent = '正在加载包…';
     label.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;margin-top:6px;';
     list.appendChild(label);
   } catch {
@@ -1094,8 +1094,8 @@ async function _fetchDependencies() {
     const _serverDeps = pkgs.filter(p => p.target !== 'local');
 
     list.innerHTML = [
-      _viewingRemote ? '' : _section('Odysseus app', 'Run inside the Odysseus app itself.', _appDeps),
-      _section('Server', 'Run on the server chosen above (Local, or a remote box over SSH).', _serverDeps),
+      _viewingRemote ? '' : _section('Odysseus 应用', '在 Odysseus 应用内部运行。', _appDeps),
+      _section('服务器', '在上面选择的服务器上运行（本地或远程 SSH 服务器）。', _serverDeps),
     ].join('');
 
     // Shared install/update routine — used by the Install button and the
@@ -1110,7 +1110,7 @@ async function _fetchDependencies() {
         const depsServerSel = document.getElementById('hwfit-deps-server');
         if (depsServerSel) _applyServerSelection(depsServerSel.value);
       }
-      const targetHost = isLocalOnly ? 'this server' : (_envState.remoteHost || 'local');
+      const targetHost = isLocalOnly ? '此服务器' : (_envState.remoteHost || '本地');
       // Always go through `python -m pip` so the leading token is `python`
       // — matches the /api/model/serve allow-list (bare `pip` is blocked).
       // Inside a venv/conda env, `--user` is invalid (pip refuses), so we
@@ -1168,9 +1168,9 @@ async function _fetchDependencies() {
           // disappearing before the user could read multi-clause errors
           // like "tmux missing on remote".
           const reason = data.detail || data.error || `HTTP ${res.status}`;
-          uiModule.showToast('Install failed: ' + String(reason).slice(0, 400), {
+          uiModule.showToast('安装失败: ' + String(reason).slice(0, 400), {
             duration: 20000,
-            action: 'OK',
+            action: '确认',
             onAction: () => {},
           });
           return;
@@ -1179,10 +1179,10 @@ async function _fetchDependencies() {
         // model) so the running-task card doesn't offer a "Serve →" button.
         const payload = { repo_id: pipName, _cmd: cmd, remote_host: _envState.remoteHost || '', _dep: true, env_path: _envState.envPath || '' };
         _addTask(data.session_id, 'pip ' + pkgName, 'download', payload);
-        if (statusEl) { statusEl.textContent = upgrade ? 'Updating...' : 'Installing...'; statusEl.disabled = true; }
-        uiModule.showToast(`${upgrade ? 'Updating' : 'Installing'} ${pkgName} on ${targetHost}...`);
+        if (statusEl) { statusEl.textContent = upgrade ? '更新中...' : '安装中...'; statusEl.disabled = true; }
+        uiModule.showToast(`${upgrade ? '正在更新' : '正在安装'} ${pkgName} 到 ${targetHost}...`);
       } catch (err) {
-        uiModule.showToast('Install failed: ' + err.message, {
+        uiModule.showToast('安装失败: ' + err.message, {
           duration: 20000,
           action: 'OK',
           onAction: () => {},
@@ -1242,12 +1242,12 @@ async function _fetchDependencies() {
             _addTask(data.session_id, 'pip llama-cpp-python[CUDA]', 'download', payload);
             uiModule.showToast(`Reinstalling llama-cpp-python with CUDA wheels on ${targetLabel} (~1-3 min)…`, 4000);
           } else {
-            uiModule.showToast('Upgrade failed: ' + String(data.detail || data.error || `HTTP ${res.status}`).slice(0, 300), {
+            uiModule.showToast('更新失败: ' + String(data.detail || data.error || `HTTP ${res.status}`).slice(0, 300), {
               duration: 20000, action: 'OK', onAction: () => {},
             });
           }
         } catch (err) {
-          uiModule.showToast('Upgrade request failed: ' + err.message, { duration: 20000, action: 'OK', onAction: () => {} });
+          uiModule.showToast('更新请求失败: ' + err.message, { duration: 20000, action: 'OK', onAction: () => {} });
         }
       });
     });
@@ -1263,7 +1263,7 @@ async function _fetchDependencies() {
         try { await navigator.clipboard.writeText(cmd); }
         catch { /* fall through */ }
         const orig = btn.textContent;
-        btn.textContent = 'Copied';
+        btn.textContent = '已复制';
         setTimeout(() => { if (btn.isConnected) btn.textContent = orig; }, 1200);
       });
     });
@@ -1290,7 +1290,7 @@ async function _fetchDependencies() {
         }
         const targetLabel = isLocal ? 'this server' : (_envState.remoteHost || 'remote');
         const origText = btn.textContent;
-        btn.textContent = 'Installing…';
+        btn.textContent = '安装中…';
         btn.disabled = true;
         try {
           const body = { packages: names };
@@ -1306,7 +1306,7 @@ async function _fetchDependencies() {
           });
           const data = await res.json().catch(() => ({}));
           if (res.ok && data.ok) {
-            uiModule.showToast(`Installed ${names.join(', ')} on ${targetLabel}. Refreshing…`, 4000);
+            uiModule.showToast(`已在 ${targetLabel} 上安装 ${names.join(', ')}。刷新中…`, 4000);
             // Refresh the deps panel so the row updates (prereqs now present).
             try { await _fetchDependencies(); } catch {}
           } else {
@@ -1315,9 +1315,9 @@ async function _fetchDependencies() {
             // from the row) so the user can copy-paste it without leaving
             // the toast. Otherwise just surface the error.
             const _suffix = _resolvedCmd ? `\n\nRun on ${targetLabel}: ${_resolvedCmd}` : '';
-            uiModule.showToast('Build-deps install failed: ' + String(reason).slice(0, 300) + _suffix, {
+            uiModule.showToast('构建依赖安装失败: ' + String(reason).slice(0, 300) + _suffix, {
               duration: 25000,
-              action: _resolvedCmd ? 'Copy command' : 'OK',
+              action: _resolvedCmd ? '复制命令' : 'OK',
               onAction: async () => {
                 if (_resolvedCmd) {
                   try { await navigator.clipboard.writeText(_resolvedCmd); } catch {}
@@ -1328,7 +1328,7 @@ async function _fetchDependencies() {
             btn.disabled = false;
           }
         } catch (err) {
-          uiModule.showToast('Install request failed: ' + err.message, {
+          uiModule.showToast('安装请求失败: ' + err.message, {
             duration: 20000, action: 'OK', onAction: () => {},
           });
           btn.textContent = origText;
@@ -1402,7 +1402,7 @@ async function _fetchDependencies() {
         if (!pre) return;
         try {
           await navigator.clipboard.writeText(pre.textContent);
-          uiModule.showToast('Copied');
+          uiModule.showToast('已复制');
         } catch {
           // Fallback for non-secure contexts: select the pre's text so
           // the user can Ctrl+C themselves.
@@ -1453,14 +1453,14 @@ async function _fetchDependencies() {
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.ok) {
-            uiModule.showToast('Run failed: ' + String(data.detail || data.error || `HTTP ${res.status}`).slice(0, 200));
+            uiModule.showToast('运行失败: ' + String(data.detail || data.error || `HTTP ${res.status}`).slice(0, 200));
             return;
           }
           const payload = { repo_id: `${backend} setup`, _cmd: cmd, remote_host: _envState.remoteHost || '', _dep: true };
           _addTask(data.session_id, `${backend} setup`, 'download', payload);
-          uiModule.showToast(`Running ${backend} setup on ${targetHost}…`);
+          uiModule.showToast(`正在 ${targetHost} 上运行 ${backend} 安装脚本…`);
         } catch (err) {
-          uiModule.showToast('Run failed: ' + err.message);
+          uiModule.showToast('运行失败: ' + err.message);
         }
       });
     });
@@ -1473,13 +1473,13 @@ async function _fetchDependencies() {
       const where = host || 'this server';
       const action = updateSource ? 'Update llama.cpp source and rebuild' : 'Rebuild llama.cpp engine';
       const detail = updateSource
-        ? 'This fast-forwards the Cookbook-managed ~/llama.cpp checkout when possible, then clears the cached llama-server build. The next launch recompiles or installs the latest matching prebuilt.'
-        : 'This clears the cached llama-server build. The next launch recompiles or installs a matching prebuilt.';
+        ? '这会尽可能快进图谱管理的 ~/llama.cpp 检出，然后清除缓存的 llama-server 构建。下次启动会重新编译或安装最新匹配的预构建版本。'
+        : '这会清除缓存的 llama-server 构建。下次启动会重新编译或安装匹配的预构建版本。';
       if (!confirm(`${action} on ${where}?\n\n${detail}`)) return;
       const oldText = statusEl?.textContent;
       if (statusEl) {
         statusEl.disabled = true;
-        statusEl.textContent = updateSource ? 'Updating...' : 'Clearing...';
+        statusEl.textContent = updateSource ? '更新中...' : '清除中...';
       }
       try {
         const res = await fetch('/api/cookbook/rebuild-engine', {
@@ -1495,11 +1495,11 @@ async function _fetchDependencies() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
           const reason = data.detail || data.error || `HTTP ${res.status}`;
-          uiModule.showToast(`${updateSource ? 'Update' : 'Rebuild'} failed: ` + String(reason).slice(0, 300), {
+          uiModule.showToast(`${updateSource ? '更新' : '重建'}失败: ` + String(reason).slice(0, 300), {
             duration: 20000, action: 'OK', onAction: () => {},
           });
         } else {
-          uiModule.showToast(`${updateSource ? 'Updated source and cleared' : 'Cleared'} llama.cpp build on ${where}. Re-launch the serve task to rebuild.`);
+          uiModule.showToast(`已在 ${where} ${updateSource ? '更新源码并清除' : '清除'} llama.cpp 构建。重新启动服务任务以重建。`);
         }
       } catch (err) {
         uiModule.showToast(`${updateSource ? 'Update' : 'Rebuild'} failed: ` + err.message);
@@ -1878,7 +1878,7 @@ function _wireTabEvents(body) {
   if (selectBtn && bulkBar) {
     selectBtn.addEventListener('click', () => {
       const active = selectBtn.classList.toggle('active');
-      selectBtn.textContent = active ? 'Cancel' : 'Select';
+      selectBtn.textContent = active ? '取消' : '选择';
       bulkBar.classList.toggle('hidden', !active);
       document.querySelectorAll('.serve-select-cb').forEach(dot => {
         dot.style.display = active ? '' : 'none';
@@ -1907,7 +1907,7 @@ function _wireTabEvents(body) {
 
     document.getElementById('serve-bulk-cancel')?.addEventListener('click', () => {
       selectBtn.classList.remove('active');
-      selectBtn.textContent = 'Select';  // reset label so the button doesn't stay reading "Cancel" after exit
+      selectBtn.textContent = '选择';  // reset label so the button doesn't stay reading "Cancel" after exit
       bulkBar.classList.add('hidden');
       document.querySelectorAll('.serve-select-cb').forEach(dot => { dot.style.display = 'none'; dot.classList.remove('selected'); });
     });
@@ -1926,7 +1926,7 @@ function _wireTabEvents(body) {
         if (item) await _deleteCachedModel(repo, item, true);
       }
       selectBtn.classList.remove('active');
-      selectBtn.textContent = 'Select';  // same reset as bulk-cancel
+      selectBtn.textContent = '选择';  // same reset as bulk-cancel
       bulkBar.classList.add('hidden');
       document.querySelectorAll('.serve-select-cb').forEach(dot => { dot.style.display = 'none'; dot.classList.remove('selected'); });
     });
@@ -2011,7 +2011,7 @@ function _wireTabEvents(body) {
         return false;
       }
       dlGgufRow.style.display = 'flex';
-      dlGgufQuant.innerHTML = '<option value="">Scanning...</option>';
+      dlGgufQuant.innerHTML = '<option value="">扫描中...</option>';
       dlGgufQuant.dataset.repo = repo;
       dlGgufNote.textContent = '';
       try {
@@ -2031,7 +2031,7 @@ function _wireTabEvents(body) {
           byQuant.get(quant).push(name);
         });
         if (!byQuant.size) {
-          _hideGgufPicker('No GGUF quants found');
+          _hideGgufPicker('未找到 GGUF 量化');
           return false;
         }
         const quantRank = q => {
@@ -2106,7 +2106,7 @@ function _wireTabEvents(body) {
       // Ollama names (single-segment with a tag) skip this check — they go
       // through `ollama pull` server-side, not snapshot_download.
       if (!ollamaName && !/^[^\s/]+\/[^\s/]+$/.test(repo)) {
-        uiModule.showToast('Enter a full HuggingFace repo ID like "org/model-name", or an Ollama name like "qwen2.5:14b".');
+        uiModule.showToast('请输入完整的 HuggingFace 仓库 ID，如 "org/model-name"，或 Ollama 名称如 "qwen2.5:14b"。');
         dlInput.focus();
         return;
       }
@@ -2114,7 +2114,7 @@ function _wireTabEvents(body) {
       if (looksGgufRepo && !pickerInclude) {
         const oldText = dlBtn.textContent;
         dlBtn.disabled = true;
-        dlBtn.textContent = 'Scanning...';
+        dlBtn.textContent = '扫描中...';
         try {
           const found = await _scanGgufRepo(rawRepo);
           pickerInclude = (found && dlGgufQuant?.dataset.repo === repo) ? (dlGgufQuant.value || '') : '';
@@ -2123,10 +2123,10 @@ function _wireTabEvents(body) {
           dlBtn.textContent = oldText;
         }
         if (!pickerInclude) {
-          uiModule.showToast('Pick a GGUF quant first. Odysseus will not download the whole GGUF repo without an include pattern.');
+          uiModule.showToast('请先选择 GGUF 量化。图谱不会在没有包含模式的情况下下载整个 GGUF 仓库。');
           return;
         }
-        uiModule.showToast('Pick the GGUF quant, then press Download again.');
+        uiModule.showToast('请选择 GGUF 量化，然后再次点击下载。');
         return;
       }
       // Resolve the host straight from THIS window's server dropdown, by index
@@ -2291,7 +2291,7 @@ function _wireTabEvents(body) {
         hfList.appendChild(_spin.element);
         const lbl = document.createElement('div');
         lbl.className = 'hwfit-loading';
-        lbl.textContent = 'Scanning models…';
+        lbl.textContent = '正在扫描模型…';
         lbl.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;margin-top:6px;';
         hfList.appendChild(lbl);
       } catch {
@@ -2316,7 +2316,7 @@ function _wireTabEvents(body) {
           // doesn't masquerade as no-fitting-models.
           const msg = lastErr
             ? `Couldn't load trending models (${esc(lastErr)})`
-            : 'No trending models found';
+            : '未找到热门模型';
           hfList.innerHTML = `<div class="hwfit-loading">${msg}</div>`;
           return;
         }
@@ -2484,13 +2484,13 @@ function _wireTabEvents(body) {
         if (!check) {
           check = document.createElement('span');
           check.className = 'hwfit-hf-check';
-          check.title = 'Token stored';
+          check.title = 'Token 已保存';
           check.textContent = '✓';
           check.style.cssText = 'font-weight:800;color:var(--green,#50fa7b);font-size:15px;line-height:1;flex-shrink:0;position:relative;top:2px;';
           hfInput.parentNode.insertBefore(check, hfInput);
         }
         const flash = document.createElement('span');
-        flash.textContent = 'Saved';
+        flash.textContent = '已保存';
         flash.style.cssText = 'margin-left:8px;font-size:11px;color:var(--green,#50fa7b);opacity:0;transition:opacity 0.18s;flex-shrink:0;position:relative;top:1px;';
         hfInput.parentNode.appendChild(flash);
         requestAnimationFrame(() => { flash.style.opacity = '1'; });

@@ -7,14 +7,14 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const PHASE_LABEL = {
-  probing:   'verifying model',
-  planning:  'planning strategy',
-  searching: 'searching',
-  reading:   'reading sources',
-  analyzing: 'analyzing findings',
-  writing:   'writing report',
-  error:     'error',
-  done:      'complete',
+  probing:   '正在验证模型',
+  planning:  '正在规划策略',
+  searching: '正在搜索',
+  reading:   '正在阅读来源',
+  analyzing: '正在分析发现',
+  writing:   '正在撰写报告',
+  error:     '错误',
+  done:      '完成',
 };
 
 function rand(a, b) { return Math.random() * (b - a) + a; }
@@ -35,11 +35,11 @@ export default function createResearchSynapse(container, opts = {}) {
       </svg>
     </div>
     <div class="rs-meta">
-      <span class="rs-status">starting…</span>
+      <span class="rs-status">正在启动…</span>
       <span class="rs-sep">·</span>
-      <span class="rs-round">round <b>0</b></span>
+      <span class="rs-round">第 <b>0</b> 轮</span>
       <span class="rs-sep">·</span>
-      <span class="rs-sources"><b>0</b> sources</span>
+      <span class="rs-sources"><b>0</b> 个来源</span>
       <span class="rs-sep">·</span>
       <span class="rs-timer">00:00</span>
     </div>
@@ -65,7 +65,7 @@ export default function createResearchSynapse(container, opts = {}) {
   rootLabel.setAttribute('y', cy + 28);
   rootLabel.setAttribute('text-anchor', 'middle');
   rootLabel.setAttribute('class', 'rs-label');
-  rootLabel.textContent = _trunc(opts.query || 'query', 28);
+  rootLabel.textContent = _trunc(opts.query || '查询', 28);
   nodesG.appendChild(rootLabel);
 
   const subs = []; // { x, y, count }
@@ -173,9 +173,9 @@ export default function createResearchSynapse(container, opts = {}) {
       if (completed) return;
       const label = PHASE_LABEL[phase] || phase || '';
       let txt = label;
-      if (phase === 'searching' && extra.queries) txt += ` · ${extra.queries} queries`;
-      else if (phase === 'reading' && extra.title) txt = `reading: ${_trunc(extra.title, 32)}`;
-      else if (phase === 'analyzing' && extra.total_findings) txt += ` · ${extra.total_findings} findings`;
+      if (phase === 'searching' && extra.queries) txt += ` · ${extra.queries} 次查询`;
+      else if (phase === 'reading' && extra.title) txt = `正在阅读：${_trunc(extra.title, 32)}`;
+      else if (phase === 'analyzing' && extra.total_findings) txt += ` · ${extra.total_findings} 条发现`;
       statusE.textContent = txt;
       // Visual cue per phase
       if (phase === 'error') wrap.classList.add('rs-error');
@@ -188,7 +188,7 @@ export default function createResearchSynapse(container, opts = {}) {
       if (round > lastRound) {
         // Add one sub-question node per new round we see
         for (let i = lastRound; i < round && subs.length < 10; i++) {
-          _addSub(opts.label || `R${i + 1}`);
+          _addSub(opts.label || `第 ${i + 1} 轮`);
         }
         lastRound = round;
         roundE.textContent = round;
@@ -213,7 +213,7 @@ export default function createResearchSynapse(container, opts = {}) {
       if (completed) return;
       completed = true;
       wrap.classList.add('rs-complete');
-      statusE.textContent = 'complete';
+      statusE.textContent = '完成';
       if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     },
 

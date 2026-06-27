@@ -238,7 +238,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         submitBtn.classList.add('anim-land');
         submitBtn.addEventListener('animationend', () => submitBtn.classList.remove('anim-land'), { once: true });
       }, 300);
-      submitBtn.title = 'Stop generation';
+      submitBtn.title = '停止生成';
       submitBtn.dataset.mode = 'streaming';
       submitBtn.dataset.phase = 'processing';
       isStreaming = true;
@@ -255,7 +255,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       } else {
         var icons = window._odysseusBtnIcons;
         submitBtn.innerHTML = icons ? icons.send : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
-        submitBtn.title = 'Send message';
+        submitBtn.title = '发送消息';
         submitBtn.classList.remove('mic-mode', 'newchat-mode');
       }
     }
@@ -317,7 +317,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           if (header) {
             const s = document.createElement('span');
             s.className = 'agent-thread-status';
-            s.textContent = 'stopped';
+            s.textContent = '已停止';
             header.appendChild(s);
           }
         }
@@ -366,11 +366,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         const stoppedIndicator = document.createElement('div');
         stoppedIndicator.className = 'stopped-indicator';
         const stoppedLabel = document.createElement('span');
-        stoppedLabel.textContent = '[Message interrupted]';
+        stoppedLabel.textContent = '[消息已中断]';
         stoppedIndicator.appendChild(stoppedLabel);
         const continueBtn = document.createElement('button');
         continueBtn.className = 'continue-btn';
-        continueBtn.title = 'Continue';
+        continueBtn.title = '继续';
         continueBtn.textContent = '\u25B8';
         const _stoppedHolder = currentHolder; // capture before it gets cleared
         continueBtn.addEventListener('click', () => {
@@ -499,10 +499,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           el('message').value = '';
           if (uiModule.autoResize) uiModule.autoResize(el('message'));
           addMessage('assistant',
-            'No chat session active. You can:\n\n' +
-            '- Open the model picker in the chat box and pick a model\n' +
-            '- Use the `+` button in the model picker to add a model endpoint\n' +
-            '- Use `/help` to see all available commands');
+            '没有活跃的聊天会话。您可以：\n\n' +
+            '- 打开聊天框中的模型选择器并选择一个模型\n' +
+            '- 使用模型选择器中的 `+` 按钮添加模型端点\n' +
+            '- 使用 `/help` 查看所有可用命令');
           _releaseSendFlag();
           return;
         }
@@ -510,10 +510,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         el('message').value = '';
         if (uiModule.autoResize) uiModule.autoResize(el('message'));
         addMessage('assistant',
-          'No chat session active. You can:\n\n' +
-          '- Open the model picker in the chat box and pick a model\n' +
-          '- Use the `+` button in the model picker to add a model endpoint\n' +
-          '- Use `/help` to see all available commands');
+          '没有活跃的聊天会话。您可以：\n\n' +
+          '- 打开聊天框中的模型选择器并选择一个模型\n' +
+          '- 使用模型选择器中的 `+` 按钮添加模型端点\n' +
+          '- 使用 `/help` 查看所有可用命令');
         _releaseSendFlag();
         return;
       }
@@ -521,7 +521,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
     // --- API key guard: warn if message looks like an API key ---
     if (API_KEY_RE.test(msg.trim())) {
-      if (!await window.styledConfirm('This looks like an API key. Sending it to the AI could expose it.\n\nDid you mean to use /setup instead?', { confirmText: 'Send anyway', danger: true })) {
+      if (!await window.styledConfirm('这看起来像是一个 API 密钥。将其发送给 AI 可能会泄露。\n\n您是否想要使用 /setup 代替？', { confirmText: '仍然发送', danger: true })) {
         _releaseSendFlag();
         return;
       }
@@ -579,9 +579,9 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     const scheduleFirstTokenWaitMessages = () => {
       clearFirstTokenWaitTimers();
       const steps = [
-        [20000, 'Still waiting for first token'],
-        [60000, 'Large local model is pre-filling context'],
-        [120000, 'Still working - no tokens yet from the model'],
+        [20000, '正在等待首个 token'],
+        [60000, '大型本地模型正在预填充上下文'],
+        [120000, '仍在工作 — 模型尚未输出 token'],
       ];
       firstTokenWaitTimers = steps.map(([ms, text]) => setTimeout(() => {
         if (!accumulated && spinner && spinner.element && !(currentAbort && currentAbort.signal.aborted)) {
@@ -725,16 +725,16 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         banner.id = 'import-prompt-banner';
         banner.className = 'import-prompt-banner';
         const label = _importableFiles.length === 1
-          ? `Import "${_importableFiles[0].info.name}" to document library?`
-          : `Import ${_importableFiles.length} files to document library?`;
+          ? `导入 "${_importableFiles[0].info.name}" 到文档库？`
+          : `导入 ${_importableFiles.length} 个文件到文档库？`;
         const textEl = document.createElement('span');
         textEl.textContent = label;
         banner.appendChild(textEl);
         const importBtn = document.createElement('button');
-        importBtn.textContent = 'Import';
+        importBtn.textContent = '导入';
         importBtn.addEventListener('click', async () => {
           importBtn.disabled = true;
-          importBtn.textContent = 'Importing…';
+          importBtn.textContent = '导入中…';
           const EXT_LANG = {'.py':'python','.js':'javascript','.ts':'typescript','.html':'html','.css':'css','.md':'markdown','.json':'json','.yml':'yaml','.yaml':'yaml','.sh':'bash','.sql':'sql','.rs':'rust','.go':'go','.java':'java','.c':'c','.cpp':'cpp','.rb':'ruby','.php':'php','.xml':'xml','.jsx':'javascript','.tsx':'typescript'};
           let imported = 0;
           for (const { info, file } of _importableFiles) {
@@ -751,15 +751,15 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
               imported++;
             } catch (e) { console.error('Import failed:', info.name, e); }
           }
-          banner.textContent = `Imported ${imported} file${imported !== 1 ? 's' : ''}`;
+          banner.textContent = `已导入 ${imported} 个文件`;
           setTimeout(() => banner.remove(), 2000);
         });
         banner.appendChild(importBtn);
         const dismissBtn = document.createElement('button');
         dismissBtn.textContent = '\u00d7';
         dismissBtn.className = 'import-prompt-dismiss';
-        dismissBtn.setAttribute('aria-label', 'Dismiss');
-        dismissBtn.title = 'Dismiss';
+        dismissBtn.setAttribute('aria-label', '关闭');
+        dismissBtn.title = '关闭';
         dismissBtn.addEventListener('click', () => banner.remove());
         banner.appendChild(dismissBtn);
         const chatBar = document.querySelector('.chat-input-bar');
@@ -899,18 +899,18 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       
       const modelName = sessionModule.getCurrentModel() || null;
 
-      let loadingText = 'Initializing...';
+      let loadingText = '初始化中...';
 
       if (el('web-toggle').checked && !_isAgent) {
         const _searchLabel = searchModule ? searchModule.getProviderLabel() : 'web';
-        loadingText = `Searching via ${_searchLabel}...<br>
+        loadingText = `通过 ${_searchLabel} 搜索中...<br>
                        <span style="font-size: 0.9em; opacity: 0.8;">
-                       Query: "${msg.substring(0, 50)}${msg.length > 50 ? '...' : ''}"<br>
-                       Fetching top results...</span>`;
+                       查询："${msg.substring(0, 50)}${msg.length > 50 ? '...' : ''}"<br>
+                       正在获取最佳结果...</span>`;
       } else if (el('research-toggle').checked) {
-        loadingText = 'Deep research mode active...';
+        loadingText = '深度研究模式运行中...';
       } else {
-        loadingText = 'Processing request...';
+        loadingText = '处理请求中...';
       }
 
       var roleLabel = _modelRouteLabel(modelName, modelName);
@@ -924,7 +924,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       holder.style.position = 'relative';
       
       // Create spinner
-      spinner = spinnerModule.create('Initializing', 'right', 'wave');
+      spinner = spinnerModule.create('初始化中', 'right', 'wave');
       currentSpinner = spinner;
       const bodyDiv = holder.querySelector('.body');
       bodyDiv.appendChild(spinner.createElement());
@@ -932,13 +932,13 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       
       // Update spinner message based on mode
       if (el('web-toggle').checked && !_isAgent) {
-        spinner.updateMessage('Searching web with ' + (searchModule ? searchModule.getProviderLabel() : 'SearXNG'));
-        setTimeout(() => spinner.updateMessage('Processing results'), 1500);
+        spinner.updateMessage('通过 ' + (searchModule ? searchModule.getProviderLabel() : 'SearXNG') + ' 搜索网页中');
+        setTimeout(() => spinner.updateMessage('处理结果中'), 1500);
       } else if (el('research-toggle').checked) {
-        spinner.updateMessage('Researching');
-        setTimeout(() => spinner.updateMessage('Analyzing sources'), 1500);
+        spinner.updateMessage('研究中');
+        setTimeout(() => spinner.updateMessage('分析来源中'), 1500);
       } else {
-        spinner.updateMessage('Processing request');
+        spinner.updateMessage('处理请求中');
         scheduleFirstTokenWaitMessages();
       }
       
@@ -995,7 +995,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         } catch {}
         // Auto-switch to chat mode for tool-related errors
         if (errText.includes('tool') || errText.includes('auto')) {
-          errText = 'This model doesn\'t support agent tools — switched to Chat mode. Try again.';
+          errText = '此模型不支持智能体工具 — 已切换到聊天模式。请重试。';
           const _ab = document.getElementById('mode-agent-btn');
           const _cb = document.getElementById('mode-chat-btn');
           if (_ab && _cb) {
@@ -1068,32 +1068,32 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       let _lastToolName = '';
       const _searchIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
       const _toolLabels = {
-        'web_search': 'Searching',
-        'bash': 'Running',
-        'python': 'Running',
-        'create_document': 'Writing',
-        'update_document': 'Writing',
-        'read_document': 'Reading',
-        'edit_file': 'Editing',
-        'read_file': 'Reading',
-        'write_file': 'Writing',
-        'list_files': 'Browsing',
-        'image_gen': 'Generating',
-        'generate_image': 'Generating',
-        'manage_memory': 'Remembering',
-        'save_memory': 'Remembering',
-        'search_memory': 'Recalling',
-        'manage_session': 'Organizing',
-        'deep_research': 'Researching',
-        'list_models': 'Browsing',
-        'ui_control': 'Adjusting',
+        'web_search': '搜索中',
+        'bash': '运行中',
+        'python': '运行中',
+        'create_document': '写入中',
+        'update_document': '写入中',
+        'read_document': '读取中',
+        'edit_file': '编辑中',
+        'read_file': '读取中',
+        'write_file': '写入中',
+        'list_files': '浏览中',
+        'image_gen': '生成中',
+        'generate_image': '生成中',
+        'manage_memory': '记忆中',
+        'save_memory': '记忆中',
+        'search_memory': '召回中',
+        'manage_session': '组织中',
+        'deep_research': '深度研究中',
+        'list_models': '浏览中',
+        'ui_control': '调整中',
       };
       const _toolIcons = {
         'web_search': _searchIcon,
       };
       function _thinkingLabel() {
         if (!_lastToolName) {
-          return 'Thinking';
+          return '思考中';
         }
         // Check exact match first, then prefix match
         const lower = _lastToolName.toLowerCase();
@@ -1101,7 +1101,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         for (const [key, label] of Object.entries(_toolLabels)) {
           if (lower.includes(key) || key.includes(lower)) return label;
         }
-        return 'Thinking';
+        return '思考中';
       }
 
       function _showThinkingSpinner(label) {
@@ -1110,7 +1110,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         _thinkMsg.className = 'msg msg-ai agent-thinking-dots';
         const _thinkBody = document.createElement('div');
         _thinkBody.className = 'body';
-        const _ts = spinnerModule.create(label || 'Thinking', 'right', 'wave');
+        const _ts = spinnerModule.create(label || '思考中', 'right', 'wave');
         _thinkBody.appendChild(_ts.createElement());
         _ts.start(120);
         _thinkMsg._spinner = _ts;
@@ -1241,7 +1241,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           // Don't show beforeThink text during streaming — it'll appear in the final render
           // This prevents the "split into two" duplication
           contentEl.innerHTML =
-            '<div class="thinking-section"><div class="thinking-header"><div class="thinking-header-left">Thinking' +
+            '<div class="thinking-section"><div class="thinking-header"><div class="thinking-header-left">思考中' +
             (lines > 1 ? ` (${lines} lines)` : '') + '</div></div></div>';
           // The stream renderer self-heals when it next sees this overwritten
           // container (streamingRenderer.js), so no explicit reset is needed here.
@@ -1349,7 +1349,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   accumulated = accumulated.replace(/<think>/i, '<think time="' + _elapsedDone + '">');
                   roundText = roundText.replace(/<think>/i, '<think time="' + _elapsedDone + '">');
                 }
-                if (_liveThinkHeader) _liveThinkHeader.textContent = 'View thinking process';
+                if (_liveThinkHeader) _liveThinkHeader.textContent = '查看思考过程';
                 if (_liveThinkSpinnerSlot) _liveThinkSpinnerSlot.remove();
                 if (_liveThinkTimerEl && _elapsedDone) {
                   _liveThinkTimerEl.textContent = _formatThinkStats(_elapsedDone, _liveThinkTokenCount);
@@ -1402,7 +1402,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
               if (json.type === 'agent_prep') {
                 if (!_isBg) {
                   _cancelThinkingTimer();
-                  _replaceThinkingSpinner('Preparing agent');
+                  _replaceThinkingSpinner('准备智能体');
                 }
                 continue;
               }
@@ -1628,7 +1628,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     accumulated = accumulated.replace(/<think>/i, '<think time="' + elapsed + '">');
                     roundText = roundText.replace(/<think>/i, '<think time="' + elapsed + '">');
                   }
-                  if (_liveThinkHeader) _liveThinkHeader.textContent = 'View thinking process';
+                  if (_liveThinkHeader) _liveThinkHeader.textContent = '查看思考过程';
                   if (_liveThinkSpinnerSlot) _liveThinkSpinnerSlot.remove();
                   // Move timer to right side of header
                   if (_liveThinkTimerEl && elapsed) {
@@ -1733,15 +1733,15 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   } else if (rp.phase === 'searching') {
                     const q = rp.queries ? `${rp.queries} queries` : '';
                     const s = rp.total_sources ? ` · ${rp.total_sources} sources` : '';
-                    spinner.updateMessage(`Round ${rp.round || '?'}: Searching${q ? ' (' + q + ')' : ''}${s}`);
+                    spinner.updateMessage(`第 ${rp.round || '?'} 轮: 搜索中${q ? ' (' + q + ')' : ''}${s}`);
                   } else if (rp.phase === 'reading') {
-                    spinner.updateMessage(rp.title ? `Reading: ${rp.title}` : `Round ${rp.round || '?'}: Reading ${rp.new_sources || ''} pages · ${rp.total_sources || 0} sources total`);
+                    spinner.updateMessage(rp.title ? `阅读中: ${rp.title}` : `第 ${rp.round || '?'} 轮: 读取 ${rp.new_sources || ''} 页 · 共 ${rp.total_sources || 0} 个来源`);
                   } else if (rp.phase === 'analyzing') {
-                    spinner.updateMessage(`Round ${rp.round || '?'}: Analyzing ${rp.total_findings || 0} findings`);
+                    spinner.updateMessage(`第 ${rp.round || '?'} 轮: 分析 ${rp.total_findings || 0} 个发现结果`);
                   } else if (rp.phase === 'writing') {
                     spinner.updateMessage(`Writing report · ${rp.total_sources || 0} sources`);
                   } else if (rp.phase === 'error') {
-                    spinner.updateMessage(rp.message || 'Search error');
+                    spinner.updateMessage(rp.message || '搜索错误');
                   }
                 }
               } else if (json.type === 'research_sources') {
@@ -1899,12 +1899,12 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   note.className = 'stopped-indicator rounds-exhausted';
                   const label = document.createElement('span');
                   label.className = 'rounds-exhausted-label';
-                  label.textContent = `Reached the ${json.rounds || ''}-step limit — not finished.`;
+                  label.textContent = `已达到${json.rounds || ''}步限制 — 任务未完成。`;
                   note.appendChild(label);
                   const contBtn = document.createElement('button');
                   contBtn.className = 'continue-btn';
-                  contBtn.title = 'Continue the task';
-                  contBtn.textContent = 'Continue ▸';
+                  contBtn.title = '继续任务';
+                  contBtn.textContent = '继续 ▸';
                   const _holder = currentHolder;
                   contBtn.addEventListener('click', () => {
                     note.remove();
@@ -1950,7 +1950,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                           if (_att.vision_model && !_existingPreview.querySelector('.attach-vision-model')) {
                             const _vl = document.createElement('div');
                             _vl.className = 'attach-vision-model';
-                            _vl.textContent = 'Vision: ' + String(_att.vision_model).split('/').pop();
+                            _vl.textContent = '视觉模型: ' + String(_att.vision_model).split('/').pop();
                             const _name = _existingPreview.querySelector('.attach-image-name');
                             if (_name) _existingPreview.insertBefore(_vl, _name);
                             else _existingPreview.appendChild(_vl);
@@ -1965,13 +1965,13 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                         _iw.onclick = () => window.open(API_BASE + '/api/upload/' + _att.id, '_blank');
                         const _im = document.createElement('img');
                         _im.src = API_BASE + '/api/upload/' + _att.id;
-                        _im.alt = _att.name || 'Image';
+                        _im.alt = _att.name || '图片';
                         _im.style.cssText = 'max-width:300px;max-height:200px;border-radius:6px;display:block;';
                         _iw.appendChild(_im);
                         if (_att.vision_model) {
                           const _vl = document.createElement('div');
                           _vl.className = 'attach-vision-model';
-                          _vl.textContent = 'Vision: ' + String(_att.vision_model).split('/').pop();
+                          _vl.textContent = '视觉模型: ' + String(_att.vision_model).split('/').pop();
                           _iw.appendChild(_vl);
                         }
                         if (_att.name) {
@@ -2003,7 +2003,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 holder._memoriesUsed = json.data;
               } else if (json.type === 'compacted') {
                 if (!_isBg) {
-                  uiModule.showToast('Context compacted — older messages summarized');
+                  uiModule.showToast('上下文已压缩 — 旧消息已摘要');
                 }
               } else if (json.type === 'metrics') {
                 metrics = json.data;
@@ -2032,7 +2032,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   isThinking = false;
                   cancelAnimationFrame(_thinkTimerRAF);
                   var _elapsed2 = thinkingStartTime ? ((Date.now() - thinkingStartTime) / 1000).toFixed(1) : null;
-                  if (_liveThinkHeader) _liveThinkHeader.textContent = 'View thinking process';
+                  if (_liveThinkHeader) _liveThinkHeader.textContent = '查看思考过程';
                   if (_liveThinkTimerEl) _liveThinkTimerEl.textContent = _elapsed2 ? _formatThinkStats(_elapsed2, _liveThinkTokenCount) : '';
                   if (_liveThinkSpinnerSlot) _liveThinkSpinnerSlot.remove();
                   // Assign stable IDs
@@ -2178,7 +2178,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   const cmd = json.command || '';
                   let outHtml = '';
                   if (json.output && json.output.trim()) {
-                    outHtml = `<details class="agent-tool-output"><summary>Output</summary><pre>${esc(json.output)}</pre></details>`;
+                    outHtml = `<details class="agent-tool-output"><summary>输出</summary><pre>${esc(json.output)}</pre></details>`;
                   }
                   // File-write diff (write_file): show a before/after unified diff.
                   let diffHtml = '';
@@ -2214,7 +2214,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   // bottom of file) so no per-node listener needed.
                   const _wasOpen = currentToolBubble.classList.contains('open');
                   currentToolBubble.className = 'agent-thread-node' + (ok ? '' : ' error') + (_wasOpen ? ' open' : '');
-                  currentToolBubble.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(json.tool)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${cmdHtml2}${outHtml}${diffHtml}</div>`;
+                  currentToolBubble.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(json.tool)}</span><span class="agent-thread-status">${ok ? '完成' : '失败'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${cmdHtml2}${outHtml}${diffHtml}</div>`;
                   // Reset so thinking spinner between tools says "Thinking" not the old tool's label
                   _lastToolName = '';
                   uiModule.scrollHistory();
@@ -2236,7 +2236,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                       const details = document.createElement('details');
                       details.className = 'agent-tool-output';
                       const summary = document.createElement('summary');
-                      summary.textContent = 'Screenshot';
+                      summary.textContent = '截图';
                       const img = document.createElement('img');
                       img.src = screenshotSrc;
                       img.style.cssText = 'max-width:100%;border-radius:6px;margin-top:6px;border:1px solid var(--border)';
@@ -2352,7 +2352,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   const closeBtn = document.createElement('button');
                   closeBtn.type = 'button';
                   closeBtn.className = 'modal-close ask-user-close';
-                  closeBtn.setAttribute('aria-label', 'Dismiss question');
+                  closeBtn.setAttribute('aria-label', '关闭提问');
                   closeBtn.textContent = '×';
                   closeBtn.addEventListener('click', () => {
                     card.remove();
@@ -2375,7 +2375,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                     // Label the choice group with the question for screen readers.
                     card.setAttribute('aria-labelledby', q.id);
                   } else {
-                    card.setAttribute('aria-label', 'Question from the assistant');
+                    card.setAttribute('aria-label', '助手提问');
                   }
 
                   const list = document.createElement('div');
@@ -2434,7 +2434,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   const otherSend = document.createElement('button');
                   otherSend.type = 'button';
                   otherSend.className = 'confirm-btn confirm-btn-primary ask-user-other-send';
-                  otherSend.setAttribute('aria-label', 'Send answer');
+                  otherSend.setAttribute('aria-label', '发送答案');
                   otherSend.textContent = multi ? 'Send selection' : 'Send';
                   const _submit = () => {
                     const free = otherInput.value.trim();
@@ -2509,7 +2509,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 if (spinner && spinner.element) spinner.destroy();
                 // Show spinner while waiting for text (skip for research — has its own progress)
                 if (!_researchingStreamIds.has(streamSessionId)) {
-                  spinner = spinnerModule.create('Generating response', 'right', 'wave');
+                  spinner = spinnerModule.create('生成回复中', 'right', 'wave');
                   newBody.appendChild(spinner.createElement());
                   spinner.start();
                 }
@@ -2629,11 +2629,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             _stall.className = 'stopped-indicator';
             const _lbl = document.createElement('span');
             _lbl.style.cssText = 'font-style:italic;opacity:0.7;';
-            _lbl.textContent = 'Paused mid-task';
+            _lbl.textContent = '任务中途暂停';
             _stall.appendChild(_lbl);
             const _cont = document.createElement('button');
             _cont.className = 'continue-btn agent-continue-btn';
-            _cont.title = 'Continue — pick up where it left off';
+            _cont.title = '继续 — 从上次中断处继续';
             _cont.textContent = '▸';
             _cont.addEventListener('click', () => {
               _stall.remove();
@@ -2790,7 +2790,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
               ttsBtn.innerHTML = ICON_PLAY_TTS;
               ttsBtn.classList.remove('playing', 'loading');
               ttsBtn.style.color = '#6b7280';
-              ttsBtn.title = 'Read aloud';
+              ttsBtn.title = '朗读';
             };
             if (streamingTTS) {
               // Flush remaining partial sentence and attach the real button
@@ -2801,7 +2801,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 ttsBtn.innerHTML = ICON_STOP_TTS;
                 ttsBtn.classList.add('playing');
                 ttsBtn.style.color = '#ccc';
-                ttsBtn.title = 'Stop';
+                ttsBtn.title = '停止';
               }
             } else {
               // Non-streaming fallback (autoPlay toggled mid-stream, etc.)
@@ -2960,11 +2960,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             const stoppedIndicator = document.createElement('div');
             stoppedIndicator.className = 'stopped-indicator';
             const stoppedLabel = document.createElement('span');
-            stoppedLabel.textContent = '[Message interrupted]';
+            stoppedLabel.textContent = '[消息已中断]';
             stoppedIndicator.appendChild(stoppedLabel);
             const continueBtn = document.createElement('button');
             continueBtn.className = 'continue-btn';
-            continueBtn.title = 'Continue';
+            continueBtn.title = '继续';
             continueBtn.textContent = '\u25B8';
             continueBtn.addEventListener('click', () => {
               stoppedIndicator.remove();
@@ -3100,7 +3100,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
             if (_box && sessionModule.getCurrentSessionId() === _timeoutSessionId) {
               var _timeoutMsg = document.createElement('div');
               _timeoutMsg.className = 'msg msg-ai';
-              _timeoutMsg.innerHTML = '<div class="role">Odysseus</div><div class="body" style="opacity:0.6;font-style:italic;">Research clarification timed out. Toggle research again to start over.</div>';
+              _timeoutMsg.innerHTML = '<div class="role">Odysseus</div><div class="body" style="opacity:0.6;font-style:italic;">研究澄清已超时。再次切换研究以重新开始。</div>';
               _box.appendChild(_timeoutMsg);
               uiModule.scrollHistory();
             }
@@ -3222,8 +3222,8 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     bar.innerHTML = `<span class="stall-banner-txt">Quiet for ${label} — still working?</span>`;
     const cont = document.createElement('button');
     cont.className = 'stall-banner-btn';
-    cont.textContent = 'Nudge it';
-    cont.title = 'Stop the stalled stream and ask it to continue';
+    cont.textContent = '推一下';
+    cont.title = '停止卡住的流并请求其继续';
     cont.addEventListener('click', () => {
       _removeStallBanner();
       const mi = uiModule.el('message');
@@ -3235,7 +3235,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     });
     const stop = document.createElement('button');
     stop.className = 'stall-banner-btn stall-banner-stop';
-    stop.textContent = 'Stop';
+    stop.textContent = '停止';
     stop.addEventListener('click', () => { _removeStallBanner(); abortCurrentRequest(true); });
     bar.appendChild(cont);
     bar.appendChild(stop);
@@ -3268,7 +3268,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       const label = document.createElement('span');
       label.style.fontStyle = 'italic';
       label.style.opacity = '0.7';
-      label.textContent = '[Cancelled by user]';
+      label.textContent = '[用户取消]';
       indicator.appendChild(label);
       body.appendChild(indicator);
     }
@@ -3384,7 +3384,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     const contentDiv = holder.querySelector('.stream-content');
     box.appendChild(holder);
 
-    const spinner = spinnerModule.create('Generating response...', 'right');
+    const spinner = spinnerModule.create('生成回复中...', 'right');
     holder.querySelector('.body').appendChild(spinner.createElement());
     spinner.start();
     uiModule.scrollHistory();
@@ -3508,7 +3508,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       if (box) {
         var errHolder = document.createElement('div');
         errHolder.className = 'msg msg-ai';
-        errHolder.innerHTML = '<div class="body"><i style="color: var(--color-error);">[Background stream encountered an error]</i></div>';
+        errHolder.innerHTML = '<div class="body"><i style="color: var(--color-error);">[后台流遇到错误]</i></div>';
         box.appendChild(errHolder);
       }
       return;
@@ -3673,7 +3673,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         if (runBtn) runBtn.setAttribute('data-code', newCode);
         // Swap icon back to pencil
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-        btn.title = 'Edit';
+        btn.title = '编辑';
         btn.classList.remove('active');
       } else {
         // Enter edit mode. Firefox (especially on mobile) historically lacks
@@ -3691,7 +3691,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         try { codeEl.focus({ preventScroll: true }); } catch (_) { codeEl.focus(); }
         // Swap icon to checkmark
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-        btn.title = 'Done editing';
+        btn.title = '完成编辑';
         btn.classList.add('active');
       }
     });
@@ -3839,10 +3839,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
     const saveBtn = document.createElement('button');
     saveBtn.className = 'edit-save-btn';
-    saveBtn.textContent = 'Send';
+    saveBtn.textContent = '发送';
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'edit-cancel-btn';
-    cancelBtn.textContent = 'Cancel';
+    cancelBtn.textContent = '取消';
     btnRow.appendChild(saveBtn);
     btnRow.appendChild(cancelBtn);
 
@@ -3885,7 +3885,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         if (submitBtn) submitBtn.click();
       } catch (err) {
         console.error('Edit failed:', err);
-        if (uiModule) uiModule.showError('Edit failed: ' + err.message);
+        if (uiModule) uiModule.showError('编辑失败: ' + err.message);
         bodyEl.innerHTML = originalHTML;
       }
     });
@@ -3945,7 +3945,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     // The common case is a regen during a pre-upload race where the bubble
     // never had an `[data-file-id]` to scrape.
     if (!text && !_ids.length) {
-      if (uiModule?.showError) uiModule.showError('Nothing to resend — message has no text and no attachments yet (try again after the upload finishes).');
+      if (uiModule?.showError) uiModule.showError('没有可重发的内容 — 该消息没有文本也没有附件（请等上传完成后再试）。');
       return;
     }
 
@@ -3983,7 +3983,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       if (submitBtn) submitBtn.click();
     } catch (err) {
       console.error('Resend failed:', err);
-      if (uiModule) uiModule.showError('Resend failed: ' + err.message);
+      if (uiModule) uiModule.showError('重发失败: ' + err.message);
     }
   }
 
@@ -4013,7 +4013,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     }
 
     if (userIndex < 0) {
-      if (uiModule) uiModule.showError('Could not find the user message to regenerate');
+      if (uiModule) uiModule.showError('找不到要重新生成的用户消息');
       return;
     }
 
@@ -4053,7 +4053,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     // because the attachments themselves are the message. Bail only if there
     // is no text AND no attachments to send.
     if (!userText && !_pendingRegenAttachments.length) {
-      if (uiModule) uiModule.showError('Nothing to regenerate — the user message has no text and no attachments');
+      if (uiModule) uiModule.showError('没有可重新生成的内容 — 该用户消息没有文本也没有附件');
       return;
     }
 
@@ -4097,7 +4097,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
     } catch (err) {
       console.error('Regenerate failed:', err);
-      if (uiModule) uiModule.showError('Regenerate failed: ' + err.message);
+      if (uiModule) uiModule.showError('重新生成失败: ' + err.message);
     }
   }
 
@@ -4262,7 +4262,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       if (uiModule) uiModule.showToast(`Forked → ${data.name}`);
     } catch (err) {
       console.error('Fork failed:', err);
-      if (uiModule) uiModule.showError('Fork failed: ' + err.message);
+      if (uiModule) uiModule.showError('分支失败: ' + err.message);
     }
   }
 
@@ -4362,11 +4362,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         } else if (rp.phase === 'searching') {
           const q = rp.queries ? `${rp.queries} queries` : '';
           const s = rp.total_sources ? ` · ${rp.total_sources} sources` : '';
-          spinner.updateMessage(`Round ${rp.round || '?'}: Searching${q ? ' (' + q + ')' : ''}${s}`);
+          spinner.updateMessage(`第 ${rp.round || '?'} 轮: 搜索中${q ? ' (' + q + ')' : ''}${s}`);
         } else if (rp.phase === 'reading') {
-          spinner.updateMessage(rp.title ? `Reading: ${rp.title}` : `Round ${rp.round || '?'}: Reading ${rp.new_sources || ''} pages · ${rp.total_sources || 0} sources total`);
+          spinner.updateMessage(rp.title ? `阅读中: ${rp.title}` : `第 ${rp.round || '?'} 轮: 读取 ${rp.new_sources || ''} 页 · 共 ${rp.total_sources || 0} 个来源`);
         } else if (rp.phase === 'analyzing') {
-          spinner.updateMessage(`Round ${rp.round || '?'}: Analyzing ${rp.total_findings || 0} findings`);
+          spinner.updateMessage(`第 ${rp.round || '?'} 轮: 分析 ${rp.total_findings || 0} 个发现结果`);
         } else if (rp.phase === 'writing') {
           spinner.updateMessage(`Writing report · ${rp.total_sources || 0} sources`);
         }
@@ -4508,7 +4508,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
    */
   export async function deleteMessage(msgElement) {
     if (uiModule && uiModule.styledConfirm) {
-      const ok = await uiModule.styledConfirm('Delete this message?', {
+      const ok = await uiModule.styledConfirm('删除此消息？', {
         confirmText: 'Delete',
         cancelText: 'Cancel',
         danger: true,
@@ -4606,7 +4606,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       // error output shown before a model was selected, #1428). Just remove the
       // DOM so the "x" works regardless.
       domToRemove.forEach(el => el.remove());
-      if (uiModule) uiModule.showToast('Message deleted');
+      if (uiModule) uiModule.showToast('消息已删除');
       return;
     }
 
@@ -4618,10 +4618,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       });
       if (!res.ok) throw new Error('Server error ' + res.status);
       domToRemove.forEach(el => el.remove());
-      if (uiModule) uiModule.showToast('Message deleted');
+      if (uiModule) uiModule.showToast('消息已删除');
     } catch (err) {
       console.error('Delete failed:', err);
-      if (uiModule) uiModule.showError('Delete failed: ' + err.message);
+      if (uiModule) uiModule.showError('删除失败: ' + err.message);
     }
   }
 
@@ -4652,10 +4652,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     bar.className = 'msg-edit-bar';
     const saveBtn = document.createElement('button');
     saveBtn.className = 'msg-edit-save';
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = '保存';
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'msg-edit-cancel';
-    cancelBtn.textContent = 'Cancel';
+    cancelBtn.textContent = '取消';
     bar.appendChild(saveBtn);
     bar.appendChild(cancelBtn);
     textarea.parentNode.insertBefore(bar, textarea.nextSibling);
@@ -4677,7 +4677,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       if (newContent === originalRaw) { cleanup(); return; }
 
       const msgId = msgElement.dataset.dbId;
-      if (!msgId) { if (uiModule) uiModule.showError('Cannot edit: message ID not found'); cleanup(); return; }
+      if (!msgId) { if (uiModule) uiModule.showError('无法编辑: 找不到消息 ID'); cleanup(); return; }
 
       const sessionId = sessionModule.getCurrentSessionId();
       if (!sessionId) { cleanup(); return; }
@@ -4698,15 +4698,15 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         if (!msgElement.querySelector('.edited-indicator')) {
           const indicator = document.createElement('div');
           indicator.className = 'edited-indicator';
-          indicator.textContent = '[Message edited]';
+          indicator.textContent = '[消息已编辑]';
           body.parentNode.insertBefore(indicator, body.nextSibling);
         }
 
         cleanup();
-        if (uiModule) uiModule.showToast('Message edited');
+        if (uiModule) uiModule.showToast('消息已编辑');
       } catch (err) {
         console.error('Edit failed:', err);
-        if (uiModule) uiModule.showError('Edit failed: ' + err.message);
+        if (uiModule) uiModule.showError('编辑失败: ' + err.message);
       }
     });
   }
@@ -4725,7 +4725,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     const oldHtml = aiMsgElement.querySelector('.body')?.innerHTML || '';
 
     if (!oldRaw.trim()) {
-      if (uiModule) uiModule.showError('No text to rewrite');
+      if (uiModule) uiModule.showError('没有可重写的文本');
       return;
     }
 
@@ -4867,7 +4867,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       _killRwSpin();
       // Restore original content on failure
       if (bodyEl) bodyEl.innerHTML = oldHtml;
-      if (uiModule) uiModule.showError('Rewrite failed: ' + err.message);
+      if (uiModule) uiModule.showError('重写失败: ' + err.message);
     }
   }
 
@@ -4972,7 +4972,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       }
     } catch (e) {
       console.error('open attachment as document failed', e);
-      import('./ui.js').then(m => m.showError && m.showError('Could not open attachment')).catch(() => {});
+      import('./ui.js').then(m => m.showError && m.showError('无法打开附件')).catch(() => {});
       window.open(url, '_blank');  // fallback so the file is still reachable
     }
   }

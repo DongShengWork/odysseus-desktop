@@ -101,9 +101,9 @@ export function createApplyImageTool({
         state.activeLayerId = layer.id;
         composite();
         renderLayerPanel();
-        if (uiModule) uiModule.showToast(layerName + ' complete', 4500);
+        if (uiModule) uiModule.showToast(layerName + ' 完成', 4500);
       };
-      img.onerror = () => { if (uiModule) uiModule.showToast('Failed to load result', 6000); };
+      img.onerror = () => { if (uiModule) uiModule.showToast('加载结果失败', 6000); };
       img.src = 'data:image/png;base64,' + data.image;
     } catch (e) {
       // Detect known failure modes and surface an action-toast.
@@ -121,19 +121,19 @@ export function createApplyImageTool({
       }
       if (uiModule) {
         if (depMatch && uiModule.showToast.length >= 2) {
-          uiModule.showToast(layerName + ' failed: ' + depMatch + ' is not installed on the server.', {
+          uiModule.showToast(layerName + ' 失败: ' + depMatch + ' 未安装在该服务器上。', {
             duration: 9000,
-            action: `Install ${depMatch}`,
+            action: `安装 ${depMatch}`,
             onAction: () => openCookbookForDependency(depMatch),
           });
         } else if (needsImg2Img && uiModule.showToast.length >= 2) {
-          uiModule.showToast(layerName + ' failed: ' + e.message, {
+          uiModule.showToast(layerName + ' 失败: ' + e.message, {
             duration: 9000,
-            action: 'Open Cookbook',
+            action: '打开 Cookbook',
             onAction: () => openCookbookForImg2img(),
           });
         } else {
-          uiModule.showToast(layerName + ' failed: ' + e.message, 6000);
+          uiModule.showToast(layerName + ' 失败: ' + e.message, 6000);
         }
       }
     } finally {

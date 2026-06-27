@@ -1,7 +1,7 @@
 {
   "name": "Odysseus",
   "short_name": "Odysseus",
-  "description": "Self-hosted AI chat with memory, documents, and tools",
+  "description": "自托管的 AI 聊天助手，支持记忆、文档和工具",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

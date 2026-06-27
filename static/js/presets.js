@@ -175,7 +175,7 @@ function initEnabledToggle() {
   if (tokensSlider && tokensValue) {
     tokensSlider.addEventListener('input', () => {
       const v = parseInt(tokensSlider.value);
-      tokensValue.textContent = v > 8192 ? 'No limit' : v.toLocaleString();
+      tokensValue.textContent = v > 8192 ? '无限制' : v.toLocaleString();
     });
   }
 }
@@ -214,7 +214,7 @@ function initNameDropdown() {
       const nameRow = document.getElementById('char-name-row');
       if (nameRow) nameRow.style.display = '';
       if (tempInput) { tempInput.value = 1.0; if (tempValue) tempValue.textContent = '1.0'; tempInput.dispatchEvent(new Event('input')); }
-      if (tokensInput) { tokensInput.value = 8448; if (tokensValue) tokensValue.textContent = 'No limit'; tokensInput.dispatchEvent(new Event('input')); }
+      if (tokensInput) { tokensInput.value = 8448; if (tokensValue) tokensValue.textContent = '无限制'; tokensInput.dispatchEvent(new Event('input')); }
       if (delBtn) delBtn.style.display = 'none';
       return;
     }
@@ -238,7 +238,7 @@ function initNameDropdown() {
       if (!charName || charName === '__default__') return;
       const match = userTemplates.find(t => t.name === charName);
       const isBuiltin = PROMPT_TEMPLATES.some(t => t.name === charName);
-      if (!await window.styledConfirm(`Delete "${charName}"?\n\nThis will remove the persona and all its memories.`, { confirmText: 'Delete', danger: true })) return;
+      if (!await window.styledConfirm(`Delete "${charName}"?\n\nThis will remove the persona and all its memories.`, { confirmText: '删除', danger: true })) return;
       try {
         // Delete saved template if exists
         if (match) {
@@ -303,7 +303,7 @@ function _tryLoadTemplate(name) {
   if (tokensInput) {
     const v = tmpl.max_tokens || 0;
     tokensInput.value = v === 0 ? 8448 : v;
-    if (tokensValue) tokensValue.textContent = (v === 0 || v > 8192) ? 'No limit' : v.toLocaleString();
+    if (tokensValue) tokensValue.textContent = (v === 0 || v > 8192) ? '无限制' : v.toLocaleString();
     tokensInput.dispatchEvent(new Event('input'));
   }
   const delBtn = document.getElementById('char-delete-template-btn');
@@ -319,7 +319,7 @@ function _populateCharSelect() {
   const savedNames = new Set(userTemplates.map(t => t.name));
   if (userTemplates.length) {
     const group = document.createElement('optgroup');
-    group.label = 'Saved';
+    group.label = '已保存';
     userTemplates.forEach(t => {
       const opt = document.createElement('option');
       opt.value = t.name;
@@ -333,7 +333,7 @@ function _populateCharSelect() {
   const builtins = PROMPT_TEMPLATES.filter(t => !savedNames.has(t.name) && !hiddenPresets.includes(t.name));
   if (builtins.length) {
     const group = document.createElement('optgroup');
-    group.label = 'Presets';
+    group.label = '预设';
     builtins.forEach(t => {
       const opt = document.createElement('option');
       opt.value = t.name;
@@ -433,12 +433,12 @@ function initPersistentChat() {
       await sessionModule.loadSessions();
       await sessionModule.selectSession(sessionId);
 
-      btn.textContent = 'Created!';
-      setTimeout(() => { btn.textContent = 'Create Persistent Chat'; }, 1500);
+      btn.textContent = '已创建！';
+      setTimeout(() => { btn.textContent = '创建持久聊天'; }, 1500);
     } catch (e) {
       console.error('Failed to create persistent chat:', e);
-      btn.textContent = 'Error';
-      setTimeout(() => { btn.textContent = 'Create Persistent Chat'; }, 2000);
+      btn.textContent = '错误';
+      setTimeout(() => { btn.textContent = '创建持久聊天'; }, 2000);
     }
   });
 }
@@ -455,7 +455,7 @@ function initSaveAsTemplate() {
 
     let name = nameInput ? nameInput.value.trim() : '';
     if (!name) {
-      name = prompt('Enter a name for this persona:');
+      name = prompt('请输入此角色名称：');
       if (!name || !name.trim()) return;
       name = name.trim();
       if (nameInput) nameInput.value = name;
@@ -480,17 +480,17 @@ function initSaveAsTemplate() {
       const data = await res.json();
       if (data.success) {
         await loadUserTemplates();
-        btn.textContent = 'Saved!';
-        setTimeout(() => { btn.textContent = 'Save as Template'; }, 1500);
+        btn.textContent = '已保存！';
+        setTimeout(() => { btn.textContent = '保存为模板'; }, 1500);
       } else {
-        btn.textContent = 'Error';
-        setTimeout(() => { btn.textContent = 'Save as Template'; }, 2000);
+        btn.textContent = '错误';
+        setTimeout(() => { btn.textContent = '保存为模板'; }, 2000);
       }
     } catch (e) {
       console.error('Failed to save template:', e);
-      btn.textContent = 'Restart server';
+      btn.textContent = '重启服务器';
       btn.style.color = 'var(--color-error)';
-      setTimeout(() => { btn.textContent = 'Save as Template'; btn.style.color = ''; }, 3000);
+      setTimeout(() => { btn.textContent = '保存为模板'; btn.style.color = ''; }, 3000);
     }
   });
 }
@@ -530,7 +530,7 @@ export async function loadPresets(showError) {
   } catch (error) {
     console.error('Failed to load presets:', error);
     if (showError) {
-      showError('Failed to load presets');
+      showError('加载预设失败');
     }
   }
 }
@@ -595,7 +595,7 @@ export function openCustomPresetModal() {
     const saved = savedConfig.max_tokens || 0;
     tokensInput.value = saved === 0 ? 8448 : saved;
     const tkv = document.getElementById('tokens-value');
-    if (tkv) tkv.textContent = (saved === 0 || saved > 8192) ? 'No limit' : parseInt(saved).toLocaleString();
+    if (tkv) tkv.textContent = (saved === 0 || saved > 8192) ? '无限制' : parseInt(saved).toLocaleString();
   }
   if (promptInput) promptInput.value = savedConfig.system_prompt || '';
 
@@ -626,15 +626,15 @@ export function openCustomPresetModal() {
     const activeTab = document.querySelector('.preset-tab.active')?.dataset.chartab || 'inject';
     let label;
     if (activeTab === 'group') {
-      label = 'Start Group';
+      label = '启动群组';
     } else if (activeTab === 'inject') {
       // Inject tab = a plain tuned "prompt" chat (prefix/suffix + temp/tokens),
       // no persona.
-      label = 'Start Prompt';
+      label = '启动提示词';
     } else {
       // Character/persona tab. "Save & " prefix when the user edited a template,
       // so it's clear the edit is being saved on start.
-      label = changed ? 'Save & Start Persona' : 'Start Persona';
+      label = changed ? '保存并启动角色' : '启动角色';
     }
     btn.textContent = label;
     // Show a "Cancel" button next to Start when the active tab's feature is
@@ -645,7 +645,7 @@ export function openCustomPresetModal() {
       const groupOn = !!(window.groupModule && window.groupModule.isActive && window.groupModule.isActive());
       const featOn = activeTab === 'group' ? groupOn : !!(presets.custom && presets.custom.enabled);
       cancelBtn.style.display = featOn ? '' : 'none';
-      cancelBtn.textContent = activeTab === 'group' ? 'Cancel group' : 'Cancel';
+      cancelBtn.textContent = activeTab === 'group' ? '取消群组' : '取消';
     }
     // Reset only makes sense on the character tab (it resets the persona).
     if (resetBtn) resetBtn.style.display = (changed && activeTab === 'character') ? '' : 'none';
@@ -726,7 +726,7 @@ export function openCustomPresetModal() {
       const notice = document.createElement('div');
       notice.id = 'char-lock-notice';
       notice.style.cssText = 'font-size:11px;color:var(--color-muted);text-align:center;padding:6px;margin-bottom:8px;border:1px dashed var(--border);border-radius:6px;';
-      notice.textContent = 'Persistent chat — persona is locked. Style, temperature, and memory can still be changed.';
+      notice.textContent = '持久聊天 — 角色已锁定。样式、温度和记忆仍可更改。';
       modal.querySelector('.modal-body').prepend(notice);
     }
   } else {
@@ -843,7 +843,7 @@ export async function saveCustomPreset(showToast, showError) {
 
       if (showToast) {
         // The Inject tab is a plain tuned "prompt" chat, not a persona — say so.
-        showToast(_isInjectStart ? 'Prompt saved' : 'Persona saved');
+        showToast(_isInjectStart ? '提示词已保存' : '角色已保存');
       }
       const modal = document.getElementById('custom-preset-modal');
       if (modal) {
@@ -851,13 +851,13 @@ export async function saveCustomPreset(showToast, showError) {
       }
     } else {
       if (showError) {
-        showError('Failed to save custom preset');
+        showError('保存自定义预设失败');
       }
     }
   } catch (error) {
     console.error('Error saving custom preset:', error);
     if (showError) {
-      showError('Failed to save custom preset');
+      showError('保存自定义预设失败');
     }
   }
 }
@@ -985,8 +985,8 @@ function _syncCharIndicator() {
       // Inject/tuning chat — syringe tag labeled "Prompt" to match the
       // window identity, no persona name.
       if (iconEl) iconEl.innerHTML = _SYRINGE;
-      if (nameSpan) nameSpan.textContent = 'Prompt';
-      btn.title = 'Custom settings active — click to configure';
+      if (nameSpan) nameSpan.textContent = '提示词';
+      btn.title = '自定义设置已激活 — 点击配置';
     }
     // Hide X in persistent chats
     const xIcon = btn.querySelector('.tool-indicator-x');

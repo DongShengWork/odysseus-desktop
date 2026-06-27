@@ -161,8 +161,8 @@ function buildAttachCards(attachments) {
           const ocrBtn = document.createElement('button');
           ocrBtn.type = 'button';
           ocrBtn.className = 'attach-ocr-btn';
-          ocrBtn.title = 'View / edit OCR text';
-          ocrBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg><span class="attach-ocr-label">Caption</span>';
+          ocrBtn.title = '查看/编辑识别文本';
+          ocrBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg><span class="attach-ocr-label">描述</span>';
           ocrBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             _openVisionEditor(att, ocrBtn.closest('.msg'));
@@ -174,7 +174,7 @@ function buildAttachCards(attachments) {
       if (att.vision_model) {
         const visionLabel = document.createElement('div');
         visionLabel.className = 'attach-vision-model';
-        visionLabel.textContent = 'Vision: ' + String(att.vision_model).split('/').pop();
+        visionLabel.textContent = '视觉模型: ' + String(att.vision_model).split('/').pop();
         imgWrap.appendChild(visionLabel);
       }
       if (att.name) {
@@ -249,7 +249,7 @@ function _openImageLightbox(att) {
   full.addEventListener('error', () => {
     const err = document.createElement('div');
     err.className = 'attach-lightbox-err';
-    err.textContent = 'Failed to load full-resolution image.';
+    err.textContent = '无法加载全分辨率图片。';
     overlay.appendChild(err);
   });
   full.src = `/api/upload/${att.id}`;
@@ -301,16 +301,16 @@ function _openVisionEditor(att, userMsgEl) {
   title.className = 'vision-editor-title';
   // Eye icon matches the one in Settings → Vision so users recognise where
   // this text originates.
-  title.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Vision text</span>';
+  title.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>视觉文本</span>';
   panel.appendChild(title);
   const desc = document.createElement('div');
   desc.className = 'vision-editor-desc';
-  desc.textContent = 'Edit text and save, new chats will have the new context. Regenerate or continue from there.';
+  desc.textContent = '编辑文本并保存，新的对话将使用更新后的上下文。重新生成或继续皆可。';
   panel.appendChild(desc);
   const ta = document.createElement('textarea');
   ta.className = 'vision-editor-text';
   ta.rows = 10;
-  ta.placeholder = 'Loading…';
+  ta.placeholder = '加载中…';
   ta.disabled = true;
   panel.appendChild(ta);
   const actions = document.createElement('div');
@@ -318,7 +318,7 @@ function _openVisionEditor(att, userMsgEl) {
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'vision-editor-btn';
-  closeBtn.innerHTML = '<span class="vision-btn-label">Close</span>';
+  closeBtn.innerHTML = '<span class="vision-btn-label">关闭</span>';
   closeBtn.addEventListener('click', _closeVisionEditor);
   const _saveVisionText = async () => {
     const res = await fetch(`/api/upload/${att.id}/vision`, {
@@ -332,19 +332,19 @@ function _openVisionEditor(att, userMsgEl) {
   const saveBtn = document.createElement('button');
   saveBtn.type = 'button';
   saveBtn.className = 'vision-editor-btn vision-editor-btn-primary';
-  saveBtn.innerHTML = '<span class="vision-btn-label">Save</span>';
+  saveBtn.innerHTML = '<span class="vision-btn-label">保存</span>';
   saveBtn.disabled = true;
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
-    saveBtn.innerHTML = '<span class="vision-btn-label">Saving…</span>';
+    saveBtn.innerHTML = '<span class="vision-btn-label">保存中…</span>';
     try {
       await _saveVisionText();
-      if (uiModule?.showToast) uiModule.showToast('Saved');
+      if (uiModule?.showToast) uiModule.showToast('已保存');
       _closeVisionEditor();
     } catch (e) {
       saveBtn.disabled = false;
-      saveBtn.innerHTML = '<span class="vision-btn-label">Save</span>';
-      if (uiModule?.showError) uiModule.showError('Failed to save OCR text');
+      saveBtn.innerHTML = '<span class="vision-btn-label">保存</span>';
+      if (uiModule?.showError) uiModule.showError('无法保存识别文本');
     }
   });
   // Regenerate-message: save the edited text, close, then trigger a resend of
@@ -352,8 +352,8 @@ function _openVisionEditor(att, userMsgEl) {
   const regenBtn = document.createElement('button');
   regenBtn.type = 'button';
   regenBtn.className = 'vision-editor-btn vision-editor-btn-primary';
-  regenBtn.title = 'Save and regenerate the message';
-  regenBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.74 9.74 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span class="vision-btn-label">Regenerate message</span>';
+  regenBtn.title = '保存并重新生成消息';
+  regenBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.74 9.74 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span class="vision-btn-label">重新生成消息</span>';
   regenBtn.disabled = true;
   regenBtn.addEventListener('click', async () => {
     regenBtn.disabled = true;
@@ -364,12 +364,12 @@ function _openVisionEditor(att, userMsgEl) {
       if (userMsgEl && window.chatModule?.resendUserMessage) {
         window.chatModule.resendUserMessage(userMsgEl, { replaceFromHere: true });
       } else if (uiModule?.showToast) {
-        uiModule.showToast('Saved');
+        uiModule.showToast('已保存');
       }
     } catch (e) {
       regenBtn.disabled = false;
       saveBtn.disabled = false;
-      if (uiModule?.showError) uiModule.showError('Failed to save OCR text');
+      if (uiModule?.showError) uiModule.showError('无法保存识别文本');
     }
   });
   actions.appendChild(closeBtn);
@@ -397,7 +397,7 @@ function _openVisionEditor(att, userMsgEl) {
     })
     .catch(() => {
       ta.value = '';
-      ta.placeholder = 'Could not load OCR text — type your correction and save.';
+      ta.placeholder = '无法加载识别文本 — 请键入修改并保存。';
       ta.disabled = false;
       saveBtn.disabled = false;
       regenBtn.disabled = !userMsgEl;
@@ -636,35 +636,35 @@ export function applyModelColor(roleEl, modelName) {
       let html = '<div style="font-weight:600;margin-bottom:6px;color:var(--fg);display:flex;align-items:center;gap:6px;">';
       if (logoHtml) html += '<span class="role-provider-logo" style="opacity:0.7">' + logoHtml + '</span>';
       html += uiModule.esc(short) + '</div>';
-      html += '<div><span class="ctx-label">Model</span> ' + uiModule.esc(modelName.split('/').pop()) + '</div>';
+      html += '<div><span class="ctx-label">模型</span> ' + uiModule.esc(modelName.split('/').pop()) + '</div>';
       // Provider = the serving endpoint, distinct from the model vendor/logo
       // (e.g. the same model via OpenRouter vs Copilot vs Anthropic direct).
       const _epUrl = (window.sessionModule && window.sessionModule.getCurrentEndpointUrl)
         ? window.sessionModule.getCurrentEndpointUrl() : null;
       const _provLabel = providerLabel(_epUrl);
-      if (_provLabel) html += '<div><span class="ctx-label">Provider</span> ' + uiModule.esc(_provLabel) + '</div>';
+      if (_provLabel) html += '<div><span class="ctx-label">提供商</span> ' + uiModule.esc(_provLabel) + '</div>';
       // Show static context initially, then fetch real from server
       const _realCtx = window._realContextLengths && window._realContextLengths[modelName];
       if (_realCtx) {
-        html += '<div><span class="ctx-label">Context</span> ' + _fmtCtx(_realCtx) + ' tokens';
-        if (info && info.ctx && info.ctx !== _realCtx) html += ' <span style="opacity:0.35">(spec: ' + _fmtCtx(info.ctx) + ')</span>';
+        html += '<div><span class="ctx-label">上下文</span> ' + _fmtCtx(_realCtx) + ' token';
+        if (info && info.ctx && info.ctx !== _realCtx) html += ' <span style="opacity:0.35">(规格: ' + _fmtCtx(info.ctx) + ')</span>';
         html += '</div>';
       } else if (info && info.ctx) {
-        html += '<div><span class="ctx-label">Context</span> <span id="_ctx-val">' + _fmtCtx(info.ctx) + ' tokens</span></div>';
+        html += '<div><span class="ctx-label">上下文</span> <span id="_ctx-val">' + _fmtCtx(info.ctx) + ' token</span></div>';
       }
       // Fetch real context from server async
       if (!_realCtx && window.sessionModule) {
         const _sid = window.sessionModule.getCurrentSessionId();
         if (_sid) {
           fetch('/api/session/' + _sid + '/context_info').then(r => r.ok ? r.json() : null).then(d => {
-            if (d && d.context_length) {
+              if (d && d.context_length) {
               if (!window._realContextLengths) window._realContextLengths = {};
               window._realContextLengths[modelName] = d.context_length;
               const el = document.getElementById('_ctx-val');
               if (el) {
-                el.innerHTML = _fmtCtx(d.context_length) + ' tokens';
+                el.innerHTML = _fmtCtx(d.context_length) + ' token';
                 if (info && info.ctx && info.ctx !== d.context_length) {
-                  el.innerHTML += ' <span style="opacity:0.35">(spec: ' + _fmtCtx(info.ctx) + ')</span>';
+                  el.innerHTML += ' <span style="opacity:0.35">(规格: ' + _fmtCtx(info.ctx) + ')</span>';
                 }
               }
             }
@@ -677,13 +677,13 @@ export function applyModelColor(roleEl, modelName) {
         const _preset = _pid ? window.presetsModule.getPreset(_pid) : null;
         const _mt = _preset?.max_tokens;
         if (_mt && _mt > 0 && _mt <= 8192) {
-          html += '<div><span class="ctx-label">Max tokens</span> ' + _mt.toLocaleString() + ' <span style="opacity:0.4">(configured)</span></div>';
+          html += '<div><span class="ctx-label">最大 token</span> ' + _mt.toLocaleString() + ' <span style="opacity:0.4">(已配置)</span></div>';
         }
       }
       if (isCostTrackedEndpoint(_epUrl)) {
-        if (info && info.input != null) html += '<div><span class="ctx-label">Input</span> $' + info.input.toFixed(2) + ' / 1M</div>';
-        if (info && info.output != null) html += '<div><span class="ctx-label">Output</span> $' + info.output.toFixed(2) + ' / 1M</div>';
-        if (!info) html += '<div style="opacity:0.4;font-size:0.85em;margin-top:4px;">No pricing data available</div>';
+        if (info && info.input != null) html += '<div><span class="ctx-label">输入</span> $' + info.input.toFixed(2) + ' / 百万</div>';
+        if (info && info.output != null) html += '<div><span class="ctx-label">输出</span> $' + info.output.toFixed(2) + ' / 百万</div>';
+        if (!info) html += '<div style="opacity:0.4;font-size:0.85em;margin-top:4px;">暂无定价数据</div>';
       }
       popup.innerHTML = html;
       const rect = roleEl.getBoundingClientRect();
@@ -883,7 +883,7 @@ export function buildSourcesBox(sources, type, expanded) {
   var esc = uiModule.esc;
   var id = 'sources-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
   var count = sources.length;
-  var label = type === 'research' ? 'Research sources' : 'Web sources';
+  var label = type === 'research' ? '研究来源' : '网页来源';
   var lines = '';
   for (var i = 0; i < count; i++) {
     var s = sources[i];
@@ -926,7 +926,7 @@ export function buildRagSourcesBox(sources) {
       + (pct ? ' <span class="rag-similarity">' + pct + '</span>' : '')
       + '<div class="rag-snippet">' + esc(s.snippet || '') + '</div></div>';
   }
-  return '<details class="rag-sources"><summary>Sources (' + sources.length + ' documents)</summary>' + items + '</details>';
+  return '<details class="rag-sources"><summary>来源 (' + sources.length + ' 个文档)</summary>' + items + '</details>';
 }
 
 /**
@@ -961,7 +961,7 @@ export function buildFindingsBox(findings, expanded) {
   var expandedClass = expanded ? ' expanded' : '';
   return '<div class="sources-section">'
     + '<div class="sources-header" data-sources-id="' + id + '" onclick="window.toggleSources(\'' + id + '\')">'
-    + '<div class="sources-header-left">' + FINDINGS_ICON + '<span>' + count + ' Raw collected findings</span></div>'
+    + '<div class="sources-header-left">' + FINDINGS_ICON + '<span>' + count + ' 原始收集资料</span></div>'
     + '<span class="sources-toggle" id="' + id + '-toggle" data-arrow="' + arrow + '"></span>'
     + '</div>'
     + '<div class="sources-content' + expandedClass + '" id="' + id + '">'
@@ -981,7 +981,7 @@ function _appendContinuePrompt(container) {
   wrap.innerHTML =
     '<div class="continue-research-hint">'
     + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>'
-    + '<span>Dig deeper? Activate Research again and type a follow-up question to continue this research.</span>'
+    + '<span>想要深入了解？再次激活研究并输入后续问题以继续此研究。</span>'
     + '</div>';
   container.appendChild(wrap);
 }
@@ -995,7 +995,7 @@ function _appendReportButton(container, sessionId) {
   var btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'view-report-btn';
-  btn.innerHTML = REPORT_ICON + ' Open Visual Report';
+  btn.innerHTML = REPORT_ICON + ' 打开可视化报告';
 
   var reportUrl = apiBase + '/api/research/report/' + sessionId;
   btn.addEventListener('click', function() {
@@ -1006,12 +1006,12 @@ function _appendReportButton(container, sessionId) {
   var chatBtn = document.createElement('button');
   chatBtn.type = 'button';
   chatBtn.className = 'view-report-btn chat-about-btn';
-  chatBtn.innerHTML = CHAT_ABOUT_ICON + ' Discuss';
+  chatBtn.innerHTML = CHAT_ABOUT_ICON + ' 讨论';
   chatBtn.addEventListener('click', async function() {
     if (chatBtn.disabled) return;
     var origLabel = chatBtn.innerHTML;
     chatBtn.disabled = true;
-    chatBtn.innerHTML = CHAT_ABOUT_ICON + ' Creating…';
+    chatBtn.innerHTML = CHAT_ABOUT_ICON + ' 创建中…';
     try {
       var res = await fetch(apiBase + '/api/research/spinoff/' + sessionId, { method: 'POST' });
       if (!res.ok) {
@@ -1028,9 +1028,9 @@ function _appendReportButton(container, sessionId) {
       chatBtn.disabled = false;
       chatBtn.innerHTML = origLabel;
       if (window.uiModule && uiModule.showError) {
-        uiModule.showError('Could not start follow-up chat: ' + e.message);
+        uiModule.showError('无法发起后续对话: ' + e.message);
       } else {
-        alert('Could not start follow-up chat: ' + e.message);
+        alert('无法发起后续对话: ' + e.message);
       }
     }
   });
@@ -1160,15 +1160,15 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
 
   const safeImageUrl = safeDisplayImageSrc(imageUrl);
   if (!safeImageUrl) {
-    body.textContent = '[Image unavailable]';
+    body.textContent = '[图片不可用]';
     wrap.appendChild(body);
     return wrap;
   }
 
   const img = document.createElement('img');
   img.className = 'generated-image';
-  img.alt = prompt || 'Generated image';
-  img.title = prompt || 'Generated image';
+  img.alt = prompt || '生成的图片';
+  img.title = prompt || '生成的图片';
   img.src = safeImageUrl;
   img.addEventListener('click', () => { window.open(safeImageUrl, '_blank', 'noopener,noreferrer'); });
   body.appendChild(img);
@@ -1191,7 +1191,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   const copyBtn = document.createElement('button');
   copyBtn.className = 'footer-copy-btn';
   copyBtn.type = 'button';
-  copyBtn.title = 'Copy prompt';
+  copyBtn.title = '复制提示词';
   copyBtn.innerHTML = COPY_ICON;
   copyBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1204,7 +1204,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   const dlBtn = document.createElement('button');
   dlBtn.className = 'footer-copy-btn';
   dlBtn.type = 'button';
-  dlBtn.title = 'Download image';
+  dlBtn.title = '下载图片';
   dlBtn.textContent = '\u2913';
   dlBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1227,7 +1227,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   const editBtn = document.createElement('button');
   editBtn.className = 'footer-copy-btn';
   editBtn.type = 'button';
-  editBtn.title = 'Edit in image editor';
+  editBtn.title = '在图片编辑器中编辑';
   editBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
   editBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1250,7 +1250,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
       if (albumsContainer) albumsContainer.style.display = 'none';
       const editorContainer = document.getElementById('gallery-editor-container');
       if (editorContainer) editorContainer.style.display = 'flex';
-      const label = (prompt || '').trim().slice(0, 60) || 'Generated image';
+      const label = (prompt || '').trim().slice(0, 60) || '生成的图片';
       editorMod.openEditor(imageUrl, null, null, label);
     } catch (err) {
       console.error('[chat] open in editor failed', err);
@@ -1261,13 +1261,13 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   const delBtn = document.createElement('button');
   delBtn.className = 'footer-copy-btn footer-delete-btn';
   delBtn.type = 'button';
-  delBtn.title = 'Delete image';
+  delBtn.title = '删除图片';
   delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';
   delBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
-    const ok = await uiModule.styledConfirm('Delete this image?', {
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
+    const ok = await uiModule.styledConfirm('删除此图片？', {
+      confirmText: '删除',
+      cancelText: '取消',
       danger: true,
     });
     if (!ok) return;
@@ -1279,12 +1279,12 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
           method: 'DELETE', credentials: 'same-origin',
         });
         if (!res.ok && res.status !== 404) {
-          uiModule.showToast?.('Delete failed', 4000);
+          uiModule.showToast?.('删除失败', 4000);
           return;
         }
         window.dispatchEvent(new CustomEvent('gallery-refresh'));
       } catch (_) {
-        uiModule.showToast?.('Delete failed', 4000);
+        uiModule.showToast?.('删除失败', 4000);
         return;
       }
     }
@@ -1383,34 +1383,34 @@ export function createMsgFooter(msgElement) {
 
   // Define all available actions: { id, icon, title, className, handler }
   const allActions = [
-    { id: 'copy', icon: COPY_ICON, title: 'Copy message', cls: 'footer-copy-btn', html: true, handler(e) {
+    { id: 'copy', icon: COPY_ICON, title: '复制消息', cls: 'footer-copy-btn', html: true, handler(e) {
       e.stopPropagation();
       const btn = e.currentTarget;
       uiModule.copyToClipboard(copyMessageText(msgElement));
       btn.innerHTML = CHECK_ICON;
       setTimeout(() => { btn.innerHTML = COPY_ICON; }, 1500);
     }},
-    { id: 'edit', icon: '\u270E', title: 'Edit', cls: 'msg-action-btn', handler(e) {
+    { id: 'edit', icon: '\u270E', title: '编辑', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.editAIMessage) window.chatModule.editAIMessage(msgElement);
     }},
-    { id: 'regen', icon: '\u21BB', title: 'Regenerate from here', cls: 'msg-action-btn', handler(e) {
+    { id: 'regen', icon: '\u21BB', title: '从此处重新生成', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.regenerateFrom) window.chatModule.regenerateFrom(msgElement);
     }},
-    { id: 'shorten', icon: '\u2702', title: 'Rewrite shorter', cls: 'msg-action-btn', handler(e) {
+    { id: 'shorten', icon: '\u2702', title: '重写为简短版本', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.rewriteWith) window.chatModule.rewriteWith(msgElement, 'Rewrite your last response to be shorter and more concise. Keep the key information but cut the fluff.');
     }},
-    { id: 'explain', icon: '?', title: 'Explain simpler', cls: 'msg-action-btn', handler(e) {
+    { id: 'explain', icon: '?', title: '更简单地解释', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.rewriteWith) window.chatModule.rewriteWith(msgElement, 'Explain your last response in simpler terms. Use plain language and short sentences.');
     }},
-    { id: 'fork', icon: '\u2ADD', title: 'Fork conversation', cls: 'msg-action-btn', handler(e) {
+    { id: 'fork', icon: '\u2ADD', title: '分支对话', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.forkFrom) window.chatModule.forkFrom(msgElement);
     }},
-    { id: 'delete', icon: '\u2715', title: 'Delete message', cls: 'msg-action-btn msg-delete-btn', handler(e) {
+    { id: 'delete', icon: '\u2715', title: '删除消息', cls: 'msg-action-btn msg-delete-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.deleteMessage) window.chatModule.deleteMessage(msgElement);
     }},
@@ -1451,7 +1451,7 @@ export function createMsgFooter(msgElement) {
     const moreBtn = document.createElement('button');
     moreBtn.className = 'msg-action-btn msg-more-btn';
     moreBtn.type = 'button';
-    moreBtn.title = 'More actions';
+    moreBtn.title = '更多操作';
     moreBtn.textContent = '\u00B7\u00B7\u00B7';
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1506,8 +1506,8 @@ export function createMsgFooter(msgElement) {
     const pinnedCount = mems.filter(m => m.type === 'pinned').length;
     const recalledCount = mems.filter(m => m.type === 'recalled').length;
     const parts = [];
-    if (pinnedCount) parts.push(`${pinnedCount} pinned`);
-    if (recalledCount) parts.push(`${recalledCount} recalled`);
+    if (pinnedCount) parts.push(`${pinnedCount} 条固定`);
+    if (recalledCount) parts.push(`${recalledCount} 条召回`);
     pill.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.8-3.5 6-.3.2-.5.5-.5.9V18h-6v-2.1c0-.4-.2-.7-.5-.9C6.3 13.8 5 11.5 5 9a7 7 0 0 1 7-7z"/><path d="M9 18h6v1a3 3 0 0 1-6 0v-1z"/><path d="M12 2v7"/><path d="M8.5 6.5L12 9l3.5-2.5"/></svg><span class="memory-used-pill-text">${parts.join(', ')}</span>`;
     pill.title = mems.map(m => `[${m.type}] ${m.text}`).join('\n');
 
@@ -1526,7 +1526,7 @@ export function createMsgFooter(msgElement) {
         const row = document.createElement('div');
         row.className = 'memory-used-row';
         row.style.cursor = 'pointer';
-        row.title = 'Click to open memory manager';
+        row.title = '点击打开记忆管理器';
         const badge = document.createElement('span');
         badge.className = 'memory-used-badge ' + (m.type === 'pinned' ? 'pinned' : 'recalled');
         badge.textContent = m.type === 'pinned' ? '\u25CF' : '\u21BB';
@@ -1594,22 +1594,22 @@ export function createUserMsgFooter(msgElement) {
   actions.className = 'msg-actions';
 
   const allActions = [
-    { id: 'edit', icon: '\u270E', title: 'Edit message', cls: 'msg-action-btn', handler(e) {
+    { id: 'edit', icon: '\u270E', title: '编辑消息', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.editUserMessage) window.chatModule.editUserMessage(msgElement);
     }},
-    { id: 'delete', icon: '\u2715', title: 'Delete message', cls: 'msg-action-btn msg-delete-btn', handler(e) {
+    { id: 'delete', icon: '\u2715', title: '删除消息', cls: 'msg-action-btn msg-delete-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.deleteMessage) window.chatModule.deleteMessage(msgElement);
     }},
-    { id: 'copy', icon: COPY_ICON, title: 'Copy message', cls: 'footer-copy-btn', html: true, handler(e) {
+    { id: 'copy', icon: COPY_ICON, title: '复制消息', cls: 'footer-copy-btn', html: true, handler(e) {
       e.stopPropagation();
       const btn = e.currentTarget;
       uiModule.copyToClipboard(msgElement.querySelector('.body')?.textContent || '');
       btn.innerHTML = CHECK_ICON;
       setTimeout(() => { btn.innerHTML = COPY_ICON; }, 1500);
     }},
-    { id: 'resend', icon: '\u21BB', title: 'Resend message', cls: 'msg-action-btn', handler(e) {
+    { id: 'resend', icon: '\u21BB', title: '重新发送', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.resendUserMessage) window.chatModule.resendUserMessage(msgElement);
     }},
@@ -1642,7 +1642,7 @@ export function createUserMsgFooter(msgElement) {
     const moreBtn = document.createElement('button');
     moreBtn.className = 'msg-action-btn msg-more-btn';
     moreBtn.type = 'button';
-    moreBtn.title = 'More actions';
+    moreBtn.title = '更多操作';
     moreBtn.textContent = '\u00B7\u00B7\u00B7';
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1701,7 +1701,7 @@ export function displayMetrics(messageElement, metrics) {
   const tps = metrics.tokens_per_second;
   const isReal = metrics.usage_source === 'real';
   const ctxPct = metrics.context_percent;
-  const model = metrics.model || 'Unknown';
+  const model = metrics.model || '未知';
   const cost = _billableCost(model, inputTokens, outputTokens);
 
   // Nothing useful to show — bail out (only if ALL metrics are missing)
@@ -1734,7 +1734,7 @@ export function displayMetrics(messageElement, metrics) {
   if (!metricsLabel) return;
   metricsContainer.textContent = metricsLabel;
   metricsContainer.style.cursor = 'pointer';
-  metricsContainer.title = 'Click for details';
+  metricsContainer.title = '点击查看详情';
   const metricsDivider = document.createElement('span');
   metricsDivider.textContent = ' | ';
   metricsDivider.style.color = 'var(--color-muted-alt)';
@@ -1765,25 +1765,25 @@ export function displayMetrics(messageElement, metrics) {
     const popup = document.createElement('div');
     popup.className = 'ctx-popup';
     popup.innerHTML = `
-      <div style="font-weight:600;margin-bottom:6px;color:var(--fg);">Message Stats</div>
-      <div><span class="ctx-label">Model</span> ${model.split('/').pop()}</div>
-      <div><span class="ctx-label">Input</span> ${inputTokens.toLocaleString()} tokens${isReal ? '' : '~'}</div>
-      <div><span class="ctx-label">Output</span> ${outputTokens.toLocaleString()} tokens${isReal ? '' : '~'}</div>
-      <div><span class="ctx-label">Total</span> ${totalTok.toLocaleString()} tokens</div>
-      <div><span class="ctx-label">Speed</span> ${speedStr}</div>
-      <div><span class="ctx-label">Time</span> ${responseTime}s</div>
-      ${prepTime != null ? `<div><span class="ctx-label">Prep</span> ${prepTime}s</div>` : ''}
-      ${modelWaitTime != null ? `<div><span class="ctx-label">Model wait</span> ${modelWaitTime}s</div>` : ''}
+      <div style="font-weight:600;margin-bottom:6px;color:var(--fg);">消息统计</div>
+      <div><span class="ctx-label">模型</span> ${model.split('/').pop()}</div>
+      <div><span class="ctx-label">输入</span> ${inputTokens.toLocaleString()} token${isReal ? '' : '~'}</div>
+      <div><span class="ctx-label">输出</span> ${outputTokens.toLocaleString()} token${isReal ? '' : '~'}</div>
+      <div><span class="ctx-label">总计</span> ${totalTok.toLocaleString()} token</div>
+      <div><span class="ctx-label">速度</span> ${speedStr}</div>
+      <div><span class="ctx-label">耗时</span> ${responseTime}s</div>
+      ${prepTime != null ? `<div><span class="ctx-label">准备</span> ${prepTime}s</div>` : ''}
+      ${modelWaitTime != null ? `<div><span class="ctx-label">模型等待</span> ${modelWaitTime}s</div>` : ''}
       ${costRows}
       ${sessionCostStr}
       ${prepDetails ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:0.85em;opacity:0.8;">
-        <div style="font-weight:600;margin-bottom:4px;color:var(--fg);">Agent prep</div>
+        <div style="font-weight:600;margin-bottom:4px;color:var(--fg);">智能体准备</div>
         ${prepDetails}
       </div>` : ''}
       ${ctxPct !== undefined && ctxPct > 0 ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">
-        <span class="ctx-label">Context</span> <span style="color:${ctxColor};font-weight:600;">${ctxPct}%</span> used
+        <span class="ctx-label">上下文</span> <span style="color:${ctxColor};font-weight:600;">${ctxPct}%</span> 已使用
       </div>` : ''}
-      ${isReal ? '' : '<div style="margin-top:4px;font-size:0.8em;opacity:0.4;">~ estimated token count</div>'}
+      ${isReal ? '' : '<div style="margin-top:4px;font-size:0.8em;opacity:0.4;">~ 估算的 token 数量</div>'}
     `;
 
     const rect = metricsContainer.getBoundingClientRect();
@@ -1821,7 +1821,7 @@ export function displayMetrics(messageElement, metrics) {
     const ctxColor = ctxPct >= 85 ? 'var(--red, #e06c75)' : ctxPct >= 70 ? '#ff9900' : 'var(--green, #98c379)';
     ctxRing = document.createElement('span');
     ctxRing.className = 'ctx-ring';
-    ctxRing.title = `${ctxPct}% context used — click for details`;
+    ctxRing.title = `${ctxPct}% 上下文已使用 — 点击查看详情`;
     ctxRing.style.cursor = 'pointer';
     ctxRing.style.setProperty('--ctx-color', ctxColor);
     ctxRing.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14">
@@ -1843,20 +1843,20 @@ export function displayMetrics(messageElement, metrics) {
       const popup = document.createElement('div');
       popup.className = 'ctx-detail-popup';
       popup.innerHTML = `
-        <div style="font-weight:600;margin-bottom:8px;color:var(--fg);">Context Window</div>
+        <div style="font-weight:600;margin-bottom:8px;color:var(--fg);">上下文窗口</div>
         <div class="ctx-bar-wrap">
           <div class="ctx-bar-fill" style="width:${Math.min(ctxPct, 100)}%;background:${ctxColor};"></div>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-top:4px;opacity:0.6;">
-          <span>${fmtNum(usedTokens)} used</span>
-          <span>${fmtNum(totalCtx)} total</span>
+          <span>${fmtNum(usedTokens)} 已使用</span>
+          <span>${fmtNum(totalCtx)} 总计</span>
         </div>
         <div style="margin-top:8px;font-size:0.8rem;">
-          <div><span class="ctx-label">Model</span> ${modelShort}</div>
-          <div><span class="ctx-label">Usage</span> <span style="color:${ctxColor};font-weight:600;">${ctxPct}%</span></div>
-          <div><span class="ctx-label">Window</span> ${fmtNum(totalCtx)} tokens</div>
+          <div><span class="ctx-label">模型</span> ${modelShort}</div>
+          <div><span class="ctx-label">使用率</span> <span style="color:${ctxColor};font-weight:600;">${ctxPct}%</span></div>
+          <div><span class="ctx-label">窗口</span> ${fmtNum(totalCtx)} token</div>
         </div>
-        ${ctxPct >= 70 ? `<button class="ctx-compact-btn" title="Summarize older messages to free up context">Compact context</button>` : ''}
+        ${ctxPct >= 70 ? `<button class="ctx-compact-btn" title="摘要旧消息以释放上下文">压缩上下文</button>` : ''}
       `;
 
       const compactBtn = popup.querySelector('.ctx-compact-btn');
@@ -1877,7 +1877,7 @@ export function displayMetrics(messageElement, metrics) {
           compactRole.textContent = 'Odysseus';
           const compactBody = document.createElement('div');
           compactBody.className = 'body';
-          compactBody.innerHTML = 'Compacting context <span class="compact-wave">▁▂▃▅▂▁</span>';
+          compactBody.innerHTML = '正在压缩上下文 <span class="compact-wave">▁▂▃▅▂▁</span>';
           compactMsg.appendChild(compactRole);
           compactMsg.appendChild(compactBody);
           chatBox.appendChild(compactMsg);
@@ -1906,14 +1906,14 @@ export function displayMetrics(messageElement, metrics) {
               setTimeout(() => {
                 const msgs = document.querySelectorAll('#chat-history .msg');
                 for (const m of msgs) {
-                  if (m.querySelector('.body')?.textContent.includes('Conversation compacted')) {
+                  if (m.querySelector('.body')?.textContent.includes('对话已压缩')) {
                     m.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     break;
                   }
                 }
               }, 200);
             } else {
-              let detail = 'Compaction failed. Try again later.';
+              let detail = '压缩失败。请稍后再试。';
               try {
                 const err = await res.json();
                 if (err.detail) detail = err.detail;
@@ -1924,7 +1924,7 @@ export function displayMetrics(messageElement, metrics) {
           } catch (err) {
             clearInterval(waveInterval);
             console.warn('compact failed:', err);
-            compactBody.innerHTML = '<span style="color:var(--red);">Compaction failed: ' + err.message + '</span>';
+            compactBody.innerHTML = '<span style="color:var(--red);">压缩失败: ' + err.message + '</span>';
           }
         });
       }
@@ -2069,11 +2069,11 @@ export function addMessage(role, content, modelName, metadata) {
             const ok = (ev.exit_code === 0 || ev.exit_code == null);
             let outHtml = '';
             if (ev.output && ev.output.trim()) {
-              outHtml = `<details class="agent-tool-output"><summary>Output</summary><pre>${esc(ev.output)}</pre></details>`;
+              outHtml = `<details class="agent-tool-output"><summary>输出</summary><pre>${esc(ev.output)}</pre></details>`;
             }
             const screenshotSrc = safeToolScreenshotSrc(ev.screenshot);
             if (screenshotSrc) {
-              outHtml += `<details class="agent-tool-output"><summary>Screenshot</summary><img src="${esc(screenshotSrc)}" style="max-width:100%;border-radius:6px;margin-top:6px;border:1px solid var(--border)" /></details>`;
+              outHtml += `<details class="agent-tool-output"><summary>截图</summary><img src="${esc(screenshotSrc)}" style="max-width:100%;border-radius:6px;margin-top:6px;border:1px solid var(--border)" /></details>`;
             }
             // File-write/edit diff (persisted in the tool event) \u2014 re-render it
             // so it survives reload, matching the live stream.
@@ -2101,7 +2101,7 @@ export function addMessage(role, content, modelName, metadata) {
             node.className = 'agent-thread-node' + (ok ? '' : ' error');
             // Hide the raw JSON command when a diff says it better (same as live).
             const evCmdHtml = (ev.command && !(ev.diff && ev.diff.text)) ? `<pre class="agent-thread-cmd">${esc(ev.command)}</pre>` : '';
-            node.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(ev.tool)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${evCmdHtml}${outHtml}${evDiffHtml}</div>`;
+            node.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(ev.tool)}</span><span class="agent-thread-status">${ok ? '完成' : '失败'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${evCmdHtml}${outHtml}${evDiffHtml}</div>`;
             // Click handling is delegated globally \u2014 see chat.js init.
             threadWrap.appendChild(node);
           }
@@ -2164,9 +2164,9 @@ export function addMessage(role, content, modelName, metadata) {
     const isCompacted = metadata?.compacted;
     const replyModels = replyModelPair(modelName, metadata);
     const resolvedModel = replyModels.actualModel || replyModels.requestedModel;
-    var _roleText = role === 'user' ? 'You' : (isSlash || isCompacted) ? 'Odysseus' : modelRouteLabel(replyModels.requestedModel, resolvedModel);
+    var _roleText = role === 'user' ? '我' : (isSlash || isCompacted) ? 'Odysseus' : modelRouteLabel(replyModels.requestedModel, resolvedModel);
     if (role === 'assistant' && (metadata?.research || metadata?.research_clarification)) {
-      _roleText += ' (Research)';
+      _roleText += ' (研究)';
     }
     if (metadata?.group_model && role !== 'user') {
       _roleText = metadata.group_model;
@@ -2287,15 +2287,15 @@ export function addMessage(role, content, modelName, metadata) {
       // Differentiate between "stopped mid-stream" (had content, can continue)
       // and "cancelled before any content" — the latter has no Continue affordance.
       stoppedLabel.textContent = metadata.cancelled
-        ? '[Cancelled by user]'
-        : '[Message interrupted]';
+        ? '[用户取消]'
+        : '[消息已中断]';
       stoppedIndicator.appendChild(stoppedLabel);
       // Continue button only makes sense when there's partial content to
       // resume from \u2014 skip it for fully-cancelled (empty) turns.
       if (!metadata.cancelled) {
         const continueBtn = document.createElement('button');
         continueBtn.className = 'continue-btn';
-        continueBtn.title = 'Continue';
+        continueBtn.title = '继续';
         continueBtn.textContent = '\u25B8';
         continueBtn.addEventListener('click', () => {
           stoppedIndicator.remove();
@@ -2320,7 +2320,7 @@ export function addMessage(role, content, modelName, metadata) {
     if (metadata?.edited) {
       const editedIndicator = document.createElement('div');
       editedIndicator.className = 'edited-indicator';
-      editedIndicator.textContent = '[Message edited]';
+      editedIndicator.textContent = '[消息已编辑]';
       b.appendChild(editedIndicator);
     }
 
@@ -2438,7 +2438,7 @@ export function addMessage(role, content, modelName, metadata) {
     return wrap;
   } catch (error) {
     console.error('Error in addMessage:', error);
-    if (uiModule) uiModule.showError('Failed to add message: ' + error.message);
+    if (uiModule) uiModule.showError('添加消息失败: ' + error.message);
   }
 }
 

@@ -179,20 +179,20 @@ function deriveSyntaxColors(colors) {
 
 // Advanced picker key → CSS variable mapping
 const ADV_KEYS = [
-  { key: 'userBubbleBg',       css: '--user-bubble-bg',    label: 'User Chat Bubble', group: 'Chat Bubbles' },
-  { key: 'aiBubbleBg',         css: '--ai-bubble-bg',      label: 'AI Chat Bubble',   group: 'Chat Bubbles' },
-  { key: 'bubbleBorder',       css: '--bubble-border',     label: 'Border Chat Bubble', group: 'Chat Bubbles' },
-  { key: 'sidebarBg',          css: '--sidebar-bg',        label: 'Sidebar Bg',       group: 'Sidebar' },
-  { key: 'brandColor',         css: '--brand-color',       label: 'Odysseus Logo',    group: 'Sidebar' },
-  { key: 'brandMixTo',         css: '--brand-mix-to',      label: 'Logo Gradient End', group: 'Sidebar' },
-  { key: 'hamburgerColor',     css: '--hamburger-color',   label: 'Hamburger Menu',   group: 'Sidebar' },
-  { key: 'inputBg',            css: '--input-bg',          label: 'Input Bg',         group: 'Chat Input / Prompt Area' },
-  { key: 'inputBorder',        css: '--input-border',      label: 'Input Border',     group: 'Chat Input / Prompt Area' },
-  { key: 'sendBtnBg',          css: '--send-btn-bg',       label: 'Send Btn',         group: 'Chat Input / Prompt Area' },
-  { key: 'sendBtnHover',       css: '--send-btn-hover',    label: 'Send Hover',       group: 'Chat Input / Prompt Area' },
-  { key: 'codeBg',             css: '--code-bg',           label: 'Code Bg',          group: 'Code Blocks' },
-  { key: 'codeFg',             css: '--code-fg',           label: 'Code Text',        group: 'Code Blocks' },
-  { key: 'toggleActive',       css: '--toggle-active',     label: 'Toggle On',        group: 'Controls' },
+  { key: 'userBubbleBg',       css: '--user-bubble-bg',    label: '用户聊天气泡', group: '聊天气泡' },
+  { key: 'aiBubbleBg',         css: '--ai-bubble-bg',      label: 'AI 聊天气泡',   group: '聊天气泡' },
+  { key: 'bubbleBorder',       css: '--bubble-border',     label: '聊天气泡边框', group: '聊天气泡' },
+  { key: 'sidebarBg',          css: '--sidebar-bg',        label: '侧边栏背景',       group: '侧边栏' },
+  { key: 'brandColor',         css: '--brand-color',       label: 'Odysseus 标志',    group: '侧边栏' },
+  { key: 'brandMixTo',         css: '--brand-mix-to',      label: '标志渐变终点', group: '侧边栏' },
+  { key: 'hamburgerColor',     css: '--hamburger-color',   label: '汉堡菜单',   group: '侧边栏' },
+  { key: 'inputBg',            css: '--input-bg',          label: '输入框背景',         group: '聊天输入/提示区域' },
+  { key: 'inputBorder',        css: '--input-border',      label: '输入框边框',     group: '聊天输入/提示区域' },
+  { key: 'sendBtnBg',          css: '--send-btn-bg',       label: '发送按钮',         group: '聊天输入/提示区域' },
+  { key: 'sendBtnHover',       css: '--send-btn-hover',    label: '发送悬停',       group: '聊天输入/提示区域' },
+  { key: 'codeBg',             css: '--code-bg',           label: '代码块背景',          group: '代码块' },
+  { key: 'codeFg',             css: '--code-fg',           label: '代码块文字',        group: '代码块' },
+  { key: 'toggleActive',       css: '--toggle-active',     label: '开关开启',        group: '控件' },
 ];
 
 function computeAdvancedDefaults(colors) {
@@ -632,7 +632,7 @@ export function initThemeUI() {
         <span style="background:${c.fg}"></span>
         <span style="background:${c.red}"></span>
       </div>
-      ${name === 'dark' ? 'original' : (name === 'gpt' ? 'GPT' : name)}
+      ${name === 'dark' ? '默认' : (name === 'gpt' ? 'GPT' : name)}
     </div>
   `).join('');
 
@@ -651,7 +651,7 @@ export function initThemeUI() {
           <span style="background:${c.red}"></span>
         </div>
         <span class="theme-swatch-name">${name}</span>
-        <button type="button" class="theme-delete-btn" data-delete="${name}" title="Delete theme"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button type="button" class="theme-delete-btn" data-delete="${name}" title="删除主题"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     `).join('');
   } else if (userCard) {
@@ -731,7 +731,7 @@ export function initThemeUI() {
         e.stopPropagation();
         const name = btn.dataset.delete;
         if (uiModule && uiModule.styledConfirm) {
-          if (!await uiModule.styledConfirm(`Delete theme "${name}"?`, { confirmText: 'Delete', danger: true })) return;
+          if (!await uiModule.styledConfirm(`删除主题 "${name}"？`, { confirmText: '删除', danger: true })) return;
         }
         deleteCustomTheme(name);
       });
@@ -879,10 +879,10 @@ export function initThemeUI() {
     const doSave = () => {
       saveError.style.display = 'none';
       const name = newNameInput.value.trim();
-      if (!name) { saveError.textContent = 'Enter a name.'; saveError.style.display = 'block'; return; }
+      if (!name) { saveError.textContent = '请输入名称。'; saveError.style.display = 'block'; return; }
       const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      if (!slug) { saveError.textContent = 'Invalid name.'; saveError.style.display = 'block'; return; }
-      if (THEMES[slug]) { saveError.textContent = 'Cannot overwrite a built-in theme.'; saveError.style.display = 'block'; return; }
+      if (!slug) { saveError.textContent = '名称无效。'; saveError.style.display = 'block'; return; }
+      if (THEMES[slug]) { saveError.textContent = '无法覆盖内置主题。'; saveError.style.display = 'block'; return; }
       const colors = {};
       const pickerIds2 = { bg: 'clr-bg', fg: 'clr-fg', panel: 'clr-panel', border: 'clr-border', red: 'clr-red' };
       Object.entries(pickerIds2).forEach(([k, pid]) => { colors[k] = document.getElementById(pid).value; });
@@ -896,14 +896,14 @@ export function initThemeUI() {
       if (hasAdv) colors.advanced = adv;
       const opts = _getOpts();
       const result = saveCustomTheme(slug, colors, opts);
-      if (result === 'limit') { saveError.textContent = 'Max ' + MAX_CUSTOM_THEMES + ' custom themes. Delete one first.'; saveError.style.display = 'block'; return; }
+      if (result === 'limit') { saveError.textContent = '最多 ' + MAX_CUSTOM_THEMES + ' 个自定义主题，请先删除一个。'; saveError.style.display = 'block'; return; }
       save(slug, colors, opts);
       newNameInput.value = '';
-      _flashAutosaved('Theme saved');
-      uiModule.showToast?.('Theme saved');
+      _flashAutosaved('主题已保存');
+      uiModule.showToast?.('主题已保存');
       const prevHtml = newGoBtn.innerHTML;
       newGoBtn.disabled = true;
-      newGoBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Saved</span>';
+      newGoBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>已保存</span>';
       setTimeout(() => {
         newGoBtn.disabled = false;
         newGoBtn.innerHTML = prevHtml;
@@ -1263,8 +1263,8 @@ export function initThemeUI() {
       a.download = 'odysseus_' + (obj.name || 'theme') + '.json';
       a.click();
       URL.revokeObjectURL(url);
-      newExp.innerHTML = '&#x2713; Downloaded!';
-      setTimeout(() => { newExp.innerHTML = '&#x2913; Export'; }, 1500);
+      newExp.innerHTML = '&#x2713; 已下载!';
+      setTimeout(() => { newExp.innerHTML = '&#x2913; 导出'; }, 1500);
     });
   }
 
@@ -1286,15 +1286,15 @@ export function initThemeUI() {
       saveError.style.display = 'none';
       let parsed;
       try { parsed = JSON.parse(importAreaEl.value.trim()); }
-      catch { saveError.textContent = 'Invalid JSON.'; saveError.style.display = 'block'; return; }
+      catch { saveError.textContent = 'JSON 格式无效。'; saveError.style.display = 'block'; return; }
       let colors = parsed.colors || parsed;
       const name = parsed.name || 'imported';
       const required = ['bg', 'fg', 'panel', 'border', 'red'];
       const missing = required.filter(k => !colors[k]);
-      if (missing.length) { saveError.textContent = 'Missing: ' + missing.join(', '); saveError.style.display = 'block'; return; }
+      if (missing.length) { saveError.textContent = '缺少: ' + missing.join(', '); saveError.style.display = 'block'; return; }
       const hexRe = /^#[0-9a-fA-F]{6}$/;
       for (const k of required) {
-        if (!hexRe.test(colors[k])) { saveError.textContent = 'Bad hex for ' + k; saveError.style.display = 'block'; return; }
+        if (!hexRe.test(colors[k])) { saveError.textContent = '无效的十六进制颜色值: ' + k; saveError.style.display = 'block'; return; }
       }
       const colorData = { bg: colors.bg, fg: colors.fg, panel: colors.panel, border: colors.border, red: colors.red };
       if (colors.advanced && typeof colors.advanced === 'object') colorData.advanced = colors.advanced;
@@ -1305,7 +1305,7 @@ export function initThemeUI() {
       if (parsed.bgPattern) opts.bgPattern = parsed.bgPattern;
       if (parsed.bgEffectColor) opts.bgEffectColor = parsed.bgEffectColor;
       const result = saveCustomTheme(slug, colorData, opts);
-      if (result === 'limit') { saveError.textContent = 'Max ' + MAX_CUSTOM_THEMES + ' custom themes. Delete one first.'; saveError.style.display = 'block'; return; }
+      if (result === 'limit') { saveError.textContent = '最多 ' + MAX_CUSTOM_THEMES + ' 个自定义主题，请先删除一个。'; saveError.style.display = 'block'; return; }
       save(slug, colorData, opts);
       applyColors(colorData);
       applyFontDensity(opts.font || DEFAULT_FONT, opts.density || DEFAULT_DENSITY);
@@ -1385,7 +1385,7 @@ function _clearThemeZoneHighlight() {
 }
 
 let _flashTimer = null;
-function _flashAutosaved(label = 'Auto-saved') {
+function _flashAutosaved(label = '自动已保存') {
   let pill = document.getElementById('theme-autosaved-pill');
   if (!pill) {
     pill = document.createElement('div');

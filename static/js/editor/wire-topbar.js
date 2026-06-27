@@ -143,14 +143,14 @@ export function wireTopbar(deps) {
   // Edge popup — Width input + Feather / Delete action buttons.
   function applyEdgeAction(hardDelete) {
     const layer = activeLayer();
-    if (!layer || layer.locked) { uiModule.showToast('Select an unlocked layer'); return; }
+    if (!layer || layer.locked) { uiModule.showToast('请选择未锁定的图层'); return; }
     const widthInput = document.getElementById('ge-edge-width');
     const width = parseInt(widthInput?.value || '8');
-    if (isNaN(width) || width < 1) { uiModule.showToast('Invalid width'); return; }
+    if (isNaN(width) || width < 1) { uiModule.showToast('无效的宽度'); return; }
     saveState();
     applyEdgeFeather(layer, width, hardDelete);
     composite();
-    uiModule.showToast(hardDelete ? `Edges deleted ${width}px` : `Edges feathered ${width}px`);
+    uiModule.showToast(hardDelete ? `已删除边缘 ${width}px` : `已羽化边缘 ${width}px`);
   }
   {
     const btn = document.getElementById('ge-edge-menu-btn');

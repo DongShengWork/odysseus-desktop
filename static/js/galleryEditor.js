@@ -233,16 +233,16 @@ function _getSelectedAIEndpoint(type) {
 // the busy button state ("Removing…", "Sharpening…"). Falls back to a
 // neutral "Processing…" when the layer name doesn't match a known verb.
 const _BUSY_LABELS = {
-  'bg removed': 'Removing…',
-  'sharpened': 'Sharpening…',
-  'enhanced': 'Enhancing…',
-  'harmonized': 'Harmonizing…',
-  'upscaled': 'Upscaling…',
-  'styled': 'Styling…',
+  'bg removed': '正在移除…',
+  'sharpened': '正在锐化…',
+  'enhanced': '正在增强…',
+  'harmonized': '正在协调…',
+  'upscaled': '正在放大…',
+  'styled': '正在风格化…',
 };
 function _deriveBusyLabel(layerName) {
-  if (!layerName) return 'Processing…';
-  return _BUSY_LABELS[String(layerName).toLowerCase()] || 'Processing…';
+  if (!layerName) return '处理中…';
+  return _BUSY_LABELS[String(layerName).toLowerCase()] || '处理中…';
 }
 
 // AI-tool runner — sharpen / harmonize / upscale / style / bg-remove
@@ -491,7 +491,7 @@ function _showCanvasLoading(message) {
     `;
     state.container.appendChild(overlay);
   }
-  overlay.querySelector('.ge-canvas-loading-msg').textContent = message || 'Working…';
+  overlay.querySelector('.ge-canvas-loading-msg').textContent = message || '处理中…';
   overlay.style.display = '';
 }
 function _hideCanvasLoading() {
@@ -730,7 +730,7 @@ function _saveState(label) {
   // step) rather than kill the user's action.
   try {
     const snap = _snapshotState();
-    snap._label = label || 'Edit';
+    snap._label = label || '编辑';
     snap._ts = Date.now();
     state.undoStack.push(snap);
     if (state.undoStack.length > MAX_HISTORY) state.undoStack.shift();
@@ -794,7 +794,7 @@ async function _persistDraft() {
   const payload = _buildDraftPayload();
   const thumbnail = _buildThumbnail();
   const body = {
-    name: state.draftName || 'Untitled',
+    name: state.draftName || '未命名',
     source_image_id: state.imageId || null,
     width: state.imgWidth,
     height: state.imgHeight,
@@ -894,7 +894,7 @@ function _restoreDraft(draft) {
     let pending = data.layers.length;
     if (pending === 0) { resolve(); return; }
     data.layers.forEach((s, idx) => {
-      const layer = createLayer(s.name || 'Layer', s.canvasW || state.imgWidth, s.canvasH || state.imgHeight);
+      const layer = createLayer(s.name || '图层', s.canvasW || state.imgWidth, s.canvasH || state.imgHeight);
       layer.id = s.id;
       layer.visible = s.visible !== false;
       layer.opacity = typeof s.opacity === 'number' ? s.opacity : 1;
@@ -1263,10 +1263,10 @@ function _showCropApply() {
   pop = document.createElement('div');
   pop.className = 'ge-crop-apply';
   pop.innerHTML = `
-    <input type="number" class="ge-crop-w" min="1" max="20000" value="${Math.round(state.cropRect.w)}" title="Width">
+    <input type="number" class="ge-crop-w" min="1" max="20000" value="${Math.round(state.cropRect.w)}" title="宽度">
     <span class="ge-crop-x">×</span>
-    <input type="number" class="ge-crop-h" min="1" max="20000" value="${Math.round(state.cropRect.h)}" title="Height">
-    <button class="ge-crop-apply-btn">Apply</button>
+    <input type="number" class="ge-crop-h" min="1" max="20000" value="${Math.round(state.cropRect.h)}" title="高度">
+    <button class="ge-crop-apply-btn">应用</button>
   `;
   const area = state.container.querySelector('.ge-canvas-area');
   if (!area || !state.cropRect || !state.mainCanvas) return;
@@ -1324,7 +1324,7 @@ function _showCropApply() {
 
 function _applyCrop() {
   if (!state.cropRect) return;
-  _saveState('Crop');
+  _saveState('裁剪');
   const { x, y, w, h } = state.cropRect;
   const cw = Math.round(w);
   const ch = Math.round(h);
@@ -1623,7 +1623,7 @@ function _showWandLoading() {
     spinner.element.style.cssText = 'width:30px;height:30px;margin:0;';
     overlay.appendChild(spinner.element);
   } catch (_) {
-    overlay.textContent = 'Selecting...';
+    overlay.textContent = '正在选择...';
   }
   area.appendChild(overlay);
   return () => {
@@ -1728,7 +1728,7 @@ function _loadLayerAlphaAsSelection(layer) {
   state.wandLayerId = layer.id;
   state.wandLastSeed = null;
   composite();
-  if (uiModule) uiModule.showToast('Layer pixels selected');
+  if (uiModule) uiModule.showToast('已选择图层像素');
 }
 
 // Invert the active selection: lasso (point list — turn into a polygon
@@ -1747,7 +1747,7 @@ function _invertSelection() {
     }
     ctx.putImageData(data, 0, 0);
     composite();
-    if (uiModule) uiModule.showToast('Selection inverted');
+    if (uiModule) uiModule.showToast('已反转选区');
     return true;
   }
   if (state.lassoPoints.length >= 3 && !state.lassoActive) {
@@ -1772,7 +1772,7 @@ function _invertSelection() {
     state.lassoPoints = [];
     state.lassoActive = false;
     composite();
-    if (uiModule) uiModule.showToast('Selection inverted (converted to wand)');
+    if (uiModule) uiModule.showToast('已反转选区（转换为魔棒）');
     return true;
   }
   return false;
@@ -1855,7 +1855,7 @@ function _wandToMask() {
   state.wandLastSeed = null;
   composite();
   _renderLayerPanel();
-  if (uiModule) uiModule.showToast('Selection added to mask');
+  if (uiModule) uiModule.showToast('已添加选区到蒙版');
 }
 
 // Reveal/hide the small "X" badge on the Lasso and Wand tool buttons
@@ -1881,8 +1881,8 @@ function _syncToolClearIndicators() {
   if (fillItem) {
     fillItem.disabled = !(hasSel || hasMaskTarget);
     fillItem.title = fillItem.disabled
-      ? 'Make a selection or pick a mask first'
-      : 'Fill the active selection / mask with the current color';
+      ? '请先创建选区或选择蒙版'
+      : '用当前颜色填充选中的选区/蒙版';
   }
   // Topbar Selection button only makes sense with an active selection.
   const edgeWrap = document.getElementById('ge-edge-wrap');
@@ -1941,7 +1941,7 @@ function _wandCopyToNewLayer() {
   tCtx.drawImage(src.canvas, 0, 0);
   tCtx.globalCompositeOperation = 'destination-in';
   tCtx.drawImage(state.wandMask, 0, 0);
-  const newLayer = createLayer('Wand copy', src.canvas.width, src.canvas.height);
+  const newLayer = createLayer('魔棒复制', src.canvas.width, src.canvas.height);
   newLayer.ctx.drawImage(tmp, 0, 0);
   const srcOff = state.layerOffsets.get(src.id) || { x: 0, y: 0 };
   state.layerOffsets.set(newLayer.id, { ...srcOff });
@@ -1951,7 +1951,7 @@ function _wandCopyToNewLayer() {
   composite();
   _renderLayerPanel();
   _revealLayerPanel();
-  if (uiModule) uiModule.showToast('Copied to new layer');
+  if (uiModule) uiModule.showToast('已复制到新图层');
 }
 
 function _lassoDeleteSelection() {
@@ -1978,7 +1978,7 @@ function _lassoDeleteSelection() {
 
   state.lassoPoints = [];
   composite();
-  uiModule.showToast('Selection deleted');
+  uiModule.showToast('已删除选区');
 }
 
 function _lassoCopyToLayer() {
@@ -1991,7 +1991,7 @@ function _lassoCopyToLayer() {
   const w = layer.canvas.width, h = layer.canvas.height;
 
   const mask = _buildLassoMask(w, h, off.x, off.y, feather, grow);
-  const newLayer = createLayer('Selection', state.imgWidth, state.imgHeight);
+  const newLayer = createLayer('选区', state.imgWidth, state.imgHeight);
 
   // Copy layer pixels masked by the selection
   const srcData = layer.ctx.getImageData(0, 0, w, h);
@@ -2016,7 +2016,7 @@ function _lassoCopyToLayer() {
   _renderLayerPanel();
   _revealLayerPanel();
   composite();
-  uiModule.showToast('Selection copied to new layer');
+  uiModule.showToast('已复制选区到新图层');
 }
 
 function _lassoToMask() {
@@ -2052,7 +2052,7 @@ function _lassoToMask() {
   state.lassoPoints = [];
   composite();
   _renderLayerPanel();
-  uiModule.showToast('Selection added to mask');
+  uiModule.showToast('选区已添加到蒙版');
 }
 
 // ── Edge feather ──
@@ -2087,8 +2087,8 @@ function _filterSliderPrompt(title, params, onPreview) {
         <div class="ge-filter-modal-head">${title}</div>
         ${rows}
         <div class="ge-filter-modal-actions">
-          <button type="button" class="ge-btn ge-btn-sm" data-action="cancel">Cancel</button>
-          <button type="button" class="ge-btn ge-btn-sm ge-btn-primary" data-action="apply">Apply</button>
+          <button type="button" class="ge-btn ge-btn-sm" data-action="cancel">取消</button>
+          <button type="button" class="ge-btn ge-btn-sm ge-btn-primary" data-action="apply">应用</button>
         </div>
       </div>
     `;
@@ -2133,7 +2133,7 @@ function _filterSliderPrompt(title, params, onPreview) {
 // entry we pre-saved so the canceled run leaves no trace.
 async function _applyLiveBlur({ title, params, label, renderer }) {
   const layer = activeLayer();
-  if (!layer || layer.locked) { if (uiModule) uiModule.showToast('Select an unlocked layer'); return; }
+  if (!layer || layer.locked) { if (uiModule) uiModule.showToast('请选择未锁定的图层'); return; }
   const w = layer.canvas.width, h = layer.canvas.height;
   const snap = document.createElement('canvas');
   snap.width = w; snap.height = h;
@@ -2165,29 +2165,29 @@ async function _applyLiveBlur({ title, params, label, renderer }) {
 
 function _applyGaussianBlur() {
   _applyLiveBlur({
-    title: 'Gaussian Blur',
-    label: 'Gaussian Blur',
-    params: [{ key: 'radius', label: 'Radius', min: 0, max: 100, step: 1, value: 6, suffix: 'px' }],
+    title: '高斯模糊',
+    label: '高斯模糊',
+    params: [{ key: 'radius', label: '半径', min: 0, max: 100, step: 1, value: 6, suffix: 'px' }],
     renderer: _gaussianBlur,
   });
 }
 
 function _applyZoomBlur() {
   _applyLiveBlur({
-    title: 'Zoom Blur',
-    label: 'Zoom Blur',
-    params: [{ key: 'strength', label: 'Strength', min: 1, max: 50, step: 1, value: 15 }],
+    title: '缩放模糊',
+    label: '缩放模糊',
+    params: [{ key: 'strength', label: '强度', min: 1, max: 50, step: 1, value: 15 }],
     renderer: _zoomBlur,
   });
 }
 
 function _applyMotionBlur() {
   _applyLiveBlur({
-    title: 'Motion Blur',
-    label: 'Motion Blur',
+    title: '运动模糊',
+    label: '运动模糊',
     params: [
-      { key: 'length', label: 'Length', min: 1, max: 200, step: 1, value: 20, suffix: 'px' },
-      { key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, value: 0, suffix: '°' },
+      { key: 'length', label: '长度', min: 1, max: 200, step: 1, value: 20, suffix: 'px' },
+      { key: 'angle', label: '角度', min: -180, max: 180, step: 1, value: 0, suffix: '°' },
     ],
     renderer: _motionBlur,
   });
@@ -2398,10 +2398,10 @@ function _buildEditor(container) {
       const colorRow = document.getElementById('ge-color-row');
       if (colorRow) colorRow.style.display = (toolId === 'eraser' || toolId === 'clone') ? 'none' : '';
       const colorLabel = colorRow?.querySelector('label');
-      if (colorLabel) colorLabel.textContent = 'Color';
+      if (colorLabel) colorLabel.textContent = '颜色';
       const sizeLabelEl = brushControls?.querySelector('.ge-size-slider')?.parentElement?.querySelector('label');
       if (sizeLabelEl && sizeLabelEl.firstChild && sizeLabelEl.firstChild.nodeType === Node.TEXT_NODE) {
-        sizeLabelEl.firstChild.nodeValue = (toolId === 'eraser') ? 'Brush Size ' : 'Size ';
+        sizeLabelEl.firstChild.nodeValue = (toolId === 'eraser') ? '画笔大小 ' : '大小 ';
       }
       // Per-tool stroke-modifier sections (opacity / flow / softness).
       const brushSection = document.getElementById('ge-brush-section');
@@ -2470,7 +2470,7 @@ function _buildEditor(container) {
           const maskBtn = document.getElementById('ge-mask-vis');
           if (maskBtn) {
             maskBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-            maskBtn.title = 'Hide mask';
+            maskBtn.title = '隐藏蒙版';
             maskBtn.classList.add('visible');
           }
         }
@@ -2700,7 +2700,7 @@ function _buildEditor(container) {
     layer.ctx.drawImage(stencil, 0, 0);
     composite();
     _renderLayerPanel();
-    if (uiModule) uiModule.showToast('Filled');
+    if (uiModule) uiModule.showToast('已填充');
   }
 
   // AI model selectors (Gen, Inpaint, per-tool) — full
@@ -2716,7 +2716,7 @@ function _buildEditor(container) {
       await exportToGallery();
       return;
     }
-    const endBusy = _saveButtonBusy('Saving…');
+    const endBusy = _saveButtonBusy('正在保存…');
     let blob = null;
     let savedOk = false;
     const t0 = performance.now();
@@ -2758,7 +2758,7 @@ function _buildEditor(container) {
       } else {
         msg += sizeMB;
       }
-      if (uiModule) uiModule.showToast('Failed to save: ' + msg, 6000);
+      if (uiModule) uiModule.showToast('保存失败: ' + msg, 6000);
     } finally {
       endBusy();
       if (savedOk) _flashSaveButtonOk();
@@ -3047,7 +3047,7 @@ function _flashSaveButtonOk() {
   const origBg = btn.style.background;
   btn.style.background = '#3aa75a';
   btn.style.color = '#fff';
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>Saved';
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>已保存';
   setTimeout(() => {
     btn.style.background = origBg;
     btn.style.color = '';
@@ -3071,10 +3071,10 @@ function _saveButtonBusy(label) {
     btn.appendChild(sp.createElement());
     const txt = document.createElement('span');
     txt.className = 'ge-btn-busy-label';
-    txt.textContent = label || 'Saving…';
+    txt.textContent = label || '正在保存…';
     btn.appendChild(txt);
     sp.start();
-  } catch { btn.textContent = label || 'Saving…'; }
+  } catch { btn.textContent = label || '正在保存…'; }
   return () => {
     try { sp && sp.stop && sp.stop(); } catch {}
     btn.disabled = false;
@@ -3084,7 +3084,7 @@ function _saveButtonBusy(label) {
 }
 
 export async function exportToGallery() {
-  const endBusy = _saveButtonBusy('Saving copy…');
+  const endBusy = _saveButtonBusy('正在保存副本…');
   let blob = null;
   let savedOk = false;
   const t0 = performance.now();
@@ -3129,7 +3129,7 @@ export async function exportToGallery() {
     } else {
       msg += sizeMB;
     }
-    if (uiModule) uiModule.showToast('Save failed: ' + msg, 6000);
+    if (uiModule) uiModule.showToast('保存失败: ' + msg, 6000);
   } finally {
     endBusy();
     if (savedOk) _flashSaveButtonOk();
@@ -3261,7 +3261,7 @@ function _openCookbookForImg2img() {
     tryServe();
     return;
   }
-  if (uiModule) uiModule.showToast('Open Cookbook from the sidebar to serve an img2img model', 6000);
+  if (uiModule) uiModule.showToast('请从侧边栏打开 Cookbook 运行 img2img 模型', 6000);
 }
 
 export function downloadPNG() {
@@ -3277,7 +3277,7 @@ export function downloadPNG() {
 // survives the round-trip. Use Load Project to restore.
 function _saveProject() {
   if (!state.layers.length) {
-    if (uiModule) uiModule.showToast('Nothing to save');
+    if (uiModule) uiModule.showToast('没有可保存的内容');
     return;
   }
   const project = {
@@ -3307,7 +3307,7 @@ function _saveProject() {
   a.download = 'project.geproj.json';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  if (uiModule) uiModule.showToast('Project saved', 3000);
+  if (uiModule) uiModule.showToast('项目已保存', 3000);
 }
 
 // Open-file picker for Load Project. Restores layers + canvas size.
@@ -3322,16 +3322,16 @@ function _loadProjectPrompt() {
       const text = await file.text();
       const proj = JSON.parse(text);
       if (proj.type !== 'odysseus-gallery-editor-project') {
-        if (uiModule) uiModule.showToast('Not a project file', 5000);
+        if (uiModule) uiModule.showToast('不是项目文件', 5000);
         return;
       }
       await _restoreDraft(proj);
       composite();
       _renderLayerPanel();
       _fitZoom();
-      if (uiModule) uiModule.showToast('Project loaded', 3000);
+      if (uiModule) uiModule.showToast('项目已加载', 3000);
     } catch (e) {
-      if (uiModule) uiModule.showToast('Load failed: ' + (e.message || e), 6000);
+      if (uiModule) uiModule.showToast('加载失败: ' + (e.message || e), 6000);
     }
   });
   inp.click();
@@ -3345,8 +3345,8 @@ function _loadProjectPrompt() {
 //   title, okLabel, initialW, initialH.
 function _promptCanvasSize(opts) {
   opts = opts || {};
-  const title    = opts.title    || 'New canvas';
-  const okLabel  = opts.okLabel  || 'Create';
+  const title    = opts.title    || '新建画布';
+  const okLabel  = opts.okLabel  || '创建';
   const initialW = opts.initialW || 1024;
   const initialH = opts.initialH || 1024;
   return new Promise(resolve => {
@@ -3380,7 +3380,7 @@ function _promptCanvasSize(opts) {
     }
     function onOk() {
       const dims = _parseCanvasSizePrompt(wInput.value, hInput.value, initialW, initialH);
-      if (!dims) { uiModule.showToast('Invalid size'); return; }
+      if (!dims) { uiModule.showToast('无效的尺寸'); return; }
       cleanup(dims);
     }
     function onCancel() { cleanup(null); }
@@ -3457,7 +3457,7 @@ function _mountEditorLoading(label, dims) {
   }
   const inner = document.createElement('div');
   inner.className = 'ge-loading-inner';
-  inner.innerHTML = `<span class="ge-loading-text">${label || 'Loading…'}</span>`;
+  inner.innerHTML = `<span class="ge-loading-text">${label || '加载中…'}</span>`;
   el.appendChild(inner);
   // Mount on the editor BODY (toolbar + canvas + panel) — it sits below the
   // gallery's search/select bar, so the cover doesn't bleed up over those.
@@ -3481,7 +3481,7 @@ function _unmountEditorLoading() {
 }
 
 export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) {
-  _setEditTabLabel(displayName || (presetSize ? 'New canvas' : 'Untitled'));
+  _setEditTabLabel(displayName || (presetSize ? '新建画布' : '未命名'));
   state.imageId = imageId || null;
   // Track original file extension so save-over-original can re-encode in the
   // same format. JPEG re-encoding cuts upload size 5-10x for camera photos,
@@ -3491,7 +3491,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
     state.originalExt = m ? m[1].toLowerCase() : 'png';
   } catch { state.originalExt = 'png'; }
   state.draftId = draftId || null;
-  state.draftName = displayName || (presetSize ? `New ${presetSize.w}×${presetSize.h}` : 'Untitled');
+  state.draftName = displayName || (presetSize ? `新建 ${presetSize.w}×${presetSize.h}` : '未命名');
   state.editorOpen = true;
   state.layers = [];
   state.undoStack = [];
@@ -3509,7 +3509,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   state.container = document.getElementById('gallery-editor-container');
   if (!state.container) {
     console.error('[openEditor] #gallery-editor-container not found in DOM — editor cannot open');
-    if (uiModule) uiModule.showError('Editor container missing');
+    if (uiModule) uiModule.showError('编辑器容器缺失');
     return;
   }
   state.container.style.display = 'flex';
@@ -3518,7 +3518,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
     _buildEditor(state.container);
   } catch (e) {
     console.error('[openEditor] _buildEditor threw:', e);
-    if (uiModule) uiModule.showError('Editor failed to build: ' + (e?.message || 'unknown'));
+    if (uiModule) uiModule.showError('编辑器构建失败: ' + (e?.message || '未知'));
     return;
   }
 
@@ -3536,7 +3536,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   if (!imageUrl && draftId) {
     // Re-open a saved draft by its server-side id — covers the
     // "Resume" buttons on the Edit-tab landing.
-    _mountEditorLoading('Loading draft…', presetSize || null);
+    _mountEditorLoading('正在加载草稿…', presetSize || null);
     // Bail if the user closes the editor while the async load is in
     // flight — without this guard, the .then() callbacks fire after
     // closeEditor and re-mount the spinner / draw into a dead canvas,
@@ -3546,12 +3546,12 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
         if (!state.editorOpen) return;
         if (!d) {
           _unmountEditorLoading();
-          if (uiModule) uiModule.showToast('Draft not found');
+          if (uiModule) uiModule.showToast('未找到草稿');
           closeEditor();
           return;
         }
         state.draftId = d.id;
-        state.draftName = d.name || 'Untitled';
+        state.draftName = d.name || '未命名';
         _setEditTabLabel(state.draftName);
         state.imageId = d.source_image_id || null;
         return _restoreDraft(d).then(() => {
@@ -3562,14 +3562,14 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
           const sizeLabel = document.getElementById('ge-canvas-size');
           if (sizeLabel) sizeLabel.textContent = `${state.imgWidth}×${state.imgHeight}`;
           _unmountEditorLoading();
-          if (uiModule) uiModule.showToast('Resumed draft');
+          if (uiModule) uiModule.showToast('已恢复草稿');
         });
       })
       .catch(err => {
         if (!state.editorOpen) return;
         _unmountEditorLoading();
         console.warn('[ge] draft load failed', err);
-        if (uiModule) uiModule.showToast('Failed to load draft');
+        if (uiModule) uiModule.showToast('加载草稿失败');
         closeEditor();
       });
   }
@@ -3583,10 +3583,10 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
       // White-filled Background so the canvas is visible, then a separate
       // transparent Edit layer on top — keeps user's work isolated from
       // the underlying canvas, the standard editor pattern.
-      const bgLayer = createLayer('Background', w, h);
+      const bgLayer = createLayer('背景', w, h);
       bgLayer.ctx.fillStyle = '#ffffff';
       bgLayer.ctx.fillRect(0, 0, w, h);
-      const editLayer = createLayer('Edit', w, h);
+      const editLayer = createLayer('编辑', w, h);
       state.layers.push(bgLayer);
       state.layers.push(editLayer);
       state.activeLayerId = editLayer.id;
@@ -3609,14 +3609,14 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   // Try to restore a previously-persisted draft for this image — that
   // way closing the gallery / editor mid-edit doesn't lose progress.
   // (Server-backed: look up by source_image_id.)
-  _mountEditorLoading('Looking up draft…');
+  _mountEditorLoading('正在查找草稿…');
   _findDraftForImage(imageId).then(_draft => {
     if (!state.editorOpen) return;
     if (!_draft) return null;
     state.draftId = _draft.id;
-    state.draftName = _draft.name || displayName || 'Untitled';
+    state.draftName = _draft.name || displayName || '未命名';
     const innerLabel = state.editorLoadingEl?.querySelector('.ge-loading-text');
-    if (innerLabel) innerLabel.textContent = 'Resuming draft…';
+    if (innerLabel) innerLabel.textContent = '正在恢复草稿…';
     return _restoreDraft(_draft).then(() => {
       if (!state.editorOpen) return null;
       // If the draft was broken/empty (0 layers reconstructed), fall
@@ -3633,7 +3633,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
       const sizeLabel = document.getElementById('ge-canvas-size');
       if (sizeLabel) sizeLabel.textContent = `${state.imgWidth}×${state.imgHeight}`;
       _unmountEditorLoading();
-      if (uiModule) uiModule.showToast('Resumed previous edit');
+      if (uiModule) uiModule.showToast('已恢复之前的编辑');
       return 'restored';
     });
   }).then(restored => {
@@ -3652,10 +3652,10 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   // downloads / decodes. Especially important for multi-MB photos where
   // the canvas would otherwise sit blank for several seconds with no
   // feedback. If a draft-lookup overlay is already mounted, reuse it.
-  if (!state.editorLoadingEl) _mountEditorLoading('Loading…');
+  if (!state.editorLoadingEl) _mountEditorLoading('加载中…');
   else {
     const inner = state.editorLoadingEl.querySelector('.ge-loading-text');
-    if (inner) inner.textContent = 'Loading…';
+    if (inner) inner.textContent = '加载中…';
   }
   const _removeLoading = () => _unmountEditorLoading();
 
@@ -3666,7 +3666,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   img.onload = () => {
     if (!state.editorOpen) return;
     _initCanvas(img.naturalWidth, img.naturalHeight);
-    const photoLayer = createLayer('Photo', state.imgWidth, state.imgHeight);
+    const photoLayer = createLayer('照片', state.imgWidth, state.imgHeight);
     photoLayer.ctx.drawImage(img, 0, 0);
     photoLayer.isBase = true;
     state.layers.push(photoLayer);
@@ -3680,7 +3680,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   img.onerror = (e) => {
     console.error('[_loadSourceImage] onerror — failed to load', imageUrl, e);
     _removeLoading();
-    if (uiModule) uiModule.showToast('Failed to load image');
+    if (uiModule) uiModule.showToast('加载图片失败');
     closeEditor();
   };
   img.src = imageUrl;
@@ -3695,19 +3695,19 @@ function _setEditTabLabel(name) {
   if (!tab) return;
   const labelEl = tab.querySelector('.gallery-tab-label') || tab;
   if (!name) {
-    labelEl.textContent = 'Edit';
+    labelEl.textContent = '编辑';
     tab.classList.remove('has-edit');
     return;
   }
   const trimmed = name.length > 24 ? name.slice(0, 22) + '…' : name;
-  labelEl.textContent = `Edit: ${trimmed}`;
+  labelEl.textContent = `编辑: ${trimmed}`;
   tab.classList.add('has-edit');
 }
 
 export function closeEditor() {
   const editorMounted = _galleryEditMounted();
   if ((state.editorOpen || editorMounted) && !window.__galleryAllowCloseEditor) {
-    try { uiModule.showToast('Close the edit tab first'); } catch {}
+    try { uiModule.showToast('请先关闭编辑标签页'); } catch {}
     return false;
   }
   // Flush any pending debounced persist + fire one final save so closing

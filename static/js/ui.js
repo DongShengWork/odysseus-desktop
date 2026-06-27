@@ -220,7 +220,7 @@ _initHoverCardSpaceToggle();
 export async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
-    showToast('Copied');
+    showToast('已复制');
   }
   catch {
     const ta = document.createElement('textarea');
@@ -230,7 +230,7 @@ export async function copyToClipboard(text) {
     ta.select();
     document.execCommand('copy');
     document.body.removeChild(ta);
-    showToast('Copied');
+    showToast('已复制');
   }
 }
 
@@ -377,8 +377,8 @@ export function showToast(msg, durationOrOpts) {
     // the user already acted (or just doesn't want the banner sitting there).
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', 'Dismiss');
-    closeBtn.title = 'Dismiss';
+    closeBtn.setAttribute('aria-label', '忽略');
+    closeBtn.title = '忽略';
     closeBtn.textContent = '×';
     closeBtn.style.cssText = 'margin-left:8px;padding:0;width:20px;height:20px;line-height:1;border:none;background:none;color:var(--fg);opacity:0.55;cursor:pointer;font-size:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;pointer-events:auto;';
     closeBtn.addEventListener('mouseenter', () => { closeBtn.style.opacity = '1'; });
@@ -571,7 +571,7 @@ export function el(id) {
  * Styled confirm dialog — replaces native browser confirm().
  * Returns a Promise<boolean>.
  */
-export function styledConfirm(message, { confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
+export function styledConfirm(message, { confirmText = '确认', cancelText = '取消', danger = false } = {}) {
   return new Promise(resolve => {
     // Reuse or create the modal
     let overlay = document.getElementById('styled-confirm-overlay');
@@ -653,11 +653,11 @@ export function styledConfirm(message, { confirmText = 'Confirm', cancelText = '
  * Resolves to the trimmed string the user typed, or null on Cancel / Escape / backdrop.
  */
 export function styledPrompt(message, {
-  title = 'Name',
+  title = '名称',
   defaultValue = '',
   placeholder = '',
-  confirmText = 'Save',
-  cancelText = 'Cancel',
+  confirmText = '保存',
+  cancelText = '取消',
   maxLength = 80,
 } = {}) {
   return new Promise(resolve => {

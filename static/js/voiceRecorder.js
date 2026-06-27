@@ -120,7 +120,7 @@ async function transcribeOnServer(audioBlob) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail?.message || 'Transcription failed');
+    throw new Error(err.detail?.message || '转录失败');
   }
 
   const data = await res.json();
@@ -142,7 +142,7 @@ function insertTranscription(text, showToast) {
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.focus();
 
-  if (showToast) showToast('Transcribed');
+  if (showToast) showToast('已转录');
 }
 
 /**
@@ -151,13 +151,13 @@ function insertTranscription(text, showToast) {
 export function startRecording(onFileCreated, showToast, showError) {
   // Check for secure context (getUserMedia requires HTTPS or localhost)
   if (!window.isSecureContext) {
-    if (showError) showError('Microphone requires HTTPS. Use a reverse proxy with SSL or access via localhost.');
+    if (showError) showError('麦克风需要 HTTPS 连接。请使用 SSL 反向代理或通过 localhost 访问。');
     _resetRecordingUI();
     return;
   }
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    if (showError) showError('Microphone not supported in this browser.');
+    if (showError) showError('当前浏览器不支持麦克风。');
     _resetRecordingUI();
     return;
   }
@@ -185,23 +185,23 @@ export function startRecording(onFileCreated, showToast, showError) {
           if (transcript) {
             insertTranscription(transcript, showToast);
           } else {
-            if (showToast) showToast('No speech detected');
+            if (showToast) showToast('未检测到语音');
             const audioFile = new File([audioBlob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
             if (onFileCreated) onFileCreated(audioFile);
           }
         } else if (provider === 'local' || provider.startsWith('endpoint:')) {
           // Show "Transcribing..." feedback
-          if (showToast) showToast('Transcribing...', 5000);
+          if (showToast) showToast('转录中...', 5000);
           try {
             const transcript = await transcribeOnServer(audioBlob);
             if (transcript) {
               insertTranscription(transcript, showToast);
             } else {
-              if (showToast) showToast('No speech detected');
+              if (showToast) showToast('未检测到语音');
             }
           } catch (e) {
             console.error('STT transcription error:', e);
-            if (showError) showError('Transcription failed: ' + e.message);
+            if (showError) showError('转录失败: ' + e.message);
             // Fallback: attach as file
             const audioFile = new File([audioBlob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
             if (onFileCreated) onFileCreated(audioFile);
@@ -225,18 +225,18 @@ export function startRecording(onFileCreated, showToast, showError) {
       }
 
       if (showToast) {
-        showToast('Recording...');
+        showToast('录音中...');
       }
     })
     .catch(error => {
       console.error('Microphone access error:', error);
       if (showError) {
         if (error.name === 'NotAllowedError') {
-          showError('Microphone access denied. Check browser permissions.');
+          showError('麦克风权限被拒绝。请检查浏览器权限设置。');
         } else if (error.name === 'NotFoundError') {
-          showError('No microphone found.');
+          showError('未找到麦克风设备。');
         } else {
-          showError('Microphone error: ' + error.message);
+          showError('麦克风错误: ' + error.message);
         }
       }
       _resetRecordingUI();

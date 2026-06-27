@@ -121,7 +121,7 @@ export function wireInpaintControls({
     state.maskCtx.putImageData(imgData, 0, 0);
     composite();
     syncToolClearIndicators();
-    uiModule.showToast('Mask inverted');
+    uiModule.showToast('已反转蒙版');
   });
   document.getElementById('ge-inpaint-clear')?.addEventListener('click', () => {
     if (state.maskCtx) { state.maskCtx.clearRect(0, 0, state.maskCanvas.width, state.maskCanvas.height); composite(); }

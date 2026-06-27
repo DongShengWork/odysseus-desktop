@@ -73,7 +73,7 @@ function _initGroupTab() {
           <span style="font-size:12px;font-weight:500;">${uiModule.esc(label)}</span>
           ${sublabel && sublabel !== label ? '<span style="font-size:10px;opacity:0.35;margin-left:4px;">' + uiModule.esc(sublabel) + '</span>' : ''}
         </span>
-        <button style="background:none;border:none;color:var(--fg);opacity:0.5;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;position:relative;top:-4px;" data-idx="${idx}" title="Remove">&times;</button>
+        <button style="background:none;border:none;color:var(--fg);opacity:0.5;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;position:relative;top:-4px;" data-idx="${idx}" title="移除">&times;</button>
       `;
       row.querySelector('button').addEventListener('click', () => { _groupParticipants.splice(idx, 1); _render(); });
       participantsEl.appendChild(row);
@@ -90,19 +90,19 @@ function _initGroupTab() {
     const charSel = document.createElement('select');
     charSel.className = 'preset-input';
     charSel.style.cssText = 'font-size:11px;flex:1;height:26px;';
-    charSel.innerHTML = '<option value="">Empty...</option>' +
+    charSel.innerHTML = '<option value="">无...</option>' +
       characters.map(c => '<option value="' + c.id + '">' + uiModule.esc(c.name) + '</option>').join('');
 
     const modelSel = document.createElement('select');
     modelSel.className = 'preset-input';
     modelSel.style.cssText = 'font-size:11px;flex:1;height:26px;';
-    modelSel.innerHTML = '<option value="">Model…</option>' +
+    modelSel.innerHTML = '<option value="">选择模型…</option>' +
       models.map(m => '<option value="' + m.mid + '">' + uiModule.esc(m.display) + '</option>').join('');
 
     // Auto-add when model is selected
     modelSel.addEventListener('change', () => {
       if (!modelSel.value) return;
-      if (_groupParticipants.length >= 8) { uiModule.showToast('Max 8'); return; }
+      if (_groupParticipants.length >= 8) { uiModule.showToast('最多 8 个'); return; }
       const entry = { character: null, model: null };
       entry.model = models.find(m => m.mid === modelSel.value) || null;
       if (charSel.value) entry.character = characters.find(c => c.id === charSel.value) || null;
@@ -123,7 +123,7 @@ function _initGroupTab() {
     modeBtn.addEventListener('click', () => {
       _mode = _mode === 'parallel' ? 'round-robin' : 'parallel';
       modeBtn.classList.toggle('active', _mode === 'parallel');
-      modeBtn.innerHTML = (_mode === 'parallel' ? ICON_PAR : ICON_SEQ) + '<span class="compare-toggle-label">' + (_mode === 'parallel' ? 'Parallel' : 'Sequential') + '</span>';
+      modeBtn.innerHTML = (_mode === 'parallel' ? ICON_PAR : ICON_SEQ) + '<span class="compare-toggle-label">' + (_mode === 'parallel' ? '并行' : '顺序') + '</span>';
     });
   }
 
@@ -149,7 +149,7 @@ function _initGroupTab() {
       return m;
     }).filter(Boolean);
 
-    if (picked.length < 2) { uiModule.showToast('Need at least 2 participants — add models or characters'); return; }
+    if (picked.length < 2) { uiModule.showToast('至少需要 2 个参与者 — 请添加模型或角色'); return; }
 
     const modal = document.getElementById('custom-preset-modal');
     if (modal) modal.classList.add('hidden');
@@ -192,13 +192,13 @@ function _initGroupTab() {
       } catch (e) {}
     }
 
-    uiModule.showToast('Group chat ready — ' + picked.length + ' participants');
+    uiModule.showToast('群聊已就绪 — ' + picked.length + ' 个参与者');
   });
 
   const groupTab = document.querySelector('.preset-tab[data-chartab="group"]');
   if (groupTab) groupTab.addEventListener('click', () => {
     _modelsCache = null;
-    if (startBtn) startBtn.textContent = 'Start Group';
+    if (startBtn) startBtn.textContent = '开始群聊';
     _loadGroupPresets();
     if (_groupParticipants.length === 0) {
       setTimeout(() => addBtn.click(), 100);
@@ -226,7 +226,7 @@ function _initGroupTab() {
         chip.className = 'preset-save-btn';
         chip.style.cssText = 'padding:3px 10px;font-size:11px;background:color-mix(in srgb, var(--fg) 5%, transparent);border:1px solid var(--border);';
         const chipLabel = document.createElement('span');
-        chipLabel.textContent = g.name || 'Group ' + (idx + 1);
+        chipLabel.textContent = g.name || '群组 ' + (idx + 1);
         chip.appendChild(chipLabel);
         const chipX = document.createElement('span');
         chipX.textContent = ' \u00d7';
@@ -260,7 +260,7 @@ function _initGroupTab() {
         // Long-press / right-click to delete
         chip.addEventListener('contextmenu', async (e) => {
           e.preventDefault();
-          if (await window.styledConfirm('Delete preset "' + (g.name || 'Group') + '"?', { confirmText: 'Delete', danger: true })) {
+          if (await window.styledConfirm('删除预设 "' + (g.name || '群组') + '"？', { confirmText: '删除', danger: true })) {
             groups.splice(idx, 1);
             fetch(API_BASE + '/api/presets/groups', {
               method: 'POST', credentials: 'same-origin',
@@ -277,7 +277,7 @@ function _initGroupTab() {
   document.querySelectorAll('.preset-tab[data-chartab]').forEach(tab => {
     if (tab.dataset.chartab !== 'group') {
       tab.addEventListener('click', () => {
-        if (startBtn) startBtn.textContent = 'Start';
+        if (startBtn) startBtn.textContent = '开始';
       });
     }
   });
@@ -335,7 +335,7 @@ export async function showModelPicker() {
     // Header
     const header = document.createElement('div');
     header.className = 'modal-header';
-    header.innerHTML = '<h4>Group Chat — Select Models</h4>';
+    header.innerHTML = '<h4>群聊 — 选择模型</h4>';
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
     closeBtn.innerHTML = '&#x2716;';
@@ -351,10 +351,10 @@ export async function showModelPicker() {
     modeRow.style.cssText = 'display:flex;gap:8px;margin-bottom:10px;align-items:center;font-size:12px;';
     modeRow.innerHTML = `
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
-        <input type="radio" name="group-mode" value="parallel" ${_mode === 'parallel' ? 'checked' : ''}> All respond
+        <input type="radio" name="group-mode" value="parallel" ${_mode === 'parallel' ? 'checked' : ''}> 全部回复
       </label>
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
-        <input type="radio" name="group-mode" value="round-robin" ${_mode === 'round-robin' ? 'checked' : ''}> Round-robin
+        <input type="radio" name="group-mode" value="round-robin" ${_mode === 'round-robin' ? 'checked' : ''}> 轮询
       </label>
     `;
     body.appendChild(modeRow);
@@ -362,7 +362,7 @@ export async function showModelPicker() {
     // Search
     const search = document.createElement('input');
     search.type = 'text';
-    search.placeholder = 'Filter models…';
+    search.placeholder = '筛选模型…';
     search.className = 'memory-search-input';
     search.style.marginBottom = '8px';
     body.appendChild(search);
@@ -376,8 +376,8 @@ export async function showModelPicker() {
     const footer = document.createElement('div');
     footer.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:10px;';
     footer.innerHTML = `
-      <span id="group-selected-count" style="font-size:11px;opacity:0.5;">0 selected</span>
-      <button id="group-start-btn" class="btn-primary" disabled style="padding:6px 16px;font-size:12px;">Start Group Chat</button>
+      <span id="group-selected-count" style="font-size:11px;opacity:0.5;">已选 0 个</span>
+      <button id="group-start-btn" class="btn-primary" disabled style="padding:6px 16px;font-size:12px;">开始群聊</button>
     `;
     body.appendChild(footer);
 
@@ -417,7 +417,7 @@ export async function showModelPicker() {
     }
 
     async function render(filter) {
-      list.innerHTML = '<div style="opacity:0.4;padding:8px;font-size:12px;">Loading models…</div>';
+      list.innerHTML = '<div style="opacity:0.4;padding:8px;font-size:12px;">加载模型…</div>';
       const all = await getAllModels();
       const q = (filter || '').toLowerCase();
       all.forEach(m => {
@@ -440,12 +440,12 @@ export async function showModelPicker() {
         });
         row.querySelector('input').addEventListener('change', (e) => {
           if (e.target.checked) {
-            if (selected.size >= 8) { e.target.checked = false; uiModule.showToast('Max 8 models'); return; }
+            if (selected.size >= 8) { e.target.checked = false; uiModule.showToast('最多 8 个模型'); return; }
             selected.add(m.mid);
           } else {
             selected.delete(m.mid);
           }
-          document.getElementById('group-selected-count').textContent = selected.size + ' selected';
+          document.getElementById('group-selected-count').textContent = '已选 ' + selected.size + ' 个';
           document.getElementById('group-start-btn').disabled = selected.size < 2;
           row.style.background = selected.has(m.mid) ? 'color-mix(in srgb, var(--accent, var(--red)) 12%, transparent)' : '';
         });
@@ -470,7 +470,7 @@ export async function showModelPicker() {
       body.innerHTML = '';
       const stepTitle = document.createElement('div');
       stepTitle.style.cssText = 'font-size:12px;opacity:0.5;margin-bottom:8px;';
-      stepTitle.textContent = 'Assign characters (optional)';
+      stepTitle.textContent = '分配角色（可选）';
       body.appendChild(stepTitle);
 
       // Build character options
@@ -487,7 +487,7 @@ export async function showModelPicker() {
         `;
         const sel = document.createElement('select');
         sel.style.cssText = 'font-size:11px;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--fg);max-width:140px;';
-        let optsHtml = '<option value="">No character</option>';
+        let optsHtml = '<option value="">无角色</option>';
         characters.forEach(c => {
           optsHtml += `<option value="${c.id}">${uiModule.esc(c.name)}</option>`;
         });
@@ -508,7 +508,7 @@ export async function showModelPicker() {
       const goBtn = document.createElement('button');
       goBtn.className = 'btn-primary';
       goBtn.style.cssText = 'margin-top:10px;padding:6px 16px;font-size:12px;width:100%;';
-      goBtn.textContent = 'Start Group Chat';
+      goBtn.textContent = '开始群聊';
       goBtn.addEventListener('click', () => {
         // Attach character info to picked models
         picked.forEach(m => {
@@ -680,7 +680,7 @@ function _createGroupBubble(model, box) {
   chatRenderer.applyModelColor(wrap.querySelector('.role'), model.mid);
 
   // Spinner — identical to chat.js line 3062
-  const spinner = spinnerModule.create('Generating response', 'right');
+  const spinner = spinnerModule.create('正在生成回复', 'right');
   const bodyDiv = wrap.querySelector('.body');
   bodyDiv.appendChild(spinner.createElement());
   spinner.start();
@@ -779,7 +779,7 @@ async function _syncAllResponses(holders) {
 
 async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
   if (!sessionId) {
-    holderEl.querySelector('.body').innerHTML = '<i style="opacity:0.5;">[Session creation failed]</i>';
+    holderEl.querySelector('.body').innerHTML = '<i style="opacity:0.5;">[会话创建失败]</i>';
     return;
   }
 
@@ -873,7 +873,7 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
           else if (json.error) {
             const errDiv = document.createElement('div');
             errDiv.style.cssText = 'color:var(--color-error);font-style:italic;padding:4px 0;';
-            errDiv.textContent = `[Error: ${json.error}]`;
+            errDiv.textContent = `[错误: ${json.error}]`;
             bodyEl.appendChild(errDiv);
           }
         } catch (e) { /* skip unparseable */ }
@@ -882,7 +882,7 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
   } catch (e) {
     if (e.name === 'AbortError') return;
     console.error('[group] Stream error:', e);
-    bodyEl.innerHTML += '<div style="color:var(--color-error);font-style:italic;">[Stream error]</div>';
+    bodyEl.innerHTML += '<div style="color:var(--color-error);font-style:italic;">[数据流错误]</div>';
   }
 
   // Final render with footer
@@ -894,7 +894,7 @@ async function _streamToHolder(modelIdx, sessionId, msg, holderEl, abortCtrl) {
     if (markdownModule.renderMermaid) markdownModule.renderMermaid(holderEl);
     holderEl.appendChild(chatRenderer.createMsgFooter(holderEl));
   } else if (!bodyEl.querySelector('.agent-tool-event') && !bodyEl.querySelector('img')) {
-    bodyEl.innerHTML = '<i style="opacity:0.5;">[No response]</i>';
+    bodyEl.innerHTML = '<i style="opacity:0.5;">[无回复]</i>';
   }
 
   holderEl.dataset.raw = accumulated;

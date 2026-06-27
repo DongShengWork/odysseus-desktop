@@ -154,8 +154,8 @@ export function wireKeyboardShortcuts(deps) {
           tmp.toBlob(blob => {
             if (blob && navigator.clipboard?.write) {
               navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(() => {
-                uiModule.showToast(isCut ? 'Cut to clipboard' : 'Copied to clipboard');
-              }).catch(() => uiModule.showToast(isCut ? 'Cut (editor only)' : 'Copied (editor only)'));
+                uiModule.showToast(isCut ? '已剪切到剪贴板' : '已复制到剪贴板');
+              }).catch(() => uiModule.showToast(isCut ? '已剪切 (仅编辑器内)' : '已复制 (仅编辑器内)'));
             }
           }, 'image/png');
           if (isCut) {
@@ -197,8 +197,8 @@ export function wireKeyboardShortcuts(deps) {
         tmp.toBlob(blob => {
           if (blob && navigator.clipboard?.write) {
             navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(() => {
-              uiModule.showToast(isCut ? 'Cut to clipboard' : 'Copied to clipboard');
-            }).catch(() => uiModule.showToast(isCut ? 'Cut (editor only)' : 'Copied (editor only)'));
+              uiModule.showToast(isCut ? '已剪切到剪贴板' : '已复制到剪贴板');
+            }).catch(() => uiModule.showToast(isCut ? '已剪切 (仅编辑器内)' : '已复制 (仅编辑器内)'));
           }
         }, 'image/png');
         if (e.key === 'x') {
@@ -222,8 +222,8 @@ export function wireKeyboardShortcuts(deps) {
           layer.canvas.toBlob(blob => {
             if (blob && navigator.clipboard?.write) {
               navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-                .then(() => uiModule.showToast('Layer copied to clipboard'))
-                .catch(() => uiModule.showToast('Copy failed (clipboard permission denied?)'));
+                .then(() => uiModule.showToast('图层已复制到剪贴板'))
+                .catch(() => uiModule.showToast('复制失败（剪贴板权限被拒绝？）'));
             }
           }, 'image/png');
           return;
@@ -239,7 +239,7 @@ export function wireKeyboardShortcuts(deps) {
         state.lassoActive = false;
         composite();
         drawLassoOverlay();
-        uiModule.showToast('All selected — Ctrl+C to copy, Del to delete');
+        uiModule.showToast('已全选 — Ctrl+C 复制，Del 删除');
       }
       // Ctrl+V handled by the paste event listener.
       if (e.key === 'v') { /* no-op here */ }

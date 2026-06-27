@@ -74,7 +74,7 @@ function isCompareActive() {
 }
 
 function _compareModeLabel() {
-  return ({ search: ' search providers', agent: ' agents', research: ' research models' }[state._compareMode] || ' models');
+  return ({ search: ' 搜索提供商', agent: ' 智能体', research: ' 研究模型' }[state._compareMode] || ' 模型');
 }
 
 function _setToolbarMode(mode, syncModeTools = !state.isActive) {
@@ -106,7 +106,7 @@ function _syncCompareModeFromToolbar(mode) {
   _setToolbarMode(state._compareMode, false);
   const headerLabel = document.querySelector('.compare-header-label');
   if (headerLabel) {
-    headerLabel.textContent = 'Comparing' + _compareModeLabel() + (state._blindMode ? ' (blind)' : '') + ' · ' + state._timeout + 's timeout';
+    headerLabel.textContent = '对比' + _compareModeLabel() + (state._blindMode ? ' (盲测)' : '') + ' · ' + state._timeout + '秒超时';
   }
   const evalWrap = document.getElementById('cmp-eval-wrap');
   if (evalWrap && typeof evalWrap._renderItems === 'function') evalWrap._renderItems();
@@ -230,7 +230,7 @@ async function deactivate(teardown) {
 /** Build the compare UI: sessions, header bar, grid of panes, vote bar, eval dropdown. */
 async function _buildCompareUI() {
   if (state._selectedModels.length < 1) {
-    if (uiModule) uiModule.showError('Select at least 1 model');
+    if (uiModule) uiModule.showError('请至少选择1个模型');
     return;
   }
 
@@ -350,7 +350,7 @@ async function _buildCompareUI() {
   const headerLabel = document.createElement('span');
   headerLabel.className = 'compare-header-label';
   headerLabel.style.cssText = 'font-size:10px;font-weight:400;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
-  headerLabel.textContent = 'Comparing' + _compareModeLabel() + (state._blindMode ? ' (blind)' : '') + ' · ' + state._timeout + 's timeout';
+  headerLabel.textContent = '对比中' + _compareModeLabel() + (state._blindMode ? '（盲测）' : '') + ' · ' + state._timeout + 's 超时';
   // Left side: the Compare tool icon (two side-by-side panes, matching the
   // rail/sidebar icon) + the label. Other tool headers carry their icon; this
   // one was missing it.
@@ -370,8 +370,8 @@ async function _buildCompareUI() {
 
   const checkBtn = document.createElement('button');
   checkBtn.id = 'compare-check-btn';
-  checkBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><span style="font-size:11px;margin-left:3px;">Probe</span>';
-  checkBtn.title = 'Probe unverified models with a small test request';
+  checkBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><span style="font-size:11px;margin-left:3px;">探测</span>';
+  checkBtn.title = '用小测试请求探测未验证的模型';
   checkBtn.style.cssText = _btnCSS;
   checkBtn.addEventListener('click', () => _checkUnprobed());
   headerActions.appendChild(checkBtn);
@@ -391,8 +391,8 @@ async function _buildCompareUI() {
   exportWrap.style.cssText = 'position:relative;display:inline-flex;';
   const exportBtn = document.createElement('button');
   exportBtn.id = 'compare-export-btn';
-  exportBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span style="font-size:11px;margin-left:3px;">Export</span>';
-  exportBtn.title = 'Export options';
+  exportBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span style="font-size:11px;margin-left:3px;">导出</span>';
+  exportBtn.title = '导出选项';
   exportBtn.style.cssText = _btnCSS;
   exportBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -403,16 +403,16 @@ async function _buildCompareUI() {
 
   const shuffleBtn = document.createElement('button');
   shuffleBtn.id = 'compare-shuffle-btn';
-  shuffleBtn.innerHTML = ICON_DICE + '<span style="font-size:11px;margin-left:3px;">Shuffle</span>';
-  shuffleBtn.title = 'Shuffle pane positions';
+  shuffleBtn.innerHTML = ICON_DICE + '<span style="font-size:11px;margin-left:3px;">随机排列</span>';
+  shuffleBtn.title = '随机排列窗格位置';
   shuffleBtn.style.cssText = _btnCSS;
   shuffleBtn.addEventListener('click', () => shufflePanePositions());
   headerActions.appendChild(shuffleBtn);
 
   const addBtn = document.createElement('button');
   addBtn.id = 'compare-add-btn';
-  addBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span style="font-size:11px;margin-left:3px;">Add</span>';
-  addBtn.title = 'Add model pane';
+  addBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span style="font-size:11px;margin-left:3px;">添加</span>';
+  addBtn.title = '添加模型窗格';
   addBtn.style.cssText = _btnCSS;
   addBtn.addEventListener('click', () => _addPane(addBtn));
   headerActions.appendChild(addBtn);
@@ -420,7 +420,7 @@ async function _buildCompareUI() {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'compare-close-btn';
   closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-  closeBtn.title = 'Close compare mode';
+  closeBtn.title = '关闭对比模式';
   // Match Export/Score/Shuffle/Model styling so the X sits flush with
   // the rest of the toolbar instead of being a 24×24 bordered square.
   closeBtn.style.cssText = _btnCSS;
@@ -452,12 +452,12 @@ async function _buildCompareUI() {
         '<span class="pane-timer" id="cmp-timer-' + i + '"></span>' +
         '<span class="pane-finish-badge" id="cmp-badge-' + i + '"></span>' +
         '<div class="pane-actions">' +
-          '<button class="pane-action-btn pane-stop-btn" data-action="stop" data-pane="' + i + '" title="Stop" style="display:none;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>' +
-          '<button class="pane-action-btn pane-preview-btn" data-action="preview" data-pane="' + i + '" id="cmp-preview-' + i + '" title="Run preview" style="display:none;">' + ICON_PLAY + '</button>' +
-          '<button class="pane-action-btn" data-action="reroll" data-pane="' + i + '" title="Re-roll">' + ICON_REROLL + '</button>' +
-          '<button class="pane-action-btn" data-action="copy" data-pane="' + i + '" title="Copy">' + ICON_COPY + '</button>' +
-          '<button class="pane-action-btn" data-action="expand" data-pane="' + i + '" title="Expand">' + ICON_EXPAND + '</button>' +
-          '<button class="pane-action-btn pane-close-btn" data-action="close" data-pane="' + i + '" title="Remove pane">' + ICON_CLOSE + '</button>' +
+          '<button class="pane-action-btn pane-stop-btn" data-action="stop" data-pane="' + i + '" title="停止" style="display:none;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>' +
+          '<button class="pane-action-btn pane-preview-btn" data-action="preview" data-pane="' + i + '" id="cmp-preview-' + i + '" title="运行预览" style="display:none;">' + ICON_PLAY + '</button>' +
+          '<button class="pane-action-btn" data-action="reroll" data-pane="' + i + '" title="重新生成">' + ICON_REROLL + '</button>' +
+          '<button class="pane-action-btn" data-action="copy" data-pane="' + i + '" title="复制">' + ICON_COPY + '</button>' +
+          '<button class="pane-action-btn" data-action="expand" data-pane="' + i + '" title="展开">' + ICON_EXPAND + '</button>' +
+          '<button class="pane-action-btn pane-close-btn" data-action="close" data-pane="' + i + '" title="移除窗格">' + ICON_CLOSE + '</button>' +
         '</div>' +
       '</div>' +
       '<div class="chat-history" id="cmp-history-' + i + '"></div>' +
@@ -465,7 +465,7 @@ async function _buildCompareUI() {
       '<div class="pane-vote-footer">' +
         '<button class="pane-vote-btn" data-pane="' + i + '" type="button" disabled style="opacity:0.4;">' +
           '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:-2px;"><polyline points="20 6 9 17 4 12"/></svg>' +
-          '<span class="pane-vote-label">Vote ' + escapeHtml(label) + '</span>' +
+          '<span class="pane-vote-label">投票 ' + escapeHtml(label) + '</span>' +
         '</button>' +
       '</div>';
     grid.appendChild(pane);
@@ -521,7 +521,7 @@ async function _buildCompareUI() {
   }
   const msgTA = document.getElementById('message');
   if (msgTA) {
-    msgTA.placeholder = window.matchMedia('(max-width: 767px)').matches ? '' : 'Enter prompt for all models...';
+    msgTA.placeholder = window.matchMedia('(max-width: 767px)').matches ? '' : '为所有模型输入提示词...';
     requestAnimationFrame(() => msgTA.focus());
   }
 
@@ -553,14 +553,14 @@ function _setSendBtn(mode) {
   if (!btn) return;
   if (mode === 'stop') {
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
-    btn.title = 'Stop all models';
+    btn.title = '停止所有模型';
     btn.dataset.mode = 'streaming';
     btn.classList.remove('mic-mode', 'newchat-mode');
   } else {
     btn.dataset.mode = '';
     btn.innerHTML = SEND_SVG;
     btn.style.color = '';
-    btn.title = 'Send to all models';
+    btn.title = '发送给所有模型';
     btn.classList.remove('mic-mode', 'newchat-mode', 'newchat-expanded');
   }
 }
@@ -683,16 +683,16 @@ async function _executeCompare(message) {
         if (!hist) continue;
         const userMsg = document.createElement('div');
         userMsg.className = 'msg msg-user';
-        userMsg.innerHTML = '<div class="role">You</div><div class="body"></div>';
+        userMsg.innerHTML = '<div class="role">你</div><div class="body"></div>';
         userMsg.querySelector('.body').textContent = message;
         hist.appendChild(userMsg);
 
         const aiMsg = document.createElement('div');
         aiMsg.className = 'msg msg-ai';
-        aiMsg.innerHTML = '<div class="role">Search</div><div class="body"></div>';
+        aiMsg.innerHTML = '<div class="role">搜索</div><div class="body"></div>';
         const aiBody = aiMsg.querySelector('.body');
         if (spinnerModule) {
-          const spinner = spinnerModule.create('Searching...', 'right');
+          const spinner = spinnerModule.create('搜索中...', 'right');
           aiBody.appendChild(spinner.createElement());
           spinner.start();
         }
@@ -714,7 +714,7 @@ async function _executeCompare(message) {
           const data = await res.json();
           return { idx: i, data };
         } catch (err) {
-          return { idx: i, data: { results: [], error: err.name === 'AbortError' ? 'Stopped' : err.message } };
+          return { idx: i, data: { results: [], error: err.name === 'AbortError' ? '已停止' : err.message } };
         }
       }
 
@@ -740,16 +740,16 @@ async function _executeCompare(message) {
               const aiBody = aiMsg.querySelector('.body');
               aiBody.innerHTML = '';
               if (data.error) {
-                aiBody.innerHTML = '<div style="color:var(--color-error);font-size:0.85em;">Error: ' + escapeHtml(data.error) + '</div>';
+                aiBody.innerHTML = '<div style="color:var(--color-error);font-size:0.85em;">错误: ' + escapeHtml(data.error) + '</div>';
               } else if (!data.results || data.results.length === 0) {
-                aiBody.innerHTML = '<div style="color:color-mix(in srgb, var(--fg) 50%, transparent);font-size:0.85em;font-style:italic;">No results found</div>';
+                aiBody.innerHTML = '<div style="color:color-mix(in srgb, var(--fg) 50%, transparent);font-size:0.85em;font-style:italic;">未找到结果</div>';
               } else {
                 aiBody.appendChild(_renderSearchResults(data));
               }
               const footer = document.createElement('div'); footer.className = 'msg-footer';
               const span = document.createElement('span'); span.className = 'response-metrics';
               const parts = [];
-              if (data.results) parts.push(data.results.length + ' results');
+              if (data.results) parts.push(data.results.length + ' 条结果');
               if (data.time) parts.push(data.time + 's');
               span.textContent = parts.join(' | '); footer.appendChild(span); aiMsg.appendChild(footer);
               hist.scrollTop = hist.scrollHeight;
@@ -766,10 +766,10 @@ async function _executeCompare(message) {
               if (seqHist) {
                 const synthMsg = document.createElement('div');
                 synthMsg.className = 'msg msg-ai';
-                synthMsg.innerHTML = '<div class="role">Analysis</div><div class="body"></div>';
+                synthMsg.innerHTML = '<div class="role">分析</div><div class="body"></div>';
                 const synthBody = synthMsg.querySelector('.body');
                 let spinner = null;
-                if (spinnerModule) { spinner = spinnerModule.create('Analyzing...', 'right'); synthBody.appendChild(spinner.createElement()); spinner.start(); }
+                if (spinnerModule) { spinner = spinnerModule.create('分析中...', 'right'); synthBody.appendChild(spinner.createElement()); spinner.start(); }
                 seqHist.appendChild(synthMsg);
                 seqHist.scrollTop = seqHist.scrollHeight;
                 const resultsText = data.results.map((r, ri) => `[${ri + 1}] ${r.title}\n${r.snippet || ''}\nURL: ${r.url}`).join('\n\n');
@@ -792,9 +792,9 @@ async function _executeCompare(message) {
         aiBody.innerHTML = '';
 
         if (data.error) {
-          aiBody.innerHTML = '<div style="color:var(--color-error);font-size:0.85em;">Error: ' + escapeHtml(data.error) + '</div>';
+          aiBody.innerHTML = '<div style="color:var(--color-error);font-size:0.85em;">错误: ' + escapeHtml(data.error) + '</div>';
         } else if (!data.results || data.results.length === 0) {
-          aiBody.innerHTML = '<div style="color:color-mix(in srgb, var(--fg) 50%, transparent);font-size:0.85em;font-style:italic;">No results found</div>';
+          aiBody.innerHTML = '<div style="color:color-mix(in srgb, var(--fg) 50%, transparent);font-size:0.85em;font-style:italic;">未找到结果</div>';
         } else {
           aiBody.appendChild(_renderSearchResults(data));
         }
@@ -805,7 +805,7 @@ async function _executeCompare(message) {
         const span = document.createElement('span');
         span.className = 'response-metrics';
         const parts = [];
-        if (data.results) parts.push(data.results.length + ' results');
+        if (data.results) parts.push(data.results.length + ' 条结果');
         if (data.time) parts.push(data.time + 's');
         span.textContent = parts.join(' | ');
         footer.appendChild(span);
@@ -836,11 +836,11 @@ async function _executeCompare(message) {
           // Add synthesis message with spinner
           const synthMsg = document.createElement('div');
           synthMsg.className = 'msg msg-ai';
-          synthMsg.innerHTML = '<div class="role">Analysis</div><div class="body"></div>';
+          synthMsg.innerHTML = '<div class="role">分析</div><div class="body"></div>';
           const synthBody = synthMsg.querySelector('.body');
           let spinner = null;
           if (spinnerModule) {
-            spinner = spinnerModule.create('Analyzing...', 'right');
+            spinner = spinnerModule.create('分析中...', 'right');
             synthBody.appendChild(spinner.createElement());
             spinner.start();
           }
@@ -873,7 +873,7 @@ async function _executeCompare(message) {
       buildVoteBar(n);
     } catch (err) {
       console.error('Search compare error:', err);
-      if (uiModule) uiModule.showError('Search compare failed: ' + err.message);
+      if (uiModule) uiModule.showError('搜索对比失败: ' + err.message);
     } finally {
       state._streaming = false;
       _setSendBtn('send');
@@ -903,7 +903,7 @@ async function _executeCompare(message) {
 
       const userMsg = document.createElement('div');
       userMsg.className = 'msg msg-user';
-      userMsg.innerHTML = '<div class="role">You</div><div class="body"></div>';
+      userMsg.innerHTML = '<div class="role">你</div><div class="body"></div>';
       userMsg.querySelector('.body').textContent = message;
       hist.appendChild(userMsg);
 
@@ -914,8 +914,8 @@ async function _executeCompare(message) {
       if (spinnerModule) {
         // In sequential mode, only first pane says "Processing", rest say "Waiting"
         const label = (!state._parallel && i > 0)
-          ? 'Waiting for Model ' + _slotChar(i - 1) + '...'
-          : 'Processing...';
+          ? '等待模型 ' + _slotChar(i - 1) + '...'
+          : '处理中...';
         const spinner = spinnerModule.create(label, 'right');
         aiBody.appendChild(spinner.createElement());
         spinner.start();
@@ -979,7 +979,7 @@ async function _executeCompare(message) {
       for (let i = 0; i < state._paneSessionIds.length; i++) {
         // Update spinner
         if (aiElements[i] && aiElements[i]._spinner) {
-          aiElements[i]._spinner.updateLabel('Processing...');
+          aiElements[i]._spinner.updateLabel('处理中...');
         }
 
         await streamToPane(i, state._paneSessionIds[i], message, aiElements[i], { searchContext: sharedSearchContext, timeout: runTimeout });
@@ -1003,7 +1003,7 @@ async function _executeCompare(message) {
 
   } catch (err) {
     console.error('Compare error:', err);
-    if (uiModule) uiModule.showError('Compare failed: ' + err.message);
+    if (uiModule) uiModule.showError('对比失败: ' + err.message);
   } finally {
     state._streaming = false;
     _setSendBtn('send');
@@ -1031,14 +1031,14 @@ function _buildComparisonMarkdown() {
   if (!grid) return null;
   const panes = grid.querySelectorAll('.compare-pane');
   if (!panes.length) return null;
-  const prompt = state._lastPrompt || '(no prompt yet — run a comparison first)';
+  const prompt = state._lastPrompt || '(暂无提示词 — 请先运行对比)';
   const expected = state._expectedAnswer || '';
   const date = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  let md = '# Compare\n\n';
-  md += '**When:** ' + date + '\n';
-  md += '**Type:** ' + (state._compareMode || 'chat') + (state._blindMode ? ' (blind)' : '') + '\n';
-  md += '**Prompt:**\n\n```\n' + prompt + '\n```\n\n';
-  if (expected) md += '**Expected answer:** `' + expected + '`\n\n';
+  let md = '# 对比\n\n';
+  md += '**时间:** ' + date + '\n';
+  md += '**类型:** ' + (state._compareMode || 'chat') + (state._blindMode ? ' (盲测)' : '') + '\n';
+  md += '**提示词:**\n\n```\n' + prompt + '\n```\n\n';
+  if (expected) md += '**预期答案:** `' + expected + '`\n\n';
   panes.forEach((pane, i) => {
     const m = state._selectedModels[i];
     const name = m ? (m.name || m.model) + (m.endpointName ? ' (' + m.endpointName + ')' : '') : 'Model ' + (i + 1);
@@ -1055,7 +1055,7 @@ function _buildComparisonMarkdown() {
       if (metrics.response_time != null) bits.push(metrics.response_time + 's');
       if (bits.length) md += '_' + bits.join(' · ') + '_\n\n';
     }
-    md += text ? text + '\n\n' : '_(no response)_\n\n';
+    md += text ? text + '\n\n' : '_(无响应)_\n\n';
     md += '---\n\n';
   });
   return md;
@@ -1069,9 +1069,9 @@ function _toggleExportMenu(btn) {
   m.className = 'compare-export-menu';
   m.style.cssText = 'position:fixed;z-index:10001;top:' + (r.bottom + 4) + 'px;left:' + r.left + 'px;background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:4px;font-size:12px;display:flex;flex-direction:column;min-width:170px;';
   const opts = [
-    { label: 'Copy as Markdown', fn: () => _exportCopyMarkdown(btn) },
-    { label: 'Download .md',     fn: () => _exportDownloadMarkdown() },
-    { label: 'Print / Save PDF', fn: () => _exportPrint() },
+    { label: '复制为 Markdown', fn: () => _exportCopyMarkdown(btn) },
+    { label: '下载 .md 文件',     fn: () => _exportDownloadMarkdown() },
+    { label: '打印 / 保存为 PDF', fn: () => _exportPrint() },
   ];
   for (const o of opts) {
     const item = document.createElement('button');
@@ -1107,9 +1107,9 @@ async function _exportCopyMarkdown(_btn) {
       document.body.appendChild(ta);
       ta.select(); document.execCommand('copy'); ta.remove();
     }
-    try { window.uiModule?.showToast?.('Copied comparison to clipboard'); } catch {}
+    try { window.uiModule?.showToast?.('对比内容已复制到剪贴板'); } catch {}
   } catch (e) {
-    try { window.uiModule?.showToast?.('Copy failed'); } catch {}
+    try { window.uiModule?.showToast?.('复制失败'); } catch {}
   }
 }
 
@@ -1137,7 +1137,7 @@ function _exportPrint() {
   if (!w) return;
   try { w.opener = null; } catch (_) {}
   const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const html = '<!doctype html><meta charset="utf-8"><title>Compare export</title>' +
+  const html = '<!doctype html><meta charset="utf-8"><title>对比导出</title>' +
     '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:780px;margin:32px auto;padding:0 24px;line-height:1.55;color:#222}' +
     'pre{background:#f5f5f5;border-radius:6px;padding:10px;white-space:pre-wrap}' +
     'h1{margin-top:0}h2{border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:32px}' +
@@ -1154,15 +1154,15 @@ async function _exportComparison(btn) {
   const panes = grid.querySelectorAll('.compare-pane');
   if (!panes.length) return;
 
-  const prompt = state._lastPrompt || '(no prompt yet — run a comparison first)';
+  const prompt = state._lastPrompt || '(暂无提示词 — 请先运行对比)';
   const expected = state._expectedAnswer || '';
   const date = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-  let md = '# Compare\n\n';
-  md += '**When:** ' + date + '\n';
-  md += '**Type:** ' + (state._compareMode || 'chat') + (state._blindMode ? ' (blind)' : '') + '\n';
-  md += '**Prompt:**\n\n```\n' + prompt + '\n```\n\n';
-  if (expected) md += '**Expected answer:** `' + expected + '`\n\n';
+  let md = '# 对比\n\n';
+  md += '**时间:** ' + date + '\n';
+  md += '**类型:** ' + (state._compareMode || 'chat') + (state._blindMode ? ' (盲测)' : '') + '\n';
+  md += '**提示词:**\n\n```\n' + prompt + '\n```\n\n';
+  if (expected) md += '**预期答案:** `' + expected + '`\n\n';
 
   panes.forEach((pane, i) => {
     const m = state._selectedModels[i];
@@ -1181,7 +1181,7 @@ async function _exportComparison(btn) {
       if (metrics.response_time != null) bits.push(metrics.response_time + 's');
       if (bits.length) md += '_' + bits.join(' · ') + '_\n\n';
     }
-    md += text ? text + '\n\n' : '_(no response)_\n\n';
+    md += text ? text + '\n\n' : '_(无响应)_\n\n';
     md += '---\n\n';
   });
 
@@ -1196,12 +1196,12 @@ async function _exportComparison(btn) {
       ta.select(); document.execCommand('copy'); ta.remove();
     }
     if (btn) {
-      btn.innerHTML = '<span style="font-size:11px;">Copied!</span>';
+      btn.innerHTML = '<span style="font-size:11px;">已复制!</span>';
       setTimeout(() => { btn.innerHTML = origLabel; }, 1500);
     }
   } catch (e) {
     if (btn) {
-      btn.innerHTML = '<span style="font-size:11px;color:var(--color-error);">Failed</span>';
+      btn.innerHTML = '<span style="font-size:11px;color:var(--color-error);">失败</span>';
       setTimeout(() => { btn.innerHTML = origLabel; }, 2000);
     }
   }
@@ -1231,10 +1231,10 @@ function _setupEvalPicker() {
   btn.type = 'button';
   btn.id = 'cmp-eval-btn';
   btn.className = 'cmp-eval-btn';
-  btn.title = 'Insert an evaluation prompt';
+  btn.title = '插入评估提示词';
   btn.innerHTML =
     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
-    + '<span class="cmp-eval-label">Eval prompts</span>'
+    + '<span class="cmp-eval-label">评估提示词</span>'
     + '<svg class="cmp-eval-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 
   const menu = document.createElement('div');
@@ -1246,11 +1246,11 @@ function _setupEvalPicker() {
     const label = btn.querySelector('.cmp-eval-label');
     if (label) {
       label.textContent = ({
-        agent: 'Agent prompts',
-        chat: 'Chat prompts',
-        search: 'Search prompts',
-        research: 'Research prompts'
-      }[mode] || 'Eval prompts');
+        agent: '智能体提示词',
+        chat: '对话提示词',
+        search: '搜索提示词',
+        research: '研究提示词'
+      }[mode] || '评估提示词');
     }
     // research/html aren't first-class compare types — fall back gracefully
     const key = EVAL_PROMPTS[mode] ? mode
@@ -1258,14 +1258,14 @@ function _setupEvalPicker() {
     const list = EVAL_PROMPTS[key] || [];
 
     if (!list.length) {
-      menu.innerHTML = '<div class="cmp-eval-empty">No prompts for this type</div>';
+      menu.innerHTML = '<div class="cmp-eval-empty">该类型没有提示词</div>';
       return;
     }
     // Group by sub-category in original order
     const order = [];
     const groups = {};
     for (const p of list) {
-      const sub = p.sub || 'Other';
+      const sub = p.sub || '其他';
       if (!groups[sub]) { groups[sub] = []; order.push(sub); }
       groups[sub].push(p);
     }
@@ -1275,7 +1275,7 @@ function _setupEvalPicker() {
       for (const p of groups[sub]) {
         const data = encodeURIComponent(p.prompt);
         const ans = p.answer ? ' data-answer="' + encodeURIComponent(p.answer) + '"' : '';
-        const checkMark = p.answer ? '<span class="cmp-eval-item-tick" title="Has expected answer">✓</span>' : '';
+        const checkMark = p.answer ? '<span class="cmp-eval-item-tick" title="包含预期答案">✓</span>' : '';
         html += '<button type="button" class="cmp-eval-item" data-prompt="' + data + '"' + ans + '>'
           + escapeHtml(p.label) + checkMark + '</button>';
       }
@@ -1325,9 +1325,9 @@ function _setupEvalPicker() {
   hintChip.className = 'cmp-eval-expected hidden';
   hintChip.id = 'cmp-eval-expected';
   hintChip.innerHTML =
-    '<span class="cmp-eval-expected-label">Expected:</span>'
+    '<span class="cmp-eval-expected-label">预期:</span>'
     + ' <strong class="cmp-eval-expected-value"></strong>'
-    + ' <button type="button" class="cmp-eval-expected-close" title="Dismiss">×</button>';
+    + ' <button type="button" class="cmp-eval-expected-close" title="关闭">×</button>';
   // Anchor the floating panel against the input bar (needs position:relative
   // — added via CSS rule on .chat-input-bar:has(.cmp-eval-expected) below).
   const inputBar = document.querySelector('.chat-input-bar');
@@ -1425,7 +1425,7 @@ function removeOverlays() {
 async function showShufflePoolEditor() {
   let models;
   try { models = await fetchModels(); } catch (e) {
-    if (uiModule) uiModule.showError('Failed to load models');
+    if (uiModule) uiModule.showError('加载模型失败');
     return;
   }
 
@@ -1439,7 +1439,7 @@ async function showShufflePoolEditor() {
 
   const header = document.createElement('div');
   header.className = 'modal-header';
-  header.innerHTML = '<h4>Shuffle Pool</h4>';
+  header.innerHTML = '<h4>随机池</h4>';
   const closeBtn = document.createElement('button');
   closeBtn.className = 'close-btn';
   closeBtn.innerHTML = '&#x2716;';
@@ -1453,7 +1453,7 @@ async function showShufflePoolEditor() {
 
   const desc = document.createElement('p');
   desc.style.cssText = 'color:color-mix(in srgb, var(--fg) 55%, transparent);font-size:0.85em;margin:0 0 12px;';
-  desc.textContent = 'Uncheck models to exclude them from random shuffle. They can still be picked manually.';
+  desc.textContent = '取消勾选以从随机排列中排除模型。模型仍可手动选择。';
   body.appendChild(desc);
 
   const list = document.createElement('div');
@@ -1469,7 +1469,7 @@ async function showShufflePoolEditor() {
     if (items.length === 0) return;
     const heading = document.createElement('div');
     heading.style.cssText = 'font-size:0.78em;font-weight:600;color:color-mix(in srgb, var(--fg) 50%, transparent);text-transform:uppercase;letter-spacing:0.5px;padding:8px 4px 4px;';
-    heading.textContent = type === 'chat' ? 'Chat Models' : 'Image Models';
+    heading.textContent = type === 'chat' ? '对话模型' : '图像模型';
     list.appendChild(heading);
 
     items.forEach(m => {

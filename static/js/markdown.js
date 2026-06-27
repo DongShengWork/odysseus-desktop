@@ -984,7 +984,7 @@ async function _registerEndpointFromButton(btn) {
         window.dispatchEvent(new CustomEvent('ge:model-endpoints-updated', { detail: { baseUrl } }));
         if (window.modelsModule?.refreshModels) window.modelsModule.refreshModels(true);
         if (window.sessionModule?.updateModelPicker) window.sessionModule.updateModelPicker();
-        uiModule.showToast?.(`Already in model picker: ${existing.name || _endpointNameFromUrl(baseUrl)}`);
+        uiModule.showToast?.(`已在模型选择器中: ${existing.name || _endpointNameFromUrl(baseUrl)}`);
         return;
       }
     }
@@ -1013,11 +1013,11 @@ async function _registerEndpointFromButton(btn) {
     window.dispatchEvent(new CustomEvent('ge:model-endpoints-updated', { detail: { baseUrl } }));
     if (window.modelsModule?.refreshModels) await window.modelsModule.refreshModels(true);
     if (window.sessionModule?.updateModelPicker) window.sessionModule.updateModelPicker();
-    uiModule.showToast?.(`Model endpoint added: ${_endpointNameFromUrl(baseUrl)}`);
+    uiModule.showToast?.(`模型端点已添加: ${_endpointNameFromUrl(baseUrl)}`);
   } catch (err) {
     btn.disabled = false;
     btn.innerHTML = original;
-    uiModule.showError?.(`Add endpoint failed: ${err.message || err}`);
+    uiModule.showError?.(`添加端点失败: ${err.message || err}`);
   }
 }
 

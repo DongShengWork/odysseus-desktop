@@ -816,7 +816,7 @@ export function makeEdgeDockController(modal, side = 'right', dockClass) {
     handle.style.pointerEvents = 'auto';
     handle.style.touchAction = 'none';
     handle.style.display = 'none';
-    handle.title = 'Drag to resize docked window';
+    handle.title = '拖拽调整已停靠窗口大小';
     document.body.appendChild(handle);
   }
 
@@ -1003,7 +1003,7 @@ export function makeEdgeDockController(modal, side = 'right', dockClass) {
   stripe.style.pointerEvents = 'auto';
   stripe.style.touchAction = 'none';
   stripe.style.display = 'none';
-  stripe.title = 'Drag to resize email and draft';
+  stripe.title = '拖拽调整邮件和草稿大小';
 
   const _activeLeftDockContent = () => {
     const modal = document.querySelector(

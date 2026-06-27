@@ -48,7 +48,7 @@ function showOutput(panel, text, isError) {
     const cbtn = document.createElement('button');
     cbtn.type = 'button';
     cbtn.className = 'code-runner-copy-inline';
-    cbtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy';
+    cbtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制';
     cbtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -66,15 +66,15 @@ function showOutput(panel, text, isError) {
       } catch (_) {}
       if (!ok && navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(() => {
-          if (uiModule.showToast) uiModule.showToast('Copied');
-          cbtn.textContent = 'Copied!';
-          setTimeout(() => { cbtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy'; }, 1500);
-        }).catch(() => { if (uiModule.showToast) uiModule.showToast('Copy failed'); });
+          if (uiModule.showToast) uiModule.showToast('已复制');
+          cbtn.textContent = '已复制！';
+          setTimeout(() => { cbtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制'; }, 1500);
+        }).catch(() => { if (uiModule.showToast) uiModule.showToast('复制失败'); });
         return;
       }
-      if (uiModule.showToast) uiModule.showToast(ok ? 'Copied' : 'Copy failed');
+      if (uiModule.showToast) uiModule.showToast(ok ? '已复制' : '复制失败');
       const orig = cbtn.innerHTML;
-      cbtn.textContent = ok ? 'Copied!' : 'Copy failed';
+      cbtn.textContent = ok ? '已复制！' : '复制失败';
       setTimeout(() => { cbtn.innerHTML = orig; }, 1500);
     });
     // Button lives directly in the panel — no wrapping bar. The panel is
@@ -95,7 +95,7 @@ function addCopyBtn_unused(panel, text) {
   const btn = document.createElement('button');
   btn.type = 'button';  // Default <button> type is 'submit' — explicit "button" avoids any accidental form submission.
   btn.className = 'code-runner-copy';
-  btn.title = 'Copy output';
+  btn.title = '复制输出';
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   btn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -122,7 +122,7 @@ function addCopyBtn_unused(panel, text) {
       try { await navigator.clipboard.writeText(text); ok = true; } catch (_) {}
     }
     if (uiModule && uiModule.showToast) {
-      uiModule.showToast(ok ? 'Copied' : 'Copy failed');
+      uiModule.showToast(ok ? '已复制' : '复制失败');
     }
     const _orig = btn.innerHTML;
     btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -172,7 +172,7 @@ function loadPyodide() {
     };
     script.onerror = () => {
       pyodideLoading = false;
-      const err = new Error('Failed to load Pyodide');
+      const err = new Error('加载 Pyodide 失败');
       pyodideQueue.forEach(q => q.reject(err));
       pyodideQueue.length = 0;
       reject(err);
@@ -185,18 +185,18 @@ function loadPyodide() {
  * Run Python code via Pyodide
  */
 export async function runPython(code, panel) {
-  showLoading(panel, 'Loading Python runtime (first time ~10 MB)...');
+  showLoading(panel, '正在加载 Python 运行时（首次约需 10 MB）...');
 
   let py;
   try {
     py = await loadPyodide();
   } catch (e) {
-    showOutput(panel, 'Failed to load Python runtime: ' + e.message, true);
+    showOutput(panel, '加载 Python 运行时失败：' + e.message, true);
     addCloseBtn(panel);
     return;
   }
 
-  showLoading(panel, 'Running...');
+  showLoading(panel, '运行中...');
 
   const wrapper = `
 import sys, io
@@ -217,7 +217,7 @@ finally:
   try {
     const result = await Promise.race([
       py.runPythonAsync(wrapper),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Execution timed out (10 s)')), 10000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('执行超时（10 秒）')), 10000))
     ]);
 
     const stdout = result.toJs ? result.toJs()[0] : (result[0] || '');
@@ -230,7 +230,7 @@ finally:
     } else if (stdout) {
       showOutput(panel, stdout, false);
     } else {
-      showOutput(panel, '(no output)', false);
+      showOutput(panel, '(无输出)', false);
     }
   } catch (e) {
     showOutput(panel, e.message, true);
@@ -242,7 +242,7 @@ finally:
  * Run JavaScript code in a sandboxed iframe
  */
 export function runJavaScript(code, panel) {
-  showLoading(panel, 'Running...');
+  showLoading(panel, '运行中...');
 
   const iframe = document.createElement('iframe');
   iframe.style.display = 'none';
@@ -257,7 +257,7 @@ export function runJavaScript(code, panel) {
   const failsafe = setTimeout(() => {
     if (!settled) {
       settled = true;
-      showOutput(panel, 'Execution timed out (10 s)', true);
+      showOutput(panel, '执行超时（10 秒）', true);
       addCloseBtn(panel);
       cleanup();
     }
@@ -277,7 +277,7 @@ export function runJavaScript(code, panel) {
     } else if (data.logs && data.logs.length > 0) {
       showOutput(panel, data.logs.join('\n'), false);
     } else {
-      showOutput(panel, '(no output)', false);
+      showOutput(panel, '(无输出)', false);
     }
     addCloseBtn(panel);
     cleanup();
@@ -290,10 +290,10 @@ export function runJavaScript(code, panel) {
 var _logs = [];
 var _origLog = console.log;
 console.log = function() { _logs.push([].map.call(arguments, function(a) { try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch(e) { return String(a); } }).join(' ')); };
-console.warn = function() { _logs.push('[warn] ' + [].map.call(arguments, String).join(' ')); };
-console.error = function() { _logs.push('[error] ' + [].map.call(arguments, String).join(' ')); };
+console.warn = function() { _logs.push('[警告] ' + [].map.call(arguments, String).join(' ')); };
+console.error = function() { _logs.push('[错误] ' + [].map.call(arguments, String).join(' ')); };
 try {
-  var _timer = setTimeout(function() { parent.postMessage({error:'Execution timed out (10 s)'},'*'); }, 10000);
+  var _timer = setTimeout(function() { parent.postMessage({error:'执行超时（10 秒）'},'*'); }, 10000);
   ${code.replace(/<\/script>/gi, '<\\/script>')}
   clearTimeout(_timer);
   parent.postMessage({logs: _logs}, '*');
@@ -309,7 +309,7 @@ try {
  * Run code server-side via POST /api/shell/exec
  */
 export async function runServer(code, panel, lang) {
-  showLoading(panel, 'Running on server...');
+  showLoading(panel, '正在服务端运行...');
   // Base64-encode the script so newlines survive the shell quoting intact.
   // JSON.stringify turns \n into literal \\n which python3 -c sees as backslash-n;
   // base64 avoids every quoting/escaping pitfall.
@@ -340,16 +340,16 @@ export async function runServer(code, panel, lang) {
     } else if (data.stdout && data.stdout.trim()) {
       showOutput(panel, data.stdout, false);
     } else {
-      showOutput(panel, '(no output)' + (data.exit_code ? ' — exit code ' + data.exit_code : ''), !data.exit_code ? false : true);
+      showOutput(panel, '(无输出)' + (data.exit_code ? ' — 退出码 ' + data.exit_code : ''), !data.exit_code ? false : true);
     }
     if (data.exit_code && data.exit_code !== 0) {
       var exitEl = document.createElement('div');
       exitEl.style.cssText = 'font-size:0.75rem;opacity:0.5;padding:2px 8px;';
-      exitEl.textContent = 'Exit code: ' + data.exit_code;
+      exitEl.textContent = '退出码: ' + data.exit_code;
       panel.appendChild(exitEl);
     }
   } catch (e) {
-    showOutput(panel, 'Execution failed: ' + e.message, true);
+    showOutput(panel, '执行失败：' + e.message, true);
   }
   addCloseBtn(panel);
 }
@@ -362,7 +362,7 @@ export function runHTML(code, panel) {
 
   const win = window.open('', '_blank', 'width=800,height=600,menubar=no,toolbar=no,location=no,status=no');
   if (!win) {
-    showOutput(panel, 'Popup blocked — please allow popups for this site.', true);
+    showOutput(panel, '弹窗被拦截 — 请允许此站点弹出窗口。', true);
     addCloseBtn(panel);
     return;
   }
@@ -371,7 +371,7 @@ export function runHTML(code, panel) {
   win.document.write(code);
   win.document.close();
 
-  showOutput(panel, 'Opened in new window', false);
+  showOutput(panel, '已在新窗口中打开', false);
   addCloseBtn(panel);
 }
 

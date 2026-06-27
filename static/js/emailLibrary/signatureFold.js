@@ -275,7 +275,7 @@ export function _tryFoldHintSig(html, hintSig) {
   const sigSection = html.slice(htmlStart);
   if (!_isBloatedSig(sigSection)) return null;
   return before + '<details class="email-sig-fold">'
-    + _foldSummary('Signature', _SIG_ICON)
+    + _foldSummary('签名', _SIG_ICON)
     + sigSection + '</details>';
 }
 
@@ -292,7 +292,7 @@ export function _foldSignature(html, hintSig) {
   const wrap = (before, marker, rest) => {
     if (!_isBloatedSig(rest)) return html;
     return before + (marker || '') + '<details class="email-sig-fold">'
-      + _foldSummary('Signature', _SIG_ICON) + rest + '</details>';
+      + _foldSummary('签名', _SIG_ICON) + rest + '</details>';
   };
 
   let m = html.match(/<div[^>]*class=["'][^"']*\bgmail_signature\b[^"']*["'][\s\S]*$/i);

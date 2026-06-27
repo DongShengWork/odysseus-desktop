@@ -251,8 +251,8 @@ function _initModelPickerDropdown() {
           ].filter(Boolean).join(' '),
           stale: isLocalDead || epOffline,
           staleReason: epOffline
-            ? (item.ping_error || 'endpoint offline')
-            : (isLocalDead ? (probeResult.error || 'not responding') : ''),
+            ? (item.ping_error || '端点离线')
+            : (isLocalDead ? (probeResult.error || '无响应') : ''),
           offline: epOffline,
         });
       });
@@ -316,7 +316,7 @@ function _initModelPickerDropdown() {
     listEl.classList.toggle('is-empty', !hasAnyModel);
     menu.classList.toggle('no-models', !hasAnyModel);
     if (search) {
-      search.placeholder = hasAnyModel ? 'Search models…' : 'No models connected';
+      search.placeholder = hasAnyModel ? '搜索模型…' : '未连接模型';
     }
     if (searchRow) {
       searchRow.classList.toggle('searching', !!q);
@@ -349,7 +349,7 @@ function _initModelPickerDropdown() {
       if (m.stale) {
         row.classList.add('model-switch-stale');
         row.style.opacity = '0.45';
-        row.title = `Local server appears offline: ${m.staleReason}. Click to try anyway, or relaunch in Cookbook.`;
+        row.title = `本地服务器似乎离线：${m.staleReason}。点击尝试，或在 Cookbook 中重新启动。`;
       }
       const _mlogo = providerLogo(m.mid);
       if (_mlogo) {
@@ -384,8 +384,8 @@ function _initModelPickerDropdown() {
       favDot.textContent = '●';
       const _setFavState = (on) => {
         favDot.classList.toggle('active', on);
-        favDot.title = on ? 'Remove from favorites' : 'Add to favorites';
-        favDot.setAttribute('aria-label', on ? 'Remove from favorites' : 'Add to favorites');
+        favDot.title = on ? '从收藏中移除' : '添加到收藏';
+        favDot.setAttribute('aria-label', on ? '从收藏中移除' : '添加到收藏');
         favDot.setAttribute('aria-pressed', on ? 'true' : 'false');
       };
       _setFavState(favs.includes(m.mid));
@@ -400,7 +400,7 @@ function _initModelPickerDropdown() {
         const idx = favs.indexOf(m.mid);
         if (nowFav && idx < 0) favs.push(m.mid);
         else if (!nowFav && idx >= 0) favs.splice(idx, 1);
-        if (uiModule && uiModule.showToast) uiModule.showToast(nowFav ? 'Favorited' : 'Unfavorited');
+        if (uiModule && uiModule.showToast) uiModule.showToast(nowFav ? '已收藏' : '已取消收藏');
         // In browse mode the Favorites section membership changed — rebuild
         // (cheap: Recent + Favorites). In search mode the row stays put, so
         // the in-place favorite update above is enough.
@@ -423,7 +423,7 @@ function _initModelPickerDropdown() {
         return [m.mid, m.display, m.epName, m.providerText, provName]
           .filter(Boolean).join(' ').toLowerCase().includes(q);
       });
-      if (matches.length === 0) _addEmpty('No matching models');
+      if (matches.length === 0) _addEmpty('没有匹配的模型');
       else matches.forEach(_addRow);
       return;
     }
@@ -440,7 +440,7 @@ function _initModelPickerDropdown() {
     const shown = new Set();
     const favModels = favs.map(id => byId.get(id)).filter(Boolean);
     if (favModels.length) {
-      _addSection('Favorites');
+      _addSection('收藏');
       favModels.forEach(m => { shown.add(m.mid); _addRow(m); });
     }
     // Recent: only render when the catalog is big enough that surfacing
@@ -453,7 +453,7 @@ function _initModelPickerDropdown() {
         .filter(m => !shown.has(m.mid))
         .slice(0, RECENT_MAX);
       if (recentModels.length) {
-        _addSection('Recent');
+        _addSection('最近');
         recentModels.forEach(m => { shown.add(m.mid); _addRow(m); });
       }
     }
@@ -462,7 +462,7 @@ function _initModelPickerDropdown() {
     if (all.length <= BROWSE_ALL_LIMIT) {
       const rest = all.filter(m => !shown.has(m.mid));
       if (rest.length) {
-        if (shown.size) _addSection('All models');
+        if (shown.size) _addSection('全部模型');
         rest.forEach(_addRow);
       }
     } else {
@@ -555,7 +555,7 @@ function _initModelPickerDropdown() {
       try {
         const res = await fetch(`${API_BASE}/api/session/${currentSessionId}`, { method: 'PATCH', body: fd });
         if (!res.ok) {
-          uiModule.showError('Failed to set model');
+          uiModule.showError('设置模型失败');
           return;
         }
         const sessions = _deps.getSessions();
@@ -563,7 +563,7 @@ function _initModelPickerDropdown() {
         if (s) { s.model = m.mid; s.endpoint_url = m.url; }
         // Header stays as session name — model info shown in picker only
       } catch (e) {
-        uiModule.showError('Failed to set model: ' + e);
+        uiModule.showError('设置模型失败：' + e);
         return;
       }
     }
@@ -660,7 +660,7 @@ function _initModelPickerDropdown() {
         if (!menu.classList.contains('hidden')) _populate(search.value || '');
         updateModelPicker();
       } catch (_) {
-        uiModule.showToast('Model refresh failed');
+        uiModule.showToast('模型刷新失败');
       } finally {
         refreshBtn.disabled = false;
         refreshBtn.classList.remove('spinning');
@@ -751,7 +751,7 @@ export function updateModelPicker() {
     _ensureDefaultPendingChat();
   }
 
-  const displayName = modelId ? modelId.split('/').pop() : 'Select model';
+  const displayName = modelId ? modelId.split('/').pop() : '选择模型';
   // The header indicator clips long names with ellipsis; show the full model
   // identifier on hover (#1982). No tooltip on the "Select model" placeholder.
   label.title = modelId || '';

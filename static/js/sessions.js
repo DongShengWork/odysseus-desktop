@@ -62,7 +62,7 @@ function _deselectCurrentSession(sid) {
   if (currentSessionId !== sid) return;
   currentSessionId = null;
   uiModule.el('chat-history').innerHTML = '';
-  uiModule.el('current-meta').textContent = 'Odysseus Chat';
+  uiModule.el('current-meta').textContent = 'Odysseus 聊天';
   Storage.remove('lastSessionId');
   history.replaceState(null, '', window.location.pathname);
   if (window.chatModule && window.chatModule.showWelcomeScreen) {
@@ -169,7 +169,7 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
   const noneOpt = document.createElement('div');
   noneOpt.className = 'dropdown-item-compact';
   if (!currentFolder) noneOpt.style.opacity = '0.5';
-  noneOpt.textContent = '(No folder)';
+  noneOpt.textContent = '（无文件夹）';
   noneOpt.addEventListener('click', async (e) => {
     e.stopPropagation();
     await moveToFolder(sessionId, '');
@@ -200,7 +200,7 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
   const newOpt = document.createElement('div');
   newOpt.className = 'dropdown-item-compact';
   newOpt.style.color = 'var(--accent-primary)';
-  newOpt.textContent = '+ New Folder';
+  newOpt.textContent = '+ 新建文件夹';
   newOpt.addEventListener('click', async (e) => {
     e.stopPropagation();
     const name = await styledPrompt('Name this folder:', {
@@ -283,7 +283,7 @@ function createSessionItem(s) {
   const handle = document.createElement('span');
   handle.className = 'item-drag-handle';
   handle.textContent = '\u22EE\u22EE';
-  handle.title = 'Drag to reorder';
+  handle.title = '拖动排序';
   div.appendChild(handle);
 
   // Provider dot indicator
@@ -324,7 +324,7 @@ function createSessionItem(s) {
   // Favorite bookmark replaces session-icon when important
   if (s.is_important && !isOpenClaw) {
     icon.className = 'session-icon session-fav';
-    icon.title = 'Unfavorite';
+    icon.title = '取消收藏';
     icon.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     icon.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -332,7 +332,7 @@ function createSessionItem(s) {
       fd.append('important', false);
       await fetch(`${API_BASE}/api/session/${s.id}/important`, { method: 'POST', body: fd });
       s.is_important = false;
-      uiModule.showToast('Unfavorited');
+      uiModule.showToast('已取消收藏');
       renderSessionList();
     });
   }
@@ -345,7 +345,7 @@ function createSessionItem(s) {
   if (_isGroup) chatTitle = chatTitle.replace(/^\[GRP\]\s*/, '');
   let label = chatTitle;
   if (s.model) label += ' · ' + s.model.split('/').pop();
-  if (s.archived) label += ' [archived]';
+  if (s.archived) label += ' [已归档]';
   span.textContent = label;
   span.title = (s.model ? s.model.split('/').pop() + ' · ' : '') + chatTitle;
   span.classList.add('text-ellipsis');
@@ -370,7 +370,7 @@ function createSessionItem(s) {
           fd.append('name', newName);
           await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'PATCH', body: fd });
           s.name = newName;
-          uiModule.showToast('Renamed');
+          uiModule.showToast('已重命名');
         }
         _forceSidebarOpen();
         renderSessionList();
@@ -444,7 +444,7 @@ function createSessionItem(s) {
   // Create a dropdown menu button
   const menuBtn = document.createElement('button');
   menuBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
-  menuBtn.title = 'Session actions';
+  menuBtn.title = '会话操作';
   menuBtn.className = 'hamburger session-menu-btn';
 
   // Create dropdown menu
@@ -481,7 +481,7 @@ function createSessionItem(s) {
       : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     const starItem = document.createElement('div');
     starItem.className = 'dropdown-item-compact';
-    starItem.innerHTML = _icon(_favIcon) + '<span>' + (s.is_important ? 'Unfavorite' : 'Favorite') + '</span><span class="dropdown-shortcut">' + _mod + '+Alt+F</span>';
+    starItem.innerHTML = _icon(_favIcon) + '<span>' + (s.is_important ? '取消收藏' : '收藏') + '</span><span class="dropdown-shortcut">' + _mod + '+Alt+F</span>';
     starItem.addEventListener('click', async (e) => {
       e.stopPropagation();
       const newVal = !s.is_important;
@@ -505,7 +505,7 @@ function createSessionItem(s) {
       const res = await fetch(`${API_BASE}/api/history/${s.id}`);
       const data = await res.json();
       const msgs = data.history || [];
-      if (!msgs.length) { uiModule.showToast('No messages to copy'); return; }
+      if (!msgs.length) { uiModule.showToast('没有消息可复制'); return; }
       const lines = msgs
         .filter(m => m.role === 'user' || m.role === 'assistant')
         .map(m => {
@@ -526,10 +526,10 @@ function createSessionItem(s) {
         document.execCommand('copy');
         ta.remove();
       }
-      uiModule.showToast('Chat copied to clipboard');
+      uiModule.showToast('聊天已复制到剪贴板');
     } catch (e) {
       console.error('Copy chat failed:', e);
-      uiModule.showError('Failed to copy chat');
+      uiModule.showError('复制聊天失败');
     }
   });
 
@@ -632,7 +632,7 @@ function createSessionItem(s) {
         fd.append('name', newName);
         await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'PATCH', body: fd });
         s.name = newName;
-        uiModule.showToast('Renamed');
+        uiModule.showToast('已重命名');
       }
       _forceSidebarOpen();
       renderSessionList();
@@ -647,7 +647,7 @@ function createSessionItem(s) {
 
   deleteItem.addEventListener('click', async () => {
     if (s.is_important) {
-      uiModule.showToast('Unfavorite before deleting');
+      uiModule.showToast('删除前请先取消收藏');
       dropdown.style.display = 'none';
       return;
     }
@@ -697,13 +697,13 @@ function createSessionItem(s) {
         _forceSidebarOpen();
         await loadSessions();
         dropdown.style.display = 'none';
-        uiModule.showToast('Session archived');
+        uiModule.showToast('会话已归档');
       } else {
-        throw new Error('Failed to archive session');
+        throw new Error('归档会话失败');
       }
     } catch (error) {
       console.error('Error archiving session:', error);
-      uiModule.showError('Failed to archive session');
+      uiModule.showError('归档会话失败');
     }
   });
 
@@ -816,7 +816,7 @@ function _renderSessionListImpl() {
       const remaining = allFlat.length - SIDEBAR_MAX_VISIBLE;
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'session-show-more-btn';
-      toggleBtn.textContent = _showAllSessions ? 'Show less' : `Show ${remaining} more`;
+      toggleBtn.textContent = _showAllSessions ? '收起' : `展开 ${remaining} 条`;
       toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         _showAllSessions = !_showAllSessions;
@@ -880,7 +880,7 @@ function _renderSessionListImpl() {
     const dragHandle = document.createElement('span');
     dragHandle.className = 'folder-drag-handle';
     dragHandle.textContent = '\u2630';
-    dragHandle.title = 'Drag to reorder folder';
+    dragHandle.title = '拖动排序文件夹';
     header.appendChild(dragHandle);
 
     const toggle = document.createElement('span');
@@ -902,7 +902,7 @@ function _renderSessionListImpl() {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'folder-delete-btn';
     deleteBtn.textContent = '\u00d7';
-    deleteBtn.title = 'Delete folder and all sessions';
+    deleteBtn.title = '删除文件夹及所有会话';
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const count = folders[folderName].length;
@@ -971,7 +971,7 @@ function _renderSessionListImpl() {
         const rem = folderSessions.length - FOLDER_MAX_VISIBLE;
         const moreBtn = document.createElement('button');
         moreBtn.className = 'session-show-more-btn';
-        moreBtn.textContent = folderExpanded ? 'Show less' : `Show ${rem} more`;
+        moreBtn.textContent = folderExpanded ? '收起' : `展开 ${rem} 条`;
         moreBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           _expandedFolders[folderName] = !folderExpanded;
@@ -1009,7 +1009,7 @@ function _renderSessionListImpl() {
     const dragHandle = document.createElement('span');
     dragHandle.className = 'folder-drag-handle';
     dragHandle.textContent = '\u2630';
-    dragHandle.title = 'Drag to reorder folder';
+    dragHandle.title = '拖动排序文件夹';
     unsortedHeader.appendChild(dragHandle);
 
     const toggle = document.createElement('span');
@@ -1018,7 +1018,7 @@ function _renderSessionListImpl() {
     unsortedHeader.appendChild(toggle);
     const nameSpan = document.createElement('span');
     nameSpan.className = 'folder-name';
-    nameSpan.textContent = 'Unsorted';
+    nameSpan.textContent = '未分类';
     unsortedHeader.appendChild(nameSpan);
     const countSpan = document.createElement('span');
     countSpan.className = 'folder-count';
@@ -1028,7 +1028,7 @@ function _renderSessionListImpl() {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'folder-delete-btn';
     deleteBtn.textContent = '\u00d7';
-    deleteBtn.title = 'Delete all unsorted sessions';
+    deleteBtn.title = '删除所有未分类会话';
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!await uiModule.styledConfirm(`Delete all ${unfiled.length} unsorted session(s)?`, { confirmText: 'Delete', danger: true })) return;
@@ -1075,7 +1075,7 @@ function _renderSessionListImpl() {
     const remaining = unfiled.length - SIDEBAR_MAX_VISIBLE;
     const toggleBtn = document.createElement('button');
     toggleBtn.className = 'session-show-more-btn';
-    toggleBtn.textContent = _showAllSessions ? 'Show less' : `Show ${remaining} more`;
+    toggleBtn.textContent = _showAllSessions ? '收起' : `展开 ${remaining} 条`;
     toggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       _showAllSessions = !_showAllSessions;
@@ -1302,7 +1302,7 @@ function _initBulkSelect() {
       _exitSelectMode();
       if (window._suppressSidebarClose !== undefined) { window._suppressSidebarClose = true; setTimeout(() => { window._suppressSidebarClose = false; }, 1500); }
       await loadSessions();
-      uiModule.showToast(`${count} session(s) archived`);
+      uiModule.showToast(`${count} 个会话已归档`);
     });
   }
 
@@ -1323,7 +1323,7 @@ function _initBulkSelect() {
       _exitSelectMode();
       if (window._suppressSidebarClose !== undefined) { window._suppressSidebarClose = true; setTimeout(() => { window._suppressSidebarClose = false; }, 1500); }
       await loadSessions();
-      uiModule.showToast(`${deletedIds.length} session(s) deleted`);
+      uiModule.showToast(`${deletedIds.length} 个会话已删除`);
     });
   }
 }
@@ -1484,7 +1484,7 @@ export async function loadSessions() {
     }
   } catch (error) {
     console.error('Error in loadSessions:', error);
-    uiModule.showError('Failed to load sessions: ' + error.message);
+    uiModule.showError('加载会话失败：' + error.message);
   }
 }
 
@@ -1546,7 +1546,7 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     if (sendBtn && sendBtn.dataset.mode === 'streaming') {
       sendBtn.dataset.mode = '';
       sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
-      sendBtn.title = 'Send message';
+      sendBtn.title = '发送消息';
     }
     // Deactivate compare mode on session switch
     if (window.compareModule) {
@@ -1740,7 +1740,7 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
 
   } catch (error) {
     console.error('Error in selectSession:', error);
-    uiModule.showError('Failed to load session: ' + error.message);
+    uiModule.showError('加载会话失败：' + error.message);
   } finally {
     // Ensure memories are loaded after session selection
     if (window.memoryModule && window.memoryModule.loadMemories) {
@@ -1809,7 +1809,7 @@ export function createDirectChat(url, modelId, endpointId) {
   // Update current-meta header
   const metaEl = document.getElementById('current-meta');
   if (metaEl) {
-    metaEl.textContent = 'New Chat';
+    metaEl.textContent = '新聊天';
   }
 
   // Enable input
@@ -1843,7 +1843,7 @@ export async function materializePendingSession() {
   try {
     res = await fetch(`${API_BASE}/api/session`, { method: 'POST', body: fd });
   } catch (e) {
-    uiModule.showError('Failed to reach backend: ' + e);
+    uiModule.showError('连接后端失败：' + e);
     return false;
   }
 
@@ -1855,7 +1855,7 @@ export async function materializePendingSession() {
   }
 
   if (!res.ok) {
-    uiModule.showError(`Session create failed (${res.status}) ${payload.detail || JSON.stringify(payload)}`);
+    uiModule.showError(`会话创建失败 (${res.status}) ${payload.detail || JSON.stringify(payload)}`);
     return false;
   }
 
@@ -1943,7 +1943,7 @@ async function _onSessionListKeydown(e) {
     const s = sessions.find(x => x.id === sid);
     if (!s) return;
     if (s.is_important) {
-      uiModule.showToast('Unfavorite before deleting');
+      uiModule.showToast('删除前请先取消收藏');
       return;
     }
     const ok = await uiModule.styledConfirm('Delete this session?', { confirmText: 'Delete', danger: true });
@@ -2367,7 +2367,7 @@ async function _arcPeekOpen(sid) {
     // Find the archived session metadata
     const meta = _arc.data.find(s => s.id === sid);
     const metaEl = document.getElementById('current-meta');
-    if (metaEl) metaEl.textContent = (meta?.name || 'Archived') + ' (archived)';
+    if (metaEl) metaEl.textContent = (meta?.name || '已归档') + '（已归档）';
 
     // Render the chat history
     const chatBox = document.getElementById('chat-history');
@@ -2387,7 +2387,7 @@ async function _arcPeekOpen(sid) {
     if (window.uiModule) window.uiModule.scrollHistory();
   } catch (e) {
     console.error('Peek open failed:', e);
-    uiModule.showError('Failed to open archived session');
+    uiModule.showError('打开已归档会话失败');
   }
 }
 
@@ -2404,9 +2404,9 @@ async function _arcRestore(sid) {
     if (!res.ok) throw new Error('Failed');
     _arcRemove(sid);
     _arcRefreshUI();
-    uiModule.showToast('Session restored');
+    uiModule.showToast('会话已恢复');
     loadSessions();
-  } catch { uiModule.showError('Failed to restore session'); }
+  } catch { uiModule.showError('恢复会话失败'); }
 }
 
 async function _arcDelete(sid) {
@@ -2417,8 +2417,8 @@ async function _arcDelete(sid) {
     await _animateSessionRowsRemoving([sid], '#archive-grid .archive-row[data-session-id]');
     _arcRemove(sid);
     _arcRefreshUI();
-    uiModule.showToast('Session deleted');
-  } catch { uiModule.showError('Failed to delete session'); }
+    uiModule.showToast('会话已删除');
+  } catch { uiModule.showError('删除会话失败'); }
 }
 
 function _arcRemove(sid) {
@@ -2438,7 +2438,7 @@ async function _arcBulkRestore() {
   }
   _arc.selected.clear();
   _arcRefreshUI();
-  uiModule.showToast(`${ids.length} session${ids.length > 1 ? 's' : ''} restored`);
+  uiModule.showToast(`${ids.length} 个会话已恢复`);
   loadSessions();
 }
 
@@ -2460,7 +2460,7 @@ async function _arcBulkDelete() {
   await _animateSessionRowsRemoving(deletedIds, '#archive-grid .archive-row[data-session-id]');
   _arc.selected.clear();
   _arcRefreshUI();
-  uiModule.showToast(`${deletedIds.length} session${deletedIds.length > 1 ? 's' : ''} deleted`);
+  uiModule.showToast(`${deletedIds.length} 个会话已删除`);
 }
 
 function _arcToggleSelectMode() {
@@ -2474,9 +2474,9 @@ function _arcUpdateBulkBar() {
   const count = document.getElementById('archive-selected-count');
   const selectBtn = document.getElementById('archive-select-btn');
   if (bar) bar.classList.toggle('hidden', !_arc.selectMode);
-  if (count) count.textContent = `${_arc.selected.size} selected`;
+  if (count) count.textContent = `${_arc.selected.size} 个已选择`;
   if (selectBtn) {
-    selectBtn.textContent = _arc.selectMode ? 'Cancel' : 'Select';
+    selectBtn.textContent = _arc.selectMode ? '取消' : '选择';
     selectBtn.classList.toggle('active', _arc.selectMode);
   }
 }
@@ -2609,7 +2609,7 @@ function _arcRenderGrid() {
   const grid = document.getElementById('archive-grid');
   if (!grid) return;
   if (_arc.data.length === 0) {
-    grid.innerHTML = '<div class="doclib-empty">No archived sessions</div>';
+    grid.innerHTML = '<div class="doclib-empty">没有已归档会话</div>';
     return;
   }
   grid.innerHTML = '';
@@ -2659,7 +2659,7 @@ export function openLibrary(defaultTab) {
             <option value="most-messages">Most messages</option>
             <option value="alpha">A\u2013Z</option>
           </select>
-          <input type="text" class="memory-search-input" id="lib-search" placeholder="Filter\u2026" style="flex:1;" />
+          <input type="text" class="memory-search-input" id="lib-search" placeholder="筛选\u2026" style="flex:1;" />
           <button class="memory-toolbar-btn" id="lib-select-btn" title="Select">Select</button>
         </div>
         <div class="memory-bulk-bar hidden" id="lib-bulk-bar">
@@ -2702,17 +2702,17 @@ export function openLibrary(defaultTab) {
       document.getElementById('lib-bulk-bar').classList.add('hidden');
       // Update bulk action button label based on tab
       const action1 = document.getElementById('lib-bulk-action1');
-      if (_lib.tab === 'archive') { action1.textContent = 'Restore'; }
-      else if (_lib.tab === 'chats') { action1.textContent = 'Archive'; }
-      else if (_lib.tab === 'research') { action1.textContent = 'Open Report'; }
-      else { action1.textContent = 'Export'; }
+      if (_lib.tab === 'archive') { action1.textContent = '恢复'; }
+      else if (_lib.tab === 'chats') { action1.textContent = '归档'; }
+      else if (_lib.tab === 'research') { action1.textContent = '打开报告'; }
+      else { action1.textContent = '导出'; }
       _renderLibGrid();
     });
   });
 
   // Set initial bulk action label
   const _initAction = document.getElementById('lib-bulk-action1');
-  if (_initAction) _initAction.textContent = _lib.tab === 'archive' ? 'Restore' : _lib.tab === 'documents' ? 'Export' : 'Archive';
+  if (_initAction) _initAction.textContent = _lib.tab === 'archive' ? '恢复' : _lib.tab === 'documents' ? '导出' : '归档';
 
   document.getElementById('lib-sort').addEventListener('change', () => { _lib.sort = document.getElementById('lib-sort').value; _renderLibGrid(); });
   document.getElementById('lib-search').addEventListener('input', (e) => {
@@ -2741,10 +2741,10 @@ export function openLibrary(defaultTab) {
   document.getElementById('lib-bulk-action1').addEventListener('click', async () => {
     if (_lib.tab === 'chats') {
       for (const sid of _lib.selected) await fetch(`${API_BASE}/api/session/${sid}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-      uiModule.showToast(`Archived ${_lib.selected.size} sessions`);
+      uiModule.showToast(`已归档 ${_lib.selected.size} 个会话`);
     } else if (_lib.tab === 'archive') {
       for (const sid of _lib.selected) await fetch(`${API_BASE}/api/session/${sid}/restore`, { method: 'POST' });
-      uiModule.showToast(`Restored ${_lib.selected.size} sessions`);
+      uiModule.showToast(`已恢复 ${_lib.selected.size} 个会话`);
     }
     _lib.selected.clear();
     _lib.selectMode = false;
@@ -2838,7 +2838,7 @@ async function _renderLibArchive(grid) {
     const items = data.sessions || [];
     const stats = document.getElementById('lib-stats');
     if (stats) stats.textContent = `(${data.total || items.length})`;
-    if (!items.length) { grid.innerHTML = '<div class="doclib-empty">No archived sessions</div>'; return; }
+    if (!items.length) { grid.innerHTML = '<div class="doclib-empty">没有已归档会话</div>'; return; }
     grid.innerHTML = '';
     for (const s of items) {
       const card = _buildLibCard(s.id, s.name || 'Untitled', s.message_count || 0, (s.model || '').split('/').pop(), s.updated_at);
@@ -2924,7 +2924,7 @@ async function _renderLibResearch(grid) {
         false, false,
       );
       const metaEl = card.querySelector('.memory-item-meta');
-      if (metaEl) metaEl.textContent = metaEl.textContent.replace(/\d+ msgs?/, (item.source_count || 0) + ' sources');
+      if (metaEl) metaEl.textContent = metaEl.textContent.replace(/\d+ msgs?/, (item.source_count || 0) + ' 条来源');
       card.addEventListener('click', (e) => {
         if (e.target.closest('.archive-menu-btn') || e.target.closest('.memory-select-cb')) return;
         window.open(`${API_BASE}/api/research/report/${item.id}`, '_blank');
@@ -2940,7 +2940,7 @@ async function _renderLibResearch(grid) {
               if (modal) modal.style.display = 'none';
               const msgInput = document.getElementById('message');
               if (msgInput) { msgInput.value = item.query; msgInput.focus(); }
-              uiModule.showToast('Toggle Research and send to re-run');
+              uiModule.showToast('切换研究模式并发送以重新运行');
             }},
             { label: 'Delete', danger: true, action: async () => {
               if (!await window.styledConfirm('Delete this research?', { confirmText: 'Delete', danger: true })) return;
@@ -3024,7 +3024,7 @@ export function openArchive() {
             <option value="most-messages">Most messages</option>
             <option value="alpha">A\u2013Z</option>
           </select>
-          <input type="text" class="memory-search-input" id="archive-search" placeholder="Filter\u2026" style="flex:1;" />
+          <input type="text" class="memory-search-input" id="archive-search" placeholder="筛选\u2026" style="flex:1;" />
           <button class="memory-toolbar-btn" id="archive-select-btn" title="Select sessions">Select</button>
         </div>
         <div class="memory-bulk-bar hidden" id="archive-bulk-bar">

@@ -56,7 +56,7 @@ export function createHistoryPanel({ undo, redo }) {
     const modalId = panel._modalId || 'ge-history-panel-min';
     panel._modalId = modalId;
     modalManager.register(modalId, {
-      label: 'History',
+      label: '历史记录',
       icon: HISTORY_ICON,
       restoreFn: () => {
         panel.style.left = panel._stashLeft + 'px';

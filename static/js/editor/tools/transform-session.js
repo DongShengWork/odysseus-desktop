@@ -42,7 +42,7 @@ export function createTransformSession({
 }) {
   function startTransform() {
     const layer = activeLayer();
-    if (!layer || layer.locked) { uiModule.showToast('Select an unlocked layer'); return; }
+    if (!layer || layer.locked) { uiModule.showToast('请选择未锁定的图层'); return; }
     if (state.transformActive) { cancelTransform(); return; } // toggle off
     state.transformActive = true;
     state.transformLayer = layer;
@@ -360,7 +360,7 @@ export function createTransformSession({
     state.transformLayer = null;
     state.transformHandle = null;
     composite();
-    uiModule.showToast('Transform applied');
+    uiModule.showToast('变换已应用');
   }
 
   function cancelTransform() {
