@@ -2100,7 +2100,7 @@ export function _hwfitInit() {
           const on = !!_envState.defaultServer && b.dataset.srvKey === _envState.defaultServer;
           b.classList.toggle('active', on);
           // Keep the "default" label after the icon (don't overwrite it).
-          b.innerHTML = (on ? _MODELDIR_CHECK_ON : _MODELDIR_CHECK_OFF) + '<span class="cookbook-srv-default-label">default</span>';
+          b.innerHTML = (on ? _MODELDIR_CHECK_ON : _MODELDIR_CHECK_OFF) + '<span class="cookbook-srv-default-label">默认</span>';
           b.title = on ? '默认服务器 — 图谱由此打开' : '将此设为默认服务器';
         });
         // Apply immediately so the dropdowns reflect it without reopening
@@ -2201,7 +2201,7 @@ export function _hwfitInit() {
           }));
         } catch (_) {}
         saveBtn.classList.add('saved');
-        saveBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#50fa7b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>Saved';
+        saveBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#50fa7b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>已保存';
       });
     }
     const rmBtn = entry.querySelector('.cookbook-server-rm');
@@ -2247,7 +2247,7 @@ export function _hwfitInit() {
           });
           const data = await res.json();
           if (data.ok) {
-            setupBtn.textContent = '\u2713 Done';
+            setupBtn.textContent = '\u2713 完成';
             setupBtn.style.color = '#50fa7b';
             uiModule.showToast(`Setup complete (${data.platform})`);
             // Store detected platform on the server entry
@@ -2273,7 +2273,7 @@ export function _hwfitInit() {
                   const tag = document.createElement('span');
                   tag.className = 'cookbook-modeldir-tag';
                   tag.dataset.dirIdx = existing.length;
-                  tag.innerHTML = `${uiModule.esc(termuxDir)} <span class="cookbook-modeldir-rm" title="Remove">\u2715</span>`;
+                  tag.innerHTML = `${uiModule.esc(termuxDir)} <span class="cookbook-modeldir-rm" title="移除">\u2715</span>`;
                   tag.querySelector('.cookbook-modeldir-rm').addEventListener('click', () => { tag.remove(); _syncServers(); });
                   const addBtn = container.querySelector('.cookbook-modeldir-add');
                   if (addBtn) container.insertBefore(tag, addBtn);
@@ -2310,7 +2310,7 @@ export function _hwfitInit() {
       tag.className = 'cookbook-modeldir-tag';
       tag.dataset.dirIdx = container.querySelectorAll('.cookbook-modeldir-tag').length;
       tag.dataset.dir = dir;
-      tag.innerHTML = `<span class="cookbook-modeldir-dl" title="Send downloads here" data-dl-dir="${uiModule.esc(dir)}">${_MODELDIR_CHECK_OFF}</span> ${uiModule.esc(dir)} <span class="cookbook-modeldir-rm" title="Remove">\u2716</span>`;
+      tag.innerHTML = `<span class="cookbook-modeldir-dl" title="此处下载" data-dl-dir="${uiModule.esc(dir)}">${_MODELDIR_CHECK_OFF}</span> ${uiModule.esc(dir)} <span class="cookbook-modeldir-rm" title="移除">\u2716</span>`;
       tag.querySelector('.cookbook-modeldir-rm').addEventListener('click', () => { tag.remove(); _syncServers(); });
       _wireModelDirTarget(entry, tag.querySelector('.cookbook-modeldir-dl'));
       container.insertBefore(tag, addDirBtn);

@@ -921,7 +921,7 @@ async function initTtsSettings() {
       if (!ep.is_enabled) return;
       var hasTTS = (ep.models || []).some(m => ttsKeywords.some(kw => m.toLowerCase().includes(kw)));
       if (!hasTTS) return;
-      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + ' (API)'; provSel.appendChild(opt);
+      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + '（API）'; provSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load endpoints for TTS', e); }
 
@@ -1088,7 +1088,7 @@ async function initSttSettings() {
     var endpoints = await epRes.json();
     endpoints.forEach(function(ep) {
       if (!ep.is_enabled) return;
-      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + ' (API)'; provSel.appendChild(opt);
+      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + '（API）'; provSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load endpoints for STT', e); }
 
@@ -1178,11 +1178,11 @@ async function initSearchSettings() {
     keyRow.style.display = _searchNeedsKey[prov] ? 'flex' : 'none';
     cxRow.style.display = prov === 'google_pse' ? 'flex' : 'none';
     hint.innerHTML = _searchProviderHints[prov] || '';
-    if (prov === 'brave') keyInput.placeholder = 'Brave API key';
-    else if (prov === 'google_pse') keyInput.placeholder = 'Google API key';
-    else if (prov === 'tavily') keyInput.placeholder = 'Tavily API key';
-    else if (prov === 'serper') keyInput.placeholder = 'Serper API key';
-    else keyInput.placeholder = 'API key';
+    if (prov === 'brave') keyInput.placeholder = 'Brave API 密钥';
+    else if (prov === 'google_pse') keyInput.placeholder = 'Google API 密钥';
+    else if (prov === 'tavily') keyInput.placeholder = 'Tavily API 密钥';
+    else if (prov === 'serper') keyInput.placeholder = 'Serper API 密钥';
+    else keyInput.placeholder = 'API 密钥';
     loadKeyForProvider(prov);
   }
 
@@ -1235,7 +1235,7 @@ async function initSearchSettings() {
         extra = ' (' + s.search_url + ')';
       }
       var count = s.search_result_count || 5;
-      msg.textContent = 'Active: ' + label + extra + ' \u00b7 ' + count + ' results';
+      msg.textContent = '活跃：' + label + extra + ' \u00b7 ' + count + ' 个结果';
       msg.style.color = active === 'disabled' ? 'var(--red)' : (_searchNeedsKey[active] && !hasKey) ? 'var(--red)' : 'var(--fg)';
     } catch (e) { /* ignore */ }
   }
@@ -1474,15 +1474,15 @@ async function initSearchSettings() {
           msg.textContent = '✗ ' + d.error + ' (' + ms + 'ms)';
           msg.style.color = 'var(--red)';
         } else if (!d.results || !d.results.length) {
-          msg.textContent = '⚠ No results returned (' + ms + 'ms)';
+          msg.textContent = '⚠ 未返回结果（' + ms + '毫秒）';
           msg.style.color = 'var(--red)';
         } else {
           var topTitle = (d.results[0].title || d.results[0].url || '').slice(0, 60);
-          msg.textContent = '✓ ' + d.results.length + ' result' + (d.results.length === 1 ? '' : 's') + ' · ' + ms + 'ms · top: ' + topTitle;
+          msg.textContent = '✓ ' + d.results.length + ' 个结果 · ' + ms + '毫秒 · 顶部：' + topTitle;
           msg.style.color = 'var(--fg)';
         }
       } catch (e) {
-        msg.textContent = '✗ Test failed: ' + (e && e.message ? e.message : e);
+        msg.textContent = '✗ 测试失败：' + (e && e.message ? e.message : e);
         msg.style.color = 'var(--red)';
       } finally {
         if (wp) { try { wp.destroy(); } catch (_) {} }
@@ -1564,7 +1564,7 @@ async function initResearchSettings() {
       msg.textContent = parts.join(' · ');
       msg.style.color = 'var(--fg)';
     } else {
-      msg.textContent = 'Using chat defaults';
+      msg.textContent = '使用聊天默认值';
       msg.style.color = 'var(--fg)';
     }
   }
@@ -1637,7 +1637,7 @@ async function initResearchSearchSettings() {
       if (!kf) return;
       var hasKey = ((settings[kf] || '').trim() || (settings.search_api_key || '').trim());
       if (!hasKey) {
-        opt.textContent = (_searchLabels[prov] || prov) + ' (no key)';
+        opt.textContent = (_searchLabels[prov] || prov) + '（无密钥）';
         opt.style.color = 'var(--red)';
       } else {
         opt.textContent = _searchLabels[prov] || prov;
@@ -1705,9 +1705,9 @@ async function initAgentSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      msg.textContent = (tools > 0 ? 'Limit: ' + tools + ' tool calls' : 'Unlimited tool calls') +
-        (rounds != null ? ' · ' + rounds + ' steps/message' : '') +
-        (supInput && supInput.checked ? ' · supervisor on' : '');
+      msg.textContent = (tools > 0 ? '限制：' + tools + ' 次工具调用' : '无限制工具调用') +
+        (rounds != null ? ' · ' + rounds + ' 轮/消息' : '') +
+        (supInput && supInput.checked ? ' · 监督者已开启' : '');
       msg.style.color = 'var(--fg)';
     } catch (e) { msg.textContent = '保存失败'; msg.style.color = 'var(--red)'; }
   }
@@ -1717,9 +1717,9 @@ async function initAgentSettings() {
   if (supInput) supInput.addEventListener('change', save);
   var cur = parseInt(toolsInput.value, 10) || 0;
   var curR = roundsInput ? (parseInt(roundsInput.value, 10) || 20) : null;
-  msg.textContent = (cur > 0 ? 'Limit: ' + cur + ' tool calls' : 'Unlimited tool calls') +
-    (curR != null ? ' · ' + curR + ' steps/message' : '') +
-    (supInput && supInput.checked ? ' · supervisor on' : '');
+  msg.textContent = (cur > 0 ? '限制：' + cur + ' 次工具调用' : '无限制工具调用') +
+    (curR != null ? ' · ' + curR + ' 轮/消息' : '') +
+    (supInput && supInput.checked ? ' · 监督者已开启' : '');
 
   // Standalone Email Safety toggle (separate card on the AI Defaults tab).
   // Default to ON if the setting isn't present so a fresh install is safe.
@@ -2044,16 +2044,16 @@ async function initShortcuts() {
     });
 
     btn.classList.add('listening');
-    btn.textContent = 'Press keys...';
+    btn.textContent = '按下按键...';
     // Show confirm button
     actionBtn.textContent = '\u2713';
     actionBtn.classList.remove('is-reset');
     actionBtn.style.visibility = 'visible';
-    actionBtn.title = 'Confirm';
+    actionBtn.title = '确认';
     // Hint: tell the user how to commit / cancel the rebind.
     if (hintEl) {
       hintEl.hidden = false;
-      hintEl.textContent = 'press a key';
+      hintEl.textContent = '按下按键';
     }
 
     let pendingCombo = null;
@@ -2080,7 +2080,7 @@ async function initShortcuts() {
         if (isCustom) {
           actionBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>';
           actionBtn.classList.add('is-reset');
-          actionBtn.title = 'Reset to default';
+          actionBtn.title = '重置为默认';
         } else {
           actionBtn.style.visibility = 'hidden';
         }
@@ -2102,7 +2102,7 @@ async function initShortcuts() {
       pendingCombo = combo;
       btn.innerHTML = _formatKeyCaps(combo);
       // Now that a combo is captured, prompt to commit with Enter.
-      if (hintEl) hintEl.textContent = '\u21B5 Enter to save';
+      if (hintEl) hintEl.textContent = '\u21B5 回车保存';
     }
 
     function cleanup() {
@@ -2168,7 +2168,7 @@ function initAccount() {
       if (!policy) return;
       _authPolicy = policy;
       const pwNew = el('settings-pw-new');
-      if (pwNew) pwNew.placeholder = `New password (min ${policy.password_min_length})`;
+      if (pwNew) pwNew.placeholder = `新密码（最少${policy.password_min_length}个字符）`;
     }).catch(() => {});
 
   // Change password
@@ -2180,9 +2180,9 @@ function initAccount() {
       const nw = el('settings-pw-new').value;
       const conf = el('settings-pw-confirm').value;
       msgEl.style.color = '';
-      if (!cur || !nw) { msgEl.textContent = 'Fill in all fields'; msgEl.style.color = 'var(--red)'; return; }
-      if (nw.length < _authPolicy.password_min_length) { msgEl.textContent = `Min ${_authPolicy.password_min_length} characters`; msgEl.style.color = 'var(--red)'; return; }
-      if (nw !== conf) { msgEl.textContent = 'Passwords don\'t match'; msgEl.style.color = 'var(--red)'; return; }
+      if (!cur || !nw) { msgEl.textContent = '请填写所有字段'; msgEl.style.color = 'var(--red)'; return; }
+      if (nw.length < _authPolicy.password_min_length) { msgEl.textContent = `最少${_authPolicy.password_min_length}个字符`; msgEl.style.color = 'var(--red)'; return; }
+      if (nw !== conf) { msgEl.textContent = '密码不匹配'; msgEl.style.color = 'var(--red)'; return; }
       saveBtn.disabled = true;
       try {
         const res = await fetch('/api/auth/change-password', {
@@ -2190,7 +2190,7 @@ function initAccount() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ current_password: cur, new_password: nw })
         });
-        if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed'); }
+        if (!res.ok) { const d = await res.json(); throw new Error(d.detail || '失败'); }
         msgEl.style.color = 'var(--green)';
         msgEl.textContent = '密码已更新';
         el('settings-pw-current').value = '';
@@ -2234,23 +2234,23 @@ function initAccount() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password: pw })
               });
-              if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed'); }
+              if (!r.ok) { const d = await r.json(); throw new Error(d.detail || '失败'); }
               render2FA();
             } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--red)'; }
           });
         } else {
           // 2FA is OFF — show setup button
           tfaContent.innerHTML = `
-            <div style="font-size:12px;opacity:0.6;margin-bottom:8px;">Add an extra layer of security with an authenticator app (Aegis, Google Authenticator, etc.)</div>
+            <div style="font-size:12px;opacity:0.6;margin-bottom:8px;">使用验证器应用（Aegis、Google Authenticator 等）添加额外安全层</div>
             <div class="settings-row" style="justify-content:flex-end;">
               <span id="tfa-msg" style="font-size:11px;margin-right:auto;"></span>
-              <button class="admin-btn-add" id="tfa-setup-btn">Set Up 2FA</button>
+              <button class="admin-btn-add" id="tfa-setup-btn">设置双因素认证</button>
             </div>`;
           el('tfa-setup-btn').addEventListener('click', async () => {
             const msg = el('tfa-msg');
             try {
               const r = await fetch('/api/auth/2fa/setup', { method: 'POST', credentials: 'same-origin' });
-              if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed'); }
+              if (!r.ok) { const d = await r.json(); throw new Error(d.detail || '失败'); }
               const setup = await r.json();
               const qrCode = safeRasterDataUrl(setup.qr_code);
               // Show QR code + manual secret + verify input
@@ -2259,7 +2259,7 @@ function initAccount() {
                   ${qrCode ? `<img src="${esc(qrCode)}" alt="QR Code" style="border-radius:8px;max-width:200px;">` : ''}
                 </div>
                 <div style="font-size:11px;opacity:0.5;text-align:center;margin-bottom:8px;">
-                  Scan with your authenticator app, or enter manually:
+                  使用验证器应用扫描，或手动输入：
                 </div>
                 <div style="font-family:monospace;font-size:12px;text-align:center;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;margin-bottom:12px;word-break:break-all;user-select:all;cursor:text;">${esc(setup.secret)}</div>
                 <input id="tfa-verify-code" type="text" placeholder="输入 6 位验证码" autocomplete="one-time-code" inputmode="numeric" maxlength="8" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-family:inherit;font-size:13px;box-sizing:border-box;text-align:center;letter-spacing:3px;margin-bottom:6px;">
@@ -2396,7 +2396,7 @@ async function initReminderSettings() {
             setTimeout(() => { pubUrlMsg.textContent = ''; }, 2000);
           }
         } catch (_) {
-          if (pubUrlMsg) { pubUrlMsg.textContent = 'Save failed'; pubUrlMsg.style.color = 'var(--red)'; }
+          if (pubUrlMsg) { pubUrlMsg.textContent = '保存失败'; pubUrlMsg.style.color = 'var(--red)'; }
         }
       }, 600);
     });
@@ -2439,7 +2439,7 @@ async function initReminderSettings() {
 
   if (!smtpConfigured && emailOpt) {
     emailOpt.disabled = true;
-    emailOpt.textContent = 'Email (add an account in Integrations)';
+    emailOpt.textContent = '邮件（在集成中添加账户）';
   }
 
   // Detect whether ntfy integration exists — try admin endpoint, fall back to
@@ -2465,7 +2465,7 @@ async function initReminderSettings() {
 
   if (!ntfyConfigured && ntfyOpt) {
     ntfyOpt.disabled = true;
-    ntfyOpt.textContent = 'ntfy (add in Integrations first)';
+    ntfyOpt.textContent = 'ntfy（请先添加集成）';
   }
 
   // Webhook: available whenever at least one integration with a base_url exists.
@@ -2482,7 +2482,7 @@ async function initReminderSettings() {
   } catch (_) {}
   if (!webhookConfigured && webhookOpt) {
     webhookOpt.disabled = true;
-    webhookOpt.textContent = 'Webhook (add an Integration first)';
+    webhookOpt.textContent = 'Webhook（请先添加集成）';
   }
 
   const emailFromRow = el('set-reminder-email-from-row');
@@ -2499,7 +2499,7 @@ async function initReminderSettings() {
   function populateReminderEmailAccounts(selectedId = '') {
     if (!emailAcctSel) return;
     emailAcctSel.innerHTML = emailAccounts.map(a =>
-      `<option value="${a.id}">${esc(a.name || a.from_address || a.imap_user || '未命名')}${a.is_default ? ' (default)' : ''}</option>`
+      `<option value="${a.id}">${esc(a.name || a.from_address || a.imap_user || '未命名')}${a.is_default ? '（默认）' : ''}</option>`
     ).join('');
     const fallback = (emailAccounts.find(a => a.is_default) || emailAccounts[0] || {}).id || '';
     emailAcctSel.value = (selectedId && emailAccounts.some(a => a.id === selectedId)) ? selectedId : fallback;
@@ -2516,15 +2516,15 @@ async function initReminderSettings() {
   function applyReminderChannelAvailability() {
     if (emailOpt) {
       emailOpt.disabled = !smtpConfigured;
-      emailOpt.textContent = smtpConfigured ? 'Email' : 'Email (add an account in Integrations)';
+      emailOpt.textContent = smtpConfigured ? '邮件' : '邮件（在集成中添加账户）';
     }
     if (ntfyOpt) {
       ntfyOpt.disabled = !ntfyConfigured;
-      ntfyOpt.textContent = ntfyConfigured ? 'ntfy' : 'ntfy (add in Integrations first)';
+      ntfyOpt.textContent = ntfyConfigured ? 'ntfy' : 'ntfy（请先添加集成）';
     }
     if (webhookOpt) {
       webhookOpt.disabled = !webhookConfigured;
-      webhookOpt.textContent = webhookConfigured ? 'Webhook' : 'Webhook (add an Integration first)';
+      webhookOpt.textContent = webhookConfigured ? 'Webhook' : 'Webhook（请先添加集成）';
     }
   }
 
@@ -2643,7 +2643,7 @@ async function initReminderSettings() {
           if (all.custom && all.custom.character_name) {
             const opt = document.createElement('option');
             opt.value = 'custom';
-            opt.textContent = all.custom.character_name + ' (custom)';
+            opt.textContent = all.custom.character_name + '（自定义）';
             personaSel.appendChild(opt);
           }
         } catch (_) {}
@@ -2884,7 +2884,7 @@ async function initEmailAccountsSettings() {
   async function renderList() {
     const accs = await fetchAccounts();
     if (!accs.length) {
-      listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">No email accounts configured</div>';
+      listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">未配置邮箱账户</div>';
       return;
     }
     listEl.innerHTML = accs.map(renderRow).join('');
@@ -2901,7 +2901,7 @@ async function initEmailAccountsSettings() {
       });
       row.querySelector('.email-acc-del-btn')?.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!await window.styledConfirm(`Delete account "${accs.find(a => a.id === id)?.name}"?`, { confirmText: 'Delete', danger: true })) return;
+        if (!await window.styledConfirm(`删除账户"${accs.find(a => a.id === id)?.name}"？`, { confirmText: '删除', danger: true })) return;
         await fetch(`/api/email/accounts/${id}`, { method: 'DELETE', credentials: 'same-origin' });
         renderList();
       });
@@ -2966,12 +2966,12 @@ async function initEmailAccountsSettings() {
         <div class="settings-row" style="margin-top:10px;align-items:center;">
           <button class="admin-btn-add" id="eaf-save" style="background:var(--red);border-color:var(--red);color:#fff;display:inline-flex;align-items:center;gap:5px;font-weight:600;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-            ${isEdit ? 'Save' : 'Create'}
+            ${isEdit ? '保存' : '创建'}
           </button>
           <span id="eaf-msg" style="font-size:11px;flex:1;margin-left:8px;"></span>
           <button class="admin-btn-add" id="eaf-cancel" style="opacity:0.7;display:inline-flex;align-items:center;gap:5px;position:relative;top:1px;margin-left:auto;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            Cancel
+            取消
           </button>
         </div>
       </div>
@@ -3043,7 +3043,7 @@ async function initEmailAccountsSettings() {
       const method = isEdit ? 'PUT' : 'POST';
       const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
-      if (!d.ok) { el('eaf-msg').textContent = d.error || 'Save failed'; el('eaf-msg').style.color = 'var(--red)'; return; }
+      if (!d.ok) { el('eaf-msg').textContent = d.error || '保存失败'; el('eaf-msg').style.color = 'var(--red)'; return; }
       const accId = isEdit ? a.id : d.id;
       window.location.href = `/api/email/oauth/google/authorize?account_id=${encodeURIComponent(accId)}`;
     });
@@ -3104,7 +3104,7 @@ async function initEmailAccountsSettings() {
           el('eaf-msg').style.color = 'var(--green,#50fa7b)';
           setTimeout(() => { formEl.style.display = 'none'; renderList(); }, 400);
         } else {
-          el('eaf-msg').textContent = d.error || 'Save failed';
+          el('eaf-msg').textContent = d.error || '保存失败';
           el('eaf-msg').style.color = 'var(--red)';
         }
       } catch (e) {
@@ -3177,10 +3177,10 @@ async function initEmailSettings() {
         body: JSON.stringify(data),
       });
       const result = await res.json();
-      if (msg) msg.textContent = result.success ? '✓ 已保存' : (result.error || 'Failed');
+      if (msg) msg.textContent = result.success ? '✓ 已保存' : (result.error || '失败');
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
     } catch (e) {
-      if (msg) msg.textContent = 'Failed';
+      if (msg) msg.textContent = '失败';
     }
   });
 
@@ -3201,10 +3201,10 @@ async function initEmailSettings() {
         body: JSON.stringify(data),
       });
       const result = await res.json();
-      if (msg) msg.textContent = result.success ? '✓ 已保存' : (result.error || 'Failed');
+      if (msg) msg.textContent = result.success ? '✓ 已保存' : (result.error || '失败');
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
     } catch (e) {
-      if (msg) msg.textContent = 'Failed';
+      if (msg) msg.textContent = '失败';
     }
   });
 
@@ -3227,12 +3227,12 @@ async function initEmailSettings() {
         wrap.style.cssText = 'display:inline-flex;align-items:center;';
         wrap.appendChild(wp.element);
         const txt = document.createElement('span');
-        txt.textContent = 'Analyzing your sent emails…';
+        txt.textContent = '正在分析已发送的邮件…';
         txt.style.cssText = 'font-size:12px;opacity:0.7;';
         wrap.appendChild(txt);
         msg.appendChild(wrap);
       } catch (_) {
-        msg.textContent = 'Analyzing your sent emails…';
+        msg.textContent = '正在分析已发送的邮件…';
       }
     }
     try {
@@ -3244,12 +3244,12 @@ async function initEmailSettings() {
       const data = await res.json();
       if (data.success && data.style) {
         if (el('set-email-style')) el('set-email-style').value = data.style;
-        if (msg) msg.textContent = '✓ Style extracted';
+        if (msg) msg.textContent = '✓ 风格已提取';
       } else {
-        if (msg) msg.textContent = data.error || 'Failed';
+        if (msg) msg.textContent = data.error || '失败';
       }
     } catch (e) {
-      if (msg) msg.textContent = 'Failed to extract';
+      if (msg) msg.textContent = '提取失败';
     } finally {
       if (wp && wp.destroy) { try { wp.destroy(); } catch (_) {} }
       btn.disabled = false;
@@ -3268,10 +3268,10 @@ async function initEmailSettings() {
         body: JSON.stringify({ style: el('set-email-style').value }),
       });
       const result = await res.json();
-      if (msg) msg.textContent = result.success ? '✓ 已保存' : 'Failed';
+      if (msg) msg.textContent = result.success ? '✓ 已保存' : '失败';
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
     } catch (e) {
-      if (msg) msg.textContent = 'Failed';
+      if (msg) msg.textContent = '失败';
     }
   });
 }
@@ -3359,13 +3359,13 @@ async function initIntegrations() {
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0;">
             <button class="admin-btn-sm intg-edit-btn" data-id="${i.id}" style="font-size:11px;">编辑</button>
-            <button class="admin-btn-sm intg-del-btn" data-id="${i.id}" style="font-size:11px;opacity:0.6;">Del</button>
+            <button class="admin-btn-sm intg-del-btn" data-id="${i.id}" style="font-size:11px;opacity:0.6;">删除</button>
           </div>
         </div>
       `).join('');
       listEl.querySelectorAll('.intg-edit-btn').forEach(b => b.addEventListener('click', () => startEdit(b.dataset.id)));
       listEl.querySelectorAll('.intg-del-btn').forEach(b => b.addEventListener('click', () => doDelete(b.dataset.id)));
-    } catch (e) { listEl.innerHTML = '<div style="padding:12px;color:var(--red);font-size:12px;">Failed to load</div>'; }
+    } catch (e) { listEl.innerHTML = '<div style="padding:12px;color:var(--red);font-size:12px;">加载失败</div>'; }
   }
 
   function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -3373,7 +3373,7 @@ async function initIntegrations() {
   // Start editing
   async function startEdit(id) {
     editingId = id;
-    formTitle.textContent = 'Edit Integration';
+    formTitle.textContent = '编辑集成';
     // Fetch full data (with unmasked key from a dedicated edit fetch — we'll just load what we have)
     try {
       const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
@@ -3386,7 +3386,7 @@ async function initIntegrations() {
       authTypeSel.value = item.auth_type || 'none';
       authHeaderIn.value = item.auth_header || '';
       keyIn.value = ''; // masked — user re-enters if changing
-      keyIn.placeholder = item.api_key ? '留空以保持当前' : 'API key or token';
+      keyIn.placeholder = item.api_key ? '留空以保持当前' : 'API 密钥或令牌';
       descIn.value = item.description || '';
       syncAuthRow();
       formCard.style.display = '';
@@ -3396,14 +3396,14 @@ async function initIntegrations() {
   // Show add form
   addBtn.addEventListener('click', () => {
     editingId = null;
-    formTitle.textContent = 'Add Integration';
+    formTitle.textContent = '添加集成';
     presetSel.value = '';
     nameIn.value = '';
     urlIn.value = '';
     authTypeSel.value = 'header';
     authHeaderIn.value = '';
     keyIn.value = '';
-    keyIn.placeholder = 'API key or token';
+    keyIn.placeholder = 'API 密钥或令牌';
     descIn.value = '';
     statusEl.textContent = '';
     syncAuthRow();
@@ -3441,7 +3441,7 @@ async function initIntegrations() {
         notifyIntegrationsChanged();
       } else {
         const err = await res.json().catch(() => ({}));
-        statusEl.textContent = err.detail || 'Save failed';
+        statusEl.textContent = err.detail || '保存失败';
         statusEl.style.color = 'var(--red)';
       }
     } catch (e) {
@@ -3458,7 +3458,7 @@ async function initIntegrations() {
     try {
       const res = await fetch(`/api/auth/integrations/${editingId}/test`, { method: 'POST', credentials: 'same-origin' });
       const data = await res.json();
-      statusEl.textContent = data.message || (data.ok ? 'OK' : 'Failed');
+      statusEl.textContent = data.message || (data.ok ? '成功' : '失败');
       statusEl.style.color = data.ok ? 'var(--green, #98c379)' : 'var(--red)';
     } catch (e) {
       statusEl.textContent = '连接失败';
@@ -3468,7 +3468,7 @@ async function initIntegrations() {
 
   // Delete
   async function doDelete(id) {
-    if (!await window.styledConfirm('Delete this integration?', { confirmText: 'Delete', danger: true })) return;
+    if (!await window.styledConfirm('删除此集成？', { confirmText: '删除', danger: true })) return;
     try {
       await fetch(`/api/auth/integrations/${id}`, { method: 'DELETE', credentials: 'same-origin' });
       if (editingId === id) { formCard.style.display = 'none'; editingId = null; }
@@ -3886,7 +3886,7 @@ async function initUnifiedIntegrations() {
       if (ntfyHint) {
         ntfyHint.style.display = isNtfy ? 'block' : 'none';
         if (isNtfy) {
-          ntfyHint.innerHTML = 'Enter the ntfy server URL Odysseus can reach. Examples: <code>http://127.0.0.1:8091</code>, <code>http://100.x.y.z:8091</code>, or <code>https://ntfy.example.com</code>.';
+          ntfyHint.innerHTML = '输入 Odysseus 可以访问的 ntfy 服务器 URL。示例：<code>http://127.0.0.1:8091</code>、<code>http://100.x.y.z:8091</code> 或 <code>https://ntfy.example.com</code>。';
         }
       }
       if (url) {
@@ -3931,7 +3931,7 @@ async function initUnifiedIntegrations() {
         el('uf-api-msg').textContent = '已保存'; el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
         await renderList();
         notifyIntegrationsChanged();
-      } catch (_) { el('uf-api-msg').textContent = 'Failed'; el('uf-api-msg').style.color = 'var(--red)'; }
+      } catch (_) { el('uf-api-msg').textContent = '失败'; el('uf-api-msg').style.color = 'var(--red)'; }
     });
     el('uf-api-test').addEventListener('click', async () => {
       if (!_editId) { el('uf-api-msg').textContent = '请先保存'; return; }
@@ -3955,12 +3955,12 @@ async function initUnifiedIntegrations() {
     const isNew = !editId || editId === 'new';
     formEl.innerHTML = `
       <div class="admin-card" style="margin-top:8px">
-        <h2 style="font-size:13px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent, var(--red));flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${isNew ? 'Add CalDAV Calendar' : 'Edit CalDAV Calendar'}</h2>
+        <h2 style="font-size:13px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent, var(--red));flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${isNew ? '添加 CalDAV 日历' : '编辑 CalDAV 日历'}</h2>
         <div class="settings-col">
-          <div class="settings-row"><label class="settings-label">Label</label><input id="uf-caldav-label" class="settings-input" placeholder="e.g. Work, Personal"></div>
-          <div class="settings-row"><label class="settings-label">Server URL</label><input id="uf-caldav-url" class="settings-input" placeholder="https://www.google.com/calendar/dav/you@gmail.com/user/"></div>
-          <div class="settings-row"><label class="settings-label">Username</label><input id="uf-caldav-user" class="settings-input" placeholder="you@example.com"></div>
-          <div class="settings-row"><label class="settings-label">Password</label><input id="uf-caldav-pass" class="settings-input" type="password" placeholder="${isNew ? '' : 'Leave blank to keep existing'}"></div>
+          <div class="settings-row"><label class="settings-label">标签</label><input id="uf-caldav-label" class="settings-input" placeholder="例如：工作、个人"></div>
+          <div class="settings-row"><label class="settings-label">服务器 URL</label><input id="uf-caldav-url" class="settings-input" placeholder="https://www.google.com/calendar/dav/you@gmail.com/user/"></div>
+          <div class="settings-row"><label class="settings-label">用户名</label><input id="uf-caldav-user" class="settings-input" placeholder="you@example.com"></div>
+          <div class="settings-row"><label class="settings-label">密码</label><input id="uf-caldav-pass" class="settings-input" type="password" placeholder="${isNew ? '' : '留空以保持现有'}"></div>
           <div class="settings-row" style="margin-top:10px;align-items:center;justify-content:flex-end;gap:6px;">
             <span id="uf-caldav-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
             <button class="admin-btn-add" id="uf-caldav-test" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">测试</button>
@@ -4041,7 +4041,7 @@ async function initUnifiedIntegrations() {
         }
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          _setCalDavMsg(err.detail || 'Save failed', false);
+          _setCalDavMsg(err.detail || '保存失败', false);
           return;
         }
         _setCalDavMsg('已保存', true);
@@ -4049,15 +4049,15 @@ async function initUnifiedIntegrations() {
         await renderList();
         notifyIntegrationsChanged();
       } catch (_) {
-        _setCalDavMsg('Save failed', false);
+        _setCalDavMsg('保存失败', false);
       }
     });
 
     el('uf-caldav-test').addEventListener('click', async () => {
-      _setCalDavMsg('Testing…', true);
+      _setCalDavMsg('测试中…', true);
       el('uf-caldav-msg').style.color = '';
       const d = await _runCalDavTest();
-      _setCalDavMsg(d.ok ? 已连接 : (d.error || 'Failed'), d.ok);
+      _setCalDavMsg(d.ok ? '已连接' : (d.error || '失败'), d.ok);
     });
   }
 
@@ -4126,7 +4126,7 @@ async function initUnifiedIntegrations() {
         await renderList();
         notifyIntegrationsChanged();
       } catch (_) {
-        el('uf-carddav-msg').textContent = 'Failed';
+        el('uf-carddav-msg').textContent = '失败';
         el('uf-carddav-msg').style.color = 'var(--red)';
       }
     });
@@ -4189,7 +4189,7 @@ async function initUnifiedIntegrations() {
       if (!files.length) return;
       const btn = el('cm-import-btn');
       const orig = btn ? btn.textContent : '';
-      if (btn) { btn.textContent = 'Importing…'; btn.disabled = true; }
+      if (btn) { btn.textContent = '导入中…'; btn.disabled = true; }
       try {
         const texts = await Promise.all(files.map(f => f.text()));
         const vcfParts = [];
@@ -4239,7 +4239,7 @@ async function initUnifiedIntegrations() {
       const d = await r.json();
       contacts = d.contacts || [];
     } catch (_) {
-      list.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:8px 2px;">Failed to load contacts (check CardDAV config above).</div>';
+      list.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:8px 2px;">加载联系人失败（请检查上方 CardDAV 配置）。</div>';
       return;
     }
     const cnt = el('cm-count');
@@ -4453,11 +4453,11 @@ async function initUnifiedIntegrations() {
               <span class="uf-email-save-ico" style="display:inline-flex;width:11px;height:11px;align-items:center;justify-content:center;">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               </span>
-              <span class="uf-email-save-label">${isEdit ? 'Save' : 'Create'}</span>
+              <span class="uf-email-save-label">${isEdit ? '保存' : '创建'}</span>
             </button>
             <button class="admin-btn-add" id="uf-email-cancel" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              Cancel
+              取消
             </button>
           </div>
         </div>
@@ -4530,8 +4530,8 @@ async function initUnifiedIntegrations() {
           uiModule.showError?.('复制失败');
           return;
         }
-        uiModule.showToast?.('Copied');
-        copyBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied';
+        uiModule.showToast?.('已复制');
+        copyBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已复制';
         setTimeout(() => {
           if (copyBtn.isConnected) copyBtn.innerHTML = orig;
         }, 1500);
@@ -4650,7 +4650,7 @@ async function initUnifiedIntegrations() {
       const method = isEdit ? 'PUT' : 'POST';
       const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
-      if (!(d.ok || d.id)) { el('uf-email-msg').textContent = d.error || 'Save failed'; el('uf-email-msg').style.color = 'var(--red)'; return; }
+      if (!(d.ok || d.id)) { el('uf-email-msg').textContent = d.error || '保存失败'; el('uf-email-msg').style.color = 'var(--red)'; return; }
       const accId = isEdit ? editId : d.id;
       window.location.href = `/api/email/oauth/google/authorize?account_id=${encodeURIComponent(accId)}`;
     });
@@ -4827,7 +4827,7 @@ async function initUnifiedIntegrations() {
       const prevIco = saveIcoEl.innerHTML;
       const prevLbl = saveLblEl.textContent;
       saveIcoEl.innerHTML = _spinner;
-      saveLblEl.textContent = 'Saving…';
+      saveLblEl.textContent = '保存中…';
       try {
         const url = isEdit ? `/api/email/accounts/${editId}` : '/api/email/accounts';
         const method = isEdit ? 'PUT' : 'POST';
@@ -4838,13 +4838,13 @@ async function initUnifiedIntegrations() {
         });
         const d = await r.json();
         if (!(d.ok || d.id)) {
-          el('uf-email-msg').textContent = d.error || 'Failed';
+          el('uf-email-msg').textContent = d.error || '失败';
           el('uf-email-msg').style.color = 'var(--red)';
           return;
         }
         el('uf-email-msg').textContent = '已保存';
         el('uf-email-msg').style.color = 'var(--green,#50fa7b)';
-        integrationNotice = 'Email account saved. For more settings, go to Settings > Email.';
+        integrationNotice = '邮箱账户已保存。更多设置请前往 设置 > 邮件。';
         formEl.style.display = 'none';
         await renderList();
         notifyIntegrationsChanged();
@@ -4875,12 +4875,12 @@ async function initUnifiedIntegrations() {
             <button class="admin-btn-add" id="uf-vault-login" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">登录</button>
             <button class="admin-btn-add" id="uf-vault-unlock" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">解锁</button>
             <button class="admin-btn-add" id="uf-vault-lock" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">锁定</button>
-            <button class="admin-btn-add" id="uf-vault-logout" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Logout</button>
+            <button class="admin-btn-add" id="uf-vault-logout" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">退出登录</button>
             <button class="admin-btn-add" id="uf-vault-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">取消</button>
           </div>
           <div style="font-size:10px;opacity:0.5;margin-top:6px;line-height:1.4">
-            <strong>登录</strong> registers this device with your Vaultwarden account (once per account).<br>
-            <strong>Unlock</strong> decrypts the vault — required after restart or Lock. Session is saved so the assistant can read passwords.
+            <strong>登录</strong> 将此设备注册到您的 Vaultwarden 账户（每个账户一次）。<br>
+            <strong>解锁</strong> 解密保险库 — 重启或锁定后需要。会话已保存，助手可以读取密码。
           </div>
         </div>
       </div>`;
@@ -4899,14 +4899,14 @@ async function initUnifiedIntegrations() {
         el('uf-vault-email').value = d.email || '';
         const installed = d.bw_installed;
         const parts = [];
-        parts.push(installed ? 'bw CLI: installed' : 'bw CLI: NOT installed (install nodejs-bitwarden-cli)');
-        parts.push(d.unlocked ? 'Status: UNLOCKED' : 'Status: locked');
-        if (d.unlocked_at) parts.push(`Last unlock: ${d.unlocked_at.replace('T',' ').slice(0,19)}`);
+        parts.push(installed ? 'bw CLI：已安装' : 'bw CLI：未安装（请安装 nodejs-bitwarden-cli）');
+        parts.push(d.unlocked ? '状态：已解锁' : '状态：已锁定');
+        if (d.unlocked_at) parts.push(`上次解锁：${d.unlocked_at.replace('T',' ').slice(0,19)}`);
         const statusEl = el('uf-vault-status');
         statusEl.textContent = parts.join(' — ');
         statusEl.style.color = !installed ? 'var(--red)' : d.unlocked ? 'var(--green,#50fa7b)' : '';
       } catch (_) {
-        el('uf-vault-status').textContent = 'Failed to load vault status';
+        el('uf-vault-status').textContent = '加载保险库状态失败';
       }
     }
     await refreshStatus();
@@ -4923,15 +4923,15 @@ async function initUnifiedIntegrations() {
         });
         const d = await r.json();
         if (d.ok) { msg('已保存', 'var(--green,#50fa7b)'); await refreshStatus(); await renderList(); }
-        else msg(d.error || 'Failed', 'var(--red)');
+        else msg(d.error || '失败', 'var(--red)');
       } catch (e) { msg('错误：' + e.message, 'var(--red)'); }
     });
 
     el('uf-vault-login').addEventListener('click', async () => {
       const email = el('uf-vault-email').value.trim();
       const pass = el('uf-vault-pass').value;
-      if (!email || !pass) { msg('Email + master password required', 'var(--red)'); return; }
-      msg('Logging in...');
+      if (!email || !pass) { msg('需要邮箱和主密码', 'var(--red)'); return; }
+      msg('登录中...');
       try {
         const r = await fetch('/api/vault/login', {
           method: 'POST', credentials: 'same-origin',
@@ -4940,10 +4940,10 @@ async function initUnifiedIntegrations() {
         });
         const d = await r.json();
         if (d.ok) {
-          msg(d.already ? 'Already logged in — use Unlock' : 'Logged in', 'var(--green,#50fa7b)');
+          msg(d.already ? '已登录 — 请使用解锁' : '已登录', 'var(--green,#50fa7b)');
           el('uf-vault-pass').value = '';
           await refreshStatus(); await renderList();
-        } else msg(d.error || 'Login failed', 'var(--red)');
+        } else msg(d.error || '登录失败', 'var(--red)');
       } catch (e) { msg('错误：' + e.message, 'var(--red)'); }
     });
 
@@ -5000,7 +5000,7 @@ async function initUnifiedIntegrations() {
       const msg = el('uf-mcp-msg'); if (!msg) return;
       if (el('uf-mcp-pasteback')) return;  // already shown
       msg.innerHTML =
-        'Authorize in the opened tab. If the redirect fails (remote access), paste the resulting URL here: ' +
+        '在打开的标签页中授权。如果重定向失败（远程访问），请在此粘贴结果 URL：' +
         '<input id="uf-mcp-pasteback" class="settings-input" placeholder="http://localhost:7000/api/mcp/oauth/callback?code=..." style="margin-top:4px">' +
         '<button class="admin-btn-sm" id="uf-mcp-paste-go" style="margin-top:4px">提交</button>';
       const pasteGo = el('uf-mcp-paste-go');
@@ -5012,7 +5012,7 @@ async function initUnifiedIntegrations() {
         try {
           await fetch(`/api/mcp/oauth/exchange/${id}`, { method: 'POST', credentials: 'same-origin', body: pf });
         } finally {
-          _setBtnLoading(pasteGo, false, 'Submit');
+          _setBtnLoading(pasteGo, false, '提交');
         }
       });
     }
@@ -5036,32 +5036,32 @@ async function initUnifiedIntegrations() {
           if (!s) continue;
           if (s.auth_url) openAuth(s.auth_url);
           if (s.status === 'connected') {
-            if (msg) msg.textContent = `Connected (${s.tool_count || 0} tools)`;
+            if (msg) msg.textContent = `已连接（${s.tool_count || 0} 个工具）`;
             await renderList(); return;
           }
           if (s.status === 'error') {
-            if (msg) msg.textContent = `Failed: ${s.error || 'unknown'}`; return;
+            if (msg) msg.textContent = `失败：${s.error || '未知'}`; return;
           }
         } catch (e) {
           // Tolerate a single blip, but surface persistent failures instead of
           // silently polling until timeout.
-          if (++fails >= 5 && msg) msg.textContent = `Status check failing (${e.message || 'network error'}) — still retrying…`;
+          if (++fails >= 5 && msg) msg.textContent = `状态检查失败（${e.message || '网络错误'}）— 仍在重试…`;
         }
       }
-      if (msg) msg.textContent = 'Authorization timed out. Reconnect from the server list to retry.';
+      if (msg) msg.textContent = '授权超时。请从服务器列表重新连接以重试。';
     }
     if (editId && editId !== 'new') {
       // Show management view for existing server
-      formEl.innerHTML = '<div class="admin-card" style="margin-top:8px"><span style="opacity:0.5;font-size:11px">Loading...</span></div>';
+      formEl.innerHTML = '<div class="admin-card" style="margin-top:8px"><span style="opacity:0.5;font-size:11px">加载中...</span></div>';
       try {
         const res = await fetch('/api/mcp/servers', { credentials: 'same-origin' });
         const servers = await res.json();
         const srv = servers.find(s => (s.id || s.name) === editId);
-        if (!srv) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">Server not found</div>'; return; }
+        if (!srv) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">未找到服务器</div>'; return; }
         const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
         const statusColor = srv.needs_oauth ? '#e5a33a' : srv.status === 'connected' ? 'var(--green,#50fa7b)' : srv.status === 'error' ? 'var(--red)' : 'var(--fg)';
-        const toolInfo = srv.status === 'connected' ? `${srv.enabled_tool_count}/${srv.tool_count} tools` : '';
-        const statusText = srv.needs_oauth ? 'Needs authorization' : srv.status === 'connected' ? `Connected (${toolInfo})` : srv.status === 'error' ? `Error: ${esc(srv.error || 'unknown')}` : 'Disconnected';
+        const toolInfo = srv.status === 'connected' ? `${srv.enabled_tool_count}/${srv.tool_count} 个工具` : '';
+        const statusText = srv.needs_oauth ? '需要授权' : srv.status === 'connected' ? `已连接（${toolInfo}）` : srv.status === 'error' ? `错误：${esc(srv.error || '未知')}` : '已断开';
         formEl.innerHTML = `
           <div class="admin-card" style="margin-top:8px">
             <h2 style="font-size:13px">${esc(srv.name)}</h2>
@@ -5071,23 +5071,23 @@ async function initUnifiedIntegrations() {
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;justify-content:flex-end;">
               <span id="uf-mcp-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
-              ${srv.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${srv.id}" target="_blank" class="admin-btn-add" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));text-decoration:none;font-weight:600;">Authorize</a>` : ''}
-              <button class="admin-btn-add" id="uf-mcp-reconnect" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Reconnect</button>
-              <button class="admin-btn-add" id="uf-mcp-toggle" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">${srv.is_enabled ? 'Disable' : 'Enable'}</button>
+              ${srv.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${srv.id}" target="_blank" class="admin-btn-add" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));text-decoration:none;font-weight:600;">授权</a>` : ''}
+              <button class="admin-btn-add" id="uf-mcp-reconnect" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">重新连接</button>
+              <button class="admin-btn-add" id="uf-mcp-toggle" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">${srv.is_enabled ? '禁用' : '启用'}</button>
               <button class="admin-btn-add" id="uf-mcp-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">关闭</button>
             </div>
             <div id="uf-mcp-tools-panel"></div>
           </div>`;
         // Reconnect
         el('uf-mcp-reconnect').addEventListener('click', async () => {
-          const msg = el('uf-mcp-msg'); msg.textContent = 'Reconnecting...';
+          const msg = el('uf-mcp-msg'); msg.textContent = '重新连接中...';
           try {
             const r = await fetch(`/api/mcp/servers/${srv.id}/reconnect`, { method: 'POST', credentials: 'same-origin' });
             const d = await r.json();
-            msg.textContent = d.connected ? `Connected (${d.tool_count} tools)` : `Failed: ${d.error || 'unknown'}`;
+            msg.textContent = d.connected ? `已连接（${d.tool_count} 个工具）` : `失败：${d.error || '未知'}`;
             await renderList();
             showMcpForm(editId); // refresh this view
-          } catch (e) { msg.textContent = 'Failed'; }
+          } catch (e) { msg.textContent = '失败'; }
         });
         // Toggle enable/disable
         el('uf-mcp-toggle').addEventListener('click', async () => {
@@ -5105,26 +5105,26 @@ async function initUnifiedIntegrations() {
             const tools = await tr.json();
             if (tools.length) {
               const disabled = new Set(tools.filter(t => t.is_disabled).map(t => t.name));
-              panel.innerHTML = `<div class="mcp-tools-header"><span>Tools</span><span style="display:flex;gap:8px;align-items:center"><span class="mcp-tools-count">${tools.length - disabled.size}/${tools.length} enabled</span><a href="#" id="uf-mcp-all">All</a> <a href="#" id="uf-mcp-none">None</a></span></div><div class="mcp-tools-list">${tools.map(t => `<label title="${esc(t.description)}"><input type="checkbox" data-mcp-tool-name="${esc(t.name)}" ${!t.is_disabled ? 'checked' : ''}><span><strong>${esc(t.name)}</strong> <span style="opacity:0.5">— ${esc((t.description||'').slice(0,80))}</span></span></label>`).join('')}</div>`;
+              panel.innerHTML = `<div class="mcp-tools-header"><span>工具</span><span style="display:flex;gap:8px;align-items:center"><span class="mcp-tools-count">${tools.length - disabled.size}/${tools.length} 已启用</span><a href="#" id="uf-mcp-all">全部</a> <a href="#" id="uf-mcp-none">无</a></span></div><div class="mcp-tools-list">${tools.map(t => `<label title="${esc(t.description)}"><input type="checkbox" data-mcp-tool-name="${esc(t.name)}" ${!t.is_disabled ? 'checked' : ''}><span><strong>${esc(t.name)}</strong> <span style="opacity:0.5">— ${esc((t.description||'').slice(0,80))}</span></span></label>`).join('')}</div>`;
               const saveFn = async () => {
                 const dis = [];
                 panel.querySelectorAll('input[type=checkbox]').forEach(cb => { if (!cb.checked) dis.push(cb.dataset.mcpToolName); });
                 await fetch(`/api/mcp/servers/${srv.id}/tools`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ disabled: dis }) });
                 const cnt = panel.querySelector('.mcp-tools-count');
-                if (cnt) cnt.textContent = `${tools.length - dis.length}/${tools.length} enabled`;
+                if (cnt) cnt.textContent = `${tools.length - dis.length}/${tools.length} 已启用`;
               };
               panel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', saveFn));
               el('uf-mcp-all')?.addEventListener('click', (e) => { e.preventDefault(); panel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true); saveFn(); });
               el('uf-mcp-none')?.addEventListener('click', (e) => { e.preventDefault(); panel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false); saveFn(); });
             }
-          } catch (_) { panel.innerHTML = '<span style="opacity:0.5;font-size:11px">Failed to load tools</span>'; }
+          } catch (_) { panel.innerHTML = '<span style="opacity:0.5;font-size:11px">加载工具失败</span>'; }
         }
-      } catch (_) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">Failed to load server</div>'; }
+      } catch (_) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">加载服务器失败</div>'; }
     } else {
       // Add new MCP server form
       formEl.innerHTML = `
         <div class="admin-card" style="margin-top:8px">
-          <h2 style="font-size:13px">Add MCP Server</h2>
+          <h2 style="font-size:13px">添加 MCP 服务器</h2>
           <div class="settings-col">
             <div class="settings-row"><label class="settings-label">Name</label><input id="uf-mcp-name" class="settings-input" placeholder="Server name"></div>
             <div class="settings-row"><label class="settings-label">Transport</label><select id="uf-mcp-transport" class="settings-input"><option value="stdio">stdio</option><option value="sse">SSE</option><option value="http">Streamable HTTP</option></select></div>
@@ -5169,22 +5169,22 @@ async function initUnifiedIntegrations() {
         }
         const saveBtn = el('uf-mcp-save'), cancelBtn = el('uf-mcp-cancel');
         const _origLabel = saveBtn.textContent;
-        _setBtnLoading(saveBtn, true, 'Saving…'); if (cancelBtn) cancelBtn.disabled = true;
+        _setBtnLoading(saveBtn, true, '保存中…'); if (cancelBtn) cancelBtn.disabled = true;
         try {
           const r = await fetch('/api/mcp/servers', { method: 'POST', credentials: 'same-origin', body: fd });
           const data = await r.json().catch(() => ({}));
           if (r.ok && data.needs_auth) {
-            el('uf-mcp-msg').textContent = 'Preparing authorization…';
+            el('uf-mcp-msg').textContent = '准备授权…';
             _handleMcpAuth(data.id, data.auth_url);
           } else if (r.ok && (data.connected || data.status === 'connected')) {
-            el('uf-mcp-msg').textContent = `Connected (${data.tool_count || 0} tools)`;
+            el('uf-mcp-msg').textContent = `已连接（${data.tool_count || 0} 个工具）`;
             formEl.style.display = 'none'; await renderList();
           } else if (r.ok) {
             el('uf-mcp-msg').textContent = '已保存'; formEl.style.display = 'none'; await renderList();
           } else {
-            el('uf-mcp-msg').textContent = `Failed (${r.status})`;
+            el('uf-mcp-msg').textContent = `失败（${r.status}）`;
           }
-        } catch (_) { el('uf-mcp-msg').textContent = 'Failed'; }
+        } catch (_) { el('uf-mcp-msg').textContent = '失败'; }
         finally { _setBtnLoading(saveBtn, false, _origLabel); if (cancelBtn) cancelBtn.disabled = false; }
       });
     }
@@ -5316,15 +5316,15 @@ async function initUnifiedIntegrations() {
             <span id="uf-codex-msg" style="font-size:11px;flex:1;text-align:center;"></span>
             <button class="admin-btn-add" id="uf-codex-revoke" style="display:none;align-items:center;gap:5px;background:color-mix(in srgb, var(--color-error) 10%, transparent);color:var(--color-error);border:1px solid var(--color-error);font-weight:600;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-              Revoke
+              撤销
             </button>
             <button class="admin-btn-add" id="uf-codex-create-btn" style="display:${current ? 'none' : 'inline-flex'};align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="M15.5 7.5l3 3"/></svg>
-              Create token
+              创建令牌
             </button>
             <button class="admin-btn-add" id="uf-codex-save" style="display:none;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              Save
+              保存
             </button>
           </div>
         </div>
@@ -5349,7 +5349,7 @@ async function initUnifiedIntegrations() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name }),
             });
-            if (!r.ok) throw new Error('Save failed');
+            if (!r.ok) throw new Error('保存失败');
             notifyIntegrationsChanged();
           } catch (_) { renameInput.value = original; }
         };
@@ -5369,12 +5369,12 @@ async function initUnifiedIntegrations() {
               body: JSON.stringify({ scopes }),
             });
             const d = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(d.detail || 'Failed');
+            if (!r.ok) throw new Error(d.detail || '失败');
             if (msg) { msg.textContent = '已保存'; msg.style.color = 'var(--green, #50fa7b)'; setTimeout(() => { msg.textContent = ''; }, 1200); }
             notifyIntegrationsChanged();
           } catch (err) {
             cb.checked = !cb.checked;
-            if (msg) { msg.textContent = (err && err.message) || 'Failed'; msg.style.color = 'var(--red)'; }
+            if (msg) { msg.textContent = (err && err.message) || '失败'; msg.style.color = 'var(--red)'; }
           }
         });
       });
@@ -5410,12 +5410,12 @@ async function initUnifiedIntegrations() {
           body: JSON.stringify({ scopes }),
         });
         const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(d.detail || 'Failed');
+        if (!r.ok) throw new Error(d.detail || '失败');
         if (msg) { msg.textContent = '已保存'; msg.style.color = 'var(--green, #50fa7b)'; }
         await renderList();
         setTimeout(() => { formEl.style.display = 'none'; }, 350);
       } catch (err) {
-        if (msg) { msg.textContent = err?.message || 'Save failed'; msg.style.color = 'var(--red)'; }
+        if (msg) { msg.textContent = err?.message || '保存失败'; msg.style.color = 'var(--red)'; }
       }
     });
 
@@ -5425,18 +5425,18 @@ async function initUnifiedIntegrations() {
       const tokenId = formEl.dataset.createdTokenId;
       if (!tokenId) return;
       const ok = window.styledConfirm
-        ? await window.styledConfirm(`Revoke this ${cfg.word} agent token? Integrations using it will lose access.`, { confirmText: 'Revoke', danger: true })
-        : confirm(`Revoke this ${cfg.word} agent token? Integrations using it will lose access.`);
+        ? await window.styledConfirm(`撤销此 ${cfg.word} 代理令牌？使用它的集成将失去访问权限。`, { confirmText: '撤销', danger: true })
+        : confirm(`撤销此 ${cfg.word} 代理令牌？使用它的集成将失去访问权限。`);
       if (!ok) return;
       const msg = el('uf-codex-msg');
       try {
         const r = await fetch(`/api/tokens/${tokenId}`, { method: 'DELETE', credentials: 'same-origin' });
-        if (!r.ok) throw new Error('Revoke failed');
+        if (!r.ok) throw new Error('撤销失败');
         if (msg) { msg.textContent = '已撤销'; msg.style.color = 'var(--color-error)'; }
         await renderList();
         setTimeout(() => { formEl.style.display = 'none'; }, 350);
       } catch (err) {
-        if (msg) { msg.textContent = err?.message || 'Revoke failed'; msg.style.color = 'var(--red)'; }
+        if (msg) { msg.textContent = err?.message || '撤销失败'; msg.style.color = 'var(--red)'; }
       }
     });
 
@@ -5457,9 +5457,9 @@ async function initUnifiedIntegrations() {
           _wp = sp.createWhirlpool(14);
           _wp.element.style.cssText = 'display:inline-flex;width:14px;height:14px;margin:0 4px 0 0;';
           pending.appendChild(_wp.element);
-          pending.appendChild(document.createTextNode('Creating token…'));
+          pending.appendChild(document.createTextNode('创建令牌中…'));
         } catch (_) {
-          pending.textContent = 'Creating token…';
+          pending.textContent = '创建令牌中…';
         }
       }
       const existingNames = new Set(agentTokens.map(t => (t.name || '').trim()));
@@ -5510,7 +5510,7 @@ async function initUnifiedIntegrations() {
         // Remember the created token id so Save can PATCH its scopes.
         formEl.dataset.createdTokenId = String(uiToken.id);
         if (msg) {
-          msg.textContent = `Created "${name}".`;
+          msg.textContent = `已创建"${name}"。`;
           msg.style.color = 'var(--green, #50fa7b)';
         }
         await renderList();
@@ -5518,7 +5518,7 @@ async function initUnifiedIntegrations() {
         if (_wp) { try { _wp.destroy(); } catch (_) {} }
         if (pending) pending.style.display = 'none';
         if (msg) {
-          msg.textContent = err?.message || 'Failed';
+          msg.textContent = err?.message || '失败';
           msg.style.color = 'var(--red)';
         }
       }
@@ -5613,12 +5613,12 @@ async function initUnifiedIntegrations() {
               body: JSON.stringify({ scopes }),
             });
             const d = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(d.detail || 'Failed');
+            if (!r.ok) throw new Error(d.detail || '失败');
             if (msg) { msg.textContent = '已保存'; msg.style.color = 'var(--green, #50fa7b)'; }
             await renderList();
           } catch (err) {
             cb.checked = !cb.checked;
-            if (msg) { msg.textContent = err?.message || 'Failed'; msg.style.color = 'var(--red)'; }
+            if (msg) { msg.textContent = err?.message || '失败'; msg.style.color = 'var(--red)'; }
           }
         });
       });
@@ -5761,8 +5761,8 @@ export function close() {
       // Brief toast-style banner.
       const banner = document.createElement('div');
       banner.textContent = success
-        ? '✓ Google account connected — email is ready'
-        : `Google OAuth failed: ${errMsg || 'unknown error'}`;
+        ? '✓ Google 账户已连接 — 邮件已就绪'
+        : `Google OAuth 失败：${errMsg || '未知错误'}`;
       Object.assign(banner.style, {
         position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
         background: success ? 'var(--accent, #50fa7b)' : 'var(--red, #ff5555)',

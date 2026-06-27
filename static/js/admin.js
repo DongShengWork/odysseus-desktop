@@ -22,13 +22,13 @@ function esc(s) { return uiModule.esc(s); }
    USERS TAB
    ═══════════════════════════════════════════ */
 const PRIV_LABELS = {
-  can_use_agent: 'Agent mode',
-  can_use_browser: 'Browser automation',
-  can_use_bash: 'Shell / Python / Files',
-  can_use_documents: 'Document editor',
-  can_use_research: 'Deep research',
-  can_generate_images: 'Image generation',
-  can_manage_memory: 'Memory & skills',
+  can_use_agent: '智能体模式',
+  can_use_browser: '浏览器自动化',
+  can_use_bash: '命令行 / Python / 文件',
+  can_use_documents: '文档编辑器',
+  can_use_research: '深度研究',
+  can_generate_images: '图像生成',
+  can_manage_memory: '记忆与技能',
 };
 
 async function loadUsers() {
@@ -57,8 +57,8 @@ async function loadUsers() {
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="admin-btn-sm" data-adm-toggle-admin="${esc(u.username)}" data-make-admin="${u.is_admin ? '0' : '1'}" style="font-size:11px;">${u.is_admin ? '撤销管理员' : '设为管理员'}</button>
-          <button class="admin-btn-sm" data-adm-rename-user="${esc(u.username)}" style="font-size:11px;">Rename</button>
-          ${u.is_admin ? '' : `<button class="admin-btn-delete" data-adm-del-user="${esc(u.username)}" style="font-size:11px;">Remove</button>`}
+          <button class="admin-btn-sm" data-adm-rename-user="${esc(u.username)}" style="font-size:11px;">重命名</button>
+          ${u.is_admin ? '' : `<button class="admin-btn-delete" data-adm-del-user="${esc(u.username)}" style="font-size:11px;">移除</button>`}
           ${u.is_admin ? '' : '<svg class="admin-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>'}
         </div>
       `;
@@ -71,7 +71,7 @@ async function loadUsers() {
         privPanel.style.cssText = 'padding:8px 0 4px;border-top:1px solid var(--border);margin-top:8px;';
 
         // Boolean toggles
-        let html = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.35;font-weight:600;margin-bottom:4px;">Features</div>';
+        let html = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.35;font-weight:600;margin-bottom:4px;">功能</div>';
         for (const [key, label] of Object.entries(PRIV_LABELS)) {
           const checked = u.privileges && u.privileges[key] ? 'checked' : '';
           html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
@@ -80,12 +80,12 @@ async function loadUsers() {
           </div>`;
         }
         // Rate limit
-        html += '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.35;font-weight:600;margin:10px 0 4px;">Limits</div>';
+        html += '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.35;font-weight:600;margin:10px 0 4px;">限制</div>';
         const maxMsg = (u.privileges && u.privileges.max_messages_per_day) || 0;
         html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
           <div>
-            <span style="font-size:12px;">Daily message limit</span>
-            <div style="font-size:10px;opacity:0.4;">0 = no limit</div>
+            <span style="font-size:12px;">每日消息限制</span>
+            <div style="font-size:10px;opacity:0.4;">0 = 无限制</div>
           </div>
           <input type="number" min="0" value="${maxMsg}" data-priv="max_messages_per_day" data-user="${esc(u.username)}" style="width:70px;padding:4px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-size:12px;text-align:center;">
         </div>`;
@@ -98,15 +98,15 @@ async function loadUsers() {
         const blockAllModels = !!(u.privileges && u.privileges.block_all_models);
         html += `<div style="padding:4px 0;">
           <div style="display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:12px;">Allowed models</span>
+            <span style="font-size:12px;">允许的模型</span>
             <div style="display:flex;gap:8px;">
-              <a href="#" class="priv-models-all" data-user="${esc(u.username)}" style="font-size:10px;opacity:0.5;">All</a>
-              <a href="#" class="priv-models-none" data-user="${esc(u.username)}" style="font-size:10px;opacity:0.5;">None</a>
+              <a href="#" class="priv-models-all" data-user="${esc(u.username)}" style="font-size:10px;opacity:0.5;">全部</a>
+              <a href="#" class="priv-models-none" data-user="${esc(u.username)}" style="font-size:10px;opacity:0.5;">无</a>
             </div>
           </div>
-          <div style="font-size:10px;opacity:0.4;margin-bottom:4px;">${blockAllModels ? 'No models allowed' : (!modelsRestricted ? 'All models allowed (no restrictions)' : (allowedSet.size === 0 ? 'No models allowed' : allowedSet.size + ' model(s) allowed'))}</div>
+          <div style="font-size:10px;opacity:0.4;margin-bottom:4px;">${blockAllModels ? '不允许任何模型' : (!modelsRestricted ? '允许所有模型（无限制）' : (allowedSet.size === 0 ? '不允许任何模型' : allowedSet.size + ' 个模型已允许'))}</div>
           <div class="priv-models-list" data-user="${esc(u.username)}">
-            <span style="opacity:0.4;font-size:11px;">Loading models...</span>
+            <span style="opacity:0.4;font-size:11px;">正在加载模型...</span>
           </div>
         </div>`;
         privPanel.innerHTML = html;
@@ -158,10 +158,10 @@ async function loadUsers() {
         renameBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const oldUsername = renameBtn.dataset.admRenameUser;
-          const next = await uiModule.styledPrompt(`Rename "${oldUsername}"`, {
+          const next = await uiModule.styledPrompt(`重命名 "${oldUsername}"`, {
             defaultValue: oldUsername,
             placeholder: '新用户名',
-            confirmText: 'Rename',
+            confirmText: '重命名',
           });
           const username = (next || '').trim();
           if (!username || username === oldUsername) return;
@@ -194,7 +194,7 @@ async function loadUsers() {
         delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const username = delBtn.dataset.admDelUser;
-          if (!await uiModule.styledConfirm(`Remove user "${username}"?`, { confirmText: 'Remove', danger: true })) return;
+          if (!await uiModule.styledConfirm(`移除用户 "${username}"？`, { confirmText: '移除', danger: true })) return;
           const res = await fetch('/api/auth/users', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
           if (res.ok) loadUsers();
           else uiModule.showError('删除用户失败');
@@ -209,9 +209,9 @@ async function loadUsers() {
           const username = adminToggleBtn.dataset.admToggleAdmin;
           const makeAdmin = adminToggleBtn.dataset.makeAdmin === '1';
           const confirmMsg = makeAdmin
-            ? `Grant admin rights to "${username}"? They'll get full access to all settings and users — including the power to demote or remove other admins (you included).`
-            : `Revoke admin rights from "${username}"? They'll lose access to the admin panel.`;
-          if (!await uiModule.styledConfirm(confirmMsg, { confirmText: makeAdmin ? 'Make admin' : 'Revoke admin', danger: !makeAdmin })) return;
+            ? `授予 "${username}" 管理员权限？他们将获得所有设置和用户的完全访问权限——包括降级或移除其他管理员（包括您）的能力。`
+            : `撤销 "${username}" 的管理员权限？他们将失去对管理面板的访问权限。`;
+          if (!await uiModule.styledConfirm(confirmMsg, { confirmText: makeAdmin ? '设为管理员' : '撤销管理员', danger: !makeAdmin })) return;
           adminToggleBtn.disabled = true;
           try {
             const res = await fetch(`/api/auth/users/${encodeURIComponent(username)}/admin`, {
@@ -239,7 +239,7 @@ async function loadUsers() {
 
       list.appendChild(row);
     });
-  } catch (e) { list.innerHTML = '<div class="admin-error">Failed to load users</div>'; }
+  } catch (e) { list.innerHTML = '<div class="admin-error">加载用户失败</div>'; }
 }
 
 async function _loadModelsForUser(username, allowedSet, modelsRestricted, blockAllModels, privPanel) {
@@ -261,7 +261,7 @@ async function _loadModelsForUser(username, allowedSet, modelsRestricted, blockA
       });
     });
     if (!allModels.length) {
-      listEl.innerHTML = '<span style="opacity:0.4;font-size:11px;">No models available</span>';
+      listEl.innerHTML = '<span style="opacity:0.4;font-size:11px;">无可用模型</span>';
       return;
     }
     let restricted = modelsRestricted;
@@ -290,17 +290,17 @@ async function _loadModelsForUser(username, allowedSet, modelsRestricted, blockA
         restricted = false;
         blockAll = false;
         value = [];
-        hintText = 'All models allowed (no restrictions)';
+        hintText = '允许所有模型（无限制）';
       } else if (checked.length === 0) {
         restricted = true;
         blockAll = true;
         value = [];
-        hintText = 'No models allowed';
+        hintText = '不允许任何模型';
       } else {
         restricted = true;
         blockAll = false;
         value = checked;
-        hintText = value.length + ' model(s) allowed';
+        hintText = value.length + ' 个模型已允许';
       }
       const hint = privPanel.querySelector('.priv-models-list[data-user]')?.previousElementSibling?.querySelector('div[style*="opacity"]');
       if (hint) hint.textContent = hintText;
@@ -324,7 +324,7 @@ async function _loadModelsForUser(username, allowedSet, modelsRestricted, blockA
       _saveModels();
     });
   } catch (e) {
-    listEl.innerHTML = '<span style="opacity:0.4;font-size:11px;">Failed to load models</span>';
+    listEl.innerHTML = '<span style="opacity:0.4;font-size:11px;">加载模型失败</span>';
   }
 }
 
@@ -350,7 +350,7 @@ function initAddUser() {
       if (!policy) return;
       _authPolicy = policy;
       const admPw = el('adm-newPassword');
-      if (admPw) admPw.placeholder = `Password (min ${policy.password_min_length})`;
+      if (admPw) admPw.placeholder = `密码（最少 ${policy.password_min_length} 位）`;
     })
     .catch(() => {});
   el('adm-addBtn').addEventListener('click', async () => {
@@ -581,11 +581,11 @@ async function loadEndpoints() {
             var depData = await depRes.json();
             deps = depData.dependents || [];
           } catch (e) { /* proceed without warning */ }
-          var msg = 'Delete this endpoint?';
+          var msg = '删除此端点？';
           if (deps.length) {
-            msg += '\n\nThe following settings use this endpoint and will be reset:\n— ' + deps.join('\n— ');
+            msg += '\n\n以下设置使用了此端点，将被重置：\n— ' + deps.join('\n— ');
           }
-          if (!await uiModule.styledConfirm(msg, { confirmText: 'Delete', danger: true })) return;
+          if (!await uiModule.styledConfirm(msg, { confirmText: '删除', danger: true })) return;
         }
         // Optimistic: remove from UI immediately
         const row = btn.closest('[data-adm-ep-id]');
@@ -628,7 +628,7 @@ async function loadEndpoints() {
           let _modelsSpin = null;
           const _ld = document.createElement('span');
           _ld.style.cssText = 'opacity:0.55;font-size:11px;display:inline-flex;align-items:center;gap:8px;';
-          _ld.appendChild(document.createTextNode('Loading models…'));
+          _ld.appendChild(document.createTextNode('正在加载模型…'));
           try {
             const _sp = (await import('./spinner.js')).default;
             _modelsSpin = _sp.createWhirlpool(14);
@@ -717,12 +717,12 @@ async function loadEndpoints() {
             const models = await res.json();
             _stopSpin();
             renderModels(models);
-          } catch (e) { _stopSpin(); panel.innerHTML = '<span class="admin-error" style="font-size:11px;">Failed to load models</span>'; }
+          } catch (e) { _stopSpin(); panel.innerHTML = '<span class="admin-error" style="font-size:11px;">加载模型失败</span>'; }
         }
       });
     });
   } catch (e) {
-    const err = '<div class="admin-error">Failed to load</div>';
+    const err = '<div class="admin-error">加载失败</div>';
     [listLocal, listApi, listLegacy].forEach(c => { if (c) c.innerHTML = err; });
   }
 }
@@ -741,7 +741,7 @@ async function _saveEpModelState(epId, panel) {
       body: JSON.stringify({ hidden }),
     });
     const countLabel = panel.querySelector('.mcp-tools-count');
-    if (countLabel) countLabel.textContent = `${total - hidden.length}/${total} enabled`;
+    if (countLabel) countLabel.textContent = `${total - hidden.length}/${total} 已启用`;
     const row = panel.closest('[data-adm-ep-id]');
     if (row) {
       const badge = row.querySelector('.admin-badge');
@@ -790,8 +790,8 @@ function initEndpointForm() {
     if (deviceAuthConfig) {
       urlInput.value = '';
       urlInput.placeholder = deviceAuthProvider === 'copilot'
-        ? 'GitHub Copilot uses GitHub account sign-in'
-        : 'ChatGPT Subscription uses OpenAI account sign-in';
+        ? 'GitHub Copilot 使用 GitHub 账号登录'
+        : 'ChatGPT 订阅使用 OpenAI 账号登录';
       urlInput.readOnly = true;
       if (apiKey) {
         apiKey.value = '';
@@ -806,7 +806,7 @@ function initEndpointForm() {
       if (addBtn) {
         addBtn.disabled = false;
         addBtn.textContent = '添加';
-        addBtn.style.width = '55px';
+        addBtn.style.minWidth = '55px';
         addBtn.style.display = '';
       }
       if (kindSel) kindSel.value = 'api';
@@ -829,7 +829,7 @@ function initEndpointForm() {
       if (addBtn) {
         addBtn.disabled = false;
         addBtn.textContent = '添加';
-        addBtn.style.width = '55px';
+        addBtn.style.minWidth = '55px';
         addBtn.style.display = '';
       }
       if (msg) {
@@ -968,7 +968,7 @@ function initEndpointForm() {
     if (res.ok && d.online) {
       const models = d.models || [];
       const preview = models.slice(0, 3).map(m => esc(String(m).split('/').pop())).join(', ');
-      msg.innerHTML = `Online — found ${models.length} model${models.length !== 1 ? 's' : ''}${preview ? `: ${preview}${models.length > 3 ? ', …' : ''}` : ''}`;
+      msg.innerHTML = `在线 — 找到 ${models.length} 个模型${preview ? `: ${preview}${models.length > 3 ? ', …' : ''}` : ''}`;
       msg.className = 'admin-success';
       return;
     }
@@ -1079,7 +1079,7 @@ function initEndpointForm() {
         if (d.id) _recentlyAddedEpId = String(d.id);
         await loadEndpoints();
         await _selectAddedModelInChat(d);
-        const goLink = ' <a href="#" data-go-added-models style="margin-left:6px;text-decoration:underline;color:inherit;font-weight:600;">Added Models →</a>';
+        const goLink = ' <a href="#" data-go-added-models style="margin-left:6px;text-decoration:underline;color:inherit;font-weight:600;">已添加的模型 →</a>';
         if (!d.online) {
           msg.innerHTML = '已添加（端点离线 — 下次加载时将重试）' + goLink;
           msg.className = 'admin-error';
@@ -1087,12 +1087,12 @@ function initEndpointForm() {
           msg.innerHTML = '已添加 — 端点可访问，但未找到模型' + goLink;
           msg.className = 'admin-success';
         } else {
-          msg.innerHTML = `Added — found ${count} model${count !== 1 ? 's' : ''}` + goLink;
+          msg.innerHTML = `已添加 — 找到 ${count} 个模型` + goLink;
           msg.className = 'admin-success';
         }
       } else { msg.textContent = d.detail || '失败'; msg.className = 'admin-error'; }
     } catch (e) { msg.textContent = '请求失败'; msg.className = 'admin-error'; }
-    btn.disabled = false; btn.textContent = 'Add';
+    btn.disabled = false; btn.textContent = '添加';
   });
 
   async function _startProviderDeviceAuth(providerKey, triggerEl = null) {
@@ -1118,7 +1118,7 @@ function initEndpointForm() {
     const reset = () => {
       if (triggerEl) {
         triggerEl.disabled = false;
-        triggerEl.textContent = triggerText || 'Add';
+        triggerEl.textContent = triggerText || '添加';
       }
       deviceAuthPolling = false;
       _setApiFormForProvider();
@@ -1131,7 +1131,7 @@ function initEndpointForm() {
     }
     deviceAuthPolling = true;
     _setApiFormForProvider();
-    status.textContent = `Starting ${config.label} sign-in...`;
+    status.textContent = `正在启动 ${config.label} 登录...`;
 
     try {
       const result = await runProviderDeviceFlow(providerKey, {
@@ -1139,16 +1139,16 @@ function initEndpointForm() {
         onStart: ({ start, authUrl }) => {
           if (triggerEl) triggerEl.textContent = '等待中...';
           status.className = '';
-          const authLabel = providerKey === 'copilot' ? 'Authorize on GitHub' : 'Authorize with OpenAI';
-          const waitLabel = providerKey === 'copilot' ? 'Waiting for GitHub authorization...' : 'Waiting for ChatGPT authorization...';
+          const authLabel = providerKey === 'copilot' ? '在 GitHub 上授权' : '在 OpenAI 上授权';
+          const waitLabel = providerKey === 'copilot' ? '等待 GitHub 授权...' : '等待 ChatGPT 授权...';
           status.innerHTML =
             '<div class="adm-copilot-panel">' +
               '<div class="adm-copilot-wait"><span class="admin-spinner"></span>' +
                 '<span>' + esc(waitLabel) + '</span></div>' +
               '<div class="adm-copilot-coderow">' +
-                '<span class="adm-copilot-code-label">Code</span>' +
+                '<span class="adm-copilot-code-label">代码</span>' +
                 '<code class="adm-copilot-code">' + esc(start.user_code) + '</code>' +
-                '<button type="button" class="admin-btn-sm adm-device-auth-copy">Copy</button>' +
+                '<button type="button" class="admin-btn-sm adm-device-auth-copy">复制</button>' +
               '</div>' +
               '<a class="admin-btn-add adm-copilot-auth" href="' + encodeURI(authUrl || '') + '" target="_blank" rel="noopener">' + esc(authLabel) + ' ↗</a>' +
             '</div>';
@@ -1184,7 +1184,7 @@ function initEndpointForm() {
         const endpoint = result.endpoint || {};
         const n = ((endpoint && endpoint.models) || []).length;
         status.className = 'admin-success';
-        status.textContent = 'Connected - ' + n + ' ' + config.label + ' model' + (n !== 1 ? 's' : '') + ' available.';
+        status.textContent = '已连接 - ' + n + ' 个 ' + config.label + ' 模型可用。';
         if (endpoint && endpoint.id) _recentlyAddedEpId = String(endpoint.id);
         await loadEndpoints();
         await _selectAddedModelInChat(endpoint || {});
@@ -1193,12 +1193,12 @@ function initEndpointForm() {
       }
       if (result.status === 'failed') {
         reset();
-        showAuthError('Authorization failed (' + (result.error || 'denied') + ').');
+        showAuthError('授权失败（' + (result.error || '已拒绝') + '）。');
         return;
       }
       if (result.status === 'expired') {
         reset();
-        showAuthError('Authorization expired.');
+        showAuthError('授权已过期。');
         return;
       }
     } catch (e) {
@@ -1383,9 +1383,9 @@ function initEndpointForm() {
         _wp.element.style.cssText = 'display:inline-flex;width:11px;height:11px;margin:0 4px 0 0;';
         probeAllBtn.innerHTML = '';
         probeAllBtn.appendChild(_wp.element);
-        probeAllBtn.appendChild(document.createTextNode('Probing'));
+        probeAllBtn.appendChild(document.createTextNode('正在探测'));
       } catch (_) {
-        probeAllBtn.innerHTML = '<span style="opacity:0.7;">Probing…</span>';
+        probeAllBtn.innerHTML = '<span style="opacity:0.7;">正在探测…</span>';
       }
       try {
         // Hit the bulk local probe (same one the model picker uses).
@@ -1427,10 +1427,10 @@ function initEndpointForm() {
         return;
       }
       const confirmMsg = ids.length === 1
-        ? 'Remove 1 offline endpoint?'
-        : `Remove ${ids.length} offline endpoints?`;
+        ? '移除 1 个离线端点？'
+        : `移除 ${ids.length} 个离线端点？`;
       if (uiModule && uiModule.styledConfirm) {
-        const ok = await uiModule.styledConfirm(confirmMsg, { confirmText: 'Remove', danger: true });
+        const ok = await uiModule.styledConfirm(confirmMsg, { confirmText: '移除', danger: true });
         if (!ok) return;
       } else if (!confirm(confirmMsg)) {
         return;
@@ -1479,16 +1479,16 @@ function initEndpointForm() {
   const localTestBtn = el('adm-epLocalTestBtn');
   if (localTestBtn) {
     localTestBtn.addEventListener('click', async () => {
-      const testOriginalHtml = localTestBtn.innerHTML || '>Test';
+      const testOriginalHtml = (localTestBtn.innerHTML || '>测试').replace(/>Test\s*$/, '>测试');
       const msg = _endpointMsg('local');
       msg.textContent = ''; msg.className = 'adm-ep-inline-msg';
       const raw = (el('adm-epLocalUrl').value || '').trim();
-      if (!raw) { msg.textContent = 'Enter a base URL to test'; msg.className = 'admin-error'; return; }
+      if (!raw) { msg.textContent = '请输入要测试的基础 URL'; msg.className = 'admin-error'; return; }
       const url = _normalizeBaseUrl(raw);
       const keyEl = el('adm-epLocalApiKey');
       const apiKey = keyEl ? keyEl.value.trim() : '';
       localTestBtn.disabled = true;
-      localTestBtn.innerHTML = testOriginalHtml.replace(/>Test\s*$/, '>Testing...');
+      localTestBtn.innerHTML = testOriginalHtml.replace(/>测试\s*$/, '>测试中...');
       try {
         const fd = new FormData();
         fd.append('base_url', url);
@@ -1506,16 +1506,16 @@ function initEndpointForm() {
   }
   if (localAddBtn) {
     localAddBtn.addEventListener('click', async () => {
-      const addOriginalHtml = localAddBtn.innerHTML || '>Add';
+      const addOriginalHtml = (localAddBtn.innerHTML || '>添加').replace(/>Add\s*$/, '>添加');
       const msg = _endpointMsg('local');
       msg.textContent = ''; msg.className = 'adm-ep-inline-msg';
       const raw = (el('adm-epLocalUrl').value || '').trim();
-      if (!raw) { msg.textContent = 'Enter a base URL (e.g. http://localhost:8002/v1)'; msg.className = 'admin-error'; return; }
+      if (!raw) { msg.textContent = '请输入基础 URL（例如 http://localhost:8002/v1）'; msg.className = 'admin-error'; return; }
       const url = _normalizeBaseUrl(raw);
       const keyEl = el('adm-epLocalApiKey');
       const apiKey = keyEl ? keyEl.value.trim() : '';
       localAddBtn.disabled = true;
-      localAddBtn.innerHTML = addOriginalHtml.replace(/>Add\s*$/, '>Adding...');
+      localAddBtn.innerHTML = addOriginalHtml.replace(/>添加\s*$/, '>添加中...');
       try {
         const fd = new FormData();
         fd.append('base_url', url);
@@ -1536,11 +1536,11 @@ function initEndpointForm() {
           await _selectAddedModelInChat(d);
           const count = (d.models || []).length;
           const baseText = d.status === 'empty'
-            ? 'Added — Ollama is running, no models pulled yet'
+            ? '已添加 — Ollama 正在运行，尚未拉取模型'
             : d.online
-            ? `Added — found ${count} model${count !== 1 ? 's' : ''}`
-            : 'Added (offline — will retry on next load)';
-          msg.innerHTML = `${baseText} <a href="#" data-go-added-models style="margin-left:6px;text-decoration:underline;color:inherit;font-weight:600;">Added Models →</a>`;
+            ? `已添加 — 找到 ${count} 个模型`
+            : '已添加（离线 — 下次加载时将重试）';
+          msg.innerHTML = `${baseText} <a href="#" data-go-added-models style="margin-left:6px;text-decoration:underline;color:inherit;font-weight:600;">已添加的模型 →</a>`;
           msg.className = d.online ? 'admin-success' : 'admin-error';
         } else { msg.textContent = d.detail || '失败'; msg.className = 'admin-error'; }
       } catch (e) { msg.textContent = '请求失败'; msg.className = 'admin-error'; }
@@ -1559,7 +1559,7 @@ function initEndpointForm() {
       }
       const msg = _endpointMsg('local');
       if (msg) {
-        msg.innerHTML = '<span style="font-size:11px;opacity:0.55;">Ollama ready to test.</span>';
+        msg.innerHTML = '<span style="font-size:11px;opacity:0.55;">Ollama 已就绪，可以测试。</span>';
         msg.className = '';
       }
     });
@@ -1581,18 +1581,18 @@ function initEndpointForm() {
         wrap.style.cssText = 'display:flex;align-items:center;padding:8px 0;';
         wrap.appendChild(wp.element);
         const txt = document.createElement('span');
-        txt.textContent = 'Scanning ports 8000-8020 and 11434 for model servers...';
+        txt.textContent = '正在扫描端口 8000-8020 和 11434 查找模型服务器...';
         txt.style.cssText = 'opacity:0.7;';
         wrap.appendChild(txt);
         msg.appendChild(wrap);
         discoverBtn._wp = wp;
-      } catch(e) { msg.textContent = 'Scanning...'; }
+      } catch(e) { msg.textContent = '扫描中...'; }
       try {
         const res = await fetch('/api/discover');
         const data = await res.json();
         const items = data.items || [];
         if (!items.length) {
-          msg.textContent = 'No model servers found. Make sure vLLM, llama.cpp, SGLang, or Ollama is running. Docker users may need Ollama bound to a trusted reachable interface.';
+          msg.textContent = '未找到模型服务器。请确保 vLLM、llama.cpp、SGLang 或 Ollama 正在运行。使用 Docker 的用户可能需要将 Ollama 绑定到可信任的可达接口。';
           msg.className = 'admin-error';
         } else {
           // Auto-add each discovered endpoint. Server dedupes on base_url
@@ -1616,20 +1616,20 @@ function initEndpointForm() {
             }
           }
           const totalModels = items.reduce((n, i) => n + (i.models ? i.models.length : 0), 0);
-          const parts = [`Found ${items.length} server${items.length !== 1 ? 's' : ''} with ${totalModels} model${totalModels !== 1 ? 's' : ''}`];
-          if (added) parts.push(`added ${added} new`);
-          if (skipped) parts.push(`${skipped} already added`);
+          const parts = [`找到 ${items.length} 个服务器，共 ${totalModels} 个模型`];
+          if (added) parts.push(`新增 ${added} 个`);
+          if (skipped) parts.push(`${skipped} 个已存在`);
           msg.innerHTML = parts.join(' — ');
           msg.className = 'admin-success';
           loadEndpoints();
         }
       } catch (e) {
-        msg.textContent = 'Scan failed: ' + e.message;
+        msg.textContent = '扫描失败: ' + e.message;
         msg.className = 'admin-error';
       }
       if (discoverBtn._wp) { discoverBtn._wp.destroy(); discoverBtn._wp = null; }
       discoverBtn.disabled = false;
-      discoverBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Scan for Servers';
+      discoverBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>扫描服务器';
     });
   }
 
@@ -1740,37 +1740,37 @@ const MCP_PRESETS = [
 ];
 // ── Built-in tools management ──
 const TOOL_META = {
-  bash:              { name: 'Shell',            desc: 'Execute bash commands',           cat: 'Code',       ctx: '~200' },
-  python:            { name: 'Python',           desc: 'Run Python scripts',              cat: 'Code',       ctx: '~200' },
-  read_file:         { name: 'Read File',        desc: 'Read files from disk',            cat: 'Code',       ctx: '~150' },
-  write_file:        { name: 'Write File',       desc: 'Write/create files',              cat: 'Code',       ctx: '~150' },
-  web_search:        { name: 'Web Search',       desc: 'Search the web via SearXNG',      cat: 'Search',     ctx: '~300' },
-  search_chats:      { name: 'Search Chats',     desc: 'Search conversation history',     cat: 'Search',     ctx: '~150' },
-  create_document:   { name: 'Create Document',  desc: 'Create new documents',            cat: 'Documents',  ctx: '~200' },
-  update_document:   { name: 'Update Document',  desc: 'Modify existing documents',       cat: 'Documents',  ctx: '~200' },
-  edit_document:     { name: 'Edit Document',    desc: 'Find & replace in documents',     cat: 'Documents',  ctx: '~200' },
-  suggest_document:  { name: 'Suggest Changes',  desc: 'Propose document edits',          cat: 'Documents',  ctx: '~200' },
-  manage_documents:  { name: 'Manage Documents', desc: 'List, delete, organize docs',     cat: 'Documents',  ctx: '~150' },
-  generate_image:    { name: 'Generate Image',   desc: 'Create images via AI',            cat: 'Media',      ctx: '~150' },
-  manage_memory:     { name: 'Memory',           desc: 'Save and recall memories',        cat: 'Knowledge',  ctx: '~200' },
-  manage_skills:     { name: 'Skills',           desc: 'Learn and use procedures',        cat: 'Knowledge',  ctx: '~200' },
-  manage_rag:        { name: 'RAG / Docs',       desc: 'Query indexed documents',         cat: 'Knowledge',  ctx: '~150' },
-  chat_with_model:   { name: 'Chat with Model',  desc: 'Talk to another AI model',        cat: 'Multi-Agent', ctx: '~200' },
-  pipeline:          { name: 'Pipeline',         desc: 'Multi-step AI workflows',         cat: 'Multi-Agent', ctx: '~200' },
-  ask_teacher:       { name: 'Ask Teacher',      desc: 'Query a more capable model',      cat: 'Multi-Agent', ctx: '~150' },
-  send_to_session:   { name: 'Send to Session',  desc: 'Send message to another chat',    cat: 'Sessions',   ctx: '~100' },
-  create_session:    { name: 'Create Session',   desc: 'Start a new chat session',        cat: 'Sessions',   ctx: '~100' },
-  list_sessions:     { name: 'List Sessions',    desc: 'Browse existing sessions',        cat: 'Sessions',   ctx: '~100' },
-  manage_session:    { name: 'Manage Session',   desc: 'Rename, archive, configure',      cat: 'Sessions',   ctx: '~100' },
-  list_models:       { name: 'List Models',      desc: 'Show available models',           cat: 'System',     ctx: '~100' },
-  ui_control:        { name: 'UI Control',       desc: 'Change theme, layout, settings',  cat: 'System',     ctx: '~150' },
-  manage_tasks:      { name: 'Tasks',            desc: 'Schedule automated tasks',        cat: 'System',     ctx: '~150' },
-  api_call:          { name: 'API Call',         desc: 'Make HTTP requests',              cat: 'System',     ctx: '~200' },
-  manage_endpoints:  { name: 'Endpoints',        desc: 'Add/remove model endpoints',      cat: 'System',     ctx: '~100' },
-  manage_mcp:        { name: 'MCP Servers',      desc: 'Manage MCP connections',          cat: 'System',     ctx: '~100' },
-  manage_webhooks:   { name: 'Webhooks',         desc: 'Configure webhook events',        cat: 'System',     ctx: '~100' },
-  manage_tokens:     { name: 'API Tokens',       desc: 'Manage API access tokens',        cat: 'System',     ctx: '~100' },
-  manage_settings:   { name: 'Settings',         desc: 'Change app settings',             cat: 'System',     ctx: '~100' },
+  bash:              { name: 'Shell',            desc: '执行 bash 命令',           cat: '代码',       ctx: '~200' },
+  python:            { name: 'Python',           desc: '运行 Python 脚本',              cat: '代码',       ctx: '~200' },
+  read_file:         { name: '读取文件',        desc: '从磁盘读取文件',            cat: '代码',       ctx: '~150' },
+  write_file:        { name: '写入文件',       desc: '写入/创建文件',              cat: '代码',       ctx: '~150' },
+  web_search:        { name: '网页搜索',       desc: '通过 SearXNG 搜索网络',      cat: '搜索',     ctx: '~300' },
+  search_chats:      { name: '搜索聊天',     desc: '搜索对话历史',     cat: '搜索',     ctx: '~150' },
+  create_document:   { name: '创建文档',  desc: '创建新文档',            cat: '文档',  ctx: '~200' },
+  update_document:   { name: '更新文档',  desc: '修改已有文档',       cat: '文档',  ctx: '~200' },
+  edit_document:     { name: '编辑文档',    desc: '在文档中查找并替换',     cat: '文档',  ctx: '~200' },
+  suggest_document:  { name: '建议修改',  desc: '提议文档修改',          cat: '文档',  ctx: '~200' },
+  manage_documents:  { name: '管理文档', desc: '列出、删除、整理文档',     cat: '文档',  ctx: '~150' },
+  generate_image:    { name: '生成图像',   desc: '通过 AI 创建图像',            cat: '媒体',      ctx: '~150' },
+  manage_memory:     { name: '记忆',           desc: '保存和回忆记忆',        cat: '知识',  ctx: '~200' },
+  manage_skills:     { name: '技能',           desc: '学习和使用流程',        cat: '知识',  ctx: '~200' },
+  manage_rag:        { name: 'RAG / 文档',       desc: '查询索引文档',         cat: '知识',  ctx: '~150' },
+  chat_with_model:   { name: '与模型对话',  desc: '与另一个 AI 模型对话',        cat: '多智能体', ctx: '~200' },
+  pipeline:          { name: '流水线',         desc: '多步骤 AI 工作流',         cat: '多智能体', ctx: '~200' },
+  ask_teacher:       { name: '请教老师',      desc: '查询更强大的模型',      cat: '多智能体', ctx: '~150' },
+  send_to_session:   { name: '发送到会话',  desc: '向其他对话发送消息',    cat: '会话',   ctx: '~100' },
+  create_session:    { name: '创建会话',   desc: '开始新的聊天对话',        cat: '会话',   ctx: '~100' },
+  list_sessions:     { name: '列出会话',    desc: '浏览已有对话',        cat: '会话',   ctx: '~100' },
+  manage_session:    { name: '管理会话',   desc: '重命名、归档、配置',      cat: '会话',   ctx: '~100' },
+  list_models:       { name: '列出模型',      desc: '显示可用模型',           cat: '系统',     ctx: '~100' },
+  ui_control:        { name: 'UI 控制',       desc: '更改主题、布局、设置',  cat: '系统',     ctx: '~150' },
+  manage_tasks:      { name: '任务',            desc: '调度自动化任务',        cat: '系统',     ctx: '~150' },
+  api_call:          { name: 'API 调用',         desc: '发起 HTTP 请求',              cat: '系统',     ctx: '~200' },
+  manage_endpoints:  { name: '端点',        desc: '添加/删除模型端点',      cat: '系统',     ctx: '~100' },
+  manage_mcp:        { name: 'MCP 服务器',      desc: '管理 MCP 连接',          cat: '系统',     ctx: '~100' },
+  manage_webhooks:   { name: 'Webhooks',         desc: '配置 Webhook 事件',        cat: '系统',     ctx: '~100' },
+  manage_tokens:     { name: 'API 令牌',       desc: '管理 API 访问令牌',        cat: '系统',     ctx: '~100' },
+  manage_settings:   { name: '设置',         desc: '更改应用设置',             cat: '系统',     ctx: '~100' },
 };
 
 async function loadBuiltinTools() {
@@ -1780,7 +1780,7 @@ async function loadBuiltinTools() {
     const res = await fetch('/api/tools', { credentials: 'same-origin' });
     const data = await res.json();
     const tools = data.tools || [];
-    if (!tools.length) { list.innerHTML = '<div class="admin-empty">No tools found</div>'; return; }
+    if (!tools.length) { list.innerHTML = '<div class="admin-empty">未找到工具</div>'; return; }
 
     // Group by category
     const groups = {};
@@ -1792,7 +1792,7 @@ async function loadBuiltinTools() {
     }
 
     // Category order
-    const catOrder = ['Code', 'Search', 'Documents', 'Media', 'Knowledge', 'Multi-Agent', 'Sessions', 'System', 'Other'];
+    const catOrder = ['代码', '搜索', '文档', '媒体', '知识', '多智能体', '会话', '系统', '其他'];
     let html = '';
     for (const cat of catOrder) {
       const items = groups[cat];
@@ -1821,7 +1821,7 @@ async function loadBuiltinTools() {
             <span class="admin-tool-name">${esc(t.name)}</span>
             <span class="admin-tool-desc">${esc(t.desc)}</span>
           </div>
-          <span class="admin-tool-ctx" title="Approximate context tokens used">${esc(t.ctx)}</span>
+          <span class="admin-tool-ctx" title="约消耗的上下文 Token 数">${esc(t.ctx)}</span>
           <label class="admin-switch" style="flex-shrink:0;">
             <input type="checkbox" data-tool-id="${esc(t.id)}" ${t.enabled ? 'checked' : ''}>
             <span class="admin-slider"></span>
@@ -1895,7 +1895,7 @@ async function loadBuiltinTools() {
     });
   } catch (e) {
     console.error('Failed to load tools:', e);
-    list.innerHTML = '<div class="admin-empty">Failed to load tools</div>';
+    list.innerHTML = '<div class="admin-empty">加载工具失败</div>';
   }
 }
 
@@ -1905,22 +1905,22 @@ async function loadMcpServers() {
   try {
     const res = await fetch('/api/mcp/servers', { credentials: 'same-origin' });
     const servers = await res.json();
-    if (!servers.length) { list.innerHTML = '<div class="admin-empty">No MCP servers configured</div>'; return; }
+    if (!servers.length) { list.innerHTML = '<div class="admin-empty">未配置 MCP 服务器</div>'; return; }
     list.innerHTML = servers.map(s => {
       const statusColor = s.needs_oauth ? '#e5a33a' : s.status === 'connected' ? 'var(--fg)' : s.status === 'error' ? 'var(--red)' : 'color-mix(in srgb, var(--fg) 50%, transparent)';
-      const toolInfo = s.status === 'connected' ? `${s.enabled_tool_count}/${s.tool_count} tools enabled` : '';
-      const statusText = s.needs_oauth ? 'Needs authorization' : s.status === 'connected' ? `Connected (${toolInfo})` : s.status === 'error' ? `Error: ${s.error || 'unknown'}` : 'Disconnected';
+      const toolInfo = s.status === 'connected' ? `${s.enabled_tool_count}/${s.tool_count} 个工具已启用` : '';
+      const statusText = s.needs_oauth ? '需要授权' : s.status === 'connected' ? `已连接（${toolInfo}）` : s.status === 'error' ? `错误: ${s.error || '未知'}` : '已断开';
       const hasTools = s.status === 'connected' && s.tool_count > 0;
       return `<div class="admin-user-row" data-adm-mcp-id="${s.id}">
         <div style="display:flex;align-items:center;justify-content:space-between;${hasTools ? 'cursor:pointer;' : ''}padding:4px 0;" data-adm-mcp-header="${s.id}">
           <div class="admin-user-info" style="flex:1;flex-wrap:wrap;gap:0.3rem;">
             <span class="admin-user-name">${esc(s.name)}</span>
             <span class="admin-badge" style="background:${statusColor}33;color:${statusColor}">${statusText}</span>
-            ${hasTools ? `<span style="font-size:10px;opacity:0.4;">Click to manage tools</span>` : ''}
+            ${hasTools ? `<span style="font-size:10px;opacity:0.4;">点击管理工具</span>` : ''}
           </div>
           <div style="display:flex;gap:4px;align-items:center;">
-            ${s.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${s.id}" target="_blank" class="admin-btn-sm" style="background:var(--red);color:#fff;text-decoration:none;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;">Authorize</a>` : ''}
-            <button class="admin-btn-sm" data-adm-mcp-reconnect="${s.id}">Reconnect</button>
+            ${s.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${s.id}" target="_blank" class="admin-btn-sm" style="background:var(--red);color:#fff;text-decoration:none;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;">授权</a>` : ''}
+            <button class="admin-btn-sm" data-adm-mcp-reconnect="${s.id}">重新连接</button>
             <button class="admin-btn-delete" style="border-color:${s.is_enabled ? 'color-mix(in srgb, var(--red) 30%, transparent)' : 'color-mix(in srgb, var(--fg) 30%, transparent)'};color:${s.is_enabled ? 'var(--red)' : 'var(--fg)'};" data-adm-mcp-toggle="${s.id}" data-adm-mcp-enable="${!s.is_enabled}">${s.is_enabled ? '禁用' : '启用'}</button>
             <button class="admin-btn-delete" data-adm-mcp-delete="${s.id}">删除</button>
             ${hasTools ? '<svg class="admin-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>' : ''}
@@ -1935,10 +1935,10 @@ async function loadMcpServers() {
         try {
           const res = await fetch(`/api/mcp/servers/${btn.dataset.admMcpReconnect}/reconnect`, { method: 'POST', credentials: 'same-origin' });
           const data = await res.json();
-          msg.textContent = data.connected ? `Reconnected (${data.tool_count} tools)` : `Failed: ${data.error || 'unknown'}`;
+          msg.textContent = data.connected ? `已重新连接（${data.tool_count} 个工具）` : `失败: ${data.error || '未知'}`;
           msg.className = data.connected ? 'admin-success' : 'admin-error';
           loadMcpServers();
-        } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+        } catch (e) { msg.textContent = '失败: ' + e.message; msg.className = 'admin-error'; }
       });
     });
     list.querySelectorAll('[data-adm-mcp-toggle]').forEach(btn => {
@@ -1950,7 +1950,7 @@ async function loadMcpServers() {
     });
     list.querySelectorAll('[data-adm-mcp-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!await uiModule.styledConfirm('删除此 MCP 服务器？', { confirmText: 'Delete', danger: true })) return;
+        if (!await uiModule.styledConfirm('删除此 MCP 服务器？', { confirmText: '删除', danger: true })) return;
         await fetch(`/api/mcp/servers/${btn.dataset.admMcpDelete}`, { method: 'DELETE', credentials: 'same-origin' });
         loadMcpServers();
       });
@@ -1975,18 +1975,18 @@ async function loadMcpServers() {
         }
         if (!_toolsLoaded && isOpen) {
           _toolsLoaded = true;
-          panel.innerHTML = '<span style="opacity:0.5;font-size:11px;">Loading tools...</span>';
+          panel.innerHTML = '<span style="opacity:0.5;font-size:11px;">加载工具中...</span>';
           try {
             const res = await fetch(`/api/mcp/servers/${sid}/tools`, { credentials: 'same-origin' });
             const tools = await res.json();
-            if (!tools.length) { panel.innerHTML = '<span style="opacity:0.5;font-size:11px;">No tools</span>'; return; }
+            if (!tools.length) { panel.innerHTML = '<span style="opacity:0.5;font-size:11px;">无工具</span>'; return; }
             const disabled = new Set(tools.filter(t => t.is_disabled).map(t => t.name));
             panel.innerHTML = `<div class="mcp-tools-header">
-              <span>Tools</span>
+              <span>工具</span>
               <span style="display:flex;gap:8px;align-items:center;">
-                <span class="mcp-tools-count">${tools.length - disabled.size}/${tools.length} enabled</span>
-                <a href="#" data-mcp-select-all="${sid}">All</a>
-                <a href="#" data-mcp-select-none="${sid}">None</a>
+                <span class="mcp-tools-count">${tools.length - disabled.size}/${tools.length} 已启用</span>
+                <a href="#" data-mcp-select-all="${sid}">全部</a>
+                <a href="#" data-mcp-select-none="${sid}">无</a>
               </span>
             </div><div class="mcp-tools-list">` + tools.map(t =>
               `<label title="${esc(t.description)}">
@@ -2007,11 +2007,11 @@ async function loadMcpServers() {
             panel.querySelectorAll('input[type=checkbox]').forEach(cb => {
               cb.addEventListener('change', () => _saveMcpToolState(sid, panel));
             });
-          } catch (e) { panel.innerHTML = '<span class="admin-error" style="font-size:11px;">Failed to load tools</span>'; }
+          } catch (e) { panel.innerHTML = '<span class="admin-error" style="font-size:11px;">加载工具失败</span>'; }
         }
       });
     });
-  } catch (e) { if (list) list.innerHTML = '<div class="admin-error">Failed to load MCP servers</div>'; }
+  } catch (e) { if (list) list.innerHTML = '<div class="admin-error">加载 MCP 服务器失败</div>'; }
 }
 
 async function _saveMcpToolState(serverId, panel) {
@@ -2029,12 +2029,12 @@ async function _saveMcpToolState(serverId, panel) {
     });
     // Update the count label in the panel
     const countLabel = panel.querySelector('.mcp-tools-count');
-    if (countLabel) countLabel.textContent = `${total - disabled.length}/${total} enabled`;
+    if (countLabel) countLabel.textContent = `${total - disabled.length}/${total} 已启用`;
     // Update badge in the server row
     const row = panel.closest('[data-adm-mcp-id]');
     if (row) {
       const badge = row.querySelector('.admin-badge');
-      if (badge) badge.textContent = `Connected (${total - disabled.length}/${total} tools enabled)`;
+      if (badge) badge.textContent = `已连接（${total - disabled.length}/${total} 个工具已启用）`;
     }
   } catch (e) { /* silent */ }
 }
@@ -2075,7 +2075,7 @@ function initMcpForm() {
       row.style.cssText = 'gap:6px;align-items:center;';
       const label = document.createElement('span');
       label.style.cssText = 'font-size:11px;opacity:0.55;min-width:0;white-space:nowrap;';
-      label.textContent = pd.label || 'Provider';
+      label.textContent = pd.label || '提供商';
       const select = document.createElement('select');
       select.style.cssText = 'flex:1;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;';
       pd.options.forEach((opt, i) => {
@@ -2126,7 +2126,7 @@ function initMcpForm() {
     if (help) {
       _activeHelp = help;
       const helpLink = document.createElement('a');
-      helpLink.textContent = 'How do I get these?';
+      helpLink.textContent = '如何获取这些？';
       helpLink.href = '#';
       helpLink.style.cssText = 'font-size:10.5px;opacity:0.5;margin-top:2px;display:inline-block;';
       helpLink.addEventListener('click', (e) => {
@@ -2167,7 +2167,7 @@ function initMcpForm() {
     MCP_PRESETS.forEach((p, i) => {
       const opt = document.createElement('option');
       opt.value = i;
-      opt.textContent = p.name + (Object.keys(p.env).length ? '  (requires keys)' : '');
+      opt.textContent = p.name + (Object.keys(p.env).length ? '  (需要密钥)' : '');
       presetSel.appendChild(opt);
     });
     presetSel.addEventListener('change', () => {
@@ -2198,10 +2198,10 @@ function initMcpForm() {
     const env = _collectEnv();
     const url = el('adm-mcpUrl').value.trim();
     const msg = el('adm-mcpMsg');
-    if (!name) { msg.textContent = 'Name is required'; msg.className = 'admin-error'; return; }
-    if (transport === 'stdio' && !command) { msg.textContent = 'Command is required for stdio'; msg.className = 'admin-error'; return; }
-    if (transport === 'sse' && !url) { msg.textContent = 'URL is required for SSE'; msg.className = 'admin-error'; return; }
-    try { JSON.parse(env); } catch { msg.textContent = 'Env must be valid JSON'; msg.className = 'admin-error'; return; }
+    if (!name) { msg.textContent = '请输入名称'; msg.className = 'admin-error'; return; }
+    if (transport === 'stdio' && !command) { msg.textContent = 'stdio 需要命令参数'; msg.className = 'admin-error'; return; }
+    if (transport === 'sse' && !url) { msg.textContent = 'SSE 需要 URL'; msg.className = 'admin-error'; return; }
+    try { JSON.parse(env); } catch { msg.textContent = '环境变量必须为有效 JSON'; msg.className = 'admin-error'; return; }
     const fd = new FormData();
     fd.append('name', name); fd.append('transport', transport); fd.append('command', command); fd.append('args', args); fd.append('env', env); fd.append('url', url);
     // If preset has oauthFile config, send credentials for file generation
@@ -2223,15 +2223,15 @@ function initMcpForm() {
       const res = await fetch('/api/mcp/servers', { method: 'POST', body: fd, credentials: 'same-origin' });
       const data = await res.json();
       if (data.needs_oauth) {
-        msg.innerHTML = `Added ${esc(name)} — <a href="/api/mcp/oauth/authorize/${data.id}" target="_blank" style="color:var(--red);font-weight:600;">Authorize with Google</a> to connect`;
+        msg.innerHTML = `已添加 ${esc(name)} — <a href="/api/mcp/oauth/authorize/${data.id}" target="_blank" style="color:var(--red);font-weight:600;">使用 Google 授权</a> 以连接`;
         msg.className = 'admin-success';
       } else if (data.connected) {
-        msg.textContent = `Added ${name} (${data.tool_count} tools discovered)`; msg.className = 'admin-success';
-      } else { msg.textContent = `Added but connection failed: ${data.error || 'unknown'}`; msg.className = 'admin-error'; }
+        msg.textContent = `已添加 ${name}（发现 ${data.tool_count} 个工具）`; msg.className = 'admin-success';
+      } else { msg.textContent = `已添加但连接失败: ${data.error || '未知'}`; msg.className = 'admin-error'; }
       el('adm-mcpName').value = ''; el('adm-mcpCommand').value = ''; el('adm-mcpArgs').value = ''; el('adm-mcpUrl').value = '';
       _clearEnvFields(); helpBox.style.display = 'none'; _activeHelp = null; _activeOauthFile = null; _activeOauth = null;
       loadMcpServers();
-    } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = '失败: ' + e.message; msg.className = 'admin-error'; }
   });
 }
 
@@ -2248,12 +2248,12 @@ async function loadRag() {
     const data = await res.json();
     const dirList = el('adm-ragDirList');
     const dirs = data.directories || [];
-    if (dirs.length === 0) { dirList.innerHTML = '<div class="admin-empty">No directories indexed</div>'; }
+    if (dirs.length === 0) { dirList.innerHTML = '<div class="admin-empty">未索引任何目录</div>'; }
     else {
-      dirList.innerHTML = dirs.map(d => `<div class="admin-rag-item"><span class="admin-rag-item-name" title="${esc(d)}">${esc(d)}</span><button class="admin-btn-delete" data-adm-rag-dir="${esc(d)}">Remove</button></div>`).join('');
+      dirList.innerHTML = dirs.map(d => `<div class="admin-rag-item"><span class="admin-rag-item-name" title="${esc(d)}">${esc(d)}</span><button class="admin-btn-delete" data-adm-rag-dir="${esc(d)}">移除</button></div>`).join('');
       dirList.querySelectorAll('[data-adm-rag-dir]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!await uiModule.styledConfirm(`Remove directory "${btn.dataset.admRagDir}" from RAG?`, { confirmText: 'Remove', danger: true })) return;
+          if (!await uiModule.styledConfirm(`从 RAG 中移除目录 "${btn.dataset.admRagDir}"？`, { confirmText: '移除', danger: true })) return;
           btn.disabled = true; btn.textContent = '...';
           try {
             const res = await fetch('/api/personal/remove_directory?directory=' + encodeURIComponent(btn.dataset.admRagDir), { method: 'DELETE' });
@@ -2265,7 +2265,7 @@ async function loadRag() {
     }
     const fileList = el('adm-ragFileList');
     const files = data.files || [];
-    if (files.length === 0) { fileList.innerHTML = '<div class="admin-empty">No files indexed</div>'; }
+    if (files.length === 0) { fileList.innerHTML = '<div class="admin-empty">未索引任何文件</div>'; }
     else {
       fileList.innerHTML = files.map(f => {
         const size = f.size ? (f.size > 1024 ? (f.size / 1024).toFixed(1) + ' KB' : f.size + ' B') : '';
@@ -2273,7 +2273,7 @@ async function loadRag() {
       }).join('');
       fileList.querySelectorAll('[data-adm-rag-file]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!await uiModule.styledConfirm(`Delete "${btn.dataset.admRagFile}" from RAG?`, { confirmText: 'Delete', danger: true })) return;
+          if (!await uiModule.styledConfirm(`从 RAG 中删除 "${btn.dataset.admRagFile}"？`, { confirmText: '删除', danger: true })) return;
           btn.disabled = true; btn.textContent = '...';
           try {
             const res = await fetch('/api/personal/file?filepath=' + encodeURIComponent(btn.dataset.admRagFile), { method: 'DELETE' });
@@ -2284,7 +2284,7 @@ async function loadRag() {
       });
     }
   } catch (e) {
-    el('adm-ragDirList').innerHTML = '<div class="admin-error">Failed to load</div>';
+    el('adm-ragDirList').innerHTML = '<div class="admin-error">加载失败</div>';
     el('adm-ragFileList').innerHTML = '';
   }
 }
@@ -2299,15 +2299,15 @@ function ragMsg(text, isError, persist) {
 
 async function ragUpload(files) {
   if (!files || files.length === 0) return;
-  ragMsg('Uploading ' + files.length + ' file(s)...', false, true);
+  ragMsg('正在上传 ' + files.length + ' 个文件...', false, true);
   const fd = new FormData();
   for (const f of files) fd.append('files', f);
   try {
     const res = await fetch('/api/personal/upload', { method: 'POST', body: fd });
     const data = await res.json();
-    if (data.success) { ragMsg(`Uploaded ${data.uploaded.length} file(s), ${data.indexed_count} chunks indexed`); loadRag(); }
+    if (data.success) { ragMsg(`已上传 ${data.uploaded.length} 个文件，索引了 ${data.indexed_count} 个块`); loadRag(); }
     else ragMsg(data.detail || '上传失败', true);
-  } catch (e) { ragMsg('Upload error: ' + e.message, true); }
+  } catch (e) { ragMsg('上传错误: ' + e.message, true); }
 }
 
 function initRag() {
@@ -2322,25 +2322,25 @@ function initRag() {
     const dir = el('adm-ragDirInput').value.trim();
     if (!dir) return;
     const btn = el('adm-ragAddDirBtn');
-    btn.disabled = true; btn.textContent = 'Indexing...';
+    btn.disabled = true; btn.textContent = '索引中...';
     try {
       const res = await fetch('/api/personal/add_directory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory: dir }) });
       const data = await res.json();
-      if (data.success) { ragMsg(`Indexed ${data.indexed_count} chunks from directory`); el('adm-ragDirInput').value = ''; loadRag(); }
+      if (data.success) { ragMsg(`已从目录索引 ${data.indexed_count} 个块`); el('adm-ragDirInput').value = ''; loadRag(); }
       else ragMsg(data.detail || data.message || '失败', true);
     } catch (e) { ragMsg('错误：' + e.message, true); }
-    btn.disabled = false; btn.textContent = 'Add Directory';
+    btn.disabled = false; btn.textContent = '添加目录';
   });
   el('adm-ragReloadBtn').addEventListener('click', async () => {
     const btn = el('adm-ragReloadBtn');
-    btn.disabled = true; btn.textContent = 'Reloading...';
+    btn.disabled = true; btn.textContent = '重新加载中...';
     try {
       const res = await fetch('/api/personal/reload', { method: 'POST' });
       const data = await res.json();
-      ragMsg(`Index reloaded: ${data.count} documents`);
+      ragMsg(`索引已重新加载: ${data.count} 个文档`);
       loadRag();
-    } catch (e) { ragMsg('Reload failed: ' + e.message, true); }
-    btn.disabled = false; btn.textContent = 'Reload Index';
+    } catch (e) { ragMsg('重新加载失败: ' + e.message, true); }
+    btn.disabled = false; btn.textContent = '重新加载索引';
   });
 }
 
@@ -2350,19 +2350,19 @@ function initRag() {
 // Catalog mirrors the one in settings.js integration form. Keep keys in
 // sync with the backend scope allowlist.
 const _TOKEN_SCOPES = [
-  { key: 'todos:read',        label: 'Todos read',        detail: 'Read notes and checklists' },
-  { key: 'todos:write',       label: 'Todos write',       detail: 'Create, update, delete, and toggle todo items' },
-  { key: 'documents:read',    label: 'Documents read',    detail: 'Read documents when a document API is enabled' },
-  { key: 'documents:write',   label: 'Documents write',   detail: 'Create and update draft documents' },
-  { key: 'email:read',        label: 'Email read',        detail: 'Read email when an email API is enabled' },
-  { key: 'email:draft',       label: 'Email draft',       detail: 'Create email reply drafts without sending' },
-  { key: 'email:send',        label: 'Email send',        detail: 'Send email directly' },
-  { key: 'calendar:read',     label: 'Calendar read',     detail: 'Read calendar events when enabled' },
-  { key: 'calendar:write',    label: 'Calendar write',    detail: 'Create and update calendar events' },
-  { key: 'memory:read',       label: 'Memory read',       detail: 'Read memory when enabled' },
-  { key: 'memory:write',      label: 'Memory write',      detail: 'Write memory when enabled' },
-  { key: 'cookbook:read',     label: 'Cookbook read',     detail: 'List cookbook tasks + tail their tmux output' },
-  { key: 'cookbook:launch',   label: 'Cookbook launch',   detail: 'Launch and stop cookbook serve tasks' },
+  { key: 'todos:read',        label: '待办读取',        detail: '读取笔记和清单' },
+  { key: 'todos:write',       label: '待办写入',       detail: '创建、更新、删除和切换待办事项' },
+  { key: 'documents:read',    label: '文档读取',    detail: '启用文档 API 时读取文档' },
+  { key: 'documents:write',   label: '文档写入',   detail: '创建和更新草稿文档' },
+  { key: 'email:read',        label: '邮件读取',        detail: '启用邮件 API 时读取邮件' },
+  { key: 'email:draft',       label: '邮件草稿',       detail: '创建邮件回复草稿（不发送）' },
+  { key: 'email:send',        label: '邮件发送',        detail: '直接发送邮件' },
+  { key: 'calendar:read',     label: '日历读取',     detail: '启用时读取日历事件' },
+  { key: 'calendar:write',    label: '日历写入',    detail: '创建和更新日历事件' },
+  { key: 'memory:read',       label: '记忆读取',       detail: '启用时读取记忆' },
+  { key: 'memory:write',      label: '记忆写入',      detail: '启用时写入记忆' },
+  { key: 'cookbook:read',     label: '手册读取',     detail: '列出手册任务并查看 tmux 输出' },
+  { key: 'cookbook:launch',   label: '手册启动',   detail: '启动和停止手册服务任务' },
 ];
 
 function _renderTokenScopeRows(t) {
@@ -2389,18 +2389,18 @@ async function loadTokens() {
   try {
     const res = await fetch('/api/tokens', { credentials: 'same-origin' });
     const tokens = await res.json();
-    if (!tokens.length) { list.innerHTML = '<div class="admin-empty" style="color:var(--accent, var(--red));opacity:0.7;font-size:10px;">No API tokens</div>'; return; }
+    if (!tokens.length) { list.innerHTML = '<div class="admin-empty" style="color:var(--accent, var(--red));opacity:0.7;font-size:10px;">无 API 令牌</div>'; return; }
     list.innerHTML = tokens.map(t => `
       <div class="admin-user-row" data-adm-tok-row="${esc(t.id)}" style="display:block;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="admin-user-info" style="flex:1;min-width:0;flex-wrap:wrap;gap:0.3rem;">
-            <input type="text" class="adm-tok-rename" data-token-id="${esc(t.id)}" value="${esc(t.name || '')}" placeholder="Token name" style="font-size:13px;font-weight:600;padding:3px 6px;background:transparent;border:1px solid transparent;border-radius:4px;min-width:160px;" title="Click to rename">
+            <input type="text" class="adm-tok-rename" data-token-id="${esc(t.id)}" value="${esc(t.name || '')}" placeholder="令牌名称" style="font-size:13px;font-weight:600;padding:3px 6px;background:transparent;border:1px solid transparent;border-radius:4px;min-width:160px;" title="点击重命名">
             <span class="admin-badge">${esc(t.token_prefix)}...</span>
-            ${t.owner ? `<span style="font-size:0.75rem;opacity:0.5;">Owner: ${esc(t.owner)}</span>` : ''}
-            ${t.last_used_at ? `<span style="font-size:0.75rem;opacity:0.5;">Last used: ${new Date(t.last_used_at).toLocaleDateString()}</span>` : '<span style="font-size:0.75rem;opacity:0.4;">Never used</span>'}
+            ${t.owner ? `<span style="font-size:0.75rem;opacity:0.5;">所有者: ${esc(t.owner)}</span>` : ''}
+            ${t.last_used_at ? `<span style="font-size:0.75rem;opacity:0.5;">上次使用: ${new Date(t.last_used_at).toLocaleDateString()}</span>` : '<span style="font-size:0.75rem;opacity:0.4;">从未使用</span>'}
           </div>
-          <button class="admin-btn-sm" data-adm-tok-toggle="${esc(t.id)}" style="opacity:0.75;">Permissions</button>
-          <button class="admin-btn-delete" data-adm-del-token="${esc(t.id)}">Revoke</button>
+          <button class="admin-btn-sm" data-adm-tok-toggle="${esc(t.id)}" style="opacity:0.75;">权限</button>
+          <button class="admin-btn-delete" data-adm-del-token="${esc(t.id)}">撤销</button>
         </div>
         <div data-adm-tok-perm="${esc(t.id)}" style="display:none;margin-top:8px;padding:8px 4px 0;border-top:1px solid var(--border);">
           ${_renderTokenScopeRows(t)}
@@ -2411,7 +2411,7 @@ async function loadTokens() {
     // Revoke
     list.querySelectorAll('[data-adm-del-token]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!await uiModule.styledConfirm('撤销此 API 令牌？外部集成将停止使用它。', { confirmText: 'Revoke', danger: true })) return;
+        if (!await uiModule.styledConfirm('撤销此 API 令牌？外部集成将停止使用它。', { confirmText: '撤销', danger: true })) return;
         await fetch(`/api/tokens/${btn.dataset.admDelToken}`, { method: 'DELETE', credentials: 'same-origin' });
         loadTokens();
         // Codex / Claude integration cards on the Integrations panel are
@@ -2469,7 +2469,7 @@ async function loadTokens() {
         }
       });
     });
-  } catch (e) { list.innerHTML = '<div class="admin-error">Failed to load tokens</div>'; }
+  } catch (e) { list.innerHTML = '<div class="admin-error">加载令牌失败</div>'; }
 }
 
 function initTokenForm() {
@@ -2481,7 +2481,7 @@ function initTokenForm() {
     const reveal = el('adm-tokenReveal');
     msg.textContent = ''; msg.className = ''; reveal.style.display = 'none';
     const name = el('adm-tokenName').value.trim();
-    if (!name) { msg.textContent = 'Token name is required'; msg.className = 'admin-error'; return; }
+    if (!name) { msg.textContent = '请输入令牌名称'; msg.className = 'admin-error'; return; }
     const fd = new FormData(); fd.append('name', name);
     const scopes = (el('adm-tokenScopes')?.value || '').trim();
     if (scopes) fd.append('scopes', scopes);
@@ -2522,25 +2522,25 @@ async function loadWebhooks() {
   try {
     const res = await fetch('/api/webhooks', { credentials: 'same-origin' });
     const hooks = await res.json();
-    if (!hooks.length) { list.innerHTML = '<div class="admin-empty">No webhooks configured</div>'; return; }
+    if (!hooks.length) { list.innerHTML = '<div class="admin-empty">未配置 Webhook</div>'; return; }
     list.innerHTML = hooks.map(w => {
       const events = (w.events || []).map(e => `<span class="admin-badge">${esc(e)}</span>`).join(' ');
       const statusBadge = w.last_status_code
         ? `<span class="admin-badge" style="background:${w.last_status_code < 400 ? 'color-mix(in srgb, var(--fg) 20%, transparent)' : 'color-mix(in srgb, var(--red) 20%, transparent)'};color:${w.last_status_code < 400 ? 'var(--fg)' : 'var(--red)'};">${w.last_status_code}</span>`
         : '';
-      const lastTriggered = w.last_triggered_at ? new Date(w.last_triggered_at).toLocaleString() : 'Never';
-      const errorText = w.last_error ? `<div style="font-size:0.75rem;color:var(--red);margin-top:0.2rem;">Error: ${esc(w.last_error.substring(0, 80))}</div>` : '';
+      const lastTriggered = w.last_triggered_at ? new Date(w.last_triggered_at).toLocaleString() : '从未';
+      const errorText = w.last_error ? `<div style="font-size:0.75rem;color:var(--red);margin-top:0.2rem;">错误: ${esc(w.last_error.substring(0, 80))}</div>` : '';
       return `
         <div class="admin-ep-item" style="flex-wrap:wrap;">
           <div class="admin-ep-info" style="flex:1;min-width:200px;">
             <div class="admin-ep-name">${esc(w.name)} ${w.is_active ? '' : '<span class="admin-badge admin-badge-off">已禁用</span>'} ${w.has_secret ? '<span class="admin-badge">已签名</span>' : ''}</div>
             <div class="admin-ep-detail">${esc(w.url)}</div>
             <div style="margin-top:0.3rem;">${events}</div>
-            <div class="admin-ep-detail">Last: ${lastTriggered} ${statusBadge}</div>
+            <div class="admin-ep-detail">上次触发: ${lastTriggered} ${statusBadge}</div>
             ${errorText}
           </div>
           <div class="admin-ep-actions">
-            <button class="admin-btn-sm" data-adm-wh-test="${w.id}">Test</button>
+            <button class="admin-btn-sm" data-adm-wh-test="${w.id}">测试</button>
             <button class="admin-btn-sm" data-adm-wh-toggle="${w.id}">${w.is_active ? '禁用' : '启用'}</button>
             <button class="admin-btn-delete" data-adm-wh-delete="${w.id}">删除</button>
           </div>
@@ -2551,9 +2551,9 @@ async function loadWebhooks() {
         const msg = el('adm-whMsg'); msg.textContent = '发送测试...'; msg.className = '';
         try {
           const res = await fetch(`/api/webhooks/${btn.dataset.admWhTest}/test`, { method: 'POST', credentials: 'same-origin' });
-          msg.textContent = res.ok ? '测试已发送' : 'Test failed'; msg.className = res.ok ? 'admin-success' : 'admin-error';
+          msg.textContent = res.ok ? '测试已发送' : '测试失败'; msg.className = res.ok ? 'admin-success' : 'admin-error';
           setTimeout(() => loadWebhooks(), 1000);
-        } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+        } catch (e) { msg.textContent = '失败: ' + e.message; msg.className = 'admin-error'; }
       });
     });
     list.querySelectorAll('[data-adm-wh-toggle]').forEach(btn => {
@@ -2561,11 +2561,11 @@ async function loadWebhooks() {
     });
     list.querySelectorAll('[data-adm-wh-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!await uiModule.styledConfirm('Delete this webhook?', { confirmText: 'Delete', danger: true })) return;
+        if (!await uiModule.styledConfirm('删除此 Webhook？', { confirmText: '删除', danger: true })) return;
         await fetch(`/api/webhooks/${btn.dataset.admWhDelete}`, { method: 'DELETE', credentials: 'same-origin' }); loadWebhooks();
       });
     });
-  } catch (e) { list.innerHTML = '<div class="admin-error">Failed to load webhooks</div>'; }
+  } catch (e) { list.innerHTML = '<div class="admin-error">加载 Webhook 失败</div>'; }
 }
 
 function initWebhookForm() {
@@ -2576,24 +2576,24 @@ function initWebhookForm() {
     const url = el('adm-whUrl').value.trim();
     const secret = el('adm-whSecret').value.trim();
     const events = Array.from(modalEl.querySelectorAll('.adm-wh-event:checked')).map(e => e.value).join(',');
-    if (!name) { msg.textContent = 'Name is required'; msg.className = 'admin-error'; return; }
-    if (!url) { msg.textContent = 'URL is required'; msg.className = 'admin-error'; return; }
-    if (!events) { msg.textContent = 'Select at least one event'; msg.className = 'admin-error'; return; }
+    if (!name) { msg.textContent = '请输入名称'; msg.className = 'admin-error'; return; }
+    if (!url) { msg.textContent = '请输入 URL'; msg.className = 'admin-error'; return; }
+    if (!events) { msg.textContent = '请至少选择一个事件'; msg.className = 'admin-error'; return; }
     const fd = new FormData();
     fd.append('name', name); fd.append('url', url); fd.append('secret', secret); fd.append('events', events);
     try {
       const res = await fetch('/api/webhooks', { method: 'POST', body: fd, credentials: 'same-origin' });
       if (res.ok) { msg.textContent = 'Webhook 已添加'; msg.className = 'admin-success'; el('adm-whName').value = ''; el('adm-whUrl').value = ''; el('adm-whSecret').value = ''; loadWebhooks(); }
       else { const d = await res.json(); msg.textContent = d.detail || '失败'; msg.className = 'admin-error'; }
-    } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+    } catch (e) { msg.textContent = '失败: ' + e.message; msg.className = 'admin-error'; }
   });
 }
 
 /* ── Features ── */
 const featureLabels = {
-  web_search: 'Web Search', deep_research: 'Deep Research',
-  memory: 'Memory', document_editor: 'Document Editor', rag: 'RAG Knowledge Base', sensitive_filter: 'Sensitive Info Filter',
-  gallery: 'Gallery'
+  web_search: '网页搜索', deep_research: '深度研究',
+  memory: '记忆', document_editor: '文档编辑器', rag: 'RAG 知识库', sensitive_filter: '敏感信息过滤',
+  gallery: '画廊'
 };
 
 async function loadFeatures() {
@@ -2612,7 +2612,7 @@ async function loadFeatures() {
         await fetch('/api/auth/features', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       });
     });
-  } catch (e) { container.innerHTML = '<div class="admin-error">Failed to load features</div>'; }
+  } catch (e) { container.innerHTML = '<div class="admin-error">加载功能失败</div>'; }
 }
 
 /* ── CalDAV Config ── */
@@ -2634,7 +2634,7 @@ function initCalDAV() {
     }).catch(() => {});
 
   saveBtn.addEventListener('click', async () => {
-    status.textContent = 'Saving...';
+    status.textContent = '保存中...';
     try {
       const res = await fetch(`${API_BASE}/api/calendar/config`, {
         method: 'POST', credentials: 'same-origin',
@@ -2642,9 +2642,9 @@ function initCalDAV() {
         body: JSON.stringify({ caldav_url: urlIn.value, caldav_username: userIn.value, caldav_password: passIn.value }),
       });
       const d = await res.json();
-      status.textContent = d.ok ? '已保存' : 'Error';
+      status.textContent = d.ok ? '已保存' : '错误';
       status.style.color = d.ok ? 'var(--green)' : 'var(--red)';
-    } catch (e) { status.textContent = 'Error'; status.style.color = 'var(--red)'; }
+    } catch (e) { status.textContent = '错误'; status.style.color = 'var(--red)'; }
     setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 3000);
   });
 
@@ -2659,9 +2659,9 @@ function initCalDAV() {
       });
       const res = await fetch(`${API_BASE}/api/calendar/test`, { method: 'POST', credentials: 'same-origin' });
       const d = await res.json();
-      status.textContent = d.ok ? `Connected (${d.calendars} calendars)` : `Failed: ${d.error}`;
+      status.textContent = d.ok ? `已连接（${d.calendars} 个日历）` : `失败: ${d.error}`;
       status.style.color = d.ok ? 'var(--green)' : 'var(--red)';
-    } catch (e) { status.textContent = 'Error'; status.style.color = 'var(--red)'; }
+    } catch (e) { status.textContent = '错误'; status.style.color = 'var(--red)'; }
     setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 5000);
   });
 }
@@ -2671,7 +2671,7 @@ function initBackup() {
   el('adm-exportDataBtn').addEventListener('click', async () => {
     const btn = el('adm-exportDataBtn');
     const msg = el('adm-backupMsg');
-    btn.disabled = true; btn.textContent = 'Exporting...'; msg.textContent = '';
+    btn.disabled = true; btn.textContent = '导出中...'; msg.textContent = '';
     try {
       const res = await fetch('/api/export', { credentials: 'same-origin' });
       if (!res.ok) throw new Error('导出失败');
@@ -2684,9 +2684,9 @@ function initBackup() {
       a.download = filename;
       a.click();
       URL.revokeObjectURL(a.href);
-      msg.textContent = 'Export downloaded.'; msg.className = 'admin-success';
-    } catch (e) { msg.textContent = 'Export failed: ' + e.message; msg.className = 'admin-error'; }
-    btn.disabled = false; btn.textContent = 'Export Data';
+      msg.textContent = '导出已下载。'; msg.className = 'admin-success';
+    } catch (e) { msg.textContent = '导出失败: ' + e.message; msg.className = 'admin-error'; }
+    btn.disabled = false; btn.textContent = '导出数据';
   });
 
   const fileInput = el('adm-importFile');
@@ -2696,14 +2696,14 @@ function initBackup() {
     if (!file) return;
     const msg = el('adm-backupMsg');
     const btn = el('adm-importDataBtn');
-    btn.disabled = true; btn.textContent = 'Importing...'; msg.textContent = '';
+    btn.disabled = true; btn.textContent = '导入中...'; msg.textContent = '';
     try {
       const text = (await file.text()).replace(/^\uFEFF/, '').trim();
       let data;
       try {
         data = JSON.parse(text);
       } catch (e) {
-        throw new Error('Invalid backup file: ' + e.message);
+        throw new Error('无效的备份文件: ' + e.message);
       }
       const res = await fetch('/api/import', {
         method: 'POST', credentials: 'same-origin',
@@ -2712,7 +2712,7 @@ function initBackup() {
       });
       const result = await res.json().catch(() => null);
       if (!result) {
-        throw new Error(`导入失败: server returned ${res.status}`);
+        throw new Error(`导入失败: 服务器返回 ${res.status}`);
       }
       if (res.ok && result.ok) {
         msg.textContent = result.message || '导入成功.'; msg.className = 'admin-success';
@@ -2720,7 +2720,7 @@ function initBackup() {
         msg.textContent = result.message || result.detail || '导入失败'; msg.className = 'admin-error';
       }
     } catch (e) { msg.textContent = '导入失败: ' + e.message; msg.className = 'admin-error'; }
-    btn.disabled = false; btn.textContent = 'Import Data';
+    btn.disabled = false; btn.textContent = '导入数据';
   });
 }
 
@@ -2730,21 +2730,21 @@ function initDangerZone() {
   // via data-wipe-kind; one delegated handler handles double-confirm,
   // POSTs to /api/admin/wipe/{kind}, and writes the result.
   const _LABELS = {
-    chats: 'chats', memory: 'memory entries', skills: 'skills',
-    notes: 'notes', tasks: 'tasks', documents: 'documents',
-    gallery: 'gallery images', calendar: 'calendar items',
+    chats: '聊天记录', memory: '记忆条目', skills: '技能',
+    notes: '笔记', tasks: '任务', documents: '文档',
+    gallery: '画廊图片', calendar: '日历项目',
   };
   const _wipeMsg = el('adm-wipeMsg');
   modalEl.querySelectorAll('[data-wipe-kind]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const kind = btn.dataset.wipeKind;
       const isAll = kind === '__all__';
-      const label = isAll ? 'data across every category' : (_LABELS[kind] || kind);
-      if (!await uiModule.styledConfirm(`Delete ALL ${label}? This cannot be undone.`, { confirmText: 'Delete', danger: true })) return;
-      if (!await uiModule.styledConfirm(`Really delete every one of your ${label}?`, { confirmText: isAll ? 'Yes, delete everything' : 'Yes, delete everything', danger: true })) return;
+      const label = isAll ? '所有类别的数据' : (_LABELS[kind] || kind);
+      if (!await uiModule.styledConfirm(`删除所有 ${label}？此操作不可撤销。`, { confirmText: '删除', danger: true })) return;
+      if (!await uiModule.styledConfirm(`真的要删除所有 ${label}？`, { confirmText: isAll ? '是，删除全部' : '是，删除全部', danger: true })) return;
       btn.disabled = true;
       const prevHtml = btn.innerHTML;
-      btn.innerHTML = isAll ? 'Deleting all…' : 'Deleting…';
+      btn.innerHTML = isAll ? '正在删除全部…' : '正在删除…';
       if (_wipeMsg) { _wipeMsg.textContent = ''; _wipeMsg.className = ''; }
       try {
         if (isAll) {
@@ -2766,10 +2766,10 @@ function initDangerZone() {
           const fails = results.filter(r => !r.ok).map(r => r.k);
           if (_wipeMsg) {
             if (!fails.length) {
-              _wipeMsg.textContent = `Deleted ${total} items across all ${okCount} categories.`;
+              _wipeMsg.textContent = `已从 ${okCount} 个类别中删除 ${total} 个项目。`;
               _wipeMsg.className = 'admin-success';
             } else {
-              _wipeMsg.textContent = `Deleted ${total} items; failed: ${fails.join(', ')}.`;
+              _wipeMsg.textContent = `已删除 ${total} 个项目；失败: ${fails.join(', ')}。`;
               _wipeMsg.className = 'admin-error';
             }
           }
@@ -2777,13 +2777,13 @@ function initDangerZone() {
           const res = await fetch(`/api/admin/wipe/${kind}`, { method: 'DELETE', credentials: 'same-origin' });
           const data = await res.json().catch(() => ({}));
           if (res.ok) {
-            if (_wipeMsg) { _wipeMsg.textContent = `Deleted ${data.count ?? 0} ${label}.`; _wipeMsg.className = 'admin-success'; }
+            if (_wipeMsg) { _wipeMsg.textContent = `已删除 ${data.count ?? 0} 个 ${label}。`; _wipeMsg.className = 'admin-success'; }
           } else {
             if (_wipeMsg) { _wipeMsg.textContent = data.detail || '失败'; _wipeMsg.className = 'admin-error'; }
           }
         }
       } catch (e) {
-        if (_wipeMsg) { _wipeMsg.textContent = 'Request failed: ' + e.message; _wipeMsg.className = 'admin-error'; }
+        if (_wipeMsg) { _wipeMsg.textContent = '请求失败: ' + e.message; _wipeMsg.className = 'admin-error'; }
       }
       btn.disabled = false; btn.innerHTML = prevHtml;
     });
@@ -2821,7 +2821,7 @@ function renderLogs(isAutoPoll = false) {
   }
 
   if (logs.length === 0) {
-    consoleContainer.innerHTML = '<div class="settings-system-logs-placeholder">No logs found matching current filters.</div>';
+    consoleContainer.innerHTML = '<div class="settings-system-logs-placeholder">未找到与当前筛选条件匹配的日志。</div>';
     return;
   }
 

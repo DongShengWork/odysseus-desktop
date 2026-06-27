@@ -370,7 +370,7 @@ try { (function () {
       } catch (e) {
         fail(String(e));
         saveBtn.disabled = false;
-        saveBtn.textContent = "Save schedule";
+        saveBtn.textContent = "保存计划";
         toast(`Schedule save failed: ${e}`);
       }
     }));

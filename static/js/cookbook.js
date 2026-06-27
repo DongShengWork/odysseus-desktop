@@ -882,7 +882,7 @@ async function _fetchDependencies() {
     label.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;margin-top:6px;';
     list.appendChild(label);
   } catch {
-    list.innerHTML = '<div class="hwfit-loading">Loading packages...</div>';
+    list.innerHTML = '<div class="hwfit-loading">正在加载包...</div>';
   }
   try {
     // Resolve the target server from the deps dropdown so remote-target
@@ -912,7 +912,7 @@ async function _fetchDependencies() {
     const resp = await fetch('/api/cookbook/packages' + (_pkgParams.toString() ? '?' + _pkgParams.toString() : ''));
     const data = await resp.json();
     const pkgs = data.packages || [];
-    if (!pkgs.length) { list.innerHTML = '<div class="hwfit-loading">No packages found</div>'; return; }
+    if (!pkgs.length) { list.innerHTML = '<div class="hwfit-loading">未找到包</div>'; return; }
     const _winUnsupported = new Set(['hf_transfer', 'vllm', 'rembg', 'gfpgan']);
 
     const _statusTag = (pkg, isLocal, isSystemDep, winBlocked) => {
@@ -1531,7 +1531,7 @@ async function _fetchDependencies() {
       const upIco = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>';
       const it = document.createElement('div');
       it.className = 'dropdown-item-compact';
-      it.innerHTML = `<span class="dropdown-icon">${upIco}</span><span>Update</span>`;
+      it.innerHTML = `<span class="dropdown-icon">${upIco}</span><span>更新</span>`;
       it.title = `Update ${pkgName} to the latest version (pip install -U)`;
       it.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -1543,7 +1543,7 @@ async function _fetchDependencies() {
         const rebuildIco = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
         const rebuild = document.createElement('div');
         rebuild.className = 'dropdown-item-compact';
-        rebuild.innerHTML = `<span class="dropdown-icon">${rebuildIco}</span><span>Rebuild</span>`;
+        rebuild.innerHTML = `<span class="dropdown-icon">${rebuildIco}</span><span>重建</span>`;
         rebuild.title = 'Clear the cached llama-server build so the next launch rebuilds it.';
         rebuild.addEventListener('click', async (e) => {
           e.stopPropagation();
@@ -1553,7 +1553,7 @@ async function _fetchDependencies() {
         dropdown.appendChild(rebuild);
         const source = document.createElement('div');
         source.className = 'dropdown-item-compact';
-        source.innerHTML = `<span class="dropdown-icon">${upIco}</span><span>Update source + rebuild</span>`;
+        source.innerHTML = `<span class="dropdown-icon">${upIco}</span><span>更新源码并重建</span>`;
         source.title = 'Fast-forward ~/llama.cpp when possible, then clear the cached build.';
         source.addEventListener('click', async (e) => {
           e.stopPropagation();
@@ -1582,7 +1582,7 @@ async function _fetchDependencies() {
       });
     });
   } catch (err) {
-    list.innerHTML = `<div class="hwfit-loading">Error loading packages: ${esc(err.message)}</div>`;
+    list.innerHTML = `<div class="hwfit-loading">加载包失败: ${esc(err.message)}</div>`;
   }
 }
 
@@ -1902,7 +1902,7 @@ function _wireTabEvents(body) {
     function _updateBulkCount() {
       const count = document.querySelectorAll('.serve-select-cb.selected').length;
       const countEl = document.getElementById('serve-bulk-count');
-      if (countEl) countEl.textContent = count + ' selected';
+      if (countEl) countEl.textContent = '已选择 ' + count + ' 项';
     }
 
     document.getElementById('serve-bulk-cancel')?.addEventListener('click', () => {
@@ -2295,7 +2295,7 @@ function _wireTabEvents(body) {
         lbl.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;margin-top:6px;';
         hfList.appendChild(lbl);
       } catch {
-        hfList.innerHTML = '<div class="hwfit-loading">Scanning models…</div>';
+        hfList.innerHTML = '<div class="hwfit-loading">正在扫描模型…</div>';
       }
       const hwInfo = await _getSelectedServerHw();
       const vram = hwInfo.vram || 0;
@@ -2349,7 +2349,7 @@ function _wireTabEvents(body) {
           });
         });
       } catch (e) {
-        hfList.innerHTML = '<div class="hwfit-loading">Failed to load</div>';
+        hfList.innerHTML = '<div class="hwfit-loading">加载失败</div>';
       }
     }
     hfToggle.addEventListener('click', () => {
@@ -2393,13 +2393,13 @@ function _wireTabEvents(body) {
   if (olToggle && olList) {
     let _olLoaded = false;
     async function _loadOllama(refresh = false) {
-      olList.innerHTML = '<div class="hwfit-loading" style="opacity:0.5;font-size:11px;text-align:center;padding:12px;">Loading…</div>';
+      olList.innerHTML = '<div class="hwfit-loading" style="opacity:0.5;font-size:11px;text-align:center;padding:12px;">加载中…</div>';
       try {
         const res = await fetch(`/api/cookbook/ollama/library${refresh ? '?refresh=1' : ''}`);
         const data = await res.json();
         const models = data.models || [];
         if (!models.length) {
-          olList.innerHTML = '<div class="hwfit-loading">No models</div>';
+          olList.innerHTML = '<div class="hwfit-loading">没有模型</div>';
           return;
         }
         let html = '';

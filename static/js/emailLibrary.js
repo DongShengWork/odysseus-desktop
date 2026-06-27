@@ -2413,10 +2413,10 @@ async function _doSearch() {
     _renderGrid();
 
     const count = data.total || results.length;
-    if (stats) stats.textContent = `${count} match${count === 1 ? '' : 'es'} on server`;
+    if (stats) stats.textContent = `${count} 个匹配结果（服务器端）`;
     try { console.log('[email-search]', JSON.stringify({ q, folder: folderAtStart, count, returned: results.length })); } catch {}
   } catch (e) {
-    if (stats) stats.textContent = originalStatsText || 'Search failed';
+    if (stats) stats.textContent = originalStatsText || '搜索失败';
     try { console.error('[email-search] fetch failed:', e); } catch {}
   } finally {
     _libSearchInFlight = false;
@@ -2572,7 +2572,7 @@ async function _refreshUnreadBadge() {
         badge.style.display = '';
       }
     } else if (n > 0) {
-      badge.textContent = n > 999 ? '999+ unread' : `${n} unread`;
+      badge.textContent = n > 999 ? '999+ 封未读' : `${n} 封未读`;
       badge.title = 'Show unread emails';
       badge.style.display = '';
     } else {
@@ -2623,7 +2623,7 @@ async function _loadEmails({ force = false, useCache = true } = {}) {
     if (grid2) grid2.classList.remove('email-lib-just-opened');
     _renderGrid();
     const stats = document.getElementById('email-lib-stats');
-    if (stats) stats.textContent = `${state._libTotal} emails`;
+    if (stats) stats.textContent = `${state._libTotal} 封邮件`;
   } else {
     sp = _renderEmailLoading(grid);
   }

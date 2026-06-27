@@ -669,7 +669,7 @@ import * as Modals from './modalManager.js';
       <div class="modal-content" style="width:min(780px,94vw);max-height:86vh;">
         <div class="modal-header">
           <h4>Export filled PDF</h4>
-          <button id="pdf-export-close" class="modal-close" title="Close">×</button>
+          <button id="pdf-export-close" class="modal-close" title="关闭">×</button>
         </div>
         <div id="pdf-export-summary" style="font-size:0.78rem;opacity:0.7;margin:0 0 6px;">Loading field values…</div>
         <div id="pdf-export-body" class="modal-body" style="font-size:0.85rem;">
@@ -756,7 +756,7 @@ import * as Modals from './modalManager.js';
         sec.className = 'pdf-export-section';
         sec.id = `pdf-export-page-${p}`;
         pageAnchors[p] = sec;
-        sec.innerHTML = `<div class="pdf-export-section-title">Page ${p}</div>`;
+        sec.innerHTML = `<div class="pdf-export-section-title">第 ${p} 页</div>`;
         for (const f of byPage.get(p)) {
           const row = document.createElement('div');
           row.className = 'pdf-export-row';
@@ -1142,7 +1142,7 @@ import * as Modals from './modalManager.js';
     const docId = activeDocId;
     // Keep the save pill across re-renders by detaching/re-attaching it
     const savedPill = document.getElementById('doc-pdf-save-pill');
-    pane.innerHTML = '<div style="color:#bbb;font-size:13px;text-align:center;padding:40px;">Loading PDF…</div>';
+    pane.innerHTML = '<div style="color:#bbb;font-size:13px;text-align:center;padding:40px;">加载 PDF…</div>';
     if (savedPill) pane.appendChild(savedPill);
     let data;
     try {
@@ -1150,7 +1150,7 @@ import * as Modals from './modalManager.js';
       if (!res.ok) throw new Error(await _pdfResponseErrorMessage(res));
       data = await res.json();
     } catch (e) {
-      pane.innerHTML = `<div style="color:#fbb;padding:40px;text-align:center;">Failed to load PDF view: ${_escHtml(e.message || String(e))}</div>`;
+      pane.innerHTML = `<div style="color:#fbb;padding:40px;text-align:center;">加载 PDF 视图失败：${_escHtml(e.message || String(e))}</div>`;
       if (savedPill) pane.appendChild(savedPill);
       return;
     }
@@ -1845,7 +1845,7 @@ import * as Modals from './modalManager.js';
       idle:   { txt: '',           bg: 'transparent',           fg: 'transparent' },
       dirty:  { txt: 'Editing…',   bg: 'var(--panel)',          fg: 'var(--fg)' },
       saving: { txt: 'Saving…',    bg: 'var(--panel)',          fg: 'var(--fg)' },
-      saved:  { txt: 'Saved',      bg: 'rgba(34,197,94,0.85)',  fg: '#fff' },
+      saved:  { txt: '已保存',      bg: 'rgba(34,197,94,0.85)',  fg: '#fff' },
       error:  { txt: msg || 'Save failed', bg: 'var(--red)',    fg: 'var(--bg)' },
     };
     const p = palette[status] || palette.idle;
@@ -1855,7 +1855,7 @@ import * as Modals from './modalManager.js';
     pill.style.display = p.txt ? '' : 'none';
     if (status === 'saved') {
       setTimeout(() => {
-        if (pill.textContent === 'Saved') _setPdfSaveStatus('idle');
+        if (pill.textContent === '已保存') _setPdfSaveStatus('idle');
       }, 1200);
     }
   }
@@ -2055,11 +2055,11 @@ import * as Modals from './modalManager.js';
       if (_replyable && _copyBtn.dataset.mode !== 'reply') {
         _copyBtn.dataset.mode = 'reply';
         _copyBtn.title = '将填写后的文件作为附件回复给发件人';
-        _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Attach';
+        _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>附加';
       } else if (!_replyable && _copyBtn.dataset.mode !== 'copy') {
         _copyBtn.dataset.mode = 'copy';
         _copyBtn.title = '复制文档';
-        _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy';
+        _copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制';
       }
     }
     // Standalone Export PDF / PDF-toggle icon buttons are retired — for a
@@ -3023,12 +3023,12 @@ import * as Modals from './modalManager.js';
       overlay.style.display = 'flex';
       overlay.innerHTML = `
         <div class="modal-content" style="width:360px;max-width:90vw;">
-          <div class="modal-header"><h4>No attachments found</h4></div>
+          <div class="modal-header"><h4>未找到附件</h4></div>
           <div class="modal-body" style="padding:16px;font-size:13px;opacity:0.8;">
-            Your message mentions an attachment, but nothing is attached. Send anyway?
+            您的消息提到了附件，但未附加任何文件。仍然发送？
           </div>
           <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;">
-            <button class="memory-toolbar-btn" id="att-warn-cancel">Go back</button>
+            <button class="memory-toolbar-btn" id="att-warn-cancel">返回</button>
             <button class="memory-toolbar-btn" id="att-warn-send" style="background:var(--accent-primary,var(--red));color:#fff;border-color:var(--accent-primary,var(--red));">Send anyway</button>
           </div>
         </div>
@@ -3366,15 +3366,15 @@ import * as Modals from './modalManager.js';
     ].join(';');
     menu.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:6px;min-width:200px;">
-        <textarea data-note-input rows="2" placeholder="Add context (optional)" style="width:100%;box-sizing:border-box;resize:vertical;min-height:42px;font-family:inherit;font-size:11px;padding:5px 6px;border-radius:5px;border:1px solid var(--border,#333);background:var(--bg-elev,#1a1a1a);color:var(--fg);"></textarea>
+        <textarea data-note-input rows="2" placeholder="添加上下文（可选）" style="width:100%;box-sizing:border-box;resize:vertical;min-height:42px;font-family:inherit;font-size:11px;padding:5px 6px;border-radius:5px;border:1px solid var(--border,#333);background:var(--bg-elev,#1a1a1a);color:var(--fg);"></textarea>
         <div style="display:flex;align-items:center;gap:4px;">
-          <button class="memory-toolbar-btn" data-mode="ai-reply-fast" title="Shorter, faster draft" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
+          <button class="memory-toolbar-btn" data-mode="ai-reply-fast" title="更短更快的草稿" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--accent, var(--red))" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            Fast
+            快速
           </button>
-          <button class="memory-toolbar-btn" data-mode="ai-reply-full" title="Fuller reply with more context" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
+          <button class="memory-toolbar-btn" data-mode="ai-reply-full" title="更详细的回复，包含更多上下文" style="display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="color:var(--accent, var(--red));"><circle cx="12" cy="12" r="6"/></svg>
-            Full
+            详细
           </button>
         </div>
       </div>
@@ -3454,7 +3454,7 @@ import * as Modals from './modalManager.js';
     } catch (_) {}
 
     const btn = document.getElementById('doc-email-ai-reply-btn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>Drafting...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>起草中...'; }
 
     try {
       // Empty-compose path: if there's no original body, send a placeholder
@@ -3497,12 +3497,12 @@ import * as Modals from './modalManager.js';
         await _streamEmailBodyText(textarea, newBody);
         if (uiModule) uiModule.showToast(`AI draft inserted (${data.model_used || 'AI'})`);
       } else {
-        if (uiModule) uiModule.showError(data.error || 'Failed to generate reply');
+        if (uiModule) uiModule.showError(data.error || '生成回复失败');
       }
     } catch (e) {
       if (uiModule) uiModule.showError('AI 回复生成失败');
     } finally {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:var(--accent, var(--red));flex-shrink:0;position:relative;top:-1px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg><span style="font-size:11px;margin-left:4px;">Reply</span>'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:var(--accent, var(--red));flex-shrink:0;position:relative;top:-1px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg><span style="font-size:11px;margin-left:4px;">回复</span>'; }
     }
   }
 
@@ -3979,7 +3979,7 @@ import * as Modals from './modalManager.js';
     // The secondary X button below it is only shown in fullscreen mode and
     // hides the pane outright (so fullscreen has an escape that isn't just
     // "exit fullscreen").
-    divider.innerHTML = '<button type="button" class="doc-divider-collapse" title="Collapse panel" data-mode="collapse"><span>›</span></button>' +
+    divider.innerHTML = '<button type="button" class="doc-divider-collapse" title="折叠面板" data-mode="collapse"><span>›</span></button>' +
       '<button type="button" class="doc-divider-hide" title="Hide panel" aria-label="Hide panel"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
     const _divHide = divider.querySelector('.doc-divider-hide');
     if (_divHide) {
@@ -4120,7 +4120,7 @@ import * as Modals from './modalManager.js';
           <button type="button" class="md-dd-toggle" data-dd="list" title="List"><span style="font-variant-numeric:tabular-nums;">1.</span><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
           <span class="md-toolbar-sep"></span>
           <button type="button" data-md="link" title="Link"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
-          <button type="button" id="md-toolbar-attach-btn" class="md-toolbar-attach-btn" title="Insert image"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+          <button type="button" id="md-toolbar-attach-btn" class="md-toolbar-attach-btn" title="插入图片"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
           <button type="button" class="md-dd-toggle md-toolbar-email-hide" data-dd="code" title="Code">\`<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
           <button type="button" data-md="hr" title="Horizontal rule">—</button>
           <span class="md-toolbar-sep"></span>
@@ -5090,7 +5090,7 @@ import * as Modals from './modalManager.js';
         }
         if (_findMatches.length === 0) {
           _findIdx = -1;
-          if (cnt) cnt.textContent = '0 results';
+          if (cnt) cnt.textContent = '0 个结果';
           if (codeEl) { codeEl.dataset.findQuery = q; delete codeEl.dataset.findCurrent; applyFindMarks(codeEl); }
           renderFindRects([], -1);
           return;
@@ -7004,7 +7004,7 @@ import * as Modals from './modalManager.js';
     const label = _selections.length === 1
       ? `${labels[0]} selected`
       : `${_selections.length} selections (${labels.join(', ')})`;
-    badge.innerHTML = `${label}<button class="doc-selection-clear" title="Clear all selections">&times;</button>`;
+    badge.innerHTML = `${label}<button class="doc-selection-clear" title="清除所有选择">&times;</button>`;
     badge.style.display = '';
     badge.querySelector('.doc-selection-clear').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -7779,7 +7779,7 @@ import * as Modals from './modalManager.js';
     const el = statusEl || document.getElementById('diff-toolbar-status');
     if (!el) return;
     const resolved = _diffChunks.length - _diffUnresolvedCount;
-    el.textContent = `${resolved} / ${_diffChunks.length} changes resolved`;
+    el.textContent = `${resolved} / ${_diffChunks.length} 个更改已解决`;
   }
 
   /** Resolve a single chunk */
@@ -8113,7 +8113,7 @@ import * as Modals from './modalManager.js';
     }
 
     if (!codeRunnerModule) {
-      outputPanel.innerHTML = '<pre class="doc-run-error">Code runner not loaded</pre>';
+      outputPanel.innerHTML = '<pre class="doc-run-error">代码运行器未加载</pre>';
       setTimeout(() => { if (outputPanel) outputPanel.style.display = 'none'; }, 5000);
       return;
     }
@@ -8133,7 +8133,7 @@ import * as Modals from './modalManager.js';
       return;
     }
 
-    outputPanel.innerHTML = '<pre class="doc-run-error">Unsupported language. Supported: bash, python, javascript, html</pre>';
+    outputPanel.innerHTML = '<pre class="doc-run-error">不支持的语言。支持：bash, python, javascript, html</pre>';
     setTimeout(() => { if (outputPanel) outputPanel.style.display = 'none'; }, 5000);
   }
 
@@ -8316,12 +8316,12 @@ import * as Modals from './modalManager.js';
       result = await res.json().catch(() => ({}));
       if (!res.ok || !result.ok) {
         const msg = (result && result.error) || `HTTP ${res.status}`;
-        if (uiModule) uiModule.showError(`Couldn't prepare signed reply: ${msg}`);
+        if (uiModule) uiModule.showError(`无法准备签名回复：${msg}`);
         return;
       }
     } catch (e) {
       console.error('prepare-signed-reply failed:', e);
-      if (uiModule) uiModule.showError("Couldn't prepare signed reply");
+      if (uiModule) uiModule.showError('无法准备签名回复');
       return;
     }
 
@@ -8335,7 +8335,7 @@ import * as Modals from './modalManager.js';
         d._composeAtts = (d._composeAtts || []).concat([att]);
         await loadDocument(d.id);
         _renderComposeAttachments();
-        if (uiModule) uiModule.showToast(`Added "${att.filename}" to the reply draft`);
+        if (uiModule) uiModule.showToast(`已将 "${att.filename}" 添加到回复草稿`);
         return;
       }
     }
@@ -8349,7 +8349,7 @@ import * as Modals from './modalManager.js';
       reply.source_uid ? `X-Source-UID: ${reply.source_uid}` : null,
       reply.source_folder ? `X-Source-Folder: ${reply.source_folder}` : null,
     ].filter(Boolean);
-    const content = headerLines.join('\n') + '\n---\n\nHi' + (reply.to_name ? ' ' + reply.to_name.split(/\s+/)[0] : '') + ',\n\nPlease find the signed copy attached.\n\nBest,\n';
+    const content = headerLines.join('\n') + '\n---\n\n您好' + (reply.to_name ? ' ' + reply.to_name.split(/\s+/)[0] : '') + '，\n\n请查收签名副本。\n\n此致\n敬礼\n';
 
     let draftId = null;
     try {
@@ -8366,7 +8366,7 @@ import * as Modals from './modalManager.js';
         credentials: 'same-origin',
         body: JSON.stringify({
           session_id: sessionId,
-          title: reply.subject || 'Signed reply',
+          title: reply.subject || '签名回复',
           language: 'email',
           content,
         }),
@@ -8376,7 +8376,7 @@ import * as Modals from './modalManager.js';
       if (!draftId) throw new Error('No draft id returned');
     } catch (e) {
       console.error('Failed to create draft doc:', e);
-      if (uiModule) uiModule.showError("Couldn't create reply draft");
+      if (uiModule) uiModule.showError('无法创建回复草稿');
       return;
     }
 
@@ -8384,7 +8384,7 @@ import * as Modals from './modalManager.js';
     // signed PDFs from the same email get appended to this same draft.
     addDocToTabs({
       id: draftId,
-      title: reply.subject || 'Signed reply',
+      title: reply.subject || '签名回复',
       language: 'email',
       current_content: content,
       version_count: 1,
@@ -8398,7 +8398,7 @@ import * as Modals from './modalManager.js';
 
     await loadDocument(draftId);
     _renderComposeAttachments();
-    if (uiModule) uiModule.showToast(`Reply draft ready — "${att.filename}" attached`);
+    if (uiModule) uiModule.showToast(`回复草稿已就绪 — "${att.filename}" 已附加`);
   }
 
   /** Save manual edits */
@@ -8967,7 +8967,7 @@ import * as Modals from './modalManager.js';
           if (editorWrap) editorWrap.after(outputPanel);
         }
         outputPanel.style.display = 'block';
-        outputPanel.innerHTML = '<pre class="doc-run-error">No data — CSV is empty or unparseable.</pre>';
+        outputPanel.innerHTML = '<pre class="doc-run-error">无数据 — CSV 为空或无法解析。</pre>';
         return;
       } else {
         const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -9197,7 +9197,7 @@ import * as Modals from './modalManager.js';
             if (skipped > 0) {
               const sep = document.createElement('div');
               sep.className = 'doc-diff-sep';
-              sep.textContent = `\u22EF ${skipped} unchanged`;
+              sep.textContent = `\u22EF 跳过 ${skipped} 行（未更改）`;
               content.appendChild(sep);
               skipped = 0;
             }
@@ -9885,7 +9885,7 @@ import * as Modals from './modalManager.js';
         });
       });
     } catch (e) {
-      list.innerHTML = '<div style="padding:8px;opacity:0.5;">Failed to load versions</div>';
+      list.innerHTML = '<div style="padding:8px;opacity:0.5;">加载版本列表失败</div>';
     }
   }
 

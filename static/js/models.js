@@ -569,7 +569,7 @@ export async function refreshModels(force = false) {
       box.appendChild(noModels);
       // No endpoints yet: keep the welcome screen focused on first setup.
       const welcomeSub = document.getElementById('welcome-sub');
-      if (welcomeSub) welcomeSub.innerHTML = 'Type <span class="setup-trigger-link" style="color:var(--accent,var(--red));font-weight:600;cursor:pointer;text-decoration:underline;" title="Click to launch setup">/setup</span> to get started.';
+      if (welcomeSub) welcomeSub.innerHTML = '输入 <span class="setup-trigger-link" style="color:var(--accent,var(--red));font-weight:600;cursor:pointer;text-decoration:underline;" title="点击启动配置">/setup</span> 开始使用。';
       const welcomeTip = document.getElementById('welcome-tip');
       if (welcomeTip) welcomeTip.textContent = '输入 /setup，然后选择本地模型或 API。';
     } else {
@@ -608,7 +608,7 @@ export async function refreshProviders() {
   const sel = document.getElementById('openai-model');
   if (!sel) return; // Exit if element doesn't exist
 
-  sel.innerHTML = '<option disabled>Loading providers…</option>';
+  sel.innerHTML = '<option disabled>加载提供商…</option>';
 
   try {
     const res = await fetch(`${API_BASE}/api/providers`);

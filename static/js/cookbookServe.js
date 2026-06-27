@@ -1619,7 +1619,7 @@ function _rerenderCachedModels() {
           return;
         }
         if (_ctxAutoNote) {
-          _ctxAutoNote.textContent = `Auto ${fit.ctx.toLocaleString()} · ${fit.reason}`;
+          _ctxAutoNote.textContent = `自动 ${fit.ctx.toLocaleString()} · ${fit.reason}`;
           const _llamaMemoryLabel = String(f.llama_mode || '').toLowerCase() === 'unified' || f.unified_mem
             ? '统一系统内存'
             : '选定 GPU 内存';
@@ -2179,7 +2179,7 @@ function _rerenderCachedModels() {
           it.className = 'dropdown-item-compact' + (p.favorite ? ' cookbook-saved-favorite' : '');
           it.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
           const lbl = document.createElement('span');
-          lbl.textContent = p.label || `Config ${idx + 1}`;
+          lbl.textContent = p.label || `配置 ${idx + 1}`;
           lbl.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
           const fav = document.createElement('button');
           fav.type = 'button';
@@ -2548,7 +2548,7 @@ function _rerenderCachedModels() {
                 setTimeout(() => _probeBtn.click(), 1200);
               } else {
                 btn.disabled = false;
-                btn.textContent = sig === 'KILL' ? '!' : 'Kill';
+                btn.textContent = sig === 'KILL' ? '!' : '杀死';
               }
             });
           });
@@ -3656,9 +3656,9 @@ export async function _fetchCachedModels() {
 
     if (!allModels.length) {
       if (!host) {
-        list.innerHTML = '<div class="hwfit-loading" style="flex-direction:column;gap:6px;text-align:center;"><div>No cached models found</div><div style="font-size:11px;opacity:0.55;max-width:420px;line-height:1.4;">Docker Local uses Odysseus’s cache in <code>data/huggingface</code>. Download a model here, or copy an existing host HuggingFace cache into that folder once.</div></div>';
+        list.innerHTML = '<div class="hwfit-loading" style="flex-direction:column;gap:6px;text-align:center;"><div>未找到缓存的模型</div><div style="font-size:11px;opacity:0.55;max-width:420px;line-height:1.4;">Docker Local 使用 Odysseus 的缓存目录 <code>data/huggingface</code>。在此处下载模型，或一次性将现有的 HuggingFace 缓存目录复制到该文件夹中。</div></div>';
       } else {
-        list.innerHTML = '<div class="hwfit-loading">No cached models found</div>';
+        list.innerHTML = '<div class="hwfit-loading">未找到缓存的模型</div>';
       }
       document.getElementById('serve-tags').innerHTML = '';
       return;
@@ -3720,7 +3720,7 @@ export async function _fetchCachedModels() {
     _rerenderCachedModels();
   } catch (e) {
     _dlWp.destroy();
-    list.innerHTML = `<div class="hwfit-loading">Failed: ${esc(e.message)}</div>`;
+    list.innerHTML = `<div class="hwfit-loading">失败：${esc(e.message)}</div>`;
   }
 }
 

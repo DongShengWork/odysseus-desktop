@@ -636,7 +636,7 @@ function _renderList() {
   const _tabCount = document.getElementById('tasks-tab-count');
   if (_tabCount) _tabCount.textContent = _tasks.length;
   const _headCount = document.getElementById('tasks-head-count');
-  if (_headCount) _headCount.textContent = _tasks.length ? `${_tasks.length} task${_tasks.length !== 1 ? 's' : ''}` : '';
+  if (_headCount) _headCount.textContent = _tasks.length ? `${_tasks.length} 个任务` : '';
 
   if (_tasks.length === 0) {
     // Differentiate "still loading" from "really empty" so the first paint
@@ -1253,7 +1253,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
           schedOpts.appendChild(inp);
           const hint = document.createElement('div');
           hint.style.cssText = 'font-size:10px;opacity:0.4;margin-top:2px;';
-          hint.textContent = 'min hour day month weekday — e.g. "0 */2 * * *" = every 2 hours';
+          hint.textContent = '分钟 小时 日 月 星期 — 例如 "0 */2 * * *" = 每 2 小时';
           schedOpts.appendChild(hint);
         }
       }
@@ -1297,7 +1297,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
           if (uiModule) uiModule.showToast('已复制');
         });
       } else {
-        triggerOpts.innerHTML = '<div style="font-size:11px;opacity:0.5;margin-top:4px;">网络钩子 URL will be generated when the task is saved.</div>';
+        triggerOpts.innerHTML = '<div style="font-size:11px;opacity:0.5;margin-top:4px;">Webhook URL 将在保存任务时生成。</div>';
       }
     }
   }
@@ -1727,17 +1727,17 @@ function _syncPauseAllButton() {
   const hasActive = _tasks.some(t => t.status === 'active');
   const hasPaused = _tasks.some(t => t.status === 'paused');
   if (hasActive) {
-    btn.innerHTML = pauseIco + 'Pause all';
+    btn.innerHTML = pauseIco + '全部暂停';
     btn.title = '暂停所有运行中的任务';
     btn.style.opacity = '1';
     btn.disabled = false;
   } else if (hasPaused) {
-    btn.innerHTML = playIco + 'Resume all';
+    btn.innerHTML = playIco + '全部恢复';
     btn.title = '恢复所有已暂停的任务';
     btn.style.opacity = '1';
     btn.disabled = false;
   } else {
-    btn.innerHTML = pauseIco + 'Pause all';
+    btn.innerHTML = pauseIco + '全部暂停';
     btn.style.opacity = '0.4';
     btn.disabled = true;
   }

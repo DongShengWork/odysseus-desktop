@@ -134,7 +134,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       const lines = [];
       for (const m of history) {
         if (m.role !== 'user' && m.role !== 'assistant') continue;
-        const label = m.role === 'user' ? 'User' : 'Assistant';
+        const label = m.role === 'user' ? '用户' : '助手';
         const body = (m.content || '')
           .replace(/<think>[\s\S]*?<\/think>/g, '')
           .replace(/<think>[\s\S]*$/, '')
@@ -354,9 +354,9 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     if (!el) return;
     const totalAll = Object.values(_libraryLanguages).reduce((a, b) => a + b, 0);
     if (_librarySearch || _libraryActiveLanguage) {
-      el.textContent = `${_libraryTotal} of ${totalAll} document${totalAll !== 1 ? 's' : ''}`;
+      el.textContent = `${_libraryTotal}/${totalAll} 篇文档`;
     } else {
-      el.textContent = `${totalAll} document${totalAll !== 1 ? 's' : ''}`;
+      el.textContent = `${totalAll} 篇文档`;
     }
   }
 
@@ -372,7 +372,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
 
     const allChip = document.createElement('button');
     allChip.className = 'memory-cat-chip' + (!_libraryActiveLanguage ? ' active' : '');
-    allChip.textContent = `all (${totalAll})`;
+    allChip.textContent = `全部 (${totalAll})`;
     allChip.addEventListener('click', () => {
       if (_librarySelectMode) {
         _libraryDocs.forEach(d => _librarySelectedIds.add(d.id));
@@ -434,15 +434,15 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
 
     if (_libraryDocs.length === 0) {
       if (_librarySearch || _libraryActiveLanguage) {
-        grid.innerHTML = '<div class="doclib-empty">No documents match your search.</div>';
+        grid.innerHTML = '<div class="doclib-empty">没有符合搜索条件的文档。</div>';
       } else {
         const _impIco = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin:0 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
         grid.innerHTML =
           '<div class="doclib-empty" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">' +
-            '<span>No documents yet</span>' +
+            '<span>暂无文档</span>' +
             '<span style="opacity:0.7;font-size:11px;">' +
-              '<a href="#" data-doclib-import style="color:var(--accent,var(--red));text-decoration:underline;">Import' + _impIco + '</a>' +
-              ' &middot; or create one in a session' +
+              '<a href="#" data-doclib-import style="color:var(--accent,var(--red));text-decoration:underline;">导入' + _impIco + '</a>' +
+              ' &middot; 或在会话中创建' +
             '</span>' +
           '</div>';
         grid.querySelector('[data-doclib-import]')?.addEventListener('click', (e) => {
@@ -468,7 +468,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       const btn = document.createElement('button');
       btn.className = 'doclib-load-more doclib-inline-load-more';
       btn.id = 'doclib-docs-load-more';
-      btn.textContent = `Load more (${shownCount} of ${_libraryTotal})`;
+      btn.textContent = `加载更多 (${shownCount}/${_libraryTotal})`;
       btn.addEventListener('click', async () => {
         _docsVisibleLimit += 20;
         // Need more than we've fetched? pull the next server page first.
@@ -600,7 +600,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     menuWrap.style.position = 'relative';
     const menuBtn = document.createElement('button');
     menuBtn.className = 'memory-item-btn';
-    menuBtn.title = 'Actions';
+    menuBtn.title = '操作';
     menuBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -610,7 +610,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       if (window.innerWidth <= 768) {
         const items = [];
         if (doc.session_id) items.push({ label: '打开', action: () => libraryOpenInSession(doc) });
-        items.push({ label: 'Clone', action: () => libraryImportDocument(doc) });
+        items.push({ label: '克隆', action: () => libraryImportDocument(doc) });
         _showLibDropdown(menuBtn, items, { onSelect: () => {
           libraryEnterSelectMode();
           _librarySelectedIds.add(doc.id);
@@ -677,13 +677,13 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     const openItem = document.createElement('button');
     openItem.className = 'dropdown-item-compact';
     openItem.style.cssText = 'background:none;border:none;width:100%;';
-    openItem.innerHTML = _di(_openIco) + '<span>Open</span>';
+    openItem.innerHTML = _di(_openIco) + '<span>打开</span>';
     if (doc.session_id) {
       openItem.addEventListener('click', (e) => { e.stopPropagation(); hideCardDropdown(); libraryOpenInSession(doc); });
     } else {
       // Orphaned doc (closed / session detached) is still openable in the editor
       // by id — libraryOpenDocument handles the no-session case (#1602).
-      openItem.title = 'Open in the editor';
+      openItem.title = '在编辑器中打开';
       openItem.addEventListener('click', (e) => { e.stopPropagation(); hideCardDropdown(); libraryOpenDocument(doc); });
     }
     dropdown.appendChild(openItem);
@@ -693,8 +693,8 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     const cloneItem = document.createElement('button');
     cloneItem.className = 'dropdown-item-compact';
     cloneItem.style.cssText = 'background:none;border:none;width:100%;';
-    cloneItem.innerHTML = _di(_cloneIco) + '<span>Clone</span>';
-    cloneItem.title = 'Clone to active session';
+    cloneItem.innerHTML = _di(_cloneIco) + '<span>克隆</span>';
+    cloneItem.title = '克隆到当前会话';
     cloneItem.addEventListener('click', (e) => { e.stopPropagation(); hideCardDropdown(); libraryImportDocument(doc); });
     dropdown.appendChild(cloneItem);
 
@@ -703,7 +703,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     const exportItem = document.createElement('button');
     exportItem.className = 'dropdown-item-compact';
     exportItem.style.cssText = 'background:none;border:none;width:100%;';
-    exportItem.innerHTML = _di(_exportIco) + '<span>Export</span>';
+    exportItem.innerHTML = _di(_exportIco) + '<span>导出</span>';
     exportItem.addEventListener('click', async (e) => {
       e.stopPropagation();
       hideCardDropdown();
@@ -728,8 +728,8 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     const archiveItem = document.createElement('button');
     archiveItem.className = 'dropdown-item-compact';
     archiveItem.style.cssText = 'background:none;border:none;width:100%;';
-    archiveItem.innerHTML = _di(_archiveIco) + `<span>${_libraryArchivedView ? 'Restore' : 'Archive'}</span>`;
-    archiveItem.title = _libraryArchivedView ? 'Restore to active documents' : 'Archive (hide from the main list)';
+    archiveItem.innerHTML = _di(_archiveIco) + `<span>${_libraryArchivedView ? '恢复' : '归档'}</span>`;
+    archiveItem.title = _libraryArchivedView ? '恢复到活动文档' : '归档（从主列表隐藏）';
     archiveItem.addEventListener('click', async (e) => {
       e.stopPropagation();
       hideCardDropdown();
@@ -740,7 +740,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         // Drop it from the current view (it no longer belongs here) and refresh.
         libraryRemoveDocumentFromState(doc.id);
         libraryRenderGrid();
-        if (uiModule) uiModule.showToast(toArchived ? 'Archived' : 'Restored');
+        if (uiModule) uiModule.showToast(toArchived ? '已归档' : '已恢复');
       } catch { if (uiModule) uiModule.showError((toArchived ? '归档' : '恢复') + '失败'); }
     });
     dropdown.appendChild(archiveItem);
@@ -750,7 +750,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     const deleteItem = document.createElement('button');
     deleteItem.className = 'dropdown-item-compact dropdown-item-danger';
     deleteItem.style.cssText = 'background:none;border:none;width:100%;';
-    deleteItem.innerHTML = _di(_deleteIco) + '<span>Delete</span>';
+    deleteItem.innerHTML = _di(_deleteIco) + '<span>删除</span>';
     deleteItem.addEventListener('click', (e) => { e.stopPropagation(); hideCardDropdown(); libraryDeleteSingle(doc.id, card); });
     dropdown.appendChild(deleteItem);
 
@@ -796,34 +796,34 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
 
     const openBtn = document.createElement('button');
     openBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
-    openBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M5 12h14M13 5l7 7-7 7"/></svg>Open';
+    openBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M5 12h14M13 5l7 7-7 7"/></svg>打开';
     if (doc.session_id) {
-      openBtn.title = 'Open in original session';
+      openBtn.title = '在原始会话中打开';
       openBtn.addEventListener('click', (e) => { e.stopPropagation(); libraryOpenInSession(doc); });
     } else {
       // Orphaned doc (closed / session detached) is still openable in the editor
       // by id — libraryOpenDocument handles the no-session case (#1602).
-      openBtn.title = 'Open in the editor';
+      openBtn.title = '在编辑器中打开';
       openBtn.addEventListener('click', (e) => { e.stopPropagation(); libraryOpenDocument(doc); });
     }
 
     const cloneBtn = document.createElement('button');
     cloneBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
-    cloneBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Clone';
-    cloneBtn.title = 'Clone — copy to active session';
+    cloneBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>克隆';
+    cloneBtn.title = '克隆 — 复制到当前会话';
     cloneBtn.addEventListener('click', (e) => { e.stopPropagation(); libraryImportDocument(doc); });
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'doclib-card-text-btn doclib-card-action-btn doclib-card-text-btn-danger';
-    deleteBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete';
+    deleteBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>删除';
     deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); libraryDeleteSingle(doc.id, card); });
 
     // Archive sits next to Delete on the LEFT — same lineup as the chat
     // and research footers. Label flips to Restore inside the Archive view.
     const archiveBtn = document.createElement('button');
     archiveBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
-    archiveBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>' + (_libraryArchivedView ? 'Restore' : 'Archive');
-    archiveBtn.title = _libraryArchivedView ? 'Restore to active documents' : 'Archive (hide from the main list)';
+    archiveBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>' + (_libraryArchivedView ? '恢复' : '归档');
+    archiveBtn.title = _libraryArchivedView ? '恢复到活动文档' : '归档（从主列表隐藏）';
     archiveBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const toArchived = !_libraryArchivedView;
@@ -832,7 +832,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         if (!res.ok) throw new Error('failed');
         libraryRemoveDocumentFromState(doc.id);
         libraryRenderGrid();
-        if (uiModule) uiModule.showToast(toArchived ? 'Archived' : 'Restored');
+        if (uiModule) uiModule.showToast(toArchived ? '已归档' : '已恢复');
       } catch { if (uiModule) uiModule.showError((toArchived ? '归档' : '恢复') + '失败'); }
     });
 
@@ -977,7 +977,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     } catch (e) {
       // On error, keep existing preview if available
       if (!existingPre) {
-        preview.innerHTML = '<div style="padding:8px;color:var(--color-error);font-size:10px;">Failed to load</div>';
+        preview.innerHTML = '<div style="padding:8px;color:var(--color-error);font-size:10px;">加载失败</div>';
       }
       if (actionsBar && !preview.contains(actionsBar)) preview.appendChild(actionsBar);
     }
@@ -1066,7 +1066,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     try {
       // Fetch full content of the source document
       const srcRes = await fetch(`${API_BASE}/api/document/${doc.id}`);
-      if (!srcRes.ok) throw new Error('Failed to fetch document');
+      if (!srcRes.ok) throw new Error('获取文档失败');
       const src = await srcRes.json();
 
       // Deduplicate title — append (2), (3), etc. if name already exists in session
@@ -1161,7 +1161,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
   function libraryUpdateBulkCount() {
     const countEl = document.getElementById('doclib-selected-count');
     const actionsBtn = document.getElementById('doclib-bulk-actions');
-    if (countEl) countEl.textContent = `${_librarySelectedIds.size} Selected`;
+    if (countEl) countEl.textContent = `已选择 ${_librarySelectedIds.size} 项`;
     if (actionsBtn) actionsBtn.style.color = _librarySelectedIds.size > 0 ? 'var(--fg)' : '';
     // Legacy per-action buttons no longer rendered — guard so the rest of the
     // function (if anything still references them) doesn't crash.
@@ -1174,15 +1174,15 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     if (cloneBtn) cloneBtn.disabled = _librarySelectedIds.size === 0;
     if (archiveBtn) {
       archiveBtn.disabled = _librarySelectedIds.size === 0;
-      archiveBtn.textContent = _libraryArchivedView ? 'Restore' : 'Archive';
+      archiveBtn.textContent = _libraryArchivedView ? '恢复' : '归档';
     }
   }
 
   async function libraryDeleteSingle(docId, card) {
     if (uiModule && uiModule.styledConfirm) {
-      const ok = await uiModule.styledConfirm('Delete this document?', { confirmText: '删除', danger: true });
+      const ok = await uiModule.styledConfirm('删除此文档？', { confirmText: '删除', danger: true });
       if (!ok) return;
-    } else if (!confirm('Delete this document?')) {
+    } else if (!confirm('删除此文档？')) {
       return;
     }
     try {
@@ -1213,7 +1213,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         { confirmText: '删除', danger: true }
       );
       if (!ok) return;
-    } else if (!confirm(`Delete ${count} document${count !== 1 ? 's' : ''}?`)) {
+    } else if (!confirm(`删除 ${count} 篇文档？`)) {
       return;
     }
 
@@ -1263,7 +1263,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     libraryExitSelectMode();
     await libraryFetch(false);
     if (uiModule) {
-      const verb = toArchived ? 'Archived' : 'Restored';
+      const verb = toArchived ? '已归档' : '已恢复';
       const msg = failed > 0 ? `${verb} ${done} · ${failed} failed` : `${verb} ${done} document${done !== 1 ? 's' : ''}`;
       (failed > 0 ? uiModule.showError : uiModule.showToast)(msg);
     }
@@ -1601,55 +1601,55 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
                Documents / Research / Archive) so the user sees ONE icon at
                the top representing the section they're in, with the tab
                strip below as sub-navigation. _switchLibTab() updates this. -->
-          <h4 id="doclib-header-title"><span id="doclib-header-icon" style="vertical-align:-2px;margin-right:4px;display:inline-flex;"></span><span id="doclib-header-text">Library</span></h4>
+          <h4 id="doclib-header-title"><span id="doclib-header-icon" style="vertical-align:-2px;margin-right:4px;display:inline-flex;"></span><span id="doclib-header-text">文库</span></h4>
           <button class="close-btn" id="doclib-close">\u2716</button>
         </div>
         <div class="lib-tabs" id="doclib-lib-tabs" style="padding:0 10px;">
-          <button class="lib-tab" data-doclib-tab="chats"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chats</button>
-          <button class="lib-tab active" data-doclib-tab="documents"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>Documents</button>
-          <button class="lib-tab" data-doclib-tab="research"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>Research</button>
-          <button class="lib-tab" data-doclib-tab="archive"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archive</button>
+          <button class="lib-tab" data-doclib-tab="chats"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button class="lib-tab active" data-doclib-tab="documents"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>文档</button>
+          <button class="lib-tab" data-doclib-tab="research"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>研究</button>
+          <button class="lib-tab" data-doclib-tab="archive"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>归档</button>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;overflow:hidden;">
           <div id="doclib-panel-chats" data-doclib-panel="chats" class="admin-card" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
-              <h2 style="margin:0;padding:0;line-height:1;">Chats <span id="doclib-chats-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
+              <h2 style="margin:0;padding:0;line-height:1;">对话 <span id="doclib-chats-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
             </div>
-            <p class="memory-desc doclib-desc">All active chat sessions. Click to open.</p>
+            <p class="memory-desc doclib-desc">所有活跃会话。点击打开。</p>
             <div class="memory-toolbar">
               <div class="memory-category-filters">
                 <select class="memory-sort-select" id="doclib-chats-sort">
-                  <option value="recent">Recent</option>
-                  <option value="oldest">Oldest</option>
-                  <option value="most-messages">Most messages</option>
+                  <option value="recent">最近</option>
+                  <option value="oldest">最早</option>
+                  <option value="most-messages">最多消息</option>
                   <option value="alpha">A\u2013Z</option>
                 </select>
                 <button class="memory-toolbar-btn" id="doclib-chats-select-btn">选择</button>
-                <button class="memory-toolbar-btn" id="doclib-chats-tidy-btn" title="AI 整理：删除无用的会话并整理到文件夹中"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> Tidy</button>
+                <button class="memory-toolbar-btn" id="doclib-chats-tidy-btn" title="AI 整理：删除无用的会话并整理到文件夹中"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> 整理</button>
               </div>
               <input type="text" id="doclib-chats-search" placeholder="搜索聊天\u2026" class="memory-search-input" />
               <div id="doclib-chats-chips" class="doclib-lang-chips"></div>
             </div>
             <div id="doclib-chats-bulk" class="memory-bulk-bar hidden" style="margin-bottom:5px;">
-              <label class="memory-bulk-check-all" style="position:relative;top:0px;left:-1px;"><input type="checkbox" id="doclib-chats-select-all" style="position:relative;top:0px;"> All</label>
-              <span id="doclib-chats-selected-count">0 Selected</span>
-              <button class="memory-toolbar-btn" id="doclib-chats-bulk-archive" style="position:relative;top:-3px;left:2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archive</button>
-              <button class="memory-toolbar-btn danger" id="doclib-chats-bulk-delete" style="position:relative;left:2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>
+              <label class="memory-bulk-check-all" style="position:relative;top:0px;left:-1px;"><input type="checkbox" id="doclib-chats-select-all" style="position:relative;top:0px;"> 全部</label>
+              <span id="doclib-chats-selected-count">已选择 0 项</span>
+              <button class="memory-toolbar-btn" id="doclib-chats-bulk-archive" style="position:relative;top:-3px;left:2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>归档</button>
+              <button class="memory-toolbar-btn danger" id="doclib-chats-bulk-delete" style="position:relative;left:2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除</button>
               <button class="memory-toolbar-btn" id="doclib-chats-bulk-cancel" title="取消（Esc）" style="margin-left:4px;padding:3px 6px;position:relative;left:2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div id="doclib-chats-grid" class="doclib-grid"></div>
           </div>
           <div id="doclib-panel-archive" data-doclib-panel="archive" class="admin-card" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
-              <h2 style="margin:0;padding:0;line-height:1;position:relative;top:2px;">Archive <span id="doclib-arc-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
+              <h2 style="margin:0;padding:0;line-height:1;position:relative;top:2px;">归档 <span id="doclib-arc-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
             </div>
-            <p class="memory-desc doclib-desc" style="position:relative;top:0.5px;">Archived sessions. Restore to make active again.</p>
+            <p class="memory-desc doclib-desc" style="position:relative;top:0.5px;">已归档的会话。恢复后重新变为活跃。</p>
             <div class="memory-toolbar">
               <div class="memory-category-filters">
                 <select class="memory-sort-select" id="doclib-arc-sort">
                   <option value="recent">Recent</option>
                   <option value="oldest">Oldest</option>
-                  <option value="most-messages">Most messages</option>
+                  <option value="most-messages">最多消息</option>
                   <option value="alpha">A\u2013Z</option>
                 </select>
                 <button class="memory-toolbar-btn" id="doclib-arc-select-btn">选择</button>
@@ -1658,25 +1658,25 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
               <div id="doclib-arc-chips" class="doclib-lang-chips"></div>
             </div>
             <div id="doclib-arc-bulk" class="memory-bulk-bar hidden" style="margin-bottom:5px;">
-              <label class="memory-bulk-check-all" style="position:relative;top:0px;left:1px;"><input type="checkbox" id="doclib-arc-select-all"> All</label>
-              <span id="doclib-arc-selected-count">0 Selected</span>
-              <button class="memory-toolbar-btn" id="doclib-arc-bulk-restore" style="position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Restore</button>
-              <button class="memory-toolbar-btn danger" id="doclib-arc-bulk-delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>
+              <label class="memory-bulk-check-all" style="position:relative;top:0px;left:1px;"><input type="checkbox" id="doclib-arc-select-all"> 全部</label>
+              <span id="doclib-arc-selected-count">已选择 0 项</span>
+              <button class="memory-toolbar-btn" id="doclib-arc-bulk-restore" style="position:relative;top:-3px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>恢复</button>
+              <button class="memory-toolbar-btn danger" id="doclib-arc-bulk-delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除</button>
               <button class="memory-toolbar-btn" id="doclib-arc-bulk-cancel" title="取消（Esc）" style="margin-left:4px;padding:3px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div id="doclib-arc-grid" class="doclib-grid"></div>
           </div>
           <div id="doclib-panel-research" data-doclib-panel="research" class="admin-card" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;margin-top:10px;">
-              <h2 style="margin:0;padding:0;line-height:1;">Research <span id="doclib-research-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
+              <h2 style="margin:0;padding:0;line-height:1;">研究 <span id="doclib-research-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
             </div>
-            <p class="memory-desc doclib-desc" style="position:relative;top:-1px;">Completed deep research reports. Click to view.</p>
+            <p class="memory-desc doclib-desc" style="position:relative;top:-1px;">已完成的研究报告。点击查看。</p>
             <div class="memory-toolbar">
               <div class="memory-category-filters">
                 <select class="memory-sort-select" id="doclib-research-sort">
                   <option value="recent">Recent</option>
                   <option value="oldest">Oldest</option>
-                  <option value="most-sources">Most sources</option>
+                  <option value="most-sources">最多来源</option>
                   <option value="alpha">A\u2013Z</option>
                 </select>
                 <button class="memory-toolbar-btn" id="doclib-research-select-btn">选择</button>
@@ -1685,27 +1685,27 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
               <input type="text" id="doclib-research-search" placeholder="搜索研究\u2026" class="memory-search-input" />
             </div>
             <div id="doclib-research-bulk" class="memory-bulk-bar hidden" style="margin-bottom:5px;">
-              <label class="memory-bulk-check-all" style="position:relative;top:0px;left:1px;"><input type="checkbox" id="doclib-research-select-all"> All</label>
-              <span id="doclib-research-selected-count">0 Selected</span>
-              <button class="memory-toolbar-btn" id="doclib-research-bulk-archive" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archive</button>
-              <button class="memory-toolbar-btn danger" id="doclib-research-bulk-delete" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>
+              <label class="memory-bulk-check-all" style="position:relative;top:0px;left:1px;"><input type="checkbox" id="doclib-research-select-all"> 全部</label>
+              <span id="doclib-research-selected-count">已选择 0 项</span>
+              <button class="memory-toolbar-btn" id="doclib-research-bulk-archive" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>归档</button>
+              <button class="memory-toolbar-btn danger" id="doclib-research-bulk-delete" style="position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除</button>
               <button class="memory-toolbar-btn" id="doclib-research-bulk-cancel" title="取消（Esc）" style="margin-left:4px;padding:3px 6px;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div id="doclib-research-grid" class="doclib-grid"></div>
           </div>
           <div data-doclib-panel="documents" class="admin-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
-              <h2 style="margin:0;padding:0;line-height:1;">Documents <span id="doclib-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
+              <h2 style="margin:0;padding:0;line-height:1;">文档 <span id="doclib-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
               <button class="memory-toolbar-btn" id="doclib-import-file-btn" title="从磁盘导入文件" style="margin-left:auto;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px;"><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="21" x2="19" y2="21"/></svg> 导入</button>
-              <button class="memory-toolbar-btn" id="doclib-create-btn" title="Create new blank document"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Create</button>
+              <button class="memory-toolbar-btn" id="doclib-create-btn" title="创建新的空白文档"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> 创建</button>
             </div>
-            <p class="memory-desc doclib-desc">Open documents in a session, clone to a new or import new files.</p>
+            <p class="memory-desc doclib-desc">在会话中打开文档，克隆到新会话或导入新文件。</p>
             <div class="memory-toolbar">
               <div class="memory-category-filters">
                 <select class="memory-sort-select" id="doclib-sort">
                   <option value="recent">Recent</option>
                   <option value="oldest">Oldest</option>
-                  <option value="edits">Most edits</option>
+                  <option value="edits">最多编辑</option>
                   <option value="alpha">A\u2013Z</option>
                 </select>
                 <button class="memory-toolbar-btn" id="doclib-select-btn" title="选择文档">选择</button>
@@ -1716,13 +1716,13 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
             </div>
             <input type="file" id="doclib-file-input" multiple style="display:none" />
             <div id="doclib-bulk-bar" class="memory-bulk-bar hidden" style="margin-bottom:5px;">
-              <label class="memory-bulk-check-all" style="position:relative;top:0px;left:1px;"><input type="checkbox" id="doclib-select-all" /> All</label>
-              <span id="doclib-selected-count">0 Selected</span>
-              <button id="doclib-bulk-actions" class="memory-toolbar-btn" style="position:relative;top:-2px;margin-left:auto;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Actions <span style="opacity:0.55;font-size:9px;">&#9660;</span></button>
+              <label class="memory-bulk-check-all" style="position:relative;top:0px;left:1px;"><input type="checkbox" id="doclib-select-all" /> 全部</label>
+              <span id="doclib-selected-count">已选择 0 项</span>
+              <button id="doclib-bulk-actions" class="memory-toolbar-btn" style="position:relative;top:-2px;margin-left:auto;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>操作 <span style="opacity:0.55;font-size:9px;">&#9660;</span></button>
               <button id="doclib-bulk-cancel" class="memory-toolbar-btn" title="取消（Esc）" style="margin-left:4px;margin-right:4px;padding:3px 6px;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div class="doclib-grid" id="doclib-grid"></div>
-            <button class="doclib-load-more" id="doclib-load-more" style="display:none">Load more</button>
+            <button class="doclib-load-more" id="doclib-load-more" style="display:none">加载更多</button>
           </div>
         </div>
       </div>
@@ -1829,7 +1829,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       if (totalCount <= currentLimit) return;
       const btn = document.createElement('button');
       btn.className = 'doclib-load-more doclib-inline-load-more';
-      btn.textContent = `Load more (${currentLimit} of ${totalCount})`;
+      btn.textContent = `加载更多 (${currentLimit}/${totalCount})`;
       btn.addEventListener('click', onClick);
       grid.parentElement.appendChild(btn);
     }
@@ -1838,19 +1838,19 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     // in sync with whichever sub-tab the user is on.
     const _TAB_HEADERS = {
       chats: {
-        label: 'Chats',
+        label: '对话',
         svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
       },
       documents: {
-        label: 'Documents',
+        label: '文档',
         svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
       },
       research: {
-        label: 'Research',
+        label: '研究',
         svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>',
       },
       archive: {
-        label: 'Archive',
+        label: '归档',
         svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
       },
     };
@@ -1900,7 +1900,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         _chatsSessions = raw.filter(s => !s.archived);
         _renderChatsGrid();
         _renderChatsChips();
-      }).catch(() => { grid.innerHTML = '<div class="doclib-empty">Failed to load</div>'; });
+      }).catch(() => { grid.innerHTML = '<div class="doclib-empty">加载失败</div>'; });
     }
 
     // Tap a chat row to expand inline: fetches the recent messages and
@@ -1929,7 +1929,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       }
       card.classList.add('doclib-card-expanded');
       preview.style.display = 'block';
-      preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">Loading…</div>';
+      preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">加载中…</div>';
       try {
         const res = await fetch(`${API_BASE}/api/history/${session.id}`, { credentials: 'same-origin' });
         if (!res.ok) throw new Error('Failed');
@@ -1972,11 +1972,11 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         const archiveHtml = isArchive
           ? '<button class="doclib-chat-restore-btn">' +
               '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>' +
-              'Restore' +
+              '恢复' +
             '</button>'
           : '<button class="doclib-chat-archive-btn">' +
               '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>' +
-              'Archive' +
+              '归档' +
             '</button>';
         // Copy sits next to Archive on the left side of the action row.
         // Uses the same border-only secondary-action style — distinct from
@@ -1985,7 +1985,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         // Open there). It still shows for active chats.
         const copyHtml = isArchive ? '' : '<button class="doclib-chat-copy-btn">' +
               '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
-              'Copy' +
+              '复制' +
             '</button>';
         const deleteHtml = '<button class="doclib-chat-delete-btn">' +
               '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>' +
@@ -2042,7 +2042,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         const deleteBtn = preview.querySelector('.doclib-chat-delete-btn');
         if (deleteBtn) deleteBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (!await window.styledConfirm('Delete this chat?', { confirmText: '删除', danger: true })) return;
+          if (!await window.styledConfirm('删除此对话？', { confirmText: '删除', danger: true })) return;
           await fetch(API_BASE + '/api/session/' + session.id, { method: 'DELETE' });
           card.style.maxHeight = `${Math.max(card.getBoundingClientRect().height, card.scrollHeight)}px`;
           card.classList.add('memory-tidy-removing');
@@ -2050,7 +2050,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
           if (isArchive) _renderLibArchive(); else _renderLibChats();
         });
       } catch (e) {
-        preview.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:6px 4px;color:var(--color-error);">Failed to load preview</div>';
+        preview.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:6px 4px;color:var(--color-error);">加载预览失败</div>';
       }
     }
 
@@ -2058,7 +2058,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       const grid = document.getElementById('doclib-chats-grid');
       if (!grid) return;
       const _csb = document.getElementById('doclib-chats-select-btn');
-      if (_csb) { _csb.classList.toggle('active', _chatsSelectMode); _csb.textContent = _chatsSelectMode ? '取消' : 'Select'; }
+      if (_csb) { _csb.classList.toggle('active', _chatsSelectMode); _csb.textContent = _chatsSelectMode ? '取消' : '选择'; }
       let filtered = _chatsSessions.slice();
       if (_chatsSearch) {
         const q = _chatsSearch.toLowerCase();
@@ -2071,12 +2071,12 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       else filtered.sort((a, b) => (b.updated_at || '') > (a.updated_at || '') ? 1 : -1);
 
       const stats = document.getElementById('doclib-chats-stats');
-      if (stats) stats.textContent = filtered.length + ' chat' + (filtered.length !== 1 ? 's' : '');
+      if (stats) stats.textContent = filtered.length + ' 个对话';
 
       if (!filtered.length) {
         // Sad-mouth smiley (downturn curve) for "nothing here yet".
         const _sadIco = '<span style="vertical-align:-3px;margin-left:6px;">' + uiModule.emptyStateIcon('sad') + '</span>';
-        grid.innerHTML = '<div class="doclib-empty">No chats' + _sadIco + '</div>';
+        grid.innerHTML = '<div class="doclib-empty">没有对话' + _sadIco + '</div>';
         _appendInlineLoadMore(grid, 0, _chatsVisibleLimit, () => {});
         return;
       }
@@ -2115,10 +2115,10 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         if (cb) { cb.addEventListener('click', e => e.stopPropagation()); cb.addEventListener('change', () => { if (cb.checked) _chatsSelected.add(s.id); else _chatsSelected.delete(s.id); _updateChatsCount(); }); }
         card.querySelector('._chat-menu').addEventListener('click', (e) => { e.stopPropagation(); _showLibDropdown(e.currentTarget, [
           { label: '打开', action: () => { if (window.sessionModule) window.sessionModule.selectSession(s.id); } },
-          { label: 'Copy', action: () => _copyChatById(s.id) },
-          { label: 'Archive', action: async () => { await fetch(API_BASE + '/api/session/' + s.id + '/archive', { method: 'POST', headers: {'Content-Type':'application/json'} }); _renderLibChats(); } },
+          { label: '复制', action: () => _copyChatById(s.id) },
+          { label: '归档', action: async () => { await fetch(API_BASE + '/api/session/' + s.id + '/archive', { method: 'POST', headers: {'Content-Type':'application/json'} }); _renderLibChats(); } },
           { label: '删除', action: async () => {
-            if (!await window.styledConfirm('Delete this chat?', { confirmText: '删除', danger: true })) return;
+            if (!await window.styledConfirm('删除此对话？', { confirmText: '删除', danger: true })) return;
             await fetch(API_BASE + '/api/session/' + s.id, { method: 'DELETE' });
             card.style.maxHeight = `${Math.max(card.getBoundingClientRect().height, card.scrollHeight)}px`;
             card.classList.add('memory-tidy-removing');
@@ -2159,7 +2159,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       folders.forEach(f => mk(f, f, counts[f]));
     }
 
-    function _updateChatsCount() { const el = document.getElementById('doclib-chats-selected-count'); if (el) el.textContent = _chatsSelected.size + ' Selected'; }
+    function _updateChatsCount() { const el = document.getElementById('doclib-chats-selected-count'); if (el) el.textContent = '已选择 ' + _chatsSelected.size + ' 项'; }
 
     // Chats event listeners
     document.getElementById('doclib-chats-sort').addEventListener('change', (e) => { _chatsSort = e.target.value; _renderChatsGrid(); });
@@ -2214,7 +2214,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
             card.style.transform = '';
           }
         });
-        if (window.uiModule) window.uiModule.showError(`Failed to archive ${failed.length} of ${ids.length} chat${ids.length > 1 ? 's' : ''}`);
+        if (window.uiModule) window.uiModule.showError(`归档失败：${failed.length}/${ids.length} 个对话`);
       }
       _chatsSelected.clear();
       _chatsSelectMode = false;
@@ -2224,7 +2224,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     document.getElementById('doclib-chats-bulk-delete').addEventListener('click', async () => {
       const count = _chatsSelected.size;
       if (!count) return;
-      if (!await window.styledConfirm(`Delete ${count} chat${count > 1 ? 's' : ''}? This cannot be undone.`, { confirmText: '删除', danger: true })) return;
+      if (!await window.styledConfirm(`删除 ${count} 个对话？此操作不可撤销。`, { confirmText: '删除', danger: true })) return;
       // Fade out selected cards
       const grid = document.getElementById('doclib-chats-grid');
       if (grid) {
@@ -2259,7 +2259,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
             card.style.transform = '';
           }
         });
-        if (window.uiModule) window.uiModule.showError(`Failed to delete ${failed.length} of ${ids.length} chat${ids.length > 1 ? 's' : ''}`);
+        if (window.uiModule) window.uiModule.showError(`删除失败：${failed.length}/${ids.length} 个对话`);
       }
       _chatsSelected.clear();
       _chatsSelectMode = false;
@@ -2334,7 +2334,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         _arcResearch = (r.research || []).map(x => ({ ...x, archived: true }));
         _renderArcGrid();
         _renderArcChips();
-      }).catch(() => { grid.innerHTML = '<div class="doclib-empty">Failed to load</div>'; });
+      }).catch(() => { grid.innerHTML = '<div class="doclib-empty">加载失败</div>'; });
     }
 
     // Inline expand/collapse for an archived DOCUMENT card (chat-style). Loads
@@ -2360,7 +2360,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       }
       card.classList.add('doclib-card-expanded');
       preview.style.display = 'block';
-      preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">Loading…</div>';
+      preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">加载中…</div>';
       try {
         const res = await fetch(`${API_BASE}/api/document/${d.id}`, { credentials: 'same-origin' });
         if (!res.ok) throw new Error('failed');
@@ -2368,7 +2368,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         const content = (full.current_content || '').slice(0, 20000);
         const pre = document.createElement('pre');
         pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;font-size:11px;margin:6px 4px;max-height:50vh;overflow:auto;';
-        pre.textContent = content || '(empty document)';
+        pre.textContent = content || '(空文档)';
         preview.innerHTML = '';
         preview.appendChild(pre);
 
@@ -2384,7 +2384,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
           '<button class="doclib-chat-open-btn"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>Open</button>';
         actions.querySelector('.doclib-chat-delete-btn').addEventListener('click', async (ev) => {
           ev.stopPropagation();
-          if (!await window.styledConfirm('Delete this document?', { confirmText: '删除', danger: true })) return;
+          if (!await window.styledConfirm('删除此文档？', { confirmText: '删除', danger: true })) return;
           await fetch(`${API_BASE}/api/document/${d.id}`, { method: 'DELETE', credentials: 'same-origin' });
           _renderLibArchive();
         });
@@ -2400,7 +2400,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         });
         preview.appendChild(actions);
       } catch {
-        preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">Failed to load preview</div>';
+        preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">加载预览失败</div>';
       }
     }
 
@@ -2408,7 +2408,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       const grid = document.getElementById('doclib-arc-grid');
       if (!grid) return;
       const _asb = document.getElementById('doclib-arc-select-btn');
-      if (_asb) { _asb.classList.toggle('active', _arcSelectMode); _asb.textContent = _arcSelectMode ? '取消' : 'Select'; }
+      if (_asb) { _asb.classList.toggle('active', _arcSelectMode); _asb.textContent = _arcSelectMode ? '取消' : '选择'; }
       let filtered = _arcSessions.slice();
       if (_arcSearch) {
         const q = _arcSearch.toLowerCase();
@@ -2434,12 +2434,12 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       if (!_showResearch) filtResearch = [];
 
       const stats = document.getElementById('doclib-arc-stats');
-      if (stats) stats.textContent = (filtered.length + filtDocs.length + filtResearch.length) + ' archived';
+      if (stats) stats.textContent = (filtered.length + filtDocs.length + filtResearch.length) + ' 个已归档';
 
       if (!filtered.length && !filtDocs.length && !filtResearch.length) {
         // Neutral / no-smile face for "nothing archived here".
         const _neutralIco = '<span style="vertical-align:-3px;margin-left:6px;">' + uiModule.emptyStateIcon('neutral') + '</span>';
-        grid.innerHTML = '<div class="doclib-empty">No archived items' + _neutralIco + '</div>';
+        grid.innerHTML = '<div class="doclib-empty">没有已归档的条目' + _neutralIco + '</div>';
         _appendInlineLoadMore(grid, 0, _arcVisibleLimit, () => {});
         return;
       }
@@ -2470,10 +2470,10 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         if (cb) { cb.addEventListener('click', e => e.stopPropagation()); cb.addEventListener('change', () => { if (cb.checked) _arcSelected.add('chats:' + s.id); else _arcSelected.delete('chats:' + s.id); _updateArcCount(); }); }
         card.querySelector('._arc-menu').addEventListener('click', (e) => { e.stopPropagation(); _showLibDropdown(e.currentTarget, [
           { label: '打开', action: () => { if (window.sessionModule) window.sessionModule.selectSession(s.id); } },
-          { label: 'Copy', action: () => _copyChatById(s.id) },
-          { label: 'Restore', action: async () => { await fetch(API_BASE + '/api/session/' + s.id + '/unarchive', { method: 'POST' }); _renderLibArchive(); } },
+          { label: '复制', action: () => _copyChatById(s.id) },
+          { label: '恢复', action: async () => { await fetch(API_BASE + '/api/session/' + s.id + '/unarchive', { method: 'POST' }); _renderLibArchive(); } },
           { label: '删除', action: async () => {
-            if (!await window.styledConfirm('Delete this chat permanently?', { confirmText: '删除', danger: true })) return;
+            if (!await window.styledConfirm('永久删除此对话？', { confirmText: '删除', danger: true })) return;
             await fetch(API_BASE + '/api/session/' + s.id, { method: 'DELETE' });
             _renderLibArchive();
           }, danger: true },
@@ -2505,7 +2505,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
             _dcb +
             '<div style="flex:1;min-width:0;">' +
               '<div class="memory-item-title">' + _arcDocIco + _esc(d.title || '未命名') + '</div>' +
-              '<div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">' + ['Document', (d.language || 'text'), _relTime(d.updated_at)].filter(Boolean).join(' · ') + '</div>' +
+              '<div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">' + ['文档', (d.language || 'text'), _relTime(d.updated_at)].filter(Boolean).join(' · ') + '</div>' +
             '</div>' +
             '<div class="memory-item-actions"><button class="memory-item-btn _arc-doc-menu" title="操作"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>' +
           '</div>' +
@@ -2541,8 +2541,8 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
           '<div class="doclib-chat-header" style="display:flex;align-items:center;width:100%;gap:6px;">' +
             _rcb +
             '<div style="flex:1;min-width:0;">' +
-              '<div class="memory-item-title">' + _arcResIco + _esc(r.query || 'Research') + '</div>' +
-              '<div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">' + ['Research', (r.source_count ? r.source_count + ' sources' : ''), _relTime(r.completed_at ? new Date(r.completed_at * 1000).toISOString() : '')].filter(Boolean).join(' · ') + '</div>' +
+              '<div class="memory-item-title">' + _arcResIco + _esc(r.query || '研究') + '</div>' +
+              '<div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">' + ['研究', (r.source_count ? r.source_count + ' 个来源' : ''), _relTime(r.completed_at ? new Date(r.completed_at * 1000).toISOString() : '')].filter(Boolean).join(' · ') + '</div>' +
             '</div>' +
             '<div class="memory-item-actions"><button class="memory-item-btn _arc-res-menu" title="操作"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>' +
           '</div>' +
@@ -2556,8 +2556,8 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         });
         card.querySelector('._arc-res-menu').addEventListener('click', (e) => { e.stopPropagation(); _showLibDropdown(e.currentTarget, [
           { label: '打开', action: () => { const a = document.createElement('a'); a.href = '/api/research/report/' + r.id; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); } },
-          { label: 'Restore', action: async () => { await fetch('/api/research/' + r.id + '/archive?archived=false', { method: 'POST', credentials: 'same-origin' }); _renderLibArchive(); } },
-          { label: '删除', danger: true, action: async () => { if (!await window.styledConfirm('Delete this research?', { confirmText: '删除', danger: true })) return; await fetch('/api/research/' + r.id, { method: 'DELETE', credentials: 'same-origin' }); _renderLibArchive(); } },
+          { label: '恢复', action: async () => { await fetch('/api/research/' + r.id + '/archive?archived=false', { method: 'POST', credentials: 'same-origin' }); _renderLibArchive(); } },
+          { label: '删除', danger: true, action: async () => { if (!await window.styledConfirm('删除此研究报告？', { confirmText: '删除', danger: true })) return; await fetch('/api/research/' + r.id, { method: 'DELETE', credentials: 'same-origin' }); _renderLibArchive(); } },
         ], { onSelect: () => {
           _arcSelectMode = true;
           _arcSelected.add('research:' + r.id);
@@ -2588,12 +2588,12 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       const total = _arcSessions.length + _arcDocs.length + _arcResearch.length;
       if (!total) return;
       mk('全部', '', total);
-      if (_arcSessions.length) mk('Chats', 'chats', _arcSessions.length);
-      if (_arcDocs.length) mk('Documents', 'documents', _arcDocs.length);
-      if (_arcResearch.length) mk('Research', 'research', _arcResearch.length);
+      if (_arcSessions.length) mk('对话', 'chats', _arcSessions.length);
+      if (_arcDocs.length) mk('文档', 'documents', _arcDocs.length);
+      if (_arcResearch.length) mk('研究', 'research', _arcResearch.length);
     }
 
-    function _updateArcCount() { const el = document.getElementById('doclib-arc-selected-count'); if (el) el.textContent = _arcSelected.size + ' Selected'; }
+    function _updateArcCount() { const el = document.getElementById('doclib-arc-selected-count'); if (el) el.textContent = '已选择 ' + _arcSelected.size + ' 项'; }
 
     // Archive event listeners
     document.getElementById('doclib-arc-sort').addEventListener('change', (e) => { _arcSort = e.target.value; _renderArcGrid(); });
@@ -2646,7 +2646,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     document.getElementById('doclib-arc-bulk-delete').addEventListener('click', async () => {
       const count = _arcSelected.size;
       if (!count) return;
-      if (!await window.styledConfirm(`Delete ${count} archived item${count > 1 ? 's' : ''} permanently?`, { confirmText: '删除', danger: true })) return;
+      if (!await window.styledConfirm(`永久删除 ${count} 个已归档条目？`, { confirmText: '删除', danger: true })) return;
       const grid = document.getElementById('doclib-arc-grid');
       if (grid) {
         grid.querySelectorAll('.memory-item[data-arckey]').forEach(card => {
@@ -2683,14 +2683,14 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         const _sp = _spm.createWhirlpool(22);
         _sp.element.style.cssText = 'margin:18px auto;display:block;';
         grid.appendChild(_sp.element);
-      } catch { grid.innerHTML = '<div class="hwfit-loading">Loading…</div>'; }
+      } catch { grid.innerHTML = '<div class="hwfit-loading">加载中…</div>'; }
       try {
         const res = await fetch('/api/research/library' + (_researchArchivedView ? '?archived=true' : ''), { credentials: 'same-origin' });
         if (!res.ok) throw new Error(res.statusText);
         const data = await res.json();
         _researchItems = data.research || data || [];
       } catch (e) {
-        grid.innerHTML = `<div class="hwfit-loading">Failed to load: ${_esc(e.message)}</div>`;
+        grid.innerHTML = `<div class="hwfit-loading">加载失败：${_esc(e.message)}</div>`;
         return;
       }
       _renderResearchGrid();
@@ -2721,7 +2721,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       }
       card.classList.add('doclib-card-expanded');
       preview.style.display = 'block';
-      preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">Loading…</div>';
+      preview.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 4px;">加载中…</div>';
       let detail = item;
       try {
         // Hit the per-research detail endpoint to pull sources + summary.
@@ -2758,14 +2758,14 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
           '</button>' +
           '<button class="doclib-chat-archive-btn">' +
             '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>' +
-            ((_researchArchivedView || item.archived) ? 'Restore' : 'Archive') +
+            ((_researchArchivedView || item.archived) ? '恢复' : '归档') +
           '</button>' +
           // Discuss is hidden in the Archive so the footer matches chat
           // (Delete + Restore + Open).
           (item.archived ? '' :
           '<button class="doclib-chat-discuss-btn">' +
             '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
-            'Discuss' +
+            '讨论' +
           '</button>') +
           '<button class="doclib-chat-open-btn">' +
             '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>' +
@@ -2809,8 +2809,8 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       if (delBtn) delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const ok = uiModule && uiModule.styledConfirm
-          ? await uiModule.styledConfirm('Delete this research report?', { confirmText: '删除', danger: true })
-          : window.confirm('Delete this research report?');
+          ? await uiModule.styledConfirm('删除此研究报告？', { confirmText: '删除', danger: true })
+          : window.confirm('删除此研究报告？');
         if (!ok) return;
         try {
           const res = await fetch(`${API_BASE}/api/research/${item.id}`, { method: 'DELETE', credentials: 'same-origin' });
@@ -2840,7 +2840,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
             _researchItems = _researchItems.filter(r => r.id !== item.id);
             _renderResearchGrid();
           }
-          if (uiModule) uiModule.showToast(toArchived ? 'Archived' : 'Restored');
+          if (uiModule) uiModule.showToast(toArchived ? '已归档' : '已恢复');
         } catch { if (uiModule) uiModule.showError((toArchived ? '归档' : '恢复') + '失败'); }
       });
     }
@@ -2850,7 +2850,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       const stats = document.getElementById('doclib-research-stats');
       if (!grid) return;
       const _rsb = document.getElementById('doclib-research-select-btn');
-      if (_rsb) { _rsb.classList.toggle('active', _researchSelectMode); _rsb.textContent = _researchSelectMode ? '取消' : 'Select'; }
+      if (_rsb) { _rsb.classList.toggle('active', _researchSelectMode); _rsb.textContent = _researchSelectMode ? '取消' : '选择'; }
       let items = _researchItems;
       if (_researchSearch) {
         const s = _researchSearch.toLowerCase();
@@ -2862,7 +2862,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       else if (_rSort === 'oldest') items.sort((a, b) => (a.completed_at || 0) - (b.completed_at || 0));
       else if (_rSort === 'most-sources') items.sort((a, b) => (b.source_count || 0) - (a.source_count || 0));
       else if (_rSort === 'alpha') items.sort((a, b) => (a.query || '').localeCompare(b.query || ''));
-      if (stats) stats.textContent = items.length + ' research' + (items.length !== 1 ? 'es' : '');
+      if (stats) stats.textContent = items.length + ' 个研究';
       if (!items.length) {
         grid.innerHTML =
           '<div class="hwfit-loading" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">' +
@@ -2952,7 +2952,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
                 a.click();
                 a.remove();
               } },
-            { label: _researchArchivedView ? 'Restore' : 'Archive', action: async () => {
+            { label: _researchArchivedView ? '恢复' : '归档', action: async () => {
                 const toArchived = !_researchArchivedView;
                 const card = btn.closest('.doclib-research-card');
                 if (card) { card.style.transition = 'opacity 0.25s, transform 0.25s'; card.style.opacity = '0'; card.style.transform = 'scale(0.95)'; }
@@ -2960,10 +2960,10 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
                 await new Promise(r => setTimeout(r, 200));
                 _researchItems = _researchItems.filter(r => r.id !== rid);
                 _renderResearchGrid();
-                if (uiModule) uiModule.showToast(toArchived ? 'Archived' : 'Restored');
+                if (uiModule) uiModule.showToast(toArchived ? '已归档' : '已恢复');
               } },
             { label: '删除', danger: true, action: async () => {
-                if (!await window.styledConfirm('Delete this research?', { confirmText: '删除', danger: true })) return;
+                if (!await window.styledConfirm('删除此研究报告？', { confirmText: '删除', danger: true })) return;
                 const card = btn.closest('.doclib-research-card');
                 if (card) {
                   card.style.transition = 'opacity 0.25s, transform 0.25s';
@@ -3002,9 +3002,9 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
 
     function _updateResearchCount() {
       const el = document.getElementById('doclib-research-selected-count');
-      if (el) el.textContent = _researchSelected.size + ' Selected';
+      if (el) el.textContent = '已选择 ' + _researchSelected.size + ' 项';
       const arc = document.getElementById('doclib-research-bulk-archive');
-      if (arc) arc.textContent = _researchArchivedView ? 'Restore' : 'Archive';
+      if (arc) arc.textContent = _researchArchivedView ? '恢复' : '归档';
     }
 
     // Research select mode
@@ -3068,7 +3068,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     document.getElementById('doclib-research-archived-btn')?.addEventListener('click', (e) => {
       _researchArchivedView = !_researchArchivedView;
       e.currentTarget.classList.toggle('active', _researchArchivedView);
-      e.currentTarget.title = _researchArchivedView ? 'Show active research' : 'Show archived research';
+      e.currentTarget.title = _researchArchivedView ? '显示活跃研究' : '显示已归档研究';
       if (_researchSelectMode) { _researchSelectMode = false; _researchSelected.clear(); document.getElementById('doclib-research-bulk').classList.add('hidden'); }
       _renderLibResearch();
     });
@@ -3092,7 +3092,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     document.getElementById('doclib-research-bulk-delete')?.addEventListener('click', async () => {
       const count = _researchSelected.size;
       if (!count) return;
-      if (!await window.styledConfirm(`Delete ${count} research report${count > 1 ? 's' : ''} permanently?`, { confirmText: '删除', danger: true })) return;
+      if (!await window.styledConfirm(`永久删除 ${count} 个研究报告？`, { confirmText: '删除', danger: true })) return;
       const grid = document.getElementById('doclib-research-grid');
       if (grid) {
         grid.querySelectorAll('.doclib-research-card').forEach(card => {
@@ -3134,7 +3134,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
       _researchSelectMode = false;
       document.getElementById('doclib-research-bulk').classList.add('hidden');
       _renderResearchGrid();
-      if (uiModule) uiModule.showToast(toArchived ? 'Archived' : 'Restored');
+      if (uiModule) uiModule.showToast(toArchived ? '已归档' : '已恢复');
     });
 
     // Shared dropdown for chats/archive menus — defined at module scope below
@@ -3245,7 +3245,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
     if (archivedBtn) archivedBtn.addEventListener('click', () => {
       _libraryArchivedView = !_libraryArchivedView;
       archivedBtn.classList.toggle('active', _libraryArchivedView);
-      archivedBtn.title = _libraryArchivedView ? 'Show active documents' : 'Show archived documents';
+      archivedBtn.title = _libraryArchivedView ? '显示活跃文档' : '显示已归档文档';
       if (_librarySelectMode) libraryExitSelectMode();
       libraryFetch(false);
     });
@@ -3293,7 +3293,7 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         spinner.destroy();
 
         if (totalDeleted === 0 && totalFixed === 0) {
-          tidyBtn.innerHTML = '<span style="opacity:0.7">Already tidy</span>';
+          tidyBtn.innerHTML = '<span style="opacity:0.7">已整理完成</span>';
         } else {
           const msg = aiMessage || `Removed ${totalDeleted} document${totalDeleted !== 1 ? 's' : ''}`;
           if (uiModule) uiModule.showToast(msg);
@@ -3347,8 +3347,8 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
         return;
       }
       _showLibDropdown(e.currentTarget, [
-        { label: _libraryArchivedView ? 'Restore' : 'Archive', icon: _libraryArchivedView ? 'restore' : 'archive', action: libraryBulkArchive },
-        { label: 'Clone', icon: 'clone', action: libraryBulkClone },
+        { label: _libraryArchivedView ? '恢复' : '归档', icon: _libraryArchivedView ? 'restore' : 'archive', action: libraryBulkArchive },
+        { label: '克隆', icon: 'clone', action: libraryBulkClone },
         { label: '导出', icon: 'open', action: libraryBulkExport },
         { label: '删除', icon: 'delete', danger: true, action: libraryBulkDelete },
       ], { onCancel: libraryExitSelectMode });

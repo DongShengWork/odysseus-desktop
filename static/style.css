@@ -38275,3 +38275,56 @@ body.theme-frosted .modal {
 .log-line-default {
   color: var(--fg, #9cdef2);
 }
+
+/* ── Chinese text safety — prevents text overflow after localization ── */
+/* Fixed-width buttons: let content set width naturally */
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.confirm-btn,
+.confirm-btn-primary,
+.confirm-btn-secondary,
+.theme-io-btn,
+.memory-toolbar-btn,
+.memory-sort-btn,
+.memory-cat-chip {
+  white-space: nowrap;
+  overflow: visible;
+  max-width: none;
+}
+/* Allow text wrapping in cards, labels, and descriptions that may now be wider */
+.memory-desc,
+.doclib-desc,
+.settings-label,
+.admin-card p,
+.admin-card .muted,
+.pane-title-btn,
+.from-sender-empty {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+/* Prevent long Chinese text from clipping in inline-flex buttons */
+.memory-tab,
+.preset-tab {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: visible;
+}
+/* Email reader buttons — prevent label clipping */
+.reader-btn-label,
+.email-reader-actions .memory-toolbar-btn {
+  white-space: nowrap;
+  overflow: visible;
+}
+/* Prevent sidebar section titles from clipping Chinese characters */
+.sidebar-action-label,
+.section-title {
+  overflow: visible;
+  white-space: nowrap;
+}
+/* Modal header titles — ensure Chinese text is fully visible */
+.modal-header h4 {
+  overflow: visible;
+  white-space: nowrap;
+}

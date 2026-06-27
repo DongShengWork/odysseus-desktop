@@ -2267,7 +2267,7 @@ export function addMessage(role, content, modelName, metadata) {
         // Extract instruction text (after "Instruction: ")
         const instrMatch = b.textContent.match(/Instruction:\s*([\s\S]*)$/);
         const instrText = instrMatch ? instrMatch[1].trim() : '';
-        b.innerHTML = '<span class="doc-edit-tag">Doc edit: ' + lineRef + '</span> ' + markdownModule.processWithThinking(instrText);
+        b.innerHTML = '<span class="doc-edit-tag">文档编辑: ' + lineRef + '</span> ' + markdownModule.processWithThinking(instrText);
       }
 
       // Render attachment cards

@@ -417,7 +417,7 @@ function enterSelectMode() {
   const bulkBar = document.getElementById('memory-bulk-bar');
   const selectBtn = document.getElementById('memory-select-btn');
   if (bulkBar) bulkBar.classList.remove('hidden');
-  if (selectBtn) { selectBtn.classList.add('active'); selectBtn.innerHTML = _SELECT_BTN_X_SVG + 'Cancel'; }
+  if (selectBtn) { selectBtn.classList.add('active'); selectBtn.innerHTML = _SELECT_BTN_X_SVG + '取消'; }
   updateBulkCount();
   renderMemoryList();
 }
@@ -429,7 +429,7 @@ function exitSelectMode() {
   const selectBtn = document.getElementById('memory-select-btn');
   const selectAll = document.getElementById('memory-select-all');
   if (bulkBar) bulkBar.classList.add('hidden');
-  if (selectBtn) { selectBtn.classList.remove('active'); selectBtn.innerHTML = _SELECT_BTN_DOT_SVG + 'Select'; }
+  if (selectBtn) { selectBtn.classList.remove('active'); selectBtn.innerHTML = _SELECT_BTN_DOT_SVG + '选择'; }
   if (selectAll) selectAll.checked = false;
   renderMemoryList();
 }
@@ -446,7 +446,7 @@ function toggleSelectItem(id) {
 function updateBulkCount() {
   const countEl = document.getElementById('memory-selected-count');
   const deleteBtn = document.getElementById('memory-bulk-delete');
-  if (countEl) countEl.textContent = `${selectedIds.size} Selected`;
+  if (countEl) countEl.textContent = `已选择 ${selectedIds.size} 项`;
   if (deleteBtn) deleteBtn.disabled = selectedIds.size === 0;
 }
 
@@ -526,7 +526,7 @@ export async function tidyMemories() {
     const data = await res.json();
     if ((data.removed || 0) === 0) {
       if (tidySpinner) tidySpinner.destroy();
-      if (tidyBtn) { tidyBtn.disabled = false; tidyBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;color:var(--accent, var(--red));"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> Tidy'; }
+      if (tidyBtn) { tidyBtn.disabled = false; tidyBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;color:var(--accent, var(--red));"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> 整理'; }
       showToast('已整洁');
       return;
     }
@@ -569,7 +569,7 @@ export async function tidyMemories() {
       tidyBtn.disabled = false;
       tidyBtn.style.border = '';
       tidyBtn.style.background = '';
-      tidyBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;color:var(--accent, var(--red));"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> Tidy';
+      tidyBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px;color:var(--accent, var(--red));"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg> 整理';
     }
   }
 }
@@ -691,12 +691,12 @@ export function renderMemoryList() {
     const searchTerm = document.getElementById('memory-search')?.value?.trim() || '';
     const _smiley = '<span style="vertical-align:-3px;margin-left:6px;">' + uiModule.emptyStateIcon('smiley') + '</span>';
     if (searchTerm || activeCategory !== 'all') {
-      memoryList.innerHTML = `<div class="memory-empty">No matches.</div>`;
+      memoryList.innerHTML = `<div class="memory-empty">没有匹配结果。</div>`;
     } else {
       memoryList.innerHTML = `<div class="memory-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
-        <span>No memories yet${_smiley}</span>
+        <span>暂无记忆${_smiley}</span>
         <span style="opacity:0.7;font-size:11px;display:block;">
-          <a href="#" data-mem-goto-add style="color:var(--accent,var(--red));text-decoration:underline;">Import in Add tab</a>
+          <a href="#" data-mem-goto-add style="color:var(--accent,var(--red));text-decoration:underline;">在添加标签中导入</a>
         </span>
       </div>`;
       memoryList.querySelector('[data-mem-goto-add]')?.addEventListener('click', (e) => {
@@ -749,7 +749,7 @@ export function renderMemoryList() {
     if (memory.pinned) {
       const pinBadge = document.createElement('span');
       pinBadge.className = 'memory-cat-badge memory-cat-pinned';
-      pinBadge.textContent = 'pinned';
+      pinBadge.textContent = '已置顶';
       meta.appendChild(pinBadge);
     }
 
@@ -815,24 +815,24 @@ export function renderMemoryList() {
         : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_bookmarkPath}</svg>`;
       const pinItem = document.createElement('div');
       pinItem.className = 'dropdown-item-compact';
-      pinItem.innerHTML = `<span class="dropdown-icon">${_pinSvg}</span><span>${memory.pinned ? 'Unpin' : 'Pin'}</span>`;
+      pinItem.innerHTML = `<span class="dropdown-icon">${_pinSvg}</span><span>${memory.pinned ? '取消置顶' : '置顶'}</span>`;
       pinItem.addEventListener('click', () => { dropdown.style.display = 'none'; togglePin(memory.id, !memory.pinned); });
 
       const editItem = document.createElement('div');
       editItem.className = 'dropdown-item-compact';
-      editItem.textContent = '✎ Edit';
+      editItem.textContent = '✎ 编辑';
       editItem.addEventListener('click', () => { dropdown.style.display = 'none'; startInlineEdit(item, memory); });
 
       const deleteItem = document.createElement('div');
       deleteItem.className = 'dropdown-item-compact memory-dropdown-delete';
-      deleteItem.textContent = '✕ Delete';
+      deleteItem.textContent = '✕ 删除';
       deleteItem.addEventListener('click', () => { dropdown.style.display = 'none'; deleteMemory(memory.id); });
 
       // Select — enters bulk-select mode and pre-selects this memory. Same
       // pattern as the email/documents/skills Select item.
       const selectItem = document.createElement('div');
       selectItem.className = 'dropdown-item-compact';
-      selectItem.innerHTML = '<span class="dropdown-icon"><span style="font-size:16px;line-height:1;">●</span></span><span>Select</span>';
+      selectItem.innerHTML = '<span class="dropdown-icon"><span style="font-size:16px;line-height:1;">●</span></span><span>选择</span>';
       selectItem.addEventListener('click', (e) => {
         e.stopPropagation();
         if (dropdown.parentNode) dropdown.remove();
@@ -847,7 +847,7 @@ export function renderMemoryList() {
       // dismisses cleanly.
       const cancelItem = document.createElement('div');
       cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-      cancelItem.textContent = '✕ Cancel';
+      cancelItem.textContent = '✕ 取消';
       cancelItem.addEventListener('click', (e) => { e.stopPropagation(); if (dropdown.parentNode) dropdown.remove(); });
 
       dropdown.appendChild(pinItem);
@@ -994,12 +994,12 @@ function startInlineEdit(item, memory) {
 
   const saveBtn = document.createElement('button');
   saveBtn.className = 'memory-item-btn save';
-  saveBtn.textContent = 'save';
+  saveBtn.textContent = '保存';
   saveBtn.addEventListener('click', () => saveInlineEdit(memory.id, input.value, catSelect.value));
 
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'memory-item-btn';
-  cancelBtn.textContent = 'cancel';
+  cancelBtn.textContent = '取消';
   cancelBtn.addEventListener('click', () => renderMemoryList());
 
   actions.appendChild(saveBtn);
@@ -1074,7 +1074,7 @@ export function updateMemoryCount() {
   const num = visible.length === scopeTotal ? `${scopeTotal}` : `${visible.length}/${scopeTotal}`;
   // Header (next to the "Memories" title) reads "N memories", like the
   // Documents header. The bare number still feeds any tab badge if present.
-  if (h2Count) h2Count.textContent = `${num} ${scopeTotal === 1 && visible.length === scopeTotal ? 'memory' : 'memories'}`;
+  if (h2Count) h2Count.textContent = `${num} 条记忆`;
   if (tabCount) tabCount.textContent = num;
 }
 
@@ -1192,14 +1192,14 @@ export async function extractMemory(sessionId) {
   if (memList) memList.classList.add('hidden');
 
   if (suggestions.length === 0) {
-    body.innerHTML = '<div class="memory-empty">No useful information detected.</div>';
+    body.innerHTML = '<div class="memory-empty">未检测到有用信息。</div>';
   } else {
     const header = document.createElement('div');
     header.className = 'memory-suggestions-header';
     header.innerHTML = '<span>Suggested memories</span>';
     const backBtn = document.createElement('button');
     backBtn.className = 'memory-item-btn';
-    backBtn.textContent = 'back';
+    backBtn.textContent = '返回';
     backBtn.addEventListener('click', () => {
       body.classList.add('hidden');
       body.innerHTML = '';
@@ -1216,7 +1216,7 @@ export async function extractMemory(sessionId) {
       txt.textContent = s;
       const btn = document.createElement('button');
       btn.className = 'memory-item-btn save';
-      btn.textContent = 'save';
+      btn.textContent = '保存';
       btn.addEventListener('click', async () => {
         await fetch(`${window.location.origin}/api/memory/add`, {
           method: 'POST',
@@ -1224,7 +1224,7 @@ export async function extractMemory(sessionId) {
           body: JSON.stringify({ text: s })
         });
         btn.disabled = true;
-        btn.textContent = 'saved';
+        btn.textContent = '已保存';
         showToast('已保存到记忆');
       });
       div.appendChild(txt);
@@ -1311,7 +1311,7 @@ async function handleImportFile(file) {
     if (memList) memList.classList.add('hidden');
 
     if (suggestions.length === 0) {
-      body.innerHTML = '<div class="memory-empty">No useful information found in file.</div>';
+      body.innerHTML = '<div class="memory-empty">文件中未找到有用信息。</div>';
     } else {
       const reviewItems = suggestions
         .map((s) => ({
@@ -1325,14 +1325,14 @@ async function handleImportFile(file) {
       const headerTitle = document.createElement('span');
       const updateHeaderTitle = () => {
         const remaining = reviewItems.filter((item) => item.active).length;
-        headerTitle.textContent = `Imported from ${data.filename || file.name} (${remaining}) Review`;
+        headerTitle.textContent = `从 ${data.filename || file.name} 导入 (${remaining}) 审查`;
       };
       updateHeaderTitle();
       const headerActions = document.createElement('div');
       headerActions.className = 'memory-suggestions-actions';
       const backBtn = document.createElement('button');
       backBtn.className = 'memory-item-btn';
-      backBtn.textContent = 'back';
+      backBtn.textContent = '返回';
       backBtn.addEventListener('click', () => {
         body.classList.add('hidden');
         body.innerHTML = '';
@@ -1340,7 +1340,7 @@ async function handleImportFile(file) {
       });
       const saveAllBtn = document.createElement('button');
       saveAllBtn.className = 'memory-item-btn save';
-      saveAllBtn.textContent = 'save all';
+      saveAllBtn.textContent = '全部保存';
       saveAllBtn.addEventListener('click', async () => {
         let saved = 0;
         for (const s of reviewItems) {
@@ -1386,7 +1386,7 @@ async function handleImportFile(file) {
         actionWrap.className = 'memory-suggestion-actions';
         const btn = document.createElement('button');
         btn.className = 'memory-item-btn save';
-        btn.textContent = 'save';
+        btn.textContent = '保存';
         btn.addEventListener('click', async () => {
           await fetch(`${window.location.origin}/api/memory/add`, {
             method: 'POST',
@@ -1397,12 +1397,12 @@ async function handleImportFile(file) {
           div.remove();
           updateHeaderTitle();
           btn.disabled = true;
-          btn.textContent = 'saved';
+          btn.textContent = '已保存';
           showToast('已保存到记忆');
         });
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'memory-item-btn delete';
-        deleteBtn.textContent = 'delete';
+        deleteBtn.textContent = '删除';
         deleteBtn.addEventListener('click', () => {
           item.active = false;
           div.remove();
