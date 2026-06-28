@@ -164,6 +164,21 @@ rm -f "$DIST/$APP_NAME.dmg"
 hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -ov -format UDZO "$DIST/$APP_NAME.dmg" >/dev/null
 rm -rf "$STAGE"
 
+# Strip com.apple.provenance xattr from venv (macOS 14+ issue)
+# Without this, the .app launcher fails with:
+#   PermissionError: [Errno 1] Operation not permitted: '.../venv/pyvenv.cfg'
+if xattr -l "$INSTALL_DIR/venv/pyvenv.cfg" 2>/dev/null | grep -q 'com.apple.provenance'; then
+  echo "  xattr:       stripping com.apple.provenance from venv/..."
+  xattr -r -d com.apple.provenance "$INSTALL_DIR/venv/" 2>/dev/null
+fi
+
+# Ad-hoc code sign the .app bundle (no Apple Developer account needed).
+# macOS LaunchServices (open / Finder) applies sandbox restrictions to
+# unsigned .app bundles, preventing them from reading files outside their
+# container — including the venv. Ad-hoc signing resolves this.
+echo "  codesign:    ad-hoc signing .app bundle..."
+codesign -s - -f --deep "$APP" 2>/dev/null || echo "  codesign:    (skipped — not available)"
+
 echo ""
 echo "Done:"
 echo "  $APP"
