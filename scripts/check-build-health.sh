@@ -291,6 +291,17 @@ check_binary_health() {
                     log_warn "  → Workaround: codesign with ad-hoc signature (no dev account needed)"
                     log_warn "  → Or run the launcher script directly from terminal"
                 fi
+
+                # Detect standalone vs launcher-wrapper .app
+                if [[ -f "$app_path/Contents/MacOS/${APP_NAME}" ]]; then
+                    local app_type
+                    app_type="$(file "$app_path/Contents/MacOS/${APP_NAME}" 2>/dev/null)"
+                    if echo "$app_type" | grep -q "Mach-O"; then
+                        log_pass "Standalone .app (PyInstaller bundled)"
+                    elif echo "$app_type" | grep -q "shell script\|bash"; then
+                        log_warn "Launcher-wrapper .app (depends on project venv — not standalone)"
+                    fi
+                fi
             fi
             ;;
         Linux*)

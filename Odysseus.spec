@@ -1,12 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
+
+datas = [('static', 'static'), ('scripts', 'scripts'), ('mcp_servers', 'mcp_servers'), ('config', 'config'), ('services/hwfit/data', 'services/hwfit/data'), ('.env.example', '.env.example')]
+binaries = []
+hiddenimports = ['uvicorn.logging', 'uvicorn.loops.auto', 'uvicorn.protocols.http.auto']
+tmp_ret = collect_all('uvicorn')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['launcher.py'],
+    ['/Users/ding/Documents/github/odysseus-desktop/launcher.py'],
     pathex=[],
-    binaries=[],
-    datas=[('static', 'static'), ('scripts', 'scripts'), ('mcp_servers', 'mcp_servers'), ('services/hwfit/data', 'services/hwfit/data'), ('config', 'config'), ('.env.example', '.env.example')],
-    hiddenimports=[],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -32,7 +39,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['static\\icon.ico'],
+    icon=['/Users/ding/Documents/github/odysseus-desktop/static/icon.ico'],
 )
 coll = COLLECT(
     exe,
@@ -42,4 +49,10 @@ coll = COLLECT(
     upx=True,
     upx_exclude=[],
     name='Odysseus',
+)
+app = BUNDLE(
+    coll,
+    name='Odysseus.app',
+    icon='/Users/ding/Documents/github/odysseus-desktop/static/icon.ico',
+    bundle_identifier=None,
 )

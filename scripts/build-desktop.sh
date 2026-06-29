@@ -167,8 +167,8 @@ build_macos() {
     log_info "Target minimum macOS: 11.0 (Big Sur)"
 
     # Validate build script exists
-    if [[ ! -x "$REPO_DIR/build-macos-app.sh" ]]; then
-        log_err "build-macos-app.sh not found at $REPO_DIR/build-macos-app.sh"
+    if [[ ! -x "$REPO_DIR/build-standalone-macos.sh" ]]; then
+        log_err "build-standalone-macos.sh not found"
         return 1
     fi
 
@@ -180,12 +180,12 @@ build_macos() {
         log_ok "Clean complete"
     fi
 
-    # Execute macOS build script
-    log_info "Running build-macos-app.sh..."
+    # Execute standalone macOS build (generates self-contained .app + .dmg)
+    log_info "Running build-standalone-macos.sh..."
     if $VERBOSE; then
-        bash "$REPO_DIR/build-macos-app.sh" 2>&1 | tee -a "$BUILD_LOG"
+        bash "$REPO_DIR/build-standalone-macos.sh" 2>&1 | tee -a "$BUILD_LOG"
     else
-        bash "$REPO_DIR/build-macos-app.sh" >> "$BUILD_LOG" 2>&1
+        bash "$REPO_DIR/build-standalone-macos.sh" >> "$BUILD_LOG" 2>&1
     fi
 
     local pyret=$?
