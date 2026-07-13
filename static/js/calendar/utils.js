@@ -3,14 +3,14 @@
 // Pure constants + zero-state helpers for the calendar UI.
 // No DOM, no fetch, no global mutable state — safe to import anywhere.
 
-export const WEEKDAYS     = ['一', '二', '三', '四', '五', '六', '日'];
-export const WEEKDAYS_SUN = ['日', '一', '二', '三', '四', '五', '六'];
+export const WEEKDAYS     = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const WEEKDAYS_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 
-export const MONTHS = ['一月', '二月', '三月', '四月', '五月', '六月',
-  '七月', '八月', '九月', '十月', '十一月', '十二月'];
+export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
 
-export const MON_SHORT = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+export const MON_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export const CAL_PALETTE = [
   'var(--accent)', '#5b8abf', '#bf6b5b', '#5bbf7a', '#bf9a5b',
@@ -65,13 +65,25 @@ export function _calBgImageUrl(c) {
   return _isCalBgImage(c) ? c.slice(3) : '';
 }
 
+// Escape a value for safe embedding inside a single-quoted CSS `url('...')`.
+// Backslashes MUST be escaped first: otherwise a trailing/embedded `\` in the
+// (CalDAV-syncable, untrusted) bg-image URL would escape the closing quote we
+// add for `'` and let the value break out of the string (CodeQL
+// js/incomplete-sanitization). `"` is percent-encoded for good measure.
+export function _cssUrlEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '%22');
+}
+
 // Returns a value safe to drop into `style="background:..."`. Falls back to
 // the calendar default for bg-image events in spots where an image would be
 // too small to render usefully (small grid dots, multi-day bars).
 export function _calBgCss(c, fallback) {
   if (_isCalBgImage(c)) {
     const u = _calBgImageUrl(c);
-    return u ? `center/cover no-repeat url('${u.replace(/'/g, "\\'")}')` : (fallback || 'var(--accent)');
+    return u ? `center/cover no-repeat url('${_cssUrlEscape(u)}')` : (fallback || 'var(--accent)');
   }
   return c || fallback || 'var(--accent)';
 }

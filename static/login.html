@@ -291,7 +291,7 @@
   </form>
 
   <div class="toggle" id="toggleArea" style="display:none">
-    <span id="toggleText">还没有账号？ </span>
+    <span id="toggleText">还没有账户？ </span>
     <a id="toggleLink" href="#">注册</a>
   </div>
 </main>
@@ -347,7 +347,7 @@
       confirmGroup.style.display = 'block';
       submitBtn.innerHTML = '<span style="position:relative;top:1px;">创建账户</span>';
       toggleArea.style.display = 'block';
-      toggleText.textContent = '已有账号？ ';
+      toggleText.textContent = '已有账户？ ';
       toggleLink.textContent = '登录';
       rememberToggle.style.display = 'none';
     } else {
@@ -355,7 +355,7 @@
       confirmGroup.style.display = 'none';
       submitBtn.textContent = '登录';
       toggleArea.style.display = signupAllowed ? 'block' : 'none';
-      toggleText.textContent = "还没有账号？ ";
+      toggleText.textContent = "还没有账户？ ";
       toggleLink.textContent = '注册';
       rememberToggle.style.display = '';
     }
@@ -434,13 +434,13 @@
         return;
       }
       if (password.length < policy.password_min_length) {
-        errEl.textContent = `密码长度至少需要 ${policy.password_min_length} 个字符`;
+        errEl.textContent = `密码长度至少为 ${policy.password_min_length} 个字符`;
         errEl.style.display = 'block';
         submitBtn.disabled = false;
         return;
       }
       if (policy.reserved_usernames.includes(username.toLowerCase())) {
-        errEl.textContent = '该用户名已被保留';
+        errEl.textContent = '该用户名为保留用户名';
         errEl.style.display = 'block';
         submitBtn.disabled = false;
         return;
@@ -509,7 +509,7 @@
         form._totpMode = true;
         const totpWrap = document.createElement('div');
         totpWrap.style.cssText = 'margin-top:12px;';
-        totpWrap.innerHTML = '<label for="totp-input" style="font-size:0.85em;opacity:0.7;display:block;margin-bottom:4px;">双重验证码</label><input type="text" id="totp-input" placeholder="输入 6 位验证码" aria-label="双重验证码" autocomplete="one-time-code" inputmode="numeric" maxlength="8" style="width:100%;padding:10px 12px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box;text-align:center;letter-spacing:4px;">';
+        totpWrap.innerHTML = '<label for="totp-input" style="font-size:0.85em;opacity:0.7;display:block;margin-bottom:4px;">两步验证码</label><input type="text" id="totp-input" placeholder="输入6位验证码" aria-label="两步验证码" autocomplete="one-time-code" inputmode="numeric" maxlength="8" style="width:100%;padding:10px 12px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box;text-align:center;letter-spacing:4px;">';
         const formEl = submitBtn.parentElement;
         formEl.insertBefore(totpWrap, submitBtn);
         const totpInput = document.getElementById('totp-input');

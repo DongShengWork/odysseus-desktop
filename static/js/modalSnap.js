@@ -310,7 +310,7 @@ function _collapseSidebarToRail() {
   // Mark the collapse as route/dock-driven so the paired restore in
   // app.js (window._restoreSidebarIfRouteCollapsed) knows it owns the
   // un-collapse. Same marker the /email and /notes openers use — they
-  // can't both be active at once so no conflict.
+  // can\'t both be active at once so no conflict.
   if (!sidebar.classList.contains('hidden')) {
     document.body.dataset.routeCollapsedSidebar = '1';
   }
@@ -623,7 +623,7 @@ export function clearRightDock(modal, cx, cy, dockClass) {
   _disconnectLeftDockObservers(content);
   const snap = content._preDockSnapshot;
   // Re-expand the wide sidebar if we collapsed it — but only if the
-  // user didn't manually toggle it during the dock (we don't want to
+  // user didn\'t manually toggle it during the dock (we don\'t want to
   // override their explicit choice).
   if (snap && snap.collapsedSidebar && !_hasAnyOtherDockedWindow(modal)) _expandSidebarFromRail();
   // Restore the exact inline style values the modal had before docking
@@ -636,7 +636,7 @@ export function clearRightDock(modal, cx, cy, dockClass) {
   content.style.right = sty.right || '';
   content.style.bottom = sty.bottom || '';
   // Inline width/height may have been empty on the original (CSS-driven)
-  // modal — but we're now forcing position:fixed, which kills the
+  // modal — but we\'re now forcing position:fixed, which kills the
   // CSS-flex-centered layout that produced the original size. Without a
   // fallback, position:fixed + width:auto collapses the window to its
   // content's min-width and the user sees a tiny pane after undock.
@@ -672,7 +672,7 @@ export function clearRightDock(modal, cx, cy, dockClass) {
 // width) WITHOUT un-docking the window — used when a docked modal is
 // MINIMIZED. The modal keeps its docked geometry + class + snapshot so
 // resumeDock() can snap it right back when the chip is reopened. Returns the
-// docked side, or null if the modal wasn't docked.
+// docked side, or null if the modal wasn\'t docked.
 export function suspendDock(modal) {
   const nodes = _resolveDockNodes(modal);
   if (!nodes || !nodes.content) return null;
@@ -816,7 +816,7 @@ export function makeEdgeDockController(modal, side = 'right', dockClass) {
     handle.style.pointerEvents = 'auto';
     handle.style.touchAction = 'none';
     handle.style.display = 'none';
-    handle.title = '拖拽调整已停靠窗口大小';
+    handle.title = 'Drag to resize docked window';
     document.body.appendChild(handle);
   }
 
@@ -1003,7 +1003,7 @@ export function makeEdgeDockController(modal, side = 'right', dockClass) {
   stripe.style.pointerEvents = 'auto';
   stripe.style.touchAction = 'none';
   stripe.style.display = 'none';
-  stripe.title = '拖拽调整邮件和草稿大小';
+  stripe.title = 'Drag to resize email and draft';
 
   const _activeLeftDockContent = () => {
     const modal = document.querySelector(

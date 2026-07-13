@@ -10,7 +10,7 @@
 
 /**
  * Cheap downscaled preview composited from all visible layers.
- * Returns a JPEG dataURL, or null when there's nothing to draw.
+ * Returns a JPEG dataURL, or null when there\'s nothing to draw.
  *
  * @param {Array<{visible: boolean, opacity: number, id: string, canvas: HTMLCanvasElement}>} layers
  * @param {number} imgW            Document width in canvas pixels.

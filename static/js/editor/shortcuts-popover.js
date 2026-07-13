@@ -1,7 +1,7 @@
 /**
  * Shortcuts-cheatsheet popover — floating frosted-glass list of every
  * editor keyboard shortcut, anchored above the topbar keyboard icon
- * (drops below if there's no room above). Drag the header to move;
+ * (drops below if there\'s no room above). Drag the header to move;
  * Esc or click outside dismisses; position is persisted in
  * localStorage so re-opening restores where the user left it.
  *
@@ -23,7 +23,7 @@ export function createShortcutsPopover() {
     el.style.cssText = [
       'position:fixed', 'z-index:10000', 'display:none',
       // Frosted-glass background: semi-transparent + heavy blur of
-      // what's behind. Layered with an inner translucent veil so
+      // what\'s behind. Layered with an inner translucent veil so
       // light themes also read clearly without losing the see-through
       // feel.
       'background:color-mix(in srgb, var(--panel, #1a1a1a) 55%, transparent)',
@@ -51,7 +51,7 @@ export function createShortcutsPopover() {
         drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height };
         handle.setPointerCapture(e.pointerId);
         handle.style.cursor = 'grabbing';
-        // Mark as user-positioned so subsequent toggles don't re-anchor.
+        // Mark as user-positioned so subsequent toggles don\'t re-anchor.
         el.dataset.userPositioned = '1';
         e.preventDefault();
       });
@@ -84,7 +84,7 @@ export function createShortcutsPopover() {
 
   function positionPopover(el, anchor) {
     // Place ABOVE the anchor, horizontally centred but clamped to
-    // viewport. Falls back to BELOW if there's no room above.
+    // viewport. Falls back to BELOW if there\'s no room above.
     el.style.display = 'block';   // need a layout pass for accurate size
     const ar = anchor.getBoundingClientRect();
     const pr = el.getBoundingClientRect();
@@ -124,7 +124,7 @@ export function createShortcutsPopover() {
         if (anchor) positionPopover(el, anchor);
         else el.style.display = 'block';
       }
-      // Defer outside-click so the click that opened us doesn't close us.
+      // Defer outside-click so the click that opened us doesn\'t close us.
       outside = (e) => {
         if (el.contains(e.target)) return;
         if (e.target.closest('#ge-shortcuts-btn')) return;

@@ -125,7 +125,7 @@ export function wireTopbar(deps) {
   document.getElementById('ge-load-project')?.addEventListener('click', loadProjectPrompt);
 
   // Global outside-click — closes EVERY editor dropdown when the
-  // user clicks anywhere that isn't a menu or trigger button. Each
+  // user clicks anywhere that isn\'t a menu or trigger button. Each
   // menu has its own click-away handler too; this is a defence-in-
   // depth net for cross-menu clicks / mobile touches that miss the
   // individual handlers.
@@ -143,14 +143,14 @@ export function wireTopbar(deps) {
   // Edge popup — Width input + Feather / Delete action buttons.
   function applyEdgeAction(hardDelete) {
     const layer = activeLayer();
-    if (!layer || layer.locked) { uiModule.showToast('请选择未锁定的图层'); return; }
+    if (!layer || layer.locked) { uiModule.showToast('请选择一个未锁定的图层'); return; }
     const widthInput = document.getElementById('ge-edge-width');
     const width = parseInt(widthInput?.value || '8');
     if (isNaN(width) || width < 1) { uiModule.showToast('无效的宽度'); return; }
     saveState();
     applyEdgeFeather(layer, width, hardDelete);
     composite();
-    uiModule.showToast(hardDelete ? `已删除边缘 ${width}px` : `已羽化边缘 ${width}px`);
+    uiModule.showToast(hardDelete ? `边缘已删除 ${width}px` : `边缘已羽化 ${width}px`);
   }
   {
     const btn = document.getElementById('ge-edge-menu-btn');

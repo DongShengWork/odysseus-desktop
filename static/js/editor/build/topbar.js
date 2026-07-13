@@ -13,7 +13,7 @@ export function buildTopbar() {
   topBar.className = 'ge-topbar';
   topBar.innerHTML = `
     <div class="ge-topbar-left">
-      <span class="ge-alpha-badge" title="此编辑器正在积极开发中 — 可能存在不完善之处">ALPHA</span>
+      <span class="ge-alpha-badge" title="此编辑器正在积极开发中 — 可能会有不完善之处">ALPHA</span>
       <button class="ge-btn ge-btn-sm ge-stacked-btn" id="ge-undo" title="撤销">
         <span class="ge-stacked-glyph">↩</span>
         <span class="ge-stacked-label">撤销</span>
@@ -22,7 +22,7 @@ export function buildTopbar() {
         <span class="ge-stacked-glyph">↪</span>
         <span class="ge-stacked-label">重做</span>
       </button>
-      <button class="ge-btn ge-btn-sm ge-stacked-btn" id="ge-history-btn" title="历史记录 — 点击条目跳转到对应状态" aria-label="历史记录">
+      <button class="ge-btn ge-btn-sm ge-stacked-btn" id="ge-history-btn" title="历史记录 — 点击条目跳转到该状态" aria-label="历史记录">
         <span class="ge-stacked-glyph"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 16 14"/></svg></span>
         <span class="ge-stacked-label">历史</span>
       </button>
@@ -36,24 +36,24 @@ export function buildTopbar() {
       </span>
       <button class="ge-btn ge-btn-sm" id="ge-zoom-in" title="放大">+</button>
       <span class="ge-topbar-sep"></span>
-      <button class="ge-btn ge-btn-sm ge-stacked-btn" id="ge-zoom-fit" title="适应窗口" aria-pressed="false">
+      <button class="ge-btn ge-btn-sm ge-stacked-btn" id="ge-zoom-fit" title="适应视图" aria-pressed="false">
         <span class="ge-stacked-glyph"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 4 20 10 20"/><polyline points="20 10 20 4 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
         <span class="ge-stacked-label">适应</span>
       </button>
       <button class="ge-btn ge-btn-sm ge-stacked-btn" id="ge-zoom-100" title="实际大小" aria-pressed="false">
         <span class="ge-stacked-glyph">1:1</span>
-        <span class="ge-stacked-label">缩放</span>
+        <span class="ge-stacked-label">比例</span>
       </button>
       <span class="ge-topbar-sep"></span>
     </div>
     <div class="ge-topbar-right">
-      <span class="ge-canvas-size" id="ge-canvas-size" title="画布尺寸" hidden></span>
+      <span class="ge-canvas-size" id="ge-canvas-size" title="画布大小" hidden></span>
       <div class="ge-image-wrap">
         <button class="ge-btn ge-btn-sm" id="ge-image-menu-btn" title="图像操作" aria-haspopup="true">图像 ▾</button>
         <div class="ge-image-menu dropdown" id="ge-image-menu" hidden>
           <button class="dropdown-item-compact" data-image-action="resize">
             <span class="dropdown-icon">⤢</span>
-            <span>画布大小…</span>
+            <span>画布…</span>
           </button>
           <div class="ge-filter-submenu-label">变换</div>
           <button class="dropdown-item-compact" data-image-action="rotate-90">
@@ -92,21 +92,21 @@ export function buildTopbar() {
       <button class="ge-btn ge-btn-sm" id="ge-shortcuts-btn" title="键盘快捷键 (?)" aria-label="快捷键">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:relative;top:2px;"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
       </button>
-      <button class="ge-btn ge-btn-sm" id="ge-import-topbar" title="导入图像为新图层">+ 导入</button>
+      <button class="ge-btn ge-btn-sm" id="ge-import-topbar" title="导入图像为图层">+ 导入</button>
       <div class="ge-save-wrap">
         <button class="ge-btn ge-btn-primary" id="ge-save-menu-btn" title="保存选项" style="display:inline-flex;align-items:center;gap:4px;">保存
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="ge-save-menu dropdown" id="ge-save-menu" hidden>
-          <div class="dropdown-section-label">图片</div>
-          <button class="dropdown-item-compact" id="ge-save" title="覆盖原始图片">
+          <div class="dropdown-section-label">图像</div>
+          <button class="dropdown-item-compact" id="ge-save" title="覆盖原始图像">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
-            <span>覆盖保存</span>
+            <span>覆盖原图</span>
             <span class="dropdown-shortcut">Ctrl+S</span>
           </button>
-          <button class="dropdown-item-compact" id="ge-export-gallery" title="保存为新图片到画廊">
+          <button class="dropdown-item-compact" id="ge-export-gallery" title="保存为新图像到图库">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></span>
-            <span>保存副本</span>
+            <span>另存为副本</span>
             <span class="dropdown-shortcut">Ctrl+Shift+S</span>
           </button>
           <button class="dropdown-item-compact" id="ge-download" title="下载 PNG 到电脑">
@@ -115,7 +115,7 @@ export function buildTopbar() {
           </button>
           <div class="dropdown-section-divider"></div>
           <div class="dropdown-section-label">项目</div>
-          <button class="dropdown-item-compact" id="ge-save-project" title="保存分层项目 (.json) — 保留所有图层以便后续编辑">
+          <button class="dropdown-item-compact" id="ge-save-project" title="保存分层项目 (.json) — 保留所有图层可编辑">
             <span class="dropdown-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="13" height="13" rx="1"/><rect x="8" y="8" width="13" height="13" rx="1"/></svg></span>
             <span>保存项目 (.json)</span>
           </button>

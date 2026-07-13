@@ -13,7 +13,7 @@
  *     resize prompts + undo history work the same as the toolbar
  *     Import button.
  *
- * Both gated by `state.editorOpen` so they're inert when the editor
+ * Both gated by `state.editorOpen` so they\'re inert when the editor
  * is closed (other listeners on the page get first dibs).
  *
  * @param {{
@@ -48,7 +48,7 @@ export function wireClipboardAndDrop({
       if (tb) tb.querySelectorAll('.ge-tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === 'move'));
       renderLayerPanel();
       composite();
-      uiModule.showToast('已粘贴为新图层');
+      uiModule.showToast('Pasted as new layer');
     }
 
     // Check internal clipboard first (from Ctrl+C lasso/wand).

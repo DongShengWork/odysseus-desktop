@@ -12,7 +12,7 @@
  *     from hard disk to soft falloff.
  *
  * The whole block was three near-identical 30-LOC copies before; now
- * it's one helper that takes the tool's prefix + a state-field bag.
+ * it\'s one helper that takes the tool's prefix + a state-field bag.
  *
  * Usage: just call wireStrokeToolSliders() — the DOM IDs are wired
  * statically from #ge-{eraser,brush,clone}-{opacity,flow,softness}

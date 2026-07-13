@@ -1,7 +1,7 @@
 /**
  * Deep Research side panel — open/close, form, job rendering, library.
  */
-import * as jobs from './jobs.js';
+import * as jobs from './jobs.js?v=20260630researchthumb';
 import themeModule from '../theme.js';
 import createResearchSynapse from '../researchSynapse.js';
 import spinnerModule from '../spinner.js';
@@ -10,7 +10,7 @@ import { sortModelIds } from '../modelSort.js';
 // Rotating research textarea placeholders — pick one at random each
 // time the panel is rendered so the example keeps feeling fresh.
 const _RESEARCH_HINTS = [
-  "e.g. Trace Odysseus's ten-year journey home from Troy — every island, monster, and detour, and why each one cost him",
+  "e.g. Trace Odysseus\'s ten-year journey home from Troy — every island, monster, and detour, and why each one cost him",
   "e.g. Compare Rust and Go for building a high-throughput web API in 2026",
   "e.g. Fact-check whether honey actually never spoils",
   "e.g. How to roast a duck so the skin stays crispy",
@@ -31,7 +31,7 @@ function _pickResearchHint() {
 // the SVG keeps its accumulated nodes/edges between progress events.
 const _jobSynapses = new Map();
 // Which foldable job sections ('active' / 'past') the user has collapsed — kept
-// across re-renders so the panel doesn't re-expand on every job-state change.
+// across re-renders so the panel doesn\'t re-expand on every job-state change.
 const _collapsedSections = new Set();
 
 // Persisted preference to minimize (hide) the per-job synapse "tree" visual.
@@ -49,7 +49,7 @@ function _toggleSynapseMinimized() {
     .forEach(h => h.classList.toggle('synapse-collapsed', _synapseMinimized));
   document.querySelectorAll('.research-synapse-toggle').forEach(b => {
     b.classList.toggle('active', _synapseMinimized);
-    b.title = _synapseMinimized ? '显示可视化' : '最小化可视化';
+    b.title = _synapseMinimized ? 'Show visualization' : 'Minimize visualization';
     b.innerHTML = _synapseMinimized ? _vizExpandIcon : _vizCollapseIcon;
   });
 }
@@ -141,7 +141,7 @@ function _syncResearchRail() {
       }
       const round = runningJob && runningJob.progress && runningJob.progress.round;
       // Just the round as "R1", "R2", … (empty until the first round lands).
-      // Only update when we actually have a round — don't blank it out on
+      // Only update when we actually have a round — don\'t blank it out on
       // progress ticks that lack one, or it flickers on/off between rounds.
       if (round) wrap.querySelector('.research-sb-status').textContent = `R${round}`;
     } else if (wrap) {
@@ -191,7 +191,7 @@ async function _updateResearchCount() {
     if (!res.ok) return;
     const data = await res.json();
     const n = data.total || 0;
-    el.textContent = n + ' 条研究';
+    el.textContent = n + (n === 1 ? ' research' : ' research');
   } catch {}
 }
 
@@ -278,7 +278,7 @@ export function openPanel(focusJobId) {
   });
 
   // Document-level ESC handler — overlay-only listener never fired because
-  // overlay isn't focused. Tracked in module scope so closePanel can detach.
+  // overlay isn\'t focused. Tracked in module scope so closePanel can detach.
   _onDocKeydown = (e) => {
     if (e.key === 'Escape' && _open) {
       e.preventDefault();
@@ -297,6 +297,7 @@ export function openPanel(focusJobId) {
   _loadEndpoints().then(_restoreSavedSettings);
   _clearBadge();
   _updateResearchCount();
+  jobs.refreshLibrary?.({ force: true });
 
   if ('Notification' in window && Notification.permission === 'default') {
     try { Notification.requestPermission(); } catch {}
@@ -344,10 +345,10 @@ export function closePanel() {
 function _buildPanelHTML() {
   const searchProviders = ['', 'searxng', 'duckduckgo', 'tavily', 'brave', 'google', 'serper'];
   const providerOpts = searchProviders.map(p =>
-    `<option value="${p}">${p || '默认'}</option>`
+    `<option value="${p}">${p || 'Default'}</option>`
   ).join('');
 
-  let roundOpts = '<option value="0" selected>自动</option>';
+  let roundOpts = '<option value="0" selected>Auto</option>';
   for (let i = 1; i <= 20; i++) {
     roundOpts += `<option value="${i}">${i}</option>`;
   }
@@ -357,56 +358,56 @@ function _buildPanelHTML() {
 
   return `
     <div class="modal-header research-pane-header">
-      <h4><span style="position:relative;top:-1px;left:6px;display:inline-flex;vertical-align:middle;">${_searchIcon}</span><span style="margin-left:6px;">深度研究</span></h4>
+      <h4><span style="position:relative;top:-1px;left:6px;display:inline-flex;vertical-align:middle;">${_searchIcon}</span><span style="margin-left:6px;">Deep Research</span></h4>
       <div class="research-pane-header-actions">
-        <button id="research-panel-minimize" class="modal-minimize-btn" type="button" title="最小化"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="18" x2="19" y2="18"/></svg></button>
-        <button id="research-panel-close" class="close-btn" title="关闭">&#x2716;</button>
+        <button id="research-panel-minimize" class="modal-minimize-btn" type="button" title="Minimize"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="18" x2="19" y2="18"/></svg></button>
+        <button id="research-panel-close" class="close-btn" title="Close">&#x2716;</button>
       </div>
     </div>
     <div class="modal-body research-pane-body" data-no-swipe-dismiss>
       <div class="research-new-job">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
-          <h2 style="margin:0;padding:0;line-height:1;display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent, var(--red))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h4v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/></svg>研究 <span id="research-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
+          <h2 style="margin:0;padding:0;line-height:1;display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent, var(--red))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h4v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/></svg>Research <span id="research-stats" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
         </div>
         <p class="memory-desc doclib-desc" style="margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span>使用LLM代理的多步骤网络研究</span>
-          <span id="research-no-past-hint" style="display:none;font:inherit;opacity:1;position:static;">— 历史记录在 <button type="button" class="research-library-link" style="background:none;border:none;padding:0;font:inherit;color:var(--accent, var(--red));cursor:pointer;text-decoration:underline;">资料库, 研究</button></span>
+          <span>Multi-step web research with an LLM-in-the-loop agent</span>
+          <span id="research-no-past-hint" style="display:none;font:inherit;opacity:1;position:static;">All past research found in: <button type="button" class="research-library-link" style="background:none;border:none;padding:0;font:inherit;color:var(--accent, var(--red));cursor:pointer;text-decoration:underline;">Library, Research</button></span>
         </p>
         <textarea id="research-query" class="research-query" placeholder="${_pickResearchHint()}" rows="4"></textarea>
         <button id="research-settings-toggle" class="research-settings-toggle${chevronCls}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;opacity:0.85;flex-shrink:0;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>设置<span class="research-settings-chevron">${_chevronIcon}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;opacity:0.85;flex-shrink:0;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings<span class="research-settings-chevron">${_chevronIcon}</span>
         </button>
         <div id="research-settings-body" class="research-settings-row"${settingsHidden}>
           <label class="research-setting">
-            <span class="research-setting-label">轮次 <span class="hwfit-help-chip hwfit-help-chip-inline" title="设置代理运行的搜索→阅读→反思轮次数量。轮次越多=覆盖越深、等待越久、消耗更多token。">?</span></span>
+            <span class="research-setting-label">Rounds <span class="hwfit-help-chip hwfit-help-chip-inline" title="How many search → read → reflect rounds the agent runs. More rounds = deeper coverage, longer wait, more tokens.">?</span></span>
             <select id="research-rounds">${roundOpts}</select>
           </label>
           <label class="research-setting">
-            <span class="research-setting-label">格式 <span class="hwfit-help-chip hwfit-help-chip-inline" title="自动让LLM选择输出格式。当你明确需要对比表格、教程、产品或事实核查时可手动指定。">?</span></span>
+            <span class="research-setting-label">Format <span class="hwfit-help-chip hwfit-help-chip-inline" title="Auto lets the LLM pick the output shape. Override when you specifically want a Compare table, How-to, Product, or Fact-check.">?</span></span>
             <select id="research-category">
-              <option value="" selected>自动</option>
-              <option value="product">产品</option>
-              <option value="comparison">对比</option>
-              <option value="howto">教程</option>
-              <option value="factcheck">事实核查</option>
+              <option value="" selected>Auto</option>
+              <option value="product">Product</option>
+              <option value="comparison">Compare</option>
+              <option value="howto">How-to</option>
+              <option value="factcheck">Fact-check</option>
             </select>
           </label>
           <label class="research-setting">
-            <span class="research-setting-label">搜索引擎</span>
+            <span class="research-setting-label">Search engine</span>
             <select id="research-search-provider">${providerOpts}</select>
           </label>
           <label class="research-setting">
-            <span class="research-setting-label">端点</span>
-            <select id="research-endpoint"><option value="">默认</option></select>
+            <span class="research-setting-label">Endpoint</span>
+            <select id="research-endpoint"><option value="">Default</option></select>
           </label>
           <label class="research-setting">
-            <span class="research-setting-label">模型</span>
-            <select id="research-model"><option value="">默认</option></select>
+            <span class="research-setting-label">Model</span>
+            <select id="research-model"><option value="">Default</option></select>
           </label>
         </div>
         <div class="research-controls-row">
-          <button id="research-add-btn" class="research-add-btn"><span class="research-add-plus">+</span> 加入队列</button>
-          <button id="research-start-btn" class="research-start-btn">${_playIcon} 开始</button>
+          <button id="research-add-btn" class="research-add-btn"><span class="research-add-plus">+</span> Queue</button>
+          <button id="research-start-btn" class="research-start-btn">${_playIcon} Start</button>
         </div>
       </div>
       <div id="research-jobs-list" class="research-jobs-list" data-no-swipe-dismiss></div>
@@ -566,7 +567,7 @@ async function _handleStart() {
         _wp.element.style.cssText += ';vertical-align:middle;margin-right:5px;position:relative;top:-1px;';
         startBtn.appendChild(_wp.element);
       } catch {}
-      startBtn.appendChild(document.createTextNode('启动中'));
+      startBtn.appendChild(document.createTextNode('Starting'));
       startBtn.classList.add('research-start-busy');
     } else {
       startBtn.disabled = false;
@@ -577,7 +578,7 @@ async function _handleStart() {
     }
   };
 
-  // Show busy briefly for click feedback. Don't await the full launch —
+  // Show busy briefly for click feedback. Don\'t await the full launch —
   // the per-job card immediately shows "Starting..." progress, and the
   // backend POST can take a while.
   _setBusy(true);
@@ -597,7 +598,7 @@ async function _handleStart() {
   if (_mobile) _dismissKeyboard(queryEl); else queryEl.focus();
   _resetCategoryToAuto();
   jobs.startJob(query, settings).catch((e) => {
-    if (typeof uiModule !== 'undefined' && uiModule?.showError) uiModule.showError('启动研究失败');
+    if (typeof uiModule !== 'undefined' && uiModule?.showError) uiModule.showError('Failed to start research');
     queryEl.value = query; // restore so user can retry
   });
 }
@@ -609,7 +610,7 @@ function _restoreSavedSettings() {
     const catSel = document.getElementById('research-category');
     if (catSel) catSel.value = saved.category;
   }
-  // Rounds intentionally defaults to "Auto" on every open — don't restore.
+  // Rounds intentionally defaults to "Auto" on every open — don\'t restore.
   // Users can pick a specific cap each time if needed.
   const search = document.getElementById('research-search-provider');
   if (search && saved.search_provider !== undefined) search.value = saved.search_provider;
@@ -645,7 +646,7 @@ async function _loadEndpoints() {
 function _populateModels(endpointId) {
   const sel = document.getElementById('research-model');
   if (!sel) return;
-  sel.innerHTML = '<option value="">默认</option>';
+  sel.innerHTML = '<option value="">Default</option>';
   if (!endpointId) return;
   const ep = _endpoints.find(e => e.id === endpointId);
   if (!ep || !ep.models) return;
@@ -669,8 +670,8 @@ function _renderJobs() {
   const allJobs = jobs.getJobs();
   if (!allJobs.length) {
     // No empty-state text in the body — the query box above is the call to
-    // action. But still surface the "All past research found in Library,
-    // Research" hint under the main title, since the Past section won't
+    // action. But still surface the "All past research found in: Library,
+    // Research" hint under the main title, since the Past section won\'t
     // render to host it (this is exactly the case the dynamic hint targets).
     container.innerHTML = '';
     const noPastHint = document.getElementById('research-no-past-hint');
@@ -698,11 +699,11 @@ function _renderJobs() {
 
   // Keep the header "(N research)" chip in sync with the Past-section count.
   // _updateResearchCount fetches the library total only, which under-counts
-  // when there's a session-completed job not yet persisted to the library.
+  // when there\'s a session-completed job not yet persisted to the library.
   const statsEl = document.getElementById('research-stats');
   if (statsEl) {
     const n = recentDone.length + past.length;
-    statsEl.textContent = n + ' 条研究';
+    statsEl.textContent = n + ' research';
   }
 
   // The main Start button doubles as "Start All (N)" when more than one job
@@ -712,13 +713,13 @@ function _renderJobs() {
   const startBtn = document.getElementById('research-start-btn');
   if (startBtn && !startBtn.classList.contains('research-start-busy')) {
     startBtn.innerHTML = queued.length > 1
-      ? `${_playIcon} 全部开始 (${queued.length})`
-      : `${_playIcon} 开始`;
+      ? `${_playIcon} Start All (${queued.length})`
+      : `${_playIcon} Start`;
     startBtn.dataset._origHTML = startBtn.innerHTML;
   }
 
-  // Dynamic Past hint: when the Past section won't render (no past items),
-  // surface the "All past research found in Library, Research" line under
+  // Dynamic Past hint: when the Past section won\'t render (no past items),
+  // surface the "All past research found in: Library, Research" line under
   // the main Research title instead, so the link is always discoverable.
   const noPastHint = document.getElementById('research-no-past-hint');
   if (noPastHint) {
@@ -771,10 +772,10 @@ function _renderJobs() {
     }
     // Both sections carry a "Clear all" button in the header (cookbook-running
     // section style); it clears all research and must not toggle the fold.
-    const clearAllHtml = '<button class="research-section-clear" title="清除所有研究">' + _cancelIcon + ' 清除全部</button>';
+    const clearAllHtml = '<button class="research-section-clear" title="Clear all research">' + _cancelIcon + ' Clear all</button>';
     header.innerHTML =
       '<span class="research-section-title">' + title + '</span>'
-      + '<span class="research-section-count memory-count">' + arr.length + ' 条研究</span>'
+      + '<span class="research-section-count memory-count">' + arr.length + ' research</span>'
       + '<span class="research-section-right">'
       +   clearAllHtml
       +   '<span class="research-section-dot' + (dotPulse ? ' pulsing' : '') + '" style="background:' + dotColor + ';"></span>'
@@ -783,7 +784,7 @@ function _renderJobs() {
     if (key === 'past') {
       const hint = document.createElement('span');
       hint.className = 'research-library-hint';
-      hint.innerHTML = '<span>使用LLM代理的多步骤网络研究</span> <button type="button" class="research-library-link">资料库, 研究</button>';
+      hint.innerHTML = '<span>All past research found in:</span> <button type="button" class="research-library-link">Library, Research</button>';
       hint.querySelector('.research-library-link').addEventListener('click', (e) => {
         e.stopPropagation();
         // Close the research panel first so the Library opens ABOVE it on mobile
@@ -819,13 +820,13 @@ function _renderJobs() {
 
   // ("Clear all" lives inside the Past research section header — see _addSection.)
 
-  _addSection('active', '进行中', active);
-  _addSection('past', '历史研究', recentDone.concat(past));
+  _addSection('active', 'Active', active);
+  _addSection('past', 'Past research', recentDone.concat(past));
 }
 
 /** Pick parallel vs sequential as a small popover anchored to the
  *  Start-All button. Drops down by default; flips to drop-up if there
- *  isn't enough room below the button. Outside-click / Esc dismiss. */
+ *  isn\'t enough room below the button. Outside-click / Esc dismiss. */
 function _promptParallelOrSequential(count, anchorBtn) {
   // Strip any prior instance so a second click closes-then-reopens cleanly.
   const existing = document.getElementById('research-run-mode-popover');
@@ -840,18 +841,18 @@ function _promptParallelOrSequential(count, anchorBtn) {
   const ICON_PARALLEL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
   const ICON_SEQUENTIAL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>';
   pop.innerHTML =
-    '<button class="research-run-mode-row" data-mode="parallel">' + ICON_PARALLEL + '<span class="rrm-title">并行</span></button>'
-    + '<button class="research-run-mode-row" data-mode="sequential">' + ICON_SEQUENTIAL + '<span class="rrm-title">顺序</span></button>';
+    '<button class="research-run-mode-row" data-mode="parallel">' + ICON_PARALLEL + '<span class="rrm-title">Parallel</span></button>'
+    + '<button class="research-run-mode-row" data-mode="sequential">' + ICON_SEQUENTIAL + '<span class="rrm-title">Sequential</span></button>';
   document.body.appendChild(pop);
 
   // Position: prefer dropping down from the button's bottom-right corner.
-  // If there isn't enough room below the viewport, flip to drop-up above.
+  // If there isn\'t enough room below the viewport, flip to drop-up above.
   const popHeight = pop.offsetHeight;
   const margin = 6;
   const spaceBelow = window.innerHeight - rect.bottom;
   const goUp = spaceBelow < popHeight + margin && rect.top > popHeight + margin;
   const top = goUp ? (rect.top - popHeight - margin) : (rect.bottom + margin);
-  // Right-align to the button so the menu doesn't extend off-screen on the right
+  // Right-align to the button so the menu doesn\'t extend off-screen on the right
   const right = Math.max(8, window.innerWidth - rect.right);
   pop.style.top = `${Math.round(top)}px`;
   pop.style.right = `${Math.round(right)}px`;
@@ -897,7 +898,7 @@ function _buildJobCard(job) {
 
   if (job.status === 'queued') {
     const rounds = job.settings?.max_rounds;
-    const roundsLabel = !rounds ? '自动轮次' : `${rounds} 轮次`;
+    const roundsLabel = !rounds ? 'Auto rounds' : `${rounds} rounds`;
     const epName = job.settings?._endpointName || '';
     const mName = job.settings?._modelName || '';
     const meta = [mName, epName, roundsLabel].filter(Boolean).join(' -- ');
@@ -907,9 +908,9 @@ function _buildJobCard(job) {
       </div>
       <div class="research-job-queued-meta">${_esc(meta)}</div>
       <div class="research-job-actions">
-        <button class="research-job-action" data-action="start" title="开始">${_playIcon} 开始</button>
-        <button class="research-job-action" data-action="edit" title="编辑查询">${_editIcon} 编辑</button>
-        <button class="research-job-action research-job-action-dim" data-action="remove" title="移除">${_cancelIcon}</button>
+        <button class="research-job-action" data-action="start" title="Start">${_playIcon} Start</button>
+        <button class="research-job-action" data-action="edit" title="Edit query">${_editIcon} Edit</button>
+        <button class="research-job-action research-job-action-dim" data-action="remove" title="Remove">${_cancelIcon}</button>
       </div>
     `;
     card.querySelector('[data-action="start"]').addEventListener('click', (e) => {
@@ -936,8 +937,8 @@ function _buildJobCard(job) {
         <span class="research-job-query">${_esc(job.query)}</span>${job.category ? `<span class="research-cat-badge">${_esc(job.category)}</span>` : ""}
         ${modelTag}
         <span class="research-job-time">${elapsed}</span>
-        <button class="research-synapse-toggle${_synapseMinimized ? ' active' : ''}" title="${_synapseMinimized ? '显示可视化' : '最小化可视化'}">${_synapseMinimized ? _vizExpandIcon : _vizCollapseIcon}</button>
-        <button class="research-job-cancel" title="取消研究">${_cancelIcon}</button>
+        <button class="research-synapse-toggle${_synapseMinimized ? ' active' : ''}" title="${_synapseMinimized ? 'Show visualization' : 'Minimize visualization'}">${_synapseMinimized ? _vizExpandIcon : _vizCollapseIcon}</button>
+        <button class="research-job-cancel" title="Cancel research">${_cancelIcon}</button>
       </div>
       <div class="research-job-phase">${phase}</div>
       <div class="research-job-synapse-host${_synapseMinimized ? ' synapse-collapsed' : ''}" data-synapse-host="${job.id}"></div>
@@ -988,24 +989,30 @@ function _buildJobCard(job) {
     const failed = srcCount === 0;
     if (failed) card.classList.add('research-job-failed');
     const doneBadge = failed
-      ? `<span class="research-cat-badge research-cat-failed">${_cancelIcon} 无结果</span>`
-      : (job.category ? `<span class="research-cat-badge">${_esc(job.category)}</span>` : `<span class="research-cat-badge research-cat-standard">标准</span>`);
+      ? `<span class="research-cat-badge research-cat-failed">${_cancelIcon} no results</span>`
+      : (job.category ? `<span class="research-cat-badge">${_esc(job.category)}</span>` : `<span class="research-cat-badge research-cat-standard">standard</span>`);
     const failNote = failed
-      ? `<div class="research-job-failnote">无法提取任何内容 — 尝试重新表述问题，或在设置中更换搜索引擎。</div>`
+      ? `<div class="research-job-failnote">Couldn't extract anything — try rephrasing the question, or switch the search engine in Settings.</div>`
       : '';
+    const thumbSource = (job.sources || []).find(s => s && (s.image || s.og_image));
+    const thumbUrl = job.thumbnail || thumbSource?.image || thumbSource?.og_image || '';
+    const thumbnail = thumbUrl
+      ? `<img class="research-job-thumb" src="${_esc(thumbUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+      : '<span class="research-job-thumb research-job-thumb-empty" aria-hidden="true"></span>';
     card.innerHTML = `
       <div class="research-job-header">
         <span class="research-job-query">${_esc(job.query)}</span>${doneBadge}
         ${modelTag}
-        <span class="research-job-meta">${elapsed} -- ${srcCount} 个来源</span>
+        <span class="research-job-meta">${elapsed} -- ${srcCount} sources</span>
       </div>
       ${failNote}
       <div class="research-job-actions">
-        <button class="research-job-action research-job-action-report" data-action="report" title="可视化报告">${_externalIcon} 可视化报告</button>
-        <button class="research-job-action" data-action="chat" title="以此研究为上下文开启后续对话">${_chatIcon} 讨论</button>
-        <button class="research-job-action research-job-action-dim" data-action="copy" title="复制报告到剪贴板">${_copyIcon}</button>
-        <button class="research-job-action research-job-action-dim" data-action="dismiss" title="从列表清除">${_cancelIcon}</button>
-        <button class="research-job-action research-job-action-dim" data-action="delete" title="从磁盘删除">${_trashIcon} 删除</button>
+        ${thumbnail}
+        <button class="research-job-action research-job-action-report" data-action="report" title="Visual report">${_externalIcon} Visual Report</button>
+        <button class="research-job-action" data-action="chat" title="Open follow-up chat with this research as context">${_chatIcon} Discuss</button>
+        <button class="research-job-action research-job-action-dim" data-action="copy" title="Copy report to clipboard">${_copyIcon}</button>
+        <button class="research-job-action research-job-action-dim" data-action="dismiss" title="Clear from list">${_cancelIcon}</button>
+        <button class="research-job-action research-job-action-dim" data-action="delete" title="Delete from disk">${_trashIcon} Delete</button>
       </div>
       ${isExpanded ? `<div class="research-job-result">${_renderResult(job)}</div>` : ''}
     `;
@@ -1032,7 +1039,7 @@ function _buildJobCard(job) {
     card.querySelector('[data-action="delete"]').addEventListener('click', async (e) => {
       e.stopPropagation();
       if (window.styledConfirm) {
-        const ok = await window.styledConfirm('确认要删除这项研究？这将从磁盘永久移除。', { confirmText: '删除', danger: true });
+        const ok = await window.styledConfirm('Delete this research? This permanently removes it from disk.', { confirmText: 'Delete', danger: true });
         if (!ok) return;
       }
       try { await fetch(`${_apiBase}/api/research/${job.id}`, { method: 'DELETE', credentials: 'same-origin' }); } catch {}
@@ -1052,9 +1059,9 @@ function _buildJobCard(job) {
       </div>
       ${errMsg}
       <div class="research-job-actions">
-        <button class="research-job-action" data-action="retry" title="重试">${_retryIcon} 重试</button>
-        <button class="research-job-action" data-action="edit" title="编辑并重试">${_editIcon} 编辑</button>
-        <button class="research-job-action research-job-action-dim" data-action="dismiss" title="关闭">${_cancelIcon}</button>
+        <button class="research-job-action" data-action="retry" title="Retry">${_retryIcon} Retry</button>
+        <button class="research-job-action" data-action="edit" title="Edit and retry">${_editIcon} Edit</button>
+        <button class="research-job-action research-job-action-dim" data-action="dismiss" title="Dismiss">${_cancelIcon}</button>
       </div>
     `;
     card.querySelector('[data-action="retry"]').addEventListener('click', (e) => {
@@ -1080,15 +1087,15 @@ const _CAT_ICONS = {
 };
 
 const _CAT_LABELS = {
-  product: '产品',
-  comparison: '对比',
-  howto: '教程指南',
-  landscape: '全景',
-  factcheck: '事实核查',
+  product: 'Product',
+  comparison: 'Comparison',
+  howto: 'How-to Guide',
+  landscape: 'Landscape',
+  factcheck: 'Fact-check',
 };
 
 function _renderResult(job) {
-  if (!job.result) return '<div class="research-job-loading">加载结果中...</div>';
+  if (!job.result) return '<div class="research-job-loading">Loading result...</div>';
   const cat = job.category || '';
   const catIcon = _CAT_ICONS[cat] || '';
   const catLabel = _CAT_LABELS[cat] || '';
@@ -1117,7 +1124,7 @@ function _renderResult(job) {
         ? `<a href="${url}" target="_blank" rel="noopener" class="research-source-link">${title}</a>`
         : `<span class="research-source-link">${title}</span>`;
     }
-    if (job.sources.length > 10) html += `<span class="research-source-more">+${job.sources.length - 10} 更多</span>`;
+    if (job.sources.length > 10) html += `<span class="research-source-more">+${job.sources.length - 10} more</span>`;
     html += '</div>';
   }
 
@@ -1148,14 +1155,14 @@ async function _copyResult(job, btn) {
   if (!job.result) return;
   let text = `# ${job.query}\n\n${job.result}`;
   if (job.findings?.length) {
-    text += '\n\n---\n## 原始发现\n';
+    text += '\n\n---\n## Raw Findings\n';
     for (const f of job.findings) {
-      text += `\n### ${f.title || '无标题'}\n来源: ${f.url || ''}\n${f.summary || ''}\n`;
+      text += `\n### ${f.title || 'Untitled'}\nSource: ${f.url || ''}\n${f.summary || ''}\n`;
     }
   }
   if (job.sources?.length) {
     const srcList = job.sources.map(s => `- [${s.title || s.url}](${s.url})`).join('\n');
-    text += `\n\n---\n## 来源\n${srcList}`;
+    text += `\n\n---\n## Sources\n${srcList}`;
   }
   let ok = false;
   try {
@@ -1197,7 +1204,7 @@ async function _copyResult(job, btn) {
       btn.classList.add('research-job-action-copied');
       setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('research-job-action-copied'); }, 2000);
     } else {
-      btn.innerHTML = `${_cancelIcon} 失败`;
+      btn.innerHTML = `${_cancelIcon} Failed`;
       setTimeout(() => { btn.innerHTML = orig; }, 2000);
     }
   }
@@ -1208,7 +1215,7 @@ async function _copyResult(job, btn) {
 async function _chatAboutResearch(researchId, btn) {
   if (!researchId) return;
   const origLabel = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = `${_chatIcon} 创建中...`; }
+  if (btn) { btn.disabled = true; btn.innerHTML = `${_chatIcon} Creating…`; }
   try {
     const res = await fetch(`${_apiBase}/api/research/spinoff/${researchId}`, {
       method: 'POST', credentials: 'same-origin',
@@ -1227,13 +1234,13 @@ async function _chatAboutResearch(researchId, btn) {
       window.location.hash = '#' + payload.session_id;
       window.location.reload();
     } else {
-      // 200 OK but no session_id — server contract violation. Don't leave
+      // 200 OK but no session_id — server contract violation. Don\'t leave
       // the button stuck on 'Creating…'; surface the failure instead.
       throw new Error('Server returned no session id');
     }
   } catch (e) {
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
-    alert('无法开启后续对话: ' + e.message);
+    alert('Could not start follow-up chat: ' + e.message);
   }
 }
 

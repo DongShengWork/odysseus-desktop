@@ -54,10 +54,10 @@ function _onModalOpened(modal) {
   if (_shown || _hasSeen()) return;
   const id = modal.id;
   if (!_modalShouldShowHint(id)) return;
-  // Don't interrupt the welcome / tour itself
+  // Don\'t interrupt the welcome / tour itself
   if (document.body.classList.contains('tour-active')) return;
   if (document.getElementById('tour-tooltip')) return;
-  // Mobile: skip — snapping isn't a desktop-only feature there
+  // Mobile: skip — snapping isn\'t a desktop-only feature there
   if (window.innerWidth <= 768) return;
 
   _shown = true;
@@ -88,8 +88,8 @@ function _show(modal) {
         <path class="th-cursor" d="M0 0 L0 9 L2.5 7 L4.5 10 L6 9 L4 6 L7 6 Z" fill="currentColor" />
       </svg>
     </div>
-    <div class="tour-hint-text"><b>小技巧：</b>拖动窗口标题栏到屏幕边缘可吸附窗口，拖到顶部可全屏显示。</div>
-    <button class="tour-hint-dismiss" type="button">知道了</button>
+    <div class="tour-hint-text"><b>Pro tip:</b> drag any window's title bar to a screen edge to snap it. Drag to the top for fullscreen.</div>
+    <button class="tour-hint-dismiss" type="button">Got it</button>
   `;
   document.body.appendChild(pop);
 
@@ -120,7 +120,7 @@ function _show(modal) {
     _markSeen();
   };
   pop.querySelector('.tour-hint-dismiss').addEventListener('click', dismiss);
-  // Auto-dismiss after 14s so it doesn't linger forever.
+  // Auto-dismiss after 14s so it doesn\'t linger forever.
   setTimeout(() => { if (pop.isConnected) dismiss(); }, 14000);
 }
 

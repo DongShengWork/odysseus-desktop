@@ -102,7 +102,7 @@ export function applyAdjustment(srcCanvas, adj) {
 /**
  * Apply a combined Levels + Color Balance pass to a layer in-place via
  * its `layer.adjustments` field. Cached on `layer._adjCache` keyed by
- * `cacheKey` so repeated composite passes don't re-run the math.
+ * `cacheKey` so repeated composite passes don\'t re-run the math.
  *
  * Returns the cached output canvas.
  *
@@ -130,7 +130,7 @@ export function renderLayerPixelAdjustments(layer, cacheKey) {
   const d = img.data;
 
   // Single 256-entry LUT for the Levels portion (applied per R/G/B
-  // channel identically — luma-style isn't right when colour balance
+  // channel identically — luma-style isn\'t right when colour balance
   // follows, per-channel is fine here).
   const l = adj.levels || { inBlack: 0, inWhite: 255, gamma: 1, outBlack: 0, outWhite: 255 };
   const inLow  = Math.max(0, Math.min(254, l.inBlack));

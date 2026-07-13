@@ -59,8 +59,8 @@ export function createStrokeTool({
       if (state.tool === 'inpaint') {
         const flip = e && e.ctrlKey && e.altKey;
         state.inpaintEraseStroke = flip ? !state.inpaintEraseMode : state.inpaintEraseMode;
-        // Make sure we're painting onto an existing mask sub-layer. If
-        // there's no parent layer at all, create one first so a totally
+        // Make sure we\'re painting onto an existing mask sub-layer. If
+        // there\'s no parent layer at all, create one first so a totally
         // empty canvas can accept an inpaint stroke.
         if (!getActiveMaskLayer()) {
           let parent = activeParentLayer();

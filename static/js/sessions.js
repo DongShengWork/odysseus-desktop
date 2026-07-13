@@ -2,7 +2,7 @@
 // This module handles all session-related operations
 
 import Storage from './storage.js';
-import uiModule, { styledPrompt } from './ui.js';
+import uiModule, { autoResize, styledPrompt } from './ui.js';
 import markdownModule from './markdown.js';
 import chatRenderer from './chatRenderer.js';
 import { providerLogo } from './providers.js';
@@ -16,6 +16,11 @@ let sessions = [];
 let currentSessionId = null;
 let _sessionNavToken = 0;
 let _skipAutoSelect = false;
+let _suppressNextSessionLoading = false;
+const HISTORY_DISPLAY_CHAR_LIMIT = 160000;
+const HISTORY_DISPLAY_TAIL_CHARS = 20000;
+const HISTORY_PAGE_LIMIT_MOBILE = 8;
+const HISTORY_PAGE_LIMIT_DESKTOP = 24;
 
 const SIDEBAR_MAX_VISIBLE = 10;
 const FOLDER_MAX_VISIBLE = 5;
@@ -26,6 +31,232 @@ let _autoCreateInProgress = false; // guard against recursive auto-create
 const _INCOGNITO_SESSIONS_KEY = 'ody-incognito-sessions'; // sessionStorage key for incognito session IDs
 const _isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const _mod = _isMac ? '⌘' : 'Ctrl';
+let _historyPager = null;
+
+function _paintSessionLoading(chatHistory, label = '加载聊天中') {
+  if (!chatHistory) return;
+  if (chatRenderer.hideWelcomeScreen) chatRenderer.hideWelcomeScreen();
+  chatHistory.style.transition = '';
+  chatHistory.style.opacity = '1';
+  chatHistory.classList.add('no-animate');
+  chatHistory.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'session-loading-state session-loading-skeleton';
+  wrap.setAttribute('role', 'status');
+  wrap.setAttribute('aria-live', 'polite');
+  wrap.setAttribute('aria-label', label);
+
+  const viewportHeight = chatHistory.clientHeight || window.innerHeight || 720;
+  const bubbleCount = Math.max(8, Math.min(16, Math.ceil(viewportHeight / 86)));
+  for (let i = 0; i < bubbleCount; i += 1) {
+    const bubble = document.createElement('div');
+    bubble.className = `session-skeleton-bubble ${i % 2 ? 'is-user' : 'is-ai'}`;
+    const lines = i % 4 === 1 ? 2 : (i % 4 === 3 ? 3 : 4);
+    for (let j = 0; j < lines; j += 1) {
+      const line = document.createElement('div');
+      line.className = 'session-skeleton-line';
+      line.style.width = `${[72, 92, 58, 82][(i + j) % 4]}%`;
+      bubble.appendChild(line);
+    }
+    wrap.appendChild(bubble);
+  }
+  chatHistory.appendChild(wrap);
+}
+
+function _updateSessionLoading(chatHistory, label) {
+  const el = chatHistory?.querySelector('.session-loading-state');
+  if (el) el.setAttribute('aria-label', label);
+}
+
+function _nextPaint() {
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+function _displayHistoryContent(content) {
+  const text = String(content || '');
+  if (text.length <= HISTORY_DISPLAY_CHAR_LIMIT) return text;
+  const head = text.slice(0, HISTORY_DISPLAY_CHAR_LIMIT - HISTORY_DISPLAY_TAIL_CHARS);
+  const tail = text.slice(-HISTORY_DISPLAY_TAIL_CHARS);
+  const omitted = text.length - head.length - tail.length;
+  return [
+    `> 大消息显示已裁剪（省略 ${omitted.toLocaleString()} 个字符）。完整内容仍保存在聊天记录/导出中。`,
+    '',
+    head,
+    '',
+    '```text',
+    `[... 屏幕渲染中省略了 ${omitted.toLocaleString()} 个字符 ...]`,
+    '```',
+    '',
+    tail,
+  ].join('\n');
+}
+
+function _stripUserVisionBlocks(text) {
+  return String(text || '').replace(
+    /\n*\[Image: ([^\]]+)\]\n[\s\S]*?(?=\n*\[Image: |\n*\[Image attached: |\n*=== File: |\n*\[PDF content\]:|$)/g,
+    ''
+  ).trim();
+}
+
+function _historyPageLimit() {
+  return window.innerWidth <= 768 ? HISTORY_PAGE_LIMIT_MOBILE : HISTORY_PAGE_LIMIT_DESKTOP;
+}
+
+function _historyUrl(id, { limit = null, offset = null } = {}) {
+  const url = new URL(`${API_BASE}/api/history/${id}`);
+  if (limit != null) url.searchParams.set('limit', String(limit));
+  if (offset != null) url.searchParams.set('offset', String(offset));
+  return url.toString();
+}
+
+function _renderHistoryMessage(msg, modelName) {
+  const meta = msg.metadata ? { ...msg.metadata, _fromHistory: true } : null;
+  let displayContent;
+  if (typeof msg.content === 'string') {
+    displayContent = _displayHistoryContent(msg.content);
+  } else if (Array.isArray(msg.content)) {
+    displayContent = _displayHistoryContent(msg.content.filter(p => p.type === 'text').map(p => p.text).join('\n').trim());
+  } else {
+    displayContent = '';
+  }
+  if (msg.role === 'user') {
+    displayContent = _stripUserVisionBlocks(displayContent);
+    const trimmed = displayContent.trim();
+    if (
+      trimmed === 'Continue where you left off' ||
+      trimmed.startsWith('Your message was cut off.') ||
+      trimmed.startsWith('Your previous response was interrupted.') ||
+      displayContent.includes('[Instruction: Rewrite') ||
+      displayContent.includes('[Instruction: Explain')
+    ) {
+      return null;
+    }
+    const docEditMatch = displayContent.match(/^In the document, edit this specific text \((lines? [\d-]+)\):\n```\n([\s\S]*?)\n```\n\nInstruction: ([\s\S]*)$/);
+    if (docEditMatch) {
+      displayContent = `[Doc edit: ${docEditMatch[1]}] ${docEditMatch[3]}`;
+    }
+  }
+  const box = document.getElementById('chat-history');
+  if (!box) return null;
+  if (chatRenderer.hideWelcomeScreen) chatRenderer.hideWelcomeScreen();
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + (msg.role === 'user' ? 'msg-user' : 'msg-ai');
+  wrap.dataset.raw = displayContent;
+  if (meta?._db_id) wrap.dataset.dbId = meta._db_id;
+
+  const roleEl = document.createElement('div');
+  roleEl.className = 'role';
+  if (msg.role === 'user') {
+    roleEl.textContent = '你';
+  } else {
+    const pair = chatRenderer.replyModelPair ? chatRenderer.replyModelPair(modelName, meta) : {};
+    const resolved = pair.actualModel || pair.requestedModel || modelName;
+    roleEl.textContent = chatRenderer.modelRouteLabel
+      ? chatRenderer.modelRouteLabel(pair.requestedModel, resolved)
+      : (resolved || 'Odysseus');
+    if (chatRenderer.applyModelColor) chatRenderer.applyModelColor(roleEl, resolved);
+  }
+  const timestamp = meta?.timestamp;
+  if (timestamp) {
+    const ts = document.createElement('span');
+    ts.className = 'msg-time';
+    try {
+      ts.textContent = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      ts.textContent = '';
+    }
+    roleEl.appendChild(ts);
+  }
+
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.innerHTML = markdownModule.processWithThinking(
+    markdownModule.squashOutsideCode(markdownModule.renderContent(displayContent || ''))
+  );
+  if (msg.role === 'user' && Array.isArray(meta?.attachments) && meta.attachments.length) {
+    if (chatRenderer.buildAttachCards) {
+      body.appendChild(chatRenderer.buildAttachCards(meta.attachments));
+    }
+  }
+
+  wrap.appendChild(roleEl);
+  wrap.appendChild(body);
+  box.appendChild(wrap);
+  return wrap;
+}
+
+function _clearHistoryPager() {
+  const box = document.getElementById('chat-history');
+  if (_historyPager?.handler && box) {
+    box.removeEventListener('scroll', _historyPager.handler);
+  }
+  _historyPager = null;
+}
+
+function _installHistoryPager(id, pageInfo, modelName) {
+  const box = document.getElementById('chat-history');
+  _clearHistoryPager();
+  if (!box || !pageInfo || !pageInfo.has_more_before) return;
+
+  _historyPager = {
+    sessionId: id,
+    offset: Number(pageInfo.offset || 0),
+    limit: Number(pageInfo.limit || _historyPageLimit()),
+    loading: false,
+    done: false,
+    modelName,
+    handler: null,
+  };
+
+  const loadOlder = async () => {
+    if (!_historyPager || _historyPager.loading || _historyPager.done) return;
+    if (_historyPager.sessionId !== currentSessionId) return;
+    if (box.scrollTop > 90) return;
+
+    const nextOffset = Math.max(0, _historyPager.offset - _historyPager.limit);
+    const nextLimit = _historyPager.offset - nextOffset;
+    if (nextLimit <= 0) {
+      _historyPager.done = true;
+      return;
+    }
+
+    _historyPager.loading = true;
+    const anchor = box.querySelector('.msg, .agent-thread, .gallery-bubble');
+    const beforeHeight = box.scrollHeight;
+    try {
+      const res = await fetch(_historyUrl(_historyPager.sessionId, { limit: nextLimit, offset: nextOffset }));
+      const data = await res.json();
+      if (!_historyPager || _historyPager.sessionId !== currentSessionId) return;
+      const newEls = [];
+      for (const msg of data.history || []) {
+        if (msg.role !== 'user' && msg.role !== 'assistant') continue;
+        const el = _renderHistoryMessage(msg, _historyPager.modelName);
+        if (el) newEls.push(el);
+      }
+      for (const el of newEls) {
+        box.insertBefore(el, anchor || box.firstChild);
+      }
+      _historyPager.offset = Number(data.offset || nextOffset);
+      _historyPager.done = !data.has_more_before;
+      if (window.hljs) {
+        newEls.forEach(el => el.querySelectorAll('pre code:not(.hljs)').forEach(block => window.hljs.highlightElement(block)));
+      }
+      const heightDelta = box.scrollHeight - beforeHeight;
+      box.scrollTop += heightDelta;
+    } catch (e) {
+      console.warn('Failed to load older chat history:', e);
+    } finally {
+      if (_historyPager) _historyPager.loading = false;
+    }
+  };
+
+  _historyPager.handler = () => {
+    if (box.scrollTop <= 90) loadOlder();
+  };
+  box.addEventListener('scroll', _historyPager.handler, { passive: true });
+}
 
 function _getIncognitoIds() {
   try { return JSON.parse(sessionStorage.getItem(_INCOGNITO_SESSIONS_KEY) || '[]'); } catch { return []; }
@@ -62,7 +293,7 @@ function _deselectCurrentSession(sid) {
   if (currentSessionId !== sid) return;
   currentSessionId = null;
   uiModule.el('chat-history').innerHTML = '';
-  uiModule.el('current-meta').textContent = 'Odysseus 聊天';
+  uiModule.el('current-meta').textContent = 'Odysseus Chat';
   Storage.remove('lastSessionId');
   history.replaceState(null, '', window.location.pathname);
   if (window.chatModule && window.chatModule.showWelcomeScreen) {
@@ -160,7 +391,7 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
   moveItem.className = 'dropdown-item-compact';
   moveItem.style.position = 'relative';
   const _folderIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
-  moveItem.innerHTML = '<span class="dropdown-icon">' + _folderIcon + '</span><span>Move to folder</span>';
+  moveItem.innerHTML = '<span class="dropdown-icon">' + _folderIcon + '</span><span>移动到文件夹</span>';
 
   const sub = document.createElement('div');
   sub.className = 'dropdown session-folder-submenu';
@@ -203,10 +434,10 @@ function buildFolderSubmenu(sessionId, currentFolder, dropdown) {
   newOpt.textContent = '+ 新建文件夹';
   newOpt.addEventListener('click', async (e) => {
     e.stopPropagation();
-    const name = await styledPrompt('Name this folder:', {
-      title: 'New folder',
-      placeholder: 'e.g. Work, Research, Drafts',
-      confirmText: 'Create',
+    const name = await styledPrompt('为此文件夹命名：', {
+      title: '新建文件夹',
+      placeholder: '例如：工作、研究、草稿',
+      confirmText: '创建',
     });
     if (!name || !name.trim()) return;
     await moveToFolder(sessionId, name.trim());
@@ -283,7 +514,7 @@ function createSessionItem(s) {
   const handle = document.createElement('span');
   handle.className = 'item-drag-handle';
   handle.textContent = '\u22EE\u22EE';
-  handle.title = '拖动排序';
+  handle.title = '拖拽以重新排序';
   div.appendChild(handle);
 
   // Provider dot indicator
@@ -460,15 +691,15 @@ function createSessionItem(s) {
 
   const renameItem = document.createElement('div');
   renameItem.className = 'dropdown-item-compact';
-  renameItem.innerHTML = _icon(_renameIcon) + '<span>Rename</span>';
+  renameItem.innerHTML = _icon(_renameIcon) + '<span>重命名</span>';
 
   const archiveItem = document.createElement('div');
   archiveItem.className = 'dropdown-item-compact';
-  archiveItem.innerHTML = _icon(_archiveIcon) + '<span>Archive</span>';
+  archiveItem.innerHTML = _icon(_archiveIcon) + '<span>归档</span>';
 
   const deleteItem = document.createElement('div');
   deleteItem.className = 'dropdown-item-compact dropdown-item-danger';
-  deleteItem.innerHTML = _icon(_deleteIcon) + '<span>Delete</span><span class="dropdown-shortcut">' + _mod + '+Alt+D</span>';
+  deleteItem.innerHTML = _icon(_deleteIcon) + '<span>删除</span><span class="dropdown-shortcut">' + _mod + '+Alt+D</span>';
 
 
 
@@ -497,7 +728,7 @@ function createSessionItem(s) {
 
   const copyItem = document.createElement('div');
   copyItem.className = 'dropdown-item-compact';
-  copyItem.innerHTML = _icon(_copyIcon) + '<span>Copy Chat</span>';
+  copyItem.innerHTML = _icon(_copyIcon) + '<span>复制聊天</span>';
   copyItem.addEventListener('click', async (e) => {
     e.stopPropagation();
     dropdown.style.display = 'none';
@@ -505,11 +736,11 @@ function createSessionItem(s) {
       const res = await fetch(`${API_BASE}/api/history/${s.id}`);
       const data = await res.json();
       const msgs = data.history || [];
-      if (!msgs.length) { uiModule.showToast('没有消息可复制'); return; }
+      if (!msgs.length) { uiModule.showToast('没有可复制的消息'); return; }
       const lines = msgs
         .filter(m => m.role === 'user' || m.role === 'assistant')
         .map(m => {
-          const label = m.role === 'user' ? 'You' : 'AI';
+          const label = m.role === 'user' ? '你' : 'AI';
           const text = typeof m.content === 'string' ? m.content.trim() : JSON.stringify(m.content);
           return `${label}: ${text}`;
         });
@@ -539,7 +770,7 @@ function createSessionItem(s) {
   if (!isOpenClaw) {
     const selectMoreItem = document.createElement('div');
     selectMoreItem.className = 'dropdown-item-compact';
-    selectMoreItem.innerHTML = _icon('<span style="font-size:16px;line-height:1;">●</span>') + '<span>Select</span>';
+    selectMoreItem.innerHTML = _icon('<span style="font-size:16px;line-height:1;">●</span>') + '<span>选择</span>';
     selectMoreItem.addEventListener('click', (e) => {
       e.stopPropagation();
       dropdown.style.display = 'none';
@@ -574,7 +805,7 @@ function createSessionItem(s) {
   const _cancelIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const cancelItem = document.createElement('div');
   cancelItem.className = 'dropdown-item-compact dropdown-cancel-mobile';
-  cancelItem.innerHTML = _icon(_cancelIcon) + '<span>Cancel</span>';
+  cancelItem.innerHTML = _icon(_cancelIcon) + '<span>取消</span>';
   cancelItem.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.style.display = 'none';
@@ -647,12 +878,12 @@ function createSessionItem(s) {
 
   deleteItem.addEventListener('click', async () => {
     if (s.is_important) {
-      uiModule.showToast('删除前请先取消收藏');
+      uiModule.showToast('请先取消收藏再删除');
       dropdown.style.display = 'none';
       return;
     }
     dropdown.style.display = 'none';
-    if (!await uiModule.styledConfirm('Delete this session?', { confirmText: 'Delete', danger: true })) {
+    if (!await uiModule.styledConfirm('删除此会话？', { confirmText: '删除', danger: true })) {
       _forceSidebarOpen();
       return;
     }
@@ -699,7 +930,7 @@ function createSessionItem(s) {
         dropdown.style.display = 'none';
         uiModule.showToast('会话已归档');
       } else {
-        throw new Error('归档会话失败');
+        throw new Error('Failed to archive session');
       }
     } catch (error) {
       console.error('Error archiving session:', error);
@@ -740,6 +971,58 @@ function createSessionItem(s) {
   div._sessionDropdown = dropdown;
 
   return div;
+}
+
+function _dateBucketLabel(value) {
+  if (!value) return '更早';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '更早';
+  const dayStart = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const today = dayStart(new Date());
+  const day = dayStart(d);
+  const diff = Math.round((today - day) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '昨天';
+  if (diff > 1 && diff < 7) return d.toLocaleDateString([], { weekday: 'long' });
+  if (diff >= 365) {
+    const years = Math.floor(diff / 365);
+    return `${years} 年前`;
+  }
+  if (diff >= 180) return '6 个月前';
+  if (diff >= 30) return `${Math.floor(diff / 30) * 30} 天前`;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString([], sameYear ? { month: 'long', day: 'numeric' } : { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function _sessionBucketDate(s) {
+  return s.last_message_at || s.updated_at || s.created_at || '';
+}
+
+function _createDateSectionHeader(label, kind = 'session') {
+  const el = document.createElement('div');
+  el.className = `date-section-header ${kind}-date-section-header`;
+  el.textContent = label;
+  return el;
+}
+
+function _appendSessionItemsWithDateHeaders(frag, items) {
+  let lastLabel = null;
+  for (const s of items) {
+    const label = _dateBucketLabel(_sessionBucketDate(s));
+    if (label !== lastLabel) {
+      frag.appendChild(_createDateSectionHeader(label, 'session'));
+      lastLabel = label;
+    }
+    frag.appendChild(createSessionItem(s));
+  }
+}
+
+function _appendFavoriteSessionItems(frag, items) {
+  if (!items.length) return;
+  frag.appendChild(_createDateSectionHeader('收藏', 'session'));
+  for (const s of items) {
+    frag.appendChild(createSessionItem(s));
+  }
 }
 
 let _renderRAF = null;
@@ -800,23 +1083,28 @@ function _renderSessionListImpl() {
       }
       return 0;
     });
-    // Starred still float to top
-    const starred = orderedSessions.filter(s => s.is_important);
-    const rest = orderedSessions.filter(s => !s.is_important);
-    const allFlat = [...starred, ...rest];
+    // Favorites are a global pinned block above date buckets, not just
+    // promoted within the day they belong to.
+    const allFlat = [
+      ...orderedSessions.filter(s => s.is_important),
+      ...orderedSessions.filter(s => !s.is_important),
+    ];
 
     const limit = _showAllSessions ? allFlat.length : SIDEBAR_MAX_VISIBLE;
     const visible = allFlat.slice(0, limit);
     const activeIdx = allFlat.findIndex(s => s.id === currentSessionId);
     if (!_showAllSessions && activeIdx >= limit) visible.push(allFlat[activeIdx]);
 
-    visible.forEach(s => _frag.appendChild(createSessionItem(s)));
+    const visibleFavorites = visible.filter(s => s.is_important);
+    const visibleRegular = visible.filter(s => !s.is_important);
+    _appendFavoriteSessionItems(_frag, visibleFavorites);
+    _appendSessionItemsWithDateHeaders(_frag, visibleRegular);
 
     if (allFlat.length > SIDEBAR_MAX_VISIBLE) {
       const remaining = allFlat.length - SIDEBAR_MAX_VISIBLE;
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'session-show-more-btn';
-      toggleBtn.textContent = _showAllSessions ? '收起' : `展开 ${remaining} 条`;
+      toggleBtn.textContent = _showAllSessions ? '收起' : `显示更多 ${remaining} 个`;
       toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         _showAllSessions = !_showAllSessions;
@@ -880,7 +1168,7 @@ function _renderSessionListImpl() {
     const dragHandle = document.createElement('span');
     dragHandle.className = 'folder-drag-handle';
     dragHandle.textContent = '\u2630';
-    dragHandle.title = '拖动排序文件夹';
+    dragHandle.title = '拖拽以重新排序文件夹';
     header.appendChild(dragHandle);
 
     const toggle = document.createElement('span');
@@ -906,7 +1194,7 @@ function _renderSessionListImpl() {
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const count = folders[folderName].length;
-      if (!await uiModule.styledConfirm(`Delete folder "${folderName}" and all ${count} session(s) inside it?`, { confirmText: 'Delete', danger: true })) return;
+      if (!await uiModule.styledConfirm(`删除文件夹"${folderName}"及其中所有 ${count} 个会话？`, { confirmText: '删除', danger: true })) return;
       for (const s of folders[folderName]) {
         try {
           await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' });
@@ -937,10 +1225,10 @@ function _renderSessionListImpl() {
     header.addEventListener('dblclick', async (e) => {
       e.stopPropagation();
       if (e.target.closest('.folder-delete-btn')) return;
-      const newName = await styledPrompt('Rename folder:', {
-        title: 'Rename folder',
+      const newName = await styledPrompt('重命名文件夹：', {
+        title: '重命名文件夹',
         defaultValue: folderName,
-        confirmText: 'Rename',
+        confirmText: '重命名',
       });
       if (!newName || !newName.trim() || newName.trim() === folderName) return;
       const promises = folders[folderName].map(s => moveToFolder(s.id, newName.trim()));
@@ -971,7 +1259,7 @@ function _renderSessionListImpl() {
         const rem = folderSessions.length - FOLDER_MAX_VISIBLE;
         const moreBtn = document.createElement('button');
         moreBtn.className = 'session-show-more-btn';
-        moreBtn.textContent = folderExpanded ? '收起' : `展开 ${rem} 条`;
+        moreBtn.textContent = folderExpanded ? '收起' : `显示更多 ${rem} 个`;
         moreBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           _expandedFolders[folderName] = !folderExpanded;
@@ -1009,7 +1297,7 @@ function _renderSessionListImpl() {
     const dragHandle = document.createElement('span');
     dragHandle.className = 'folder-drag-handle';
     dragHandle.textContent = '\u2630';
-    dragHandle.title = '拖动排序文件夹';
+    dragHandle.title = '拖拽以重新排序文件夹';
     unsortedHeader.appendChild(dragHandle);
 
     const toggle = document.createElement('span');
@@ -1031,7 +1319,7 @@ function _renderSessionListImpl() {
     deleteBtn.title = '删除所有未分类会话';
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!await uiModule.styledConfirm(`Delete all ${unfiled.length} unsorted session(s)?`, { confirmText: 'Delete', danger: true })) return;
+      if (!await uiModule.styledConfirm(`删除所有 ${unfiled.length} 个未分类会话？`, { confirmText: '删除', danger: true })) return;
       for (const s of unfiled) {
         try {
           await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' });
@@ -1075,7 +1363,7 @@ function _renderSessionListImpl() {
     const remaining = unfiled.length - SIDEBAR_MAX_VISIBLE;
     const toggleBtn = document.createElement('button');
     toggleBtn.className = 'session-show-more-btn';
-    toggleBtn.textContent = _showAllSessions ? '收起' : `展开 ${remaining} 条`;
+    toggleBtn.textContent = _showAllSessions ? '收起' : `显示更多 ${remaining} 个`;
     toggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       _showAllSessions = !_showAllSessions;
@@ -1129,7 +1417,7 @@ function _showSwipeHint(list) {
       localStorage.setItem('ody-swipe-hint-shown', '1');
       const hint = document.createElement('div');
       hint.className = 'swipe-hint';
-      hint.innerHTML = '<span class="swipe-hint-arrow">\u2190</span> swipe to delete';
+      hint.innerHTML = '<span class="swipe-hint-arrow">\u2190</span> 左滑删除';
       firstItem.style.position = 'relative';
       firstItem.appendChild(hint);
       setTimeout(() => { hint.style.opacity = '0'; }, 3000);
@@ -1293,7 +1581,7 @@ function _initBulkSelect() {
     archiveBtn.addEventListener('click', async () => {
       if (_selectedIds.size === 0) return;
       const count = _selectedIds.size;
-      if (!await uiModule.styledConfirm(`Archive ${count} session(s)?`, { confirmText: 'Archive' })) return;
+      if (!await uiModule.styledConfirm(`归档 ${count} 个会话？`, { confirmText: '归档' })) return;
       for (const sid of _selectedIds) {
         try {
           await fetch(`${API_BASE}/api/session/${sid}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
@@ -1302,7 +1590,7 @@ function _initBulkSelect() {
       _exitSelectMode();
       if (window._suppressSidebarClose !== undefined) { window._suppressSidebarClose = true; setTimeout(() => { window._suppressSidebarClose = false; }, 1500); }
       await loadSessions();
-      uiModule.showToast(`${count} 个会话已归档`);
+      uiModule.showToast(`已归档 ${count} 个会话`);
     });
   }
 
@@ -1311,7 +1599,7 @@ function _initBulkSelect() {
     deleteBtn.addEventListener('click', async () => {
       if (_selectedIds.size === 0) return;
       const count = _selectedIds.size;
-      if (!await uiModule.styledConfirm(`Delete ${count} session(s)? This cannot be undone.`, { confirmText: 'Delete', danger: true })) return;
+      if (!await uiModule.styledConfirm(`删除 ${count} 个会话？此操作无法撤销。`, { confirmText: '删除', danger: true })) return;
       const deletedIds = [];
       for (const sid of _selectedIds) {
         try {
@@ -1323,7 +1611,7 @@ function _initBulkSelect() {
       _exitSelectMode();
       if (window._suppressSidebarClose !== undefined) { window._suppressSidebarClose = true; setTimeout(() => { window._suppressSidebarClose = false; }, 1500); }
       await loadSessions();
-      uiModule.showToast(`${deletedIds.length} 个会话已删除`);
+      uiModule.showToast(`已删除 ${deletedIds.length} 个会话`);
     });
   }
 }
@@ -1403,22 +1691,22 @@ export async function loadSessions() {
       targetId = savedId;
     } else if (!_skipAutoSelect && _realSessions.length > 0) {
       // Most-recent NON-transient session — skip Assistant / Tasks so the
-      // auto-firing assistant doesn't become the apparent default chat.
+      // auto-firing assistant doesn\'t become the apparent default chat.
       targetId = _realSessions[0].id;
     } else if (!_skipAutoSelect && activeSessions.length > 0) {
       // Only transient sessions exist (brand-new account) — fall through to
-      // the original behaviour so we don't leave the user with nothing.
+      // the original behaviour so we don\'t leave the user with nothing.
       targetId = activeSessions[0].id;
     }
     _skipAutoSelect = false;
 
     // Fresh login: prefer a default-model session so a brand-new user lands
-    // ready to chat. CRITICAL: only do this when there's NO session to return
+    // ready to chat. CRITICAL: only do this when there\'s NO session to return
     // to (no hash / lastSessionId / existing chat resolved into targetId).
     // Otherwise a fresh page load — which a server restart triggers — would
     // spin up a new empty default-model chat and shadow the user's last
     // conversation, making it look like the chat "lost its context" (and the
-    // picker would still show the old model's name from cached state). See
+    // picker would still show the old model\'s name from cached state). See
     // the targetId resolution above (hash → currentSession → lastSessionId →
     // most-recent).
     const _isFirstLoad = !sessionStorage.getItem('ody-session-active');
@@ -1429,7 +1717,7 @@ export async function loadSessions() {
           const dcRes = await fetch(`${API_BASE}/api/default-chat`);
           const dc = await dcRes.json();
           if (dc.endpoint_url && dc.model) {
-            // Check if there's already an empty session with this model we can reuse
+            // Check if there\'s already an empty session with this model we can reuse
             const emptyDefault = activeSessions.find(s =>
               s.model === dc.model && s.message_count === 0
             );
@@ -1449,8 +1737,12 @@ export async function loadSessions() {
       }
     }
 
+    const suppressSessionLoading = _suppressNextSessionLoading;
+    _suppressNextSessionLoading = false;
+
     if (targetId && targetId !== currentSessionId) {
-      await selectSession(targetId, { keepSidebar: true });
+      const showLoading = !suppressSessionLoading && !(_isFirstLoad && !hashId);
+      await selectSession(targetId, { keepSidebar: true, showLoading });
     } else if (targetId && targetId === currentSessionId) {
       // Same session — just refresh the header name in case it was auto-generated
       const s = sessions.find(x => x.id === targetId);
@@ -1478,7 +1770,7 @@ export async function loadSessions() {
           if (dc.endpoint_url && dc.model) {
             await createDirectChat(dc.endpoint_url, dc.model, dc.endpoint_id);
           }
-        } catch (_) { /* no default model — that's fine, user can /setup */ }
+        } catch (_) { /* no default model — that\'s fine, user can /setup */ }
         _autoCreateInProgress = false;
       }
     }
@@ -1488,7 +1780,7 @@ export async function loadSessions() {
   }
 }
 
-export async function selectSession(id, { keepSidebar = false } = {}) {
+export async function selectSession(id, { keepSidebar = false, showLoading = true } = {}) {
   // Exit compare mode cleanly if active
   if (window.compareModule && window.compareModule.isActive()) {
     window.compareModule.deactivate(true);
@@ -1497,14 +1789,15 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
   try {
     const navToken = ++_sessionNavToken;
     const prevSessionId = currentSessionId;
+    _clearHistoryPager();
     // Re-archive peeked session when navigating away
     _checkPeekCleanup(id);
-    // Clear any leftover document text selection so it doesn't bleed into the new chat
+    // Clear any leftover document text selection so it doesn\'t bleed into the new chat
     if (prevSessionId !== id && window.documentModule?.clearSelection) {
       try { window.documentModule.clearSelection(); } catch {}
     }
     currentSessionId = id;
-    // Identify Assistant / task-output sessions so we don't "trap" the user
+    // Identify Assistant / task-output sessions so we don\'t "trap" the user
     // there on return. Skipped from both `lastSessionId` persistence and the
     // URL hash — the user complained that coming back to Odysseus kept
     // landing them on the auto-firing task-log chat instead of their last
@@ -1557,6 +1850,9 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     if (msgInput) {
       msgInput.disabled = false;
       msgInput.value = '';
+      msgInput.style.height = '';
+      msgInput.style.overflow = '';
+      autoResize(msgInput);
     }
     const sendBtn2 = document.querySelector('.send-btn');
     if (sendBtn2) {
@@ -1564,7 +1860,15 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       if (window._updateSendBtnIcon) window._updateSendBtnIcon();
     }
 
-    // On mobile, keep sidebar open — user dismisses it by tapping chat area or swiping
+    // On mobile manual chat switches, move the drawer away before showing the
+    // loader so the status sits over the chat pane instead of being hidden by
+    // the sidebar. Startup auto-restore passes keepSidebar + showLoading=false.
+    if (showLoading && !keepSidebar && window.innerWidth <= 768) {
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (sidebar) sidebar.classList.add('hidden');
+      if (backdrop) backdrop.classList.remove('visible');
+    }
 
     // Highlight active session in sidebar
     document.querySelectorAll('.list-item.active-session').forEach(el => el.classList.remove('active-session'));
@@ -1588,17 +1892,42 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     // declaration had been removed while leaving the references in
     // place, producing a ReferenceError every selectSession.)
     const isOC = meta && (meta.is_openclaw || id === 'openclaw');
-    let msgHistory = [], modelName = null;
+    let msgHistory = [], modelName = null, pageInfo = null;
+    let paintedLoading = false;
+    let loadingTimer = null;
+    let loadingPaintReady = Promise.resolve();
     if (!isOC) {
-      const res = await fetch(`${API_BASE}/api/history/${id}`);
+      if (showLoading && chatHistory && prevSessionId !== id) {
+        const loadingDelayMs = window.innerWidth <= 768 ? 900 : 500;
+        loadingTimer = setTimeout(() => {
+          if (navToken !== _sessionNavToken || currentSessionId !== id) return;
+          _paintSessionLoading(chatHistory, '加载聊天中');
+          paintedLoading = true;
+          loadingPaintReady = _nextPaint();
+        }, loadingDelayMs);
+      }
+      const res = await fetch(_historyUrl(id, { limit: _historyPageLimit() }));
       const data = await res.json();
+      if (loadingTimer) {
+        clearTimeout(loadingTimer);
+        loadingTimer = null;
+      }
+      if (paintedLoading) {
+        await loadingPaintReady;
+      }
       if (navToken !== _sessionNavToken || currentSessionId !== id) return;
       msgHistory = data.history || [];
       modelName = data.model || null;
+      pageInfo = {
+        offset: data.offset,
+        limit: data.limit,
+        total: data.total,
+        has_more_before: !!data.has_more_before,
+      };
       // The model returned by /api/history is the authoritative one the
       // backend will use for this session. Write it back into the cached
       // session meta and refresh the picker so the displayed model can
-      // never diverge from what's actually sent (the "picker says Minimax
+      // never diverge from what\'s actually sent (the "picker says Minimax
       // but it used the default" bug after a restart / stale cache).
       if (modelName) {
         const sMeta = sessions.find(s => s.id === id);
@@ -1610,7 +1939,7 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     }
 
     // Guard: if the fetched history is empty but the DOM already has message
-    // bubbles for the same session (incognito doesn't persist, so /api/history
+    // bubbles for the same session (incognito doesn\'t persist, so /api/history
     // returns []), preserve the DOM instead of wiping it. This fixes the
     // "reply flashes for 0.1s then empty" bug when selectSession is called
     // after a streaming completion in an incognito chat.
@@ -1618,13 +1947,22 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     const hasExistingBubbles = chatHistory && chatHistory.querySelectorAll('.msg').length > 0;
     const wouldWipe = !isOC && !msgHistory.length && isSameSession && hasExistingBubbles;
     if (wouldWipe) {
-      // Skip the fade/reload; we're already showing the right content.
+      // Skip the fade/reload; we\'re already showing the right content.
       if (chatHistory) chatHistory.classList.remove('no-animate');
       return;
     }
 
-    // Fade out old content, swap, fade in
-    if (chatHistory) {
+    if (paintedLoading && chatHistory) {
+      _updateSessionLoading(chatHistory, msgHistory.length ? '渲染聊天中' : '打开聊天中');
+      await _nextPaint();
+      if (navToken !== _sessionNavToken || currentSessionId !== id) return;
+      chatHistory.innerHTML = '';
+    }
+
+    // Fade out old content, swap, fade in. When we already painted a loading
+    // state, keep it visible until render starts instead of fading to a blank
+    // pane during slow history fetches.
+    if (chatHistory && !paintedLoading) {
       chatHistory.style.transition = 'opacity 0.12s ease-out';
       chatHistory.style.opacity = '0';
       await new Promise(r => setTimeout(r, 120));
@@ -1639,38 +1977,26 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
     if (isOC) {
       if (window.chatModule && window.chatModule.showWelcomeScreen) window.chatModule.showWelcomeScreen();
       window.chatModule.addMessage('assistant',
-        `<p>\uD83E\uDD9E <strong>OpenClaw Agent Connected</strong></p>
-         <p>Messages will be routed through your OpenClaw agent. The agent has access to tools, memory, and skills configured in your OpenClaw workspace.</p>`,
+        `<p>\uD83E\uDD9E <strong>OpenClaw 智能体已连接</strong></p>
+         <p>消息将通过您的 OpenClaw 智能体路由。该智能体可以访问在 OpenClaw 工作区中配置的工具、记忆和技能。</p>`,
         'OpenClaw');
     } else if (msgHistory.length) {
       for (const msg of msgHistory) {
-        const meta = msg.metadata ? { ...msg.metadata, _fromHistory: true } : null;
-        let displayContent;
-        if (typeof msg.content === 'string') {
-          displayContent = msg.content;
-        } else if (Array.isArray(msg.content)) {
-          // Multimodal (image/audio attachments): extract text parts, skip binary
-          displayContent = msg.content.filter(p => p.type === 'text').map(p => p.text).join('\n').trim();
-        } else {
-          displayContent = '';
+        try {
+          _renderHistoryMessage(msg, modelName);
+        } catch (e) {
+          console.warn('Failed to render history message:', e, msg);
         }
-        // Clean up doc selection context for display
-        if (msg.role === 'user') {
-          // Hide "Continue where you left off" bubbles
-          if (displayContent.trim() === 'Continue where you left off' || displayContent.trim().startsWith('Your message was cut off.') || displayContent.trim().startsWith('Your previous response was interrupted.') || displayContent.includes('[Instruction: Rewrite') || displayContent.includes('[Instruction: Explain')) continue;
-          const docEditMatch = displayContent.match(/^In the document, edit this specific text \((lines? [\d-]+)\):\n```\n([\s\S]*?)\n```\n\nInstruction: ([\s\S]*)$/);
-          if (docEditMatch) {
-            displayContent = `[Doc edit: ${docEditMatch[1]}] ${docEditMatch[3]}`;
-          }
-        }
-        window.chatModule.addMessage(msg.role, markdownModule.renderContent(displayContent), modelName, meta);
       }
     } else {
       if (window.chatModule && window.chatModule.showWelcomeScreen) window.chatModule.showWelcomeScreen();
-      // Don't highlight empty sessions — feels like nothing is selected
+      // Don\'t highlight empty sessions — feels like nothing is selected
       document.querySelectorAll('.list-item.active-session').forEach(el => el.classList.remove('active-session'));
     }
     uiModule.scrollHistoryInstant();
+    if (!isOC && msgHistory.length) {
+      _installHistoryPager(id, pageInfo, modelName);
+    }
 
     // Fade in and re-enable message animations
     if (chatHistory) {
@@ -1683,7 +2009,7 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
         window.hljs.highlightElement(block);
       });
     }
-    // Hide research button on session switch — it's only for the session that started it
+    // Hide research button on session switch — it\'s only for the session that started it
     var _rBtn = document.getElementById('research-toggle-btn');
     var _rChk = document.getElementById('research-toggle');
     if (_rBtn) _rBtn.style.display = 'none';
@@ -1740,6 +2066,16 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
 
   } catch (error) {
     console.error('Error in selectSession:', error);
+    const chatHistory = uiModule.el('chat-history');
+    if (chatHistory?.querySelector('.session-loading-state')) {
+      chatHistory.innerHTML = '';
+      chatHistory.style.opacity = '1';
+      chatHistory.classList.remove('no-animate');
+      const msg = document.createElement('div');
+      msg.className = 'msg msg-ai';
+      msg.innerHTML = `<div class="body">加载此聊天失败。${uiModule.esc ? uiModule.esc(error.message || '') : ''}</div>`;
+      chatHistory.appendChild(msg);
+    }
     uiModule.showError('加载会话失败：' + error.message);
   } finally {
     // Ensure memories are loaded after session selection
@@ -1763,7 +2099,7 @@ let _pendingChat = null; // { url, modelId, endpointId }
 
 export function createDirectChat(url, modelId, endpointId) {
   _sessionNavToken++;
-  // Detach any active stream so it doesn't interfere with the new chat
+  // Detach any active stream so it doesn\'t interfere with the new chat
   if (window.chatModule && window.chatModule.detachCurrentStream) {
     window.chatModule.detachCurrentStream(currentSessionId);
   }
@@ -1774,9 +2110,10 @@ export function createDirectChat(url, modelId, endpointId) {
     if (window._syncGroupIndicator) window._syncGroupIndicator(false);
   }
 
-  // Don't hit the API — just store the model info and prepare the UI
+  // Don\'t hit the API — just store the model info and prepare the UI
   _pendingChat = { url, modelId, endpointId };
   _skipAutoSelect = true;
+  _suppressNextSessionLoading = true;
   currentSessionId = null;
   Storage.remove('lastSessionId');
   history.replaceState(null, '', window.location.pathname);
@@ -1843,7 +2180,7 @@ export async function materializePendingSession() {
   try {
     res = await fetch(`${API_BASE}/api/session`, { method: 'POST', body: fd });
   } catch (e) {
-    uiModule.showError('连接后端失败：' + e);
+    uiModule.showError('无法连接后端：' + e);
     return false;
   }
 
@@ -1855,7 +2192,7 @@ export async function materializePendingSession() {
   }
 
   if (!res.ok) {
-    uiModule.showError(`会话创建失败 (${res.status}) ${payload.detail || JSON.stringify(payload)}`);
+    uiModule.showError(`会话创建失败（${res.status}）${payload.detail || JSON.stringify(payload)}`);
     return false;
   }
 
@@ -1873,6 +2210,7 @@ export async function materializePendingSession() {
 
   // Reload sidebar to show the new session — await it so the session
   // is fully registered before the caller proceeds (prevents race conditions)
+  _suppressNextSessionLoading = true;
   await loadSessions().catch(() => {});
   return true;
 }
@@ -1909,6 +2247,7 @@ export function setCurrentSessionId(id) {
   _sessionNavToken++;
   currentSessionId = id;
   if (!id) {
+    _suppressNextSessionLoading = true;
     Storage.remove('lastSessionId');
     history.replaceState(null, '', window.location.pathname);
     document.querySelectorAll('.list-item.active-session, .session-item.active').forEach(el => {
@@ -1938,15 +2277,16 @@ async function _onSessionListKeydown(e) {
   }
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (item.querySelector('.session-rename-input')) return;
     e.preventDefault();
     const sid = item.dataset.sessionId;
     const s = sessions.find(x => x.id === sid);
     if (!s) return;
     if (s.is_important) {
-      uiModule.showToast('删除前请先取消收藏');
+      uiModule.showToast('请先取消收藏再删除');
       return;
     }
-    const ok = await uiModule.styledConfirm('Delete this session?', { confirmText: 'Delete', danger: true });
+    const ok = await uiModule.styledConfirm('删除此会话？', { confirmText: '删除', danger: true });
     if (!ok) return;
     _sessionListFocused = true;
     (async () => {
@@ -2084,10 +2424,21 @@ export function clearStreaming(sessionId) {
   _updateRailNotifs();
 }
 
+function _clearRunningState(sessionId) {
+  if (!sessionId) return;
+  var changed = false;
+  if (_researchingSessions.delete(sessionId)) changed = true;
+  if (_streamingSessions.delete(sessionId)) changed = true;
+  if (changed) {
+    _updateResearchDots();
+    _updateRailNotifs();
+  }
+}
+
 export function markStreamComplete(sessionId) {
   _researchingSessions.delete(sessionId);
   _streamingSessions.delete(sessionId);
-  // Don't pulse if user is already viewing this session — they can see the response
+  // Don\'t pulse if user is already viewing this session — they can see the response
   if (currentSessionId === sessionId) {
     _updateResearchDots();
     _updateRailNotifs();
@@ -2154,9 +2505,15 @@ async function _checkServerStream(sessionId) {
     if (window.chatModule && window.chatModule.hasActiveStream && window.chatModule.hasActiveStream(sessionId)) return;
 
     const res = await fetch(`${API_BASE}/api/chat/stream_status/${sessionId}`);
-    if (!res.ok) return; // 404 = no active stream
+    if (!res.ok) {
+      _clearRunningState(sessionId);
+      return; // 404 = no active stream
+    }
     const info = await res.json();
-    if (info.status !== 'streaming') return;
+    if (info.status !== 'streaming') {
+      _clearRunningState(sessionId);
+      return;
+    }
 
     // Skip if this is a research stream — research has its own progress UI
     if (info.mode === 'research' || info.is_research) return;
@@ -2178,7 +2535,7 @@ async function _checkServerStream(sessionId) {
     const bodyDiv = holder.querySelector('.body');
 
     const spinnerMod = await import('./spinner.js');
-    const spinner = spinnerMod.default.create('Generating response...', 'right');
+    const spinner = spinnerMod.default.create('生成回复中…', 'right');
     bodyDiv.appendChild(spinner.createElement());
     spinner.start();
     box.appendChild(holder);
@@ -2261,8 +2618,8 @@ function _initDropdownDismiss() {
     if (e.target.closest('.session-dropdown-menu, .session-folder-submenu')) return;
     document.querySelectorAll('.session-dropdown-menu, .session-folder-submenu').forEach(d => d.style.display = 'none');
   });
-  // Watch the sidebar — when it's hidden (any path: hamburger, swipe, mobile
-  // collapse), close any open session dropdowns so they don't orphan over
+  // Watch the sidebar — when it\'s hidden (any path: hamburger, swipe, mobile
+  // collapse), close any open session dropdowns so they don\'t orphan over
   // the page.
   const _sb = document.getElementById('sidebar');
   if (_sb) {
@@ -2339,11 +2696,11 @@ function _arcRelativeTime(iso) {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return `${mins} 分钟前`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs} 小时前`;
   const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return `${days} 天前`;
   return new Date(iso).toLocaleDateString();
 }
 
@@ -2387,7 +2744,7 @@ async function _arcPeekOpen(sid) {
     if (window.uiModule) window.uiModule.scrollHistory();
   } catch (e) {
     console.error('Peek open failed:', e);
-    uiModule.showError('打开已归档会话失败');
+    uiModule.showError('打开归档会话失败');
   }
 }
 
@@ -2410,7 +2767,7 @@ async function _arcRestore(sid) {
 }
 
 async function _arcDelete(sid) {
-  if (!await window.styledConfirm('Delete this session permanently?', { confirmText: 'Delete', danger: true })) return;
+  if (!await window.styledConfirm('永久删除此会话？', { confirmText: '删除', danger: true })) return;
   try {
     const res = await fetch(`${API_BASE}/api/session/${sid}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed');
@@ -2438,14 +2795,14 @@ async function _arcBulkRestore() {
   }
   _arc.selected.clear();
   _arcRefreshUI();
-  uiModule.showToast(`${ids.length} 个会话已恢复`);
+  uiModule.showToast(`已恢复 ${ids.length} 个会话`);
   loadSessions();
 }
 
 async function _arcBulkDelete() {
   const ids = [..._arc.selected];
   if (!ids.length) return;
-  const ok = await uiModule.styledConfirm(`Delete ${ids.length} session${ids.length > 1 ? 's' : ''} permanently?`, { confirmText: 'Delete', danger: true });
+  const ok = await uiModule.styledConfirm(`永久删除 ${ids.length} 个会话？`, { confirmText: '删除', danger: true });
   if (!ok) return;
   const deletedIds = [];
   for (const sid of ids) {
@@ -2460,7 +2817,7 @@ async function _arcBulkDelete() {
   await _animateSessionRowsRemoving(deletedIds, '#archive-grid .archive-row[data-session-id]');
   _arc.selected.clear();
   _arcRefreshUI();
-  uiModule.showToast(`${deletedIds.length} 个会话已删除`);
+  uiModule.showToast(`已删除 ${deletedIds.length} 个会话`);
 }
 
 function _arcToggleSelectMode() {
@@ -2474,7 +2831,7 @@ function _arcUpdateBulkBar() {
   const count = document.getElementById('archive-selected-count');
   const selectBtn = document.getElementById('archive-select-btn');
   if (bar) bar.classList.toggle('hidden', !_arc.selectMode);
-  if (count) count.textContent = `${_arc.selected.size} 个已选择`;
+  if (count) count.textContent = `已选择 ${_arc.selected.size} 项`;
   if (selectBtn) {
     selectBtn.textContent = _arc.selectMode ? '取消' : '选择';
     selectBtn.classList.toggle('active', _arc.selectMode);
@@ -2527,7 +2884,7 @@ function _arcRenderStats() {
 function _arcRenderChips() {
   const el = document.getElementById('archive-chips');
   if (!el) return;
-  // Use cached counts so chips don't disappear when filtering
+  // Use cached counts so chips don\'t disappear when filtering
   const cached = _arc.allModelCounts;
   if (!cached) return;
   const modelCounts = cached.counts;
@@ -2541,7 +2898,7 @@ function _arcRenderChips() {
     chip.addEventListener('click', () => { _arc.model = (_arc.model === value ? '' : value); _arcFetch(false); });
     el.appendChild(chip);
   };
-  mkChip('All', '', cached.total);
+  mkChip('全部', '', cached.total);
   models.forEach(m => mkChip(m, m, modelCounts[m]));
 }
 
@@ -2558,17 +2915,17 @@ function _arcRenderCard(s) {
   card.innerHTML = `
     ${checkboxHtml}
     <div style="flex:1;min-width:0;">
-      <div class="memory-item-title">${uiModule.esc(s.name || 'Untitled')}</div>
+      <div class="memory-item-title">${uiModule.esc(s.name || '无标题')}</div>
       <div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">
-        <span>${modelShort || 'no model'}</span>
+        <span>${modelShort || '无模型'}</span>
         <span>\u00b7</span>
-        <span>${msgCount} msg${msgCount !== 1 ? 's' : ''}</span>
+        <span>${msgCount} 条消息</span>
         <span>\u00b7</span>
         <span>${_arcRelativeTime(s.updated_at)}</span>
       </div>
     </div>
     <div class="memory-item-actions">
-      <button class="memory-item-btn archive-menu-btn" title="Actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      <button class="memory-item-btn archive-menu-btn" title="操作"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
     </div>
   `;
 
@@ -2585,9 +2942,9 @@ function _arcRenderCard(s) {
   card.querySelector('.archive-menu-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     _showDropdown(e.currentTarget, [
-      { label: 'Open', action: () => _arcPeekOpen(s.id) },
-      { label: 'Restore', action: () => _arcRestore(s.id) },
-      { label: 'Delete', action: () => _arcDelete(s.id), danger: true },
+      { label: '打开', action: () => _arcPeekOpen(s.id) },
+      { label: '恢复', action: () => _arcRestore(s.id) },
+      { label: '删除', action: () => _arcDelete(s.id), danger: true },
     ]);
   });
   card.addEventListener('click', () => {
@@ -2609,7 +2966,7 @@ function _arcRenderGrid() {
   const grid = document.getElementById('archive-grid');
   if (!grid) return;
   if (_arc.data.length === 0) {
-    grid.innerHTML = '<div class="doclib-empty">没有已归档会话</div>';
+    grid.innerHTML = '<div class="doclib-empty">没有归档的会话</div>';
     return;
   }
   grid.innerHTML = '';
@@ -2642,31 +2999,31 @@ export function openLibrary(defaultTab) {
   modal.innerHTML = `
     <div class="modal-content doclib-modal-content">
       <div class="modal-header">
-        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Library <span id="lib-stats" style="font-size:0.8em;opacity:0.5;font-weight:normal;margin-left:4px"></span></h4>
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>资源库 <span id="lib-stats" style="font-size:0.8em;opacity:0.5;font-weight:normal;margin-left:4px"></span></h4>
         <button class="close-btn" id="lib-close">✖</button>
       </div>
       <div class="modal-body">
         <div class="lib-tabs" id="lib-tabs">
-          <button class="lib-tab${_lib.tab === 'chats' ? ' active' : ''}" data-lib-tab="chats">Chats</button>
-          <button class="lib-tab${_lib.tab === 'documents' ? ' active' : ''}" data-lib-tab="documents">Documents</button>
-          <button class="lib-tab${_lib.tab === 'archive' ? ' active' : ''}" data-lib-tab="archive">Archive</button>
-          <button class="lib-tab${_lib.tab === 'research' ? ' active' : ''}" data-lib-tab="research">Research</button>
+          <button class="lib-tab${_lib.tab === 'chats' ? ' active' : ''}" data-lib-tab="chats">聊天</button>
+          <button class="lib-tab${_lib.tab === 'documents' ? ' active' : ''}" data-lib-tab="documents">文档</button>
+          <button class="lib-tab${_lib.tab === 'archive' ? ' active' : ''}" data-lib-tab="archive">归档</button>
+          <button class="lib-tab${_lib.tab === 'research' ? ' active' : ''}" data-lib-tab="research">研究</button>
         </div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
           <select class="memory-sort-select" id="lib-sort">
-            <option value="recent">Recent</option>
-            <option value="oldest">Oldest</option>
-            <option value="most-messages">Most messages</option>
+            <option value="recent">最近</option>
+            <option value="oldest">最早</option>
+            <option value="most-messages">最多消息</option>
             <option value="alpha">A\u2013Z</option>
           </select>
           <input type="text" class="memory-search-input" id="lib-search" placeholder="筛选\u2026" style="flex:1;" />
-          <button class="memory-toolbar-btn" id="lib-select-btn" title="Select">Select</button>
+          <button class="memory-toolbar-btn" id="lib-select-btn" title="选择">选择</button>
         </div>
         <div class="memory-bulk-bar hidden" id="lib-bulk-bar">
-          <label class="memory-bulk-check-all"><input type="checkbox" id="lib-select-all"> All</label>
-          <span id="lib-selected-count" style="color:color-mix(in srgb, var(--fg) 50%, transparent);font-size:10px;flex:1;">0 selected</span>
+          <label class="memory-bulk-check-all"><input type="checkbox" id="lib-select-all"> 全选</label>
+          <span id="lib-selected-count" style="color:color-mix(in srgb, var(--fg) 50%, transparent);font-size:10px;flex:1;">已选择 0 项</span>
           <button class="memory-toolbar-btn" id="lib-bulk-action1"></button>
-          <button class="memory-toolbar-btn danger" id="lib-bulk-delete">Delete</button>
+          <button class="memory-toolbar-btn danger" id="lib-bulk-delete">删除</button>
         </div>
         <div class="doclib-grid archive-list" id="lib-grid"></div>
       </div>
@@ -2755,7 +3112,7 @@ export function openLibrary(defaultTab) {
 
   // Bulk delete
   document.getElementById('lib-bulk-delete').addEventListener('click', async () => {
-    if (!await uiModule.styledConfirm(`Delete ${_lib.selected.size} items?`, { confirmText: 'Delete', danger: true })) return;
+    if (!await uiModule.styledConfirm(`删除 ${_lib.selected.size} 项？`, { confirmText: '删除', danger: true })) return;
     if (_lib.tab === 'chats' || _lib.tab === 'archive') {
       for (const sid of _lib.selected) await fetch(`${API_BASE}/api/session/${sid}`, { method: 'DELETE' });
     } else if (_lib.tab === 'documents') {
@@ -2775,7 +3132,7 @@ export function openLibrary(defaultTab) {
 
 function _updateLibCount() {
   const el = document.getElementById('lib-selected-count');
-  if (el) el.textContent = `${_lib.selected.size} selected`;
+  if (el) el.textContent = `已选择 ${_lib.selected.size} 项`;
 }
 
 function _renderLibGrid() {
@@ -2790,7 +3147,7 @@ function _renderLibGrid() {
 
 function _renderLibChats(grid) {
   if (!sessions || !sessions.length) {
-    grid.innerHTML = '<div class="doclib-empty">No sessions loaded</div>';
+    grid.innerHTML = '<div class="doclib-empty">没有已加载的会话</div>';
     return;
   }
   let filtered = sessions.filter(s => !s.archived);
@@ -2806,10 +3163,10 @@ function _renderLibChats(grid) {
   const stats = document.getElementById('lib-stats');
   if (stats) stats.textContent = `(${filtered.length})`;
 
-  if (!filtered.length) { grid.innerHTML = '<div class="doclib-empty">No chats found</div>'; return; }
+  if (!filtered.length) { grid.innerHTML = '<div class="doclib-empty">没有找到聊天</div>'; return; }
   grid.innerHTML = '';
   for (const s of filtered) {
-    const card = _buildLibCard(s.id, s.name || 'Untitled', s.message_count || 0, (s.model || '').split('/').pop(), s.updated_at, s.id === currentSessionId);
+    const card = _buildLibCard(s.id, s.name || '无标题', s.message_count || 0, (s.model || '').split('/').pop(), s.updated_at, s.id === currentSessionId);
     card.addEventListener('click', (e) => {
       if (e.target.closest('.archive-menu-btn,.memory-select-cb')) return;
       if (_lib.selectMode) { _toggleLibSelect(card, s.id); return; }
@@ -2818,9 +3175,9 @@ function _renderLibChats(grid) {
     card.querySelector('.archive-menu-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       _showDropdown(e.currentTarget, [
-        { label: 'Open', action: () => { closeLibrary(); selectSession(s.id); } },
-        { label: 'Archive', action: async () => { await fetch(`${API_BASE}/api/session/${s.id}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }); await loadSessions(); _renderLibGrid(); } },
-        { label: 'Delete', action: async () => { if (!await uiModule.styledConfirm('Delete?', { confirmText: 'Delete', danger: true })) return; await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' }); await loadSessions(); _renderLibGrid(); }, danger: true },
+        { label: '打开', action: () => { closeLibrary(); selectSession(s.id); } },
+        { label: '归档', action: async () => { await fetch(`${API_BASE}/api/session/${s.id}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }); await loadSessions(); _renderLibGrid(); } },
+        { label: '删除', action: async () => { if (!await uiModule.styledConfirm('删除？', { confirmText: '删除', danger: true })) return; await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' }); await loadSessions(); _renderLibGrid(); }, danger: true },
       ]);
     });
     grid.appendChild(card);
@@ -2829,7 +3186,7 @@ function _renderLibChats(grid) {
 
 async function _renderLibArchive(grid) {
   grid.innerHTML = '';
-  grid.appendChild(spinnerModule.createLoadingRow('Loading…'));
+  grid.appendChild(spinnerModule.createLoadingRow('加载中…'));
   try {
     const params = new URLSearchParams({ limit: '50', sort: _lib.sort === 'most-messages' ? 'messages' : _lib.sort });
     if (_lib.search) params.set('search', _lib.search);
@@ -2838,10 +3195,10 @@ async function _renderLibArchive(grid) {
     const items = data.sessions || [];
     const stats = document.getElementById('lib-stats');
     if (stats) stats.textContent = `(${data.total || items.length})`;
-    if (!items.length) { grid.innerHTML = '<div class="doclib-empty">没有已归档会话</div>'; return; }
+    if (!items.length) { grid.innerHTML = '<div class="doclib-empty">没有归档的会话</div>'; return; }
     grid.innerHTML = '';
     for (const s of items) {
-      const card = _buildLibCard(s.id, s.name || 'Untitled', s.message_count || 0, (s.model || '').split('/').pop(), s.updated_at);
+      const card = _buildLibCard(s.id, s.name || '无标题', s.message_count || 0, (s.model || '').split('/').pop(), s.updated_at);
       card.addEventListener('click', (e) => {
         if (e.target.closest('.archive-menu-btn,.memory-select-cb')) return;
         if (_lib.selectMode) { _toggleLibSelect(card, s.id); return; }
@@ -2849,18 +3206,18 @@ async function _renderLibArchive(grid) {
       card.querySelector('.archive-menu-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         _showDropdown(e.currentTarget, [
-          { label: 'Restore', action: async () => { await fetch(`${API_BASE}/api/session/${s.id}/restore`, { method: 'POST' }); await loadSessions(); _renderLibGrid(); } },
-          { label: 'Delete', action: async () => { if (!await uiModule.styledConfirm('Delete?', { confirmText: 'Delete', danger: true })) return; await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' }); _renderLibGrid(); }, danger: true },
+          { label: '恢复', action: async () => { await fetch(`${API_BASE}/api/session/${s.id}/restore`, { method: 'POST' }); await loadSessions(); _renderLibGrid(); } },
+          { label: '删除', action: async () => { if (!await uiModule.styledConfirm('删除？', { confirmText: '删除', danger: true })) return; await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE' }); _renderLibGrid(); }, danger: true },
         ]);
       });
       grid.appendChild(card);
     }
-  } catch (e) { console.error('Library archive error:', e); grid.innerHTML = '<div class="doclib-empty">Failed to load archive</div>'; }
+  } catch (e) { console.error('Library archive error:', e); grid.innerHTML = '<div class="doclib-empty">加载归档失败</div>'; }
 }
 
 async function _renderLibDocuments(grid) {
   grid.innerHTML = '';
-  grid.appendChild(spinnerModule.createLoadingRow('Loading…'));
+  grid.appendChild(spinnerModule.createLoadingRow('加载中…'));
   try {
     const params = new URLSearchParams({ limit: '50', sort: _lib.sort });
     if (_lib.search) params.set('search', _lib.search);
@@ -2869,10 +3226,10 @@ async function _renderLibDocuments(grid) {
     const docs = data.documents || [];
     const stats = document.getElementById('lib-stats');
     if (stats) stats.textContent = `(${data.total || docs.length})`;
-    if (!docs.length) { grid.innerHTML = '<div class="doclib-empty">No documents found</div>'; return; }
+    if (!docs.length) { grid.innerHTML = '<div class="doclib-empty">没有找到文档</div>'; return; }
     grid.innerHTML = '';
     for (const d of docs) {
-      const card = _buildLibCard(d.id, d.title || 'Untitled', d.version_count || 1, d.language || 'text', d.updated_at, false, true);
+      const card = _buildLibCard(d.id, d.title || '无标题', d.version_count || 1, d.language || 'text', d.updated_at, false, true);
       card.dataset.docId = d.id;
       card.addEventListener('click', (e) => {
         if (e.target.closest('.archive-menu-btn,.memory-select-cb')) return;
@@ -2887,18 +3244,18 @@ async function _renderLibDocuments(grid) {
       card.querySelector('.archive-menu-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         _showDropdown(e.currentTarget, [
-          { label: 'Open', action: () => { if (d.session_id) { closeLibrary(); selectSession(d.session_id); } } },
-          { label: 'Delete', action: async () => { if (!await uiModule.styledConfirm('Delete?', { confirmText: 'Delete', danger: true })) return; await fetch(`${API_BASE}/api/document/${d.id}`, { method: 'DELETE' }); _renderLibGrid(); }, danger: true },
+          { label: '打开', action: () => { if (d.session_id) { closeLibrary(); selectSession(d.session_id); } } },
+          { label: '删除', action: async () => { if (!await uiModule.styledConfirm('删除？', { confirmText: '删除', danger: true })) return; await fetch(`${API_BASE}/api/document/${d.id}`, { method: 'DELETE' }); _renderLibGrid(); }, danger: true },
         ]);
       });
       grid.appendChild(card);
     }
-  } catch (e) { console.error('Library documents error:', e); grid.innerHTML = '<div class="doclib-empty">Failed to load documents</div>'; }
+  } catch (e) { console.error('Library documents error:', e); grid.innerHTML = '<div class="doclib-empty">加载文档失败</div>'; }
 }
 
 async function _renderLibResearch(grid) {
   grid.innerHTML = '';
-  grid.appendChild(spinnerModule.createLoadingRow('Loading research…'));
+  grid.appendChild(spinnerModule.createLoadingRow('加载研究中…'));
   try {
     const params = new URLSearchParams({ limit: '50', sort: _lib.sort });
     if (_lib.search) params.set('search', _lib.search);
@@ -2907,24 +3264,24 @@ async function _renderLibResearch(grid) {
     const data = await res.json();
     const items = data.research || [];
     const statsEl = document.getElementById('lib-stats');
-    if (statsEl) statsEl.textContent = `${data.total || 0} research`;
+    if (statsEl) statsEl.textContent = `${data.total || 0} 项研究`;
     grid.innerHTML = '';
     if (!items.length) {
-      grid.innerHTML = '<div class="doclib-empty">No research found</div>';
+      grid.innerHTML = '<div class="doclib-empty">没有找到研究</div>';
       return;
     }
     for (const item of items) {
       const meta = [
         item.duration || '',
-        item.rounds ? item.rounds + ' rounds' : '',
+        item.rounds ? item.rounds + ' 轮' : '',
       ].filter(Boolean).join(' \u00b7 ');
       const card = _buildLibCard(
-        item.id, item.query || '(untitled)', item.source_count || 0,
+        item.id, item.query || '（无标题）', item.source_count || 0,
         meta, item.completed_at ? new Date(item.completed_at * 1000).toISOString() : '',
         false, false,
       );
       const metaEl = card.querySelector('.memory-item-meta');
-      if (metaEl) metaEl.textContent = metaEl.textContent.replace(/\d+ msgs?/, (item.source_count || 0) + ' 条来源');
+      if (metaEl) metaEl.textContent = metaEl.textContent.replace(/\d+ msgs?/, (item.source_count || 0) + ' 个来源');
       card.addEventListener('click', (e) => {
         if (e.target.closest('.archive-menu-btn') || e.target.closest('.memory-select-cb')) return;
         window.open(`${API_BASE}/api/research/report/${item.id}`, '_blank');
@@ -2934,16 +3291,16 @@ async function _renderLibResearch(grid) {
         menuBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           _showDropdown(e.currentTarget, [
-            { label: 'Open Report', action: () => window.open(`${API_BASE}/api/research/report/${item.id}`, '_blank') },
-            { label: 'Re-run', action: () => {
+            { label: '打开报告', action: () => window.open(`${API_BASE}/api/research/report/${item.id}`, '_blank') },
+            { label: '重新运行', action: () => {
               const modal = document.getElementById('library-modal');
               if (modal) modal.style.display = 'none';
               const msgInput = document.getElementById('message');
               if (msgInput) { msgInput.value = item.query; msgInput.focus(); }
               uiModule.showToast('切换研究模式并发送以重新运行');
             }},
-            { label: 'Delete', danger: true, action: async () => {
-              if (!await window.styledConfirm('Delete this research?', { confirmText: 'Delete', danger: true })) return;
+            { label: '删除', danger: true, action: async () => {
+              if (!await window.styledConfirm('删除此研究？', { confirmText: '删除', danger: true })) return;
               await fetch(`${API_BASE}/api/research/${item.id}`, { method: 'DELETE' });
               _renderLibGrid();
             }},
@@ -2952,7 +3309,7 @@ async function _renderLibResearch(grid) {
       }
       grid.appendChild(card);
     }
-  } catch (e) { console.error('Library research error:', e); grid.innerHTML = '<div class="doclib-empty">Failed to load research</div>'; }
+  } catch (e) { console.error('Library research error:', e); grid.innerHTML = '<div class="doclib-empty">加载研究失败</div>'; }
 }
 
 function _buildLibCard(id, title, count, meta, time, isActive, isDoc) {
@@ -2963,7 +3320,7 @@ function _buildLibCard(id, title, count, meta, time, isActive, isDoc) {
   const cbHtml = _lib.selectMode ? `<input type="checkbox" class="memory-select-cb"${_lib.selected.has(id) ? ' checked' : ''}>` : '';
   const metaParts = [];
   if (meta) metaParts.push(uiModule.esc(meta));
-  metaParts.push(isDoc ? 'v' + count : count + ' msg' + (count !== 1 ? 's' : ''));
+  metaParts.push(isDoc ? 'v' + count : count + ' 条消息');
   if (time) metaParts.push(_arcRelativeTime(time));
   card.innerHTML = `
     ${cbHtml}
@@ -2972,7 +3329,7 @@ function _buildLibCard(id, title, count, meta, time, isActive, isDoc) {
       <div class="memory-item-meta" style="font-size:10px;opacity:0.4;margin-top:2px;">${metaParts.join(' \u00b7 ')}</div>
     </div>
     <div class="memory-item-actions">
-      <button class="memory-item-btn archive-menu-btn" title="Actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      <button class="memory-item-btn archive-menu-btn" title="操作"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
     </div>
   `;
   const cb = card.querySelector('.memory-select-cb');
@@ -3012,29 +3369,29 @@ export function openArchive() {
   modal.innerHTML = `
     <div class="modal-content doclib-modal-content">
       <div class="modal-header">
-        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archive <span id="archive-stats" style="font-size:0.8em;opacity:0.5;font-weight:normal;margin-left:4px"></span></h4>
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>归档 <span id="archive-stats" style="font-size:0.8em;opacity:0.5;font-weight:normal;margin-left:4px"></span></h4>
         <button class="close-btn" id="archive-close">✖</button>
       </div>
       <div class="modal-body">
         <div class="doclib-chips" id="archive-chips"></div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
           <select class="memory-sort-select" id="archive-sort">
-            <option value="recent">Recent</option>
-            <option value="oldest">Oldest</option>
-            <option value="most-messages">Most messages</option>
+            <option value="recent">最近</option>
+            <option value="oldest">最早</option>
+            <option value="most-messages">最多消息</option>
             <option value="alpha">A\u2013Z</option>
           </select>
           <input type="text" class="memory-search-input" id="archive-search" placeholder="筛选\u2026" style="flex:1;" />
-          <button class="memory-toolbar-btn" id="archive-select-btn" title="Select sessions">Select</button>
+          <button class="memory-toolbar-btn" id="archive-select-btn" title="选择会话">选择</button>
         </div>
         <div class="memory-bulk-bar hidden" id="archive-bulk-bar">
-          <label class="memory-bulk-check-all"><input type="checkbox" id="archive-select-all"> All</label>
-          <span id="archive-selected-count" style="color:color-mix(in srgb, var(--fg) 50%, transparent);font-size:10px;flex:1;">0 selected</span>
-          <button class="memory-toolbar-btn" id="archive-bulk-restore">Restore</button>
-          <button class="memory-toolbar-btn danger" id="archive-bulk-delete">Delete</button>
+          <label class="memory-bulk-check-all"><input type="checkbox" id="archive-select-all"> 全选</label>
+          <span id="archive-selected-count" style="color:color-mix(in srgb, var(--fg) 50%, transparent);font-size:10px;flex:1;">已选择 0 项</span>
+          <button class="memory-toolbar-btn" id="archive-bulk-restore">恢复</button>
+          <button class="memory-toolbar-btn danger" id="archive-bulk-delete">删除</button>
         </div>
         <div class="doclib-grid archive-list" id="archive-grid"></div>
-        <button class="doclib-load-more" id="archive-load-more" style="display:none">Load more</button>
+        <button class="doclib-load-more" id="archive-load-more" style="display:none">加载更多</button>
       </div>
     </div>
   `;

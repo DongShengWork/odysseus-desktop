@@ -33,6 +33,9 @@ import {
   _fetchCachedModels, _cachedAllModels, _filterCachedList, _rerenderCachedModels, _deleteCachedModel,
 } from './cookbookServe.js';
 
+import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
+import { topPortalZ } from './toolWindowZOrder.js';
+
 const STORAGE_KEY = 'cookbook-presets';
 const LAST_STATE_KEY = 'cookbook-last-state';
 const SERVE_STATE_KEY = 'cookbook-serve-state';
@@ -40,7 +43,7 @@ const SERVE_STATE_KEY = 'cookbook-serve-state';
 // Global, once: tag chip rows (.doclib-lang-chips) scroll horizontally on mobile.
 // Stop their touch events (capture phase, before any ancestor sees them) so a
 // sideways tag scroll never triggers a swipe-to-change-tab / swipe-dismiss
-// gesture in ANY modal (cookbook, document library, etc.). We don't preventDefault,
+// gesture in ANY modal (cookbook, document library, etc.). We don\'t preventDefault,
 // so the browser's native horizontal scroll of the chips still works.
 if (typeof window !== 'undefined' && !window._tagScrollGuardWired) {
   window._tagScrollGuardWired = true;
@@ -52,12 +55,12 @@ if (typeof window !== 'undefined' && !window._tagScrollGuardWired) {
   });
 }
 
-// Radio-style check marking which model directory is a server's download target.
+// Radio-style check marking which model directory is a server\'s download target.
 // OFF = hollow circle (pickable); ON = checked circle (accent-tinted via CSS).
 export const _MODELDIR_CHECK_OFF = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>';
 export const _MODELDIR_CHECK_ON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>';
 
-// Monochrome platform glyphs (currentColor) for a server's OS tag: a penguin for
+// Monochrome platform glyphs (currentColor) for a server\'s OS tag: a penguin for
 // Linux, the four-pane logo for Windows, an Android robot for Termux/Android.
 function _platformIcon(platform) {
   const k = (platform || '').toLowerCase();
@@ -73,7 +76,7 @@ function _platformIcon(platform) {
   return '';
 }
 
-export let _envState = { env: 'none', envPath: '', hfToken: '', hfTokenConfigured: false, hfTokenMasked: '', gpus: '', remoteHost: '', servers: [], modelPaths: [], platform: '', defaultServer: '' };
+export let _envState = { env: 'none', envPath: '', hfToken: '', hfTokenConfigured: false, hfTokenMasked: '', gpus: '', remoteHost: '', servers: [], modelPaths: [], platform: '', hostPlatform: '', defaultServer: '' };
 let _lastCacheHostVal = null;
 let _cookbookOpeningSpinners = [];
 export function _lastCacheHost() { return _lastCacheHostVal; }
@@ -81,7 +84,7 @@ export function _setLastCacheHost(v) { _lastCacheHostVal = v; }
 
 function _setCookbookOpening(on) {
   // Sidebar (tool-cookbook-btn) deliberately excluded — the inline
-  // whirlpool on the sidebar row read as "the click didn't register"
+  // whirlpool on the sidebar row read as "the click didn\'t register"
   // rather than "loading", which made users (rightly) think clicks
   // were being eaten. Keep only the icon-rail spinner since the
   // rail is narrow enough that an obvious loading state still helps.
@@ -196,13 +199,13 @@ function _buildServerOpts(excludeLocal = false) {
 /** Wrap a command in SSH for a remote host, with proper single-quote escaping. */
 export function _sshCmd(host, cmd, port) {
   const portFlag = port && port !== '22' ? `-p ${port} ` : '';
-  return `ssh ${portFlag}${host} '${cmd.replace(/'/g, "'\\''")}'`;
+  return `ssh ${portFlag}${host} '${cmd.replace(/'/g, "'\''")}'`;
 }
 
 /** Get SSH port for a given host (or task object) */
 function _getPort(hostOrTask) {
   if (!hostOrTask) return '';
-  if (typeof hostOrTask === 'object') return hostOrTask.sshPort || _getPort(hostOrTask.remoteServerKey || hostOrTask.remoteHost);
+  if (typeof hostOrTask === 'object') return hostOrTask.sshPort || _getPort(hostOrTask.remoteServerKey || hostOrTask.remoteHost || hostOrTask.payload?.remote_host);
   const selected = hostOrTask === _envState.remoteHost ? _selectedServer() : null;
   const srv = selected || _serverByVal(hostOrTask);
   return srv?.port || '';
@@ -210,8 +213,13 @@ function _getPort(hostOrTask) {
 
 /** Get platform for a given host (or task object). Returns 'windows', 'termux', 'linux', or '' */
 export function _getPlatform(hostOrTask) {
-  if (!hostOrTask) return _envState.platform || '';
-  if (typeof hostOrTask === 'object') return hostOrTask.platform || _getPlatform(hostOrTask.remoteServerKey || hostOrTask.remoteHost);
+  if (hostOrTask === 'local') return _envState.hostPlatform || '';
+  if (!hostOrTask) return _envState.remoteHost ? (_envState.platform || '') : (_envState.hostPlatform || '');
+  if (typeof hostOrTask === 'object') {
+    const taskHost = hostOrTask.remoteServerKey || hostOrTask.remoteHost || '';
+    if (!taskHost || taskHost === 'local') return _envState.hostPlatform || '';
+    return hostOrTask.platform || _getPlatform(taskHost);
+  }
   const selected = hostOrTask === _envState.remoteHost ? _selectedServer() : null;
   const srv = selected || _serverByVal(hostOrTask);
   return srv?.platform || '';
@@ -247,8 +255,8 @@ function _detectModelOptimizations(modelName) {
   // Hermes/XML guesses, and the MoE backend should default to expert parallel.
   if (_isStepFunStepModel(modelName)) {
     opts.flags.push('--enable-expert-parallel');
-    opts.tips.push('StepFun Step-3 MoE: 专家并行');
-    opts.tips.push('StepFun 解析器: step3p5 用于原生工具调用和推理标记');
+    opts.tips.push('StepFun Step-3 MoE: expert parallel');
+    opts.tips.push('StepFun parser: step3p5 for native tool calls and reasoning tags');
   }
   // Qwen3.5 MoE models — MoE-specific env vars + expert-parallel.
   // The --reasoning-parser flag is added uniformly below via
@@ -256,7 +264,7 @@ function _detectModelOptimizations(modelName) {
   else if (n.includes('qwen3.5') || n.includes('qwen3-') && (n.includes('a10b') || n.includes('a22b') || n.includes('a3b'))) {
     opts.envVars.push('VLLM_USE_DEEP_GEMM=0', 'VLLM_USE_FLASHINFER_MOE_FP16=1', 'VLLM_USE_FLASHINFER_SAMPLER=0', 'OMP_NUM_THREADS=4');
     opts.flags.push('--enable-expert-parallel');
-    opts.tips.push('MoE 优化: 专家并行 + flashinfer MoE 内核');
+    opts.tips.push('MoE optimizations: expert parallel + flashinfer MoE kernels');
   }
   // Qwen3 MoE (non-3.5)
   else if (n.includes('qwen3') && (n.includes('a10b') || n.includes('a22b') || n.includes('a3b'))) {
@@ -271,7 +279,7 @@ function _detectModelOptimizations(modelName) {
   // the launch crashes otherwise (--kv-cache-dtype auto → bf16 OOMs).
   else if (n.includes('deepseek') && /\b(v[3-9]|v\d{2,}|r[1-9])\b/.test(n)) {
     opts.flags.push('--enable-expert-parallel');
-    opts.tips.push('DeepSeek MoE 专家并行');
+    opts.tips.push('MoE expert parallel for DeepSeek');
     opts.kvCacheDtype = 'fp8';
     opts.tips.push('fp8 KV cache required — bf16 OOMs at usable context');
   }
@@ -282,10 +290,10 @@ function _detectModelOptimizations(modelName) {
   // checkbox in the serve form to render at all.
   else if (n.includes('minimax')) {
     opts.flags.push('--enable-expert-parallel');
-    opts.tips.push('MiniMax MoE 专家并行');
+    opts.tips.push('MoE expert parallel for MiniMax');
     if (/\bm3\b/.test(n)) {
       opts.kvCacheDtype = 'fp8';
-      opts.tips.push('MiniMax M3 默认: fp8 KV 缓存, 块大小 128, TRITON 注意力');
+      opts.tips.push('MiniMax M3 defaults: fp8 KV cache, block-size 128, TRITON attention');
     }
   }
   // Reasoning parser — applies independently of MoE detection. Without this
@@ -322,7 +330,7 @@ function _detectModelOptimizations(modelName) {
 
 /** Detect the right vLLM --reasoning-parser based on model name.
  *  Returns the parser slug (matches vLLM's official list) or null when the
- *  model isn't a reasoning model. Without the right parser, thinking tokens
+ *  model isn\'t a reasoning model. Without the right parser, thinking tokens
  *  leak as plain text instead of being split into a separate channel.
  *  Source: vllm/reasoning/__init__.py registered parsers.
  */
@@ -335,12 +343,12 @@ export function _detectReasoningParser(modelName) {
   // be checked before the M2.x rule and before the generic MiniMax tool parser.
   if (n.includes('minimax') && /\bm3\b/.test(n)) return 'minimax_m3';
   // MiniMax M2 / M2.5 / M2.7 — released with a dedicated parser. Catch M2
-  // before plain "minimax" so M2.x doesn't fall through to a wrong parser.
+  // before plain "minimax" so M2.x doesn\'t fall through to a wrong parser.
   if (n.includes('minimax') && n.match(/\bm2(?:\.\d)?\b/)) return 'minimax_m2';
   // DeepSeek-R1 / V3-Thinking / V3.1-Thinking variants. Bare V3/V3.1 (non-
-  // thinking) skip this — they're not reasoning models.
+  // thinking) skip this — they\'re not reasoning models.
   if (n.includes('deepseek') && (n.includes('r1') || n.includes('thinking'))) return 'deepseek_r1';
-  // Qwen3 / Qwen3.5 reasoning models. Qwen3-Coder + Qwen3-Instruct don't
+  // Qwen3 / Qwen3.5 reasoning models. Qwen3-Coder + Qwen3-Instruct don\'t
   // emit <think> blocks, so skip the parser there.
   if (n.includes('qwen3') && !n.includes('coder') && !n.includes('instruct')) return 'qwen3';
   // GLM-4 / GLM-4.5 / GLM-4.6 with reasoning.
@@ -363,7 +371,7 @@ export function _detectReasoningParser(modelName) {
  *   - Qwen2.5 / Qwen2 / 1.5 → hermes       (Qwen2.5 was trained on Hermes format)
  *  Catching "qwen" first and labelling everything qwen3_xml breaks tool
  *  calls on the Qwen2.5 line (the model emits hermes-style which the
- *  qwen3_xml parser doesn't recognise, so the call leaks through as text).
+ *  qwen3_xml parser doesn\'t recognise, so the call leaks through as text).
  */
 export function _detectToolParser(modelName) {
   const n = (modelName || '').toLowerCase();
@@ -415,7 +423,7 @@ export function _detectBackend(model) {
 
   // AWQ / GPTQ / FP8 are safetensors GPU-serving formats. Never route them
   // through llama.cpp/Ollama just because the host is Mac/Windows; those engines
-  // need GGUF. The UI will warn/block on Metal where vLLM/SGLang aren't viable.
+  // need GGUF. The UI will warn/block on Metal where vLLM/SGLang aren\'t viable.
   if (isAwqLike) {
     return { backend: 'vllm', label: 'vLLM' };
   }
@@ -431,7 +439,7 @@ export function _detectBackend(model) {
   }
 
   // Apple Silicon (Metal) → llama.cpp (GGUF). vLLM/SGLang are CUDA/ROCm-only and
-  // don't run on macOS; vLLM-native quantized models are already filtered out
+  // don\'t run on macOS; vLLM-native quantized models are already filtered out
   // of metal Cookbook results, so llama.cpp is always the right engine here.
   if (['metal', 'mps', 'apple'].includes(sysBackend)) {
     return { backend: 'llamacpp', label: 'llama.cpp' };
@@ -451,7 +459,7 @@ export function _detectBackend(model) {
 // ── Command builders ──
 
 export function _shellQuote(value) {
-  return "'" + String(value ?? '').replace(/'/g, "'\\''") + "'";
+  return "'" + String(value ?? '').replace(/'/g, "'\''") + "'";
 }
 
 export function _psQuote(value) {
@@ -460,10 +468,10 @@ export function _psQuote(value) {
 
 // Pick the GPU-pinning env-var name for the detected backend. NVIDIA uses
 // CUDA_VISIBLE_DEVICES; ROCm/HIP uses HIP_VISIBLE_DEVICES; Vulkan and
-// Apple Metal don't take an index env var at all (and CUDA_VISIBLE_DEVICES
+// Apple Metal don\'t take an index env var at all (and CUDA_VISIBLE_DEVICES
 // is a silent no-op on those, which silently hides "wrong backend" config
 // bugs). Returns 'cmd ' style prefix ('CUDA_VISIBLE_DEVICES=0 ') or '' when
-// the backend doesn't support pinning. Pass isWindows=true to get PowerShell
+// the backend doesn\'t support pinning. Pass isWindows=true to get PowerShell
 // `$env:` syntax instead. backend defaults to whatever hwfit detected.
 function _gpuEnvVarName() {
   // Only emit a pinning env var when we POSITIVELY know the backend AND
@@ -471,7 +479,7 @@ function _gpuEnvVarName() {
   // Without the target-match guard, switching the server picker from an
   // NVIDIA box (cuda) to a local/Vulkan target preserved the stale
   // `cuda` backend in the cache, leaking `CUDA_VISIBLE_DEVICES=` into
-  // launches that don't have an NVIDIA GPU at all. Default to "" when
+  // launches that don\'t have an NVIDIA GPU at all. Default to "" when
   // unsure — the user sees a clean command and is prompted to scan.
   const cachedHost = String(_hwfitCache?._scannedHost || '');
   const currentHost = String(_envState.remoteHost || '');
@@ -556,7 +564,7 @@ export function _buildServeCmd(f, modelName, backend) {
         cmd += _opts.envVars.join(' ') + ' ';
       } else {
         // Fallback when the user toggles MoE Env on for a model the
-        // family detector didn't classify as MoE — emit the generic
+        // family detector didn\'t classify as MoE — emit the generic
         // vLLM MoE optimization env vars so the toggle is never a
         // silent no-op (was the case before the "always show" change).
         cmd += 'VLLM_USE_DEEP_GEMM=0 VLLM_USE_FLASHINFER_MOE_FP16=1 OMP_NUM_THREADS=4 ';
@@ -564,7 +572,7 @@ export function _buildServeCmd(f, modelName, backend) {
     }
     // Free-text "Env" field — verbatim KEY=VAL pairs (space-separated).
     // Collapse any pasted newlines/tabs so the backend allowlist (which
-    // rejects \n / \r) doesn't trip on a multi-line paste from a model card.
+    // rejects \n / \r) doesn\'t trip on a multi-line paste from a model card.
     const _extraEnv = (f.extra_env ?? '').toString().replace(/\s+/g, ' ').trim();
     if (_extraEnv) cmd += _extraEnv + ' ';
     cmd += `${_vllmBin} serve ${modelName} --host 0.0.0.0 --port ${f.port || '8000'}`;
@@ -635,7 +643,12 @@ export function _buildServeCmd(f, modelName, backend) {
     // GPU list — read from gpus (button strip); fall back to gpu_id for
     // backward-compat with older saved presets that pre-date the removal.
     const gpuId = (f.gpus || f.gpu_id || '').toString().trim();
-    const py = _isWindows() ? 'python' : 'python3';
+    const _targetHost = Object.prototype.hasOwnProperty.call(f, 'host')
+      ? String(f.host || '').trim()
+      : String(_envState.remoteHost || '').trim();
+    const _isWin = _targetHost ? _isWindows(_targetHost) : _isWindows('local');
+    const _localWindows = _isWin && !_targetHost;
+    const py = _isWin ? 'python' : 'python3';
     // CPU-only serve (-ngl 0): drop the GPU-only flags, otherwise the command
     // mixes "zero GPU layers" with CUDA unified-memory + flash-attn and fails to
     // start (issue #1291). Only affects the ngl=0 path; GPU serving is unchanged.
@@ -653,29 +666,29 @@ export function _buildServeCmd(f, modelName, backend) {
     // GGML_CUDA_* env vars are no-ops on Vulkan/ROCm/Metal/CPU. Only emit
     // them when the detected backend is actually CUDA AND the hwfit scan
     // was run against the currently-targeted host, so a saved preset
-    // from a prior NVIDIA target doesn't pollute a non-NVIDIA launch
+    // from a prior NVIDIA target doesn\'t pollute a non-NVIDIA launch
     // with misleading prefixes.
     const _sb = String(_hwfitCache?.system?.backend || '').toLowerCase();
     const _hwfitHost = String(_hwfitCache?._scannedHost || '');
-    const _curHost = String(_envState.remoteHost || '');
+    const _curHost = _targetHost;
     const _isCudaTarget = (_sb === 'cuda') && (_hwfitHost === _curHost);
     const lcPrefix = (() => {
       let p = '';
-      if (f.unified_mem && !_cpuOnly && !_isWindows() && _isCudaTarget) p += `GGML_CUDA_ENABLE_UNIFIED_MEMORY=1 `;
-      // No GPU env var in CPU mode — `-ngl 0` already disables offload
+      if (f.unified_mem && !_cpuOnly && (!_isWin || _localWindows) && _isCudaTarget) p += `GGML_CUDA_ENABLE_UNIFIED_MEMORY=1 `;
+      // No GPU env var in CPU mode - `-ngl 0` already disables offload
       // so CUDA_VISIBLE_DEVICES / HIP_VISIBLE_DEVICES would be misleading
       // clutter ("why is CUDA pinned for a CPU run?").
-      if (!_isWindows() && !_cpuOnly) p += _gpuEnvPrefix(gpuId);
+      if ((!_isWin || _localWindows) && !_cpuOnly) p += _gpuEnvPrefix(gpuId);
       return p;
     })();
-    if (f.unified_mem && !_cpuOnly && _isWindows() && _isCudaTarget) cmd += `$env:GGML_CUDA_ENABLE_UNIFIED_MEMORY="1"; `;
-    if (_isWindows() && !_cpuOnly) cmd += _gpuEnvPrefix(gpuId, true);
+    if (f.unified_mem && !_cpuOnly && _isWin && !_localWindows && _isCudaTarget) cmd += `$env:GGML_CUDA_ENABLE_UNIFIED_MEMORY="1"; `;
+    if (_isWin && !_localWindows && !_cpuOnly) cmd += _gpuEnvPrefix(gpuId, true);
     const needsGgufPrelude = /^\$\(\{\s*find\s/.test(String(ggufPath || ''));
     const modelArg = needsGgufPrelude ? '"$MODEL_FILE"' : `"${ggufPath}"`;
     // Prefer native llama-server. The backend bootstrap resolves/builds the
     // right binary (Vulkan/HIP/CUDA/Metal/CPU), so keep the generated command
     // as a validator-safe binary + args with no shell chaining.
-    // Don't suppress stderr — surface real errors (missing file, lib, OOM).
+    // Don\'t suppress stderr — surface real errors (missing file, lib, OOM).
     // Optional perf/fit flags from a hardware profile (see services/hwfit/
     // profiles.py). n_cpu_moe offloads MoE expert layers to CPU when the model
     // is bigger than VRAM; flash-attn + a quantized KV cache cut KV memory and
@@ -741,11 +754,16 @@ export function _buildServeCmd(f, modelName, backend) {
       // llama-cpp-python takes the projector via --clip_model_path.
       _lcpExtra += ` --clip_model_path "${f._mmproj_path}"`;
     }
-    if (_isWindows()) {
-      const _lcpServer = `${lcPrefix}${py} -m llama_cpp.server --model ${modelArg} --host 0.0.0.0 --port ${f.port || '8080'} --n_gpu_layers ${f.ngl || '99'} --n_ctx ${f.ctx || '8192'}${_lcpExtra}`;
+    const _lcServer = `${lcPrefix}llama-server --model ${modelArg} --host 0.0.0.0 --port ${f.port || '8080'} -ngl ${f.ngl || '99'} -c ${f.ctx || '8192'}${_lcExtra}`;
+    const _lcpServer = `${lcPrefix}${py} -m llama_cpp.server --model ${modelArg} --host 0.0.0.0 --port ${f.port || '8080'} --n_gpu_layers ${f.ngl || '99'} --n_ctx ${f.ctx || '8192'}${_lcpExtra}`;
+    if (_localWindows) {
+      // Local Windows serve is launched through Git Bash, so use the native
+      // llama-server shape and let PATH resolve the CUDA Release wrapper.
+      cmd += _lcServer;
+    } else if (_isWin) {
       cmd += _lcpServer;
     } else {
-      cmd += `${lcPrefix}llama-server --model ${modelArg} --host 0.0.0.0 --port ${f.port || '8080'} -ngl ${f.ngl || '99'} -c ${f.ctx || '8192'}${_lcExtra}`;
+      cmd += _lcServer;
     }
     if (needsGgufPrelude) {
       cmd = `MODEL_FILE=${ggufPath} && { [ -n "$MODEL_FILE" ] && [ -f "$MODEL_FILE" ]; } || { echo "ERROR: No GGUF found on this host"; exit 1; } && ${cmd}`;
@@ -754,8 +772,8 @@ export function _buildServeCmd(f, modelName, backend) {
     const ollamaPort = f.port || '11434';
     // GGUF + Ollama: delegate to the iGPU-bound ollama-test container via
     // its /usr/local/bin/ollama-import helper. Plain `ollama serve` errors
-    // 127 on hosts where ollama isn't on PATH (and even when it is, it
-    // doesn't import the GGUF — it just starts the daemon). Args are all
+    // 127 on hosts where ollama isn\'t on PATH (and even when it is, it
+    // doesn\'t import the GGUF — it just starts the daemon). Args are all
     // literal so the cookbook validator (which bans &&/||/;/$() ) is
     // happy: `docker exec ollama-test ollama-import <repo> <name> <ctx>
     // <file>`. The helper handles the find/Modelfile/preload dance.
@@ -873,20 +891,21 @@ async function _fetchDependencies() {
   let _spin = null;
   try {
     const sp = (await import('./spinner.js')).default;
-    _spin = sp.createWhirlpool(28);
-    _spin.element.style.cssText = 'margin:24px auto 0;display:block;';
+    _spin = sp.createWhirlpool(22);
+    _spin.element.classList.add('cookbook-section-loading-wp');
+    _spin.element.style.cssText = 'margin:24px auto 0;display:block;width:22px;height:22px;';
     list.appendChild(_spin.element);
     const label = document.createElement('div');
     label.className = 'hwfit-loading';
-    label.textContent = '正在加载包…';
+    label.textContent = 'Loading packages…';
     label.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;margin-top:6px;';
     list.appendChild(label);
   } catch {
-    list.innerHTML = '<div class="hwfit-loading">正在加载包...</div>';
+    list.innerHTML = '<div class="hwfit-loading">Loading packages...</div>';
   }
   try {
     // Resolve the target server from the deps dropdown so remote-target
-    // packages are checked on THAT server's venv (not just the local host).
+    // packages are checked on THAT server\'s venv (not just the local host).
     let _depHost = '', _depPort = '', _depVenv = '';
     const _dsel = document.getElementById('hwfit-deps-server');
     const _depSrv = _dsel && _dsel.value !== 'local' ? _serverByVal(_dsel.value) : null;
@@ -912,7 +931,7 @@ async function _fetchDependencies() {
     const resp = await fetch('/api/cookbook/packages' + (_pkgParams.toString() ? '?' + _pkgParams.toString() : ''));
     const data = await resp.json();
     const pkgs = data.packages || [];
-    if (!pkgs.length) { list.innerHTML = '<div class="hwfit-loading">未找到包</div>'; return; }
+    if (!pkgs.length) { list.innerHTML = '<div class="hwfit-loading">No packages found</div>'; return; }
     const _winUnsupported = new Set(['hf_transfer', 'vllm', 'rembg', 'gfpgan']);
 
     const _statusTag = (pkg, isLocal, isSystemDep, winBlocked) => {
@@ -933,7 +952,7 @@ async function _fetchDependencies() {
 
     // Per-package inline glyphs — same accent-coloured marks used in the
     // Backend picker on the Run page, so the Dependencies row visually
-    // matches the engine you're configuring. Unknown packages get no
+    // matches the engine you\'re configuring. Unknown packages get no
     // icon (the name alone is fine for librosa, hf_transfer, etc.).
     const _DEP_GLYPHS = {
       vllm: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4l7 16 7-16"/><path d="M14 4l4 9 3-9"/></svg>',
@@ -1033,7 +1052,7 @@ async function _fetchDependencies() {
     // Prepend the configured venv's activate line (pip variant only) so
     // the user sees a paste-ready sequence; Run keeps using env_prefix to
     // activate the same venv before the pip command. Docker variant skips
-    // the activate line — `docker pull` doesn't need a venv.
+    // the activate line — `docker pull` doesn\'t need a venv.
     function _recipeDisplayText(commands, variant) {
       if (variant === 'docker') return commands.join('\n');
       const envPath = (_envState.envPath || '').replace(/\/+$/, '');
@@ -1094,8 +1113,8 @@ async function _fetchDependencies() {
     const _serverDeps = pkgs.filter(p => p.target !== 'local');
 
     list.innerHTML = [
-      _viewingRemote ? '' : _section('Odysseus 应用', '在 Odysseus 应用内部运行。', _appDeps),
-      _section('服务器', '在上面选择的服务器上运行（本地或远程 SSH 服务器）。', _serverDeps),
+      _viewingRemote ? '' : _section('Odysseus app', 'Run inside the Odysseus app itself.', _appDeps),
+      _section('Server', 'Run on the server chosen above (Local, or a remote box over SSH).', _serverDeps),
     ].join('');
 
     // Shared install/update routine — used by the Install button and the
@@ -1110,11 +1129,11 @@ async function _fetchDependencies() {
         const depsServerSel = document.getElementById('hwfit-deps-server');
         if (depsServerSel) _applyServerSelection(depsServerSel.value);
       }
-      const targetHost = isLocalOnly ? '此服务器' : (_envState.remoteHost || '本地');
+      const targetHost = isLocalOnly ? 'this server' : (_envState.remoteHost || 'local');
       // Always go through `python -m pip` so the leading token is `python`
       // — matches the /api/model/serve allow-list (bare `pip` is blocked).
       // Inside a venv/conda env, `--user` is invalid (pip refuses), so we
-      // only add `--user --break-system-packages` when there's no env —
+      // only add `--user --break-system-packages` when there\'s no env —
       // for PEP-668-locked system pythons (Arch, newer Debian).
       const _inEnv = _envState.env === 'venv' || _envState.env === 'conda';
       const _pipFlags = (!_isWindows() && !_inEnv) ? ' --user --break-system-packages' : '';
@@ -1168,21 +1187,21 @@ async function _fetchDependencies() {
           // disappearing before the user could read multi-clause errors
           // like "tmux missing on remote".
           const reason = data.detail || data.error || `HTTP ${res.status}`;
-          uiModule.showToast('安装失败: ' + String(reason).slice(0, 400), {
+          uiModule.showToast('安装失败：' + String(reason).slice(0, 400), {
             duration: 20000,
-            action: '确认',
+            action: 'OK',
             onAction: () => {},
           });
           return;
         }
         // _dep flags this as a pip dependency/driver install (not a servable
-        // model) so the running-task card doesn't offer a "Serve →" button.
+        // model) so the running-task card doesn\'t offer a "Serve →" button.
         const payload = { repo_id: pipName, _cmd: cmd, remote_host: _envState.remoteHost || '', _dep: true, env_path: _envState.envPath || '' };
         _addTask(data.session_id, 'pip ' + pkgName, 'download', payload);
-        if (statusEl) { statusEl.textContent = upgrade ? '更新中...' : '安装中...'; statusEl.disabled = true; }
+        if (statusEl) { statusEl.textContent = upgrade ? 'Updating...' : 'Installing...'; statusEl.disabled = true; }
         uiModule.showToast(`${upgrade ? '正在更新' : '正在安装'} ${pkgName} 到 ${targetHost}...`);
       } catch (err) {
-        uiModule.showToast('安装失败: ' + err.message, {
+        uiModule.showToast('安装失败：' + err.message, {
           duration: 20000,
           action: 'OK',
           onAction: () => {},
@@ -1210,7 +1229,7 @@ async function _fetchDependencies() {
     // install routine (currently only `reinstall_llama_cpp_cuda` —
     // forces pip install with the abetlen CUDA wheel index to add GPU
     // offload). Same install flow used at launch-time auto-fix, but
-    // user-initiated here so they don't have to launch + wait + retry.
+    // user-initiated here so they don\'t have to launch + wait + retry.
     list.querySelectorAll('.cookbook-dep-partial').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -1242,12 +1261,12 @@ async function _fetchDependencies() {
             _addTask(data.session_id, 'pip llama-cpp-python[CUDA]', 'download', payload);
             uiModule.showToast(`Reinstalling llama-cpp-python with CUDA wheels on ${targetLabel} (~1-3 min)…`, 4000);
           } else {
-            uiModule.showToast('更新失败: ' + String(data.detail || data.error || `HTTP ${res.status}`).slice(0, 300), {
+            uiModule.showToast('升级失败：' + String(data.detail || data.error || `HTTP ${res.status}`).slice(0, 300), {
               duration: 20000, action: 'OK', onAction: () => {},
             });
           }
         } catch (err) {
-          uiModule.showToast('更新请求失败: ' + err.message, { duration: 20000, action: 'OK', onAction: () => {} });
+          uiModule.showToast('升级请求失败：' + err.message, { duration: 20000, action: 'OK', onAction: () => {} });
         }
       });
     });
@@ -1263,7 +1282,7 @@ async function _fetchDependencies() {
         try { await navigator.clipboard.writeText(cmd); }
         catch { /* fall through */ }
         const orig = btn.textContent;
-        btn.textContent = '已复制';
+        btn.textContent = 'Copied';
         setTimeout(() => { if (btn.isConnected) btn.textContent = orig; }, 1200);
       });
     });
@@ -1290,7 +1309,7 @@ async function _fetchDependencies() {
         }
         const targetLabel = isLocal ? 'this server' : (_envState.remoteHost || 'remote');
         const origText = btn.textContent;
-        btn.textContent = '安装中…';
+        btn.textContent = 'Installing…';
         btn.disabled = true;
         try {
           const body = { packages: names };
@@ -1306,7 +1325,7 @@ async function _fetchDependencies() {
           });
           const data = await res.json().catch(() => ({}));
           if (res.ok && data.ok) {
-            uiModule.showToast(`已在 ${targetLabel} 上安装 ${names.join(', ')}。刷新中…`, 4000);
+            uiModule.showToast(`Installed ${names.join(', ')} on ${targetLabel}. Refreshing…`, 4000);
             // Refresh the deps panel so the row updates (prereqs now present).
             try { await _fetchDependencies(); } catch {}
           } else {
@@ -1315,9 +1334,9 @@ async function _fetchDependencies() {
             // from the row) so the user can copy-paste it without leaving
             // the toast. Otherwise just surface the error.
             const _suffix = _resolvedCmd ? `\n\nRun on ${targetLabel}: ${_resolvedCmd}` : '';
-            uiModule.showToast('构建依赖安装失败: ' + String(reason).slice(0, 300) + _suffix, {
+            uiModule.showToast('构建依赖安装失败：' + String(reason).slice(0, 300) + _suffix, {
               duration: 25000,
-              action: _resolvedCmd ? '复制命令' : 'OK',
+              action: _resolvedCmd ? 'Copy command' : 'OK',
               onAction: async () => {
                 if (_resolvedCmd) {
                   try { await navigator.clipboard.writeText(_resolvedCmd); } catch {}
@@ -1328,7 +1347,7 @@ async function _fetchDependencies() {
             btn.disabled = false;
           }
         } catch (err) {
-          uiModule.showToast('安装请求失败: ' + err.message, {
+          uiModule.showToast('安装请求失败：' + err.message, {
             duration: 20000, action: 'OK', onAction: () => {},
           });
           btn.textContent = origText;
@@ -1453,14 +1472,14 @@ async function _fetchDependencies() {
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.ok) {
-            uiModule.showToast('运行失败: ' + String(data.detail || data.error || `HTTP ${res.status}`).slice(0, 200));
+            uiModule.showToast('运行失败：' + String(data.detail || data.error || `HTTP ${res.status}`).slice(0, 200));
             return;
           }
           const payload = { repo_id: `${backend} setup`, _cmd: cmd, remote_host: _envState.remoteHost || '', _dep: true };
           _addTask(data.session_id, `${backend} setup`, 'download', payload);
-          uiModule.showToast(`正在 ${targetHost} 上运行 ${backend} 安装脚本…`);
+          uiModule.showToast(`Running ${backend} setup on ${targetHost}…`);
         } catch (err) {
-          uiModule.showToast('运行失败: ' + err.message);
+          uiModule.showToast('运行失败：' + err.message);
         }
       });
     });
@@ -1473,13 +1492,13 @@ async function _fetchDependencies() {
       const where = host || 'this server';
       const action = updateSource ? 'Update llama.cpp source and rebuild' : 'Rebuild llama.cpp engine';
       const detail = updateSource
-        ? '这会尽可能快进图谱管理的 ~/llama.cpp 检出，然后清除缓存的 llama-server 构建。下次启动会重新编译或安装最新匹配的预构建版本。'
-        : '这会清除缓存的 llama-server 构建。下次启动会重新编译或安装匹配的预构建版本。';
+        ? 'This fast-forwards the Cookbook-managed ~/llama.cpp checkout when possible, then clears the cached llama-server build. The next launch recompiles or installs the latest matching prebuilt.'
+        : 'This clears the cached llama-server build. The next launch recompiles or installs a matching prebuilt.';
       if (!confirm(`${action} on ${where}?\n\n${detail}`)) return;
       const oldText = statusEl?.textContent;
       if (statusEl) {
         statusEl.disabled = true;
-        statusEl.textContent = updateSource ? '更新中...' : '清除中...';
+        statusEl.textContent = updateSource ? 'Updating...' : 'Clearing...';
       }
       try {
         const res = await fetch('/api/cookbook/rebuild-engine', {
@@ -1495,11 +1514,11 @@ async function _fetchDependencies() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
           const reason = data.detail || data.error || `HTTP ${res.status}`;
-          uiModule.showToast(`${updateSource ? '更新' : '重建'}失败: ` + String(reason).slice(0, 300), {
+          uiModule.showToast(`${updateSource ? 'Update' : 'Rebuild'} failed: ` + String(reason).slice(0, 300), {
             duration: 20000, action: 'OK', onAction: () => {},
           });
         } else {
-          uiModule.showToast(`已在 ${where} ${updateSource ? '更新源码并清除' : '清除'} llama.cpp 构建。重新启动服务任务以重建。`);
+          uiModule.showToast(`${updateSource ? 'Updated source and cleared' : 'Cleared'} llama.cpp build on ${where}. Re-launch the serve task to rebuild.`);
         }
       } catch (err) {
         uiModule.showToast(`${updateSource ? 'Update' : 'Rebuild'} failed: ` + err.message);
@@ -1514,7 +1533,7 @@ async function _fetchDependencies() {
 
     // Wire the installed-package menu.
     function _showDepMenu(anchor) {
-      document.querySelectorAll('.cookbook-dep-menu').forEach(d => d.remove());
+      document.querySelectorAll('.cookbook-dep-menu').forEach(dismissOrRemove);
       const row = anchor.closest('.cookbook-dep-row');
       if (!row) return;
       const pipName = row.dataset.depPip;
@@ -1527,15 +1546,15 @@ async function _fetchDependencies() {
       const minW = 150;
       let left = Math.min(rect.right - minW, window.innerWidth - minW - 8);
       left = Math.max(8, left);
-      dropdown.style.cssText = `position:fixed;display:block;z-index:10001;top:${rect.bottom + 6}px;left:${left}px;right:auto;min-width:${minW}px;max-width:calc(100vw - 16px);background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:6px;font-size:11px;`;
+      dropdown.style.cssText = `position:fixed;display:block;z-index:${topPortalZ()};top:${rect.bottom + 6}px;left:${left}px;right:auto;min-width:${minW}px;max-width:calc(100vw - 16px);background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:6px;font-size:11px;`;
       const upIco = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>';
       const it = document.createElement('div');
       it.className = 'dropdown-item-compact';
-      it.innerHTML = `<span class="dropdown-icon">${upIco}</span><span>更新</span>`;
+      it.innerHTML = `<span class="dropdown-icon">${upIco}</span><span>Update</span>`;
       it.title = `Update ${pkgName} to the latest version (pip install -U)`;
       it.addEventListener('click', async (e) => {
         e.stopPropagation();
-        dropdown.remove();
+        close();
         await _installDep(pipName, pkgName, isLocalOnly, true, null);
       });
       dropdown.appendChild(it);
@@ -1543,7 +1562,7 @@ async function _fetchDependencies() {
         const rebuildIco = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
         const rebuild = document.createElement('div');
         rebuild.className = 'dropdown-item-compact';
-        rebuild.innerHTML = `<span class="dropdown-icon">${rebuildIco}</span><span>重建</span>`;
+        rebuild.innerHTML = `<span class="dropdown-icon">${rebuildIco}</span><span>Rebuild</span>`;
         rebuild.title = 'Clear the cached llama-server build so the next launch rebuilds it.';
         rebuild.addEventListener('click', async (e) => {
           e.stopPropagation();
@@ -1553,7 +1572,7 @@ async function _fetchDependencies() {
         dropdown.appendChild(rebuild);
         const source = document.createElement('div');
         source.className = 'dropdown-item-compact';
-        source.innerHTML = `<span class="dropdown-icon">${upIco}</span><span>更新源码并重建</span>`;
+        source.innerHTML = `<span class="dropdown-icon">${upIco}</span><span>Update source + rebuild</span>`;
         source.title = 'Fast-forward ~/llama.cpp when possible, then clear the cached build.';
         source.addEventListener('click', async (e) => {
           e.stopPropagation();
@@ -1563,26 +1582,21 @@ async function _fetchDependencies() {
         dropdown.appendChild(source);
       }
       document.body.appendChild(dropdown);
-      const close = (ev) => {
-        if (!dropdown.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) {
-          dropdown.remove();
-          document.removeEventListener('click', close, true);
-        }
-      };
-      setTimeout(() => document.addEventListener('click', close, true), 10);
+      const close = bindMenuDismiss(dropdown, () => { dropdown.remove(); }, (ev) =>
+        !dropdown.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target));
     }
     list.querySelectorAll('.cookbook-dep-installed-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (document.querySelector('.cookbook-dep-menu')) {
-          document.querySelectorAll('.cookbook-dep-menu').forEach(d => d.remove());
+          document.querySelectorAll('.cookbook-dep-menu').forEach(dismissOrRemove);
           return;
         }
         _showDepMenu(btn);
       });
     });
   } catch (err) {
-    list.innerHTML = `<div class="hwfit-loading">加载包失败: ${esc(err.message)}</div>`;
+    list.innerHTML = `<div class="hwfit-loading">Error loading packages: ${esc(err.message)}</div>`;
   }
 }
 
@@ -1615,10 +1629,10 @@ function _applyServerSelection(val) {
     if (!sel || sel.tagName !== 'SELECT') return;
     // Option values are host strings now ('local' for the local box).
     sel.value = _want;
-    // If the host isn't among this select's current options (stale options after
+    // If the host isn\'t among this select's current options (stale options after
     // the server list changed), the browser leaves the box BLANK/grey even though
     // the value is "set". Rebuild the options so the chosen host has an entry, then
-    // re-apply; fall back to 'local' only if it's genuinely gone.
+    // re-apply; fall back to 'local' only if it\'s genuinely gone.
     if (sel.selectedIndex < 0) {
       sel.innerHTML = _buildServerOpts(sel.id === 'hwfit-dl-server');
       sel.value = _want;
@@ -1639,10 +1653,10 @@ function _wireTabEvents(body) {
       });
       if (backend === 'Search') {
         _hwfitInit();
-        _hwfitFetch();
+        _hwfitFetch(false, { allowNetwork: false });
       }
       if (backend === 'Serve') {
-        _fetchCachedModels();
+        _fetchCachedModels(false, { allowNetwork: false });
       }
       if (backend === 'Dependencies') {
         _fetchDependencies();
@@ -1701,7 +1715,7 @@ function _wireTabEvents(body) {
     });
     _envState.servers = servers;
     // Auto-default: when the user has configured EXACTLY ONE remote server
-    // and hasn't picked one yet, select it. Without this, the dropdown
+    // and hasn\'t picked one yet, select it. Without this, the dropdown
     // stays on "Local" so the eventual serve/scan/launch resolves to no
     // remote host and the backend rejects the call with 403 (Forbidden),
     // which read to the user as a permission bug.
@@ -1737,15 +1751,15 @@ function _wireTabEvents(body) {
   });
 
   // Server selector — the server is global, so switching it here re-scans the
-  // main Scan/Download list (#hwfit-list) for the new server's hardware too.
+  // main Scan/Download list (#hwfit-list) for the new server\'s hardware too.
   // (The trending sublist reloads via its own handler in the HF-latest wiring.)
   const dlServer = document.getElementById('hwfit-dl-server');
   if (dlServer) {
     dlServer.addEventListener('change', () => {
       _applyServerSelection(dlServer.value);
-      // Reset toggle state (no flicker) so the new server's hardware re-renders.
+      // Reset toggle state (no flicker) so the new server\'s hardware re-renders.
       _resetGpuToggleState();
-      _hwfitFetch();
+      _hwfitFetch(false, { allowNetwork: false });
     });
   }
 
@@ -1782,13 +1796,13 @@ function _wireTabEvents(body) {
           if (settingsTab) settingsTab.click();
         });
       }
-      _fetchCachedModels();
+      _fetchCachedModels(false, { allowNetwork: false });
     });
   }
 
   const scanBtn = document.getElementById('hwfit-cache-scan');
   if (scanBtn) {
-    scanBtn.addEventListener('click', () => _fetchCachedModels());
+    scanBtn.addEventListener('click', () => _fetchCachedModels(true));
   }
 
   const editDirsLink = document.querySelector('.cookbook-serve-dir-edit');
@@ -1830,7 +1844,7 @@ function _wireTabEvents(body) {
 
   // "Reinstall" buttons for pip-based serving stacks (vllm, sglang). The
   // deps list renders ASYNCHRONOUSLY after _fetchDependencies resolves, so
-  // attaching listeners directly here would miss buttons that don't exist
+  // attaching listeners directly here would miss buttons that don\'t exist
   // yet. Use document-level delegation instead — the click always finds the
   // right .cookbook-dep-reinstall button no matter when it was painted.
   if (!document._cookbookReinstallWired) {
@@ -1902,12 +1916,12 @@ function _wireTabEvents(body) {
     function _updateBulkCount() {
       const count = document.querySelectorAll('.serve-select-cb.selected').length;
       const countEl = document.getElementById('serve-bulk-count');
-      if (countEl) countEl.textContent = '已选择 ' + count + ' 项';
+      if (countEl) countEl.textContent = count + ' selected';
     }
 
     document.getElementById('serve-bulk-cancel')?.addEventListener('click', () => {
       selectBtn.classList.remove('active');
-      selectBtn.textContent = '选择';  // reset label so the button doesn't stay reading "Cancel" after exit
+      selectBtn.textContent = '选择';  // reset label so the button doesn\'t stay reading "Cancel" after exit
       bulkBar.classList.add('hidden');
       document.querySelectorAll('.serve-select-cb').forEach(dot => { dot.style.display = 'none'; dot.classList.remove('selected'); });
     });
@@ -1920,7 +1934,7 @@ function _wireTabEvents(body) {
         const item = dot.closest('.memory-item[data-repo]');
         if (item?.dataset.repo) repos.push(item.dataset.repo);
       });
-      if (!(await uiModule.styledConfirm(`Delete ${repos.length} model(s)? This removes cached files.`, { confirmText: 'Delete', danger: true }))) return;
+      if (!(await uiModule.styledConfirm(`确定删除 ${repos.length} 个模型？这将移除缓存文件。`, { confirmText: '删除', danger: true }))) return;
       for (const repo of repos) {
         const item = document.querySelector(`.memory-item[data-repo="${repo}"]`);
         if (item) await _deleteCachedModel(repo, item, true);
@@ -2011,7 +2025,7 @@ function _wireTabEvents(body) {
         return false;
       }
       dlGgufRow.style.display = 'flex';
-      dlGgufQuant.innerHTML = '<option value="">扫描中...</option>';
+      dlGgufQuant.innerHTML = '<option value="">Scanning...</option>';
       dlGgufQuant.dataset.repo = repo;
       dlGgufNote.textContent = '';
       try {
@@ -2031,7 +2045,7 @@ function _wireTabEvents(body) {
           byQuant.get(quant).push(name);
         });
         if (!byQuant.size) {
-          _hideGgufPicker('未找到 GGUF 量化');
+          _hideGgufPicker('No GGUF quants found');
           return false;
         }
         const quantRank = q => {
@@ -2063,7 +2077,7 @@ function _wireTabEvents(body) {
     // repo + exact file include. Lets the user paste a path straight out
     // of a HuggingFace "Files and versions" page or a copied filename
     // without needing to peel the repo/file apart by hand. Returns null
-    // when the input doesn't look like a deep file path.
+    // when the input doesn\'t look like a deep file path.
     function _splitRepoFile(raw) {
       // Must have at least 3 slash-separated segments AND end in a
       // model-file extension to avoid eating Ollama tags or repo-only
@@ -2114,7 +2128,7 @@ function _wireTabEvents(body) {
       if (looksGgufRepo && !pickerInclude) {
         const oldText = dlBtn.textContent;
         dlBtn.disabled = true;
-        dlBtn.textContent = '扫描中...';
+        dlBtn.textContent = 'Scanning...';
         try {
           const found = await _scanGgufRepo(rawRepo);
           pickerInclude = (found && dlGgufQuant?.dataset.repo === repo) ? (dlGgufQuant.value || '') : '';
@@ -2123,14 +2137,14 @@ function _wireTabEvents(body) {
           dlBtn.textContent = oldText;
         }
         if (!pickerInclude) {
-          uiModule.showToast('请先选择 GGUF 量化。图谱不会在没有包含模式的情况下下载整个 GGUF 仓库。');
+          uiModule.showToast('请先选择 GGUF 量化版本。Odysseus 不会在没有包含模式的情况下下载整个 GGUF 仓库。');
           return;
         }
-        uiModule.showToast('请选择 GGUF 量化，然后再次点击下载。');
+        uiModule.showToast('请选择 GGUF 量化版本，然后再次点击下载。');
         return;
       }
       // Resolve the host straight from THIS window's server dropdown, by index
-      // into the (consistent) servers list. We deliberately don't use
+      // into the (consistent) servers list. We deliberately don\'t use
       // _envState.remoteHost — there can be multiple copies of the cookbook
       // state in memory and they disagree on the active host, which is what sent
       // downloads to the wrong server. The dropdown the user sees is the truth.
@@ -2239,7 +2253,7 @@ function _wireTabEvents(body) {
   const hfRefresh = document.getElementById('cookbook-hf-latest-refresh');
   if (hfToggle && hfList) {
     let _loaded = false;
-    // Per-server VRAM cache so we don't re-probe on every expand
+    // Per-server VRAM cache so we don\'t re-probe on every expand
     const _hwCache = {};
     function _hfModelLooksAwqLike(m) {
       const text = `${m?.repo_id || ''} ${(m?.tags || []).join(' ')}`.toLowerCase();
@@ -2286,16 +2300,17 @@ function _wireTabEvents(body) {
       hfList.innerHTML = '';
       try {
         const sp = (await import('./spinner.js')).default;
-        const _spin = sp.createWhirlpool(28);
-        _spin.element.style.cssText = 'margin:24px auto 0;display:block;';
+        const _spin = sp.createWhirlpool(22);
+        _spin.element.classList.add('cookbook-section-loading-wp');
+        _spin.element.style.cssText = 'margin:24px auto 0;display:block;width:22px;height:22px;';
         hfList.appendChild(_spin.element);
         const lbl = document.createElement('div');
         lbl.className = 'hwfit-loading';
-        lbl.textContent = '正在扫描模型…';
+        lbl.textContent = 'Scanning models…';
         lbl.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;margin-top:6px;';
         hfList.appendChild(lbl);
       } catch {
-        hfList.innerHTML = '<div class="hwfit-loading">正在扫描模型…</div>';
+        hfList.innerHTML = '<div class="hwfit-loading">Scanning models…</div>';
       }
       const hwInfo = await _getSelectedServerHw();
       const vram = hwInfo.vram || 0;
@@ -2313,10 +2328,10 @@ function _wireTabEvents(body) {
         }
         if (!models.length) {
           // Distinguish "the HF API failed" from "nothing matched" so an outage
-          // doesn't masquerade as no-fitting-models.
+          // doesn\'t masquerade as no-fitting-models.
           const msg = lastErr
             ? `Couldn't load trending models (${esc(lastErr)})`
-            : '未找到热门模型';
+            : 'No trending models found';
           hfList.innerHTML = `<div class="hwfit-loading">${msg}</div>`;
           return;
         }
@@ -2349,7 +2364,7 @@ function _wireTabEvents(body) {
           });
         });
       } catch (e) {
-        hfList.innerHTML = '<div class="hwfit-loading">加载失败</div>';
+        hfList.innerHTML = '<div class="hwfit-loading">Failed to load</div>';
       }
     }
     hfToggle.addEventListener('click', () => {
@@ -2373,8 +2388,8 @@ function _wireTabEvents(body) {
     });
     // Re-fetch when a server dropdown changes — different server = different
     // hardware/VRAM. Mark the list stale so it reloads for the new server even
-    // if it's currently collapsed (otherwise reopening showed the old server's
-    // models); reload immediately when it's open.
+    // if it\'s currently collapsed (otherwise reopening showed the old server\'s
+    // models); reload immediately when it\'s open.
     const _onServerChange = () => {
       _loaded = false;
       if (hfList.style.display !== 'none') { _loaded = true; _loadLatest(); }
@@ -2393,13 +2408,13 @@ function _wireTabEvents(body) {
   if (olToggle && olList) {
     let _olLoaded = false;
     async function _loadOllama(refresh = false) {
-      olList.innerHTML = '<div class="hwfit-loading" style="opacity:0.5;font-size:11px;text-align:center;padding:12px;">加载中…</div>';
+      olList.innerHTML = '<div class="hwfit-loading" style="opacity:0.5;font-size:11px;text-align:center;padding:12px;">Loading…</div>';
       try {
         const res = await fetch(`/api/cookbook/ollama/library${refresh ? '?refresh=1' : ''}`);
         const data = await res.json();
         const models = data.models || [];
         if (!models.length) {
-          olList.innerHTML = '<div class="hwfit-loading">没有模型</div>';
+          olList.innerHTML = '<div class="hwfit-loading">No models</div>';
           return;
         }
         let html = '';
@@ -2484,7 +2499,7 @@ function _wireTabEvents(body) {
         if (!check) {
           check = document.createElement('span');
           check.className = 'hwfit-hf-check';
-          check.title = 'Token 已保存';
+          check.title = 'Token stored';
           check.textContent = '✓';
           check.style.cssText = 'font-weight:800;color:var(--green,#50fa7b);font-size:15px;line-height:1;flex-shrink:0;position:relative;top:2px;';
           hfInput.parentNode.insertBefore(check, hfInput);
@@ -2506,18 +2521,18 @@ function _wireTabEvents(body) {
 // "+ Add server" handler, so a freshly-added server has the IDENTICAL layout
 // (Model Directory header, default-server checkmark, trash delete, platform icon).
 // forceRemote renders an editable remote entry even before a host is typed
-// (a new server's host is empty, which would otherwise read as "Local").
+// (a new server\'s host is empty, which would otherwise read as "Local").
 export function _serverEntryHtml(s, i, defaultServer, forceRemote, isNew) {
   const isLocal = (forceRemote || isNew) ? false : (!s.host || s.host === 'local');
-  const envOpts = ['none', 'venv'].map(e => `<option value="${e}"${s.env === e ? ' selected' : ''}>${e === 'none' ? 'None' : e}</option>`).join('');
+  const envOpts = [['none', 'None'], ['venv', 'venv'], ['conda', 'conda']].map(([value, label]) => `<option value="${value}"${s.env === value ? ' selected' : ''}>${label}</option>`).join('');
   let html = '';
   html += `<div class="cookbook-server-entry" data-idx="${i}" data-platform="${esc(s.platform || '')}">`;
   const _srvTitle = s.name || (isLocal ? 'Local' : (s.host || `Server ${i + 1}`));
   const _srvKey = isLocal ? 'local' : (s.host || '');
   const _isDefaultSrv = (defaultServer || '') === _srvKey;
   const _pIco = _platformIcon(s.platform);
-  const _keyBtn = `<button class="cookbook-server-key-btn" title="Set up SSH key for this server" style="height:22px;box-sizing:border-box;display:inline-flex;align-items:center;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M12 11l8-8"/><path d="M17 6l3 3"/></svg>Key</button>`;
-  const _checkBtn = `<button class="cookbook-server-check-btn" title="Check SSH connection" style="height:22px;box-sizing:border-box;display:inline-flex;align-items:center;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>Check</button>`;
+  const _keyBtn = `<button class="cookbook-server-key-btn" title="Set up SSH key for this server" style="height:22px;box-sizing:border-box;display:inline-flex;align-items:center;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M12 11l8-8"/><path d="M17 6l3 3"/></svg>密钥</button>`;
+  const _checkBtn = `<button class="cookbook-server-check-btn" title="Check SSH connection" style="height:22px;box-sizing:border-box;display:inline-flex;align-items:center;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>检查</button>`;
   html += `<span class="cookbook-server-title" style="display:flex;align-items:center;gap:6px;width:100%;font-size:13px;font-weight:600;margin-bottom:4px;">`;
   html += `${esc(_srvTitle)}`;
   html += _pIco ? `<span class="cookbook-srv-platform" title="${esc(s.platform || '')}" style="display:inline-flex;align-items:center;opacity:0.55;">${_pIco}</span>` : '';
@@ -2531,11 +2546,11 @@ export function _serverEntryHtml(s, i, defaultServer, forceRemote, isNew) {
   }
   html += `</span>`;
   html += `<div class="cookbook-server-row">`;
-  html += `<input type="text" class="hwfit-sf cookbook-srv-name" value="${esc(s.name || (isLocal ? 'Local' : ''))}" placeholder="Name (optional)" style="width:92px;flex-shrink:0;" />`;
+  html += `<input type="text" class="hwfit-sf cookbook-srv-name" value="${esc(s.name || (isLocal ? 'Local' : ''))}" placeholder="名称（可选）" style="width:92px;flex-shrink:0;" />`;
   html += `<input type="text" class="hwfit-sf cookbook-srv-host" value="${isLocal ? '' : esc(s.host || '')}" placeholder="e.g. user@ip" style="width:214.5px;flex-shrink:0;box-sizing:border-box;" ${isLocal ? 'readonly' : ''} />`;
-  html += `<input type="text" class="hwfit-sf cookbook-srv-port" value="${esc(s.port || '')}" placeholder="Port" title="SSH port (default 22)" style="width:48px;flex-shrink:0;" ${isLocal ? 'readonly' : ''} />`;
+  html += `<input type="text" class="hwfit-sf cookbook-srv-port" value="${esc(s.port || '')}" placeholder="端口" title="SSH 端口（默认 22）" style="width:48px;flex-shrink:0;" ${isLocal ? 'readonly' : ''} />`;
   html += `<select class="hwfit-sf cookbook-srv-env">${envOpts}</select>`;
-  html += `<input type="text" class="hwfit-sf cookbook-srv-path" value="${esc(s.envPath || '')}" placeholder="${s.platform === 'windows' ? 'venv path' : '~/venv'}" />`;
+  html += `<input type="text" class="hwfit-sf cookbook-srv-path" value="${esc(s.envPath || '')}" placeholder="${s.platform === 'windows' ? 'venv/conda env' : '~/venv or conda-env'}" />`;
   html += `<span class="cookbook-dep-tag cookbook-dep-target" style="font-size:8px;flex-shrink:0;min-width:46px;text-align:center;visibility:hidden;">placeholder</span>`;
   html += `<span class="cookbook-srv-actions" style="display:inline-flex;gap:4px;align-items:center;width:78px;flex-shrink:0;justify-content:flex-end;"></span>`;
   html += `</div>`;
@@ -2556,9 +2571,9 @@ export function _serverEntryHtml(s, i, defaultServer, forceRemote, isNew) {
   if (isNew) {
     // A brand-new server: Save (confirm) sits where Delete would be; Cancel is
     // top-right in the title. Save confirms with a checkmark (auto-saves on edit too).
-    html += `<button class="cookbook-server-save-btn" title="Save this server" style="${_btnStyle}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save</button>`;
+    html += `<button class="cookbook-server-save-btn" title="Save this server" style="${_btnStyle}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存</button>`;
   } else if (!isLocal) {
-    html += `<button class="cookbook-server-rm cookbook-server-rm-btn" title="Delete this server" style="${_btnStyle}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>Delete</button>`;
+    html += `<button class="cookbook-server-rm cookbook-server-rm-btn" title="Delete this server" style="${_btnStyle}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>删除</button>`;
   }
   html += `</div>`;
   if (!isLocal) {
@@ -2614,13 +2629,14 @@ function _renderRecipes() {
     const isLocal = !s.host || s.host.toLowerCase() === 'local';
     if (isLocal) {
       s.host = '';
+      s.platform = _envState.hostPlatform || '';
       if (_localSeen) return false;
       _localSeen = true;
     }
     return true;
   });
   if (!_localSeen) {
-    _es.servers.unshift({ host: '', env: _es.env || 'none', envPath: _es.envPath || '', modelDir: '~/.cache/huggingface/hub' });
+    _es.servers.unshift({ host: '', env: _es.env || 'none', envPath: _es.envPath || '', modelDir: '~/.cache/huggingface/hub', platform: _envState.hostPlatform || '' });
   }
   if (_es.remoteHost && !_es.servers.some(s => s.host === _es.remoteHost)) {
     _es.servers.push({ host: _es.remoteHost, env: _es.env || 'none', envPath: _es.envPath || '', modelDir: '~/.cache/huggingface/hub' });
@@ -2642,7 +2658,7 @@ function _renderRecipes() {
   } else {
     html += `<input type="hidden" id="hwfit-dl-server" value="local" />`;
   }
-  html += `<input type="text" class="cookbook-dl-repo" id="cookbook-dl-repo" placeholder="org/model-name, qwen2.5:14b, or HF URL" style="flex:1;min-width:0;" />`;
+  html += `<input type="text" class="cookbook-dl-repo" id="cookbook-dl-repo" placeholder="org/model-name、qwen2.5:14b 或 HF URL" style="flex:1;min-width:0;" />`;
   html += `<button class="cookbook-btn cookbook-dl-btn" id="cookbook-dl-btn">Download</button>`;
   html += `</div>`;
   html += `<div id="cookbook-dl-gguf-row" class="cookbook-dl-gguf-row" style="display:none;">`;
@@ -2658,7 +2674,7 @@ function _renderRecipes() {
   html += `<div style="margin-top:5px;position:relative;top:-11px;">`;
   html += `<div style="display:flex;gap:4px;align-items:center;">`;
   html += `<button type="button" class="memory-toolbar-btn" id="cookbook-hf-latest-toggle" style="flex:1;text-align:left;height:28px;font-size:11px;display:flex;align-items:center;gap:6px;border-radius:5px;">`;
-  // Trending-up icon (accent) so the section reads as "what's hot".
+  // Trending-up icon (accent) so the section reads as "what\'s hot".
   html += `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent, var(--red))" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;pointer-events:none;"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`;
   html += `<span style="pointer-events:none;flex:1;">Trending models that fit your hardware</span>`;
   // Chevron moved to the RIGHT \u2014 collapsed = pointing right, expanded
@@ -2680,23 +2696,29 @@ function _renderRecipes() {
   html += '<p class="memory-desc doclib-desc" style="margin-top:6px;">Scans your hardware for what models you can run. Hardware is cached; hit the scan button to re-probe after changing GPUs.</p>';
   html += '<div class="hwfit-toolbar" style="margin-top:9px;">';
   html += '<select class="cookbook-field-input hwfit-usecase" id="hwfit-usecase" style="height:28px;">';
-  html += '<option value="general" selected>Standard</option><option value="coding">Coding</option>';
-  html += '<option value="reasoning">Reasoning</option><option value="chat">Chat</option>';
+  html += '<option value="general" selected>Standard</option>';
   // Image tab removed — text→image gen is gone from this build (only inpaint
    // remains, which uses its own settings panel). Vision (multimodal) stays.
   html += '<option value="multimodal">Vision</option></select>';
   // Search moved next to the Type filter so the two primary picks
   // (what category + free text) sit together; the more advanced
   // levers (Engine / Quant / Context) live to the right.
-  html += '<input type="text" class="cookbook-field-input hwfit-search" id="hwfit-search" placeholder="Search models..." style="flex:1;" />';
+  html += '<input type="text" class="cookbook-field-input hwfit-search" id="hwfit-search" placeholder="搜索模型..." style="flex:1;" />';
   html += '<span class="hwfit-engine-wrap">';
-  html += '<select class="cookbook-field-input hwfit-engine" id="hwfit-engine" style="height:28px;" title="Filter by serving engine">';
+  html += '<select class="cookbook-field-input hwfit-engine" id="hwfit-engine" style="display:none;" title="Filter by serving engine">';
   html += '<option value="">Engine</option>';
   html += '<option value="llamacpp">llama.cpp</option>';
   html += '<option value="ollama">Ollama</option>';
   html += '<option value="vllm">vLLM</option>';
   html += '<option value="sglang">SGLang</option>';
+  html += '<option value="diffusers">Diffusers</option>';
   html += '</select>';
+  html += '<button type="button" class="cookbook-field-input hwfit-engine-btn" data-hwfit-engine-btn aria-haspopup="listbox" aria-expanded="false" title="Filter by serving engine">';
+  html += '<span class="hwfit-engine-btn-icon" data-hwfit-engine-icon aria-hidden="true"></span>';
+  html += '<span class="hwfit-engine-btn-label" data-hwfit-engine-label>Engine</span>';
+  html += '<svg class="hwfit-engine-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+  html += '</button>';
+  html += '<div class="hwfit-engine-menu" data-hwfit-engine-menu role="listbox" hidden></div>';
   html += '<span class="hwfit-help-chip hwfit-help-chip-inline hwfit-engine-help" title="Rule of thumb: GGUF on single GPU / CPU+RAM → llama.cpp (or Ollama). Safetensors on multi-GPU NVIDIA → vLLM. SGLang is a vLLM-class alternative, sometimes faster on big-MoE / long-context.">?</span>';
   html += '</span>';
   // Quant (Q4/Q8/…). Default is "All" so the list shows the best-scoring
@@ -2708,7 +2730,7 @@ function _renderRecipes() {
   html += '<option value="Q6_K">Q6</option><option value="Q5_K_M">Q5</option>';
   html += '<option value="Q3_K_M">Q3</option><option value="Q2_K">Q2</option>';
   html += '<option value="AWQ-4bit">AWQ</option><option value="FP8">FP8</option><option value="FP4">FP4</option><option value="NVFP4">NVFP4</option></select>';
-  html += '<span class="hwfit-help-chip hwfit-help-chip-inline hwfit-quant-help" title="Lower quant tiers (Q2/Q3/Q4 / AWQ-4bit) are smaller, faster, and cheaper to run, at some quality loss. Higher tiers (Q8 / FP8 / FP16 / BF16) preserve more quality but need more VRAM. “All” shows the best-scoring quant per model — pick a specific one to filter.">?</span>';
+  html += '<span class="hwfit-help-chip hwfit-help-chip-inline hwfit-quant-help" title="Lower quant tiers (Q2/Q3/Q4 / AWQ-4bit) are smaller, faster, and cheaper to run, at some quality loss. Higher tiers (Q8 / FP8 / FP16 / BF16) preserve more quality but need more VRAM. "All" shows the best-scoring quant per model — pick a specific one to filter.">?</span>';
   html += '</span>';
   // Ctx slider — lets you target a context length for fit estimates; the
   // hwfit ranking uses _ctxValue() to factor that into VRAM math, so
@@ -2778,8 +2800,8 @@ function _renderRecipes() {
   html += '</div>';
   html += '<div class="memory-toolbar" style="margin-top:8px;">';
   html += '<div class="memory-category-filters">';
-  html += '<input type="text" class="memory-search-input" id="serve-search" placeholder="Search cached models\u2026" style="flex:1;min-width:120px;" />';
-  html += '<button class="memory-toolbar-btn" id="hwfit-cache-select">Select</button>';
+  html += '<input type="text" class="memory-search-input" id="serve-search" placeholder="搜索已缓存模型\u2026" style="flex:1;min-width:120px;" />';
+  html += '<button class="memory-toolbar-btn" id="hwfit-cache-select">选择</button>';
   html += '</div>';
   html += '<div class="doclib-lang-chips" id="serve-tags"></div>';
   html += '</div>';
@@ -2824,8 +2846,8 @@ function _renderRecipes() {
   html += '<p class="memory-desc doclib-desc">Personal access token for downloading gated and private models.</p>';
   html += '<div class="memory-toolbar">';
   html += `<div style="display:flex;gap:4px;align-items:center;">`;
-  // Bold green check shown when a token is stored (a placeholder can't style a
-  // single glyph, so it's its own element next to the input).
+  // Bold green check shown when a token is stored (a placeholder can\'t style a
+  // single glyph, so it\'s its own element next to the input).
   if (_es.hfTokenConfigured) {
     html += `<span class="hwfit-hf-check" title="Token stored" style="font-weight:800;color:var(--green,#50fa7b);font-size:15px;line-height:1;flex-shrink:0;position:relative;top:2px;">✓</span>`;
   }
@@ -2861,7 +2883,7 @@ function _renderRecipes() {
 
   // Auto-init What Fits
   _hwfitInit();
-  _hwfitFetch();
+  _hwfitFetch(false, { allowNetwork: false });
 }
 
 // ── Public API ──
@@ -2938,7 +2960,7 @@ export async function open(opts) {
   }
   _setCookbookOpening(true);
   try {
-  // Invalidate any pending close() animation handlers so they won't re-hide us
+  // Invalidate any pending close() animation handlers so they won\'t re-hide us
   _closeGen++;
   // Clear any leftover inline styles from a previous swipe-dismiss or close animation
   const _content = modal.querySelector('.modal-content');
@@ -2963,7 +2985,7 @@ export async function open(opts) {
   // state to localStorage. So ALWAYS hydrate our _envState from that mirror —
   // on a successful sync it holds the freshly-fetched servers; on failure it
   // holds the last-known state. Gating this on `!synced` left the render's
-  // _envState empty whenever sync succeeded → "servers don't show".
+  // _envState empty whenever sync succeeded → "servers don\'t show".
   try { Object.assign(_envState, _readStoredEnvState()); } catch {}
   // Honour a user-set default server: always land on it when Cookbook opens, so
   // every dropdown (scan/download/serve/cache/deps) starts on the same machine.
@@ -2979,7 +3001,7 @@ export async function open(opts) {
   // Re-render on every open AFTER sync so the freshly-fetched state (servers,
   // HF token, presets) is always reflected. Gating this to once-per-page used
   // to freeze a stale/empty servers list whenever the first sync raced or
-  // returned before hydration — and since close/reopen doesn't reset the page,
+  // returned before hydration — and since close/reopen doesn\'t reset the page,
   // only a full reload recovered it. Re-rendering is cheap and the in-progress
   // Running tab is rendered separately just below.
   // Guard the render passes: a single broken task card must not throw out of
@@ -3028,7 +3050,7 @@ function _wireCookbookDrag(modal) {
     content, header,
     skipSelector: '.close-btn, .modal-close',
     // Keep only the "close to the edge" dock gesture for Cookbook. The
-    // tileManager side snap is suppressed for this modal so there isn't a
+    // tileManager side snap is suppressed for this modal so there isn\'t a
     // second, tighter edge state fighting the working one.
     enableDock: true,
   });
@@ -3073,8 +3095,48 @@ export function isVisible() {
 
 let _sharedSyncInFlight = false;
 let _sharedSyncLast = 0;
+const SHARED_STATE_LEADER_KEY = 'odysseus-cookbook-shared-state-leader';
+const SHARED_STATE_LEADER_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const SHARED_STATE_LEADER_TTL_MS = 12000;
+
+function _foregroundChatBusy() {
+  try {
+    return !!window.__odysseusChatBusy || Date.now() < (window.__odysseusChatBusyUntil || 0);
+  } catch (_) {
+    return false;
+  }
+}
+
+function _claimSharedStateLeader() {
+  if (document.visibilityState !== 'visible') return false;
+  const now = Date.now();
+  try {
+    const raw = localStorage.getItem(SHARED_STATE_LEADER_KEY);
+    const current = raw ? JSON.parse(raw) : null;
+    if (
+      !current
+      || !current.id
+      || current.id === SHARED_STATE_LEADER_ID
+      || now - Number(current.ts || 0) > SHARED_STATE_LEADER_TTL_MS
+    ) {
+      localStorage.setItem(SHARED_STATE_LEADER_KEY, JSON.stringify({ id: SHARED_STATE_LEADER_ID, ts: now }));
+      return true;
+    }
+    return current.id === SHARED_STATE_LEADER_ID;
+  } catch (_) {
+    return true;
+  }
+}
+
+function _canRefreshSharedCookbookState() {
+  if (!isVisible() || _sharedSyncInFlight) return false;
+  if (document.visibilityState !== 'visible') return false;
+  if (_foregroundChatBusy()) return false;
+  return _claimSharedStateLeader();
+}
+
 async function _refreshSharedCookbookState(reason = '') {
-  if (!isVisible() || _sharedSyncInFlight) return;
+  if (!_canRefreshSharedCookbookState()) return;
   const now = Date.now();
   if (now - _sharedSyncLast < 1500) return;
   _sharedSyncInFlight = true;

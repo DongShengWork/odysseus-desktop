@@ -39,6 +39,7 @@ const FONT_MAP = {
   mono: "'Fira Code', monospace",
   sans: "system-ui, -apple-system, 'Segoe UI', sans-serif",
   serif: "Georgia, 'Times New Roman', serif",
+  opendyslexic: "'OpenDyslexic', sans-serif",
 };
 const DEFAULT_FONT = 'mono';
 const DEFAULT_DENSITY = 'comfortable';
@@ -179,20 +180,20 @@ function deriveSyntaxColors(colors) {
 
 // Advanced picker key → CSS variable mapping
 const ADV_KEYS = [
-  { key: 'userBubbleBg',       css: '--user-bubble-bg',    label: '用户聊天气泡', group: '聊天气泡' },
-  { key: 'aiBubbleBg',         css: '--ai-bubble-bg',      label: 'AI 聊天气泡',   group: '聊天气泡' },
-  { key: 'bubbleBorder',       css: '--bubble-border',     label: '聊天气泡边框', group: '聊天气泡' },
-  { key: 'sidebarBg',          css: '--sidebar-bg',        label: '侧边栏背景',       group: '侧边栏' },
-  { key: 'brandColor',         css: '--brand-color',       label: 'Odysseus 标志',    group: '侧边栏' },
-  { key: 'brandMixTo',         css: '--brand-mix-to',      label: '标志渐变终点', group: '侧边栏' },
-  { key: 'hamburgerColor',     css: '--hamburger-color',   label: '汉堡菜单',   group: '侧边栏' },
-  { key: 'inputBg',            css: '--input-bg',          label: '输入框背景',         group: '聊天输入/提示区域' },
-  { key: 'inputBorder',        css: '--input-border',      label: '输入框边框',     group: '聊天输入/提示区域' },
-  { key: 'sendBtnBg',          css: '--send-btn-bg',       label: '发送按钮',         group: '聊天输入/提示区域' },
-  { key: 'sendBtnHover',       css: '--send-btn-hover',    label: '发送悬停',       group: '聊天输入/提示区域' },
-  { key: 'codeBg',             css: '--code-bg',           label: '代码块背景',          group: '代码块' },
-  { key: 'codeFg',             css: '--code-fg',           label: '代码块文字',        group: '代码块' },
-  { key: 'toggleActive',       css: '--toggle-active',     label: '开关开启',        group: '控件' },
+  { key: 'userBubbleBg',       css: '--user-bubble-bg',    label: 'User Chat Bubble', group: 'Chat Bubbles' },
+  { key: 'aiBubbleBg',         css: '--ai-bubble-bg',      label: 'AI Chat Bubble',   group: 'Chat Bubbles' },
+  { key: 'bubbleBorder',       css: '--bubble-border',     label: 'Border Chat Bubble', group: 'Chat Bubbles' },
+  { key: 'sidebarBg',          css: '--sidebar-bg',        label: 'Sidebar Bg',       group: 'Sidebar' },
+  { key: 'brandColor',         css: '--brand-color',       label: 'Odysseus Logo',    group: 'Sidebar' },
+  { key: 'brandMixTo',         css: '--brand-mix-to',      label: 'Logo Gradient End', group: 'Sidebar' },
+  { key: 'hamburgerColor',     css: '--hamburger-color',   label: 'Hamburger Menu',   group: 'Sidebar' },
+  { key: 'inputBg',            css: '--input-bg',          label: 'Input Bg',         group: 'Chat Input / Prompt Area' },
+  { key: 'inputBorder',        css: '--input-border',      label: 'Input Border',     group: 'Chat Input / Prompt Area' },
+  { key: 'sendBtnBg',          css: '--send-btn-bg',       label: 'Send Btn',         group: 'Chat Input / Prompt Area' },
+  { key: 'sendBtnHover',       css: '--send-btn-hover',    label: 'Send Hover',       group: 'Chat Input / Prompt Area' },
+  { key: 'codeBg',             css: '--code-bg',           label: 'Code Bg',          group: 'Code Blocks' },
+  { key: 'codeFg',             css: '--code-fg',           label: 'Code Text',        group: 'Code Blocks' },
+  { key: 'toggleActive',       css: '--toggle-active',     label: 'Toggle On',        group: 'Controls' },
 ];
 
 function computeAdvancedDefaults(colors) {
@@ -387,6 +388,20 @@ export function applyFontDensity(font, density) {
   if (d !== 'comfortable') document.documentElement.classList.add('density-' + d);
 }
 
+// UI text-size scale (accessibility). Global and independent of the active
+// theme, so the chosen size persists across theme switches. Stored as a plain
+// percentage string ('100' | '110' | '125' | '150').
+const UI_SCALE_KEY = 'odysseus-ui-scale';
+const DEFAULT_UI_SCALE = '100';
+
+export function applyUiScale(scale) {
+  const s = scale || DEFAULT_UI_SCALE;
+  // Only one non-default scale ('125'). Remove any legacy classes too so an
+  // older stored value can\'t leave a stale zoom applied.
+  document.documentElement.classList.remove('ui-scale-110', 'ui-scale-125', 'ui-scale-140');
+  if (s === '125') document.documentElement.classList.add('ui-scale-125');
+}
+
 const _BG_CLASSES = ['bg-pattern-dots',
   'bg-pattern-synapse', 'bg-pattern-rain', 'bg-pattern-constellations',
   'bg-pattern-perlin-flow',
@@ -514,7 +529,7 @@ export function initThemeUI() {
   }
 
   // Attach the in-house color picker to every color input in the theme panel.
-  // Safe to call repeatedly — the picker marks inputs it's already wrapped.
+  // Safe to call repeatedly — the picker marks inputs it\'s already wrapped.
   try { initColorPickers(document); } catch (e) { console.warn('Color picker init failed', e); }
 
   // Populate the advanced color inputs with their computed defaults right now.
@@ -546,7 +561,7 @@ export function initThemeUI() {
       // Restore full opacity / blur on every other tab. The slider's effect
       // is meant to be Customize-only — peeking at the page while tweaking
       // colors — so swapping back to Themes (or Schedule) should look
-      // exactly like the rest of the app's modals again.
+      // exactly like the rest of the app\'s modals again.
       const popup = document.getElementById('theme-popup');
       if (popup) {
         if (targetId === 'theme-tab-customize') {
@@ -632,7 +647,7 @@ export function initThemeUI() {
         <span style="background:${c.fg}"></span>
         <span style="background:${c.red}"></span>
       </div>
-      ${name === 'dark' ? '默认' : (name === 'gpt' ? 'GPT' : name)}
+      ${name === 'dark' ? 'original' : (name === 'gpt' ? 'GPT' : name)}
     </div>
   `).join('');
 
@@ -651,7 +666,7 @@ export function initThemeUI() {
           <span style="background:${c.red}"></span>
         </div>
         <span class="theme-swatch-name">${name}</span>
-        <button type="button" class="theme-delete-btn" data-delete="${name}" title="删除主题"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button type="button" class="theme-delete-btn" data-delete="${name}" title="Delete theme"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     `).join('');
   } else if (userCard) {
@@ -731,7 +746,7 @@ export function initThemeUI() {
         e.stopPropagation();
         const name = btn.dataset.delete;
         if (uiModule && uiModule.styledConfirm) {
-          if (!await uiModule.styledConfirm(`删除主题 "${name}"？`, { confirmText: '删除', danger: true })) return;
+          if (!await uiModule.styledConfirm(`Delete theme "${name}"?`, { confirmText: 'Delete', danger: true })) return;
         }
         deleteCustomTheme(name);
       });
@@ -813,7 +828,7 @@ export function initThemeUI() {
       // values (which keep whatever was set — could be #abc, #ABCDEF, or
       // rgb()) compare correctly against color-input pickers (always
       // #rrggbb lowercase). Without this, every advanced picker reads as
-      // "user-set" and we'd revert to the v161 bug.
+      // "user-set" and we\'d revert to the v161 bug.
       const _norm = (raw) => {
         let h = String(raw || '').trim().toLowerCase();
         if (!h) return '';
@@ -850,7 +865,7 @@ export function initThemeUI() {
       const _activeName = _activeSaved && _activeSaved.name;
       const _customMap = _loadCustomThemes();
       if (_activeName && _customMap && _customMap[_activeName]) {
-        // Preserve advanced/opts keys that aren't part of basic colors.
+        // Preserve advanced/opts keys that aren\'t part of basic colors.
         saveCustomTheme(_activeName, colors, {
           font: _activeSaved.font, density: _activeSaved.density,
           bgPattern: _activeSaved.bgPattern, bgEffectColor: _activeSaved.bgEffectColor,
@@ -879,10 +894,10 @@ export function initThemeUI() {
     const doSave = () => {
       saveError.style.display = 'none';
       const name = newNameInput.value.trim();
-      if (!name) { saveError.textContent = '请输入名称。'; saveError.style.display = 'block'; return; }
+      if (!name) { saveError.textContent = 'Enter a name.'; saveError.style.display = 'block'; return; }
       const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      if (!slug) { saveError.textContent = '名称无效。'; saveError.style.display = 'block'; return; }
-      if (THEMES[slug]) { saveError.textContent = '无法覆盖内置主题。'; saveError.style.display = 'block'; return; }
+      if (!slug) { saveError.textContent = 'Invalid name.'; saveError.style.display = 'block'; return; }
+      if (THEMES[slug]) { saveError.textContent = 'Cannot overwrite a built-in theme.'; saveError.style.display = 'block'; return; }
       const colors = {};
       const pickerIds2 = { bg: 'clr-bg', fg: 'clr-fg', panel: 'clr-panel', border: 'clr-border', red: 'clr-red' };
       Object.entries(pickerIds2).forEach(([k, pid]) => { colors[k] = document.getElementById(pid).value; });
@@ -896,14 +911,14 @@ export function initThemeUI() {
       if (hasAdv) colors.advanced = adv;
       const opts = _getOpts();
       const result = saveCustomTheme(slug, colors, opts);
-      if (result === 'limit') { saveError.textContent = '最多 ' + MAX_CUSTOM_THEMES + ' 个自定义主题，请先删除一个。'; saveError.style.display = 'block'; return; }
+      if (result === 'limit') { saveError.textContent = 'Max ' + MAX_CUSTOM_THEMES + ' custom themes. Delete one first.'; saveError.style.display = 'block'; return; }
       save(slug, colors, opts);
       newNameInput.value = '';
-      _flashAutosaved('主题已保存');
-      uiModule.showToast?.('主题已保存');
+      _flashAutosaved('Theme saved');
+      uiModule.showToast?.('Theme saved');
       const prevHtml = newGoBtn.innerHTML;
       newGoBtn.disabled = true;
-      newGoBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>已保存</span>';
+      newGoBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Saved</span>';
       setTimeout(() => {
         newGoBtn.disabled = false;
         newGoBtn.innerHTML = prevHtml;
@@ -973,7 +988,7 @@ export function initThemeUI() {
       const el = document.getElementById('adv-' + key);
       if (!el) continue;
       const v = (el.value || '').toLowerCase();
-      // Skip empty or never-populated inputs so we don't accidentally store
+      // Skip empty or never-populated inputs so we don\'t accidentally store
       // them as overrides (and then write '#000000' to the CSS var).
       if (!v || !/^#[0-9a-f]{6}$/.test(v)) continue;
       if (v !== (defaults[key] || '').toLowerCase()) {
@@ -1133,6 +1148,18 @@ export function initThemeUI() {
       const s = getSaved(); if (s) _saveFull(s.name, s.colors);
     });
   }
+  const textSizeSelect = document.getElementById('theme-text-size-select');
+  if (textSizeSelect) {
+    const nts = textSizeSelect.cloneNode(true); textSizeSelect.parentNode.replaceChild(nts, textSizeSelect);
+    let initScale = DEFAULT_UI_SCALE;
+    try { initScale = localStorage.getItem(UI_SCALE_KEY) || DEFAULT_UI_SCALE; } catch (e) {}
+    nts.value = initScale;
+    applyUiScale(initScale);
+    nts.addEventListener('change', () => {
+      applyUiScale(nts.value);
+      try { localStorage.setItem(UI_SCALE_KEY, nts.value); } catch (e) {}
+    });
+  }
   if (patternSelect) {
     const np = patternSelect.cloneNode(true); patternSelect.parentNode.replaceChild(np, patternSelect);
     np.value = _initPattern;
@@ -1183,7 +1210,7 @@ export function initThemeUI() {
   const harmonyAccentEl = document.getElementById('harmony-accent');
   // Make sure the in-house color picker really attached to this one. The
   // global initColorPickers() call earlier in initThemeUI should have grabbed
-  // it, but in older sessions / partial loads it sometimes wasn't wrapped —
+  // it, but in older sessions / partial loads it sometimes wasn\'t wrapped —
   // call attachColorPicker idempotently so the popover, suggestions, recents
   // and hex syncing all match every other color row.
   if (harmonyAccentEl) {
@@ -1263,8 +1290,8 @@ export function initThemeUI() {
       a.download = 'odysseus_' + (obj.name || 'theme') + '.json';
       a.click();
       URL.revokeObjectURL(url);
-      newExp.innerHTML = '&#x2713; 已下载!';
-      setTimeout(() => { newExp.innerHTML = '&#x2913; 导出'; }, 1500);
+      newExp.innerHTML = '&#x2713; Downloaded!';
+      setTimeout(() => { newExp.innerHTML = '&#x2913; Export'; }, 1500);
     });
   }
 
@@ -1286,15 +1313,15 @@ export function initThemeUI() {
       saveError.style.display = 'none';
       let parsed;
       try { parsed = JSON.parse(importAreaEl.value.trim()); }
-      catch { saveError.textContent = 'JSON 格式无效。'; saveError.style.display = 'block'; return; }
+      catch { saveError.textContent = 'Invalid JSON.'; saveError.style.display = 'block'; return; }
       let colors = parsed.colors || parsed;
       const name = parsed.name || 'imported';
       const required = ['bg', 'fg', 'panel', 'border', 'red'];
       const missing = required.filter(k => !colors[k]);
-      if (missing.length) { saveError.textContent = '缺少: ' + missing.join(', '); saveError.style.display = 'block'; return; }
+      if (missing.length) { saveError.textContent = 'Missing: ' + missing.join(', '); saveError.style.display = 'block'; return; }
       const hexRe = /^#[0-9a-fA-F]{6}$/;
       for (const k of required) {
-        if (!hexRe.test(colors[k])) { saveError.textContent = '无效的十六进制颜色值: ' + k; saveError.style.display = 'block'; return; }
+        if (!hexRe.test(colors[k])) { saveError.textContent = 'Bad hex for ' + k; saveError.style.display = 'block'; return; }
       }
       const colorData = { bg: colors.bg, fg: colors.fg, panel: colors.panel, border: colors.border, red: colors.red };
       if (colors.advanced && typeof colors.advanced === 'object') colorData.advanced = colors.advanced;
@@ -1305,7 +1332,7 @@ export function initThemeUI() {
       if (parsed.bgPattern) opts.bgPattern = parsed.bgPattern;
       if (parsed.bgEffectColor) opts.bgEffectColor = parsed.bgEffectColor;
       const result = saveCustomTheme(slug, colorData, opts);
-      if (result === 'limit') { saveError.textContent = '最多 ' + MAX_CUSTOM_THEMES + ' 个自定义主题，请先删除一个。'; saveError.style.display = 'block'; return; }
+      if (result === 'limit') { saveError.textContent = 'Max ' + MAX_CUSTOM_THEMES + ' custom themes. Delete one first.'; saveError.style.display = 'block'; return; }
       save(slug, colorData, opts);
       applyColors(colorData);
       applyFontDensity(opts.font || DEFAULT_FONT, opts.density || DEFAULT_DENSITY);
@@ -1333,7 +1360,7 @@ export function initThemeUI() {
 // ── Zone highlighter ───────────────────────────────────────────────────
 // Maps each color input id to a selector for the part of the UI it affects.
 // When the user hovers the color row, we overlay a translucent box on the
-// matching elements so it's obvious what's being edited.
+// matching elements so it\'s obvious what\'s being edited.
 const _THEME_ZONE_MAP = {
   'clr-bg':            'body',
   'clr-fg':            '.msg .body, .chat-input-bar',
@@ -1385,7 +1412,7 @@ function _clearThemeZoneHighlight() {
 }
 
 let _flashTimer = null;
-function _flashAutosaved(label = '自动已保存') {
+function _flashAutosaved(label = 'Auto-saved') {
   let pill = document.getElementById('theme-autosaved-pill');
   if (!pill) {
     pill = document.createElement('div');
@@ -1439,7 +1466,7 @@ export function makeDraggable(el, handle) {
   const dragOptions = {
     content: el,
     header: handle,
-    // Don't start a window-drag when the user grabs an interactive control
+    // Don\'t start a window-drag when the user grabs an interactive control
     // in the header — e.g. the theme opacity slider now lives next to the
     // title, and dragging its thumb must move the slider, not the window.
     skipSelector: 'button, input, select, .theme-opacity-wrap',
@@ -1499,7 +1526,7 @@ function _initSynapse() {
   canvas.id = 'synapse-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
   // Decorative background effect — hide from assistive tech so screen readers
-  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
+  // don\'t announce an empty canvas and axe's "region" rule doesn\'t flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1595,7 +1622,7 @@ function _initRain() {
   canvas.id = 'rain-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
   // Decorative background effect — hide from assistive tech so screen readers
-  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
+  // don\'t announce an empty canvas and axe's "region" rule doesn\'t flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1670,7 +1697,7 @@ function _initConstellations() {
   canvas.id = 'constellations-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
   // Decorative background effect — hide from assistive tech so screen readers
-  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
+  // don\'t announce an empty canvas and axe's "region" rule doesn\'t flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1776,7 +1803,7 @@ function _initPerlinFlow() {
   canvas.id = 'perlin-flow-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
   // Decorative background effect — hide from assistive tech so screen readers
-  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
+  // don\'t announce an empty canvas and axe's "region" rule doesn\'t flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1833,7 +1860,7 @@ function _initPetals() {
   canvas.id = 'petals-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
   // Decorative background effect — hide from assistive tech so screen readers
-  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
+  // don\'t announce an empty canvas and axe's "region" rule doesn\'t flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1890,7 +1917,7 @@ function _initSparkles() {
   canvas.id = 'sparkles-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
   // Decorative background effect — hide from assistive tech so screen readers
-  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
+  // don\'t announce an empty canvas and axe's "region" rule doesn\'t flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');
@@ -1948,7 +1975,7 @@ function _initEmbers() {
   canvas.id = 'embers-canvas';
   canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
   // Decorative background effect — hide from assistive tech so screen readers
-  // don't announce an empty canvas and axe's "region" rule doesn't flag it.
+  // don\'t announce an empty canvas and axe's "region" rule doesn\'t flag it.
   canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const ctx = canvas.getContext('2d');

@@ -19,7 +19,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
 
 // SECURITY: defense-in-depth state wipe on user switch. If the authenticated
 // user is different from the one whose state is cached in this browser,
-// wipe localStorage + sessionStorage so the new account doesn't inherit
+// wipe localStorage + sessionStorage so the new account doesn\'t inherit
 // the previous user's last session id, last-used model, draft chat input,
 // or cached lists. The settings-tab Logout button already wipes on
 // explicit logout; this catches the cases where a different user signs
@@ -46,8 +46,8 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     }
     localStorage.setItem(KEY, liveUser);
     // Apply per-user privilege gates to the UI. The backend enforces these
-    // independently — this is purely cosmetic / "don't dangle controls the
-    // user can't actually use." Privileges come from /api/auth/status; admins
+    // independently — this is purely cosmetic / "don\'t dangle controls the
+    // user can\'t actually use." Privileges come from /api/auth/status; admins
     // always get the full set so this is a no-op for them.
     try {
       const privs = (data && data.privileges) || {};
@@ -76,7 +76,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
 
 /* Sidebar section default-collapsed setup. The click-to-toggle handlers
    themselves live in js/section-management.js — attaching them in BOTH
-   places caused two toggles per click, which read as "clicks aren't doing
+   places caused two toggles per click, which read as "clicks aren\'t doing
    anything" (even-count parity). Keep only the initial-state-apply here. */
 {
   const KEY = Storage.KEYS.SIDEBAR_COLLAPSED;
@@ -89,7 +89,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     if (shouldCollapse) section.classList.add('collapsed');
   });
   // Sessions-section notification dot: clear when the section becomes
-  // expanded. Watch the class with MutationObserver so we don't need a
+  // expanded. Watch the class with MutationObserver so we don\'t need a
   // click handler (which would race the section-management one).
   const sessionsSection = document.getElementById('sessions-section');
   if (sessionsSection) {
@@ -126,7 +126,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     } else if (rw > 0) {
       root.style.setProperty('--icon-rail-w', rw + 'px');
     } else {
-      // 0 from a visible-but-not-yet-laid-out rail: don't shadow the
+      // 0 from a visible-but-not-yet-laid-out rail: don\'t shadow the
       // CSS fallback; re-sync on the next frame instead.
       const cs = rail && window.getComputedStyle(rail);
       const hidden = !cs || cs.display === 'none' || cs.visibility === 'hidden';
@@ -153,7 +153,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     if (rail) ro.observe(rail);
     if (sidebar) ro.observe(sidebar);
   }
-  // Class flips (sidebar.hidden ↔ visible) don't trigger ResizeObserver
+  // Class flips (sidebar.hidden ↔ visible) don\'t trigger ResizeObserver
   // until layout settles a frame later; also watch the class attribute
   // so we re-sync immediately when the user toggles the hamburger.
   if (sidebar && typeof MutationObserver !== 'undefined') {
@@ -320,7 +320,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     document.removeEventListener('mouseup', stopExpandDrag);
 
     if (collapsed) {
-      // Didn't drag far enough — snap back to icon rail
+      // Didn\'t drag far enough — snap back to icon rail
       sidebar.style.width = '';
       sidebar.classList.add('hidden');
       if (typeof syncRailSide === 'function') syncRailSide();

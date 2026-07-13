@@ -179,7 +179,7 @@ function setFromHex(hex) {
 
 // ── Handlers ──────────────────────────────────────────────────────────
 // Window-level pointer listeners — installed ONCE, not per-popover, so they
-// don't leak when the popover is rebuilt on every open.
+// don\'t leak when the popover is rebuilt on every open.
 let _windowPointerInstalled = false;
 function _installWindowPointer() {
   if (_windowPointerInstalled) return;
@@ -247,7 +247,7 @@ function wireHandlers(p) {
         }
       } catch (_) { /* user cancelled */ }
       // Re-arm outside-click handler after a frame so the eyedropper's
-      // own pick-click doesn't immediately re-close us.
+      // own pick-click doesn\'t immediately re-close us.
       if (wasOnOutside && _popover) {
         requestAnimationFrame(() => {
           if (!_popover) return;
@@ -261,7 +261,7 @@ function wireHandlers(p) {
   } else {
     eye.disabled = true;
     eye.style.opacity = '0.3';
-    eye.title = '此浏览器不支持取色器';
+    eye.title = 'Eyedropper not supported in this browser';
   }
 }
 
@@ -351,7 +351,7 @@ function open(inputEl) {
     if (_popover.contains(e.target)) return;
     if (e.target === _input) return;
     // If the click landed on a modal close button (X), swallow it so the
-    // popover-close doesn't also dismiss the enclosing modal. The user
+    // popover-close doesn\'t also dismiss the enclosing modal. The user
     // wants their first click to just close the color picker.
     const closeBtn = e.target.closest && e.target.closest('.close-btn, [aria-label*="lose" i]');
     if (closeBtn) {
@@ -371,7 +371,7 @@ function open(inputEl) {
       close();
     }
   };
-  // Defer install so the click that opened us doesn't immediately close us.
+  // Defer install so the click that opened us doesn\'t immediately close us.
   // Use requestAnimationFrame instead of setTimeout(0) to be sure the current
   // click event has fully bubbled before we register the listener.
   requestAnimationFrame(() => {
@@ -429,14 +429,14 @@ export function attachColorPicker(inputEl) {
     e.preventDefault();
     e.stopPropagation();
     // If the same input already has the picker open, close it (toggle).
-    // Otherwise always (re)open — never get stuck in a "won't reopen" state.
+    // Otherwise always (re)open — never get stuck in a "won\'t reopen" state.
     if (_input === inputEl && _popover) {
       close();
     } else {
       open(inputEl);
     }
   });
-  // Suppress the trailing click so it can't bubble to overlays/listeners.
+  // Suppress the trailing click so it can\'t bubble to overlays/listeners.
   inputEl.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();

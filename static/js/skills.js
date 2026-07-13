@@ -7,6 +7,8 @@
 
 import uiModule from './ui.js';
 import * as spinnerModule from './spinner.js';
+import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
+import { topPortalZ } from './toolWindowZOrder.js';
 
 const API = window.location.origin;
 let skills = [];
@@ -55,7 +57,7 @@ function _preloadVisibleMarkdown() {
 }
 
 // Collapsed skills sections ("user" / "builtin"), persisted so the
-// choice survives reloads. Built-in defaults to collapsed (it's
+// choice survives reloads. Built-in defaults to collapsed (it\'s
 // reference info, not the user's own skills).
 const _collapsedSections = (() => {
   try {
@@ -195,9 +197,9 @@ function _matches(sk, query) {
 }
 
 function _statusPill(sk) {
-  const s = sk.status || (sk._legacy ? 'legacy' : '草稿');
-  if (s === 'published') return '<span class="memory-cat-badge skill-status-pill" data-status="已发布" style="background:color-mix(in srgb, var(--accent, #4ade80) 30%, transparent)">已发布</span>';
-  if (s === '草稿')     return '<span class="memory-cat-badge skill-status-pill" data-status="草稿" style="background:color-mix(in srgb, var(--fg) 14%, transparent)">草稿</span>';
+  const s = sk.status || (sk._legacy ? 'legacy' : 'draft');
+  if (s === 'published') return '<span class="memory-cat-badge skill-status-pill" data-status="published" style="background:color-mix(in srgb, var(--accent, #4ade80) 30%, transparent)">已发布</span>';
+  if (s === 'draft')     return '<span class="memory-cat-badge skill-status-pill" data-status="draft" style="background:color-mix(in srgb, var(--fg) 14%, transparent)">草稿</span>';
   return `<span class="memory-cat-badge skill-status-pill" data-status="${esc(s)}" style="opacity:0.6">${esc(s)}</span>`;
 }
 
@@ -208,7 +210,7 @@ function _statusPill(sk) {
 function _sourcePill(sk) {
   if (sk.source !== 'teacher-escalation') return '';
   const teacher = sk.teacher_model || 'teacher';
-  return `<span class="memory-cat-badge" title="由教师升级创建：${esc(teacher)}" style="background:color-mix(in srgb, var(--color-warning, #f0ad4e) 22%, transparent);">教师创建</span>`;
+  return `<span class="memory-cat-badge" title="Created by teacher escalation: ${esc(teacher)}" style="background:color-mix(in srgb, var(--color-warning, #f0ad4e) 22%, transparent);">teacher-created</span>`;
 }
 
 function _modelShortName(model) {
@@ -301,24 +303,24 @@ function _auditModelPills(sk) {
   const teacher = sk.audit_teacher_model || '';
   let html = '';
   if (worker) {
-    html += `<span class="memory-cat-badge skill-model-pill skill-model-student" title="Last audited by default audit model: ${esc(worker)}">审计</span>`;
+    html += `<span class="memory-cat-badge skill-model-pill skill-model-student" title="Last audited by default audit model: ${esc(worker)}">audit</span>`;
   }
   if (sk.audit_by_teacher || teacher) {
     const title = teacher
       ? `Teacher rewrote this skill; audit model passed after the rewrite. Teacher: ${teacher}`
-      : '教师已重写此技能；审计模型在重写后通过.';
-    html += `<span class="memory-cat-badge skill-model-pill skill-model-teacher" title="${esc(title)}">教师修复</span>`;
+      : 'Teacher rewrote this skill; audit model passed after the rewrite.';
+    html += `<span class="memory-cat-badge skill-model-pill skill-model-teacher" title="${esc(title)}">teacher-fixed</span>`;
   }
   return html;
 }
 
 function _necessityKind(sk) {
   const nec = sk && sk.necessity;
-  if (sk && sk._duplicateGroup) return '重复';
+  if (sk && sk._duplicateGroup) return 'duplicate';
   if (!nec || nec.necessary !== false) return null;
   const reason = String(nec.reason || '').toLowerCase();
   const redundant = (nec.redundant_with || []).filter(Boolean);
-  if (redundant.length || /duplicat|redundan|overlap|same skill|same procedure/.test(reason)) return '重复';
+  if (redundant.length || /duplicat|redundan|overlap|same skill|same procedure/.test(reason)) return 'duplicate';
   if (/trivial|generic|capable assistant|without a saved|not need|unnecessary/.test(reason)) return 'trivial';
   return 'irrelevant';
 }
@@ -328,13 +330,13 @@ function _necessityPill(sk) {
   if (!kind) return '';
   const nec = sk.necessity || {};
   const dup = (nec.redundant_with || []).filter(Boolean);
-  const label = kind === '重复' ? (sk._duplicateGroup ? `duplicate #${sk._duplicateGroup}` : '重复')
-    : kind === 'trivial' ? '通用'
-    : '可能无关';
+  const label = kind === 'duplicate' ? (sk._duplicateGroup ? `duplicate #${sk._duplicateGroup}` : 'duplicate')
+    : kind === 'trivial' ? 'generic'
+    : 'possibly-irrelevant';
   const group = sk._duplicateNames || [];
   const why = sk._duplicateGroup
     ? `Duplicate group #${sk._duplicateGroup}. Recommended keep: ${sk._duplicateKeepName}. Group: ${group.join(', ')}`
-    : (nec.reason || '可能不值得保留') + (dup.length ? ' | overlaps: ' + dup.join(', ') : '');
+    : (nec.reason || 'May not be worth keeping') + (dup.length ? ' | overlaps: ' + dup.join(', ') : '');
   return `<span class="memory-cat-badge skill-necessity-pill skill-necessity-${kind}" title="${esc(why)}">${label}</span>`;
 }
 
@@ -391,26 +393,26 @@ function _svg(paths, { fill = 'none', size = 13 } = {}) {
 // Kebab dropdown for a collapsed skill card — same actions + icons as the
 // expanded footer (Publish/Unpublish · Edit · Delete).
 function _openSkillMenu(btn, card, sk, name, isPublished) {
-  document.querySelectorAll('.skill-kebab-menu').forEach(m => m.remove());
+  document.querySelectorAll('.skill-kebab-menu').forEach(dismissOrRemove);
   const menu = document.createElement('div');
   menu.className = 'skill-kebab-menu';
   const mk = (paths, label, opts, onClick) => {
     const item = document.createElement('button');
     item.className = 'skill-kebab-item' + (opts && opts.danger ? ' danger' : '');
     item.innerHTML = _svg(paths, opts) + `<span>${label}</span>`;
-    item.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); onClick(); });
+    item.addEventListener('click', (e) => { e.stopPropagation(); close(); onClick(); });
     menu.appendChild(item);
   };
-  if (isPublished) mk(_ICON.unpublish, '取消发布', {}, () => _setSkillStatus(name, '草稿'));
+  if (isPublished) mk(_ICON.unpublish, '取消发布', {}, () => _setSkillStatus(name, 'draft'));
   else mk(_ICON.approve, '发布', {}, () => _setSkillStatus(name, 'published'));
   // Select — moved up to 2nd so it sits next to Publish/Unpublish
   // (bulk actions cluster at the top of the menu).
   const selItem = document.createElement('button');
   selItem.className = 'skill-kebab-item';
-  selItem.innerHTML = '<svg class="memory-select-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg><span>Select</span>';
+  selItem.innerHTML = '<svg class="memory-select-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg><span>选择</span>';
   selItem.addEventListener('click', (e) => {
     e.stopPropagation();
-    menu.remove();
+    close();
     if (!_selectMode) _enterSelectMode();
     _selectedNames.add(name);
     renderSkillsList();
@@ -431,11 +433,15 @@ function _openSkillMenu(btn, card, sk, name, isPublished) {
   // already dismisses cleanly.
   const cancelItem = document.createElement('button');
   cancelItem.className = 'skill-kebab-item dropdown-cancel-mobile';
-  cancelItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span>Cancel</span>';
-  cancelItem.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); });
+  cancelItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span>取消</span>';
+  cancelItem.addEventListener('click', (e) => { e.stopPropagation(); close(); });
   menu.appendChild(cancelItem);
 
   document.body.appendChild(menu);
+  // Override the CSS z-index (100002) with a value derived from the live
+  // tool-window stack so the kebab menu stays above its modal even after the
+  // bring-to-front counter climbs past the static value (#4720).
+  menu.style.zIndex = String(topPortalZ());
   const r = btn.getBoundingClientRect();
   menu.style.top = (r.bottom + 4) + 'px';
   menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
@@ -453,8 +459,7 @@ function _openSkillMenu(btn, card, sk, name, isPublished) {
     menu.style.maxHeight = Math.max(80, window.innerHeight - 12 - mr2.top) + 'px';
     menu.style.overflowY = 'auto';
   }
-  const close = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', close, true); } };
-  setTimeout(() => document.addEventListener('click', close, true), 0);
+  const close = bindMenuDismiss(menu, () => { menu.remove(); }, (ev) => !menu.contains(ev.target));
 }
 
 // Cards for the agent's built-in tool capabilities (from
@@ -474,8 +479,8 @@ function _buildBuiltinCards() {
       <div style="flex:1;min-width:0;overflow:hidden;">
         <div class="doclib-card-title" style="display:flex;align-items:center;gap:6px;min-width:0;">
           <code style="font-weight:600;font-size:0.9em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0;">${esc(b.name)}</code>
-          <span class="memory-cat-badge" style="background:color-mix(in srgb, var(--fg) 14%, transparent)">内置</span>
-          ${b.is_overridden ? '<span class="memory-cat-badge" title="You have edited this built-in capability" style="background:color-mix(in srgb, var(--color-warning, #f0ad4e) 30%, transparent);">已编辑</span>' : ''}
+          <span class="memory-cat-badge" style="background:color-mix(in srgb, var(--fg) 14%, transparent)">built-in</span>
+          ${b.is_overridden ? '<span class="memory-cat-badge" title="You have edited this built-in capability" style="background:color-mix(in srgb, var(--color-warning, #f0ad4e) 30%, transparent);">edited</span>' : ''}
         </div>
         ${b.description ? `<div class="doclib-card-session" title="${esc(b.description)}" style="font-size:10px;opacity:0.55;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(b.description)}</div>` : ''}
       </div>
@@ -488,7 +493,7 @@ function _buildBuiltinCards() {
     // Warning banner — editing a built-in changes how the assistant uses a native tool.
     const warn = document.createElement('div');
     warn.className = 'skill-builtin-warn';
-    warn.innerHTML = '⚠ This is a built-in capability. Editing changes how the assistant is instructed to use this native tool — it can break or alter core behaviour. Use Revert to restore the shipped default.';
+    warn.innerHTML = '⚠ 这是内置功能。编辑会改变助手使用此原生工具的方式 — 可能会破坏或改变核心行为。使用"恢复"来恢复默认设置。';
     preview.appendChild(warn);
     const pre = document.createElement('pre');
     pre.className = 'skill-md-pre';
@@ -501,13 +506,13 @@ function _buildBuiltinCards() {
 
     const revertBtn = document.createElement('button');
     revertBtn.className = 'doclib-card-text-btn doclib-card-action-btn doclib-card-text-btn-danger';
-    revertBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Revert';
-    revertBtn.title = '恢复原始的出厂指令';
+    revertBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>恢复';
+    revertBtn.title = '恢复原始默认指令';
     revertBtn.addEventListener('click', (e) => { e.stopPropagation(); _revertBuiltin(b.name); });
 
     const editBtn = document.createElement('button');
     editBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
-    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit';
+    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>编辑';
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); _toggleBuiltinEdit(card, b.name); });
 
     const rightGroup = document.createElement('div');
@@ -524,7 +529,7 @@ function _buildBuiltinCards() {
 
     card.addEventListener('click', (e) => {
       if (e.target.closest('button, input, textarea')) return;
-      // Editing in progress → don't collapse on an outside-the-textarea click.
+      // Editing in progress → don\'t collapse on an outside-the-textarea click.
       if (card.querySelector('.skill-md-editor')) return;
       _expandBuiltinCard(card, b.name);
     });
@@ -572,7 +577,7 @@ function _toggleBuiltinEdit(card, name) {
   preview.insertBefore(ta, preview.querySelector('.doclib-card-expanded-actions'));
   ta.focus();
   const editBtn = [...preview.querySelectorAll('.doclib-card-action-btn')].find(b => /Edit|Save/.test(b.textContent));
-  if (editBtn) editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save';
+  if (editBtn) editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存';
 }
 
 async function _saveBuiltinEdit(card, name) {
@@ -585,31 +590,31 @@ async function _saveBuiltinEdit(card, name) {
       body: JSON.stringify({ text: ta.value }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    uiModule.showToast('内置能力已更新');
+    uiModule.showToast('内置功能已更新');
     builtinSkills = [];  // force reload of built-in list (refreshes "edited" badge)
     await loadSkills();
-  } catch (e) { uiModule.showError('保存失败：' + e.message); }
+  } catch (e) { uiModule.showError('保存失败: ' + e.message); }
 }
 
 async function _revertBuiltin(name) {
-  if (!(await uiModule.styledConfirm(`Revert "${name}" to its original built-in instructions?`, { confirmText: '还原', danger: true }))) return;
+  if (!(await uiModule.styledConfirm(`将 "${name}" 恢复为原始内置指令？`, { confirmText: '恢复', danger: true }))) return;
   try {
     const res = await fetch(`${API}/api/skills/builtin/${encodeURIComponent(name)}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    uiModule.showToast('已还原为默认值');
+    uiModule.showToast('已恢复默认');
     builtinSkills = [];
     await loadSkills();
-  } catch (e) { uiModule.showError('还原失败：' + e.message); }
+  } catch (e) { uiModule.showError('恢复失败: ' + e.message); }
 }
 
 function _getFilteredSkills() {
   const query = (document.getElementById('skills-search')?.value || '').toLowerCase();
   let filtered = query ? skills.filter(sk => _matches(sk, query)) : skills;
   if (_showDraftsOnly) {
-    filtered = filtered.filter(sk => (sk.status || '草稿') !== 'published');
+    filtered = filtered.filter(sk => (sk.status || 'draft') !== 'published');
   }
   if (_showPublishedOnly) {
-    filtered = filtered.filter(sk => (sk.status || '草稿') === 'published');
+    filtered = filtered.filter(sk => (sk.status || 'draft') === 'published');
   }
   if (_confMax != null) {
     // "≤ X%" — surface the lower-confidence skills that may need review.
@@ -627,7 +632,7 @@ function renderSkillsList() {
 
   const sorted = _getFilteredSkills();
   // Built-in capabilities show as their own read-only section (skipped when
-  // the user is filtering to drafts, since built-ins aren't drafts).
+  // the user is filtering to drafts, since built-ins aren\'t drafts).
   // Skills menu shows the user's own skills only (built-in capabilities
   // are intentionally not surfaced here).
   const showBuiltin = false;
@@ -636,7 +641,7 @@ function renderSkillsList() {
     const selectBtn = document.getElementById('skills-select-btn');
     if (selectBtn) selectBtn.disabled = true;
     if (_selectMode) _exitSelectMode();
-    container.innerHTML = `<div style="text-align:center;opacity:0.4;padding:24px 0;font-size:11px;">${loaded ? '暂无技能，使用智能体自动提取技能。' : '加载中…'}</div>`;
+    container.innerHTML = `<div style="text-align:center;opacity:0.4;padding:24px 0;font-size:11px;">${loaded ? '暂无技能，使用代理来自动提取它们。' : '加载中…'}</div>`;
     return;
   }
 
@@ -652,7 +657,7 @@ function renderSkillsList() {
   // #skills-list itself becomes the .doclib-grid (rather than a nested
   // grid) so the global "hide non-grid children when a card is expanded"
   // rule (.admin-card:has(.doclib-card-expanded) > *:not(.doclib-grid))
-  // doesn't hide the list container along with everything else.
+  // doesn\'t hide the list container along with everything else.
   container.classList.add('doclib-grid');
   const cards = [];
   const dupeMeta = _duplicateMeta(sorted);
@@ -679,7 +684,7 @@ function renderSkillsList() {
     const card = document.createElement('div');
     card.className = 'doclib-card skill-card';
     card.dataset.skillName = name;
-    card.dataset.skillStatus = sk.status || '草稿';
+    card.dataset.skillStatus = sk.status || 'draft';
 
     const checked = _selectedNames.has(name) ? 'checked' : '';
     const cbHtml = _selectMode
@@ -703,14 +708,14 @@ function renderSkillsList() {
         ${_necessityPill(sk)}
         ${_duplicatePriorityPill(sk)}
         <span class="skill-stats">${_auditMarks(sk)}<span class="skill-conf" style="color:${confColor};">${conf}%</span> · ${uses}u</span>
-        <span class="skill-chevron-up" title="Collapse"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></span>
-        <button class="skill-kebab-btn" title="Actions" aria-label="Actions"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+        <span class="skill-chevron-up" title="收起"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></span>
+        <button class="skill-kebab-btn" title="操作" aria-label="操作"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
       </div>
     `;
     card.appendChild(header);
 
     // Kebab dropdown (collapsed-bar quick actions: same set + icons as the
-    // expanded footer). Clicking the kebab opens it; it doesn't expand.
+    // expanded footer). Clicking the kebab opens it; it doesn\'t expand.
     header.querySelector('.skill-kebab-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       _openSkillMenu(e.currentTarget, card, sk, name, isPublished);
@@ -730,33 +735,33 @@ function renderSkillsList() {
 
     const delBtn = document.createElement('button');
     delBtn.className = 'doclib-card-text-btn doclib-card-action-btn doclib-card-text-btn-danger';
-    delBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete';
+    delBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>删除';
     delBtn.addEventListener('click', (e) => { e.stopPropagation(); _deleteSkill(name, card); });
 
     const editBtn = document.createElement('button');
     editBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
-    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit';
+    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>编辑';
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); _toggleSkillEdit(card, name); });
 
     const pubBtn = document.createElement('button');
     pubBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
     if (isPublished) {
-      pubBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12l5 5L20 7"/></svg>Unpublish';
+      pubBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12l5 5L20 7"/></svg>取消发布';
       pubBtn.title = '移回草稿';
-      pubBtn.addEventListener('click', (e) => { e.stopPropagation(); _setSkillStatus(name, '草稿'); });
+      pubBtn.addEventListener('click', (e) => { e.stopPropagation(); _setSkillStatus(name, 'draft'); });
     } else {
-      pubBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Publish';
-      pubBtn.title = '发布 — 显示在技能索引中';
+      pubBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>发布';
+      pubBtn.title = '发布 — 出现在技能索引中';
       pubBtn.style.color = 'var(--color-success, #4caf50)';
       pubBtn.addEventListener('click', (e) => { e.stopPropagation(); _setSkillStatus(name, 'published'); });
     }
 
-    // Test/audit this one skill — same action that's in the kebab, surfaced in
-    // the footer too so it's not buried under the "⋯" menu.
+    // Test/audit this one skill — same action that\'s in the kebab, surfaced in
+    // the footer too so it\'s not buried under the "⋯" menu.
     const testBtn = document.createElement('button');
     testBtn.className = 'doclib-card-text-btn doclib-card-action-btn';
     testBtn.innerHTML = _svg(_ICON.test, { size: 11 }) + '测试';
-    testBtn.title = '测试此技能 — 运行 + AI 评判';
+    testBtn.title = '测试此技能 — 运行它 + AI 评估';
     testBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       // Immediate visual feedback: previously the click looked like nothing
@@ -864,17 +869,17 @@ function renderSkillsList() {
     return hdr;
   };
 
-  // "Your skills" section — show the header only when there's also a
-  // built-in section to distinguish from (otherwise it's just the list).
+  // "Your skills" section — show the header only when there\'s also a
+  // built-in section to distinguish from (otherwise it\'s just the list).
   if (cards.length) {
-    if (showBuiltin) container.appendChild(_mkSectionHeader('user', 'Your skills', cards.length));
+    if (showBuiltin) container.appendChild(_mkSectionHeader('user', '你的技能', cards.length));
     cards.forEach(c => { c.dataset.skillSection = 'user'; container.appendChild(c); });
   }
 
   // Built-in capabilities — read-only cards (the agent's native tools).
   if (showBuiltin) {
     const builtinCards = _buildBuiltinCards();
-    container.appendChild(_mkSectionHeader('builtin', 'Built-in capabilities', builtinCards.length));
+    container.appendChild(_mkSectionHeader('builtin', '内置功能', builtinCards.length));
     builtinCards.forEach(c => { c.dataset.skillSection = 'builtin'; container.appendChild(c); });
   }
 
@@ -944,13 +949,13 @@ async function _expandSkillCard(card, name) {
   if (grid) grid.querySelectorAll('.doclib-card-expanded').forEach(_collapseSkillCardEl);
   card.classList.add('doclib-card-expanded');
   if (switching) card.classList.add('skill-expand-instant');
-  // Explicit class on the admin-card so CSS doesn't depend on :has()
+  // Explicit class on the admin-card so CSS doesn\'t depend on :has()
   // (Firefox mobile builds without :has left the expand at ~50%).
   if (adminCard) adminCard.classList.add('skills-has-expanded');
   if (grid) grid.scrollTop = 0;
 
-  // Firefox doesn't treat the absolutely-positioned card's stretched height
-  // (inset:0) or height:100% as DEFINITE, so grid/flex children won't fill.
+  // Firefox doesn\'t treat the absolutely-positioned card's stretched height
+  // (inset:0) or height:100% as DEFINITE, so grid/flex children won\'t fill.
   // Pin an explicit px height = the card's already-rendered height. A px
   // value is unambiguously definite, so the preview + <pre> finally fill.
   card._fillH = () => {
@@ -964,7 +969,7 @@ async function _expandSkillCard(card, name) {
     if (pre) { pre.style.removeProperty('height'); pre.style.removeProperty('flex'); }
 
     // The px-pinning is ONLY for the mobile layout (position:absolute fill,
-    // where Firefox won't propagate a definite height). On desktop the card
+    // where Firefox won\'t propagate a definite height). On desktop the card
     // expands via normal flex/flow — pinning measured heights there just
     // under-sizes it. So bail on desktop and let the CSS handle it.
     if (!window.matchMedia('(max-width: 768px)').matches) return;
@@ -1020,7 +1025,7 @@ async function _expandSkillCard(card, name) {
         card._mdLoaded = true;
         card._md = md;
       } catch (e) {
-        pre.textContent = 'SKILL.md 加载失败';
+        pre.textContent = '加载 SKILL.md 失败';
       }
     }
   }
@@ -1048,7 +1053,7 @@ function _toggleSkillEdit(card, name) {
   ta.focus();
   // Flip the Edit button label to "Save".
   const editBtn = [...preview.querySelectorAll('.doclib-card-action-btn')].find(b => /Edit|Save/.test(b.textContent));
-  if (editBtn) editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save';
+  if (editBtn) editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>保存';
 }
 
 async function _saveSkillEdit(card, name) {
@@ -1067,13 +1072,13 @@ async function _saveSkillEdit(card, name) {
     uiModule.showToast('已保存');
     await loadSkills();  // re-render (frontmatter changes like name/status may have changed)
   } catch (e) {
-    uiModule.showError('保存失败：' + e.message);
+    uiModule.showError('保存失败: ' + e.message);
   }
 }
 
 async function _deleteSkill(name, card = null) {
-  if (!(await uiModule.styledConfirm(`Delete skill "${name}"? This removes the SKILL.md.`, { confirmText: '删除', danger: true }))) return;
-  // Locate the card if the caller didn't hand one over, so we can collapse it
+  if (!(await uiModule.styledConfirm(`删除技能 "${name}"？这将移除 SKILL.md 文件。`, { confirmText: '删除', danger: true }))) return;
+  // Locate the card if the caller didn\'t hand one over, so we can collapse it
   // away gracefully (same fade+shrink as the document library) instead of
   // re-rendering the whole list.
   if (!card) {
@@ -1092,7 +1097,7 @@ async function _deleteSkill(name, card = null) {
     }
     await loadSkills();
     uiModule.showToast('技能已删除');
-  } catch (e) { uiModule.showError('删除失败：' + e.message); }
+  } catch (e) { uiModule.showError('删除失败: ' + e.message); }
 }
 
 async function _setSkillStatus(name, status) {
@@ -1104,7 +1109,7 @@ async function _setSkillStatus(name, status) {
     });
     await loadSkills();
     uiModule.showToast(status === 'published' ? '技能已批准' : '技能已移至草稿');
-  } catch (e) { uiModule.showError('更新失败：' + e.message); }
+  } catch (e) { uiModule.showError('更新失败: ' + e.message); }
 }
 
 // ---- Test a skill (sandbox agent run + AI eval) ----
@@ -1121,15 +1126,15 @@ function _renderTestLog(logEl, verdictEl, job, card, name) {
   logEl.innerHTML = '';
   const add = (txt, cls) => { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = txt; logEl.appendChild(d); };
   for (const ev of (job.log || [])) {
-    if (ev.type === 'skill_test_start') { add('Task: ' + ev.task, 'skill-test-task'); add('Model: ' + ev.model, 'skill-test-meta'); }
-    else if (ev.type === 'agent_step') add('— round ' + ev.round + ' —', 'skill-test-round');
+    if (ev.type === 'skill_test_start') { add('任务: ' + ev.task, 'skill-test-task'); add('模型: ' + ev.model, 'skill-test-meta'); }
+    else if (ev.type === 'agent_step') add('— 第 ' + ev.round + ' 轮 —', 'skill-test-round');
     else if (ev.type === 'tool_start') add('▸ ' + ev.tool + '  ' + String(ev.command || '').slice(0, 200), 'skill-test-tool');
     else if (ev.type === 'tool_output') add(String(ev.output || '').slice(0, 500), 'skill-test-out');
     else if (ev.type === 'say') add(ev.text || '', 'skill-test-say');
-    else if (ev.type === 'evaluating') add('Evaluating run…', 'skill-test-meta');
-    else if (ev.type === 'error') add('Error: ' + (ev.error || 'run failed'), 'skill-test-err');
+    else if (ev.type === 'evaluating') add('评估运行中…', 'skill-test-meta');
+    else if (ev.type === 'error') add('错误: ' + (ev.error || '运行失败'), 'skill-test-err');
   }
-  if (job.status === 'running') add('…running (you can close this — it keeps going)', 'skill-test-meta');
+  if (job.status === 'running') add('…运行中（你可以关闭 — 它会继续运行）', 'skill-test-meta');
   logEl.scrollTop = logEl.scrollHeight;
   if (job.status === 'done' && job.verdict) _renderTestVerdict(verdictEl, job.verdict, card, name);
   else if (verdictEl) verdictEl.innerHTML = '';
@@ -1151,7 +1156,7 @@ async function _testSkill(card, name, force = false) {
   let job = force ? { status: 'none' } : await _fetchTestStatus(name);
 
   if (job.status === 'none') {
-    logEl.innerHTML = '<div class="skill-test-meta">Starting test…</div>';
+    logEl.innerHTML = '<div class="skill-test-meta">开始测试…</div>';
     let model = '', endpoint_url = '';
     try {
       const sm = window.sessionModule;
@@ -1163,8 +1168,8 @@ async function _testSkill(card, name, force = false) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, endpoint_url }),
       });
-      if (!res.ok) { logEl.innerHTML = '<div class="skill-test-err">Test failed: HTTP ' + res.status + '</div>'; return; }
-    } catch (e) { logEl.innerHTML = '<div class="skill-test-err">Test failed: ' + (e.message || e) + '</div>'; return; }
+      if (!res.ok) { logEl.innerHTML = '<div class="skill-test-err">测试失败: HTTP ' + res.status + '</div>'; return; }
+    } catch (e) { logEl.innerHTML = '<div class="skill-test-err">测试失败: ' + (e.message || e) + '</div>'; return; }
     job = await _fetchTestStatus(name);
   }
 
@@ -1177,12 +1182,12 @@ async function _testSkill(card, name, force = false) {
       // only stop once the card itself is gone from the DOM.
       if (!document.body.contains(card)) { clearInterval(card._testPoll); card._testPoll = null; _setCardRunning(card, false); return; }
       const s = await _fetchTestStatus(name);
-      // Update the expanded log only while it's still on screen.
+      // Update the expanded log only while it\'s still on screen.
       if (document.body.contains(logEl)) _renderTestLog(logEl, verdictEl, s, card, name);
       if (s.status !== 'running') {
         clearInterval(card._testPoll); card._testPoll = null;
         _setCardRunning(card, false);
-        // If the log isn't visible (card was collapsed), still update the
+        // If the log isn\'t visible (card was collapsed), still update the
         // header dot/% so the result shows on the folded card.
         if (!document.body.contains(logEl) && s.verdict && s.verdict.verdict) {
           _applyVerdictToHeader(card, s.verdict.verdict);
@@ -1231,7 +1236,7 @@ function _applyVerdictToHeader(card, verdict) {
     fail: 'var(--color-danger, #e06c75)',
   }[verdict];
   // Audit dot removed at user request — strip any pre-existing one so the
-  // post-audit live update doesn't leave a stale dot from an old render.
+  // post-audit live update doesn\'t leave a stale dot from an old render.
   const header = card.querySelector('.skill-card-header');
   if (header) {
     header.querySelectorAll('.skill-audit-dot').forEach(n => n.remove());
@@ -1264,7 +1269,7 @@ function _applyVerdictToHeader(card, verdict) {
       fail:       { bg: 'color-mix(in srgb, var(--color-danger, #e06c75) 30%, transparent)',  fg: 'var(--color-danger, #e06c75)' },
     }[verdict];
     // The status pill (draft / published) keeps its own colours now — the
-    // verdict lives in a separate "checked" pill that's inserted next to it.
+    // verdict lives in a separate "checked" pill that\'s inserted next to it.
     // Remove any prior audit glyph (was previously inserted inside the pill;
     // now scrub both the in-pill and sibling locations on every refresh).
     pill.querySelectorAll('.skill-pill-verdict').forEach(n => n.remove());
@@ -1299,15 +1304,15 @@ function _renderTestVerdict(el, v, card, name) {
   if (!el) return;
   const verdict = (v && v.verdict) || 'unknown';
   const cls = { pass: 'ok', needs_work: 'warn', fail: 'bad', inconclusive: 'unknown' }[verdict] || 'unknown';
-  const label = { pass: 'PASS', needs_work: 'NEEDS WORK', fail: 'FAIL', inconclusive: 'INCONCLUSIVE', unknown: 'UNCLEAR' }[verdict] || 'UNCLEAR';
+  const label = { pass: '通过', needs_work: '需改进', fail: '失败', inconclusive: '不确定', unknown: '不明确' }[verdict] || '不明确';
   const conf = v && typeof v.confidence === 'number' ? Math.round(v.confidence * 100) + '%' : '';
   const issues = Array.isArray(v && v.issues) ? v.issues : [];
-  // Reflect the skill's current state: if it's already published, the button
+  // Reflect the skill's current state: if it\'s already published, the button
   // confirms "Approved" (click to unpublish) rather than offering to approve.
   const isPub = card && card.dataset && card.dataset.skillStatus === 'published';
-  const approveLabel = isPub ? 'Approved' : 'Approve';
+  const approveLabel = isPub ? '已批准' : '批准';
   const approveCls = 'skill-eval-approve' + (isPub ? ' is-approved' : (verdict === 'pass' ? ' suggested' : ''));
-  const approveTitle = isPub ? 'Already approved — click to unpublish' : '发布 — 显示在技能索引中';
+  const approveTitle = isPub ? '已批准 — 点击取消发布' : '发布 — 出现在技能索引中';
   el.innerHTML =
     '<div class="skill-eval-head"><span class="skill-eval-badge skill-eval-' + cls + '">' + label + (conf ? ' · ' + conf : '') + '</span>' +
     '<span class="skill-eval-summary">' + esc((v && v.summary) || '') + '</span></div>' +
@@ -1315,24 +1320,24 @@ function _renderTestVerdict(el, v, card, name) {
     '<div class="doclib-card-expanded-actions skill-eval-actions-wrap">' +
       '<button class="doclib-card-text-btn doclib-card-action-btn ' + approveCls + '" data-act="approve" title="' + approveTitle + '">' + approveLabel + '</button>' +
       '<div class="doclib-action-group"><div class="doclib-action-btn-row">' +
-        '<button class="doclib-card-text-btn doclib-card-action-btn" data-act="retry" title="Run the test again">Retry</button>' +
-        '<button class="doclib-card-text-btn doclib-card-action-btn" data-act="copy" title="Copy the run output + verdict">Copy</button>' +
-        '<button class="doclib-card-text-btn doclib-card-action-btn" data-act="edit">Edit</button>' +
-        '<button class="doclib-card-text-btn doclib-card-action-btn doclib-card-text-btn-danger" data-act="del"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>' +
+        '<button class="doclib-card-text-btn doclib-card-action-btn" data-act="retry" title="重新运行测试">重试</button>' +
+        '<button class="doclib-card-text-btn doclib-card-action-btn" data-act="copy" title="复制运行输出 + 判定结果">复制</button>' +
+        '<button class="doclib-card-text-btn doclib-card-action-btn" data-act="edit">编辑</button>' +
+        '<button class="doclib-card-text-btn doclib-card-action-btn doclib-card-text-btn-danger" data-act="del"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除</button>' +
       '</div></div>' +
     '</div>';
   _applyVerdictToHeader(card, verdict);
   el.querySelector('[data-act="approve"]')?.addEventListener('click', async (e) => {
     e.stopPropagation();
     const nowPub = card.dataset.skillStatus === 'published';
-    await _setSkillStatus(name, nowPub ? '草稿' : 'published');
+    await _setSkillStatus(name, nowPub ? 'draft' : 'published');
     // _setSkillStatus reloads the list, but if this card survives, relabel it.
-    card.dataset.skillStatus = nowPub ? '草稿' : 'published';
+    card.dataset.skillStatus = nowPub ? 'draft' : 'published';
     const btn = el.querySelector('[data-act="approve"]');
     if (btn) {
       const pub = card.dataset.skillStatus === 'published';
-      btn.textContent = pub ? 'Approved' : 'Approve';
-      btn.title = pub ? 'Already approved — click to unpublish' : '发布 — 显示在技能索引中';
+      btn.textContent = pub ? '已批准' : '批准';
+      btn.title = pub ? '已批准 — 点击取消发布' : '发布 — 出现在技能索引中';
       btn.classList.toggle('is-approved', pub);
       btn.classList.toggle('suggested', !pub && verdict === 'pass');
     }
@@ -1366,17 +1371,17 @@ function _confirmAuditSkills(label) {
       overlay.className = 'modal';
       overlay.innerHTML =
         '<div class="modal-content styled-confirm-box">' +
-          '<div class="modal-header"><h4>Audit Skills</h4></div>' +
+          '<div class="modal-header"><h4>审计技能</h4></div>' +
           '<div class="modal-body">' +
             '<p id="skills-audit-confirm-msg"></p>' +
             '<label class="memory-bulk-check-all" style="margin-top:10px;display:inline-flex;align-items:center;gap:7px;">' +
               '<input type="checkbox" id="skills-audit-skip-audited" checked />' +
-              '<span>Skip already audited</span>' +
+              '<span>跳过已审计的</span>' +
             '</label>' +
           '</div>' +
           '<div class="modal-footer">' +
-            '<button id="skills-audit-confirm-cancel" class="confirm-btn confirm-btn-secondary">Cancel</button>' +
-            '<button id="skills-audit-confirm-ok" class="confirm-btn confirm-btn-primary">Audit</button>' +
+            '<button id="skills-audit-confirm-cancel" class="confirm-btn confirm-btn-secondary">取消</button>' +
+            '<button id="skills-audit-confirm-ok" class="confirm-btn confirm-btn-primary">审计</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
@@ -1386,7 +1391,7 @@ function _confirmAuditSkills(label) {
     const skip = overlay.querySelector('#skills-audit-skip-audited');
     const okBtn = overlay.querySelector('#skills-audit-confirm-ok');
     const cancelBtn = overlay.querySelector('#skills-audit-confirm-cancel');
-    msg.textContent = `Audit ${label}? Each is tested from top to bottom, then published or moved to draft using your auto-approve confidence threshold.`;
+    msg.textContent = `审计 ${label}？每个技能将从头到尾进行测试，然后根据你的自动批准置信度阈值发布或移至草稿。`;
     skip.checked = true;
     overlay.classList.remove('hidden');
     overlay.style.display = '';
@@ -1434,7 +1439,7 @@ async function _auditAllSkills(opts = {}) {
       ? `${names.length} selected ${names.length === 1 ? 'skill' : 'skills'}`
       : `${names.length} visible ${names.length === 1 ? 'skill' : 'skills'}`;
     if (!names.length) {
-      uiModule.showToast(explicitNames ? 'No selected skills to audit' : 'No visible skills to audit');
+      uiModule.showToast(explicitNames ? '没有选中的技能可审计' : '没有可见的技能可审计');
       return;
     }
     const confirmed = await _confirmAuditSkills(label);
@@ -1528,7 +1533,7 @@ function _applyAuditResults(st) {
   _auditSeenResults = results.length;
 }
 
-// Make the card currently being audited glow, so it's obvious which one the
+// Make the card currently being audited glow, so it\'s obvious which one the
 // "Audit now" run is processing. Pass null to clear all highlights.
 function _highlightAuditCard(name) {
   document.querySelectorAll('.skill-card.skill-audit-active')
@@ -1559,18 +1564,18 @@ function _renderAuditPanel(panel, st) {
   const running = st.status === 'running';
   const cancelled = st.status === 'cancelled';
   const head = running
-    ? `Auditing ${done}/${total}${st.current ? ' — ' + esc(st.current) : ''}`
+    ? `审计中 ${done}/${total}${st.current ? ' — ' + esc(st.current) : ''}`
     : cancelled
-      ? `Audit cancelled — ${done}/${total}`
-    : `Audit complete — ${total} skill${total === 1 ? '' : 's'}`;
+      ? `审计已取消 — ${done}/${total}`
+    : `审计完成 — ${total} 个技能`;
   panel.innerHTML =
     '<div class="skills-audit-head">' +
       '<span class="skills-audit-title-wrap" style="display:inline-flex;align-items:center;gap:8px;">' +
         '<span class="skills-audit-title">' + head + '</span>' +
       '</span>' +
       (running
-        ? '<button class="memory-toolbar-btn" data-act="audit-cancel">Cancel</button>'
-        : '<button class="memory-toolbar-btn" data-act="audit-close">Close</button>') +
+        ? '<button class="memory-toolbar-btn" data-act="audit-cancel">取消</button>'
+        : '<button class="memory-toolbar-btn" data-act="audit-close">关闭</button>') +
     '</div>' +
     '<div class="skills-audit-bar"><div class="skills-audit-fill" style="width:' + pct + '%"></div></div>' +
     (summary ? '<div class="skills-audit-summary">' + esc(summary) + (st.teacher ? ' · teacher: ' + esc(st.teacher) : '') + '</div>' : '') +
@@ -1596,7 +1601,7 @@ function _renderAuditPanel(panel, st) {
       _highlightAuditCard(null);
     } catch {
       cancel.disabled = false;
-      cancel.textContent = '取消';
+      cancel.textContent = 'Cancel';
     }
   });
   const close = panel.querySelector('[data-act="audit-close"]');
@@ -1639,7 +1644,7 @@ function _updateBulkBar() {
   const delNonPassingBtn = document.getElementById('skills-bulk-delete-nonpassing');
   const pubBtn = document.getElementById('skills-bulk-publish');
   const auditBtn = document.getElementById('skills-bulk-audit');
-  if (countEl) countEl.textContent = `${_selectedNames.size} Selected`;
+  if (countEl) countEl.textContent = `${_selectedNames.size} 已选择`;
   if (delBtn) delBtn.disabled = _selectedNames.size === 0;
   if (auditBtn) auditBtn.disabled = _selectedNames.size === 0;
   if (delNonPassingBtn) {
@@ -1652,7 +1657,7 @@ function _updateBulkBar() {
   // Approve is only meaningful when at least one selected skill is still a draft.
   const anyDraft = [..._selectedNames].some(n => {
     const sk = skills.find(s => (s.name || s.id) === n);
-    return sk && (sk.status || '草稿') !== 'published';
+    return sk && (sk.status || 'draft') !== 'published';
   });
   if (pubBtn) pubBtn.disabled = !anyDraft;
 }
@@ -1671,7 +1676,7 @@ async function _bulkDelete() {
   if (!_selectedNames.size) return;
   const n = _selectedNames.size;
   const ok = await uiModule.styledConfirm(
-    `Delete ${n} ${n === 1 ? 'skill' : 'skills'}? This removes their SKILL.md files.`,
+    `删除 ${n} 个技能？这将移除它们的 SKILL.md 文件。`,
     { confirmText: '删除', danger: true }
   );
   if (!ok) return;
@@ -1693,7 +1698,7 @@ async function _bulkDelete() {
   if (deletedNames.length) await new Promise(resolve => setTimeout(resolve, 320));
   _exitSelectMode();
   await loadSkills();
-  uiModule.showToast(`Deleted ${deleted}`);
+  uiModule.showToast(`已删除 ${deleted}`);
 }
 
 async function _loadSkillApprovalThreshold() {
@@ -1714,7 +1719,7 @@ function _selectedNonPassingSkills() {
     if (!selected.has(name)) return false;
     const conf = Number(sk.confidence || 0);
     const necessity = _necessityKind(sk);
-    if (necessity === '重复' || necessity === 'trivial' || necessity === 'irrelevant') return true;
+    if (necessity === 'duplicate' || necessity === 'trivial' || necessity === 'irrelevant') return true;
     if ((sk.audit_verdict || '') !== 'pass') return true;
     return conf < _skillApprovalThreshold;
   });
@@ -1723,14 +1728,14 @@ function _selectedNonPassingSkills() {
 async function _bulkDeleteNonPassing() {
   const targets = _selectedNonPassingSkills();
   if (!targets.length) {
-    uiModule.showToast('未选择不符合审核的技能');
+    uiModule.showToast('没有选中的不合格技能');
     return;
   }
   const thresholdPct = Math.round(_skillApprovalThreshold * 100);
   const names = targets.map(sk => sk.name || sk.id).filter(Boolean);
   const ok = await uiModule.styledConfirm(
-    `Delete ${names.length} selected non-passing ${names.length === 1 ? 'skill' : 'skills'}? This removes duplicates, generic/irrelevant skills, failed audits, and anything below ${thresholdPct}%.`,
-    { confirmText: 'Delete non passing', danger: true }
+    `删除 ${names.length} 个选中的不合格技能？这将移除重复的、通用/无关的技能、审计失败的，以及任何低于 ${thresholdPct}% 的技能。`,
+    { confirmText: '删除不合格', danger: true }
   );
   if (!ok) return;
   let deleted = 0;
@@ -1752,7 +1757,7 @@ async function _bulkDeleteNonPassing() {
   if (deletedNames.length) await new Promise(resolve => setTimeout(resolve, 320));
   _exitSelectMode();
   await loadSkills();
-  uiModule.showToast(`Deleted ${deleted} non-passing`);
+  uiModule.showToast(`已删除 ${deleted} 个不合格技能`);
 }
 
 async function _bulkApprove() {
@@ -1772,7 +1777,7 @@ async function _bulkApprove() {
   }
   _exitSelectMode();
   await loadSkills();
-  uiModule.showToast(`Published ${published}`);
+  uiModule.showToast(`已发布 ${published}`);
 }
 
 async function _bulkAudit() {
@@ -1793,7 +1798,7 @@ async function _showSkillSource(name) {
     const data = await res.json();
     md = data.markdown || '';
   } catch (e) {
-    uiModule.showError('SKILL.md 加载失败');
+    uiModule.showError('加载 SKILL.md 失败');
     return;
   }
 
@@ -1802,16 +1807,16 @@ async function _showSkillSource(name) {
   wrap.className = 'modal';
   wrap.style.display = 'block';
   wrap.innerHTML = `
-    <div class="modal-content" style="max-width:760px;max-height:85vh;display:flex;flex-direction:column">
+    <div class="modal-content" style="max-width:760px;display:flex;flex-direction:column">
       <div class="modal-header">
         <h4>SKILL.md — <code>${esc(name)}</code></h4>
         <span style="flex:1"></span>
-        <button class="memory-toolbar-btn" id="skill-save-btn">Save</button>
+        <button class="memory-toolbar-btn" id="skill-save-btn">保存</button>
         <button class="close-btn" id="skill-md-close">✖</button>
       </div>
       <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
         <textarea id="skill-md-textarea" spellcheck="false" style="flex:1;min-height:50vh;width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);box-sizing:border-box"></textarea>
-        <p class="memory-desc" style="margin:0">Edit the frontmatter and body directly. Save replaces the file via PUT /api/skills/{name}.</p>
+        <p class="memory-desc" style="margin:0">直接编辑 frontmatter 和内容。保存将通过 PUT /api/skills/{name} 替换文件。</p>
       </div>
     </div>
   `;
@@ -1823,7 +1828,7 @@ async function _showSkillSource(name) {
   wrap.querySelector('#skill-save-btn').addEventListener('click', async () => {
     try {
       // We use the manage_skills-style edit by going through PUT with a
-      // single 'content' field. The route doesn't accept that yet — use the
+      // single 'content' field. The route doesn\'t accept that yet — use the
       // tool call instead. We have a /api/skills/{name} PUT for fields, but
       // a full SKILL.md replace is simpler via the parsed-then-PUT approach
       // below: parse client-side by uploading via the tool route.
@@ -1833,11 +1838,11 @@ async function _showSkillSource(name) {
         body: JSON.stringify({ markdown: ta.value }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      uiModule.showToast('已保存');
+      uiModule.showToast('Saved');
       wrap.remove();
       await loadSkills();
     } catch (e) {
-      uiModule.showError('保存失败：' + e.message);
+      uiModule.showError('保存失败: ' + e.message);
     }
   });
 }
@@ -1862,10 +1867,10 @@ async function importSkillFromUrl() {
     if (input) input.value = '';
     await loadSkills();
     const name = data.skill?.name || 'skill';
-    uiModule.showToast(`Imported ${name} (${data.files || 1} file(s))`);
+    uiModule.showToast(`已导入 ${name} (${data.files || 1} 个文件)`);
     if (name) openSkill(name);
   } catch (err) {
-    uiModule.showError('导入失败：' + err.message);
+    uiModule.showError('导入失败: ' + err.message);
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -1884,7 +1889,7 @@ async function addSkill() {
   const category = document.getElementById('new-skill-category')?.value.trim() || 'general';
 
   if (!description && !name) {
-    uiModule.showError('需要提供描述（或名称）');
+    uiModule.showError('需要描述（或名称）');
     return;
   }
   const procedure = procedureRaw
@@ -1903,7 +1908,7 @@ async function addSkill() {
         when_to_use: whenToUse,
         procedure,
         tags,
-        status: '草稿',
+        status: 'draft',
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1914,7 +1919,7 @@ async function addSkill() {
     await loadSkills();
     uiModule.showToast('技能已添加（草稿）');
   } catch (err) {
-    uiModule.showError('添加技能失败：' + err.message);
+    uiModule.showError('添加技能失败: ' + err.message);
   }
 }
 

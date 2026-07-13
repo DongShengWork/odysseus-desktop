@@ -5,7 +5,7 @@
  * Owns its own input handlers (begin/drag/end) and reads/writes the
  * shared `state` store directly. The factory takes a small dependency
  * bag for things that still live in galleryEditor.js — `activeLayer`,
- * `saveState`, `composite` — so this module doesn't have to know about
+ * `saveState`, `composite` — so this module doesn\'t have to know about
  * the orchestrator.
  *
  * @param {{

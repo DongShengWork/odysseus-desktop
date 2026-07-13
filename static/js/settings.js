@@ -8,6 +8,7 @@ import { clearDockSide } from './modalSnap.js';
 import { sortModelIds } from './modelSort.js';
 import { providerLogo } from './providers.js';
 import { isAltGrEvent } from './platform.js';
+import { bindMenuDismiss } from './escMenuStack.js';
 
 let initialized = false;
 let modalEl = null;
@@ -50,7 +51,7 @@ function initDrag() {
   const content = modalEl.querySelector('.settings-modal-content');
   if (!header || !content) return;
   // Skip interactive controls in the header (e.g. the opacity slider) so
-  // grabbing them doesn't start a window-drag.
+  // grabbing them doesn\'t start a window-drag.
   makeWindowDraggable(modalEl, {
     content,
     header,
@@ -89,7 +90,7 @@ function initOpenPromptModalLink() {
     const link = e.target.closest('[data-open-prompt-modal]');
     if (!link) return;
     e.preventDefault();
-    // Close settings first so the prompt modal isn't stacked on top.
+    // Close settings first so the prompt modal isn\'t stacked on top.
     if (modalEl && !modalEl.classList.contains('hidden')) close();
     try {
       const m = await import('./presets.js');
@@ -118,7 +119,7 @@ function initClose() {
     // Bail when a transient popover inside the modal is open — Esc should
     // dismiss just that, not the whole modal. Same-document listeners fire
     // in registration order regardless of capture/bubble, so the popover's
-    // own handler can't pre-empt ours; we have to opt out here.
+    // own handler can\'t pre-empt ours; we have to opt out here.
     const popoverOpen = modalEl.querySelector(
       '#adm-epLocalMoreMenu, #adm-epApiMoreMenu, #adm-provider-menu, #search-provider-menu, [data-popover-open="1"]'
     );
@@ -126,7 +127,7 @@ function initClose() {
       return;
     }
     // If an integration edit/add form is open inside the modal, close
-    // just that — don't dismiss the whole settings modal. (Pressing
+    // just that — don\'t dismiss the whole settings modal. (Pressing
     // ESC mid-edit and losing the modal was a fast-typing footgun.)
     const innerForm = modalEl.querySelector('#unified-intg-form, #set-email-accounts-form');
     if (innerForm && innerForm.style.display !== 'none' && innerForm.children.length > 0) {
@@ -212,7 +213,7 @@ async function _fetchModelEndpoints() {
 }
 
 function _endpointLabel(ep) {
-  return ep.name + (ep.online ? '' : ' (离线)');
+  return ep.name + (ep.online ? '' : ' (offline)');
 }
 
 function _fillEndpointSelect(selectEl, endpoints, selected, keepBlank) {
@@ -243,7 +244,7 @@ function _fillEndpointSelect(selectEl, endpoints, selected, keepBlank) {
   _syncEndpointLogo(selectEl);
 }
 
-// Mirror the selected model's provider logo into a sibling <span id="<selectId>-logo">.
+// Mirror the selected model\'s provider logo into a sibling <span id="<selectId>-logo">.
 // Wires the change listener exactly once so we can call this every time the
 // select is repopulated without piling on duplicate handlers.
 function _syncModelLogo(selectEl) {
@@ -384,7 +385,7 @@ function _bindFallbackWidget(opts) {
       enabledEps().forEach(function(ep) {
         var o = document.createElement('option');
         o.value = ep.id;
-        o.textContent = ep.name + (ep.online ? '' : ' (离线)');
+        o.textContent = ep.name + (ep.online ? '' : ' (offline)');
         epS.appendChild(o);
       });
       var first = enabledEps()[0];
@@ -408,7 +409,7 @@ function _bindFallbackWidget(opts) {
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'settings-fallback-remove';
-      rm.title = '移除备用方案';
+      rm.title = '移除备选方案';
       rm.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
       rm.addEventListener('click', function() {
         current.splice(idx, 1);
@@ -487,7 +488,7 @@ async function initDefaultChat() {
       enabledEndpoints().forEach(function(ep) {
         var o = document.createElement('option');
         o.value = ep.id;
-        o.textContent = ep.name + (ep.online ? '' : ' (离线)');
+        o.textContent = ep.name + (ep.online ? '' : ' (offline)');
         epS.appendChild(o);
       });
       var first = enabledEndpoints()[0];
@@ -512,7 +513,7 @@ async function initDefaultChat() {
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'settings-fallback-remove';
-      rm.title = '移除备用方案';
+      rm.title = 'Remove fallback';
       rm.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
       rm.addEventListener('click', function() {
         _fallbacks.splice(idx, 1);
@@ -541,6 +542,9 @@ async function initDefaultChat() {
     renderFallbacks();
   } catch (e) { console.warn('Failed to load default chat settings', e); }
 
+  epSel.addEventListener('change', function() { refreshModels(''); saveDefault(); });
+  modelSel.addEventListener('change', saveDefault);
+
   async function saveDefault() {
     try {
       var clean = _fallbacks.filter(function(f) { return f.endpoint_id && f.model; });
@@ -557,8 +561,6 @@ async function initDefaultChat() {
     } catch (e) { msg.textContent = '保存失败'; msg.style.color = 'var(--red)'; }
   }
 
-  epSel.addEventListener('change', function() { refreshModels(''); saveDefault(); });
-  modelSel.addEventListener('change', saveDefault);
   if (addFbBtn) addFbBtn.addEventListener('click', function() {
     var first = enabledEndpoints()[0];
     _fallbacks.push({ endpoint_id: first ? first.id : '', model: '' });
@@ -579,8 +581,8 @@ async function initUtilityModel() {
   var msg = el('set-utilityChatMsg');
   var _endpoints = [];
   var fallbackWidget = null;
-  if (epSel && epSel.options[0]) epSel.options[0].textContent = '与聊天设置相同';
-  if (modelSel && modelSel.options[0]) modelSel.options[0].textContent = '与聊天设置相同';
+  if (epSel && epSel.options[0]) epSel.options[0].textContent = '与聊天相同';
+  if (modelSel && modelSel.options[0]) modelSel.options[0].textContent = '与聊天相同';
 
   try {
     _endpoints = await _fetchModelEndpoints();
@@ -671,7 +673,7 @@ async function initTeacherModel() {
     // Dim the card when off as a "dormant" cue, but keep the endpoint+model
     // dropdowns INTERACTIVE — the toggle gates whether escalation runs, not
     // whether you can configure it. (Previously the config was inert when off,
-    // so users couldn't pick an endpoint until they'd already enabled it.)
+    // so users couldn't pick an endpoint until they\'d already enabled it.)
     var card = enabledToggle ? enabledToggle.closest('.admin-card') : null;
     if (card) card.style.opacity = off ? '0.7' : '';
     var wrap = card ? card.querySelector('.settings-col') : null;
@@ -685,7 +687,7 @@ async function initTeacherModel() {
     var settings = await res.json();
     if (enabledToggle) enabledToggle.checked = !!settings.teacher_enabled;
     // teacher_model is stored as "model@endpoint_name". Split on the
-    // LAST `@` so model ids that contain @ aren't mangled.
+    // LAST `@` so model ids that contain @ aren\'t mangled.
     var spec = settings.teacher_model || '';
     var savedModel = spec;
     var savedEpName = '';
@@ -716,7 +718,7 @@ async function initTeacherModel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teacher_enabled: enabled, teacher_model: spec })
       });
-      msg.textContent = enabled ? (spec ? '已保存' : '请选择节点和模型') : '已禁用';
+      msg.textContent = enabled ? (spec ? '已保存' : '请选择端点 + 模型') : '已禁用';
       msg.style.color = enabled && !spec ? 'var(--red)' : 'var(--fg)';
       setTimeout(function() { msg.textContent = ''; }, 2000);
     } catch (e) { msg.textContent = '保存失败'; msg.style.color = 'var(--red)'; }
@@ -769,7 +771,7 @@ async function initImageSettings() {
     // Hardcoded fallbacks shown as "(not detected)" so users know what to
     // download/serve to enable inpaint here.
     ['stable-diffusion-3.5-medium', 'stable-diffusion-inpainting'].forEach(mid => {
-      if (!imageModels.includes(mid)) { const opt = document.createElement('option'); opt.value = mid; opt.textContent = mid + '（未检测到）'; modelSel.appendChild(opt); }
+      if (!imageModels.includes(mid)) { const opt = document.createElement('option'); opt.value = mid; opt.textContent = mid + ' (not detected)'; modelSel.appendChild(opt); }
     });
   } catch (e) { console.warn('Failed to load models for image settings', e); }
   try {
@@ -921,7 +923,7 @@ async function initTtsSettings() {
       if (!ep.is_enabled) return;
       var hasTTS = (ep.models || []).some(m => ttsKeywords.some(kw => m.toLowerCase().includes(kw)));
       if (!hasTTS) return;
-      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + '（API）'; provSel.appendChild(opt);
+      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + ' (API)'; provSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load endpoints for TTS', e); }
 
@@ -948,9 +950,9 @@ async function initTtsSettings() {
     try {
       await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tts_enabled: ttsEnabledToggle ? ttsEnabledToggle.checked : true, tts_provider: provSel.value, tts_model: getModel() || 'tts-1', tts_voice: getVoice() || 'alloy', tts_speed: speedSelect.value || '1' }) });
-      ttsMsg.textContent = '已保存'; ttsMsg.style.color = 'var(--fg)'; setTimeout(() => { ttsMsg.textContent = ''; }, 2000);
+      ttsMsg.textContent = 'Saved'; ttsMsg.style.color = 'var(--fg)'; setTimeout(() => { ttsMsg.textContent = ''; }, 2000);
       if (window.aiTTSManager) window.aiTTSManager.checkAvailability();
-    } catch (e) { ttsMsg.textContent = '保存失败'; ttsMsg.style.color = 'var(--red)'; }
+    } catch (e) { ttsMsg.textContent = 'Failed to save'; ttsMsg.style.color = 'var(--red)'; }
   }
 
   async function saveAndClearCache() {
@@ -978,7 +980,7 @@ async function initTtsSettings() {
   if (previewBtn) {
     var previewAudio = null;
     var previewPlaying = false;
-    function resetPreview() { previewPlaying = false; previewBtn.textContent = '预览'; previewBtn.style.borderColor = ''; }
+    function resetPreview() { previewPlaying = false; previewBtn.textContent = '试听'; previewBtn.style.borderColor = ''; }
 
     previewBtn.addEventListener('click', async function() {
       if (previewPlaying) {
@@ -1030,7 +1032,7 @@ async function initTtsSettings() {
           });
         }
       } catch (e) {
-        ttsMsg.textContent = '预览失败：' + e.message; ttsMsg.style.color = 'var(--red, #e55)';
+        ttsMsg.textContent = '试听失败: ' + e.message; ttsMsg.style.color = 'var(--red, #e55)';
         setTimeout(function() { ttsMsg.textContent = ''; }, 3000);
       } finally {
         resetPreview();
@@ -1050,7 +1052,7 @@ async function initSttSettings() {
   var sttMsg = el('set-sttSettingsMsg');
   var sttEnabledToggle = el('set-sttEnabledToggle');
   var sttConfigWrap = el('set-sttConfigWrap');
-  // STT was removed from AI Defaults — bail if the UI isn't present.
+  // STT was removed from AI Defaults — bail if the UI isn\'t present.
   if (!provSel) return;
 
   function isEndpoint() { return provSel.value.startsWith('endpoint:'); }
@@ -1088,7 +1090,7 @@ async function initSttSettings() {
     var endpoints = await epRes.json();
     endpoints.forEach(function(ep) {
       if (!ep.is_enabled) return;
-      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + '（API）'; provSel.appendChild(opt);
+      var opt = document.createElement('option'); opt.value = 'endpoint:' + ep.id; opt.textContent = ep.name + ' (API)'; provSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load endpoints for STT', e); }
 
@@ -1111,11 +1113,11 @@ async function initSttSettings() {
       await fetch('/api/auth/settings', { method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stt_enabled: enabled, stt_provider: provSel.value, stt_model: getModel() || 'base', stt_language: langInput.value.trim() }) });
-      sttMsg.textContent = '已保存'; sttMsg.style.color = 'var(--fg)'; setTimeout(() => { sttMsg.textContent = ''; }, 2000);
+      sttMsg.textContent = 'Saved'; sttMsg.style.color = 'var(--fg)'; setTimeout(() => { sttMsg.textContent = ''; }, 2000);
       // Notify voiceRecorder of effective provider and update send button icon
       if (window.voiceRecorderModule) window.voiceRecorderModule._sttProvider = effectiveProvider();
       if (window._updateSendBtnIcon) window._updateSendBtnIcon();
-    } catch (e) { sttMsg.textContent = '保存失败'; sttMsg.style.color = 'var(--red)'; }
+    } catch (e) { sttMsg.textContent = 'Failed to save'; sttMsg.style.color = 'var(--red)'; }
   }
 
   provSel.addEventListener('change', function() { updateVisibility(); saveSTT(); });
@@ -1133,13 +1135,13 @@ var _LINK = function(href, text) {
   return '<a href="' + href + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent, var(--red));text-decoration:underline;">' + text + '</a>';
 };
 var _searchProviderHints = {
-  searxng: 'Private, self-hosted instance. Leave URL empty to use the SEARXNG_INSTANCE env var.',
-  duckduckgo: 'No API key needed, but rate-limited — heavy use can return empty results. Configure a fallback below.',
-  brave: 'Get your API key from ' + _LINK('https://brave.com/search/api/', 'brave.com/search/api'),
-  google_pse: 'Requires a Google API key and a Programmable Search Engine ID (CX). Create one at ' + _LINK('https://programmablesearchengine.google.com/', 'programmablesearchengine.google.com'),
-  tavily: 'AI-optimized search. 1,000 free credits/month at ' + _LINK('https://tavily.com/', 'tavily.com'),
-  serper: 'Google results via API. 2,500 free queries at ' + _LINK('https://serper.dev/', 'serper.dev'),
-  disabled: 'Web search and deep research tools will be unavailable.',
+  searxng: '私密、自托管实例。URL 留空以使用 SEARXNG_INSTANCE 环境变量。',
+  duckduckgo: '无需 API 密钥，但有速率限制 — 大量使用可能返回空结果。请在下方配置备选方案。',
+  brave: '从此处获取 API 密钥: ' + _LINK('https://brave.com/search/api/', 'brave.com/search/api'),
+  google_pse: '需要 Google API 密钥和可编程搜索引擎 ID (CX)。在此创建: ' + _LINK('https://programmablesearchengine.google.com/', 'programmablesearchengine.google.com'),
+  tavily: 'AI 优化搜索。每月 1,000 次免费额度: ' + _LINK('https://tavily.com/', 'tavily.com'),
+  serper: '通过 API 获取 Google 结果。2,500 次免费查询: ' + _LINK('https://serper.dev/', 'serper.dev'),
+  disabled: '网页搜索和深度研究工具将不可用。',
 };
 var _searchNeedsKey = { brave: 1, google_pse: 1, tavily: 1, serper: 1 };
 var _searchLabels = {
@@ -1230,12 +1232,12 @@ async function initSearchSettings() {
       var kf = keyFieldFor(active);
       var hasKey = kf ? ((s[kf] || '').trim() || (s.search_api_key || '').trim()) : false;
       if (_searchNeedsKey[active]) {
-        extra = hasKey ? ' (key set)' : ' (no key)';
+        extra = hasKey ? ' (密钥已设置)' : ' (未设置密钥)';
       } else if (active === 'searxng' && (s.search_url || '').trim()) {
         extra = ' (' + s.search_url + ')';
       }
       var count = s.search_result_count || 5;
-      msg.textContent = '活跃：' + label + extra + ' \u00b7 ' + count + ' 个结果';
+      msg.textContent = '当前: ' + label + extra + ' \u00b7 ' + count + ' 条结果';
       msg.style.color = active === 'disabled' ? 'var(--red)' : (_searchNeedsKey[active] && !hasKey) ? 'var(--red)' : 'var(--fg)';
     } catch (e) { /* ignore */ }
   }
@@ -1392,7 +1394,7 @@ async function initSearchSettings() {
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'settings-fallback-remove';
-      rm.title = '移除备用方案';
+      rm.title = 'Remove fallback';
       rm.innerHTML = TRASH_SVG;
       rm.addEventListener('click', function() {
         var next = (_settings.search_fallback_chain || []).filter(function(x, i) { return i !== idx; });
@@ -1445,7 +1447,7 @@ async function initSearchSettings() {
         msg.style.color = 'var(--red)';
         return;
       }
-      // Persist current form values first so the test uses what's on screen.
+      // Persist current form values first so the test uses what\'s on screen.
       await saveSearch();
       testBtn.disabled = true;
       var origHtml = testBtn.innerHTML;
@@ -1458,7 +1460,7 @@ async function initSearchSettings() {
         testBtn.appendChild(wp.element);
         testBtn.appendChild(document.createTextNode('测试中'));
       } catch (_) {
-        testBtn.innerHTML = origHtml.replace(/>Test\s*$/, '>Testing...');
+        testBtn.innerHTML = origHtml.replace(/>Test\s*$/, '>测试中...');
       }
       msg.textContent = '';
       var t0 = performance.now();
@@ -1474,15 +1476,15 @@ async function initSearchSettings() {
           msg.textContent = '✗ ' + d.error + ' (' + ms + 'ms)';
           msg.style.color = 'var(--red)';
         } else if (!d.results || !d.results.length) {
-          msg.textContent = '⚠ 未返回结果（' + ms + '毫秒）';
+          msg.textContent = '⚠ 无结果返回 (' + ms + 'ms)';
           msg.style.color = 'var(--red)';
         } else {
           var topTitle = (d.results[0].title || d.results[0].url || '').slice(0, 60);
-          msg.textContent = '✓ ' + d.results.length + ' 个结果 · ' + ms + '毫秒 · 顶部：' + topTitle;
+          msg.textContent = '✓ ' + d.results.length + ' 条结果 · ' + ms + 'ms · 最佳: ' + topTitle;
           msg.style.color = 'var(--fg)';
         }
       } catch (e) {
-        msg.textContent = '✗ 测试失败：' + (e && e.message ? e.message : e);
+        msg.textContent = '✗ 测试失败: ' + (e && e.message ? e.message : e);
         msg.style.color = 'var(--red)';
       } finally {
         if (wp) { try { wp.destroy(); } catch (_) {} }
@@ -1546,25 +1548,25 @@ async function initResearchSettings() {
       parts.push(epName + ' / ' + mName);
     }
     if (tokensInput.value) {
-      parts.push('Max tokens: ' + tokensInput.value);
+      parts.push('最大令牌: ' + tokensInput.value);
     }
     if (extractTimeoutInput.value) {
-      parts.push('Extract: ' + extractTimeoutInput.value + 's');
+      parts.push('提取: ' + extractTimeoutInput.value + '秒');
     }
     if (extractConcurrencyInput.value) {
-      parts.push('Parallel: ' + extractConcurrencyInput.value);
+      parts.push('并行: ' + extractConcurrencyInput.value);
     }
     if (runTimeoutInput.value !== '') {
       var rtv = parseInt(runTimeoutInput.value, 10);
       if (!isNaN(rtv)) {
-        parts.push(rtv === 0 ? 'Max time: no limit' : 'Max time: ' + rtv + 's');
+        parts.push(rtv === 0 ? '最大时间: 无限制' : '最大时间: ' + rtv + '秒');
       }
     }
     if (parts.length) {
       msg.textContent = parts.join(' · ');
       msg.style.color = 'var(--fg)';
     } else {
-      msg.textContent = '使用聊天默认值';
+      msg.textContent = '使用聊天默认设置';
       msg.style.color = 'var(--fg)';
     }
   }
@@ -1637,7 +1639,7 @@ async function initResearchSearchSettings() {
       if (!kf) return;
       var hasKey = ((settings[kf] || '').trim() || (settings.search_api_key || '').trim());
       if (!hasKey) {
-        opt.textContent = (_searchLabels[prov] || prov) + '（无密钥）';
+        opt.textContent = (_searchLabels[prov] || prov) + ' (无密钥)';
         opt.style.color = 'var(--red)';
       } else {
         opt.textContent = _searchLabels[prov] || prov;
@@ -1705,9 +1707,9 @@ async function initAgentSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      msg.textContent = (tools > 0 ? '限制：' + tools + ' 次工具调用' : '无限制工具调用') +
-        (rounds != null ? ' · ' + rounds + ' 轮/消息' : '') +
-        (supInput && supInput.checked ? ' · 监督者已开启' : '');
+      msg.textContent = (tools > 0 ? '限制: ' + tools + ' 次工具调用' : '无限工具调用') +
+        (rounds != null ? ' · ' + rounds + ' 步/消息' : '') +
+        (supInput && supInput.checked ? ' · 监督模式开' : '');
       msg.style.color = 'var(--fg)';
     } catch (e) { msg.textContent = '保存失败'; msg.style.color = 'var(--red)'; }
   }
@@ -1717,28 +1719,10 @@ async function initAgentSettings() {
   if (supInput) supInput.addEventListener('change', save);
   var cur = parseInt(toolsInput.value, 10) || 0;
   var curR = roundsInput ? (parseInt(roundsInput.value, 10) || 20) : null;
-  msg.textContent = (cur > 0 ? '限制：' + cur + ' 次工具调用' : '无限制工具调用') +
-    (curR != null ? ' · ' + curR + ' 轮/消息' : '') +
-    (supInput && supInput.checked ? ' · 监督者已开启' : '');
+  msg.textContent = (cur > 0 ? '限制: ' + cur + ' 次工具调用' : '无限工具调用') +
+    (curR != null ? ' · ' + curR + ' 步/消息' : '') +
+    (supInput && supInput.checked ? ' · 监督模式开' : '');
 
-  // Standalone Email Safety toggle (separate card on the AI Defaults tab).
-  // Default to ON if the setting isn't present so a fresh install is safe.
-  var emailConfirm = el('set-agentEmailConfirm');
-  if (emailConfirm) {
-    try {
-      var s = await fetch('/api/auth/settings', { credentials: 'same-origin' }).then(r => r.json());
-      emailConfirm.checked = s.agent_email_confirm !== false;
-    } catch (_) {}
-    emailConfirm.addEventListener('change', async () => {
-      try {
-        await fetch('/api/auth/settings', {
-          method: 'POST', credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agent_email_confirm: !!emailConfirm.checked }),
-        });
-      } catch (_) {}
-    });
-  }
 }
 
 /* ═══════════════════════════════════════════
@@ -1755,30 +1739,30 @@ function initAppearance() {
       if (window.UI_VIS_ADMIN_ONLY && window.UI_VIS_ADMIN_ONLY.has(key) && !chk.checked && !window._isAdmin) {
         chk.checked = true;
         if (uiModule && uiModule.showToast) {
-          uiModule.showToast('Only admins can hide Settings.');
+          uiModule.showToast('只有管理员可以隐藏设置。');
         }
         return;
       }
 
       // Hiding the Settings cog removes the only visible way to re-open this
       // panel. Warn the user and remind them about the `/settings` slash
-      // command so they don't lock themselves out.
+      // command so they don\'t lock themselves out.
       if (key === 'sidebar-settings-btn' && !chk.checked) {
         var ok = true;
         try {
           ok = await (uiModule && uiModule.styledConfirm
             ? uiModule.styledConfirm(
-                'Hide the Settings cog?\n\nYou can re-open this panel any time by typing /settings in the chat input.',
-                { confirmText: 'Hide', cancelText: 'Cancel' }
+                '隐藏设置齿轮？\n\n您可以随时通过在聊天输入框中输入 /settings 来重新打开此面板。',
+                { confirmText: '隐藏', cancelText: '取消' }
               )
-            : Promise.resolve(window.confirm('Hide the Settings cog?\n\nYou can re-open this panel any time by typing /settings in the chat input.')));
+            : Promise.resolve(window.confirm('隐藏设置齿轮？\n\n您可以随时通过在聊天输入框中输入 /settings 来重新打开此面板。')));
         } catch (_) { ok = false; }
         if (!ok) {
           chk.checked = true;
           return;
         }
         if (uiModule && uiModule.showToast) {
-          uiModule.showToast('Settings cog hidden — type /settings to bring it back.', 5000);
+          uiModule.showToast('设置齿轮已隐藏 — 输入 /settings 可恢复显示。', 5000);
         }
       }
 
@@ -1888,33 +1872,33 @@ const SHORTCUT_ICONS = {
 };
 
 const SHORTCUT_LABELS = {
-  search:         'Search conversations',
-  toggle_sidebar: 'Toggle sidebar',
-  new_session:    'New session',
-  fav_session:    'Favorite session',
-  delete_session: 'Delete session',
-  cancel:         'Cancel / close',
-  tts:            'Play/stop TTS',
-  incognito:      'Toggle incognito',
-  settings:       'Toggle Window',
-  focus_input:    'Focus chat input',
-  open_calendar:  'Open Calendar',
-  open_compare:   'Open Compare',
-  open_cookbook:  'Open Cookbook',
-  open_research:  'Open Deep Research',
-  open_gallery:   'Open Gallery',
-  open_library:   'Open Library',
-  open_memory:    'Open Memory',
-  open_notes:     'Open Notes',
-  open_tasks:     'Open Tasks',
-  open_theme:     'Open Theme',
+  search:         '搜索对话',
+  toggle_sidebar: '切换侧边栏',
+  new_session:    '新建会话',
+  fav_session:    '收藏会话',
+  delete_session: '删除会话',
+  cancel:         '取消 / 关闭',
+  tts:            '播放/停止语音',
+  incognito:      '切换隐身模式',
+  settings:       '切换窗口',
+  focus_input:    '聚焦聊天输入',
+  open_calendar:  '打开日历',
+  open_compare:   '打开对比',
+  open_cookbook:  '打开配方本',
+  open_research:  '打开深度研究',
+  open_gallery:   '打开画廊',
+  open_library:   '打开资料库',
+  open_memory:    '打开记忆',
+  open_notes:     '打开笔记',
+  open_tasks:     '打开任务',
+  open_theme:     '打开主题',
 };
 
 const SHORTCUT_CATEGORIES = [
-  { name: 'Navigation', keys: ['search', 'toggle_sidebar', 'focus_input', 'settings'] },
-  { name: 'Sessions', keys: ['new_session', 'fav_session', 'delete_session'] },
-  { name: 'Tools', keys: ['incognito', 'tts', 'cancel'] },
-  { name: 'Open Tools', keys: ['open_calendar', 'open_compare', 'open_cookbook', 'open_research', 'open_gallery', 'open_library', 'open_memory', 'open_notes', 'open_tasks', 'open_theme'] },
+  { name: '导航', keys: ['search', 'toggle_sidebar', 'focus_input', 'settings'] },
+  { name: '会话', keys: ['new_session', 'fav_session', 'delete_session'] },
+  { name: '工具', keys: ['incognito', 'tts', 'cancel'] },
+  { name: '打开工具', keys: ['open_calendar', 'open_compare', 'open_cookbook', 'open_research', 'open_gallery', 'open_library', 'open_memory', 'open_notes', 'open_tasks', 'open_theme'] },
 ];
 
 function _formatKeyCaps(combo) {
@@ -1934,7 +1918,7 @@ function _formatKeyCaps(combo) {
 }
 
 function _comboFromEvent(e) {
-  // Drop a stray AltGr keystroke (e.g. AltGr+E to type €) so it isn't recorded
+  // Drop a stray AltGr keystroke (e.g. AltGr+E to type €) so it isn\'t recorded
   // as a bogus ctrl+alt+<char> binding — onKey ignores empty combos. See
   // platform.js for the macOS carve-out and Windows trade-off.
   if (isAltGrEvent(e)) return '';
@@ -1997,13 +1981,13 @@ async function initShortcuts() {
         const row = document.createElement('div');
         row.className = 'shortcut-row' + (hasConflict ? ' shortcut-conflict' : '');
         row.dataset.action = action;
-        const keyContent = combo ? _formatKeyCaps(combo) : '<span class="shortcut-unset">Set</span>';
+        const keyContent = combo ? _formatKeyCaps(combo) : '<span class="shortcut-unset">设置</span>';
         row.innerHTML = `
-          <span class="shortcut-label"><span class="shortcut-icon">${icon}</span>${esc(label)}${hasConflict ? '<span class="shortcut-warn" title="Duplicate shortcut">!</span>' : ''}</span>
+          <span class="shortcut-label"><span class="shortcut-icon">${icon}</span>${esc(label)}${hasConflict ? '<span class="shortcut-warn" title="快捷键重复">!</span>' : ''}</span>
           <div class="shortcut-controls">
             <span class="shortcut-hint" hidden></span>
-            <button class="shortcut-key${combo ? '' : ' shortcut-key-unset'}" data-action="${action}" title="Click to rebind">${keyContent}</button>
-            <button class="shortcut-action-btn ${isCustom ? 'is-reset' : ''}" data-action="${action}" title="${isCustom ? 'Reset to default' : 'Confirm'}" style="${isCustom ? '' : 'visibility:hidden'}">
+            <button class="shortcut-key${combo ? '' : ' shortcut-key-unset'}" data-action="${action}" title="点击重新绑定">${keyContent}</button>
+            <button class="shortcut-action-btn ${isCustom ? 'is-reset' : ''}" data-action="${action}" title="${isCustom ? '重置为默认' : '确认'}" style="${isCustom ? '' : 'visibility:hidden'}">
               ${isCustom
                 ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
                 : '\u2713'}
@@ -2053,7 +2037,7 @@ async function initShortcuts() {
     // Hint: tell the user how to commit / cancel the rebind.
     if (hintEl) {
       hintEl.hidden = false;
-      hintEl.textContent = '按下按键';
+      hintEl.textContent = '按下一个键';
     }
 
     let pendingCombo = null;
@@ -2102,7 +2086,7 @@ async function initShortcuts() {
       pendingCombo = combo;
       btn.innerHTML = _formatKeyCaps(combo);
       // Now that a combo is captured, prompt to commit with Enter.
-      if (hintEl) hintEl.textContent = '\u21B5 回车保存';
+      if (hintEl) hintEl.textContent = '\u21B5 按回车保存';
     }
 
     function cleanup() {
@@ -2124,7 +2108,7 @@ async function initShortcuts() {
       });
       // Update global keybinds so they take effect immediately
       window._odysseusKeybinds = keybinds;
-      if (uiModule && uiModule.showToast) uiModule.showToast('Shortcut saved');
+      if (uiModule && uiModule.showToast) uiModule.showToast('快捷键已保存');
     } catch (e) {
       console.error('Failed to save keybinds:', e);
     }
@@ -2135,7 +2119,7 @@ async function initShortcuts() {
       keybinds = { ...SHORTCUT_DEFAULTS };
       render();
       await saveKeybinds();
-      if (uiModule && uiModule.showToast) uiModule.showToast('Shortcuts reset to defaults');
+      if (uiModule && uiModule.showToast) uiModule.showToast('快捷键已重置为默认');
     });
   }
 
@@ -2168,7 +2152,7 @@ function initAccount() {
       if (!policy) return;
       _authPolicy = policy;
       const pwNew = el('settings-pw-new');
-      if (pwNew) pwNew.placeholder = `新密码（最少${policy.password_min_length}个字符）`;
+      if (pwNew) pwNew.placeholder = `新密码（最少 ${policy.password_min_length} 位）`;
     }).catch(() => {});
 
   // Change password
@@ -2181,7 +2165,7 @@ function initAccount() {
       const conf = el('settings-pw-confirm').value;
       msgEl.style.color = '';
       if (!cur || !nw) { msgEl.textContent = '请填写所有字段'; msgEl.style.color = 'var(--red)'; return; }
-      if (nw.length < _authPolicy.password_min_length) { msgEl.textContent = `最少${_authPolicy.password_min_length}个字符`; msgEl.style.color = 'var(--red)'; return; }
+      if (nw.length < _authPolicy.password_min_length) { msgEl.textContent = `最少 ${_authPolicy.password_min_length} 个字符`; msgEl.style.color = 'var(--red)'; return; }
       if (nw !== conf) { msgEl.textContent = '密码不匹配'; msgEl.style.color = 'var(--red)'; return; }
       saveBtn.disabled = true;
       try {
@@ -2190,7 +2174,7 @@ function initAccount() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ current_password: cur, new_password: nw })
         });
-        if (!res.ok) { const d = await res.json(); throw new Error(d.detail || '失败'); }
+        if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed'); }
         msgEl.style.color = 'var(--green)';
         msgEl.textContent = '密码已更新';
         el('settings-pw-current').value = '';
@@ -2216,7 +2200,7 @@ function initAccount() {
           // 2FA is ON — show disable option
           tfaContent.innerHTML = `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-              <span style="color:var(--color-save-green, #4caf50);font-size:12px;font-weight:600;">&#x2713; Enabled</span>
+              <span style="color:var(--color-save-green, #4caf50);font-size:12px;font-weight:600;">&#x2713; 已启用</span>
               <span style="font-size:11px;opacity:0.5;">登录时需要验证器应用</span>
             </div>
             <input id="tfa-disable-pw" type="password" placeholder="输入密码以禁用" autocomplete="current-password" style="padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-family:inherit;font-size:12px;width:100%;box-sizing:border-box;margin-bottom:6px;">
@@ -2227,21 +2211,21 @@ function initAccount() {
           el('tfa-disable-btn').addEventListener('click', async () => {
             const pw = el('tfa-disable-pw').value;
             const msg = el('tfa-msg');
-            if (!pw) { msg.textContent = '输入密码'; msg.style.color = 'var(--red)'; return; }
+            if (!pw) { msg.textContent = '请输入密码'; msg.style.color = 'var(--red)'; return; }
             try {
               const r = await fetch('/api/auth/2fa/disable', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password: pw })
               });
-              if (!r.ok) { const d = await r.json(); throw new Error(d.detail || '失败'); }
+              if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed'); }
               render2FA();
             } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--red)'; }
           });
         } else {
           // 2FA is OFF — show setup button
           tfaContent.innerHTML = `
-            <div style="font-size:12px;opacity:0.6;margin-bottom:8px;">使用验证器应用（Aegis、Google Authenticator 等）添加额外安全层</div>
+            <div style="font-size:12px;opacity:0.6;margin-bottom:8px;">使用验证器应用（Aegis、Google Authenticator 等）增加一层安全保障</div>
             <div class="settings-row" style="justify-content:flex-end;">
               <span id="tfa-msg" style="font-size:11px;margin-right:auto;"></span>
               <button class="admin-btn-add" id="tfa-setup-btn">设置双因素认证</button>
@@ -2250,7 +2234,7 @@ function initAccount() {
             const msg = el('tfa-msg');
             try {
               const r = await fetch('/api/auth/2fa/setup', { method: 'POST', credentials: 'same-origin' });
-              if (!r.ok) { const d = await r.json(); throw new Error(d.detail || '失败'); }
+              if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed'); }
               const setup = await r.json();
               const qrCode = safeRasterDataUrl(setup.qr_code);
               // Show QR code + manual secret + verify input
@@ -2262,18 +2246,18 @@ function initAccount() {
                   使用验证器应用扫描，或手动输入：
                 </div>
                 <div style="font-family:monospace;font-size:12px;text-align:center;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;margin-bottom:12px;word-break:break-all;user-select:all;cursor:text;">${esc(setup.secret)}</div>
-                <input id="tfa-verify-code" type="text" placeholder="输入 6 位验证码" autocomplete="one-time-code" inputmode="numeric" maxlength="8" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-family:inherit;font-size:13px;box-sizing:border-box;text-align:center;letter-spacing:3px;margin-bottom:6px;">
+                <input id="tfa-verify-code" type="text" placeholder="输入6位验证码以验证" autocomplete="one-time-code" inputmode="numeric" maxlength="8" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-family:inherit;font-size:13px;box-sizing:border-box;text-align:center;letter-spacing:3px;margin-bottom:6px;">
                 <div class="settings-row" style="justify-content:flex-end;">
                   <span id="tfa-msg" style="font-size:11px;margin-right:auto;"></span>
                   <button class="admin-btn-add" id="tfa-cancel-btn" style="opacity:0.5;">取消</button>
-                  <button class="admin-btn-add" id="tfa-verify-btn">Verify & Enable</button>
+                  <button class="admin-btn-add" id="tfa-verify-btn">验证并启用</button>
                 </div>`;
               el('tfa-verify-code').focus();
               el('tfa-cancel-btn').addEventListener('click', () => render2FA());
               el('tfa-verify-btn').addEventListener('click', async () => {
                 const code = el('tfa-verify-code').value.trim();
                 const vmsg = el('tfa-msg');
-                if (!code) { vmsg.textContent = '输入验证码'; vmsg.style.color = 'var(--red)'; return; }
+                if (!code) { vmsg.textContent = '请输入验证码'; vmsg.style.color = 'var(--red)'; return; }
                 try {
                   const vr = await fetch('/api/auth/2fa/confirm', {
                     method: 'POST', credentials: 'same-origin',
@@ -2285,10 +2269,10 @@ function initAccount() {
                   // Show backup codes
                   const codes = result.backup_codes || [];
                   tfaContent.innerHTML = `
-                    <div style="color:var(--color-save-green, #4caf50);font-size:13px;font-weight:600;margin-bottom:8px;">&#x2713; 2FA Enabled!</div>
-                    <div style="font-size:12px;opacity:0.7;margin-bottom:8px;">Save these backup codes somewhere safe. Each can be used once if you lose your authenticator:</div>
+                    <div style="color:var(--color-save-green, #4caf50);font-size:13px;font-weight:600;margin-bottom:8px;">&#x2713; 双因素认证已启用！</div>
+                    <div style="font-size:12px;opacity:0.7;margin-bottom:8px;">请将以下备用码保存在安全的地方。每个备用码只能使用一次（如果您丢失了验证器）：</div>
                     <div style="font-family:monospace;font-size:12px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;columns:2;column-gap:16px;margin-bottom:8px;">${codes.map(c => '<div style="margin-bottom:2px;">' + c + '</div>').join('')}</div>
-                    <button class="admin-btn-add" id="tfa-done-btn">Done</button>`;
+                    <button class="admin-btn-add" id="tfa-done-btn">完成</button>`;
                   el('tfa-done-btn').addEventListener('click', () => render2FA());
                 } catch (e) { vmsg.textContent = e.message; vmsg.style.color = 'var(--red)'; }
               });
@@ -2310,7 +2294,7 @@ function initAccount() {
     logoutBtn.addEventListener('click', async () => {
       try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
       // SECURITY: wipe all client-side state on logout so the next user that
-      // signs in on this browser doesn't inherit the previous account's
+      // signs in on this browser doesn\'t inherit the previous account's
       // session id, last-used model, draft chat input, or any cached lists.
       // Keep "odysseus-last-user" so the login form remembers the username
       // (if "Remember me" was on). Without this the chat composer pre-loaded
@@ -2426,7 +2410,7 @@ async function initReminderSettings() {
   // `/api/email/config` endpoint was a no-op stub for most installs;
   // the real per-account list lives at `/api/email/accounts` and is
   // what the Integrations panel manages. Treat the email channel as
-  // configured if there's at least one account with SMTP set.
+  // configured if there\'s at least one account with SMTP set.
   let emailAccounts = [];
   try {
     const res = await fetch('/api/email/accounts', { credentials: 'same-origin' });
@@ -2439,7 +2423,7 @@ async function initReminderSettings() {
 
   if (!smtpConfigured && emailOpt) {
     emailOpt.disabled = true;
-    emailOpt.textContent = '邮件（在集成中添加账户）';
+    emailOpt.textContent = '电子邮件（在集成中添加账户）';
   }
 
   // Detect whether ntfy integration exists — try admin endpoint, fall back to
@@ -2465,7 +2449,7 @@ async function initReminderSettings() {
 
   if (!ntfyConfigured && ntfyOpt) {
     ntfyOpt.disabled = true;
-    ntfyOpt.textContent = 'ntfy（请先添加集成）';
+    ntfyOpt.textContent = 'ntfy（先在集成中添加）';
   }
 
   // Webhook: available whenever at least one integration with a base_url exists.
@@ -2482,7 +2466,7 @@ async function initReminderSettings() {
   } catch (_) {}
   if (!webhookConfigured && webhookOpt) {
     webhookOpt.disabled = true;
-    webhookOpt.textContent = 'Webhook（请先添加集成）';
+    webhookOpt.textContent = 'Webhook（先添加一个集成）';
   }
 
   const emailFromRow = el('set-reminder-email-from-row');
@@ -2499,7 +2483,7 @@ async function initReminderSettings() {
   function populateReminderEmailAccounts(selectedId = '') {
     if (!emailAcctSel) return;
     emailAcctSel.innerHTML = emailAccounts.map(a =>
-      `<option value="${a.id}">${esc(a.name || a.from_address || a.imap_user || '未命名')}${a.is_default ? '（默认）' : ''}</option>`
+      `<option value="${a.id}">${esc(a.name || a.from_address || a.imap_user || 'Unnamed')}${a.is_default ? ' (default)' : ''}</option>`
     ).join('');
     const fallback = (emailAccounts.find(a => a.is_default) || emailAccounts[0] || {}).id || '';
     emailAcctSel.value = (selectedId && emailAccounts.some(a => a.id === selectedId)) ? selectedId : fallback;
@@ -2516,15 +2500,15 @@ async function initReminderSettings() {
   function applyReminderChannelAvailability() {
     if (emailOpt) {
       emailOpt.disabled = !smtpConfigured;
-      emailOpt.textContent = smtpConfigured ? '邮件' : '邮件（在集成中添加账户）';
+      emailOpt.textContent = smtpConfigured ? '电子邮件' : '电子邮件（在集成中添加账户）';
     }
     if (ntfyOpt) {
       ntfyOpt.disabled = !ntfyConfigured;
-      ntfyOpt.textContent = ntfyConfigured ? 'ntfy' : 'ntfy（请先添加集成）';
+      ntfyOpt.textContent = ntfyConfigured ? 'ntfy' : 'ntfy（先在集成中添加）';
     }
     if (webhookOpt) {
       webhookOpt.disabled = !webhookConfigured;
-      webhookOpt.textContent = webhookConfigured ? 'Webhook' : 'Webhook（请先添加集成）';
+      webhookOpt.textContent = webhookConfigured ? 'Webhook' : 'Webhook（先添加一个集成）';
     }
   }
 
@@ -2588,12 +2572,12 @@ async function initReminderSettings() {
   // Browser notifications fire on EVERY reminder (see
   // routes/note_routes.py — the in-app notif is always queued
   // regardless of channel). The hint should make that clear so
-  // users don't think they have to choose between channels.
+  // users don\'t think they have to choose between channels.
   const CHANNEL_HINTS = {
-    browser: 'Reminders appear as browser notifications inside Odysseus.',
-    email: 'Reminders are emailed and shown as a browser notification.',
-    ntfy: 'Reminders are pushed via ntfy AND shown as a browser notification.',
-    webhook: 'Reminders are POSTed to the selected integration AND shown as a browser notification. Use {{title}} and {{message}} in the payload template.',
+    browser: '提醒以 Odysseus 内的浏览器通知形式显示。',
+    email: '提醒通过电子邮件发送，同时显示为浏览器通知。',
+    ntfy: '提醒通过 ntfy 推送，同时显示为浏览器通知。',
+    webhook: '提醒通过 POST 发送到所选集成，同时显示为浏览器通知。在载荷模板中使用 {{title}} 和 {{message}}。',
   };
 
   applyReminderChannelAvailability();
@@ -2605,7 +2589,7 @@ async function initReminderSettings() {
   }
 
   // Default payload templates for known presets — auto-filled when the user
-  // picks a matching integration so they don't have to write JSON from scratch.
+  // picks a matching integration so they don\'t have to write JSON from scratch.
   // Defined here (before the load block) so both the load path and the change
   // handler can reference it.
   const WEBHOOK_PRESET_TEMPLATES = {
@@ -2643,7 +2627,7 @@ async function initReminderSettings() {
           if (all.custom && all.custom.character_name) {
             const opt = document.createElement('option');
             opt.value = 'custom';
-            opt.textContent = all.custom.character_name + '（自定义）';
+            opt.textContent = all.custom.character_name + ' (custom)';
             personaSel.appendChild(opt);
           }
         } catch (_) {}
@@ -2803,24 +2787,24 @@ async function initReminderSettings() {
           const activeChannel = data.channel ? ` (server used channel: "${data.channel}")` : '';
           throw new Error((data.webhook_error || 'Webhook reminder was not sent') + activeChannel);
         }
-        let status = 'Delivered via ' + channelSel.value;
+        let status = '已通过 ' + channelSel.value + ' 发送';
         if (data.synthesis) status += ' (AI: "' + data.synthesis.slice(0, 60) + '...")';
-        if (data.email_sent) status += ' — email sent';
-        if (data.ntfy_sent) status += ' — ntfy sent';
-        if (data.webhook_sent) status += ' — webhook sent';
+        if (data.email_sent) status += ' — 邮件已发送';
+        if (data.ntfy_sent) status += ' — ntfy 已发送';
+        if (data.webhook_sent) status += ' — webhook 已发送';
         if (testMsg) { testMsg.textContent = status; testMsg.style.color = 'var(--green, #50fa7b)'; }
         // Also fire a browser notification so user can see it
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
-            new Notification('Test Reminder', {
-              body: data.synthesis || 'This is a test reminder.',
+            new Notification('测试提醒', {
+              body: data.synthesis || '这是一条测试提醒。',
               tag: 'reminder-test',
               icon: '/static/favicon.ico',
             });
           } catch {}
         }
       } catch (e) {
-        if (testMsg) { testMsg.textContent = '失败：' + e.message; testMsg.style.color = 'var(--red)'; }
+        if (testMsg) { testMsg.textContent = '失败: ' + e.message; testMsg.style.color = 'var(--red)'; }
       } finally {
         _stopTestSpin();
         testBtn.disabled = false;
@@ -2868,14 +2852,14 @@ async function initEmailAccountsSettings() {
   function renderRow(a) {
     const imap = a.imap_host ? `${a.imap_host}:${a.imap_port}` : '<no IMAP>';
     const badge = a.is_default
-      ? '<span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px;background:color-mix(in srgb, var(--accent,#50fa7b) 15%, transparent);color:var(--accent,#50fa7b)">Default</span>'
-      : (a.enabled ? '' : '<span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px;opacity:0.4">Disabled</span>');
+      ? '<span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px;background:color-mix(in srgb, var(--accent,#50fa7b) 15%, transparent);color:var(--accent,#50fa7b)">默认</span>'
+      : (a.enabled ? '' : '<span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px;opacity:0.4">已禁用</span>');
     return `<div class="email-account-row" data-acc-id="${esc(a.id)}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">${esc(a.name)} ${badge}</div>
         <div style="font-size:11px;opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.imap_user || a.from_address || '')} — ${esc(imap)}</div>
       </div>
-      ${a.is_default ? '' : `<button class="admin-btn-sm email-acc-default-btn" style="font-size:10px">Make Default</button>`}
+      ${a.is_default ? '' : `<button class="admin-btn-sm email-acc-default-btn" style="font-size:10px">设为默认</button>`}
       <button class="admin-btn-sm email-acc-edit-btn" style="font-size:10px">编辑</button>
       <button class="admin-btn-sm email-acc-del-btn" style="font-size:10px;opacity:0.6">删除</button>
     </div>`;
@@ -2884,7 +2868,7 @@ async function initEmailAccountsSettings() {
   async function renderList() {
     const accs = await fetchAccounts();
     if (!accs.length) {
-      listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">未配置邮箱账户</div>';
+      listEl.innerHTML = '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">未配置电子邮件账户</div>';
       return;
     }
     listEl.innerHTML = accs.map(renderRow).join('');
@@ -2901,7 +2885,7 @@ async function initEmailAccountsSettings() {
       });
       row.querySelector('.email-acc-del-btn')?.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!await window.styledConfirm(`删除账户"${accs.find(a => a.id === id)?.name}"？`, { confirmText: '删除', danger: true })) return;
+        if (!await window.styledConfirm(`删除账户 "${accs.find(a => a.id === id)?.name}"？`, { confirmText: '删除', danger: true })) return;
         await fetch(`/api/email/accounts/${id}`, { method: 'DELETE', credentials: 'same-origin' });
         renderList();
       });
@@ -2938,11 +2922,11 @@ async function initEmailAccountsSettings() {
       .join('');
     const _smtpSecurity = (acct) => acct?.smtp_security || ((parseInt(acct?.smtp_port || 465) === 587) ? 'starttls' : 'ssl');
     formEl.innerHTML = `
-      <h3 style="font-size:12px;margin:0 0 8px">${isEdit ? 'Edit Account' : 'New Account'}</h3>
+      <h3 style="font-size:12px;margin:0 0 8px">${isEdit ? '编辑账户' : '新建账户'}</h3>
       <div class="settings-col">
         <div class="settings-row"><label class="settings-label">Provider${_hint('Pick a known provider to auto-fill the IMAP and SMTP host/port. Choose Custom to type your own.')}</label><select id="eaf-provider" class="settings-select"><option value="">Custom…</option>${_providerOptions}</select></div>
         <div id="eaf-provider-note" style="display:none;font-size:11px;line-height:1.5;padding:8px 10px;margin:2px 0 4px;border:1px solid color-mix(in srgb, var(--fg) 15%, transparent);border-left:3px solid var(--accent, var(--red));border-radius:4px;background:color-mix(in srgb, var(--fg) 4%, transparent);"></div>
-        <div class="settings-row"><label class="settings-label">Name${_hint('Optional label for this account (e.g. “Work” or “Personal”). Leave blank to use the email address.')}</label><input id="eaf-name" class="settings-input" placeholder="(optional — leave blank to use email)" value="${esc(a.name || '')}"></div>
+        <div class="settings-row"><label class="settings-label">Name${_hint('Optional label for this account (e.g. "Work" or "Personal"). Leave blank to use the email address.')}</label><input id="eaf-name" class="settings-input" placeholder="(optional — leave blank to use email)" value="${esc(a.name || '')}"></div>
         <div class="settings-row"><label class="settings-label">Email${_hint('Your email address. Used as the From: header on outgoing mail and as the display label when Name is blank.')}</label><input id="eaf-from" class="settings-input" placeholder="you@example.com" value="${esc(a.from_address || '')}"></div>
         <div class="settings-row"><label class="settings-label">Display Name${_hint('Your name as it appears in the From: field of emails you send, e.g. Jane Smith. Auto-filled from Google during OAuth.')}</label><input id="eaf-display-name" class="settings-input" placeholder="Your Name" value="${esc(a.display_name || '')}"></div>
         <div id="eaf-oauth-section" style="display:none;margin:8px 0;padding:10px;border:1px solid var(--border);border-radius:6px;background:color-mix(in srgb,var(--accent,#50fa7b) 6%,transparent)">
@@ -2954,7 +2938,7 @@ async function initEmailAccountsSettings() {
         <div class="settings-row"><label class="settings-label">Host${_hint('Your IMAP server, e.g. imap.gmail.com, imap.migadu.com, a LAN host, or a Tailscale IP for Dovecot.')}</label><input id="eaf-imap-host" class="settings-input" value="${esc(a.imap_host || '')}"></div>
         <div class="settings-row"><label class="settings-label">Port${_hint('993 for IMAPS (most providers), 143 for plain or STARTTLS. Local servers often use a custom port like 31143.')}</label><input id="eaf-imap-port" class="settings-input" type="number" value="${esc(a.imap_port || 993)}" style="max-width:100px"></div>
         <div class="settings-row"><label class="settings-label">Username${_hint('Usually your full email address.')}</label><input id="eaf-imap-user" class="settings-input" value="${esc(a.imap_user || '')}"></div>
-        <div class="eaf-password-section"><div class="settings-row"><label class="settings-label">Password${_hint('Your IMAP login password. Use an app-specific password if your provider requires 2FA. Outlook / Office 365 generally requires OAuth and will not work with a normal password here.')}</label><input id="eaf-imap-pass" class="settings-input" type="password" placeholder="${isEdit && a.has_imap_password ? '（未更改）' : ''}"></div></div>
+        <div class="eaf-password-section"><div class="settings-row"><label class="settings-label">Password${_hint('Your IMAP login password. Use an app-specific password if your provider requires 2FA. Outlook / Office 365 generally requires OAuth and will not work with a normal password here.')}</label><input id="eaf-imap-pass" class="settings-input" type="password" placeholder="${isEdit && a.has_imap_password ? '(unchanged)' : ''}"></div></div>
         <div class="settings-row"><label class="settings-label">STARTTLS${_hint('Turn ON for port 143/587 to upgrade plain to TLS. Turn OFF for port 993 (IMAPS — already encrypted) or a local server with no TLS configured.')}</label><label class="admin-switch"><input type="checkbox" id="eaf-imap-starttls" ${a.imap_starttls !== false ? 'checked' : ''}><span class="admin-slider"></span></label></div>
         <div style="font-size:11px;font-weight:600;opacity:0.6;margin:8px 0 2px">SMTP (Sending) <span style="font-weight:normal;opacity:0.7">— optional, leave blank for read-only</span></div>
         <div class="settings-row"><label class="settings-label">Host${_hint('Your outgoing-mail server, e.g. smtp.gmail.com, smtp.migadu.com. Leave blank to make this account read-only.')}</label><input id="eaf-smtp-host" class="settings-input" value="${esc(a.smtp_host || '')}"></div>
@@ -2962,7 +2946,7 @@ async function initEmailAccountsSettings() {
         <div class="settings-row"><label class="settings-label">Security${_hint('SSL for port 465, STARTTLS for port 587, or None for local SMTP bridges such as Proton Mail Bridge.')}</label><select id="eaf-smtp-security" class="settings-select"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option><option value="none">None</option></select></div>
         <div class="settings-row"><label class="settings-label">Same as IMAP${_hint('Use the IMAP username and password for SMTP too (this is right for almost every provider). Turn off to enter separate SMTP credentials.')}</label><label class="admin-switch"><input type="checkbox" id="eaf-smtp-same" ${(!isEdit || (a.smtp_user && a.imap_user && a.smtp_user === a.imap_user)) ? 'checked' : ''}><span class="admin-slider"></span></label></div>
         <div class="settings-row eaf-smtp-creds"><label class="settings-label">Username${_hint('Usually the same as your IMAP username (your email address).')}</label><input id="eaf-smtp-user" class="settings-input" value="${esc(a.smtp_user || '')}"></div>
-        <div class="settings-row eaf-smtp-creds"><label class="settings-label">Password${_hint('Your SMTP password — often the same as your IMAP password. Outlook / Office 365 generally requires OAuth and will not work with a normal password here.')}</label><input id="eaf-smtp-pass" class="settings-input" type="password" placeholder="${isEdit && a.has_smtp_password ? '（未更改）' : ''}"></div>
+        <div class="settings-row eaf-smtp-creds"><label class="settings-label">Password${_hint('Your SMTP password — often the same as your IMAP password. Outlook / Office 365 generally requires OAuth and will not work with a normal password here.')}</label><input id="eaf-smtp-pass" class="settings-input" type="password" placeholder="${isEdit && a.has_smtp_password ? '(unchanged)' : ''}"></div>
         <div class="settings-row" style="margin-top:10px;align-items:center;">
           <button class="admin-btn-add" id="eaf-save" style="background:var(--red);border-color:var(--red);color:#fff;display:inline-flex;align-items:center;gap:5px;font-weight:600;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
@@ -3078,7 +3062,7 @@ async function initEmailAccountsSettings() {
       if (el('eaf-imap-pass').value) body.imap_password = el('eaf-imap-pass').value;
       if (el('eaf-smtp-pass').value) body.smtp_password = el('eaf-smtp-pass').value;
       // "Same as IMAP" toggle — copy IMAP username/password into SMTP at
-      // save time, so the hidden SMTP-creds rows don't matter. We only
+      // save time, so the hidden SMTP-creds rows don\'t matter. We only
       // mirror the password if the user actually typed an IMAP one
       // (otherwise SMTP keeps whatever it already had on the server).
       if (el('eaf-smtp-same').checked) {
@@ -3108,7 +3092,7 @@ async function initEmailAccountsSettings() {
           el('eaf-msg').style.color = 'var(--red)';
         }
       } catch (e) {
-        el('eaf-msg').textContent = '错误：' + e.message;
+        el('eaf-msg').textContent = '错误: ' + e.message;
         el('eaf-msg').style.color = 'var(--red)';
       }
     });
@@ -3135,6 +3119,8 @@ async function initEmailSettings() {
     if (el('set-email-smtp-user')) el('set-email-smtp-user').value = cfg.smtp_user || '';
     if (el('set-email-smtp-pass')) el('set-email-smtp-pass').value = '';
     if (el('set-email-from')) el('set-email-from').value = cfg.from_address || '';
+    if (el('set-email-auto-translate')) el('set-email-auto-translate').checked = !!cfg.email_auto_translate;
+    if (el('set-email-translate-language')) el('set-email-translate-language').value = cfg.email_translate_language || 'English';
   } catch (_) {}
 
   // Load contacts config
@@ -3165,6 +3151,8 @@ async function initEmailSettings() {
       smtp_port: parseInt(el('set-email-smtp-port').value) || 0,
       smtp_user: el('set-email-smtp-user').value,
       email_from: el('set-email-from').value,
+      email_auto_translate: !!el('set-email-auto-translate')?.checked,
+      email_translate_language: (el('set-email-translate-language')?.value || 'English').trim() || 'English',
     };
     const imapPass = el('set-email-imap-pass').value;
     const smtpPass = el('set-email-smtp-pass').value;
@@ -3178,7 +3166,10 @@ async function initEmailSettings() {
       });
       const result = await res.json();
       if (msg) msg.textContent = result.success ? '✓ 已保存' : (result.error || '失败');
+      const translateMsg = el('set-email-translate-msg');
+      if (translateMsg) translateMsg.textContent = result.success ? '✓ 已保存' : (result.error || '失败');
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
+      setTimeout(() => { const translateMsg = el('set-email-translate-msg'); if (translateMsg) translateMsg.textContent = ''; }, 3000);
     } catch (e) {
       if (msg) msg.textContent = '失败';
     }
@@ -3227,12 +3218,12 @@ async function initEmailSettings() {
         wrap.style.cssText = 'display:inline-flex;align-items:center;';
         wrap.appendChild(wp.element);
         const txt = document.createElement('span');
-        txt.textContent = '正在分析已发送的邮件…';
+        txt.textContent = '正在分析您的发送邮件…';
         txt.style.cssText = 'font-size:12px;opacity:0.7;';
         wrap.appendChild(txt);
         msg.appendChild(wrap);
       } catch (_) {
-        msg.textContent = '正在分析已发送的邮件…';
+        msg.textContent = '正在分析您的发送邮件…';
       }
     }
     try {
@@ -3374,7 +3365,7 @@ async function initIntegrations() {
   async function startEdit(id) {
     editingId = id;
     formTitle.textContent = '编辑集成';
-    // Fetch full data (with unmasked key from a dedicated edit fetch — we'll just load what we have)
+    // Fetch full data (with unmasked key from a dedicated edit fetch — we\'ll just load what we have)
     try {
       const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
       const data = await res.json();
@@ -3386,7 +3377,7 @@ async function initIntegrations() {
       authTypeSel.value = item.auth_type || 'none';
       authHeaderIn.value = item.auth_header || '';
       keyIn.value = ''; // masked — user re-enters if changing
-      keyIn.placeholder = item.api_key ? '留空以保持当前' : 'API 密钥或令牌';
+      keyIn.placeholder = item.api_key ? 'Leave blank to keep current' : 'API key or token';
       descIn.value = item.description || '';
       syncAuthRow();
       formCard.style.display = '';
@@ -3403,7 +3394,7 @@ async function initIntegrations() {
     authTypeSel.value = 'header';
     authHeaderIn.value = '';
     keyIn.value = '';
-    keyIn.placeholder = 'API 密钥或令牌';
+    keyIn.placeholder = 'API key or token';
     descIn.value = '';
     statusEl.textContent = '';
     syncAuthRow();
@@ -3426,8 +3417,8 @@ async function initIntegrations() {
     };
     if (presetSel.value) payload.preset = presetSel.value;
     if (keyIn.value.trim()) payload.api_key = keyIn.value.trim();
-    if (!payload.name) { statusEl.textContent = '请输入名称'; statusEl.style.color = 'var(--red)'; return; }
-    if (!payload.base_url) { statusEl.textContent = '请输入 URL'; statusEl.style.color = 'var(--red)'; return; }
+    if (!payload.name) { statusEl.textContent = '需要名称'; statusEl.style.color = 'var(--red)'; return; }
+    if (!payload.base_url) { statusEl.textContent = '需要URL'; statusEl.style.color = 'var(--red)'; return; }
 
     try {
       const url = editingId ? `/api/auth/integrations/${editingId}` : '/api/auth/integrations';
@@ -3452,7 +3443,7 @@ async function initIntegrations() {
 
   // Test
   testBtn.addEventListener('click', async () => {
-    if (!editingId) { statusEl.textContent = '请先保存再测试'; statusEl.style.color = 'var(--fg)'; return; }
+    if (!editingId) { statusEl.textContent = '请先保存，再测试'; statusEl.style.color = 'var(--fg)'; return; }
     statusEl.textContent = '测试中...';
     statusEl.style.color = 'var(--fg)';
     try {
@@ -3566,7 +3557,7 @@ async function initUnifiedIntegrations() {
   let integrationNotice = '';
 
   // Hide the "+ Add Integration" button whenever the per-type create form
-  // is open so it doesn't compete visually with the in-progress form.
+  // is open so it doesn\'t compete visually with the in-progress form.
   // Many call sites toggle formEl.style.display directly; observe instead
   // of patching every one of them.
   if (formEl && addBtn && addBtn.parentElement && !formEl._addBtnObserved) {
@@ -3599,7 +3590,7 @@ async function initUnifiedIntegrations() {
     const items = [];
     // API integrations
     for (const intg of (apiRes.integrations || [])) {
-      items.push({ type: 'api', id: intg.id, name: intg.name || '未命名', detail: intg.base_url || '', enabled: intg.enabled !== false, data: intg });
+      items.push({ type: 'api', id: intg.id, name: intg.name || 'Unnamed', detail: intg.base_url || '', enabled: intg.enabled !== false, data: intg });
     }
     // CalDAV — one card per account
     for (const acc of (calRes.accounts || [])) {
@@ -3686,7 +3677,7 @@ async function initUnifiedIntegrations() {
         <button type="button" class="admin-btn-sm intg-open-email-settings" style="white-space:nowrap;">Email settings</button>
       </div>` : '';
     if (items.length === 0) {
-      listEl.innerHTML = noticeHtml + '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">未配置集成</div>';
+      listEl.innerHTML = noticeHtml + '<div style="padding:12px;opacity:0.5;font-size:12px;text-align:center">No integrations configured</div>';
     } else {
       listEl.innerHTML = noticeHtml + items.map(renderCard).join('');
     }
@@ -3758,7 +3749,7 @@ async function initUnifiedIntegrations() {
     } catch (_) {}
     const presetEntries = Object.entries(presets);
     // Same `?` hint helper as the email form. Native title tooltip,
-    // tabbable for keyboard users. Inline-styled so it doesn't need
+    // tabbable for keyboard users. Inline-styled so it doesn\'t need
     // a CSS dependency.
     const _apiHint = (tip) =>
       `<span class="uf-hint" title="${esc(tip.replace(/<[^>]+>/g, ''))}" aria-label="${esc(tip.replace(/<[^>]+>/g, ''))}" tabindex="0" `
@@ -3767,7 +3758,7 @@ async function initUnifiedIntegrations() {
       + `opacity:0.45;margin-left:5px;cursor:help;vertical-align:1px;font-weight:600;">?</span>`;
     // Real <select> instead of <datalist>: datalists are silently
     // suppressed in Firefox when autocomplete="off" is on the input,
-    // and they're patchy on mobile browsers. A native select renders
+    // and they\'re patchy on mobile browsers. A native select renders
     // the same everywhere and makes the available options visible
     // without needing the user to type.
     const sortedPresets = presetEntries.sort((a, b) => (a[1].name || a[0]).localeCompare(b[1].name || b[0]));
@@ -3818,9 +3809,9 @@ async function initUnifiedIntegrations() {
           <div class="settings-row"><label class="settings-label">API Key${_apiHint('The secret token the service issued you (generated in its admin panel / settings). Used to prove your identity on each request. Required for any Auth mode except None.')}</label><input id="uf-api-key" class="settings-input" type="password" placeholder="Token/key"></div>
           <div class="settings-row" style="margin-top:10px;align-items:center;justify-content:flex-end;gap:6px;">
             <span id="uf-api-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
-            <button class="admin-btn-add" id="uf-api-test" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">测试</button>
-            <button class="admin-btn-add" id="uf-api-save" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">保存</button>
-            <button class="admin-btn-add" id="uf-api-cancel" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">取消</button>
+            <button class="admin-btn-add" id="uf-api-test" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Test</button>
+            <button class="admin-btn-add" id="uf-api-save" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">Save</button>
+            <button class="admin-btn-add" id="uf-api-cancel" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Cancel</button>
           </div>
         </div>
       </div>`;
@@ -3838,7 +3829,10 @@ async function initUnifiedIntegrations() {
         if (lbl) lbl.textContent = text;
         if (ico) ico.innerHTML = _apiIconFor(k);
       };
-      const _close = () => { menu.style.display = 'none'; };
+      // Menu is reused (hidden, not recreated). close() hides it and tears down
+      // its outside-click listener + Escape-stack entry; bindMenuDismiss is
+      // re-registered fresh on each open (see _open).
+      let _close = () => { menu.style.display = 'none'; };
       const _open = () => {
         menu.style.display = 'block';
         const tRect = trig.getBoundingClientRect();
@@ -3847,8 +3841,7 @@ async function initUnifiedIntegrations() {
         const above = tRect.top;
         if (mRect.height > below && above > below) { menu.style.top = 'auto'; menu.style.bottom = 'calc(100% + 2px)'; }
         else { menu.style.top = 'calc(100% + 2px)'; menu.style.bottom = 'auto'; }
-        const onDoc = (ev) => { if (!menu.contains(ev.target) && ev.target !== trig) { _close(); document.removeEventListener('click', onDoc, true); } };
-        setTimeout(() => document.addEventListener('click', onDoc, true), 0);
+        _close = bindMenuDismiss(menu, () => { menu.style.display = 'none'; }, (ev) => !menu.contains(ev.target) && ev.target !== trig);
       };
       trig.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display === 'block' ? _close() : _open(); });
       menu.querySelectorAll('.ufapi-option').forEach(btn => {
@@ -3886,14 +3879,14 @@ async function initUnifiedIntegrations() {
       if (ntfyHint) {
         ntfyHint.style.display = isNtfy ? 'block' : 'none';
         if (isNtfy) {
-          ntfyHint.innerHTML = '输入 Odysseus 可以访问的 ntfy 服务器 URL。示例：<code>http://127.0.0.1:8091</code>、<code>http://100.x.y.z:8091</code> 或 <code>https://ntfy.example.com</code>。';
+          ntfyHint.innerHTML = 'Enter the ntfy server URL Odysseus can reach. Examples: <code>http://127.0.0.1:8091</code>, <code>http://100.x.y.z:8091</code>, or <code>https://ntfy.example.com</code>.';
         }
       }
       if (url) {
         url.placeholder = isNtfy ? 'http://127.0.0.1:8091' : isUrlAuth ? 'https://discord.com/api/webhooks/...' : 'http://localhost:8080';
       }
       // For presets that embed the secret in the URL, hide auth/key/header rows
-      // so users aren't confused into thinking they need to fill them in.
+      // so users aren\'t confused into thinking they need to fill them in.
       const keyRow = key?.closest('.settings-row');
       const authRow = auth?.closest('.settings-row');
       const headerRow = el('uf-api-header-row');
@@ -3912,8 +3905,8 @@ async function initUnifiedIntegrations() {
       const presetKey = preset.value || undefined;
       const nameValue = name.value.trim();
       const urlValue = url.value.trim();
-      if (!nameValue) { el('uf-api-msg').textContent = '请输入名称'; el('uf-api-msg').style.color = 'var(--red)'; return; }
-      if (!urlValue) { el('uf-api-msg').textContent = '请输入基础 URL'; el('uf-api-msg').style.color = 'var(--red)'; return; }
+      if (!nameValue) { el('uf-api-msg').textContent = 'Name required'; el('uf-api-msg').style.color = 'var(--red)'; return; }
+      if (!urlValue) { el('uf-api-msg').textContent = 'Base URL required'; el('uf-api-msg').style.color = 'var(--red)'; return; }
       const body = { name: nameValue, base_url: urlValue, auth_type: auth.value, auth_header: header.value, preset: presetKey };
       if (key.value) body.api_key = key.value;
       try {
@@ -3928,25 +3921,25 @@ async function initUnifiedIntegrations() {
         // level would silently miss, leaving Test perpetually stuck on
         // "Save first" until the form was reopened.
         if (!_editId && saved) _editId = saved.integration?.id || saved.id;
-        el('uf-api-msg').textContent = '已保存'; el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
+        el('uf-api-msg').textContent = 'Saved'; el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
         await renderList();
         notifyIntegrationsChanged();
-      } catch (_) { el('uf-api-msg').textContent = '失败'; el('uf-api-msg').style.color = 'var(--red)'; }
+      } catch (_) { el('uf-api-msg').textContent = 'Failed'; el('uf-api-msg').style.color = 'var(--red)'; }
     });
     el('uf-api-test').addEventListener('click', async () => {
-      if (!_editId) { el('uf-api-msg').textContent = '请先保存'; return; }
+      if (!_editId) { el('uf-api-msg').textContent = 'Save first'; return; }
       try {
         const r = await fetch(`/api/auth/integrations/${_editId}/test`, { method: 'POST', credentials: 'same-origin' });
         const d = await r.json();
         // Backend returns {ok: bool, message: str}
         if (d.ok) {
-          el('uf-api-msg').textContent = d.message || 已连接;
+          el('uf-api-msg').textContent = d.message || 'Connected';
           el('uf-api-msg').style.color = 'var(--green,#50fa7b)';
         } else {
           el('uf-api-msg').textContent = (d.message || d.error || d.detail || `HTTP ${r.status}`).slice(0, 360);
           el('uf-api-msg').style.color = 'var(--red)';
         }
-      } catch (e) { el('uf-api-msg').textContent = '错误：' + e.message; el('uf-api-msg').style.color = 'var(--red)'; }
+      } catch (e) { el('uf-api-msg').textContent = 'Error: ' + e.message; el('uf-api-msg').style.color = 'var(--red)'; }
     });
   }
 
@@ -3955,17 +3948,17 @@ async function initUnifiedIntegrations() {
     const isNew = !editId || editId === 'new';
     formEl.innerHTML = `
       <div class="admin-card" style="margin-top:8px">
-        <h2 style="font-size:13px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent, var(--red));flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${isNew ? '添加 CalDAV 日历' : '编辑 CalDAV 日历'}</h2>
+        <h2 style="font-size:13px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent, var(--red));flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${isNew ? 'Add CalDAV Calendar' : 'Edit CalDAV Calendar'}</h2>
         <div class="settings-col">
-          <div class="settings-row"><label class="settings-label">标签</label><input id="uf-caldav-label" class="settings-input" placeholder="例如：工作、个人"></div>
-          <div class="settings-row"><label class="settings-label">服务器 URL</label><input id="uf-caldav-url" class="settings-input" placeholder="https://www.google.com/calendar/dav/you@gmail.com/user/"></div>
-          <div class="settings-row"><label class="settings-label">用户名</label><input id="uf-caldav-user" class="settings-input" placeholder="you@example.com"></div>
-          <div class="settings-row"><label class="settings-label">密码</label><input id="uf-caldav-pass" class="settings-input" type="password" placeholder="${isNew ? '' : '留空以保持现有'}"></div>
+          <div class="settings-row"><label class="settings-label">Label</label><input id="uf-caldav-label" class="settings-input" placeholder="e.g. Work, Personal"></div>
+          <div class="settings-row"><label class="settings-label">Server URL</label><input id="uf-caldav-url" class="settings-input" placeholder="https://www.google.com/calendar/dav/you@gmail.com/user/"></div>
+          <div class="settings-row"><label class="settings-label">Username</label><input id="uf-caldav-user" class="settings-input" placeholder="you@example.com"></div>
+          <div class="settings-row"><label class="settings-label">Password</label><input id="uf-caldav-pass" class="settings-input" type="password" placeholder="${isNew ? '' : 'Leave blank to keep existing'}"></div>
           <div class="settings-row" style="margin-top:10px;align-items:center;justify-content:flex-end;gap:6px;">
             <span id="uf-caldav-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
-            <button class="admin-btn-add" id="uf-caldav-test" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">测试</button>
-            <button class="admin-btn-add" id="uf-caldav-save" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">保存</button>
-            <button class="admin-btn-add" id="uf-caldav-cancel" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">取消</button>
+            <button class="admin-btn-add" id="uf-caldav-test" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Test</button>
+            <button class="admin-btn-add" id="uf-caldav-save" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">Save</button>
+            <button class="admin-btn-add" id="uf-caldav-cancel" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Cancel</button>
           </div>
         </div>
       </div>`;
@@ -4041,23 +4034,23 @@ async function initUnifiedIntegrations() {
         }
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          _setCalDavMsg(err.detail || '保存失败', false);
+          _setCalDavMsg(err.detail || 'Save failed', false);
           return;
         }
-        _setCalDavMsg('已保存', true);
+        _setCalDavMsg('Saved', true);
         formEl.style.display = 'none';
         await renderList();
         notifyIntegrationsChanged();
       } catch (_) {
-        _setCalDavMsg('保存失败', false);
+        _setCalDavMsg('Save failed', false);
       }
     });
 
     el('uf-caldav-test').addEventListener('click', async () => {
-      _setCalDavMsg('测试中…', true);
+      _setCalDavMsg('Testing…', true);
       el('uf-caldav-msg').style.color = '';
       const d = await _runCalDavTest();
-      _setCalDavMsg(d.ok ? '已连接' : (d.error || '失败'), d.ok);
+      _setCalDavMsg(d.ok ? 'Connected' : (d.error || 'Failed'), d.ok);
     });
   }
 
@@ -4097,7 +4090,7 @@ async function initUnifiedIntegrations() {
           <input id="cm-add-email" class="settings-input" placeholder="email@example.com">
           <input id="cm-add-phone" class="settings-input" placeholder="Phone (optional)">
           <input id="cm-add-address" class="settings-input" placeholder="Address (optional)">
-          <div style="display:flex;gap:6px;justify-content:flex-end;"><button class="admin-btn-sm" id="cm-add-save">保存</button></div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;"><button class="admin-btn-sm" id="cm-add-save">Save</button></div>
         </div>
         <input type="text" id="cm-search" class="settings-input" placeholder="Search contacts (name, email, phone, address)" style="margin-top:6px;">
         <div id="cm-list" class="contacts-list"><div style="opacity:0.4;font-size:11px;padding:8px 2px;">Loading…</div></div>
@@ -4109,7 +4102,7 @@ async function initUnifiedIntegrations() {
       // none). Surface that state via the input's placeholder so users
       // can tell their password is already on file without us echoing it.
       const passInput = el('uf-carddav-pass');
-      if (passInput && d.password) passInput.placeholder = '（未更改）';
+      if (passInput && d.password) passInput.placeholder = '(unchanged)';
     } catch (_) {}
     el('uf-carddav-cancel').addEventListener('click', () => { formEl.style.display = 'none'; });
     el('uf-carddav-save').addEventListener('click', async () => {
@@ -4117,7 +4110,7 @@ async function initUnifiedIntegrations() {
       if (el('uf-carddav-pass').value) body.carddav_password = el('uf-carddav-pass').value;
       try {
         await fetch('/api/contacts/config', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        el('uf-carddav-msg').textContent = '已保存';
+        el('uf-carddav-msg').textContent = 'Saved';
         el('uf-carddav-msg').style.color = 'var(--green, #50fa7b)';
         // Refresh both the sub-panel (contacts manager) AND the
         // outer integrations list so the CardDAV row appears
@@ -4126,7 +4119,7 @@ async function initUnifiedIntegrations() {
         await renderList();
         notifyIntegrationsChanged();
       } catch (_) {
-        el('uf-carddav-msg').textContent = '失败';
+        el('uf-carddav-msg').textContent = 'Failed';
         el('uf-carddav-msg').style.color = 'var(--red)';
       }
     });
@@ -4143,7 +4136,7 @@ async function initUnifiedIntegrations() {
       const phone = el('cm-add-phone')?.value.trim() || '';
       const address = el('cm-add-address')?.value.trim() || '';
       // Need at least a name or email; address-only entries without a
-      // name aren't useful as a contact.
+      // name aren\'t useful as a contact.
       if (!name && !email) { (name ? el('cm-add-email') : el('cm-add-name')).focus(); return; }
       try {
         await fetch('/api/contacts/add', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, phone, address }) });
@@ -4158,10 +4151,10 @@ async function initUnifiedIntegrations() {
     const _downloadContacts = async (format) => {
       const btn = el(format === 'csv' ? 'cm-export-csv-btn' : 'cm-export-vcf-btn');
       const orig = btn ? btn.textContent : '';
-      if (btn) { btn.textContent = '导出中...'; btn.disabled = true; }
+      if (btn) { btn.textContent = 'Exporting...'; btn.disabled = true; }
       try {
         const res = await fetch(`/api/contacts/export?format=${encodeURIComponent(format)}`, { credentials: 'same-origin' });
-        if (!res.ok) throw new Error('导出失败');
+        if (!res.ok) throw new Error('Export failed');
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -4172,7 +4165,7 @@ async function initUnifiedIntegrations() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch (_) {
-        uiModule.showError ? uiModule.showError('导出失败') : alert('导出失败');
+        uiModule.showError ? uiModule.showError('Export failed') : alert('Export failed');
       } finally {
         if (btn) { btn.textContent = orig; btn.disabled = false; }
       }
@@ -4189,7 +4182,7 @@ async function initUnifiedIntegrations() {
       if (!files.length) return;
       const btn = el('cm-import-btn');
       const orig = btn ? btn.textContent : '';
-      if (btn) { btn.textContent = '导入中…'; btn.disabled = true; }
+      if (btn) { btn.textContent = 'Importing…'; btn.disabled = true; }
       try {
         const texts = await Promise.all(files.map(f => f.text()));
         const vcfParts = [];
@@ -4218,7 +4211,7 @@ async function initUnifiedIntegrations() {
         const msg = `Imported ${imported}/${total}` + (failed ? ` (${failed} failed)` : '');
         uiModule.showToast ? uiModule.showToast(msg) : null;
       } catch (err) {
-        uiModule.showError ? uiModule.showError(err?.message || '导入失败') : alert(err?.message || '导入失败');
+        uiModule.showError ? uiModule.showError(err?.message || 'Import failed') : alert(err?.message || 'Import failed');
       } finally {
         if (btn) { btn.textContent = orig; btn.disabled = false; }
         e.target.value = '';
@@ -4239,13 +4232,13 @@ async function initUnifiedIntegrations() {
       const d = await r.json();
       contacts = d.contacts || [];
     } catch (_) {
-      list.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:8px 2px;">加载联系人失败（请检查上方 CardDAV 配置）。</div>';
+      list.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:8px 2px;">Failed to load contacts (check CardDAV config above).</div>';
       return;
     }
     const cnt = el('cm-count');
     if (cnt) cnt.textContent = contacts.length ? `(${contacts.length})` : '';
     if (!contacts.length) {
-      list.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 2px;">暂无联系人。</div>';
+      list.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 2px;">No contacts yet.</div>';
       return;
     }
     // Sort by name for a stable list.
@@ -4266,7 +4259,7 @@ async function initUnifiedIntegrations() {
     if (cnt) cnt.textContent = contacts.length ? `(${filtered.length}/${contacts.length})` : '';
 
     if (!filtered.length) {
-      list.innerHTML = `<div style="opacity:0.4;font-size:11px;padding:8px 2px;">${q ? '无匹配结果。' : '暂无联系人。'}</div>`;
+      list.innerHTML = `<div style="opacity:0.4;font-size:11px;padding:8px 2px;">${q ? 'No matches.' : 'No contacts yet.'}</div>`;
     } else {
       list.innerHTML = filtered.map(c => {
         const emails = (c.emails || []).join(', ');
@@ -4293,13 +4286,13 @@ async function initUnifiedIntegrations() {
             <input class="settings-input contact-edit-emails" value="${esc(emails)}" placeholder="email1, email2">
             <input class="settings-input contact-edit-phones" value="${esc(phones)}" placeholder="phone1, phone2">
             <input class="settings-input contact-edit-address" value="${esc(address)}" placeholder="Address">
-            <div style="display:flex;gap:6px;"><button class="admin-btn-sm contact-save">保存</button><button class="admin-btn-sm contact-cancel" style="opacity:0.7;">取消</button></div>
+            <div style="display:flex;gap:6px;"><button class="admin-btn-sm contact-save">Save</button><button class="admin-btn-sm contact-cancel" style="opacity:0.7;">Cancel</button></div>
           </div>
         </div>`;
       }).join('');
     }
 
-    // Wire the search input — debounced so we don't refetch on every key.
+    // Wire the search input — debounced so we don\'t refetch on every key.
     if (searchInput && !searchInput._wired) {
       searchInput._wired = true;
       let _t;
@@ -4308,7 +4301,7 @@ async function initUnifiedIntegrations() {
         _t = setTimeout(() => _renderContactsManager(), 80);
       });
     }
-    // Stash latest contacts so the search input doesn't have to refetch.
+    // Stash latest contacts so the search input doesn\'t have to refetch.
     list._lastContacts = contacts;
     // Wire each row's edit / delete / save / cancel.
     list.querySelectorAll('.contact-row').forEach(row => {
@@ -4419,7 +4412,7 @@ async function initUnifiedIntegrations() {
             </div>
           </div>
           <div id="uf-email-provider-note" style="display:none;font-size:11px;line-height:1.5;padding:8px 10px;margin:2px 0 4px;border:1px solid color-mix(in srgb, var(--fg) 15%, transparent);border-left:3px solid var(--accent, var(--red));border-radius:4px;background:color-mix(in srgb, var(--fg) 4%, transparent);"></div>
-          <div class="settings-row"><label class="settings-label">Name${_hint('Optional label for this account (e.g. “Work” or “Personal”). Leave blank to use the email address.')}</label><input id="uf-email-name" class="settings-input" placeholder="(optional — leave blank to use email)"></div>
+          <div class="settings-row"><label class="settings-label">Name${_hint('Optional label for this account (e.g. "Work" or "Personal"). Leave blank to use the email address.')}</label><input id="uf-email-name" class="settings-input" placeholder="(optional — leave blank to use email)"></div>
           <div class="settings-row"><label class="settings-label">Email${_hint('Your email address. Used as the From: header on outgoing mail and as the display label when Name is blank.')}</label><input id="uf-email-from" class="settings-input" placeholder="you@example.com"></div>
           <div class="settings-row"><label class="settings-label">Display Name${_hint('Your name as it appears in the From: field of emails you send, e.g. Jane Smith. Auto-filled from Google during OAuth.')}</label><input id="uf-display-name" class="settings-input" placeholder="Your Name"></div>
           <div id="uf-oauth-section" style="display:none;margin:8px 0;padding:10px;border:1px solid var(--border);border-radius:6px;background:color-mix(in srgb,var(--accent,#50fa7b) 6%,transparent)">
@@ -4453,11 +4446,11 @@ async function initUnifiedIntegrations() {
               <span class="uf-email-save-ico" style="display:inline-flex;width:11px;height:11px;align-items:center;justify-content:center;">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               </span>
-              <span class="uf-email-save-label">${isEdit ? '保存' : '创建'}</span>
+              <span class="uf-email-save-label">${isEdit ? 'Save' : 'Create'}</span>
             </button>
             <button class="admin-btn-add" id="uf-email-cancel" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              取消
+              Cancel
             </button>
           </div>
         </div>
@@ -4527,11 +4520,11 @@ async function initUnifiedIntegrations() {
         const orig = copyBtn.innerHTML;
         const ok = await _copyProviderUrl(url);
         if (!ok) {
-          uiModule.showError?.('复制失败');
+          uiModule.showError?.('Copy failed');
           return;
         }
-        uiModule.showToast?.('已复制');
-        copyBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已复制';
+        uiModule.showToast?.('Copied');
+        copyBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied';
         setTimeout(() => {
           if (copyBtn.isConnected) copyBtn.innerHTML = orig;
         }, 1500);
@@ -4584,10 +4577,13 @@ async function initUnifiedIntegrations() {
         if (labelEl) labelEl.textContent = lbl;
         if (iconEl) iconEl.innerHTML = PROV_LOGO[k] || _customLogo;
       };
-      const _closeMenu = () => { menu.style.display = 'none'; };
+      // Menu is reused (hidden, not recreated). _closeMenu hides it and tears
+      // down its outside-click listener + Escape-stack entry; bindMenuDismiss is
+      // re-registered fresh on each open (see _openMenu).
+      let _closeMenu = () => { menu.style.display = 'none'; };
       const _openMenu = () => {
         menu.style.display = 'block';
-        // Drop-up when there's not enough room below the trigger.
+        // Drop-up when there\'s not enough room below the trigger.
         const tRect = trigger.getBoundingClientRect();
         const mRect = menu.getBoundingClientRect();
         const below = window.innerHeight - tRect.bottom;
@@ -4597,8 +4593,7 @@ async function initUnifiedIntegrations() {
         } else {
           menu.style.top = 'calc(100% + 2px)'; menu.style.bottom = 'auto';
         }
-        const onDoc = (ev) => { if (!menu.contains(ev.target) && ev.target !== trigger) { _closeMenu(); document.removeEventListener('click', onDoc, true); } };
-        setTimeout(() => document.addEventListener('click', onDoc, true), 0);
+        _closeMenu = bindMenuDismiss(menu, () => { menu.style.display = 'none'; }, (ev) => !menu.contains(ev.target) && ev.target !== trigger);
       };
       trigger.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display === 'block' ? _closeMenu() : _openMenu(); });
       menu.querySelectorAll('.ufp-option').forEach(btn => {
@@ -4645,12 +4640,12 @@ async function initUnifiedIntegrations() {
     el('uf-oauth-btn').addEventListener('click', async () => {
       const body = _collectBody();
       if (!body.name) body.name = body.from_address;
-      if (!body.name) { el('uf-email-msg').textContent = '请先输入名称或邮箱'; el('uf-email-msg').style.color = 'var(--red)'; return; }
+      if (!body.name) { el('uf-email-msg').textContent = 'Enter a Name or Email first'; el('uf-email-msg').style.color = 'var(--red)'; return; }
       const url = isEdit ? `/api/email/accounts/${editId}` : '/api/email/accounts';
       const method = isEdit ? 'PUT' : 'POST';
       const r = await fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
-      if (!(d.ok || d.id)) { el('uf-email-msg').textContent = d.error || '保存失败'; el('uf-email-msg').style.color = 'var(--red)'; return; }
+      if (!(d.ok || d.id)) { el('uf-email-msg').textContent = d.error || 'Save failed'; el('uf-email-msg').style.color = 'var(--red)'; return; }
       const accId = isEdit ? editId : d.id;
       window.location.href = `/api/email/oauth/google/authorize?account_id=${encodeURIComponent(accId)}`;
     });
@@ -4711,7 +4706,7 @@ async function initUnifiedIntegrations() {
     });
 
     // Collect the current form values + apply the "Same as IMAP" mirror —
-    // shared by both Save and Test so they agree on what's being sent.
+    // shared by both Save and Test so they agree on what\'s being sent.
     const _collectBody = () => {
       const body = {
         name: el('uf-email-name').value.trim(),
@@ -4808,7 +4803,7 @@ async function initUnifiedIntegrations() {
         btn.style.borderColor = 'var(--red)';
         btn.style.color = '#fff';
         ico.innerHTML = btn.dataset.origIco;
-        msg.textContent = '测试错误：' + e.message;
+        msg.textContent = 'Test error: ' + e.message;
         msg.style.color = 'var(--red)';
       } finally {
         btn.disabled = false;
@@ -4819,7 +4814,7 @@ async function initUnifiedIntegrations() {
       const body = _collectBody();
       // Name is optional — fall back to Email so the list still has a label.
       if (!body.name) body.name = body.from_address;
-      if (!body.name) { el('uf-email-msg').textContent = '至少需要名称或邮箱'; el('uf-email-msg').style.color = 'var(--red)'; return; }
+      if (!body.name) { el('uf-email-msg').textContent = 'Need at least a Name or Email'; el('uf-email-msg').style.color = 'var(--red)'; return; }
       const saveBtn = el('uf-email-save');
       saveBtn.disabled = true;
       const saveIcoEl = saveBtn.querySelector('.uf-email-save-ico');
@@ -4827,7 +4822,7 @@ async function initUnifiedIntegrations() {
       const prevIco = saveIcoEl.innerHTML;
       const prevLbl = saveLblEl.textContent;
       saveIcoEl.innerHTML = _spinner;
-      saveLblEl.textContent = '保存中…';
+      saveLblEl.textContent = 'Saving…';
       try {
         const url = isEdit ? `/api/email/accounts/${editId}` : '/api/email/accounts';
         const method = isEdit ? 'PUT' : 'POST';
@@ -4838,18 +4833,18 @@ async function initUnifiedIntegrations() {
         });
         const d = await r.json();
         if (!(d.ok || d.id)) {
-          el('uf-email-msg').textContent = d.error || '失败';
+          el('uf-email-msg').textContent = d.error || 'Failed';
           el('uf-email-msg').style.color = 'var(--red)';
           return;
         }
-        el('uf-email-msg').textContent = '已保存';
+        el('uf-email-msg').textContent = 'Saved';
         el('uf-email-msg').style.color = 'var(--green,#50fa7b)';
-        integrationNotice = '邮箱账户已保存。更多设置请前往 设置 > 邮件。';
+        integrationNotice = 'Email account saved. For more settings, go to Settings > Email.';
         formEl.style.display = 'none';
         await renderList();
         notifyIntegrationsChanged();
       } catch (e) {
-        el('uf-email-msg').textContent = '错误：' + e.message;
+        el('uf-email-msg').textContent = 'Error: ' + e.message;
         el('uf-email-msg').style.color = 'var(--red)';
       } finally {
         saveBtn.disabled = false;
@@ -4871,16 +4866,16 @@ async function initUnifiedIntegrations() {
           <div class="settings-row"><label class="settings-label">Master Password</label><input id="uf-vault-pass" class="settings-input" type="password" placeholder="Only required for Login / Unlock"></div>
           <div class="settings-row" style="margin-top:10px;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;">
             <span id="uf-vault-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
-            <button class="admin-btn-add" id="uf-vault-save" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">保存配置</button>
-            <button class="admin-btn-add" id="uf-vault-login" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">登录</button>
-            <button class="admin-btn-add" id="uf-vault-unlock" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">解锁</button>
-            <button class="admin-btn-add" id="uf-vault-lock" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">锁定</button>
-            <button class="admin-btn-add" id="uf-vault-logout" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">退出登录</button>
-            <button class="admin-btn-add" id="uf-vault-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">取消</button>
+            <button class="admin-btn-add" id="uf-vault-save" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">Save Config</button>
+            <button class="admin-btn-add" id="uf-vault-login" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Login</button>
+            <button class="admin-btn-add" id="uf-vault-unlock" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Unlock</button>
+            <button class="admin-btn-add" id="uf-vault-lock" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Lock</button>
+            <button class="admin-btn-add" id="uf-vault-logout" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Logout</button>
+            <button class="admin-btn-add" id="uf-vault-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Cancel</button>
           </div>
           <div style="font-size:10px;opacity:0.5;margin-top:6px;line-height:1.4">
-            <strong>登录</strong> 将此设备注册到您的 Vaultwarden 账户（每个账户一次）。<br>
-            <strong>解锁</strong> 解密保险库 — 重启或锁定后需要。会话已保存，助手可以读取密码。
+            <strong>Login</strong> registers this device with your Vaultwarden account (once per account).<br>
+            <strong>Unlock</strong> decrypts the vault — required after restart or Lock. Session is saved so the assistant can read passwords.
           </div>
         </div>
       </div>`;
@@ -4899,14 +4894,14 @@ async function initUnifiedIntegrations() {
         el('uf-vault-email').value = d.email || '';
         const installed = d.bw_installed;
         const parts = [];
-        parts.push(installed ? 'bw CLI：已安装' : 'bw CLI：未安装（请安装 nodejs-bitwarden-cli）');
-        parts.push(d.unlocked ? '状态：已解锁' : '状态：已锁定');
-        if (d.unlocked_at) parts.push(`上次解锁：${d.unlocked_at.replace('T',' ').slice(0,19)}`);
+        parts.push(installed ? 'bw CLI: installed' : 'bw CLI: NOT installed (install nodejs-bitwarden-cli)');
+        parts.push(d.unlocked ? 'Status: UNLOCKED' : 'Status: locked');
+        if (d.unlocked_at) parts.push(`Last unlock: ${d.unlocked_at.replace('T',' ').slice(0,19)}`);
         const statusEl = el('uf-vault-status');
         statusEl.textContent = parts.join(' — ');
         statusEl.style.color = !installed ? 'var(--red)' : d.unlocked ? 'var(--green,#50fa7b)' : '';
       } catch (_) {
-        el('uf-vault-status').textContent = '加载保险库状态失败';
+        el('uf-vault-status').textContent = 'Failed to load vault status';
       }
     }
     await refreshStatus();
@@ -4914,7 +4909,7 @@ async function initUnifiedIntegrations() {
     el('uf-vault-cancel').addEventListener('click', () => { formEl.style.display = 'none'; });
 
     el('uf-vault-save').addEventListener('click', async () => {
-      msg('保存中...');
+      msg('Saving...');
       try {
         const r = await fetch('/api/vault/config', {
           method: 'POST', credentials: 'same-origin',
@@ -4922,16 +4917,16 @@ async function initUnifiedIntegrations() {
           body: JSON.stringify({ server_url: el('uf-vault-url').value, email: el('uf-vault-email').value }),
         });
         const d = await r.json();
-        if (d.ok) { msg('已保存', 'var(--green,#50fa7b)'); await refreshStatus(); await renderList(); }
-        else msg(d.error || '失败', 'var(--red)');
-      } catch (e) { msg('错误：' + e.message, 'var(--red)'); }
+        if (d.ok) { msg('Saved', 'var(--green,#50fa7b)'); await refreshStatus(); await renderList(); }
+        else msg(d.error || 'Failed', 'var(--red)');
+      } catch (e) { msg('Error: ' + e.message, 'var(--red)'); }
     });
 
     el('uf-vault-login').addEventListener('click', async () => {
       const email = el('uf-vault-email').value.trim();
       const pass = el('uf-vault-pass').value;
-      if (!email || !pass) { msg('需要邮箱和主密码', 'var(--red)'); return; }
-      msg('登录中...');
+      if (!email || !pass) { msg('Email + master password required', 'var(--red)'); return; }
+      msg('Logging in...');
       try {
         const r = await fetch('/api/vault/login', {
           method: 'POST', credentials: 'same-origin',
@@ -4940,11 +4935,11 @@ async function initUnifiedIntegrations() {
         });
         const d = await r.json();
         if (d.ok) {
-          msg(d.already ? '已登录 — 请使用解锁' : '已登录', 'var(--green,#50fa7b)');
+          msg(d.already ? 'Already logged in — use Unlock' : 'Logged in', 'var(--green,#50fa7b)');
           el('uf-vault-pass').value = '';
           await refreshStatus(); await renderList();
-        } else msg(d.error || '登录失败', 'var(--red)');
-      } catch (e) { msg('错误：' + e.message, 'var(--red)'); }
+        } else msg(d.error || 'Login failed', 'var(--red)');
+      } catch (e) { msg('Error: ' + e.message, 'var(--red)'); }
     });
 
     el('uf-vault-unlock').addEventListener('click', async () => {
@@ -4963,7 +4958,7 @@ async function initUnifiedIntegrations() {
           el('uf-vault-pass').value = '';
           await refreshStatus(); await renderList();
         } else msg(d.error || 'Unlock failed', 'var(--red)');
-      } catch (e) { msg('错误：' + e.message, 'var(--red)'); }
+      } catch (e) { msg('Error: ' + e.message, 'var(--red)'); }
     });
 
     el('uf-vault-lock').addEventListener('click', async () => {
@@ -4972,7 +4967,7 @@ async function initUnifiedIntegrations() {
         await fetch('/api/vault/lock', { method: 'POST', credentials: 'same-origin' });
         msg('Locked', 'var(--green,#50fa7b)');
         await refreshStatus(); await renderList();
-      } catch (e) { msg('错误：' + e.message, 'var(--red)'); }
+      } catch (e) { msg('Error: ' + e.message, 'var(--red)'); }
     });
 
     el('uf-vault-logout').addEventListener('click', async () => {
@@ -4982,7 +4977,7 @@ async function initUnifiedIntegrations() {
         await fetch('/api/vault/logout', { method: 'POST', credentials: 'same-origin' });
         msg('Logged out', 'var(--green,#50fa7b)');
         await refreshStatus(); await renderList();
-      } catch (e) { msg('错误：' + e.message, 'var(--red)'); }
+      } catch (e) { msg('Error: ' + e.message, 'var(--red)'); }
     });
   }
 
@@ -5000,19 +4995,19 @@ async function initUnifiedIntegrations() {
       const msg = el('uf-mcp-msg'); if (!msg) return;
       if (el('uf-mcp-pasteback')) return;  // already shown
       msg.innerHTML =
-        '在打开的标签页中授权。如果重定向失败（远程访问），请在此粘贴结果 URL：' +
+        'Authorize in the opened tab. If the redirect fails (remote access), paste the resulting URL here: ' +
         '<input id="uf-mcp-pasteback" class="settings-input" placeholder="http://localhost:7000/api/mcp/oauth/callback?code=..." style="margin-top:4px">' +
-        '<button class="admin-btn-sm" id="uf-mcp-paste-go" style="margin-top:4px">提交</button>';
+        '<button class="admin-btn-sm" id="uf-mcp-paste-go" style="margin-top:4px">Submit</button>';
       const pasteGo = el('uf-mcp-paste-go');
       if (pasteGo) pasteGo.addEventListener('click', async () => {
         const cb = el('uf-mcp-pasteback').value.trim();
         if (!cb) return;
         const pf = new FormData(); pf.append('callback_url', cb);
-        _setBtnLoading(pasteGo, true, '提交中...');
+        _setBtnLoading(pasteGo, true, 'Submitting…');
         try {
           await fetch(`/api/mcp/oauth/exchange/${id}`, { method: 'POST', credentials: 'same-origin', body: pf });
         } finally {
-          _setBtnLoading(pasteGo, false, '提交');
+          _setBtnLoading(pasteGo, false, 'Submit');
         }
       });
     }
@@ -5036,32 +5031,32 @@ async function initUnifiedIntegrations() {
           if (!s) continue;
           if (s.auth_url) openAuth(s.auth_url);
           if (s.status === 'connected') {
-            if (msg) msg.textContent = `已连接（${s.tool_count || 0} 个工具）`;
+            if (msg) msg.textContent = `Connected (${s.tool_count || 0} tools)`;
             await renderList(); return;
           }
           if (s.status === 'error') {
-            if (msg) msg.textContent = `失败：${s.error || '未知'}`; return;
+            if (msg) msg.textContent = `Failed: ${s.error || 'unknown'}`; return;
           }
         } catch (e) {
           // Tolerate a single blip, but surface persistent failures instead of
           // silently polling until timeout.
-          if (++fails >= 5 && msg) msg.textContent = `状态检查失败（${e.message || '网络错误'}）— 仍在重试…`;
+          if (++fails >= 5 && msg) msg.textContent = `Status check failing (${e.message || 'network error'}) — still retrying…`;
         }
       }
-      if (msg) msg.textContent = '授权超时。请从服务器列表重新连接以重试。';
+      if (msg) msg.textContent = 'Authorization timed out. Reconnect from the server list to retry.';
     }
     if (editId && editId !== 'new') {
       // Show management view for existing server
-      formEl.innerHTML = '<div class="admin-card" style="margin-top:8px"><span style="opacity:0.5;font-size:11px">加载中...</span></div>';
+      formEl.innerHTML = '<div class="admin-card" style="margin-top:8px"><span style="opacity:0.5;font-size:11px">Loading...</span></div>';
       try {
         const res = await fetch('/api/mcp/servers', { credentials: 'same-origin' });
         const servers = await res.json();
         const srv = servers.find(s => (s.id || s.name) === editId);
-        if (!srv) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">未找到服务器</div>'; return; }
+        if (!srv) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">Server not found</div>'; return; }
         const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
         const statusColor = srv.needs_oauth ? '#e5a33a' : srv.status === 'connected' ? 'var(--green,#50fa7b)' : srv.status === 'error' ? 'var(--red)' : 'var(--fg)';
-        const toolInfo = srv.status === 'connected' ? `${srv.enabled_tool_count}/${srv.tool_count} 个工具` : '';
-        const statusText = srv.needs_oauth ? '需要授权' : srv.status === 'connected' ? `已连接（${toolInfo}）` : srv.status === 'error' ? `错误：${esc(srv.error || '未知')}` : '已断开';
+        const toolInfo = srv.status === 'connected' ? `${srv.enabled_tool_count}/${srv.tool_count} tools` : '';
+        const statusText = srv.needs_oauth ? 'Needs authorization' : srv.status === 'connected' ? `Connected (${toolInfo})` : srv.status === 'error' ? `Error: ${esc(srv.error || 'unknown')}` : 'Disconnected';
         formEl.innerHTML = `
           <div class="admin-card" style="margin-top:8px">
             <h2 style="font-size:13px">${esc(srv.name)}</h2>
@@ -5071,23 +5066,23 @@ async function initUnifiedIntegrations() {
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;justify-content:flex-end;">
               <span id="uf-mcp-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
-              ${srv.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${srv.id}" target="_blank" class="admin-btn-add" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));text-decoration:none;font-weight:600;">授权</a>` : ''}
-              <button class="admin-btn-add" id="uf-mcp-reconnect" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">重新连接</button>
-              <button class="admin-btn-add" id="uf-mcp-toggle" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">${srv.is_enabled ? '禁用' : '启用'}</button>
-              <button class="admin-btn-add" id="uf-mcp-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">关闭</button>
+              ${srv.needs_oauth ? `<a href="/api/mcp/oauth/authorize/${srv.id}" target="_blank" class="admin-btn-add" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));text-decoration:none;font-weight:600;">Authorize</a>` : ''}
+              <button class="admin-btn-add" id="uf-mcp-reconnect" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Reconnect</button>
+              <button class="admin-btn-add" id="uf-mcp-toggle" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">${srv.is_enabled ? 'Disable' : 'Enable'}</button>
+              <button class="admin-btn-add" id="uf-mcp-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Close</button>
             </div>
             <div id="uf-mcp-tools-panel"></div>
           </div>`;
         // Reconnect
         el('uf-mcp-reconnect').addEventListener('click', async () => {
-          const msg = el('uf-mcp-msg'); msg.textContent = '重新连接中...';
+          const msg = el('uf-mcp-msg'); msg.textContent = 'Reconnecting...';
           try {
             const r = await fetch(`/api/mcp/servers/${srv.id}/reconnect`, { method: 'POST', credentials: 'same-origin' });
             const d = await r.json();
-            msg.textContent = d.connected ? `已连接（${d.tool_count} 个工具）` : `失败：${d.error || '未知'}`;
+            msg.textContent = d.connected ? `Connected (${d.tool_count} tools)` : `Failed: ${d.error || 'unknown'}`;
             await renderList();
             showMcpForm(editId); // refresh this view
-          } catch (e) { msg.textContent = '失败'; }
+          } catch (e) { msg.textContent = 'Failed'; }
         });
         // Toggle enable/disable
         el('uf-mcp-toggle').addEventListener('click', async () => {
@@ -5105,26 +5100,26 @@ async function initUnifiedIntegrations() {
             const tools = await tr.json();
             if (tools.length) {
               const disabled = new Set(tools.filter(t => t.is_disabled).map(t => t.name));
-              panel.innerHTML = `<div class="mcp-tools-header"><span>工具</span><span style="display:flex;gap:8px;align-items:center"><span class="mcp-tools-count">${tools.length - disabled.size}/${tools.length} 已启用</span><a href="#" id="uf-mcp-all">全部</a> <a href="#" id="uf-mcp-none">无</a></span></div><div class="mcp-tools-list">${tools.map(t => `<label title="${esc(t.description)}"><input type="checkbox" data-mcp-tool-name="${esc(t.name)}" ${!t.is_disabled ? 'checked' : ''}><span><strong>${esc(t.name)}</strong> <span style="opacity:0.5">— ${esc((t.description||'').slice(0,80))}</span></span></label>`).join('')}</div>`;
+              panel.innerHTML = `<div class="mcp-tools-header"><span>Tools</span><span style="display:flex;gap:8px;align-items:center"><span class="mcp-tools-count">${tools.length - disabled.size}/${tools.length} enabled</span><a href="#" id="uf-mcp-all">All</a> <a href="#" id="uf-mcp-none">None</a></span></div><div class="mcp-tools-list">${tools.map(t => `<label title="${esc(t.description)}"><input type="checkbox" data-mcp-tool-name="${esc(t.name)}" ${!t.is_disabled ? 'checked' : ''}><span><strong>${esc(t.name)}</strong> <span style="opacity:0.5">— ${esc((t.description||'').slice(0,80))}</span></span></label>`).join('')}</div>`;
               const saveFn = async () => {
                 const dis = [];
                 panel.querySelectorAll('input[type=checkbox]').forEach(cb => { if (!cb.checked) dis.push(cb.dataset.mcpToolName); });
                 await fetch(`/api/mcp/servers/${srv.id}/tools`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ disabled: dis }) });
                 const cnt = panel.querySelector('.mcp-tools-count');
-                if (cnt) cnt.textContent = `${tools.length - dis.length}/${tools.length} 已启用`;
+                if (cnt) cnt.textContent = `${tools.length - dis.length}/${tools.length} enabled`;
               };
               panel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', saveFn));
               el('uf-mcp-all')?.addEventListener('click', (e) => { e.preventDefault(); panel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true); saveFn(); });
               el('uf-mcp-none')?.addEventListener('click', (e) => { e.preventDefault(); panel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false); saveFn(); });
             }
-          } catch (_) { panel.innerHTML = '<span style="opacity:0.5;font-size:11px">加载工具失败</span>'; }
+          } catch (_) { panel.innerHTML = '<span style="opacity:0.5;font-size:11px">Failed to load tools</span>'; }
         }
-      } catch (_) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">加载服务器失败</div>'; }
+      } catch (_) { formEl.innerHTML = '<div class="admin-card" style="margin-top:8px">Failed to load server</div>'; }
     } else {
       // Add new MCP server form
       formEl.innerHTML = `
         <div class="admin-card" style="margin-top:8px">
-          <h2 style="font-size:13px">添加 MCP 服务器</h2>
+          <h2 style="font-size:13px">Add MCP Server</h2>
           <div class="settings-col">
             <div class="settings-row"><label class="settings-label">Name</label><input id="uf-mcp-name" class="settings-input" placeholder="Server name"></div>
             <div class="settings-row"><label class="settings-label">Transport</label><select id="uf-mcp-transport" class="settings-input"><option value="stdio">stdio</option><option value="sse">SSE</option><option value="http">Streamable HTTP</option></select></div>
@@ -5138,8 +5133,8 @@ async function initUnifiedIntegrations() {
             </div>
             <div class="settings-row" style="margin-top:10px;align-items:center;justify-content:flex-end;gap:6px;">
               <span id="uf-mcp-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
-              <button class="admin-btn-add" id="uf-mcp-save" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">保存</button>
-              <button class="admin-btn-add" id="uf-mcp-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">取消</button>
+              <button class="admin-btn-add" id="uf-mcp-save" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">Save</button>
+              <button class="admin-btn-add" id="uf-mcp-cancel" style="background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">Cancel</button>
             </div>
           </div>
         </div>`;
@@ -5169,22 +5164,22 @@ async function initUnifiedIntegrations() {
         }
         const saveBtn = el('uf-mcp-save'), cancelBtn = el('uf-mcp-cancel');
         const _origLabel = saveBtn.textContent;
-        _setBtnLoading(saveBtn, true, '保存中…'); if (cancelBtn) cancelBtn.disabled = true;
+        _setBtnLoading(saveBtn, true, 'Saving…'); if (cancelBtn) cancelBtn.disabled = true;
         try {
           const r = await fetch('/api/mcp/servers', { method: 'POST', credentials: 'same-origin', body: fd });
           const data = await r.json().catch(() => ({}));
           if (r.ok && data.needs_auth) {
-            el('uf-mcp-msg').textContent = '准备授权…';
+            el('uf-mcp-msg').textContent = 'Preparing authorization…';
             _handleMcpAuth(data.id, data.auth_url);
           } else if (r.ok && (data.connected || data.status === 'connected')) {
-            el('uf-mcp-msg').textContent = `已连接（${data.tool_count || 0} 个工具）`;
+            el('uf-mcp-msg').textContent = `Connected (${data.tool_count || 0} tools)`;
             formEl.style.display = 'none'; await renderList();
           } else if (r.ok) {
-            el('uf-mcp-msg').textContent = '已保存'; formEl.style.display = 'none'; await renderList();
+            el('uf-mcp-msg').textContent = 'Saved'; formEl.style.display = 'none'; await renderList();
           } else {
-            el('uf-mcp-msg').textContent = `失败（${r.status}）`;
+            el('uf-mcp-msg').textContent = `Failed (${r.status})`;
           }
-        } catch (_) { el('uf-mcp-msg').textContent = '失败'; }
+        } catch (_) { el('uf-mcp-msg').textContent = 'Failed'; }
         finally { _setBtnLoading(saveBtn, false, _origLabel); if (cancelBtn) cancelBtn.disabled = false; }
       });
     }
@@ -5279,7 +5274,7 @@ async function initUnifiedIntegrations() {
           <div id="uf-codex-reveal" style="display:none;width:100%;box-sizing:border-box;">
             <div style="font-weight:600;font-size:12px;margin-bottom:6px;">Token</div>
 
-            <div style="font-size:11px;opacity:0.62;margin-bottom:4px;">Copy this token, it won't be shown again.</div>
+            <div style="font-size:11px;opacity:0.62;margin-bottom:4px;">Copy this token, it won\'t be shown again.</div>
             <div style="position:relative;">
               <code id="uf-codex-token" style="display:block;word-break:break-all;font-size:11px;padding:6px 30px 6px 8px;background:rgba(0,0,0,0.08);border-radius:4px;"></code>
               <button type="button" class="admin-btn-sm" id="uf-codex-copy-token" title="Copy token" aria-label="Copy token" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);padding:3px 5px;background:none;border:none;color:inherit;opacity:0.7;cursor:pointer;display:inline-flex;align-items:center;">
@@ -5316,15 +5311,15 @@ async function initUnifiedIntegrations() {
             <span id="uf-codex-msg" style="font-size:11px;flex:1;text-align:center;"></span>
             <button class="admin-btn-add" id="uf-codex-revoke" style="display:none;align-items:center;gap:5px;background:color-mix(in srgb, var(--color-error) 10%, transparent);color:var(--color-error);border:1px solid var(--color-error);font-weight:600;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-              撤销
+              Revoke
             </button>
             <button class="admin-btn-add" id="uf-codex-create-btn" style="display:${current ? 'none' : 'inline-flex'};align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="M15.5 7.5l3 3"/></svg>
-              创建令牌
+              Create token
             </button>
             <button class="admin-btn-add" id="uf-codex-save" style="display:none;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              保存
+              Save
             </button>
           </div>
         </div>
@@ -5349,7 +5344,7 @@ async function initUnifiedIntegrations() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name }),
             });
-            if (!r.ok) throw new Error('保存失败');
+            if (!r.ok) throw new Error('Save failed');
             notifyIntegrationsChanged();
           } catch (_) { renameInput.value = original; }
         };
@@ -5369,12 +5364,12 @@ async function initUnifiedIntegrations() {
               body: JSON.stringify({ scopes }),
             });
             const d = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(d.detail || '失败');
-            if (msg) { msg.textContent = '已保存'; msg.style.color = 'var(--green, #50fa7b)'; setTimeout(() => { msg.textContent = ''; }, 1200); }
+            if (!r.ok) throw new Error(d.detail || 'Failed');
+            if (msg) { msg.textContent = 'Saved'; msg.style.color = 'var(--green, #50fa7b)'; setTimeout(() => { msg.textContent = ''; }, 1200); }
             notifyIntegrationsChanged();
           } catch (err) {
             cb.checked = !cb.checked;
-            if (msg) { msg.textContent = (err && err.message) || '失败'; msg.style.color = 'var(--red)'; }
+            if (msg) { msg.textContent = (err && err.message) || 'Failed'; msg.style.color = 'var(--red)'; }
           }
         });
       });
@@ -5382,7 +5377,7 @@ async function initUnifiedIntegrations() {
 
     el('uf-codex-cancel')?.addEventListener('click', () => { formEl.style.display = 'none'; });
 
-    // Configure access — collapsed by default so the reveal panel doesn't
+    // Configure access — collapsed by default so the reveal panel doesn\'t
     // dump 13 toggles at once. Click reveals + rotates the caret.
     el('uf-codex-toggle-config')?.addEventListener('click', () => {
       const body = el('uf-codex-config-body');
@@ -5410,12 +5405,12 @@ async function initUnifiedIntegrations() {
           body: JSON.stringify({ scopes }),
         });
         const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(d.detail || '失败');
-        if (msg) { msg.textContent = '已保存'; msg.style.color = 'var(--green, #50fa7b)'; }
+        if (!r.ok) throw new Error(d.detail || 'Failed');
+        if (msg) { msg.textContent = 'Saved'; msg.style.color = 'var(--green, #50fa7b)'; }
         await renderList();
         setTimeout(() => { formEl.style.display = 'none'; }, 350);
       } catch (err) {
-        if (msg) { msg.textContent = err?.message || '保存失败'; msg.style.color = 'var(--red)'; }
+        if (msg) { msg.textContent = err?.message || 'Save failed'; msg.style.color = 'var(--red)'; }
       }
     });
 
@@ -5425,18 +5420,18 @@ async function initUnifiedIntegrations() {
       const tokenId = formEl.dataset.createdTokenId;
       if (!tokenId) return;
       const ok = window.styledConfirm
-        ? await window.styledConfirm(`撤销此 ${cfg.word} 代理令牌？使用它的集成将失去访问权限。`, { confirmText: '撤销', danger: true })
-        : confirm(`撤销此 ${cfg.word} 代理令牌？使用它的集成将失去访问权限。`);
+        ? await window.styledConfirm(`Revoke this ${cfg.word} agent token? Integrations using it will lose access.`, { confirmText: 'Revoke', danger: true })
+        : confirm(`Revoke this ${cfg.word} agent token? Integrations using it will lose access.`);
       if (!ok) return;
       const msg = el('uf-codex-msg');
       try {
         const r = await fetch(`/api/tokens/${tokenId}`, { method: 'DELETE', credentials: 'same-origin' });
-        if (!r.ok) throw new Error('撤销失败');
-        if (msg) { msg.textContent = '已撤销'; msg.style.color = 'var(--color-error)'; }
+        if (!r.ok) throw new Error('Revoke failed');
+        if (msg) { msg.textContent = 'Revoked'; msg.style.color = 'var(--color-error)'; }
         await renderList();
         setTimeout(() => { formEl.style.display = 'none'; }, 350);
       } catch (err) {
-        if (msg) { msg.textContent = err?.message || '撤销失败'; msg.style.color = 'var(--red)'; }
+        if (msg) { msg.textContent = err?.message || 'Revoke failed'; msg.style.color = 'var(--red)'; }
       }
     });
 
@@ -5457,9 +5452,9 @@ async function initUnifiedIntegrations() {
           _wp = sp.createWhirlpool(14);
           _wp.element.style.cssText = 'display:inline-flex;width:14px;height:14px;margin:0 4px 0 0;';
           pending.appendChild(_wp.element);
-          pending.appendChild(document.createTextNode('创建令牌中…'));
+          pending.appendChild(document.createTextNode('Creating token…'));
         } catch (_) {
-          pending.textContent = '创建令牌中…';
+          pending.textContent = 'Creating token…';
         }
       }
       const existingNames = new Set(agentTokens.map(t => (t.name || '').trim()));
@@ -5472,7 +5467,7 @@ async function initUnifiedIntegrations() {
         const base = name;
         while (existingNames.has(name)) { name = `${base} ${n++}`; }
       }
-      // Minimum scope on creation so the token isn't effectively saved
+      // Minimum scope on creation so the token isn\'t effectively saved
       // with everything granted before the user has clicked Save. The
       // UI toggles below are pre-checked as a preview of what *will*
       // be granted; nothing else is persisted server-side until Save.
@@ -5510,7 +5505,7 @@ async function initUnifiedIntegrations() {
         // Remember the created token id so Save can PATCH its scopes.
         formEl.dataset.createdTokenId = String(uiToken.id);
         if (msg) {
-          msg.textContent = `已创建"${name}"。`;
+          msg.textContent = `Created "${name}".`;
           msg.style.color = 'var(--green, #50fa7b)';
         }
         await renderList();
@@ -5518,7 +5513,7 @@ async function initUnifiedIntegrations() {
         if (_wp) { try { _wp.destroy(); } catch (_) {} }
         if (pending) pending.style.display = 'none';
         if (msg) {
-          msg.textContent = err?.message || '失败';
+          msg.textContent = err?.message || 'Failed';
           msg.style.color = 'var(--red)';
         }
       }
@@ -5613,17 +5608,17 @@ async function initUnifiedIntegrations() {
               body: JSON.stringify({ scopes }),
             });
             const d = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(d.detail || '失败');
-            if (msg) { msg.textContent = '已保存'; msg.style.color = 'var(--green, #50fa7b)'; }
+            if (!r.ok) throw new Error(d.detail || 'Failed');
+            if (msg) { msg.textContent = 'Saved'; msg.style.color = 'var(--green, #50fa7b)'; }
             await renderList();
           } catch (err) {
             cb.checked = !cb.checked;
-            if (msg) { msg.textContent = err?.message || '失败'; msg.style.color = 'var(--red)'; }
+            if (msg) { msg.textContent = err?.message || 'Failed'; msg.style.color = 'var(--red)'; }
           }
         });
       });
     }
-    // Note: don't call _wireScopeChange(formEl) here. The existing-token
+    // Note: don\'t call _wireScopeChange(formEl) here. The existing-token
     // editor (current) already wires its own change handler that PATCHes
     // immediately. The inline scopes for a *just-created* token should
     // remain unwired so they only persist on Save click below.
@@ -5650,8 +5645,11 @@ async function initUnifiedIntegrations() {
       addBtn.parentElement.style.position = 'relative';
       addBtn.parentElement.classList.add('uf-add-anchor');
     }
+    // Menu is created per open and removed on close. _closeMenu routes through
+    // the bindMenuDismiss close() bound when the menu opens, so the outside-click
+    // listener + Escape-stack entry are torn down alongside the node removal.
     let _menuEl = null;
-    const _closeMenu = () => { if (_menuEl) { _menuEl.remove(); _menuEl = null; } };
+    let _closeMenu = () => {};
     addBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (_menuEl) { _closeMenu(); return; }
@@ -5661,7 +5659,7 @@ async function initUnifiedIntegrations() {
       menu.style.cssText = 'position:absolute;right:0;z-index:1000;background:var(--panel);border:1px solid var(--border);border-radius:6px;max-height:340px;overflow-y:auto;box-shadow:0 6px 18px rgba(0,0,0,0.25);min-width:220px;';
       addBtn.parentElement.appendChild(menu);
       _menuEl = menu;
-      // Drop-up when there isn't enough room below the button (modal near
+      // Drop-up when there isn\'t enough room below the button (modal near
       // the viewport bottom, mobile keyboard up, etc.).
       const tRect = addBtn.getBoundingClientRect();
       const mRect = menu.getBoundingClientRect();
@@ -5683,8 +5681,7 @@ async function initUnifiedIntegrations() {
           showForm(k, 'new');
         });
       });
-      const onDoc = (ev) => { if (!menu.contains(ev.target) && ev.target !== addBtn) { _closeMenu(); document.removeEventListener('click', onDoc, true); } };
-      setTimeout(() => document.addEventListener('click', onDoc, true), 0);
+      _closeMenu = bindMenuDismiss(menu, () => { menu.remove(); _menuEl = null; }, (ev) => !menu.contains(ev.target) && ev.target !== addBtn);
     });
   }
 
@@ -5729,7 +5726,7 @@ export function open(tab) {
 export function close() {
   if (!modalEl) return;
   // Always clear the appearance-tab body class so the rest of the app
-  // doesn't keep its dimmed state if the modal got closed mid-tab.
+  // doesn\'t keep its dimmed state if the modal got closed mid-tab.
   document.body.classList.remove('settings-appearance-open');
   syncAppearanceOpacity(false); // clear any opacity-slider fade
   const content = modalEl.querySelector('.modal-content, .settings-modal-content');
@@ -5761,8 +5758,8 @@ export function close() {
       // Brief toast-style banner.
       const banner = document.createElement('div');
       banner.textContent = success
-        ? '✓ Google 账户已连接 — 邮件已就绪'
-        : `Google OAuth 失败：${errMsg || '未知错误'}`;
+        ? '✓ Google account connected — email is ready'
+        : `Google OAuth failed: ${errMsg || 'unknown error'}`;
       Object.assign(banner.style, {
         position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
         background: success ? 'var(--accent, #50fa7b)' : 'var(--red, #ff5555)',

@@ -231,14 +231,14 @@ function _getSelectedAIEndpoint(type) {
 // Maps a layer-name (the past-participle returned from each AI tool —
 // "BG Removed", "Sharpened", etc.) into a present-progressive label for
 // the busy button state ("Removing…", "Sharpening…"). Falls back to a
-// neutral "Processing…" when the layer name doesn't match a known verb.
+// neutral "Processing…" when the layer name doesn\'t match a known verb.
 const _BUSY_LABELS = {
-  'bg removed': '正在移除…',
-  'sharpened': '正在锐化…',
-  'enhanced': '正在增强…',
-  'harmonized': '正在协调…',
-  'upscaled': '正在放大…',
-  'styled': '正在风格化…',
+  'bg removed': '去除中…',
+  'sharpened': '锐化中…',
+  'enhanced': '增强中…',
+  'harmonized': '协调中…',
+  'upscaled': '放大中…',
+  'styled': '风格化中…',
 };
 function _deriveBusyLabel(layerName) {
   if (!layerName) return '处理中…';
@@ -249,7 +249,7 @@ function _deriveBusyLabel(layerName) {
 // all flatten the doc, POST a PNG to a server endpoint, and drop the
 // result back as a new layer. Full implementation in editor/ai-tool-
 // runner.js; instantiated lazily (so it can reference function decls
-// that haven't hoisted at module load time? — actually all named
+// that haven\'t hoisted at module load time? — actually all named
 // function decls hoist, so we instantiate at module top).
 const _applyImageTool = createApplyImageTool({
   flatten: () => flatten(),
@@ -354,7 +354,7 @@ function _ensureActiveMaskLayer() {
   c.height = state.imgHeight;
   mask = {
     id: 'mask-' + (state.nextLayerId++),
-    name: 'Mask ' + (parent.masks.length + 1),
+    name: '蒙版 ' + (parent.masks.length + 1),
     canvas: c,
     ctx: c.getContext('2d'),
     visible: true,
@@ -441,11 +441,11 @@ function _fillEnclosedMaskRegions() {
   // are enclosed.
   const visited = new Uint8Array(w * h);
   const stack = [];
-  // Pre-mark all mask pixels as visited=2 so we don't cross them.
+  // Pre-mark all mask pixels as visited=2 so we don\'t cross them.
   for (let i = 0, j = 0; i < d.length; i += 4, j++) {
     if (d[i + 3] > 0) visited[j] = 2;
   }
-  // Seed flood from every edge pixel that's empty.
+  // Seed flood from every edge pixel that\'s empty.
   const seed = (x, y) => {
     const k = y * w + x;
     if (visited[k] === 0) { visited[k] = 1; stack.push(k); }
@@ -544,12 +544,12 @@ function composite() {
   if (state.maskVisible) {
     // Build a SINGLE merged mask canvas from every visible mask
     // sub-layer (union of alpha — `lighter` keeps max alpha per pixel,
-    // so overlapping strokes don't visually stack). Then tint it red
+    // so overlapping strokes don\'t visually stack). Then tint it red
     // once and composite at the configured opacity. Result: the user
     // sees a flat, consistent translucent red over the masked area
     // regardless of how many strokes / masks contributed to it. Mask
     // visibility is INDEPENDENT of parent visibility — hiding the
-    // parent layer doesn't hide its masks.
+    // parent layer doesn\'t hide its masks.
     let _haveAny = false;
     if (!state.compositeMaskUnion) state.compositeMaskUnion = document.createElement('canvas');
     const union = state.compositeMaskUnion;
@@ -677,7 +677,7 @@ function _snapshotState() {
     wand,
     layers: state.layers.map(l => {
       // getImageData throws on a 0-sized canvas — guard so a single
-      // broken layer/mask can't take down the whole snapshot (which
+      // broken layer/mask can\'t take down the whole snapshot (which
       // would silently break undo/redo for brush strokes etc.).
       let imageData = null;
       try {
@@ -809,7 +809,7 @@ async function _persistDraft() {
         body: JSON.stringify(body),
       });
       // 404 means our row was deleted while editing — fall through to
-      // create a fresh one so the user doesn't lose work.
+      // create a fresh one so the user doesn\'t lose work.
       if (res.status === 404) {
         state.draftId = null;
         return doRequest();
@@ -954,7 +954,7 @@ function _restoreState(snap) {
   // Rebuild the state.layers array from the snapshot order. This lets Ctrl+Z
   // restore deleted layers (previously the loop only updated existing
   // ones and silently dropped any layer the snapshot still knew about).
-  // Layers absent from the snapshot are dropped — that's the desired
+  // Layers absent from the snapshot are dropped — that\'s the desired
   // behavior for undoing an "+Add" or a paste.
   const _existingById = new Map(state.layers.map(l => [l.id, l]));
   const _rebuilt = [];
@@ -986,7 +986,7 @@ function _restoreState(snap) {
     layer.adjLayers = s.adjLayers ? JSON.parse(JSON.stringify(s.adjLayers)) : [];
     if (s.isBase !== undefined) layer.isBase = s.isBase;
     // Restore mask sub-layers — rebuild each mask's canvas from the
-    // snapshot's imageData. We don't reuse old mask canvases (snapshot
+    // snapshot's imageData. We don\'t reuse old mask canvases (snapshot
     // dims might differ after a transform) so a fresh canvas is safer.
     layer.masks = (s.masks || []).map(ms => {
       const mc = document.createElement('canvas');
@@ -1003,7 +1003,7 @@ function _restoreState(snap) {
     layer._editingAdjId = null;
     _rebuilt.push(layer);
   }
-  // Drop any layer that's no longer in the snapshot.
+  // Drop any layer that\'s no longer in the snapshot.
   for (const lost of _existingById.values()) state.layerOffsets.delete(lost.id);
   state.layers = _rebuilt;
   if (!state.layers.find(l => l.id === state.activeLayerId) && state.layers.length) {
@@ -1045,7 +1045,7 @@ function _restoreState(snap) {
 function undo() {
   if (state.undoStack.length === 0) return;
   const cur = _snapshotState();
-  cur._label = 'Current';
+  cur._label = '当前';
   cur._ts = Date.now();
   state.redoStack.push(cur);
   _restoreState(state.undoStack.pop());
@@ -1055,7 +1055,7 @@ function undo() {
 function redo() {
   if (state.redoStack.length === 0) return;
   const cur = _snapshotState();
-  cur._label = 'Current';
+  cur._label = '当前';
   cur._ts = Date.now();
   state.undoStack.push(cur);
   _restoreState(state.redoStack.pop());
@@ -1082,14 +1082,14 @@ const _refreshHistoryPanelIfOpen = _historyPanel.refreshHistoryPanelIfOpen;
 // ── Drawing ──
 
 function _beginDraw(e) {
-  // Fall back to the parent resolver so a stale activeLayerId doesn't
+  // Fall back to the parent resolver so a stale activeLayerId doesn\'t
   // block strokes when there ARE layers present.
   const layer = activeLayer() || _activeParentLayer();
   // Transform-tool drag (handle grab or move-fallback) — handler in
   // editor/tools/transform-drag.js.
   if (_transformDragTool.tryBegin(e)) return;
   // Magic wand is selection-only — works even on locked layers because
-  // it doesn't mutate the layer until an action (Erase/Copy) is taken.
+  // it doesn\'t mutate the layer until an action (Erase/Copy) is taken.
   // Full implementation in editor/tools/wand.js.
   if (state.tool === 'wand') return _wandTool.click(e);
   // Inpaint can create its own layer + mask on the fly, so skip the
@@ -1113,7 +1113,7 @@ function _beginDraw(e) {
 function _continueDraw(e) {
   // _continueDraw is now bound to the window so drags can extend past
   // the canvas. The brush-cursor overlay should only follow the cursor
-  // when it's actually over the canvas, otherwise hide it.
+  // when it\'s actually over the canvas, otherwise hide it.
   const overCanvas = state.mainCanvas && e.target === state.mainCanvas;
   if (['eraser', 'inpaint', 'lasso', 'brush'].includes(state.tool) && state.mainCanvas) {
     if (overCanvas) _updateBrushCursor(e);
@@ -1263,10 +1263,10 @@ function _showCropApply() {
   pop = document.createElement('div');
   pop.className = 'ge-crop-apply';
   pop.innerHTML = `
-    <input type="number" class="ge-crop-w" min="1" max="20000" value="${Math.round(state.cropRect.w)}" title="宽度">
+    <input type="number" class="ge-crop-w" min="1" max="20000" value="${Math.round(state.cropRect.w)}" title="Width">
     <span class="ge-crop-x">×</span>
-    <input type="number" class="ge-crop-h" min="1" max="20000" value="${Math.round(state.cropRect.h)}" title="高度">
-    <button class="ge-crop-apply-btn">应用</button>
+    <input type="number" class="ge-crop-h" min="1" max="20000" value="${Math.round(state.cropRect.h)}" title="Height">
+    <button class="ge-crop-apply-btn">Apply</button>
   `;
   const area = state.container.querySelector('.ge-canvas-area');
   if (!area || !state.cropRect || !state.mainCanvas) return;
@@ -1303,7 +1303,7 @@ function _showCropApply() {
   pop.style.left = (localX + 6) + 'px';
   pop.style.top = (localY + 6) + 'px';
   // Clamp inside the CANVAS image bounds (not just the canvas-area) so
-  // the panel doesn't sit on the dark padding around the canvas — it
+  // the panel doesn\'t sit on the dark padding around the canvas — it
   // stays anchored over the actual image.
   requestAnimationFrame(() => {
     const bRect = pop.getBoundingClientRect();
@@ -1570,7 +1570,7 @@ function _runMagicWand(cx, cy, mode = 'replace', opts = {}) {
   const sourceCtx = activeMask ? activeMask.ctx : layer.ctx;
   // Snapshot current state to undo BEFORE mutating the selection, but
   // skip when called via the tolerance slider (`opts.retune`) so dragging
-  // the slider doesn't fill the undo stack with intermediate states.
+  // the slider doesn\'t fill the undo stack with intermediate states.
   if (!opts.retune) _saveState();
   // Remember the seed so the tolerance slider can re-run the wand live.
   state.wandLastSeed = { x: cx, y: cy, mode };
@@ -1591,7 +1591,7 @@ function _runMagicWand(cx, cy, mode = 'replace', opts = {}) {
   if (!mask) return;
   // Merge with existing selection per `mode`. If the existing mask is
   // for a different layer or has different dimensions, treat as replace
-  // since merging doesn't make sense across canvases.
+  // since merging doesn\'t make sense across canvases.
   const compatible = state.wandMask && state.wandLayerId === layer.id &&
     state.wandMask.width === mask.width && state.wandMask.height === mask.height;
   if (compatible && mode === 'add') {
@@ -1623,7 +1623,7 @@ function _showWandLoading() {
     spinner.element.style.cssText = 'width:30px;height:30px;margin:0;';
     overlay.appendChild(spinner.element);
   } catch (_) {
-    overlay.textContent = '正在选择...';
+    overlay.textContent = '选择中...';
   }
   area.appendChild(overlay);
   return () => {
@@ -1633,7 +1633,7 @@ function _showWandLoading() {
 }
 
 // Draw the wand selection as a translucent red overlay, mirroring the
-// inpaint-mask visual so users know what's selected.
+// inpaint-mask visual so users know what\'s selected.
 function _drawWandOverlay() {
   if (!state.wandMask || !state.mainCtx) return;
   const layer = state.layers.find(l => l.id === state.wandLayerId);
@@ -1666,7 +1666,7 @@ function _wandClear() {
 
 // Hover thumbnail — generated by downscaling the layer's canvas into a
 // small floating panel. Lives in document.body so panel `overflow:
-// hidden` can't clip it. One singleton element, repositioned per hover.
+// hidden` can\'t clip it. One singleton element, repositioned per hover.
 function _showLayerThumb(rowEl, layer) {
   if (!layer || !layer.canvas) return;
   if (!state.layerThumbEl) {
@@ -1692,7 +1692,7 @@ function _showLayerThumb(rowEl, layer) {
   ctx.drawImage(layer.canvas, 0, 0, tw, th);
   state.layerThumbEl.innerHTML = '';
   state.layerThumbEl.appendChild(c);
-  // Position to the LEFT of the row so it doesn't cover other layers.
+  // Position to the LEFT of the row so it doesn\'t cover other layers.
   const r = rowEl.getBoundingClientRect();
   state.layerThumbEl.style.top = Math.max(8, r.top - 4) + 'px';
   state.layerThumbEl.style.right = (window.innerWidth - r.left + 8) + 'px';
@@ -1747,7 +1747,7 @@ function _invertSelection() {
     }
     ctx.putImageData(data, 0, 0);
     composite();
-    if (uiModule) uiModule.showToast('已反转选区');
+    if (uiModule) uiModule.showToast('选区已反转');
     return true;
   }
   if (state.lassoPoints.length >= 3 && !state.lassoActive) {
@@ -1772,7 +1772,7 @@ function _invertSelection() {
     state.lassoPoints = [];
     state.lassoActive = false;
     composite();
-    if (uiModule) uiModule.showToast('已反转选区（转换为魔棒）');
+    if (uiModule) uiModule.showToast('选区已反转（已转换为魔棒）');
     return true;
   }
   return false;
@@ -1849,13 +1849,13 @@ function _wandToMask() {
   state.maskCtx.putImageData(cur, 0, 0);
   // Stay on the Wand tool — just bake the selection into the mask.
   // Clear the wand selection so a re-click starts fresh (and the red
-  // overlay doesn't double up over the inpaint-mask red tint).
+  // overlay doesn\'t double up over the inpaint-mask red tint).
   state.wandMask = null;
   state.wandLayerId = null;
   state.wandLastSeed = null;
   composite();
   _renderLayerPanel();
-  if (uiModule) uiModule.showToast('已添加选区到蒙版');
+  if (uiModule) uiModule.showToast('选区已添加到蒙版');
 }
 
 // Reveal/hide the small "X" badge on the Lasso and Wand tool buttons
@@ -1875,14 +1875,14 @@ function _syncToolClearIndicators() {
   document.querySelectorAll('.ge-layer-mask-btn').forEach(b => {
     b.classList.toggle('from-selection', hasSel);
   });
-  // Fill action now lives in the Image menu — enable when there's
+  // Fill action now lives in the Image menu — enable when there\'s
   // something fillable (selection or active mask).
   const fillItem = document.getElementById('ge-image-action-fill');
   if (fillItem) {
     fillItem.disabled = !(hasSel || hasMaskTarget);
     fillItem.title = fillItem.disabled
       ? '请先创建选区或选择蒙版'
-      : '用当前颜色填充选中的选区/蒙版';
+      : '用当前颜色填充活动选区/蒙版';
   }
   // Topbar Selection button only makes sense with an active selection.
   const edgeWrap = document.getElementById('ge-edge-wrap');
@@ -1941,7 +1941,7 @@ function _wandCopyToNewLayer() {
   tCtx.drawImage(src.canvas, 0, 0);
   tCtx.globalCompositeOperation = 'destination-in';
   tCtx.drawImage(state.wandMask, 0, 0);
-  const newLayer = createLayer('魔棒复制', src.canvas.width, src.canvas.height);
+  const newLayer = createLayer('魔棒副本', src.canvas.width, src.canvas.height);
   newLayer.ctx.drawImage(tmp, 0, 0);
   const srcOff = state.layerOffsets.get(src.id) || { x: 0, y: 0 };
   state.layerOffsets.set(newLayer.id, { ...srcOff });
@@ -1978,7 +1978,7 @@ function _lassoDeleteSelection() {
 
   state.lassoPoints = [];
   composite();
-  uiModule.showToast('已删除选区');
+  uiModule.showToast('选区已删除');
 }
 
 function _lassoCopyToLayer() {
@@ -2016,7 +2016,7 @@ function _lassoCopyToLayer() {
   _renderLayerPanel();
   _revealLayerPanel();
   composite();
-  uiModule.showToast('已复制选区到新图层');
+  uiModule.showToast('选区已复制到新图层');
 }
 
 function _lassoToMask() {
@@ -2087,8 +2087,8 @@ function _filterSliderPrompt(title, params, onPreview) {
         <div class="ge-filter-modal-head">${title}</div>
         ${rows}
         <div class="ge-filter-modal-actions">
-          <button type="button" class="ge-btn ge-btn-sm" data-action="cancel">取消</button>
-          <button type="button" class="ge-btn ge-btn-sm ge-btn-primary" data-action="apply">应用</button>
+          <button type="button" class="ge-btn ge-btn-sm" data-action="cancel">Cancel</button>
+          <button type="button" class="ge-btn ge-btn-sm ge-btn-primary" data-action="apply">Apply</button>
         </div>
       </div>
     `;
@@ -2133,7 +2133,7 @@ function _filterSliderPrompt(title, params, onPreview) {
 // entry we pre-saved so the canceled run leaves no trace.
 async function _applyLiveBlur({ title, params, label, renderer }) {
   const layer = activeLayer();
-  if (!layer || layer.locked) { if (uiModule) uiModule.showToast('请选择未锁定的图层'); return; }
+  if (!layer || layer.locked) { if (uiModule) uiModule.showToast('请选择一个未锁定的图层'); return; }
   const w = layer.canvas.width, h = layer.canvas.height;
   const snap = document.createElement('canvas');
   snap.width = w; snap.height = h;
@@ -2151,7 +2151,7 @@ async function _applyLiveBlur({ title, params, label, renderer }) {
     layer.ctx.clearRect(0, 0, w, h);
     layer.ctx.drawImage(snap, 0, 0);
     composite();
-    // Drop the snapshot we pushed — there's nothing to undo to.
+    // Drop the snapshot we pushed — there\'s nothing to undo to.
     if (state.undoStack.length) state.undoStack.pop();
     _refreshHistoryPanelIfOpen();
     return;
@@ -2160,7 +2160,7 @@ async function _applyLiveBlur({ title, params, label, renderer }) {
   layer.ctx.clearRect(0, 0, w, h);
   renderer(snap, result, layer.ctx);
   composite();
-  if (uiModule) uiModule.showToast(label + ' applied');
+  if (uiModule) uiModule.showToast(label + ' 已应用');
 }
 
 function _applyGaussianBlur() {
@@ -2265,7 +2265,7 @@ function _positionInpaintPanel(anchorBtn) {
   const ref = layersHeader || rightPanel;
   if (!ref) {
     // Fallback to the old toolbar-button anchor if the layers panel
-    // isn't on screen yet.
+    // isn\'t on screen yet.
     const r = anchorBtn?.getBoundingClientRect?.();
     if (!r) return;
     requestAnimationFrame(() => {
@@ -2283,7 +2283,7 @@ function _positionInpaintPanel(anchorBtn) {
     const panelW = panel.offsetWidth || 320;
     const panelH = panel.offsetHeight || 520;
     // Sit immediately to the left of the right panel, top-aligned with
-    // the Layers header. 10px gap so it's clearly a separate window
+    // the Layers header. 10px gap so it\'s clearly a separate window
     // and not visually fused with the panel.
     let left = refRect.left - panelW - 10;
     let top = refRect.top;
@@ -2373,8 +2373,8 @@ function _buildEditor(container) {
         if (reactivated) controls.classList.toggle('dismissed');
         else controls.classList.remove('dismissed');
       }
-      // On mobile, picking a tool that's about to SHOW its controls
-      // panel auto-minimises the layers sheet so the controls aren't
+      // On mobile, picking a tool that\'s about to SHOW its controls
+      // panel auto-minimises the layers sheet so the controls aren\'t
       // covered. Swiping the layers handle back up restores it.
       const isMobile = window.innerWidth <= 820;
       const hasToolControls = ['brush', 'eraser', 'clone', 'inpaint'].includes(toolId);
@@ -2394,7 +2394,7 @@ function _buildEditor(container) {
       const brushControls = document.getElementById('ge-brush-controls');
       const needsBrush = ['brush', 'eraser', 'clone'].includes(toolId);
       if (brushControls) brushControls.style.display = needsBrush ? '' : 'none';
-      // Eraser and Clone don't care about color — hide the color row.
+      // Eraser and Clone don\'t care about color — hide the color row.
       const colorRow = document.getElementById('ge-color-row');
       if (colorRow) colorRow.style.display = (toolId === 'eraser' || toolId === 'clone') ? 'none' : '';
       const colorLabel = colorRow?.querySelector('label');
@@ -2546,7 +2546,7 @@ function _buildEditor(container) {
   // with extra margin so the resize/rotation handles can render OUTSIDE
   // the image bounds. Sized + zoomed in sync with the main canvas via
   // _syncTransformOverlay(). The overlay is pointer-events:none so it
-  // doesn't intercept clicks; hit-testing still happens in image coords.
+  // doesn\'t intercept clicks; hit-testing still happens in image coords.
   state.transformOverlay = document.createElement('canvas');
   state.transformOverlay.className = 'ge-transform-overlay';
   state.transformOverlayCtx = state.transformOverlay.getContext('2d');
@@ -2594,7 +2594,7 @@ function _buildEditor(container) {
 
   // Dismiss-listeners for the inpaint popup are attached lazily by
   // _showInpaintPrompt() and removed by _dismissInpaintPrompt(), so the
-  // active-edit path doesn't pay for them on every event. (Listening on
+  // active-edit path doesn\'t pay for them on every event. (Listening on
   // mousedown/wheel/touchstart/input/change at capture phase, even with
   // a fast `closest()` check, added up to noticeable lag during heavy
   // brush use.)
@@ -2692,7 +2692,7 @@ function _buildEditor(container) {
     } else {
       return;
     }
-    _saveState('Fill selection');
+    _saveState('填充选区');
     sctx.globalCompositeOperation = 'source-in';
     sctx.fillStyle = state.color;
     sctx.fillRect(0, 0, w, h);
@@ -2716,14 +2716,14 @@ function _buildEditor(container) {
       await exportToGallery();
       return;
     }
-    const endBusy = _saveButtonBusy('正在保存…');
+    const endBusy = _saveButtonBusy('保存中…');
     let blob = null;
     let savedOk = false;
     const t0 = performance.now();
     try {
       // Encode directly from the flattened canvas via toBlob() to avoid
       // the dataURL round-trip (which doubles peak memory). Pick JPEG for
-      // photo sources so 24MP uploads don't balloon to 200MB+ PNG —
+      // photo sources so 24MP uploads don\'t balloon to 200MB+ PNG —
       // critical when the editor is accessed over Tailscale Funnel etc.
       const flat = flatten();
       const ext = (state.originalExt || 'png').toLowerCase();
@@ -2746,7 +2746,7 @@ function _buildEditor(container) {
         throw new Error(`HTTP ${resp.status}${detail ? `: ${detail}` : ''}`);
       }
       const totalMs = Math.round(performance.now() - t0);
-      if (uiModule) uiModule.showToast(`Saved over original (${(blob.size / 1024 / 1024).toFixed(1)}MB · ${(totalMs / 1000).toFixed(1)}s)`, 4000);
+      if (uiModule) uiModule.showToast(`已覆盖原图 (${(blob.size / 1024 / 1024).toFixed(1)}MB · ${(totalMs / 1000).toFixed(1)}s)`, 4000);
       window.dispatchEvent(new CustomEvent('gallery-refresh'));
       savedOk = true;
     } catch (e) {
@@ -2892,13 +2892,13 @@ function _buildEditor(container) {
 
   // Capture-phase Escape interceptor — runs BEFORE any bubble-phase
   // handler (gallery, keyboard-shortcuts module, etc.) so cancelling a
-  // crop / lasso / transform inside the editor can't ever bubble up and
+  // crop / lasso / transform inside the editor can\'t ever bubble up and
   // accidentally close the gallery modal.
   document.addEventListener('keydown', (e) => {
     if (!state.editorOpen) return;
     // Esc on the shortcuts overlay closes it; takes priority over the
     // other modal cancels so the cheatsheet feels responsive AND so the
-    // gallery's own Esc handler doesn't fire and close gallery instead.
+    // gallery's own Esc handler doesn\'t fire and close gallery instead.
     if (e.key === 'Escape' && _shortcutsPopover.isOpen()) {
       e.preventDefault();
       e.stopPropagation();
@@ -2908,7 +2908,7 @@ function _buildEditor(container) {
     }
     // Enter accepts an active crop (same as the Apply button). Skip when
     // typing in a field — the crop W/H inputs handle their own Enter, and
-    // we don't want to hijack Enter elsewhere.
+    // we don\'t want to hijack Enter elsewhere.
     if (e.key === 'Enter' && state.cropRect && !state.cropping && !state.cropMoving) {
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
@@ -3017,7 +3017,7 @@ function flatten() {
 // "Background" = the BOTTOMMOST visible layer (Harmonize's colour-match
 // reference). Everything visible ABOVE it = foreground that goes into
 // the body mask. Independent of the `isBase` flag, so reordering layers
-// (or hiding the original photo after a bg-remove) doesn't break the
+// (or hiding the original photo after a bg-remove) doesn\'t break the
 // semantics.
 // Harmonize-pipeline mask builders live in editor/harmonize-masks.js.
 // Thin wrappers translate module state into the pure helpers.
@@ -3037,7 +3037,7 @@ export function exportPNG() {
   return flatten().toDataURL('image/png');
 }
 
-// Briefly turn the Save button green with a checkmark so the user can't
+// Briefly turn the Save button green with a checkmark so the user can\'t
 // miss a successful save (the toast alone is easy to miss on remote
 // connections where focus drifts during the upload).
 function _flashSaveButtonOk() {
@@ -3047,7 +3047,7 @@ function _flashSaveButtonOk() {
   const origBg = btn.style.background;
   btn.style.background = '#3aa75a';
   btn.style.color = '#fff';
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>已保存';
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>Saved';
   setTimeout(() => {
     btn.style.background = origBg;
     btn.style.color = '';
@@ -3071,10 +3071,10 @@ function _saveButtonBusy(label) {
     btn.appendChild(sp.createElement());
     const txt = document.createElement('span');
     txt.className = 'ge-btn-busy-label';
-    txt.textContent = label || '正在保存…';
+    txt.textContent = label || '保存中…';
     btn.appendChild(txt);
     sp.start();
-  } catch { btn.textContent = label || '正在保存…'; }
+  } catch { btn.textContent = label || '保存中…'; }
   return () => {
     try { sp && sp.stop && sp.stop(); } catch {}
     btn.disabled = false;
@@ -3084,7 +3084,7 @@ function _saveButtonBusy(label) {
 }
 
 export async function exportToGallery() {
-  const endBusy = _saveButtonBusy('正在保存副本…');
+  const endBusy = _saveButtonBusy('Saving copy…');
   let blob = null;
   let savedOk = false;
   const t0 = performance.now();
@@ -3114,7 +3114,7 @@ export async function exportToGallery() {
     }
     const totalMs = Math.round(performance.now() - t0);
     window.dispatchEvent(new CustomEvent('gallery-refresh'));
-    if (uiModule) uiModule.showToast(`Saved copy to gallery (${(blob.size / 1024 / 1024).toFixed(1)}MB · ${(totalMs / 1000).toFixed(1)}s)`, 4000);
+    if (uiModule) uiModule.showToast(`已保存副本到图库 (${(blob.size / 1024 / 1024).toFixed(1)}MB · ${(totalMs / 1000).toFixed(1)}s)`, 4000);
     savedOk = true;
     if (state.draftId) {
       _clearDraftServer(state.draftId);
@@ -3138,7 +3138,7 @@ export async function exportToGallery() {
 
 // Open the Cookbook modal scoped to img2img-capable models so the user
 // can serve one in a few clicks. Falls back to plain Cookbook if the
-// filter hook isn't available.
+// filter hook isn\'t available.
 // Open Cookbook on its Dependencies tab and highlight a specific
 // package row. Used for "rembg not installed" → install path.
 function _openCookbookForDependency(pkgName) {
@@ -3149,11 +3149,11 @@ function _openCookbookForDependency(pkgName) {
   // raced and the user landed on Download.
   const cookbook = window.cookbookModule;
   if (!cookbook || typeof cookbook.open !== 'function') {
-    // Fall back to the old click-then-poll path if the module isn't
+    // Fall back to the old click-then-poll path if the module isn\'t
     // on window for some reason.
     const btn = document.getElementById('tool-cookbook-btn');
     if (btn) btn.click();
-    else if (uiModule) uiModule.showToast(`Open Cookbook to install ${pkgName}`, 6000);
+    else if (uiModule) uiModule.showToast(`打开 Cookbook 安装 ${pkgName}`, 6000);
     return;
   }
   cookbook.open({ tab: 'Dependencies' });
@@ -3261,7 +3261,7 @@ function _openCookbookForImg2img() {
     tryServe();
     return;
   }
-  if (uiModule) uiModule.showToast('请从侧边栏打开 Cookbook 运行 img2img 模型', 6000);
+  if (uiModule) uiModule.showToast('打开侧边栏 Cookbook 以部署 img2img 模型', 6000);
 }
 
 export function downloadPNG() {
@@ -3340,7 +3340,7 @@ function _loadProjectPrompt() {
 // ── Public API ──
 
 // Styled in-app prompt for canvas size — replaces the browser's
-// native prompt() which doesn't follow the app theme. Returns a Promise
+// native prompt() which doesn\'t follow the app theme. Returns a Promise
 // resolving to {w, h} on submit, or null on cancel. Optional opts:
 //   title, okLabel, initialW, initialH.
 function _promptCanvasSize(opts) {
@@ -3426,7 +3426,7 @@ function _parseCanvasSizePrompt(widthText, heightText, initialW = 1024, initialH
 // gallery's Edit-tab landing). `displayName` is optional — when provided,
 // the Edit tab in the gallery is renamed to "Edit: <name>".
 // Shared loading-overlay mount/unmount — used by the image-load path AND
-// the draft-restore paths so every "we're waiting on something" moment
+// the draft-restore paths so every "we\'re waiting on something" moment
 // in the editor surfaces the same whirlpool + label instead of a blank
 // canvas that looks broken.
 function _mountEditorLoading(label, dims) {
@@ -3438,7 +3438,7 @@ function _mountEditorLoading(label, dims) {
   // a past project loads, which looks half-rendered.
   const el = document.createElement('div');
   el.className = 'ge-loading-overlay ge-loading-overlay-full';
-  // Aspect-ratio placeholder so the user sees the shape of the canvas they're
+  // Aspect-ratio placeholder so the user sees the shape of the canvas they\'re
   // about to land in. Sized to the canvas area but centered in the overlay.
   let placeholder = null;
   if (dims && dims.w > 0 && dims.h > 0 && area) {
@@ -3460,7 +3460,7 @@ function _mountEditorLoading(label, dims) {
   inner.innerHTML = `<span class="ge-loading-text">${label || '加载中…'}</span>`;
   el.appendChild(inner);
   // Mount on the editor BODY (toolbar + canvas + panel) — it sits below the
-  // gallery's search/select bar, so the cover doesn't bleed up over those.
+  // gallery's search/select bar, so the cover doesn\'t bleed up over those.
   const _mountTarget = state.container.querySelector('.ge-editor-body') || state.container;
   _mountTarget.appendChild(el);
   try {
@@ -3536,7 +3536,7 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   if (!imageUrl && draftId) {
     // Re-open a saved draft by its server-side id — covers the
     // "Resume" buttons on the Edit-tab landing.
-    _mountEditorLoading('正在加载草稿…', presetSize || null);
+    _mountEditorLoading('Loading draft…', presetSize || null);
     // Bail if the user closes the editor while the async load is in
     // flight — without this guard, the .then() callbacks fire after
     // closeEditor and re-mount the spinner / draw into a dead canvas,
@@ -3607,16 +3607,16 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   }
 
   // Try to restore a previously-persisted draft for this image — that
-  // way closing the gallery / editor mid-edit doesn't lose progress.
+  // way closing the gallery / editor mid-edit doesn\'t lose progress.
   // (Server-backed: look up by source_image_id.)
-  _mountEditorLoading('正在查找草稿…');
+  _mountEditorLoading('查找草稿中…');
   _findDraftForImage(imageId).then(_draft => {
     if (!state.editorOpen) return;
     if (!_draft) return null;
     state.draftId = _draft.id;
     state.draftName = _draft.name || displayName || '未命名';
     const innerLabel = state.editorLoadingEl?.querySelector('.ge-loading-text');
-    if (innerLabel) innerLabel.textContent = '正在恢复草稿…';
+    if (innerLabel) innerLabel.textContent = '恢复草稿中…';
     return _restoreDraft(_draft).then(() => {
       if (!state.editorOpen) return null;
       // If the draft was broken/empty (0 layers reconstructed), fall
@@ -3680,14 +3680,14 @@ export function openEditor(imageUrl, imageId, presetSize, displayName, draftId) 
   img.onerror = (e) => {
     console.error('[_loadSourceImage] onerror — failed to load', imageUrl, e);
     _removeLoading();
-    if (uiModule) uiModule.showToast('加载图片失败');
+    if (uiModule) uiModule.showToast('图像加载失败');
     closeEditor();
   };
   img.src = imageUrl;
   }
 }
 
-// Update the gallery's Edit tab label to reflect what's currently open.
+// Update the gallery's Edit tab label to reflect what\'s currently open.
 // Pass null to reset to plain "Edit". Only mutates the inner label span
 // so the SVG icon next to it survives the update.
 function _setEditTabLabel(name) {
@@ -3711,7 +3711,7 @@ export function closeEditor() {
     return false;
   }
   // Flush any pending debounced persist + fire one final save so closing
-  // the editor mid-stroke doesn't lose work. The call is fire-and-forget;
+  // the editor mid-stroke doesn\'t lose work. The call is fire-and-forget;
   // the server commit lands shortly after the modal hides.
   if (state.persistTimer) { clearTimeout(state.persistTimer); state.persistTimer = null; }
   if (state.layers.length) {
@@ -3729,7 +3729,7 @@ export function closeEditor() {
   }
   if (state.cursorEl) { state.cursorEl.remove(); state.cursorEl = null; }
   // Tear down all floating popups + the dock so closing the editor
-  // doesn't leave stale chips/panels behind on top of the gallery.
+  // doesn\'t leave stale chips/panels behind on top of the gallery.
   try { _closeFxMenu(); } catch {}
   try { _closeAdjPopup(); } catch {}
   try { _closeHistoryPanel(); } catch {}
@@ -3744,7 +3744,7 @@ export function closeEditor() {
       }
       // v2 review HIGH-2/3: unregister any modalManager entry left over
       // from FX-popup / History-panel minimise so _state and _LABELS
-      // don't grow unboundedly across editor opens.
+      // don\'t grow unboundedly across editor opens.
       if (el._modalId) {
         try { modalManager.unregister(el._modalId); } catch {}
       }

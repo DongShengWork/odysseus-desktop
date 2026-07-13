@@ -1,7 +1,7 @@
 // static/js/calendar/reminders.js
 //
 // Browser-notification poller for calendar reminder notes. Self-contained:
-// module-private `_notifFired` Set tracks which note IDs we've already
+// module-private `_notifFired` Set tracks which note IDs we\'ve already
 // notified, persisted to localStorage. Polls `/api/notes?label=calendar`
 // every 60 seconds and fires a Notification + toast for any note whose
 // `due_date` is in the past but within the staleness window.
@@ -18,7 +18,7 @@ let _notifFired = new Set(JSON.parse(localStorage.getItem('cal-notif-fired') || 
 // Compute a fresh, system-clock-accurate notification body. Tries the
 // note's `event_dtstart` first (set by _createEventReminder); falls back
 // to scrubbing stale time tokens out of items[0].text so legacy
-// reminders don't show "in 29 min" at 9pm.
+// reminders don\'t show "in 29 min" at 9pm.
 function _formatReminderBody(note) {
   const dtstartRaw = note.event_dtstart || note.eventDtstart || null;
   if (dtstartRaw) {
@@ -30,14 +30,14 @@ function _formatReminderBody(note) {
       let when2 = '';
       const sameDay = start.toDateString() === now.toDateString();
       if (!sameDay) when2 = ' ' + start.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      if (mins >= 1 && mins <= 60) return `${mins} 分钟后开始 (${when}${when2})`;
-      if (mins === 0) return `现在开始 (${when}${when2})`;
+      if (mins >= 1 && mins <= 60) return `Starts in ${mins} min (${when}${when2})`;
+      if (mins === 0) return `Starting now (${when}${when2})`;
       if (mins > 60) {
         const h = Math.round(mins / 60);
-        return `${h} 小时后开始 (${when}${when2})`;
+        return `Starts in ${h} hour${h === 1 ? '' : 's'} (${when}${when2})`;
       }
-      if (mins >= -60) return `${Math.abs(mins)} 分钟前已开始 (${when}${when2})`;
-      return `原定于 ${when}${when2}`;
+      if (mins >= -60) return `Started ${Math.abs(mins)} min ago (${when}${when2})`;
+      return `Was scheduled for ${when}${when2}`;
     }
   }
   // Legacy notes (no event_dtstart). Scrub stale relative-time strings.
@@ -51,7 +51,7 @@ function _formatReminderBody(note) {
 // Only fire a reminder if `due` was within this many minutes BEFORE now.
 // Stops a fresh browser (empty `cal-notif-fired` localStorage) from spamming
 // every 2-week-old reminder on first poll. Anything older is silently
-// marked fired so it doesn't keep getting picked up.
+// marked fired so it doesn\'t keep getting picked up.
 const _REMINDER_STALENESS_MIN = 5;
 
 async function _pollReminders() {
@@ -68,7 +68,7 @@ async function _pollReminders() {
       if (due > now) continue; // not yet due
       const ageMs = now - due;
       if (ageMs > stalenessMs) {
-        // Too old to fire — mark as seen so we don't recheck every minute.
+        // Too old to fire — mark as seen so we don\'t recheck every minute.
         _notifFired.add(note.id);
         continue;
       }
@@ -80,18 +80,18 @@ async function _pollReminders() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           note_id: note.id,
-          title: note.title || '日历提醒',
+          title: note.title || 'Calendar Reminder',
           body,
         }),
       }).catch(() => {});
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(note.title || '日历提醒', {
+        new Notification(note.title || 'Calendar Reminder', {
           body,
           icon: '/static/favicon.png',
           tag: `cal-remind-${note.id}`,
         });
       }
-      if (uiModule.showToast) uiModule.showToast((note.title || '日历提醒') + (body ? ' — ' + body : ''));
+      if (uiModule.showToast) uiModule.showToast((note.title || 'Calendar Reminder') + (body ? ' — ' + body : ''));
     }
     // Persist fired set (keep last 200)
     const arr = [..._notifFired].slice(-200);

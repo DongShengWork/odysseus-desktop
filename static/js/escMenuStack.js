@@ -92,7 +92,7 @@ export function bindMenuDismiss(el, onClose, isOutside) {
     document.removeEventListener('click', onDocClick, true);
     try { if (typeof onClose === 'function') onClose(); } catch {}
   }
-  // Defer attaching the outside-click listener so the opening click doesn't
+  // Defer attaching the outside-click listener so the opening click doesn\'t
   // immediately close the menu. Skip the attach if close() already ran in the
   // same tick (e.g. an instant Escape) so we never leave a dangling listener.
   setTimeout(() => { if (!done) document.addEventListener('click', onDocClick, true); }, 0);

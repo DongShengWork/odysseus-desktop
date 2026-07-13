@@ -15,7 +15,7 @@
  *
  * Every picker ends with a "+ Serve a model in Cookbook…" sentinel —
  * choosing it opens Cookbook → Serve filtered to image models, then
- * reverts the picker to its prior value (so it's an action, not a
+ * reverts the picker to its prior value (so it\'s an action, not a
  * selectable model).
  *
  * @param {{
@@ -70,7 +70,7 @@ export function wireAIModelSelectors({ container, apiBase, openCookbookForImg2im
     const sel = e.target.closest('select');
     if (!sel) return;
     if (sel.value !== '__serve_cookbook__') return;
-    // Revert to the previous selection so the sentinel isn't "stuck".
+    // Revert to the previous selection so the sentinel isn\'t "stuck".
     const prev = sel._prevServeValue ?? '';
     sel.value = prev;
     openCookbookForImg2img();
@@ -84,7 +84,7 @@ export function wireAIModelSelectors({ container, apiBase, openCookbookForImg2im
   const aiGenSelect = document.getElementById('ge-ai-model');
   const aiInpaintSelect = document.getElementById('ge-ai-inpaint');
   // The global Gen model dropdown was removed from the editor topbar;
-  // only bail if there's nothing to populate at all (neither the Gen
+  // only bail if there\'s nothing to populate at all (neither the Gen
   // select nor the inpaint select nor any per-tool select).
   if (!aiGenSelect && !aiInpaintSelect &&
       !document.querySelector('select.ge-tool-model')) return;
@@ -110,7 +110,7 @@ export function wireAIModelSelectors({ container, apiBase, openCookbookForImg2im
         const models = hasListedModels ? sortModelIds(ep.models) : [''];
         const isImageEndpoint = (ep.model_type || '').toLowerCase() === 'image';
         // Image/inpaint endpoints can be called by URL even when their
-        // /models cache is still empty, so don't strand a freshly served
+        // /models cache is still empty, so don\'t strand a freshly served
         // Cookbook model as "(offline)" in the editor picker.
         const epUsable = !!ep.online || isImageEndpoint;
         for (const modelId of models) {
@@ -254,7 +254,7 @@ export function wireAIModelSelectors({ container, apiBase, openCookbookForImg2im
   // Re-fetch the model list when the user opens the inpaint dropdown,
   // so a model served via Cookbook mid-edit shows up without having to
   // close and reopen the editor. Debounced to one refresh per 3s so
-  // rapid open/close doesn't hammer the endpoint. Preserves the
+  // rapid open/close doesn\'t hammer the endpoint. Preserves the
   // current selection across the reload.
   let _lastModelRefresh = 0;
   const refreshOnOpen = (e) => {

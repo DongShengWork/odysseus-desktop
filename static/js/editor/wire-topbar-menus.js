@@ -74,13 +74,13 @@ export function wireTopbarMenus({
     if (sizeLabel) sizeLabel.textContent = `${newW}×${newH}`;
     fitZoom();
     composite();
-    uiModule.showToast(`画布大小调整为 ${newW}×${newH}`);
+    uiModule.showToast(`画布已调整为 ${newW}×${newH}`);
   }
 
   async function resizeCustomPrompt() {
     const result = await promptCanvasSize({
-      title: 'Canvas size',
-      okLabel: 'Apply',
+      title: '画布大小',
+      okLabel: '应用',
       initialW: state.imgWidth,
       initialH: state.imgHeight,
     });

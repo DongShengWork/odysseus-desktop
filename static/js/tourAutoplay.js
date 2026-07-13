@@ -5,7 +5,7 @@
 // Pairs with the existing tourHints.js (which shows a single global "drag
 // title bar to snap" hint). Tours are richer per-feature walkthroughs.
 //
-// Mobile is excluded — tours position halos by rect math that doesn't fit
+// Mobile is excluded — tours position halos by rect math that doesn\'t fit
 // the bottom-sheet layout cleanly.
 
 import { handleSlashCommand } from './slashCommands.js';
@@ -26,7 +26,7 @@ const SEEN_KEY = (tour) => `odysseus-tour-autoplay-seen-${tour}`;
 
 let _initialized = false;
 // Suppress re-fire if a tour is already active or another modal opens while
-// we're mid-tour. The slash command itself adds `body.tour-active` for the
+// we\'re mid-tour. The slash command itself adds `body.tour-active` for the
 // duration of its halos.
 function _tourActive() {
   return document.body.classList.contains('tour-active');
@@ -51,7 +51,7 @@ async function _maybeFire(modal) {
   try { seen = localStorage.getItem(SEEN_KEY(tour)) === '1'; } catch (_) {}
   if (seen) return;
   // Mark immediately so a quick double-trigger (e.g. modal-class observer
-  // fires twice during animation) can't queue two tours.
+  // fires twice during animation) can\'t queue two tours.
   try { localStorage.setItem(SEEN_KEY(tour), '1'); } catch (_) {}
   // Let the modal's own enter-animation settle before halos try to position
   // off the title bar / first card / etc. ~400ms matches tourHints.
@@ -60,7 +60,7 @@ async function _maybeFire(modal) {
     try {
       handleSlashCommand('/' + tour);
     } catch (e) {
-      // If firing fails we don't unmark — re-attempting on every modal open
+      // If firing fails we don\'t unmark — re-attempting on every modal open
       // would be more annoying than a missed tour. User can run `/tour-x`
       // manually from the chat input.
       // eslint-disable-next-line no-console

@@ -6,7 +6,7 @@
  *   #ge-merge-all   Merge All — flatten every VISIBLE layer into the
  *                   lowest visible one. Hidden layers dropped. Base
  *                   = lowest visible (not bottom of stack) so a
- *                   hidden base can't absorb the visible stack into
+ *                   hidden base can\'t absorb the visible stack into
  *                   an invisible result.
  *   #ge-merge-down  Merge active layer into the one beneath it.
  *
@@ -58,14 +58,14 @@ export function wireMergeButtons({ saveState, createLayer, renderLayerPanel, com
     state.activeLayerId = merged.id;
     renderLayerPanel();
     composite();
-    uiModule.showToast('已创建平面化副本');
+    uiModule.showToast('已创建拼合副本');
   });
 
   // Merge All — drop hidden layers; base = lowest visible.
   document.getElementById('ge-merge-all')?.addEventListener('click', () => {
     const visibleLayers = state.layers.filter(l => l.visible);
     if (visibleLayers.length < 2) {
-      if (uiModule) uiModule.showToast('需要至少两个可见图层才能合并');
+      if (uiModule) uiModule.showToast('至少需要两个可见图层才能合并');
       return;
     }
     saveState('Merge all');
@@ -87,17 +87,17 @@ export function wireMergeButtons({ saveState, createLayer, renderLayerPanel, com
     state.activeLayerId = base.id;
     renderLayerPanel();
     composite();
-    uiModule.showToast('已合并可见图层');
+    uiModule.showToast('可见图层已合并');
   });
 
   // Merge Down.
   document.getElementById('ge-merge-down')?.addEventListener('click', () => {
     const idx = state.layers.findIndex(l => l.id === state.activeLayerId);
-    if (idx < 1) return; // can't merge the bottom layer
+    if (idx < 1) return; // can\'t merge the bottom layer
     saveState('Merge down');
     mergeLayerDownAtIndex(idx);
     renderLayerPanel();
     composite();
-    uiModule.showToast('已向下合并图层');
+    uiModule.showToast('图层已向下合并');
   });
 }

@@ -8,7 +8,7 @@
 // reach or operate them.
 //
 // This module enhances those rows in place — making them focusable
-// (tabindex=0), announcing them as buttons when it's safe to do so, and
+// (tabindex=0), announcing them as buttons when it\'s safe to do so, and
 // activating them with Enter / Space — without changing how they look or
 // how they behave for mouse users. The visible focus ring already exists in
 // style.css (`.list-item:focus-visible`); it simply never fired because the

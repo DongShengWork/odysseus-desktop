@@ -15,6 +15,9 @@ let uploaded = [];
 let _lastUploadedMeta = [];
 let API_BASE = '';
 let _uploadSpinners = [];
+let _uploadAbortCtrl = null;
+let _uploading = false;
+let _lastUploadCancelled = false;
 const _previewUrls = new WeakMap();
 
 const MAX_FILES = 10;
@@ -76,10 +79,10 @@ export function renderAttachStrip() {
     const badge = document.createElement('div');
     badge.className = 'thumb thumb-collapsed';
     const label = document.createElement('span');
-    label.textContent = total + ' 个文件';
+    label.textContent = total + ' file' + (total > 1 ? 's' : '');
     label.className = 'thumb-collapsed-label';
     badge.appendChild(label);
-    badge.title = pendingFiles.map(f => f.name || '粘贴的图片').join('\n');
+    badge.title = pendingFiles.map(f => f.name || 'pasted-image').join('\n');
     badge.style.cursor = 'pointer';
     badge.addEventListener('click', (e) => {
       if (e.target.closest('.thumb-collapsed-x')) return;
@@ -89,7 +92,7 @@ export function renderAttachStrip() {
     const x = document.createElement('button');
     x.className = 'thumb-collapsed-x';
     x.textContent = '\u00d7';
-    x.title = '全部移除';
+    x.title = 'Remove all';
     x.addEventListener('click', (e) => { e.stopPropagation(); clearPending(); });
     badge.appendChild(x);
     strip.appendChild(badge);
@@ -111,16 +114,16 @@ function _createChip(f, idx) {
     const img = document.createElement('img');
     img.className = 'thumb-img';
     img.src = _getPreviewUrl(f);
-    img.alt = f.name || '图片';
+    img.alt = f.name || 'image';
     chip.appendChild(img);
   } else {
     const span = document.createElement('span');
-    span.textContent = f.name || '粘贴的图片';
+    span.textContent = f.name || 'pasted-image';
     chip.appendChild(span);
   }
   const x = document.createElement('button');
   x.textContent = '\u00d7';
-  x.setAttribute('aria-label', '移除附件');
+  x.setAttribute('aria-label', 'Remove attachment');
   x.addEventListener('click', (e) => { e.stopPropagation(); removePending(idx); });
   chip.appendChild(x);
   return chip;
@@ -130,6 +133,7 @@ function _createChip(f, idx) {
  * Remove a pending file by index
  */
 export function removePending(idx) {
+  if (_uploading) cancelUpload();
   _revokePreviewUrl(pendingFiles[idx]);
   pendingFiles.splice(idx, 1);
   renderAttachStrip();
@@ -138,12 +142,13 @@ export function removePending(idx) {
 /**
  * Upload all pending files to server
  */
-export async function uploadPending() {
+export async function uploadPending(opts = {}) {
   if (pendingFiles.length === 0) return [];
+  _lastUploadCancelled = false;
 
   // The message bubble is shown immediately, but the upload can take a moment —
-  // dim the chips and overlay a whirlpool so it's clear the files are still
-  // being sent (and aren't stuck). Cleared in the finally below.
+  // dim the chips and overlay a whirlpool so it\'s clear the files are still
+  // being sent (and aren\'t stuck). Cleared in the finally below.
   const strip = document.getElementById('attach-strip');
   if (strip) {
     strip.classList.add('attach-uploading');
@@ -164,32 +169,56 @@ export async function uploadPending() {
 
   const fd = new FormData();
   pendingFiles.forEach(f => fd.append('files', f, f.name || 'paste.png'));
+  if (opts.sessionId) fd.append('session_id', opts.sessionId);
+  _uploadAbortCtrl = new AbortController();
+  _uploading = true;
+  const timeoutId = setTimeout(() => {
+    if (_uploadAbortCtrl && !_uploadAbortCtrl.signal.aborted) {
+      try { _uploadAbortCtrl.abort(); } catch (_) {}
+    }
+  }, 120000);
 
   try {
     const res = await fetch(`${API_BASE}/api/upload`, {
       method: 'POST',
-      body: fd
+      body: fd,
+      signal: _uploadAbortCtrl.signal,
     });
     if (!res.ok) {
       // Surface the failure instead of swallowing it. Previously a non-OK
       // response (e.g. 429 rate limit, 413 too large) was ignored: the files
       // silently vanished and the chat sent with no attachments, so the model
-      // "didn't even see them" (issue #1346). Show the server's reason and keep
+      // "didn\'t even see them" (issue #1346). Show the server\'s reason and keep
       // pendingFiles so the strip re-renders for a retry (see finally below).
       let detail = '';
       try { const e = await res.json(); detail = e.detail || e.error || ''; } catch (_) {}
-      _showToast('上传失败' + (detail ? ': ' + detail : ` (HTTP ${res.status})`));
+      _showToast('Upload failed' + (detail ? ': ' + detail : ` (HTTP ${res.status})`));
       return [];
     }
     const data = await res.json();
     uploaded = (data.files || []);
+    if (uploaded.some(x => x && x.gallery_id)) {
+      try { localStorage.setItem('gallery-fresh-chat-upload', String(Date.now())); } catch (_) {}
+      window.dispatchEvent(new CustomEvent('gallery-refresh', { detail: { source: 'chat-upload' } }));
+    }
     pendingFiles = [];          // clear only on success
     // Stash the full meta (incl. width/height for images) on the module so
     // callers that want it can grab it via getLastUploadedMeta(). Keep the
     // returned shape as `ids` for backward-compatibility with existing call sites.
     _lastUploadedMeta = uploaded;
     return uploaded.map(x => x.id);
+  } catch (e) {
+    if (e && e.name === 'AbortError') {
+      _lastUploadCancelled = true;
+      _showToast('Upload cancelled');
+      return [];
+    }
+    _showToast('Upload failed: ' + (e?.message || 'network error'));
+    return [];
   } finally {
+    clearTimeout(timeoutId);
+    _uploading = false;
+    _uploadAbortCtrl = null;
     _uploadSpinners.forEach(sp => { try { sp.stop && sp.stop(); } catch (_) {} });
     _uploadSpinners = [];
     if (strip) strip.classList.remove('attach-uploading');
@@ -205,7 +234,7 @@ export async function uploadPending() {
 export function addFiles(files) {
   for (const f of files) {
     if (pendingFiles.length >= MAX_FILES) {
-      _showToast(`最多允许 ${MAX_FILES} 个文件`);
+      _showToast(`Max ${MAX_FILES} files allowed`);
       break;
     }
     pendingFiles.push(f);
@@ -250,7 +279,7 @@ export function getPendingInfo() {
   return pendingFiles.map(f => {
     const isImage = f.type?.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(f.name || '');
     return {
-      name: f.name || '粘贴的图片',
+      name: f.name || 'pasted-image',
       size: f.size || 0,
       mime: f.type || '',
       previewUrl: isImage ? _getPreviewUrl(f) : '',
@@ -262,6 +291,7 @@ export function getPendingInfo() {
  * Clear all pending files
  */
 export function clearPending() {
+  if (_uploading) cancelUpload();
   pendingFiles.forEach(_revokePreviewUrl);
   pendingFiles = [];
   renderAttachStrip();
@@ -270,6 +300,21 @@ export function clearPending() {
 /** Full meta (incl. width/height for images) from the most recent uploadPending(). */
 export function getLastUploadedMeta() {
   return _lastUploadedMeta;
+}
+
+export function isUploading() {
+  return _uploading;
+}
+
+export function wasLastUploadCancelled() {
+  return _lastUploadCancelled;
+}
+
+export function cancelUpload() {
+  _lastUploadCancelled = true;
+  if (_uploadAbortCtrl && !_uploadAbortCtrl.signal.aborted) {
+    try { _uploadAbortCtrl.abort(); } catch (_) {}
+  }
 }
 
 var escapeHtml = uiModule.esc;
@@ -286,6 +331,9 @@ const fileHandlerModule = {
   getPendingRaw,
   clearPending,
   getLastUploadedMeta,
+  isUploading,
+  wasLastUploadCancelled,
+  cancelUpload,
 };
 
 export default fileHandlerModule;

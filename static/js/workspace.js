@@ -41,7 +41,7 @@ export function syncWorkspaceIndicator(path) {
   if (pill) {
     pill.style.display = (path && !chat) ? '' : 'none';
     pill.classList.toggle('active', !!path);
-    if (path) pill.title = `工作区: ${path}\n文件工具限定于此目录；Shell 命令从此处开始但不限于此目录，可以访问外部。\n点击清除。`;
+    if (path) pill.title = `工作区: ${path}\n文件工具限制在此目录内；Shell 命令从此处开始但不受沙箱限制，可访问外部。\n点击清除。`;
   }
   if (name) name.textContent = path ? _basename(path) : '';
   if (overflow) {
@@ -114,7 +114,7 @@ function _render(data) {
     rows += `<div class="workspace-row" data-path="${encodeURIComponent(d.path)}">${_FOLDER_SVG}<span>${uiModule.esc(d.name)}</span></div>`;
   }
   if (data.truncated) {
-    rows += '<div class="workspace-empty">文件夹过多无法列出。请在上方输入或粘贴路径以跳转。</div>';
+    rows += '<div class="workspace-empty">文件夹过多，无法全部列出。请在上方输入或粘贴路径以跳转。</div>';
   }
   if (!data.dirs.length && !data.parent) rows = '<div class="workspace-empty">无子文件夹</div>';
   body.innerHTML = rows || '<div class="workspace-empty">无子文件夹</div>';
@@ -126,7 +126,7 @@ function _render(data) {
   const useBtn = _modal.querySelector('#workspace-use');
   if (useBtn) {
     useBtn.disabled = data.selectable === false;
-    useBtn.title = data.selectable === false ? '此文件夹无法用作工作区' : '';
+    useBtn.title = data.selectable === false ? '此文件夹不能用作工作区' : '';
   }
 }
 
@@ -152,8 +152,8 @@ function _getModal() {
       </div>
       <input type="text" class="styled-prompt-input workspace-cur" id="workspace-cur-path"
              spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"
-             placeholder="输入或粘贴文件夹路径，然后按 Enter" />
-      <p class="muted workspace-note">文件工具<strong>限定</strong>于此文件夹。Shell 命令从此处开始但<strong>不受沙箱限制</strong>，可以访问外部。工作区仅限定工具范围，并非安全边界。</p>
+             placeholder="输入或粘贴文件夹路径，然后按回车" />
+      <p class="muted workspace-note">文件工具<strong>限制</strong>在此目录内。Shell 命令从此处开始但<strong>不受沙箱限制</strong>，可访问外部。工作区界定工具范围，不是安全边界。</p>
       <div class="modal-body workspace-body" id="workspace-body"></div>
       <div class="modal-footer workspace-footer">
         <button type="button" class="confirm-btn confirm-btn-secondary" id="workspace-cancel">取消</button>

@@ -1,4 +1,4 @@
-// Cookbook Schedule — opens a small inline form (styled with the app's
+// Cookbook Schedule — opens a small inline form (styled with the app\'s
 // existing .cookbook-* classes) that creates a ScheduledTask with
 // action=cookbook_serve. Mounted from two places:
 //
@@ -9,7 +9,7 @@
 //
 // Feedback uses uiModule.showToast() — the same toast the rest of the
 // app uses for "Saved", "Favorited", etc. — so the success message
-// doesn't introduce a parallel notification style.
+// doesn\'t introduce a parallel notification style.
 //
 // To remove: delete this file + the <script> tag in index.html + the
 // ^ button in cookbookServe.js + the "cookbook_serve" entry in
@@ -30,7 +30,7 @@ try { (function () {
   }
 
   // Cached handle to the ui.js showToast function. Bound lazily on
-  // first use because ui.js is an ES module — it's not on `window`
+  // first use because ui.js is an ES module — it\'s not on `window`
   // unless something else has explicitly exposed it.
   let _toastFn = null;
   async function _getToast() {
@@ -79,7 +79,7 @@ try { (function () {
   const WEEKDAYS = new Set(["MO","TU","WE","TH","FR"]);
 
   // Resolve the model identity from the closest .memory-item card —
-  // that's the canonical container the cookbook serve UI uses, with
+  // that\'s the canonical container the cookbook serve UI uses, with
   // the model repo on data-repo. We do NOT grab the title via
   // textContent, because the title row also contains inline status
   // pills ("running", "downloading") and an "HF ↗" link — pulling all
@@ -97,7 +97,7 @@ try { (function () {
     // the preset registry uses as its short name. e.g.
     //   cyankiwi/Qwen3.5-397B-A17B-AWQ  →  Qwen3.5-397B-A17B-AWQ
     // Falls back to data-modelName or the bare repo for ollama-style
-    // entries that don't have a slash.
+    // entries that don\'t have a slash.
     let title = "";
     if (repo) {
       title = repo.includes("/") ? repo.split("/").pop() : repo;
@@ -254,7 +254,7 @@ try { (function () {
       }
 
       // Name: "Serve: <full model name>" — pulled from .memory-item-title
-      // so it's the user's display name (e.g. "Qwen3.5-397B-A17B-AWQ")
+      // so it\'s the user's display name (e.g. "Qwen3.5-397B-A17B-AWQ")
       // not a placeholder like "model".
       const fullName = (cfg.title || cfg.repo_id || "").trim() || "model";
       const payload = {
@@ -272,7 +272,7 @@ try { (function () {
       };
       const saveBtn = form.querySelector(".hwfit-sched-save");
       saveBtn.disabled = true;
-      saveBtn.textContent = "保存中…";
+      saveBtn.textContent = "Saving…";
       try {
         const r = await fetch("/api/tasks", {
           method: "POST", credentials: "same-origin",
@@ -283,7 +283,7 @@ try { (function () {
         if (!r.ok || data.error) {
           fail(data.error || data.detail || `HTTP ${r.status}`);
           saveBtn.disabled = false;
-          saveBtn.textContent = "保存计划";
+          saveBtn.textContent = "Save schedule";
           toast(`Schedule save failed: ${data.error || data.detail || r.status}`);
           return;
         }
@@ -370,7 +370,7 @@ try { (function () {
       } catch (e) {
         fail(String(e));
         saveBtn.disabled = false;
-        saveBtn.textContent = "保存计划";
+        saveBtn.textContent = "Save schedule";
         toast(`Schedule save failed: ${e}`);
       }
     }));

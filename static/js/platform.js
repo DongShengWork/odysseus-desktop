@@ -3,7 +3,7 @@
 // ============================================
 // Shared by the keybind code: root keyboard-shortcuts.js, the editor's
 // keyboard-shortcuts.js, and settings.js. Single source of truth so the three
-// guards can't drift.
+// guards can\'t drift.
 
 // AltGr (right Alt on AZERTY/QWERTZ and most non-US layouts, used to type
 // @ # { } [ ] | \ and €) is reported by browsers as Ctrl+Alt. macOS is the

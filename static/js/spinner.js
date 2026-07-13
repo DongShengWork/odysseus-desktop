@@ -5,7 +5,7 @@
  */
 
 class Spinner {
-  constructor(message = "AI 正在处理", style = "right", animation = "spinner") {
+  constructor(message = "AI is processing", style = "right", animation = "spinner") {
     // Different animation frames
     this.animations = {
       spinner: ['|', '/', '-', '\\'],
@@ -173,7 +173,7 @@ class Spinner {
 
     // Colors from CSS vars — read ONCE and cache. Calling getComputedStyle every
     // frame forces a full style recalc per frame, which janks/freezes the canvas
-    // animation badly when it's painting over a heavy photo. (Theme changes are
+    // animation badly when it\'s painting over a heavy photo. (Theme changes are
     // rare; the spinner is short-lived, so a stale cache is fine.)
     if (!this._wpColors) {
       const s = getComputedStyle(document.documentElement);
@@ -248,8 +248,8 @@ class Spinner {
     if (!this.isRunning) return;
     // Leak-safe self-terminate: stop once our element WAS in the DOM and then
     // got removed (e.g. a loading row replaced by results). But keep spinning
-    // before it's first appended — start() runs synchronously, before the
-    // caller inserts the element, so it isn't connected on frame 1.
+    // before it\'s first appended — start() runs synchronously, before the
+    // caller inserts the element, so it isn\'t connected on frame 1.
     const connected = !!(this.element && this.element.isConnected);
     if (connected) this._wpWasConnected = true;
     if (connected || !this._wpWasConnected) {
@@ -386,7 +386,7 @@ export function createWhirlpool(size = 24) {
  * once the element leaves the DOM (see _drawWhirlpool), so callers can just
  * replace it with results — no manual cleanup needed.
  */
-export function createLoadingRow(text = '加载中…', size = 16) {
+export function createLoadingRow(text = 'Loading…', size = 16) {
   const sp = new Spinner('', 'clean', 'whirlpool');
   sp._wpSize = size;
   const canvas = sp.createElement();

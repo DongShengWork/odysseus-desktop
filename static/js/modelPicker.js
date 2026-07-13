@@ -42,7 +42,7 @@ function _toggleFavorite(mid) {
   if (i >= 0) favs.splice(i, 1);
   else favs.push(mid);
   _saveList(FAVORITES_KEY, favs);
-  // Keep the sidebar Models section (same key) in sync if it's mounted.
+  // Keep the sidebar Models section (same key) in sync if it\'s mounted.
   try {
     if (window.modelsModule && typeof window.modelsModule.refreshModels === 'function') {
       window.modelsModule.refreshModels();
@@ -92,6 +92,31 @@ function _modelExists(modelId, url) {
   });
 }
 
+function _firstAvailableModel() {
+  if (!window.modelsModule || !window.modelsModule.getCachedItems) return null;
+  const items = window.modelsModule.getCachedItems() || [];
+  for (const item of items) {
+    if (item.offline) continue;
+    const models = (item.models || []).concat(item.models_extra || []);
+    if (!models.length) continue;
+    return {
+      url: item.url,
+      modelId: models[0],
+      endpointId: item.endpoint_id || '',
+    };
+  }
+  return null;
+}
+
+async function _ensureModelCacheForFallback() {
+  if (!window.modelsModule || !window.modelsModule.getCachedItems) return;
+  const items = window.modelsModule.getCachedItems() || [];
+  if (items.length) return;
+  if (typeof window.modelsModule.refreshModels === 'function') {
+    try { await window.modelsModule.refreshModels(false); } catch (_) {}
+  }
+}
+
 async function _ensureDefaultPendingChat() {
   if (!_deps || _defaultChatPickInFlight) return;
   if (_deps.getCurrentSessionId && _deps.getCurrentSessionId()) return;
@@ -99,12 +124,13 @@ async function _ensureDefaultPendingChat() {
   if (pending && pending.modelId) return;
   _defaultChatPickInFlight = true;
   try {
+    await _ensureModelCacheForFallback();
     let dc = null;
     try {
       const res = await fetch(`${API_BASE}/api/default-chat`, { credentials: 'same-origin' });
       if (res.ok) dc = await res.json();
     } catch (_) {}
-    if (dc && dc.endpoint_url && dc.model) {
+    if (dc && dc.endpoint_url && dc.model && _modelExists(dc.model, dc.endpoint_url)) {
       _deps.setPendingChat({
         url: dc.endpoint_url,
         modelId: dc.model,
@@ -114,15 +140,12 @@ async function _ensureDefaultPendingChat() {
       updateModelPicker();
       return;
     }
-    // No configured default: preserve the old convenience fallback.
-    if (window.modelsModule && window.modelsModule.getCachedItems) {
-      const items = window.modelsModule.getCachedItems();
-      const first = items.find(item => !item.offline && ((item.models || []).length || (item.models_extra || []).length));
-      if (first) {
-        const models = (first.models || []).concat(first.models_extra || []);
-        _deps.setPendingChat({ url: first.url, modelId: models[0], endpointId: first.endpoint_id });
-        updateModelPicker();
-      }
+    // No configured default, or the configured default is gone/offline:
+    // preserve the convenience fallback and keep the picker usable.
+    const fallback = _firstAvailableModel();
+    if (fallback) {
+      _deps.setPendingChat(fallback);
+      updateModelPicker();
     }
   } finally {
     _defaultChatPickInFlight = false;
@@ -165,7 +188,7 @@ function _initModelPickerDropdown() {
       menu.classList.add('hidden');
       search.value = '';
     }, { once: true });
-    // Fallback if animationend doesn't fire
+    // Fallback if animationend doesn\'t fire
     setTimeout(() => {
       if (!menu.classList.contains('hidden')) {
         menu.classList.remove('closing');
@@ -204,6 +227,9 @@ function _initModelPickerDropdown() {
   const _LOCAL_PROBE_TTL_MS = 5000;
 
   async function _refreshLocalProbe() {
+    try {
+      if (window.__odysseusChatBusy || Date.now() < (window.__odysseusChatBusyUntil || 0)) return;
+    } catch (_) {}
     const now = Date.now();
     if (now - _localProbeFetchedAt < _LOCAL_PROBE_TTL_MS) return;
     _localProbeFetchedAt = now;
@@ -251,8 +277,8 @@ function _initModelPickerDropdown() {
           ].filter(Boolean).join(' '),
           stale: isLocalDead || epOffline,
           staleReason: epOffline
-            ? (item.ping_error || '端点离线')
-            : (isLocalDead ? (probeResult.error || '无响应') : ''),
+            ? (item.ping_error || 'endpoint offline')
+            : (isLocalDead ? (probeResult.error || 'not responding') : ''),
           offline: epOffline,
         });
       });
@@ -316,7 +342,7 @@ function _initModelPickerDropdown() {
     listEl.classList.toggle('is-empty', !hasAnyModel);
     menu.classList.toggle('no-models', !hasAnyModel);
     if (search) {
-      search.placeholder = hasAnyModel ? '搜索模型…' : '未连接模型';
+      search.placeholder = hasAnyModel ? 'Search models…' : 'No models connected';
     }
     if (searchRow) {
       searchRow.classList.toggle('searching', !!q);
@@ -349,7 +375,7 @@ function _initModelPickerDropdown() {
       if (m.stale) {
         row.classList.add('model-switch-stale');
         row.style.opacity = '0.45';
-        row.title = `本地服务器似乎离线：${m.staleReason}。点击尝试，或在 Cookbook 中重新启动。`;
+        row.title = `Local server appears offline: ${m.staleReason}. Click to try anyway, or relaunch in Cookbook.`;
       }
       const _mlogo = providerLogo(m.mid);
       if (_mlogo) {
@@ -372,7 +398,7 @@ function _initModelPickerDropdown() {
       // badge is gone.)
       const epSpan = document.createElement('span');
       epSpan.className = 'model-switch-ep';
-      // Don't show endpoint name if it matches the model name (local self-hosted)
+      // Don\'t show endpoint name if it matches the model name (local self-hosted)
       const _epDisplay = m.epName && !m.display.toLowerCase().includes(m.epName.toLowerCase().split('/').pop()) ? m.epName : '';
       epSpan.textContent = _epDisplay;
       row.appendChild(epSpan);
@@ -384,8 +410,8 @@ function _initModelPickerDropdown() {
       favDot.textContent = '●';
       const _setFavState = (on) => {
         favDot.classList.toggle('active', on);
-        favDot.title = on ? '从收藏中移除' : '添加到收藏';
-        favDot.setAttribute('aria-label', on ? '从收藏中移除' : '添加到收藏');
+        favDot.title = on ? 'Remove from favorites' : 'Add to favorites';
+        favDot.setAttribute('aria-label', on ? 'Remove from favorites' : 'Add to favorites');
         favDot.setAttribute('aria-pressed', on ? 'true' : 'false');
       };
       _setFavState(favs.includes(m.mid));
@@ -400,7 +426,7 @@ function _initModelPickerDropdown() {
         const idx = favs.indexOf(m.mid);
         if (nowFav && idx < 0) favs.push(m.mid);
         else if (!nowFav && idx >= 0) favs.splice(idx, 1);
-        if (uiModule && uiModule.showToast) uiModule.showToast(nowFav ? '已收藏' : '已取消收藏');
+        if (uiModule && uiModule.showToast) uiModule.showToast(nowFav ? 'Favorited' : 'Unfavorited');
         // In browse mode the Favorites section membership changed — rebuild
         // (cheap: Recent + Favorites). In search mode the row stays put, so
         // the in-place favorite update above is enough.
@@ -423,7 +449,7 @@ function _initModelPickerDropdown() {
         return [m.mid, m.display, m.epName, m.providerText, provName]
           .filter(Boolean).join(' ').toLowerCase().includes(q);
       });
-      if (matches.length === 0) _addEmpty('没有匹配的模型');
+      if (matches.length === 0) _addEmpty('No matching models');
       else matches.forEach(_addRow);
       return;
     }
@@ -431,21 +457,21 @@ function _initModelPickerDropdown() {
     // ── Browse mode: Favorites (manual) + Recent (auto), with dedupe. ──
     // Rules:
     //   1. Never list the same model twice in the dropdown. Favorites
-    //      win over Recent (if you favorited it, that's where it
+    //      win over Recent (if you favorited it, that\'s where it
     //      belongs — Recent shouldn't show it again as duplicate).
     //   2. Small catalogs (≤ BROWSE_ALL_LIMIT total) skip the Recent
-    //      section entirely — when there's only ~10 models, the whole
+    //      section entirely — when there\'s only ~10 models, the whole
     //      list fits below as "All models" and a separate Recent
     //      section just duplicates rows.
     const shown = new Set();
     const favModels = favs.map(id => byId.get(id)).filter(Boolean);
     if (favModels.length) {
-      _addSection('收藏');
+      _addSection('Favorites');
       favModels.forEach(m => { shown.add(m.mid); _addRow(m); });
     }
     // Recent: only render when the catalog is big enough that surfacing
     // a recency shortlist is actually useful, AND only models that
-    // aren't already in Favorites (dedupe).
+    // aren\'t already in Favorites (dedupe).
     if (all.length > BROWSE_ALL_LIMIT) {
       const recentModels = _loadRecent()
         .map(id => byId.get(id))
@@ -453,16 +479,16 @@ function _initModelPickerDropdown() {
         .filter(m => !shown.has(m.mid))
         .slice(0, RECENT_MAX);
       if (recentModels.length) {
-        _addSection('最近');
+        _addSection('Recent');
         recentModels.forEach(m => { shown.add(m.mid); _addRow(m); });
       }
     }
 
-    // Small catalogs: still list everything so users aren't forced to search.
+    // Small catalogs: still list everything so users aren\'t forced to search.
     if (all.length <= BROWSE_ALL_LIMIT) {
       const rest = all.filter(m => !shown.has(m.mid));
       if (rest.length) {
-        if (shown.size) _addSection('全部模型');
+        if (shown.size) _addSection('All models');
         rest.forEach(_addRow);
       }
     } else {
@@ -555,7 +581,7 @@ function _initModelPickerDropdown() {
       try {
         const res = await fetch(`${API_BASE}/api/session/${currentSessionId}`, { method: 'PATCH', body: fd });
         if (!res.ok) {
-          uiModule.showError('设置模型失败');
+          uiModule.showError('Failed to set model');
           return;
         }
         const sessions = _deps.getSessions();
@@ -563,7 +589,7 @@ function _initModelPickerDropdown() {
         if (s) { s.model = m.mid; s.endpoint_url = m.url; }
         // Header stays as session name — model info shown in picker only
       } catch (e) {
-        uiModule.showError('设置模型失败：' + e);
+        uiModule.showError('Failed to set model: ' + e);
         return;
       }
     }
@@ -632,12 +658,12 @@ function _initModelPickerDropdown() {
       }
       // Kick off a local-endpoint probe — when it returns, re-render
       // the list so stale local servers get dimmed. Cloud entries
-      // aren't probed; they stay visible.
+      // aren\'t probed; they stay visible.
       _refreshLocalProbe().then(() => {
         if (!menu.classList.contains('hidden')) _populate(search.value || '');
       });
       if (window.innerWidth >= 768) search.focus();
-      // Hide scroll button so it doesn't overlap
+      // Hide scroll button so it doesn\'t overlap
       const _scrollBtn = document.getElementById('scroll-bottom-btn');
       if (_scrollBtn) _scrollBtn.style.display = 'none';
     } else {
@@ -660,7 +686,7 @@ function _initModelPickerDropdown() {
         if (!menu.classList.contains('hidden')) _populate(search.value || '');
         updateModelPicker();
       } catch (_) {
-        uiModule.showToast('模型刷新失败');
+        uiModule.showToast('Model refresh failed');
       } finally {
         refreshBtn.disabled = false;
         refreshBtn.classList.remove('spinning');
@@ -728,6 +754,18 @@ export function updateModelPicker() {
   // silently pre-populate the chatbox of the next user that signed in. If
   // we have no session model and no pending-chat pick, fall through to
   // the "Select model" placeholder below.
+  //
+  // But if the server model cache already has an online endpoint, make the
+  // same safe fallback visible in the picker immediately. The send path can
+  // already resolve a usable model; the UI should not sit on "Select model"
+  // and make it look broken.
+  if (!modelId && !currentSessionId && window.modelsModule && window.modelsModule.getCachedItems) {
+    const fallback = _firstAvailableModel();
+    if (fallback) {
+      _deps.setPendingChat(fallback);
+      modelId = fallback.modelId;
+    }
+  }
 
   // Check if selected model is still available — fall back ONLY for pending chats with no user selection
   // Never override an existing session's model — the user explicitly chose it
@@ -751,7 +789,7 @@ export function updateModelPicker() {
     _ensureDefaultPendingChat();
   }
 
-  const displayName = modelId ? modelId.split('/').pop() : '选择模型';
+  const displayName = modelId ? modelId.split('/').pop() : 'Select model';
   // The header indicator clips long names with ellipsis; show the full model
   // identifier on hover (#1982). No tooltip on the "Select model" placeholder.
   label.title = modelId || '';

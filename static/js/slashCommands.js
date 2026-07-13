@@ -73,7 +73,7 @@ const SETUP_SETTINGS_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fil
 
 function _setupApiProviderChips() {
   return SETUP_PROVIDER_NAMES.map(name =>
-    '<span class="setup-clickable-provider" data-setup-kind="api-key" data-setup-provider="' + name + '" style="cursor:pointer;text-decoration:underline;margin-right:8px;" title="点击配置 ' + name + '">' + name + '</span>'
+    '<span class="setup-clickable-provider" data-setup-kind="api-key" data-setup-provider="' + name + '" style="cursor:pointer;text-decoration:underline;margin-right:8px;" title="Click to setup ' + name + '">' + name + '</span>'
   ).join(' ');
 }
 
@@ -101,6 +101,8 @@ function _setupProviderFromInput(input) {
     xai: 'xai',
     grok: 'xai',
     nvidia: 'nvidia',
+    opencodezen: 'opencode-zen',
+    opencodego: 'opencode-go',
   };
   return SETUP_PROVIDER_URLS[aliases[raw] || raw] || null;
 }
@@ -129,6 +131,8 @@ function _extractSetupProviderCredential(input) {
     ['google', 'gemini'], ['gemini', 'gemini'],
     ['x ai', 'xai'], ['xai', 'xai'], ['grok', 'xai'],
     ['nvidia', 'nvidia'],
+    ['opencode zen', 'opencode-zen'], ['opencode-zen', 'opencode-zen'],
+    ['opencode go', 'opencode-go'], ['opencode-go', 'opencode-go'],
   ];
   for (const [alias, key] of providerAliases) {
     const re = new RegExp('(^|\\s|[,;:])(' + alias.replace(/\s+/g, '\\s+') + ')(?=$|\\s|[,;:])', 'i');
@@ -196,21 +200,23 @@ function _showSetupEndpointChoices() {
   return slashReply(
     '<div class="setup-guide-no-censor" style="display:grid;gap:10px;">' +
       '<div>' +
-        '<div>快速入门：在聊天中粘贴您的第一个 AI 端点。</div>' +
+        '<div>Quick start: add your first AI endpoint by pasting it in chat.</div>' +
       '</div>' +
       '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:color-mix(in srgb,var(--bg) 88%,var(--fg) 12%);">' +
-        '<div style="font-weight:700;margin-bottom:6px;">' + SETUP_LOCAL_ICON + '本地配置</div>' +
-        '<div>在聊天中粘贴端点 URL（示例）：</div>' +
+        '<div style="font-weight:700;margin-bottom:6px;">' + SETUP_LOCAL_ICON + 'Local setup</div>' +
+        '<div>Paste endpoint URL in chat (example):</div>' +
         '<pre style="margin:4px 0 0;"><code class="setup-clickable-code" style="cursor:pointer;text-decoration:underline;" title="Click to fill in chat">http://localhost:11434/v1</code></pre>' +
         '<div style="margin-top:4px;">or</div>' +
         '<pre style="margin:2px 0 0;"><code class="setup-clickable-code" style="cursor:pointer;text-decoration:underline;" title="Click to fill in chat">http://llm-host.local:8000/v1</code></pre>' +
+        '<div style="margin-top:4px;">or llama.cpp (llama-server):</div>' +
+        '<pre style="margin:2px 0 0;"><code class="setup-clickable-code" style="cursor:pointer;text-decoration:underline;" title="Click to fill in chat">http://localhost:8080/v1</code></pre>' +
       '</div>' +
       '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:color-mix(in srgb,var(--bg) 88%,var(--fg) 12%);">' +
-        '<div style="font-weight:700;margin-bottom:6px;">' + SETUP_API_ICON + 'API 配置</div>' +
-        '<div>粘贴提供商名称和 API 密钥（示例）：</div>' +
+        '<div style="font-weight:700;margin-bottom:6px;">' + SETUP_API_ICON + 'API setup</div>' +
+        '<div>Paste provider name then API key (example):</div>' +
         '<pre style="margin:4px 0 0;"><code class="setup-clickable-code" style="cursor:pointer;text-decoration:underline;" title="Click to fill in chat">deepseek sk-...</code></pre>' +
-        '<div style="margin-top:8px;font-size:1em;"><span>支持的提供商：</span><br>' + providers + '</div>' +
-        '<div style="margin-top:8px;font-size:1em;"><span>账户登录：</span><br>' + deviceAuthProviders + '</div>' +
+        '<div style="margin-top:8px;font-size:1em;"><span>Supported providers:</span><br>' + providers + '</div>' +
+        '<div style="margin-top:8px;font-size:1em;"><span>Account sign-in:</span><br>' + deviceAuthProviders + '</div>' +
       '</div>' +
     '</div>'
   );
@@ -219,10 +225,10 @@ function _showSetupEndpointChoices() {
 function _showSetupEndpointChoicesStreamed(options = {}) {
   const blocks = [
     options.simple
-      ? { kind: 'p', text: '在聊天中输入以下内容' }
-      : { kind: 'p', html: '<strong>快速入门：</strong>在聊天中粘贴您的第一个 AI 端点。' },
-    { kind: 'heading', html: SETUP_LOCAL_ICON + '本地配置' },
-    { kind: 'p', text: '在聊天中粘贴端点 URL（示例）：' },
+      ? { kind: 'p', text: 'Paste in chat below either' }
+      : { kind: 'p', html: '<strong>Quick start:</strong> add your first AI endpoint by pasting it in chat.' },
+    { kind: 'heading', html: SETUP_LOCAL_ICON + 'Local setup' },
+    { kind: 'p', text: 'Paste endpoint URL in chat (example):' },
     {
       kind: 'code',
       text: 'http://localhost:11434/v1',
@@ -234,15 +240,21 @@ function _showSetupEndpointChoicesStreamed(options = {}) {
       text: 'http://llm-host.local:8000/v1',
       copyText: 'http://llm-host.local:8000/v1',
     },
-    { kind: 'heading', html: SETUP_API_ICON + 'API 配置' },
-    { kind: 'p', text: '粘贴提供商名称和 API 密钥（示例）：' },
+    { kind: 'p', text: 'or llama.cpp (llama-server):' },
+    {
+      kind: 'code',
+      text: 'http://localhost:8080/v1',
+      copyText: 'http://localhost:8080/v1',
+    },
+    { kind: 'heading', html: SETUP_API_ICON + 'API setup' },
+    { kind: 'p', text: 'Paste provider name then API key (example):' },
     {
       kind: 'code',
       text: 'deepseek sk-...',
       copyText: 'deepseek sk-...',
     },
-    { kind: 'p', html: '<strong>支持的提供商：</strong><br>' + _setupApiProviderChips() },
-    { kind: 'p', html: '<strong>账户登录：</strong><br>' + _setupDeviceAuthProviderChips() },
+    { kind: 'p', html: '<strong>Supported providers:</strong><br>' + _setupApiProviderChips() },
+    { kind: 'p', html: '<strong>Account sign-in:</strong><br>' + _setupDeviceAuthProviderChips() },
   ];
   return typewriterBlocksReply(blocks, { gap: '4px', bodyClass: 'setup-guide-no-censor', interval: 3 });
 }
@@ -637,7 +649,7 @@ function setupChatUrlForEndpoint(detected) {
 }
 
 async function connectDetectedSetupEndpoint(detected) {
-  const providerLabel = detected.name || '自定义端点';
+  const providerLabel = detected.name || 'custom endpoint';
   const chatBox = document.getElementById('chat-history');
   const spinnerDiv = document.createElement('div');
   spinnerDiv.className = 'msg msg-ai';
@@ -649,7 +661,7 @@ async function connectDetectedSetupEndpoint(detected) {
   spinnerBody.className = 'body';
   spinnerDiv.appendChild(spinnerBody);
   chatBox.appendChild(spinnerDiv);
-  const setupSpinner = spinnerModule.create(`检测到 ${providerLabel}。正在连接`, 'right', 'wave');
+  const setupSpinner = spinnerModule.create(`Detected ${providerLabel}. Connecting`, 'right', 'wave');
   spinnerBody.appendChild(setupSpinner.createElement());
   setupSpinner.start(150);
   uiModule.scrollHistory();
@@ -673,7 +685,7 @@ async function connectDetectedSetupEndpoint(detected) {
       setupSpinner.destroy();
       spinnerDiv.remove();
       setupMode = 'endpoint-provider-first';
-      await typewriterReply(`端点未保存：${data.detail || '连接失败'}`);
+      await typewriterReply(`Endpoint was not saved: ${data.detail || 'connection failed'}`);
       return;
     }
 
@@ -681,14 +693,14 @@ async function connectDetectedSetupEndpoint(detected) {
     if (count > 0) {
       setupSpinner.destroy();
       spinnerDiv.remove();
-      await typewriterReply(`在 ${providerLabel} 上找到 ${count} 个模型。开始聊天...`);
+      await typewriterReply(`Found ${count} model${count > 1 ? 's' : ''} on ${providerLabel}. Starting a chat...`);
       if (modelsModule) await modelsModule.refreshModels(true);
       const firstModel = data.models[0];
       const chatUrl = setupChatUrlForEndpoint(detected);
       if (sessionModule) {
         await sessionModule.createDirectChat(chatUrl, firstModel, data.id);
       }
-      await typewriterReply("一切就绪。输入 /tour 查看导览，或输入 /setup endpoint 添加另一个端点或密钥。");
+      await typewriterReply("You're all set. Type /tour for a walkthrough, or /setup endpoint to add another endpoint or key.");
       _clearSetupGuideMessages();
       return;
     }
@@ -696,13 +708,13 @@ async function connectDetectedSetupEndpoint(detected) {
     setupSpinner.destroy();
     spinnerDiv.remove();
     setupMode = 'endpoint-provider-first';
-    await typewriterReply("端点已保存，但未找到模型。请检查提供商、密钥或服务状态，然后重新尝试 /setup endpoint。");
+    await typewriterReply("Endpoint saved, but no models were found. Check the provider, key, or service status, then try /setup endpoint again.");
     if (modelsModule) modelsModule.refreshModels(true);
   } catch {
     setupSpinner.destroy();
     spinnerDiv.remove();
     setupMode = 'endpoint-provider-first';
-    await typewriterReply("端点配置在完成前失败。请检查提供商、密钥或服务状态，然后重新尝试 /setup endpoint。");
+    await typewriterReply("Endpoint setup failed before it could finish. Check the provider, key, or service status, then try /setup endpoint again.");
   }
 }
 
@@ -710,7 +722,7 @@ async function connectDetectedSetupEndpoint(detected) {
  * Handle setup mode input — user pasted an API key or URL.
  */
 async function handleSetupInput(input) {
-  // Show masked user bubble (don't display raw key)
+  // Show masked user bubble (don\'t display raw key)
   const isUrl = /^https?:\/\//i.test(input) || /^(\d{1,3}\.){1,3}\d{1,3}/i.test(input) || /^localhost/i.test(input);
   _showSetupUserBubble(input, isUrl);
 
@@ -725,7 +737,7 @@ async function handleSetupInput(input) {
     } else {
       pendingSetupProvider = paired.provider;
       setupMode = 'endpoint-key-for-provider';
-      await _setupReply(`请粘贴您的 ${paired.provider.name} API 密钥。`);
+      await _setupReply(`Paste your ${paired.provider.name} API key now.`);
     }
     return;
   }
@@ -733,7 +745,7 @@ async function handleSetupInput(input) {
   const detected = detectProvider(input);
   if (!detected) {
     setupMode = false;
-    await typewriterReply("无法识别的格式。输入 /setup endpoint 重试。");
+    await typewriterReply("Unrecognised format. Type /setup endpoint to try again.");
     return;
   }
   if (detected.ambiguous) {
@@ -775,7 +787,7 @@ async function handleSetupWizard(mode, input) {
     if (!provider) {
       _addMessage('user', input);
       setupMode = false;
-      await _setupReply('未识别的提供商。请尝试 ' + SETUP_PROVIDER_HINT + '。输入 /setup endpoint 重试。');
+      await _setupReply('Provider not recognised. Try ' + SETUP_PROVIDER_HINT + '. Type /setup endpoint to try again.');
       return;
     }
     if (paired?.credential) {
@@ -786,7 +798,7 @@ async function handleSetupWizard(mode, input) {
     _addMessage('user', provider.name);
     pendingSetupProvider = provider;
     setupMode = 'endpoint-key-for-provider';
-    await _setupReply(`请粘贴您的 ${provider.name} API 密钥。`);
+    await _setupReply(`Paste your ${provider.name} API key.`);
     return;
   }
 
@@ -794,7 +806,7 @@ async function handleSetupWizard(mode, input) {
     const provider = pendingSetupProvider;
     pendingSetupProvider = null;
     if (!provider) {
-      await _setupReply('未选择提供商。输入 /setup endpoint 并选择一个提供商。');
+      await _setupReply('No provider selected. Type /setup endpoint and choose a provider again.');
       return;
     }
     _showSetupUserBubble(input, /^https?:\/\//i.test(input));
@@ -818,7 +830,7 @@ async function handleSetupWizard(mode, input) {
     if (paired?.provider) {
       const credential = paired.credential || key;
       if (!credential) {
-        await typewriterReply('未找到 API 密钥。输入 /setup endpoint 并重新粘贴密钥。');
+        await typewriterReply('No API key found. Type /setup endpoint and paste the key again.');
         return;
       }
       await connectDetectedSetupEndpoint({ base_url: paired.provider.url, api_key: credential, name: paired.provider.name });
@@ -826,7 +838,7 @@ async function handleSetupWizard(mode, input) {
     }
 
     if (!key) {
-      await typewriterReply('没有待处理的 API 密钥。输入 /setup endpoint 并重新粘贴密钥。');
+      await typewriterReply('No pending API key. Type /setup endpoint and paste the key again.');
       return;
     }
     let provider = _setupProviderFromInput(raw);
@@ -836,7 +848,7 @@ async function handleSetupWizard(mode, input) {
     if (!provider) {
       pendingSetupApiKey = '';
       setupMode = false;
-      await typewriterReply('未识别的提供商。请尝试 ' + SETUP_PROVIDER_HINT + '。输入 /setup endpoint 重试。');
+      await typewriterReply('Provider not recognised. Try ' + SETUP_PROVIDER_HINT + '. Type /setup endpoint to try again.');
       return;
     }
     await connectDetectedSetupEndpoint({ base_url: provider.url, api_key: key, name: provider.name });
@@ -853,12 +865,12 @@ async function handleSetupWizard(mode, input) {
     if (tm && colors) {
       tm.applyColors(colors);
       tm.save(name, colors);
-      await typewriterReply(`主题已切换到 "${name}"。`);
+      await typewriterReply(`Theme switched to "${name}".`);
     } else if (tm && tm.applyTheme) {
       tm.applyTheme(name);
-      await typewriterReply(`主题已切换到 "${name}"。`);
+      await typewriterReply(`Theme switched to "${name}".`);
     } else {
-      slashReply(`未知主题 "${name}"。输入 /theme 查看可用主题。`);
+      slashReply(`Unknown theme "${name}". Try /theme to see available themes.`);
     }
     return;
   }
@@ -877,13 +889,13 @@ async function handleSetupWizard(mode, input) {
         });
         await typewriterReply(`${name}: ${features[name] ? 'on' : 'off'}`);
       } else {
-        await typewriterReply(`未知功能 "${name}"。可用：${Object.keys(features).join(', ')}`);
+        await typewriterReply(`Unknown feature "${name}". Available: ${Object.keys(features).join(', ')}`);
       }
-    } catch { await typewriterReply('无法更新功能。'); }
+    } catch { await typewriterReply('Could not update features.'); }
     return;
   }
 
-  await typewriterReply("无法理解该指令。输入 /setup 查看选项。");
+  await typewriterReply("I didn\'t understand that. Try /setup to see options.");
 }
 
 function _syncToggleUI(name, state) {
@@ -977,7 +989,7 @@ async function _cmdSessionNew(args, ctx) {
     } catch (e) { /* ignore */ }
   }
   if (!endpointUrl || !model) {
-    slashReply('没有可用模型 — 打开模型选择器，使用 <code>+</code> 按钮添加模型端点。');
+    slashReply('No model available — open the model picker and use the <code>+</code> button to add a model endpoint.');
     return true;
   }
 
@@ -991,11 +1003,11 @@ async function _cmdSessionNew(args, ctx) {
   if (res.ok) {
     const data = await res.json();
     await sessionModule.loadSessions();
-    await sessionModule.selectSession(data.id);
+    await sessionModule.selectSession(data.id, { showLoading: false });
     _hideWelcomeScreen();
     const shortModel = (model || '').split('/').pop();
-    await typewriterReply(`新会话 — ${shortModel || '就绪'}。`);
-  } else { const err = await res.json().catch(() => null); slashReply('创建会话失败' + (err?.detail ? ': ' + ctx.esc(err.detail) : '')); }
+    await typewriterReply(`New session — ${shortModel || 'ready'}.`);
+  } else { const err = await res.json().catch(() => null); slashReply('Failed to create session' + (err?.detail ? ': ' + ctx.esc(err.detail) : '')); }
   return true;
 }
 
@@ -1009,7 +1021,7 @@ async function _cmdSessionDelete(args, ctx) {
     const sessions = sessionModule.getSessions().filter(s => !s.archived);
     const targets = force ? sessions : sessions.filter(s => !s.important);
     const skipped = sessions.length - targets.length;
-    if (!targets.length) { slashReply('没有可删除的内容' + (skipped ? ` (${skipped} starred)` : '')); return true; }
+    if (!targets.length) { slashReply('Nothing to delete' + (skipped ? ` (${skipped} starred)` : '')); return true; }
     let deleted = 0, failed = 0;
     for (const s of targets) {
       const res = await fetch(`${API_BASE}/api/session/${s.id}`, { method: 'DELETE', credentials: 'same-origin' });
@@ -1025,59 +1037,59 @@ async function _cmdSessionDelete(args, ctx) {
 
   // Single session delete
   const target = _resolveSession(cleanArg) || ctx.sid;
-  if (!target) { slashReply('没有可删除的会话'); return true; }
+  if (!target) { slashReply('No session to delete'); return true; }
   const sessions = sessionModule.getSessions();
   const sess = sessions.find(s => s.id === target);
   const label = sess ? `"${ctx.esc(sess.name || target.slice(0,8))}"` : target.slice(0,8);
   const res = await fetch(`${API_BASE}/api/session/${target}`, { method: 'DELETE', credentials: 'same-origin' });
   if (res.ok) {
-    await typewriterReply(`已删除 ${label}`);
+    await typewriterReply(`Deleted ${label}`);
     await sessionModule.loadSessions();
   } else if (res.status === 403) {
-    slashReply('无法删除已收藏的会话 — 请先取消收藏，或使用 <code>/s rm -rf</code>');
-  } else { const err = await res.json().catch(() => null); slashReply('删除失败' + (err?.detail ? ': ' + ctx.esc(err.detail) : '')); }
+    slashReply('Cannot delete a starred session — unstar it first, or use <code>/s rm -rf</code>');
+  } else { const err = await res.json().catch(() => null); slashReply('Delete failed' + (err?.detail ? ': ' + ctx.esc(err.detail) : '')); }
   return true;
 }
 
 async function _cmdSessionArchive(args, ctx) {
   const target = _resolveSession(args[0]) || ctx.sid;
-  if (!target) { slashReply('没有可归档的会话'); return true; }
+  if (!target) { slashReply('No session to archive'); return true; }
   const sessions = sessionModule.getSessions();
   const sess = sessions.find(s => s.id === target);
   const label = sess ? `"${ctx.esc(sess.name || target.slice(0,8))}"` : target.slice(0,8);
-  if (sess && sess.archived) { await typewriterReply(`${label} 已归档`); return true; }
+  if (sess && sess.archived) { await typewriterReply(`${label} is already archived`); return true; }
   const res = await fetch(`${API_BASE}/api/session/${target}/archive`, { method: 'POST', credentials: 'same-origin' });
-  if (res.ok) { await typewriterReply(`已归档 ${label}`); await sessionModule.loadSessions(); }
-  else { slashReply('归档失败'); }
+  if (res.ok) { await typewriterReply(`Archived ${label}`); await sessionModule.loadSessions(); }
+  else { slashReply('Archive failed'); }
   return true;
 }
 
 async function _cmdSessionRename(args, ctx) {
   const newName = args.join(' ');
-  if (!newName) { slashReply('用法：/rename 新名称'); return true; }
+  if (!newName) { slashReply('Usage: /rename New Name'); return true; }
   const fd = new FormData(); fd.append('name', newName);
   const res = await fetch(`${API_BASE}/api/session/${ctx.sid}`, { method: 'PATCH', body: fd, credentials: 'same-origin' });
   if (res.ok) { await typewriterReply(`Renamed to "${ctx.esc(newName)}"`); await sessionModule.loadSessions(); }
-  else { slashReply('重命名失败'); }
+  else { slashReply('Rename failed'); }
   return true;
 }
 
 async function _cmdSessionImportant(args, ctx) {
   const fd = new FormData(); fd.append('important', 'true');
   await fetch(`${API_BASE}/api/session/${ctx.sid}/important`, { method: 'POST', body: fd, credentials: 'same-origin' });
-  await typewriterReply('会话已标记为重要');
+  await typewriterReply('Session marked as important');
   return true;
 }
 
 async function _cmdSessionUnimportant(args, ctx) {
   const fd = new FormData(); fd.append('important', 'false');
   await fetch(`${API_BASE}/api/session/${ctx.sid}/important`, { method: 'POST', body: fd, credentials: 'same-origin' });
-  await typewriterReply('会话已取消标记');
+  await typewriterReply('Session unmarked');
   return true;
 }
 
 async function _cmdSessionFork(args, ctx) {
-  if (!ctx.sid) { slashReply('无活动会话'); return true; }
+  if (!ctx.sid) { slashReply('No active session'); return true; }
   const keepCount = parseInt(args[0]) || 0;
   const res = await fetch(`${API_BASE}/api/session/${ctx.sid}/fork`, {
     method: 'POST', credentials: 'same-origin',
@@ -1088,13 +1100,13 @@ async function _cmdSessionFork(args, ctx) {
     const data = await res.json();
     await sessionModule.loadSessions();
     await sessionModule.selectSession(data.id);
-    await typewriterReply(`已派生会话 (${data.kept || 0} messages)`);
-  } else { slashReply('派生失败'); }
+    await typewriterReply(`Forked session (${data.kept || 0} messages)`);
+  } else { slashReply('Fork failed'); }
   return true;
 }
 
 async function _cmdSessionTruncate(args, ctx) {
-  if (!ctx.sid) { slashReply('无活动会话'); return true; }
+  if (!ctx.sid) { slashReply('No active session'); return true; }
   const keep = parseInt(args[0]);
   if (!keep || keep < 1) { slashReply('Usage: /truncate N — deletes older messages, keeps the last N'); return true; }
   const res = await fetch(`${API_BASE}/api/session/${ctx.sid}/truncate`, {
@@ -1103,14 +1115,14 @@ async function _cmdSessionTruncate(args, ctx) {
     body: JSON.stringify({ keep_count: keep })
   });
   if (res.ok) { await typewriterReply(`Truncated to ${keep} messages`); }
-  else { slashReply('截断失败'); }
+  else { slashReply('Truncate failed'); }
   return true;
 }
 
 async function _cmdSessionList(args, ctx) {
   const sessions = sessionModule.getSessions();
   const active = sessions.filter(s => !s.archived);
-  if (!active.length) { slashReply('无活动会话'); return true; }
+  if (!active.length) { slashReply('No active sessions'); return true; }
   const lines = active.slice(0, 40).map(s => {
     const current = s.id === ctx.sid ? ' <b>(current)</b>' : '';
     return `${ctx.esc(s.name || 'Untitled')} <span style="opacity:0.5">${s.id.slice(0,8)}</span>${current}`;
@@ -1122,7 +1134,7 @@ async function _cmdSessionList(args, ctx) {
 
 async function _cmdSessionSwitch(args, ctx) {
   const query = args.join(' ').toLowerCase();
-  if (!query) { slashReply('用法：/switch &lt;名称或ID&gt;'); return true; }
+  if (!query) { slashReply('Usage: /switch &lt;name or id&gt;'); return true; }
   const sessions = sessionModule.getSessions();
   const match = sessions.find(s => !s.archived && (
     s.id.startsWith(query) || (s.name || '').toLowerCase().includes(query)
@@ -1135,27 +1147,27 @@ async function _cmdSessionSwitch(args, ctx) {
 }
 
 async function _cmdSessionSort(args, ctx) {
-  slashReply('正在自动排序会话...');
+  slashReply('Auto-sorting sessions...');
   const res = await fetch(`${API_BASE}/api/sessions/auto-sort`, { method: 'POST', credentials: 'same-origin' });
   if (res.ok) {
     const data = await res.json();
     await sessionModule.loadSessions();
     // Handle skipped status
     if (data.status === 'skipped') {
-      await typewriterReply(`Auto-sort skipped: ${data.reason || '没有可排序的会话'}`);
+      await typewriterReply(`Auto-sort skipped: ${data.reason || 'No sessions to sort'}`);
     } else {
       const del_msg = data.deleted_empty ? ` (${data.deleted_empty} empty deleted)` : '';
       await typewriterReply(`Sorted ${data.updated || 0} sessions into ${data.folders?.length || 0} folders${del_msg}`);
     }
-  } else { slashReply('自动排序失败'); }
+  } else { slashReply('Auto-sort failed'); }
   return true;
 }
 
 async function _cmdSessionInfo(args, ctx) {
-  if (!ctx.sid) { slashReply('无活动会话'); return true; }
+  if (!ctx.sid) { slashReply('No active session'); return true; }
   const sessions = sessionModule.getSessions();
   const s = sessions.find(ss => ss.id === ctx.sid);
-  if (!s) { slashReply('未找到会话'); return true; }
+  if (!s) { slashReply('Session not found'); return true; }
   slashReply(`<pre>Session: ${ctx.esc(s.name || 'Untitled')}
 ID:      ${s.id}
 Model:   ${ctx.esc(s.model || '?')}
@@ -1167,12 +1179,12 @@ Created: ${s.created_at || '?'}</pre>`);
 
 async function _cmdSessionClear(args, ctx) {
   document.getElementById('chat-history').innerHTML = '';
-  slashReply('聊天显示已清空');
+  slashReply('Chat display cleared');
   return true;
 }
 
 async function _cmdSessionExport(args, ctx) {
-  if (!ctx.sid) { slashReply('无活动会话'); return true; }
+  if (!ctx.sid) { slashReply('No active session'); return true; }
   // Parse linux-style: cat > file.json, cat > notes.txt, cat > chat.html
   let filename = '';
   let fmt = 'md';
@@ -1203,7 +1215,7 @@ async function _cmdToggleIncognito(args, ctx) {
   const sessions = sessionModule.getSessions();
   const sess = ctx.sid ? sessions.find(s => s.id === ctx.sid) : null;
   if (sess && sess.message_count > 0) {
-    slashReply(`Can't toggle Nobody mode mid-conversation — start a new session first`);
+    slashReply(`Can\'t toggle Nobody mode mid-conversation — start a new session first`);
     return true;
   }
   const v = (args[0]||'').toLowerCase();
@@ -1217,7 +1229,7 @@ async function _cmdToggleDoc(args, ctx) {
       documentModule.closePanel();
       const btn = document.getElementById('overflow-doc-btn');
       if (btn) btn.classList.remove('active');
-      slashReply('文档编辑器：已关闭');
+      slashReply('Document editor: closed');
     } else {
       const sessionId = sessionModule && sessionModule.getCurrentSessionId();
       if (sessionId) {
@@ -1227,9 +1239,9 @@ async function _cmdToggleDoc(args, ctx) {
       }
       const btn = document.getElementById('overflow-doc-btn');
       if (btn) btn.classList.add('active');
-      slashReply('文档编辑器：已打开');
+      slashReply('Document editor: opened');
     }
-  } else { slashReply('文档模块不可用'); }
+  } else { slashReply('Document module not available'); }
   return true;
 }
 
@@ -1240,7 +1252,7 @@ async function _cmdWorkspace(args, ctx) {
   const rest = args.slice(1).join(' ').trim();
   const cur = workspaceModule.getWorkspace();
   if (!sub || sub === 'show' || sub === 'status' || sub === 'info') {
-    slashReply(cur ? `Workspace: <code>${uiModule.esc(cur)}</code>` : '未设置工作区。 <code>/workspace pick</code> or <code>/workspace set /path</code>.');
+    slashReply(cur ? `Workspace: <code>${uiModule.esc(cur)}</code>` : 'No workspace set. <code>/workspace pick</code> or <code>/workspace set /path</code>.');
     return true;
   }
   if (sub === 'set' || sub === 'cd' || sub === 'use') {
@@ -1256,7 +1268,7 @@ async function _cmdWorkspace(args, ctx) {
   }
   if (sub === 'clear' || sub === 'off' || sub === 'none' || sub === 'unset') {
     workspaceModule.clearWorkspace();
-    slashReply('工作区已清空。');
+    slashReply('Workspace cleared.');
     return true;
   }
   if (sub === 'pick' || sub === 'browse' || sub === 'open') {
@@ -1286,7 +1298,7 @@ async function _cmdToggleShow(args, ctx) {
 async function _cmdToggleSidebar(args, ctx) {
   const sidebar = document.getElementById('sidebar');
   const iconRail = document.getElementById('icon-rail');
-  if (!sidebar) { slashReply('未找到侧边栏'); return true; }
+  if (!sidebar) { slashReply('Sidebar not found'); return true; }
 
   const sidebarHidden = sidebar.classList.contains('hidden');
   const railHidden = iconRail ? iconRail.classList.contains('rail-hidden') : true;
@@ -1366,7 +1378,7 @@ async function _cmdOpen(args, ctx) {
   } catch (e) {
     console.warn('/open failed', target, e);
   }
-  slashReply(`I don't know how to open "${ctx.esc(target)}" yet.`);
+  slashReply(`I don\'t know how to open "${ctx.esc(target)}" yet.`);
   return true;
 }
 
@@ -1406,7 +1418,7 @@ async function _cmdToolPanel(tool, args, ctx) {
   if (target === 'email') {
     const btn = document.getElementById('rail-email') || document.getElementById('email-section-title');
     if (btn) btn.click();
-    else slashReply('无法打开邮件。');
+    else slashReply('Could not open Email.');
     return true;
   }
   if (target === 'settings') {
@@ -1425,13 +1437,13 @@ async function _cmdSettings(args, ctx) {
     if (settingsModule && typeof settingsModule.open === 'function') {
       settingsModule.open(tab);
     } else {
-      // Fallback: click the cog directly if the module isn't loaded.
+      // Fallback: click the cog directly if the module isn\'t loaded.
       const cog = document.getElementById('user-bar-settings');
       if (cog) cog.click();
     }
   } catch (e) {
     console.warn('/settings open failed', e);
-    slashReply('无法打开设置。');
+    slashReply('Could not open Settings.');
     return true;
   }
   return true;
@@ -1495,7 +1507,7 @@ async function _cmdTheme(args, ctx) {
 // ── Models ──
 
 async function _cmdModels(args, ctx) {
-  slashReply('正在获取模型...');
+  slashReply('Fetching models...');
   const res = await fetch(`${API_BASE}/api/models`, { credentials: 'same-origin' });
   const data = await res.json();
   let lines = [];
@@ -1503,7 +1515,7 @@ async function _cmdModels(args, ctx) {
     lines.push(`<b>${ctx.esc(ep.endpoint_name || ep.url)}</b>`);
     (ep.models || []).forEach(m => lines.push(`  ${ctx.esc(m)}`));
   });
-  slashReply(`<pre>${lines.join('\n') || '未找到模型'}</pre>`);
+  slashReply(`<pre>${lines.join('\n') || 'No models found'}</pre>`);
   return true;
 }
 
@@ -1514,8 +1526,8 @@ async function _cmdModel(args, ctx) {
   const model = sessionModule.getCurrentModel ? sessionModule.getCurrentModel() : '';
   const endpoint = sessionModule.getCurrentEndpointUrl ? sessionModule.getCurrentEndpointUrl() : '';
   slashReply(`<pre>${[
-    `Current model: ${ctx.esc(model || '未选择')}`,
-    endpoint ? `Endpoint: ${ctx.esc(endpoint)}` : '端点：不可用',
+    `Current model: ${ctx.esc(model || 'None selected')}`,
+    endpoint ? `Endpoint: ${ctx.esc(endpoint)}` : 'Endpoint: not available',
     '',
     'Usage: /model list to show all available models'
   ].join('\n')}</pre>`);
@@ -1525,12 +1537,12 @@ async function _cmdModel(args, ctx) {
 async function _cmdMcp(args, ctx) {
   const res = await fetch(`${API_BASE}/api/mcp/servers`, { credentials: 'same-origin' });
   if (!res.ok) {
-    slashReply('该用户的 MCP 状态不可用。');
+    slashReply('MCP status is unavailable for this user.');
     return true;
   }
   const servers = await res.json();
   if (!Array.isArray(servers) || !servers.length) {
-    slashReply('未配置 MCP 服务器。');
+    slashReply('No MCP servers configured.');
     return true;
   }
   const lines = servers.map(s => {
@@ -1549,7 +1561,7 @@ async function _cmdMemoryList(args, ctx) {
   const res = await fetch(`${API_BASE}/api/memory`, { credentials: 'same-origin' });
   const data = await res.json();
   const mems = data.memory || [];
-  if (!mems.length) { slashReply('没有存储的记忆'); return true; }
+  if (!mems.length) { slashReply('No memories stored'); return true; }
   const lines = mems.slice(0, 40).map(m => `[${m.category||'fact'}] ${m.id.slice(0,8)} — ${ctx.esc(m.text)}`);
   if (mems.length > 40) lines.push(`... and ${mems.length - 40} more`);
   slashReply(`<pre>${lines.join('\n')}</pre>`);
@@ -1558,14 +1570,14 @@ async function _cmdMemoryList(args, ctx) {
 
 async function _cmdMemoryAdd(args, ctx) {
   const text = args.join(' ');
-  if (!text) { slashReply('用法：/memory add 您的文本'); return true; }
+  if (!text) { slashReply('Usage: /memory add Your text here'); return true; }
   const res = await fetch(`${API_BASE}/api/memory/add`, {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, category: 'fact', source: 'user' })
   });
-  if (res.ok) await typewriterReply(`记忆已添加：${ctx.esc(text)}`);
-  else slashReply('添加记忆失败');
+  if (res.ok) await typewriterReply(`Memory added: ${ctx.esc(text)}`);
+  else slashReply('Failed to add memory');
   return true;
 }
 
@@ -1578,7 +1590,7 @@ async function _cmdMemoryDelete(args, ctx) {
     const listRes = await fetch(`${API_BASE}/api/memory`, { credentials: 'same-origin' });
     const listData = await listRes.json();
     const mems = listData.memory || [];
-    if (!mems.length) { slashReply('没有可删除的记忆'); return true; }
+    if (!mems.length) { slashReply('No memories to delete'); return true; }
     if (!force) {
       slashReply(`This will delete all ${mems.length} memories. Use <code>/m rm -rf</code> to confirm.`);
       return true;
@@ -1593,7 +1605,7 @@ async function _cmdMemoryDelete(args, ctx) {
   }
 
   let memId = cleanArg;
-  if (!memId) { slashReply('用法：/memory delete &lt;id&gt; 或 /m rm -rf 删除全部'); return true; }
+  if (!memId) { slashReply('Usage: /memory delete &lt;id&gt; or /m rm -rf to wipe all'); return true; }
   // Resolve short ID to full UUID and get preview
   let preview = memId.slice(0, 8);
   if (memId.length < 36) {
@@ -1604,13 +1616,13 @@ async function _cmdMemoryDelete(args, ctx) {
   }
   const res = await fetch(`${API_BASE}/api/memory/${memId}`, { method: 'DELETE', credentials: 'same-origin' });
   if (res.ok) await typewriterReply(`Deleted: ${preview}${preview.length >= 50 ? '...' : ''}`);
-  else slashReply('删除失败 — 请检查ID');
+  else slashReply('Delete failed — check the ID');
   return true;
 }
 
 async function _cmdMemorySearch(args, ctx) {
   const query = args.join(' ');
-  if (!query) { slashReply('用法：/memory search 查询词'); return true; }
+  if (!query) { slashReply('Usage: /memory search query'); return true; }
   const fd = new FormData(); fd.append('query', query);
   const res = await fetch(`${API_BASE}/api/memory/search`, { method: 'POST', body: fd, credentials: 'same-origin' });
   const data = await res.json();
@@ -1630,7 +1642,7 @@ async function _cmdSkills(args, ctx) {
   if (sub === 'list' || sub === 'ls') {
     const skills = await _loadSkillSlashCatalog(true);
     if (!skills.length) {
-      slashReply('没有可用于斜杠命令的已发布技能。');
+      slashReply('No published skills available for slash commands.');
       return true;
     }
     const lines = skills.map(s => {
@@ -1644,14 +1656,14 @@ async function _cmdSkills(args, ctx) {
 
   if (sub === 'search' || sub === 'find') {
     const query = rest.join(' ').trim();
-    if (!query) { slashReply('用法：/skills search 查询词'); return true; }
+    if (!query) { slashReply('Usage: /skills search query'); return true; }
     const res = await fetch(`${API_BASE}/api/skills/search`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query })
     });
-    if (!res.ok) { slashReply('技能搜索失败。'); return true; }
+    if (!res.ok) { slashReply('Skill search failed.'); return true; }
     const data = await res.json();
     const skills = Array.isArray(data.skills) ? data.skills : [];
     if (!skills.length) { slashReply(`No skills found for "${ctx.esc(query)}".`); return true; }
@@ -1664,7 +1676,7 @@ async function _cmdSkills(args, ctx) {
 
   if (sub === 'view' || sub === 'cat' || sub === 'show') {
     const name = (rest[0] || '').trim();
-    if (!name) { slashReply('用法：/skills view 名称'); return true; }
+    if (!name) { slashReply('Usage: /skills view name'); return true; }
     const res = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(name)}/markdown`, { credentials: 'same-origin' });
     if (!res.ok) { slashReply(`Skill "${ctx.esc(name)}" was not found.`); return true; }
     const data = await res.json();
@@ -1674,11 +1686,11 @@ async function _cmdSkills(args, ctx) {
 
   if (sub === 'use' || sub === 'run') {
     const name = (rest[0] || '').trim();
-    if (!name) { slashReply('用法：/skills use 名称 请求'); return true; }
+    if (!name) { slashReply('Usage: /skills use name request'); return true; }
     return _invokeSkillByName(name, rest.slice(1).join(' ').trim(), ctx);
   }
 
-  slashReply('用法：/skills list | search 查询词 | view 名称 | use 名称 请求');
+  slashReply('Usage: /skills list | search query | view name | use name request');
   return true;
 }
 
@@ -1692,14 +1704,14 @@ async function _cmdReloadSkills(args, ctx) {
 
 async function _cmdNote(args, ctx) {
   const text = args.join(' ');
-  if (!text) { slashReply('用法：/note 您的笔记内容'); return true; }
+  if (!text) { slashReply('Usage: /note Your note here'); return true; }
   const res = await fetch(`${API_BASE}/api/notes`, {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title: text, content: '', note_type: 'note', source: 'slash' })
   });
-  if (res.ok) await typewriterReply(`笔记已添加：${ctx.esc(text)}`);
-  else slashReply('保存笔记失败');
+  if (res.ok) await typewriterReply(`Note added: ${ctx.esc(text)}`);
+  else slashReply('Failed to save note');
   return true;
 }
 
@@ -1788,10 +1800,10 @@ async function _cmdTodo(args, ctx) {
   const sub = (args[0] || '').toLowerCase();
   if (sub === 'list' || sub === 'ls') {
     const res = await fetch(`${API_BASE}/api/notes?note_type=note`, { credentials: 'same-origin' });
-    if (!res.ok) { slashReply('加载待办事项失败'); return true; }
+    if (!res.ok) { slashReply('Failed to load todos'); return true; }
     const data = await res.json();
     const items = (data.notes || data || []).filter(n => !n.archived).slice(0, 30);
-    if (!items.length) { slashReply('无待办事项'); return true; }
+    if (!items.length) { slashReply('No todos'); return true; }
     const lines = items.map(n => `• ${ctx.esc(n.title || n.content || '').slice(0, 80)}`);
     slashReply(`<pre>${lines.join('\n')}</pre>`);
     return true;
@@ -1804,8 +1816,8 @@ async function _cmdTodo(args, ctx) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title: rest, note_type: 'note', source: 'slash', label: 'todo' }),
   });
-  if (res.ok) await typewriterReply(`待办已添加：${ctx.esc(rest)}`);
-  else slashReply('添加待办失败');
+  if (res.ok) await typewriterReply(`Todo added: ${ctx.esc(rest)}`);
+  else slashReply('Failed to add todo');
   return true;
 }
 
@@ -1840,8 +1852,8 @@ async function _cmdEvent(args, ctx) {
 
 async function _cmdShell(args, ctx) {
   const cmd = args.join(' ');
-  if (!cmd) { slashReply('用法：/sh 命令'); return true; }
-  slashReply(`<pre>$ ${ctx.esc(cmd)}\n运行中...</pre>`);
+  if (!cmd) { slashReply('Usage: /sh command'); return true; }
+  slashReply(`<pre>$ ${ctx.esc(cmd)}\nRunning...</pre>`);
   try {
     const res = await fetch(`${API_BASE}/api/shell/exec`, {
       method: 'POST', credentials: 'same-origin',
@@ -1852,7 +1864,7 @@ async function _cmdShell(args, ctx) {
     let out = '';
     if (data.stdout) out += data.stdout;
     if (data.stderr) out += (out ? '\n' : '') + data.stderr;
-    if (!out) out = '(无输出)';
+    if (!out) out = '(no output)';
     const code = data.exit_code != null ? data.exit_code : '?';
     slashReply(`<pre>$ ${ctx.esc(cmd)}\n${ctx.esc(out)}\n[exit ${code}]</pre>`);
   } catch (e) {
@@ -1876,13 +1888,13 @@ async function _cmdRagList(args, ctx) {
     data.files.slice(0, 30).forEach(f => lines.push(`  ${ctx.esc(f.name || f.path || String(f))}`));
     if (data.files.length > 30) lines.push(`  ... and ${data.files.length - 30} more`);
   }
-  slashReply(lines.length ? `<pre>${lines.join('\n')}</pre>` : '没有已索引的文件或目录');
+  slashReply(lines.length ? `<pre>${lines.join('\n')}</pre>` : 'No files or directories indexed');
   return true;
 }
 
 async function _cmdRagAdd(args, ctx) {
   const dir = args.join(' ');
-  if (!dir) { slashReply('用法：/rag add /目录路径'); return true; }
+  if (!dir) { slashReply('Usage: /rag add /path/to/directory'); return true; }
   const res = await fetch(`${API_BASE}/api/personal/add_directory`, {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
@@ -1891,7 +1903,7 @@ async function _cmdRagAdd(args, ctx) {
   if (res.ok) {
     const data = await res.json();
     await typewriterReply(`Indexed "${ctx.esc(dir)}" (${data.indexed_count || 0} files)`);
-  } else { slashReply('添加目录失败'); }
+  } else { slashReply('Failed to add directory'); }
   return true;
 }
 
@@ -1904,7 +1916,7 @@ async function _cmdRagRemove(args, ctx) {
     const listRes = await fetch(`${API_BASE}/api/personal`, { credentials: 'same-origin' });
     const listData = await listRes.json();
     const dirs = listData.directories || [];
-    if (!dirs.length) { slashReply('没有可移除的RAG目录'); return true; }
+    if (!dirs.length) { slashReply('No RAG directories to remove'); return true; }
     if (!force) {
       slashReply(`This will remove all ${dirs.length} directories from RAG. Use <code>/rag rm -rf</code> to confirm.`);
       return true;
@@ -1926,7 +1938,7 @@ async function _cmdRagRemove(args, ctx) {
     method: 'DELETE', credentials: 'same-origin'
   });
   if (res.ok) await typewriterReply(`Removed "${ctx.esc(dir)}" from RAG`);
-  else slashReply('移除目录失败');
+  else slashReply('Failed to remove directory');
   return true;
 }
 
@@ -1934,7 +1946,7 @@ async function _cmdRagRemove(args, ctx) {
 
 async function _cmdWebSearch(args, ctx) {
   const query = args.join(' ');
-  if (!query) { slashReply('用法：/search &lt;查询词&gt;'); return true; }
+  if (!query) { slashReply('Usage: /search &lt;query&gt;'); return true; }
   // Enable web toggle for this search, then fall through to normal chat
   const chk = document.getElementById('web-toggle');
   const btn = document.getElementById('web-toggle-btn');
@@ -1948,7 +1960,7 @@ async function _cmdWebSearch(args, ctx) {
 
 async function _cmdSearch(args, ctx) {
   const query = args.join(' ');
-  if (!query) { slashReply('用法：/find &lt;查询词&gt;'); return true; }
+  if (!query) { slashReply('Usage: /find &lt;query&gt;'); return true; }
   const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&limit=20`, { credentials: 'same-origin' });
   if (res.ok) {
     const data = await res.json();
@@ -1961,7 +1973,7 @@ async function _cmdSearch(args, ctx) {
       return `<a href="#${sid}" style="color:var(--red);text-decoration:none">${name}</a>  ${snippet}`;
     });
     slashReply(`<pre>${lines.join('\n')}</pre>`);
-  } else { slashReply('搜索失败'); }
+  } else { slashReply('Search failed'); }
   return true;
 }
 
@@ -1976,14 +1988,14 @@ Messages:  ${d.messages || '?'}
 Memories:  ${d.memories || '?'}
 Documents: ${d.documents || '?'}
 Uploads:   ${d.uploads || '?'}</pre>`);
-  } else { slashReply('获取统计失败'); }
+  } else { slashReply('Failed to fetch stats'); }
   return true;
 }
 
 async function _cmdUsage(args, ctx) {
   const sid = ctx.sid;
   if (!sid) {
-    slashReply('无活动会话。');
+    slashReply('No active session.');
     return true;
   }
 
@@ -2012,8 +2024,8 @@ async function _cmdUsage(args, ctx) {
   const costLine = costTracked
     ? (cost > 0
       ? `Estimated local cost: $${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(3)}`
-      : '估算本地费用：不可用或为零')
-    : '估算本地费用：该端点未跟踪';
+      : 'Estimated local cost: unavailable or zero')
+    : 'Estimated local cost: not tracked for this endpoint';
 
   slashReply(`<pre>${[
     `Session: ${ctx.esc(session?.name || 'Current chat')}`,
@@ -2030,7 +2042,7 @@ async function _cmdUsage(args, ctx) {
 // ── Context compaction ──
 
 async function _cmdCompact(args, ctx) {
-  if (!ctx.sid) { slashReply('没有可压缩的活动聊天'); return true; }
+  if (!ctx.sid) { slashReply('No active chat to compact'); return true; }
   const reply = slashReply('Compacting context ');
   const compactSpinner = spinnerModule.create('Compacting context', 'inline', 'whirlpool');
   if (reply?.body) {
@@ -2051,7 +2063,7 @@ async function _cmdCompact(args, ctx) {
     slashReply(`Conversation compacted. Summarized ${d.summarized || 0} older messages, kept ${d.kept || 0} recent messages.`);
     if (sessionModule?.selectSession) await sessionModule.selectSession(ctx.sid);
   } else {
-    let detail = '压缩失败';
+    let detail = 'Compaction failed';
     try {
       const err = await res.json();
       detail = err.detail || detail;
@@ -2066,7 +2078,7 @@ async function _cmdCompact(args, ctx) {
 async function _cmdTts(args, ctx) {
   const text = args.join(' ');
   if (!text) { slashReply('Usage: /tts &lt;text to speak&gt;'); return true; }
-  slashReply('正在合成语音...');
+  slashReply('Synthesizing...');
   try {
     const res = await fetch(`${API_BASE}/api/tts/synthesize`, {
       method: 'POST', credentials: 'same-origin',
@@ -2078,10 +2090,10 @@ async function _cmdTts(args, ctx) {
       if (data.audio) {
         const audio = new Audio('data:audio/wav;base64,' + data.audio);
         audio.play();
-        slashReply('播放中...');
-      } else { slashReply('无音频返回'); }
-    } else { slashReply('TTS 失败（Kokoro 是否正在运行？）'); }
-  } catch(e) { slashReply('TTS 服务不可用'); }
+        slashReply('Playing...');
+      } else { slashReply('No audio returned'); }
+    } else { slashReply('TTS failed (is Kokoro running?)'); }
+  } catch(e) { slashReply('TTS service unavailable'); }
   return true;
 }
 
@@ -2090,7 +2102,7 @@ async function _cmdTts(args, ctx) {
 async function _cmdDemo(args, ctx) {
   const hasModels = await _hasConfiguredModels();
   if (!hasModels) {
-    await typewriterReply('开始导览前，请用 /setup 或在 /settings 中添加您的第一个 AI 端点。');
+    await typewriterReply('Before the tour, add your first AI endpoint with /setup or in /settings.');
     return true;
   }
 
@@ -2122,7 +2134,7 @@ async function _cmdDemo(args, ctx) {
     }, 3000);
   };
   // Body flag lets CSS lift overflow:hidden on parents (e.g. .sidebar) so
-  // the highlight halo isn't clipped while the tour is running.
+  // the highlight halo isn\'t clipped while the tour is running.
   document.body.classList.add('tour-active');
 
   // Persist anything the user types during the tour. Several actions inside
@@ -2143,7 +2155,7 @@ async function _cmdDemo(args, ctx) {
   if (_msgEl) _msgEl.addEventListener('input', _onTyped);
   _draftObserver = new MutationObserver(() => _restoreIfCleared());
   if (_msgEl) _draftObserver.observe(_msgEl, { attributes: true, attributeFilter: ['value'] });
-  // Polling fallback — MutationObserver doesn't catch assignment to `.value`.
+  // Polling fallback — MutationObserver doesn\'t catch assignment to `.value`.
   _draftPoll = setInterval(_restoreIfCleared, 200);
 
   // Inject styles once
@@ -2305,7 +2317,7 @@ async function _cmdDemo(args, ctx) {
       // click-style "breathing" halo so they feel inviting. We intentionally
       // exclude `#model-picker-btn` from this list — the model-picker step
       // used to hide its arrows AND not click-advance, leaving the user with
-      // a halo that did nothing if they didn't actually pick a model. It now
+      // a halo that did nothing if they didn\'t actually pick a model. It now
       // renders with normal arrows + `advanceOnClick`, see the steps array.
       const waitsForEvent = sels.includes('#message');
       const breathing = clickMode || waitsForEvent;
@@ -2322,13 +2334,13 @@ async function _cmdDemo(args, ctx) {
         ${breathing ? '<div style="font-size:0.72rem;opacity:0.35;margin-bottom:6px">Click the highlighted element to continue</div>' : ''}
         <div class="tour-nav" style="${breathing ? 'justify-content:center' : ''}">
           ${breathing ? '' : `<button class="tour-btn-arrow${isFirst ? ' disabled' : ''}" data-act="back">\u2190</button>`}
-          <button class="tour-btn-skip" data-act="skip">${stepOpts.finishLabel ? '完成导览' : '跳过导览'}</button>
+          <button class="tour-btn-skip" data-act="skip">${stepOpts.finishLabel ? 'finish tour' : 'skip tour'}</button>
           ${breathing ? '' : `<button class="tour-btn-arrow${pulseNext ? ' tour-btn-arrow-pulse' : ''}" data-act="next">\u2192</button>`}
         </div>`;
 
-      // Position based on the fully-rendered tooltip so it doesn't jump as
+      // Position based on the fully-rendered tooltip so it doesn\'t jump as
       // text streams in, then stream the text into .tour-text and fade
-      // everything in so the transition between steps isn't jarring.
+      // everything in so the transition between steps isn\'t jarring.
       let streamHandle = null;
       requestAnimationFrame(() => {
         positionTooltip(targets[0]);
@@ -2352,7 +2364,7 @@ async function _cmdDemo(args, ctx) {
       // that might preventDefault / stopPropagation. We walk up from e.target
       // via .closest(selector) — more robust than t.contains(e.target) when
       // the click lands on a SVG/path child or a textNode wrapper. Guarded so
-      // the multiple bound event types (click/pointerdown/mousedown) can't
+      // the multiple bound event types (click/pointerdown/mousedown) can\'t
       // double-resolve.
       let _advanced = false;
       const onDocClickCapture = (e) => {
@@ -2372,7 +2384,7 @@ async function _cmdDemo(args, ctx) {
       // doing so used to tear down the tooltip's click handler the moment
       // the user typed a single character, leaving the `→` button visible
       // but unclickable, and the typed draft vulnerable to later clears.
-      // We also stopPropagation+preventDefault on the Enter so it can't
+      // We also stopPropagation+preventDefault on the Enter so it can\'t
       // ALSO submit the chat form — otherwise the message would get sent
       // (and the input cleared) the moment the user finishes the tour.
       const onMessageInput = (e) => {
@@ -2453,8 +2465,8 @@ async function _cmdDemo(args, ctx) {
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
   // ── Welcome ──
-  await typewriterReply('欢迎使用 Odysseus！让我们开始导览！');
-  // Beat between the welcome line and the first hint so it doesn't snap in.
+  await typewriterReply('Welcome to Odysseus! Lets begin the tour!');
+  // Beat between the welcome line and the first hint so it doesn\'t snap in.
   await delay(900);
 
   // Reset to a known starting state so the interactive steps (switch to Agent,
@@ -2477,7 +2489,7 @@ async function _cmdDemo(args, ctx) {
     Storage.setJSON(Storage.KEYS.TOGGLES, _st);
     // If the web button is currently on, click it to fully unwind it via the
     // existing handler (covers any state the click handler tracks that we
-    // can't see from here).
+    // can\'t see from here).
     const _wbtn = document.getElementById('web-toggle-btn');
     if (_wbtn && _wbtn.classList.contains('active')) _wbtn.click();
     _wbtn?.classList.remove('active');
@@ -2488,9 +2500,9 @@ async function _cmdDemo(args, ctx) {
   const sidebar = document.getElementById('sidebar');
 
   const steps = [
-    { sel: '#sidebar-new-chat-btn', text: '在此开始新聊天。<b>点击它。</b>你可以做到！', mode: 'click',
+    { sel: '#sidebar-new-chat-btn', text: 'Start a new chat here. <b>Click it.</b> You can do it!', mode: 'click',
       before() { if (sidebar?.classList.contains('hidden')) sidebar.classList.remove('hidden'); } },
-    { sel: '#model-picker-btn',   text: '选择您的大模型，本地或 API。', advanceOnClick: true },
+    { sel: '#model-picker-btn',   text: 'Pick your LLM, Local or API.', advanceOnClick: true },
     { sel: '#mode-agent-btn',     text: '<b>Agent mode</b> gives Odysseus more control of the app when your model supports tools: create a theme, download a model, make a daily task, organize things, and more.', mode: 'click' },
     { sel: '#web-toggle-btn',     text: 'Toggle tools like <b>web search</b>. Odysseus comes with private built-in <b>SearXNG</b> search.', mode: 'click' },
     { sel: '#overflow-plus-btn',  text: 'More tools can be found here, or in your sidebar. <b>Click to peek.</b>',
@@ -2508,7 +2520,7 @@ async function _cmdDemo(args, ctx) {
     if (res === 'cancel') { _clearTour(); return true; }
     if (res === 'back') { if (i > 0) i--; continue; }
     i++;
-    // Breather between steps so the tour doesn't feel like it's racing ahead.
+    // Breather between steps so the tour doesn\'t feel like it\'s racing ahead.
     await delay(step.afterDelay || 750);
     // After the message input step, wait for any active stream to finish
     if (step.sel === '#message' && _isStreamingFn()) {
@@ -2528,7 +2540,7 @@ async function _cmdDemo(args, ctx) {
 
 // ── Compare tour ──
 async function _cmdTourCompare(args, ctx) {
-  // The slash dispatcher doesn't auto-clear the input, so explicitly
+  // The slash dispatcher doesn\'t auto-clear the input, so explicitly
   // wipe it — otherwise "/tour-compare" stays parked in the textarea
   // and visually competes with the tour walkthrough.
   const _msgEl = document.getElementById('message');
@@ -2580,7 +2592,7 @@ async function _cmdTourCompare(args, ctx) {
   document.body.appendChild(tooltip);
 
   // Track halos so we can destroy them between steps. Halos sit on the
-  // body (above modals) so the outline isn't clipped by modal-content's
+  // body (above modals) so the outline isn\'t clipped by modal-content's
   // overflow:auto — same pattern as _cmdDemo's makeHalo.
   let _halos = [];
   function _makeHalo(target) {
@@ -2666,7 +2678,7 @@ async function _cmdTourCompare(args, ctx) {
         '<div class="tour-text">' + text + '</div>' + hint +
         '<div class="tour-nav">' +
           '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-          '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+          '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
           '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
         '</div>';
       requestAnimationFrame(() => {
@@ -2703,7 +2715,7 @@ async function _cmdTourCompare(args, ctx) {
   }
 
   // ── Phase 1: model-selector modal ──
-  // Scope every selector to #compare-model-overlay so we don't accidentally
+  // Scope every selector to #compare-model-overlay so we don\'t accidentally
   // match the Group Chat panel's .compare-parallel-toggle (line 1053 of
   // index.html), which has the same class name and is hidden — its zero
   // bounding-rect was putting the tooltip in the top-left corner.
@@ -2716,7 +2728,7 @@ async function _cmdTourCompare(args, ctx) {
         if (modalBody) modalBody.scrollTop = 0;
       } },
     { sel: '#compare-model-overlay .compare-blind-toggle',
-      text: '<b>Blind Mode</b> hides model names so you don’t know which model gives what output.' },
+      text: '<b>Blind Mode</b> hides model names so you don\'t know which model gives what output.' },
     { sel: '#compare-model-overlay .compare-parallel-toggle',
       text: '<b>Parallel</b> runs side by side, toggle to <b>Sequential</b> as well.' },
     { sel: '#compare-model-overlay .compare-dice-toggle',
@@ -2748,7 +2760,7 @@ async function _cmdTourCompare(args, ctx) {
     _halos.push(_makeHalo(startBtn));
     requestAnimationFrame(() => _positionTooltip(startBtn));
   } else {
-    // Fallback: park near the top if the start button isn't around (yet).
+    // Fallback: park near the top if the start button isn\'t around (yet).
     tooltip.style.left = ((window.innerWidth / 2) - 140) + 'px';
     tooltip.style.top  = '20px';
   }
@@ -2781,15 +2793,15 @@ async function _cmdTourCompare(args, ctx) {
 
   // ── Phase 2: compare panes (post-modal) ──
   // Note: the Probe button (`#compare-check-btn`) is dynamic — only
-  // visible when there's at least one unverified model — so we don't
+  // visible when there\'s at least one unverified model — so we don\'t
   // tour it here; the user will discover it naturally when needed.
   const phase2 = [
     { sel: '#compare-add-btn',
-      text: 'Add more <b>Models</b> here, keep stacking, who’s stopping ya? (you can also remove btw).' },
+      text: 'Add more <b>Models</b> here, keep stacking, who\'s stopping ya? (you can also remove btw).' },
     { sel: '#compare-shuffle-btn',
       text: 'After adding, <b>Shuffle</b> to randomize the order again.' },
     { sel: '#cmp-eval-btn',
-      text: 'When you’re ready to test, feel free to use curated <b>evaluation prompts</b>.',
+      text: 'When you\'re ready to test, feel free to use curated <b>evaluation prompts</b>.',
       advanceOnClick: true },
   ];
 
@@ -2805,13 +2817,13 @@ async function _cmdTourCompare(args, ctx) {
   }
 
   _clear();
-  await typewriterReply('That’s it, you’ll figure out the rest! Have fun!');
+  await typewriterReply('That\'s it, you\'ll figure out the rest! Have fun!');
   return true;
 }
 
 // ── Cookbook tour ──
 async function _cmdTourCookbook(args, ctx) {
-  // Clear the chat input so "/tour-cookbook" doesn't linger.
+  // Clear the chat input so "/tour-cookbook" doesn\'t linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -2842,7 +2854,7 @@ async function _cmdTourCookbook(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // Open the cookbook modal if it's not already up.
+  // Open the cookbook modal if it\'s not already up.
   let modal = document.getElementById('cookbook-modal');
   if (!modal || modal.classList.contains('hidden')) {
     const opener = document.getElementById('tool-cookbook-btn') || document.getElementById('rail-cookbook');
@@ -2952,7 +2964,7 @@ async function _cmdTourCookbook(args, ctx) {
         '<div class="tour-text">' + text + '</div>' +
         '<div class="tour-nav">' +
           '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-          '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+          '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
           '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
         '</div>';
       requestAnimationFrame(() => {
@@ -3031,13 +3043,13 @@ async function _cmdTourCookbook(args, ctx) {
   // Leave Cookbook on the Download tab so the user can start downloading immediately.
   _clickTab('Search');
   _clear();
-  await typewriterReply('That’s Cookbook. Pick a model that catches your eye and let it cook.');
+  await typewriterReply('That\'s Cookbook. Pick a model that catches your eye and let it cook.');
   return true;
 }
 
 // ── Theme tour ──
 async function _cmdTourTheme(args, ctx) {
-  // Clear the chat input so "/tour-theme" doesn't linger.
+  // Clear the chat input so "/tour-theme" doesn\'t linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -3068,7 +3080,7 @@ async function _cmdTourTheme(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // Open the theme modal if it isn't already up. Same hamburger / rail
+  // Open the theme modal if it isn\'t already up. Same hamburger / rail
   // opener pattern as the other tours.
   let modal = document.getElementById('theme-modal');
   if (!modal || modal.classList.contains('hidden')) {
@@ -3189,7 +3201,7 @@ async function _cmdTourTheme(args, ctx) {
           '<div class="tour-text">' + text + '</div>' +
           '<div class="tour-nav">' +
             '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
             '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
           '</div>';
         requestAnimationFrame(() => {
@@ -3277,13 +3289,13 @@ async function _cmdTourTheme(args, ctx) {
   }
 
   _clear();
-  await typewriterReply('That’s Theme. Make it yours.');
+  await typewriterReply('That\'s Theme. Make it yours.');
   return true;
 }
 
 // ── Settings tour ──
 async function _cmdTourSettings(args, ctx) {
-  // Clear the chat input so "/tour-settings" doesn't linger.
+  // Clear the chat input so "/tour-settings" doesn\'t linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -3433,7 +3445,7 @@ async function _cmdTourSettings(args, ctx) {
           '<div class="tour-text">' + text + '</div>' +
           '<div class="tour-nav">' +
             '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
             '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
           '</div>';
         requestAnimationFrame(() => {
@@ -3515,7 +3527,7 @@ async function _cmdTourSettings(args, ctx) {
 
 // ── Gallery tour ──
 async function _cmdTourGallery(args, ctx) {
-  // Clear the chat input so "/tour-gallery" doesn't linger.
+  // Clear the chat input so "/tour-gallery" doesn\'t linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -3665,7 +3677,7 @@ async function _cmdTourGallery(args, ctx) {
           '<div class="tour-text">' + text + '</div>' +
           '<div class="tour-nav">' +
             '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
             '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
           '</div>';
         requestAnimationFrame(() => {
@@ -3730,7 +3742,7 @@ async function _cmdTourGallery(args, ctx) {
 
 // ── Notes tour ──
 async function _cmdTourNotes(args, ctx) {
-  // Clear the chat input so "/tour-notes" doesn't linger.
+  // Clear the chat input so "/tour-notes" doesn\'t linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -3760,7 +3772,7 @@ async function _cmdTourNotes(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // Open the notes pane (it's a side sheet, not a .modal).
+  // Open the notes pane (it\'s a side sheet, not a .modal).
   let pane = document.getElementById('notes-pane');
   if (!pane) {
     const opener = document.getElementById('tool-notes-btn')
@@ -3878,7 +3890,7 @@ async function _cmdTourNotes(args, ctx) {
           '<div class="tour-text">' + text + '</div>' +
           '<div class="tour-nav">' +
             '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
             '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
           '</div>';
         requestAnimationFrame(() => {
@@ -4078,7 +4090,7 @@ async function _cmdTourBrain(args, ctx) {
           '<div class="tour-text">' + text + '</div>' +
           '<div class="tour-nav">' +
             '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+            '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
             '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
           '</div>';
         requestAnimationFrame(() => {
@@ -4108,7 +4120,7 @@ async function _cmdTourBrain(args, ctx) {
       text: '<b>Tidy</b> runs your model to clear out irrelevant memories and duplicates. It also triggers automatically from Tasks.',
       before: () => _tab('browse') },
     { sel: '.memory-tab-panel[data-memory-panel="skills"]',
-      text: '<b>Skills</b> are basically your AI’s memory for improving its abilities.',
+      text: '<b>Skills</b> are basically your AI\'s memory for improving its abilities.',
       before: () => _tab('skills') },
     { sel: '.memory-tab-panel[data-memory-panel="settings"]',
       text: '<b>Settings</b> lets you turn off auto extraction and set how strong skills need to be before they are tagged.',
@@ -4128,7 +4140,7 @@ async function _cmdTourBrain(args, ctx) {
   }
 
   _clear();
-  await typewriterReply('That’s Brain — memories, skills, tidy, and settings in one place.');
+  await typewriterReply('That\'s Brain — memories, skills, tidy, and settings in one place.');
   return true;
 }
 
@@ -4267,7 +4279,7 @@ async function _runTaskTour(steps, doneText, opts) {
           '<div class="tour-text">' + step.text + '</div>' +
           '<div class="tour-nav">' +
             '<button class="tour-btn-arrow' + (i === 0 ? ' disabled' : '') + '" data-act="back">←</button>' +
-            '<button class="tour-btn-skip" data-act="skip">' + (i === steps.length - 1 ? 'done' : '跳过导览') + '</button>' +
+            '<button class="tour-btn-skip" data-act="skip">' + (i === steps.length - 1 ? 'done' : 'skip tour') + '</button>' +
             '<button class="tour-btn-arrow" data-act="next">' + (i === steps.length - 1 ? '✓' : '→') + '</button>' +
           '</div>';
         requestAnimationFrame(() => {
@@ -4279,7 +4291,7 @@ async function _runTaskTour(steps, doneText, opts) {
           if (!hit) return;
           tooltip.removeEventListener('click', onClick);
           // Always fire step.after when leaving the step, regardless of
-          // direction — it's the symmetric pair to `before` (undo the
+          // direction — it\'s the symmetric pair to `before` (undo the
           // temporary state change), and a user clicking "back" on the
           // chat-input step still needs the tasks modal restored.
           if (step.after) { try { step.after(); } catch (_) {} }
@@ -4356,7 +4368,7 @@ async function _cmdTourTask2(args, ctx) {
       text: '<b>Add</b> creates scheduled prompts, research jobs, actions, event triggers, or webhooks.',
       before: () => document.querySelector('#tasks-modal .tasks-tab[data-tab="new"]')?.click() },
     { sel: '#task-ai-input',
-      text: 'You can just describe the task in plain chat language. Example: “weekday mornings summarize unread email”.' },
+      text: 'You can just describe the task in plain chat language. Example: "weekday mornings summarize unread email".' },
     { sel: '#tasks-modal .memory-item[data-idx="0"]',
       text: 'Or pick a template and fill out the form manually.' },
     { sel: '#task-form-save, #tasks-modal .tasks-tab[data-tab="tasks"]',
@@ -4375,7 +4387,7 @@ async function _cmdTourTask2(args, ctx) {
 // ── Tour: Deep Research ──
 
 async function _cmdTourResearch(args, ctx) {
-  // Clear the chat input so "/tour-research" doesn't linger.
+  // Clear the chat input so "/tour-research" doesn\'t linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -4406,7 +4418,7 @@ async function _cmdTourResearch(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // Open the research overlay if it's not already up.
+  // Open the research overlay if it\'s not already up.
   let overlay = document.getElementById('research-overlay');
   if (!overlay) {
     const opener = document.getElementById('tool-research-btn') || document.getElementById('rail-research');
@@ -4515,7 +4527,7 @@ async function _cmdTourResearch(args, ctx) {
         '<div class="tour-text">' + text + '</div>' +
         '<div class="tour-nav">' +
           '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-          '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+          '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
           '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
         '</div>';
       requestAnimationFrame(() => {
@@ -4568,10 +4580,10 @@ async function _cmdTourResearch(args, ctx) {
 
   _clear();
   {
-    const _body = await typewriterReply('That’s Deep Research — hit Start or queue up many. You can also view past research in your ');
+    const _body = await typewriterReply('That\'s Deep Research — hit Start or queue up many. You can also view past research in your ');
     const libLink = document.createElement('button');
     libLink.type = 'button';
-    libLink.textContent = '文档库';
+    libLink.textContent = 'Library';
     libLink.style.cssText = 'background:none;border:none;padding:0;margin:0;color:var(--accent,var(--red));font:inherit;text-decoration:underline;cursor:pointer;';
     libLink.addEventListener('click', () => {
       if (window.documentModule && window.documentModule.openLibrary) {
@@ -4589,7 +4601,7 @@ async function _cmdTourResearch(args, ctx) {
 // ── Tour: Library + Document editor ──
 
 async function _cmdTourLibrary(args, ctx) {
-  // Clear the chat input so "/tour-library" doesn't linger.
+  // Clear the chat input so "/tour-library" doesn\'t linger.
   const _msgEl = document.getElementById('message');
   if (_msgEl) {
     _msgEl.value = '';
@@ -4620,7 +4632,7 @@ async function _cmdTourLibrary(args, ctx) {
     document.head.appendChild(s);
   }
 
-  // Open the library modal if it's not already up.
+  // Open the library modal if it\'s not already up.
   let libModal = document.getElementById('doclib-modal');
   if (!libModal) {
     const opener = document.getElementById('tool-library-btn') || document.getElementById('rail-archive');
@@ -4731,7 +4743,7 @@ async function _cmdTourLibrary(args, ctx) {
         '<div class="tour-text">' + text + '</div>' +
         '<div class="tour-nav">' +
           '<button class="tour-btn-arrow' + (isFirst ? ' disabled' : '') + '" data-act="back">←</button>' +
-          '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : '跳过导览') + '</button>' +
+          '<button class="tour-btn-skip" data-act="skip">' + (isLast ? 'done' : 'skip tour') + '</button>' +
           '<button class="tour-btn-arrow" data-act="next">' + (isLast ? '✓' : '→') + '</button>' +
         '</div>';
       requestAnimationFrame(() => {
@@ -4780,7 +4792,7 @@ async function _cmdTourLibrary(args, ctx) {
       text: '<b>Create</b> a fresh blank document — click it to try it out! (Or hit <b>Import</b> next to it to bring in a file from disk.)',
       interactive: true },
     { sel: '#doclib-grid .doclib-card',
-      text: 'Each card is a saved document. It’s linked to the chat you created it in — so either <b>clone</b> it for a new chat, or <b>open</b> it in its original.',
+      text: 'Each card is a saved document. It\'s linked to the chat you created it in — so either <b>clone</b> it for a new chat, or <b>open</b> it in its original.',
       optional: true },
   ];
 
@@ -5015,7 +5027,7 @@ async function _setupProviderDeviceFlow(providerKey) {
   _clearSetupGuideMessages();
   const config = PROVIDER_DEVICE_FLOWS[providerKey];
   if (!config) {
-    await _setupReply('未识别的提供商。');
+    await _setupReply('Provider not recognised.');
     return;
   }
   await _setupReply(`Starting ${config.label} sign-in...`);
@@ -5173,7 +5185,7 @@ async function _cmdSetup(args, ctx) {
     }
 
     // Unknown topic — hint
-    await typewriterReply(`I don't have a setup wizard for "${topic}" yet. Try: endpoint, theme, memory, or features.`);
+    await typewriterReply(`I don\'t have a setup wizard for "${topic}" yet. Try: endpoint, theme, memory, or features.`);
     return true;
   }
 
@@ -5264,7 +5276,7 @@ const _8BALL = [
   "You may rely on it.", "As I see it, yes.", "Most likely.", "Outlook good.",
   "Signs point to yes.", "Reply hazy, try again.", "Ask again later.",
   "Better not tell you now.", "Cannot predict now.", "Concentrate and ask again.",
-  "Don't count on it.", "My reply is no.", "My sources say no.",
+  "Don\'t count on it.", "My reply is no.", "My sources say no.",
   "Outlook not so good.", "Very doubtful.",
 ];
 
@@ -5324,7 +5336,7 @@ async function _cmdFlip(args, ctx) {
   const wrap = document.createElement('div');
   wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:6px;';
   wrap.appendChild(coin);
-  if (edge) { const lbl = document.createElement('div'); lbl.style.cssText='font-size:0.8em;opacity:0.5;';lbl.textContent='硬币立在了边缘上。';wrap.appendChild(lbl); }
+  if (edge) { const lbl = document.createElement('div'); lbl.style.cssText='font-size:0.8em;opacity:0.5;';lbl.textContent='The coin landed on its edge.';wrap.appendChild(lbl); }
   chatBox.appendChild(wrap);
   uiModule.scrollHistory();
   // Inject keyframes if not present
@@ -5481,13 +5493,13 @@ async function _cmdWisdom(args, ctx) {
     ["Talk is cheap. Show me the code.", "Linus Torvalds"],
     ["Programs must be written for people to read, and only incidentally for machines to execute.", "Abelson & Sussman"],
     ["The best error message is the one that never shows up.", "Thomas Fuchs"],
-    ["Code is like humor. When you have to explain it, it's bad.", "Cory House"],
+    ["Code is like humor. When you have to explain it, it\'s bad.", "Cory House"],
     ["Make it work, make it right, make it fast.", "Kent Beck"],
     ["Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away.", "Antoine de Saint-Exupery"],
     ["It works on my machine.", "Every developer ever"],
     ["There are only two hard things in computer science: cache invalidation, naming things, and off-by-one errors.", "Anonymous"],
     ["A SQL query walks into a bar, walks up to two tables, and asks... 'Can I join you?'", "Anonymous"],
-    ["!false -- it's funny because it's true.", "Anonymous"],
+    ["!false -- it\'s funny because it\'s true.", "Anonymous"],
     ["To understand recursion, you must first understand recursion.", "Anonymous"],
   ];
   const [quote, author] = wisdoms[Math.floor(Math.random() * wisdoms.length)];
@@ -5647,13 +5659,13 @@ async function _cmdProbe(args, ctx) {
     const pct = summary.total > 0 ? Math.round((summary.ok / summary.total) * 100) : 0;
     const sumColor = pct === 100 ? 'var(--color-success)' : pct >= 50 ? 'var(--color-blind-orange)' : 'var(--color-error)';
     html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-weight:600;color:' + sumColor + '">';
-    html += summary.ok + '/' + summary.total + ' 个模型响应 (' + pct + '%)';
+    html += summary.ok + '/' + summary.total + ' models responding (' + pct + '%)';
     html += '</div>';
     bodyEl.innerHTML = html + '</div>';
     if (uiModule) uiModule.scrollHistory();
 
   } catch (e) {
-    bodyEl.innerHTML = '探测失败：' + ctx.esc(e.message);
+    bodyEl.innerHTML = 'Failed to probe: ' + ctx.esc(e.message);
   }
   return true;
 }
@@ -5692,7 +5704,7 @@ async function _cmdHelp(args, ctx) {
       categories[cat].push(`  ${usage.padEnd(21)}${desc}`);
     }
   }
-  const order = ['入门', '导览', '聊天', '设置', '记忆', '生产力', 'AI 工具'];
+  const order = ['Getting started', 'Tours', 'Chats', 'Settings', 'Memory', 'Productivity', 'AI Tools'];
   let lines = [];
   for (const cat of order) {
     if (categories[cat] && categories[cat].length) {
@@ -5711,18 +5723,18 @@ async function _cmdHelp(args, ctx) {
   }
   const skillCommands = await _loadSkillSlashCatalog(false);
   if (skillCommands.length) {
-    lines.push('Skills:'); // keep as-is for tech term
+    lines.push('Skills:');
     for (const skill of skillCommands.slice(0, 20)) {
       const token = String(skill.token || '').padEnd(21);
       lines.push(`  ${ctx.esc(token)}${ctx.esc(skill.help || '')}`);
     }
     if (skillCommands.length > 20) {
-      lines.push(`  ... ${skillCommands.length - 20} 个更多。使用 /skills list`);
+      lines.push(`  ... ${skillCommands.length - 20} more. Use /skills list`);
     }
     lines.push('');
   }
-  lines.push('提示：/<command> --help 查看详情');
-  lines.push('快捷命令：/new /rename /fork /web /bash /memories /skills');
+  lines.push('Tip: /<command> --help for details');
+  lines.push('Shortcuts: /new /rename /fork /web /bash /memories /skills');
   slashReply(`<pre style="line-height:1.7">${lines.join('\n')}</pre>`);
   return true;
 }
@@ -5736,43 +5748,43 @@ const COMMANDS = {
   chats: {
     alias: ['chat', 'session', 'sessions', 's'],
     category: 'Chats',
-    help: '管理聊天会话',
+    help: 'Manage chat sessions',
     default: 'info',
     subs: {
-      'new':         { handler: _cmdSessionNew,         alias: ['create','mkdir'], help: '创建新聊天',             usage: '/chats new [name]' },
-      'delete':      { handler: _cmdSessionDelete,      alias: ['del','rm'],       help: '删除聊天',                 usage: '/chats delete [id]' },
-      'archive':     { handler: _cmdSessionArchive,     alias: ['tar'],            help: '归档聊天',                usage: '/chats archive [id]' },
-      'rename':      { handler: _cmdSessionRename,      alias: ['mv'],             help: '重命名当前聊天',         usage: '/chats rename Name' },
-      'favorite':    { handler: _cmdSessionImportant,   alias: ['pin','important'], help: '标记为收藏',          usage: '/chats favorite' },
-      'unfavorite':  { handler: _cmdSessionUnimportant, alias: ['unpin','unimportant'], help: '取消收藏',       usage: '/chats unfavorite' },
-      'fork':        { handler: _cmdSessionFork,        alias: ['cp'],             help: '派生聊天（保留前N条消息）', usage: '/chats fork [N]' },
-      'truncate':    { handler: _cmdSessionTruncate,    alias: [],                 help: '删除旧消息，保留最后N条', usage: '/chats truncate N' },
-      'switch':      { handler: _cmdSessionSwitch,      alias: ['goto','cd'],      help: '按名称/ID切换聊天',    usage: '/chats switch name' },
-      'sort':        { handler: _cmdSessionSort,        alias: [],                 help: '自动分类到文件夹',      usage: '/chats sort' },
-      'info':        { handler: _cmdSessionInfo,        alias: ['stat'],           help: '显示聊天详情',           usage: '/chats info' },
-      'clear':       { handler: _cmdSessionClear,       alias: [],                 help: '清空聊天显示',          usage: '/chats clear' },
-      'export':      { handler: _cmdSessionExport,      alias: ['cat'],            help: '下载为 Markdown',        usage: '/chats export' }
+      'new':         { handler: _cmdSessionNew,         alias: ['create','mkdir'], help: 'Create new chat',             usage: '/chats new [name]' },
+      'delete':      { handler: _cmdSessionDelete,      alias: ['del','rm'],       help: 'Delete chat',                 usage: '/chats delete [id]' },
+      'archive':     { handler: _cmdSessionArchive,     alias: ['tar'],            help: 'Archive chat',                usage: '/chats archive [id]' },
+      'rename':      { handler: _cmdSessionRename,      alias: ['mv'],             help: 'Rename current chat',         usage: '/chats rename Name' },
+      'favorite':    { handler: _cmdSessionImportant,   alias: ['pin','important'], help: 'Mark as favorite',          usage: '/chats favorite' },
+      'unfavorite':  { handler: _cmdSessionUnimportant, alias: ['unpin','unimportant'], help: 'Unmark favorite',       usage: '/chats unfavorite' },
+      'fork':        { handler: _cmdSessionFork,        alias: ['cp'],             help: 'Fork chat (keep first N msgs)', usage: '/chats fork [N]' },
+      'truncate':    { handler: _cmdSessionTruncate,    alias: [],                 help: 'Delete older messages, keep last N', usage: '/chats truncate N' },
+      'switch':      { handler: _cmdSessionSwitch,      alias: ['goto','cd'],      help: 'Switch to chat by name/id',    usage: '/chats switch name' },
+      'sort':        { handler: _cmdSessionSort,        alias: [],                 help: 'Auto-sort into folders',      usage: '/chats sort' },
+      'info':        { handler: _cmdSessionInfo,        alias: ['stat'],           help: 'Show chat details',           usage: '/chats info' },
+      'clear':       { handler: _cmdSessionClear,       alias: [],                 help: 'Clear chat display',          usage: '/chats clear' },
+      'export':      { handler: _cmdSessionExport,      alias: ['cat'],            help: 'Download as markdown',        usage: '/chats export' }
     }
   },
   toggle: {
     alias: ['t'],
     category: 'Quick toggles',
     hidden: true,
-    help: '切换功能开关',
+    help: 'Toggle features on/off',
     default: '_show',
     subs: {
-      'web':       { handler: _cmdToggleWeb,       alias: ['search','s','w'],  help: '切换网页搜索',       usage: '/toggle web' },
-      'bash':      { handler: _cmdToggleBash,      alias: ['b','shell'],       help: '切换命令行',       usage: '/toggle bash' },
-      'research':  { handler: _cmdToggleResearch,  alias: ['r'],               help: '切换深度研究',    usage: '/toggle research' },
-      'doc':       { handler: _cmdToggleDoc,       alias: [],     help: '切换文档编辑器',  usage: '/toggle doc' },
-      'sidebar':   { handler: _cmdToggleSidebar,   alias: ['sb'], help: '切换侧边栏（完整/迷你/关闭）', usage: '/toggle sidebar [1|2|3]' },
-      '_show':     { handler: _cmdToggleShow,      alias: [],     help: '显示所有开关状态',  usage: '/toggle' }
+      'web':       { handler: _cmdToggleWeb,       alias: ['search','s','w'],  help: 'Toggle web search',       usage: '/toggle web' },
+      'bash':      { handler: _cmdToggleBash,      alias: ['b','shell'],       help: 'Toggle bash/shell',       usage: '/toggle bash' },
+      'research':  { handler: _cmdToggleResearch,  alias: ['r'],               help: 'Toggle deep research',    usage: '/toggle research' },
+      'doc':       { handler: _cmdToggleDoc,       alias: [],     help: 'Toggle document editor',  usage: '/toggle doc' },
+      'sidebar':   { handler: _cmdToggleSidebar,   alias: ['sb'], help: 'Cycle sidebar (full/mini/off)', usage: '/toggle sidebar [1|2|3]' },
+      '_show':     { handler: _cmdToggleShow,      alias: [],     help: 'Show all toggle states',  usage: '/toggle' }
     }
   },
   workspace: {
     alias: ['ws'],
     category: 'Agent',
-    help: '设置智能体工作文件夹',
+    help: 'Set the folder the agent works in',
     handler: _cmdWorkspace,
     noUserBubble: true,
     usage: '/workspace [set <path> | clear | pick]',
@@ -5780,26 +5792,26 @@ const COMMANDS = {
   memory: {
     alias: ['m'],
     category: 'Memory',
-    help: '管理持久记忆',
+    help: 'Manage persistent memories',
     default: 'list',
     subs: {
-      'list':   { handler: _cmdMemoryList,   alias: ['ls'],          help: '列出所有记忆',   usage: '/memory list' },
-      'add':    { handler: _cmdMemoryAdd,    alias: ['echo'],        help: '保存记忆',       usage: '/memory add text' },
-      'delete': { handler: _cmdMemoryDelete, alias: ['del', 'rm'],   help: '按ID删除',        usage: '/memory delete id' },
-      'search': { handler: _cmdMemorySearch, alias: ['grep'],        help: '搜索记忆',     usage: '/memory search q' }
+      'list':   { handler: _cmdMemoryList,   alias: ['ls'],          help: 'List all memories',   usage: '/memory list' },
+      'add':    { handler: _cmdMemoryAdd,    alias: ['echo'],        help: 'Save a memory',       usage: '/memory add text' },
+      'delete': { handler: _cmdMemoryDelete, alias: ['del', 'rm'],   help: 'Delete by ID',        usage: '/memory delete id' },
+      'search': { handler: _cmdMemorySearch, alias: ['grep'],        help: 'Search memories',     usage: '/memory search q' }
     }
   },
   skills: {
     alias: ['skill'],
     category: 'Memory',
-    help: '列出、搜索、查看或运行技能',
+    help: 'List, search, inspect, or run skills',
     handler: _cmdSkills,
     usage: '/skills list | search query | view name | use name request',
   },
   'reload-skills': {
     alias: ['reload_skills'],
     category: 'Memory',
-    help: '刷新斜杠命令技能目录',
+    help: 'Refresh the slash skill catalog',
     handler: _cmdReloadSkills,
     usage: '/reload-skills',
   },
@@ -5807,18 +5819,18 @@ const COMMANDS = {
     alias: [],
     category: 'RAG',
     hidden: true,
-    help: '管理文档索引',
+    help: 'Manage document indexing',
     default: 'list',
     subs: {
-      'list':   { handler: _cmdRagList,   alias: ['ls'],       help: '列出已索引文件',    usage: '/rag list' },
-      'add':    { handler: _cmdRagAdd,    alias: [],           help: '添加目录',         usage: '/rag add /path' },
-      'remove': { handler: _cmdRagRemove, alias: ['rm'],       help: '移除目录',      usage: '/rag remove /path' }
+      'list':   { handler: _cmdRagList,   alias: ['ls'],       help: 'List indexed files',    usage: '/rag list' },
+      'add':    { handler: _cmdRagAdd,    alias: [],           help: 'Add directory',         usage: '/rag add /path' },
+      'remove': { handler: _cmdRagRemove, alias: ['rm'],       help: 'Remove directory',      usage: '/rag remove /path' }
     }
   },
   todo: {
     alias: ['td'],
     category: 'Productivity',
-    help: '添加或列出待办事项',
+    help: 'Add or list todos',
     handler: _cmdTodo,
     noUserBubble: true,
     usage: '/todo Your task  ·  /todo list',
@@ -5826,7 +5838,7 @@ const COMMANDS = {
   event: {
     alias: ['ev'],
     category: 'Productivity',
-    help: '创建日历事件',
+    help: 'Create a calendar event',
     handler: _cmdEvent,
     noUserBubble: true,
     usage: '/event tomorrow 14:00 Team call',
@@ -5834,7 +5846,7 @@ const COMMANDS = {
   setup: {
     alias: ['su', 'seutp'],
     category: 'Getting started',
-    help: '添加本地或API模型端点',
+    help: 'Add local or API model endpoints',
     handler: _cmdSetup,
     usage: '/setup local URL  ·  /setup groq KEY  ·  /setup copilot  ·  /setup chatgpt-subscription',
     // Provider subs so the autocomplete popup surfaces "/setup deepseek",
@@ -5855,10 +5867,10 @@ const COMMANDS = {
       ollama:     { help: 'Ollama Cloud',  usage: '/setup ollama KEY',          handler: (a, c) => _cmdSetup(['ollama',     ...a], c) },
       copilot:    { help: 'GitHub Copilot', usage: '/setup copilot',            handler: (a, c) => _cmdSetup(['copilot',    ...a], c) },
       'chatgpt-subscription': { help: 'ChatGPT Subscription', alias: ['codex'], usage: '/setup chatgpt-subscription', handler: (a, c) => _cmdSetup(['chatgpt-subscription', ...a], c) },
-      local:      { help: '本地模型服务器 (vLLM / LM Studio / llama.cpp / Ollama)',
+      local:      { help: 'Local model server (vLLM / LM Studio / llama.cpp / Ollama)',
                     usage: '/setup local http://localhost:8000/v1',
                     handler: (a, c) => _cmdSetup(['local', ...a], c) },
-      endpoint:   { help: '打开设置中的端点管理器',
+      endpoint:   { help: 'Open the endpoint manager in Settings',
                     usage: '/setup endpoint',
                     handler: (a, c) => _cmdSetup(['endpoint', ...a], c) },
     },
@@ -5866,7 +5878,7 @@ const COMMANDS = {
   demo: {
     alias: ['tour'],
     category: 'Tours',
-    help: '完整引导式产品导览',
+    help: 'Full guided product tour',
     handler: _cmdDemo,
     usage: '/demo'
   },
@@ -5880,84 +5892,84 @@ const COMMANDS = {
   'tour-cookbook': {
     alias: ['cookbook-tour'],
     category: 'Tours',
-    help: 'Cookbook导览：硬件、下载、服务部署',
+    help: 'Cookbook tour: hardware, downloads, serving',
     handler: _cmdTourCookbook,
     usage: '/tour-cookbook'
   },
   'tour-research': {
     alias: ['research-tour'],
     category: 'Tours',
-    help: '深度研究导览',
+    help: 'Deep Research tour',
     handler: _cmdTourResearch,
     usage: '/tour-research'
   },
   'tour-library': {
     alias: ['library-tour', 'tour-doc', 'tour-document', 'doc-tour', 'document-tour'],
     category: 'Tours',
-    help: '文档库和文档编辑器导览',
+    help: 'Library and document editor tour',
     handler: _cmdTourLibrary,
     usage: '/tour-library'
   },
   'tour-theme': {
     alias: ['theme-tour'],
     category: 'Tours',
-    help: '主题编辑器导览',
+    help: 'Theme editor tour',
     handler: _cmdTourTheme,
     usage: '/tour-theme'
   },
   'tour-settings': {
     alias: ['tour-setting', 'settings-tour'],
     category: 'Tours',
-    help: '设置导览：模型、集成、外观',
+    help: 'Settings tour: models, integrations, appearance',
     handler: _cmdTourSettings,
     usage: '/tour-settings'
   },
   'tour-gallery': {
     alias: ['gallery-tour'],
     category: 'Tours',
-    help: '图片库导览：照片、相册、编辑器',
+    help: 'Gallery tour: photos, albums, editor',
     handler: _cmdTourGallery,
     usage: '/tour-gallery'
   },
   'tour-brain': {
     alias: ['brain-tour', 'tour-memory', 'memory-tour'],
     category: 'Tours',
-    help: '大脑导览：记忆、整理、技能、设置',
+    help: 'Brain tour: memories, tidy, skills, settings',
     handler: _cmdTourBrain,
     usage: '/tour-brain'
   },
   'tour-task-1': {
     alias: ['tour-task', 'tour-tasks', 'tour-tasks-1', 'tasks-tour', 'tasks-tour-1'],
     category: 'Tours',
-    help: '任务导览：内置任务、运行、暂停控制',
+    help: 'Tasks tour: built-ins, runs, pause controls',
     handler: _cmdTourTask1,
     usage: '/tour-task-1'
   },
   'tour-task-2': {
     alias: ['tour-tasks-2', 'tasks-tour-2'],
     category: 'Tours',
-    help: '任务导览：添加和管理任务',
+    help: 'Tasks tour: adding and managing tasks',
     handler: _cmdTourTask2,
     usage: '/tour-task-2'
   },
   prompt: {
     alias: [],
     category: 'Getting started',
-    help: '发送随机入门提示词',
+    help: 'Send a random starter prompt',
     handler: _cmdPrompt,
     usage: '/prompt'
   },
   theme: {
     alias: [],
     category: 'Settings',
-    help: '更改颜色主题',
+    help: 'Change color theme',
     handler: _cmdTheme,
     usage: '/theme name'
   },
   settings: {
     alias: ['cfg', 'preferences', 'config'],
     category: 'Settings',
-    help: '打开设置面板',
+    help: 'Open the Settings panel',
     handler: _cmdSettings,
     usage: '/settings [tab]'
   },
@@ -5965,91 +5977,91 @@ const COMMANDS = {
     alias: ['show'],
     category: 'Utility',
     hidden: true,
-    help: '打开工具面板',
+    help: 'Open a tool panel',
     handler: _cmdOpen,
     usage: '/open Cookbook'
   },
   cookbook: {
     alias: ['cook'],
     category: 'Tools',
-    help: '打开 Cookbook；使用 "serve" 跳转到模型服务部署',
+    help: 'Open Cookbook; use "serve" to jump to model serving',
     handler: (args, ctx) => _cmdToolPanel('cookbook', args, ctx),
     usage: '/cookbook  ·  /cookbook serve qwen'
   },
   email: {
     alias: ['mail', 'inbox'],
     category: 'Tools',
-    help: '打开邮件',
+    help: 'Open Email',
     handler: (args, ctx) => _cmdToolPanel('email', args, ctx),
     usage: '/email'
   },
   notes: {
     alias: [],
     category: 'Tools',
-    help: '打开笔记',
+    help: 'Open Notes',
     handler: (args, ctx) => _cmdToolPanel('notes', args, ctx),
     usage: '/notes'
   },
   tasks: {
     alias: [],
     category: 'Tools',
-    help: '打开任务',
+    help: 'Open Tasks',
     handler: (args, ctx) => _cmdToolPanel('tasks', args, ctx),
     usage: '/tasks'
   },
   brain: {
     alias: ['memories'],
     category: 'Tools',
-    help: '打开大脑',
+    help: 'Open Brain',
     handler: (args, ctx) => _cmdToolPanel('brain', args, ctx),
     usage: '/brain'
   },
   library: {
     alias: ['docs', 'documents'],
     category: 'Tools',
-    help: '打开文档库',
+    help: 'Open Library',
     handler: (args, ctx) => _cmdToolPanel('library', args, ctx),
     usage: '/library'
   },
   gallery: {
     alias: ['photos'],
     category: 'Tools',
-    help: '打开图片库',
+    help: 'Open Gallery',
     handler: (args, ctx) => _cmdToolPanel('gallery', args, ctx),
     usage: '/gallery'
   },
   research: {
     alias: [],
     category: 'Tools',
-    help: '打开深度研究',
+    help: 'Open Deep Research',
     handler: (args, ctx) => _cmdToolPanel('research', args, ctx),
     usage: '/research'
   },
   compare: {
     alias: [],
     category: 'Tools',
-    help: '打开模型对比',
+    help: 'Open Compare',
     handler: (args, ctx) => _cmdToolPanel('compare', args, ctx),
     usage: '/compare'
   },
   mcp: {
     alias: [],
     category: 'Tools',
-    help: '显示MCP服务器状态',
+    help: 'Show MCP server status',
     handler: _cmdMcp,
     usage: '/mcp'
   },
   model: {
     alias: [],
     category: 'Settings',
-    help: '显示当前聊天模型',
+    help: 'Show current chat model',
     handler: _cmdModel,
     usage: '/model  ·  /model list'
   },
   models: {
     alias: [],
     category: 'Settings',
-    help: '列出可用模型',
+    help: 'List available models',
     handler: _cmdModels,
     usage: '/models'
   },
@@ -6057,7 +6069,7 @@ const COMMANDS = {
     alias: ['ws', 'websearch'],
     category: 'Utility',
     hidden: true,
-    help: '网页搜索（启用网络搜索后发送查询）',
+    help: 'Web search (sends query with web enabled)',
     handler: _cmdWebSearch,
     noUserBubble: true,
     usage: '/search query'
@@ -6066,7 +6078,7 @@ const COMMANDS = {
     alias: ['search-history'],
     category: 'Utility',
     hidden: true,
-    help: '搜索所有对话',
+    help: 'Search all conversations',
     handler: _cmdSearch,
     usage: '/find query'
   },
@@ -6074,21 +6086,21 @@ const COMMANDS = {
     alias: ['df'],
     category: 'Utility',
     hidden: true,
-    help: '数据库统计',
+    help: 'Database statistics',
     handler: _cmdStats,
     usage: '/stats'
   },
   usage: {
     alias: ['cost', 'tokens'],
     category: 'Utility',
-    help: '显示当前聊天的本地用量',
+    help: 'Show local usage for the current chat',
     handler: _cmdUsage,
     usage: '/usage'
   },
   compact: {
     alias: [],
     category: 'Utility',
-    help: '压缩旧聊天消息',
+    help: 'Compact older chat messages',
     handler: _cmdCompact,
     usage: '/compact'
   },
@@ -6096,7 +6108,7 @@ const COMMANDS = {
     alias: ['exec', 'run', 'shell'],
     category: 'Utility',
     hidden: true,
-    help: '运行 Shell 命令',
+    help: 'Run a shell command',
     handler: _cmdShell,
     usage: '/sh command'
   },
@@ -6104,7 +6116,7 @@ const COMMANDS = {
     alias: ['keys', 'keybinds', 'bind'],
     category: 'Utility',
     hidden: true,
-    help: '显示键盘快捷键',
+    help: 'Show keyboard shortcuts',
     handler: _cmdShortcuts,
     usage: '/shortcuts'
   },
@@ -6112,14 +6124,14 @@ const COMMANDS = {
     alias: ['?', 'man', 'commands'],
     category: 'Utility',
     hidden: true,
-    help: '帮助信息',
+    help: 'This help',
     handler: _cmdHelp,
     usage: '/help'
   },
   note: {
     alias: ['n'],
     category: 'Memory',
-    help: '快速保存笔记',
+    help: 'Quick-save a note',
     handler: _cmdNote,
     usage: '/note text'
   },
@@ -6134,8 +6146,8 @@ const COMMANDS = {
   cowsay:  { alias: ['moo', 'say'], hidden: true, handler: _cmdSay,     usage: '/cowsay [text]' },
   wisdom:  { alias: ['inspire'],    hidden: true, handler: _cmdWisdom,  usage: '/wisdom' },
   uptime:  { alias: [],             hidden: true, handler: _cmdUptime,  usage: '/uptime' },
-  ping:    { alias: ['pong'], category: 'Utility', hidden: true, help: '检查模型端点是否可用', handler: _cmdPing, usage: '/ping' },
-  probe:   { alias: ['test-models'], category: 'Utility', hidden: true, help: '测试哪些模型实际响应', handler: _cmdProbe, usage: '/probe [endpoint]' },
+  ping:    { alias: ['pong'], category: 'Utility', hidden: true, help: 'Check if model endpoints are alive', handler: _cmdPing, usage: '/ping' },
+  probe:   { alias: ['test-models'], category: 'Utility', hidden: true, help: 'Test which models actually respond', handler: _cmdProbe, usage: '/probe [endpoint]' },
   color:   { alias: ['colour'],     hidden: true, handler: _cmdColor,   usage: '/color [hex]' },
 };
 
@@ -6340,7 +6352,7 @@ async function handleSlashCommand(input) {
           const defKey = cmdDef.default;
           const defSub = cmdDef.subs[defKey];
           if (defSub) {
-            // For the default sub, pass all args through (they weren't consumed as a sub name)
+            // For the default sub, pass all args through (they weren\'t consumed as a sub name)
             return await defSub.handler(args, ctx);
           }
         }

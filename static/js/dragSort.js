@@ -184,7 +184,7 @@ export function enable(containerId, itemSelector, options = {}) {
   let _touchItem = null;
 
   function onTouchStart(e) {
-    // Don't start on buttons/inputs.
+    // Don\'t start on buttons/inputs.
     if (e.target.closest('button, input, select, a')) return;
     // Respect handleSelector on touch too — long-press anywhere was
     // unintentionally letting users start a reorder from the whole row.
@@ -209,7 +209,7 @@ export function enable(containerId, itemSelector, options = {}) {
   }
 
   function onTouchMove(e) {
-    // If long-press hasn't fired yet, cancel if finger moved too much
+    // If long-press hasn\'t fired yet, cancel if finger moved too much
     if (_touchTimer) {
       const dy = Math.abs(e.touches[0].clientY - _touchStartY);
       if (dy > 10) {

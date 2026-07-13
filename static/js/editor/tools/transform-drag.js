@@ -85,13 +85,13 @@ export function createTransformDragTool({
           state.hoveredHandle = hovered;
           composite();
         }
-        return false; // didn't fully consume the event
+        return false; // didn\'t fully consume the event
       }
       if (!state.transformHandle) return false;
       e.preventDefault();
       const coords = canvasCoords(e, state.mainCanvas);
       // Rotation grip — angle measured from the layer's geometric
-      // centre to the cursor. Mirror into the popup if it's open.
+      // centre to the cursor. Mirror into the popup if it\'s open.
       if (state.transformHandle === 'rot') {
         const layer = state.transformLayer;
         const off = state.layerOffsets.get(layer.id) || { x: 0, y: 0 };
@@ -136,7 +136,7 @@ export function createTransformDragTool({
       newH = Math.max(1, Math.round(newH));
       // Route through the popup-driven pipeline so popup + drag stay
       // in sync. Anchor the opposite corner via transformOrigOffset so
-      // handles don't slide while the user drags.
+      // handles don\'t slide while the user drags.
       state.transformPendingW = newW;
       state.transformPendingH = newH;
       const anchorOffX = state.transformStartOffX +
@@ -148,7 +148,7 @@ export function createTransformDragTool({
         y: anchorOffY + newH / 2 - state.transformOrigH / 2,
       };
       reapplyTransform();
-      // Mirror the new W/H into the popup if it's open.
+      // Mirror the new W/H into the popup if it\'s open.
       if (state.transformPopup) {
         const wIn = state.transformPopup.querySelector('#ge-transform-w');
         const hIn = state.transformPopup.querySelector('#ge-transform-h');

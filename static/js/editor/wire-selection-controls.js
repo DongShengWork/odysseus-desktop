@@ -142,7 +142,7 @@ export function wireSelectionControls({
     const btn = document.getElementById('ge-wand-vis');
     if (btn) {
       btn.innerHTML = state.wandMaskVisible ? EYE_OPEN : EYE_OFF;
-      btn.title = state.wandMaskVisible ? 'Hide selection overlay' : 'Show selection overlay';
+      btn.title = state.wandMaskVisible ? '隐藏选区叠加层' : '显示选区叠加层';
       btn.classList.toggle('visible', state.wandMaskVisible);
     }
     composite();
@@ -159,7 +159,7 @@ export function wireSelectionControls({
   document.getElementById('ge-wand-rembg')?.addEventListener('click', async () => {
     const btn = document.getElementById('ge-wand-rembg');
     const hint = buildSelectionHintMask();
-    if (!hint) { if (uiModule) uiModule.showToast('请先用魔棒创建选区'); return; }
+    if (!hint) { if (uiModule) uiModule.showToast('请先用魔棒工具进行选区'); return; }
     await applyImageTool('/api/image/remove-bg', { hint_mask: hint }, 'BG Removed', btn);
     wandClear();
   });

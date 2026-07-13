@@ -7,6 +7,7 @@ import Storage from './storage.js';
 import themeModule from './theme.js';
 import markdownModule from './markdown.js';
 import sessionModule from './sessions.js';
+import documentModule from './document.js';
 
 /**
  * Handle a ui_control SSE event — AI-driven UI manipulation.
@@ -183,6 +184,19 @@ export function handleUIControl(uiData) {
       }
 
     } else if (uiEvent === 'open_email_reply' || uiData.ui_event === 'open_email_reply') {
+      try {
+        var existingDocId = documentModule && documentModule.findEmailDocId
+          ? documentModule.findEmailDocId(uiData.uid, uiData.folder || 'INBOX')
+          : null;
+        if (existingDocId && documentModule.replaceEmailReplyBody) {
+          if (documentModule.loadDocument) documentModule.loadDocument(existingDocId);
+          documentModule.replaceEmailReplyBody(existingDocId, uiData.body || '', { force: true });
+          if (uiModule && uiModule.showToast) uiModule.showToast('已将回复写入打开的邮件');
+          return;
+        }
+      } catch (e) {
+        console.warn('open_email_reply existing draft update failed:', e);
+      }
       import('./emailInbox.js').then(function(mod) {
         var fn = mod.openReplyDraft || (mod.default && mod.default.openReplyDraft);
         if (fn) fn(uiData.uid, uiData.folder || 'INBOX', uiData.mode || 'reply', uiData.body || '');
@@ -232,7 +246,7 @@ export function insertStreamDoneToast(sessionId, query) {
   div.className = 'msg msg-system stream-done-toast';
   div.innerHTML = '<div class="body">'
     + '<span class="stream-done-indicator">●</span>'
-    + '<span>回复已在 <strong>' + (name || '会话').replace(/</g, '&lt;') + '</strong> 中就绪'
+    + '<span>回复已就绪，来自 <strong>' + (name || '会话').replace(/</g, '&lt;') + '</strong>'
     + (preview ? ' &mdash; ' + preview.replace(/</g, '&lt;') : '')
     + '</span>'
     + '</div>';

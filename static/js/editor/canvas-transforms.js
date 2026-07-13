@@ -32,8 +32,8 @@ export function createCanvasTransforms({ saveState, composite, fitZoom, showCanv
      */
     rotateAll(deg) {
       if (!state.layers.length) return;
-      saveState(`旋转 ${deg}°`);
-      showCanvasLoading('正在旋转…');
+      saveState(`Rotate ${deg}°`);
+      showCanvasLoading('Rotating…');
       const oldW = state.imgWidth, oldH = state.imgHeight;
       const swap = (deg === 90 || deg === 270);
       const newW = swap ? oldH : oldW;
@@ -67,7 +67,7 @@ export function createCanvasTransforms({ saveState, composite, fitZoom, showCanv
             layer.canvas.height = newLh;
             layer.ctx.drawImage(tmp, 0, 0);
             // The adjustment-render caches are keyed only by the adjustment
-            // signature, which rotation doesn't change — so composite would draw
+            // signature, which rotation doesn\'t change — so composite would draw
             // the STALE pre-rotation cache (the "had to click twice" bug). Drop
             // them so the next composite re-renders from the rotated canvas.
             layer._adjCacheKey = null;
@@ -97,12 +97,12 @@ export function createCanvasTransforms({ saveState, composite, fitZoom, showCanv
 
     /**
      * Mirror every layer horizontally ('h') or vertically ('v').
-     * Canvas dimensions don't change. Each layer offset is reflected
+     * Canvas dimensions don\'t change. Each layer offset is reflected
      * around the image centre.
      */
     flipAll(axis) {
       if (!state.layers.length) return;
-      saveState(axis === 'h' ? '水平翻转' : '垂直翻转');
+      saveState(axis === 'h' ? 'Flip horizontal' : 'Flip vertical');
       for (const layer of state.layers) {
         const lw = layer.canvas.width, lh = layer.canvas.height;
         const tmp = document.createElement('canvas');

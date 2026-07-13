@@ -216,7 +216,7 @@ function _applySnap(content, rect, zoneName) {
 function _unsnap(content) {
   const pre = content.dataset._tilePreSnap;
   if (!pre) return;
-  // Clear the !important snap props first — Object.assign can't override them.
+  // Clear the !important snap props first — Object.assign can\'t override them.
   ['position', 'left', 'top', 'width', 'height', 'max-height', 'margin', 'transform']
     .forEach(p => content.style.removeProperty(p));
   try {
@@ -246,7 +246,7 @@ document.addEventListener('pointerdown', (e) => {
   const content = _findDragTarget(e);
   if (!content) return;
 
-  // If we're already snapped, dragging away should unsnap immediately so the
+  // If we\'re already snapped, dragging away should unsnap immediately so the
   // user can move freely.
   if (content.dataset._tileZone) {
     // Defer slightly so pointermove threshold is met before unsnap kicks in

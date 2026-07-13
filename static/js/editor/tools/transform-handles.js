@@ -3,7 +3,7 @@
  *
  * Lives separately from `transform-drag.js` (which owns the drag
  * STATE MACHINE) because these three helpers are pure geometry that
- * happens to read shared state — they don't track in-progress drags,
+ * happens to read shared state — they don\'t track in-progress drags,
  * they just paint and hit-test.
  *
  *  - `syncOverlay(margin)`  positions the overlay canvas + sizes its

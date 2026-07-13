@@ -89,8 +89,8 @@ async function _loadSkillEntries() {
     return (Array.isArray(data.skills) ? data.skills : []).map(s => ({
       token: s.token || `/${s.name}`,
       aliases: [],
-      category: s.category || '技能',
-      help: s.help || '运行技能',
+      category: s.category || 'Skills',
+      help: s.help || 'Run skill',
       usage: s.usage || `${s.token || `/${s.name}`} <request>`,
     })).filter(e => e.token && e.token.startsWith('/'));
   } catch {
@@ -133,7 +133,7 @@ function _ensurePopup(textarea) {
   el.id = POPUP_ID;
   el.className = 'slash-autocomplete-popup';
   el.setAttribute('role', 'listbox');
-  el.setAttribute('aria-label', '斜杠命令');
+  el.setAttribute('aria-label', 'Slash commands');
   document.body.appendChild(el);
   return el;
 }
@@ -145,7 +145,7 @@ function _position(popup, textarea) {
   // Anchor above the textarea, left-aligned with it
   popup.style.left = Math.round(r.left) + 'px';
   popup.style.width = Math.max(280, Math.round(Math.min(r.width, 520))) + 'px';
-  // Place above when there's enough room, otherwise below.
+  // Place above when there\'s enough room, otherwise below.
   const aboveSpace = r.top;
   if (aboveSpace > maxH + 20) {
     popup.style.bottom = (window.innerHeight - r.top + 6) + 'px';
@@ -158,7 +158,7 @@ function _position(popup, textarea) {
 
 function _render(popup, items, selectedIdx, query) {
   if (!items.length) {
-    popup.innerHTML = `<div class="slash-ac-empty">没有匹配 <code>${_esc(query)}</code> 的命令</div>`;
+    popup.innerHTML = `<div class="slash-ac-empty">No commands match <code>${_esc(query)}</code></div>`;
     return;
   }
   // Group by category for the headers
@@ -167,7 +167,7 @@ function _render(popup, items, selectedIdx, query) {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     if (it.category !== lastCat) {
-      html += `<div class="slash-ac-cat">${_esc(it.category || '其他')}</div>`;
+      html += `<div class="slash-ac-cat">${_esc(it.category || 'Other')}</div>`;
       lastCat = it.category;
     }
     const sel = i === selectedIdx ? ' slash-ac-row-sel' : '';
@@ -216,7 +216,7 @@ export function initSlashAutocomplete(textarea) {
     // Only trigger when the message starts with "/" (no leading space) and
     // contains at most one space after the command (so subcommands work).
     // If the user has moved past the slash command (newline, longer prose),
-    // the menu hides — we don't autocomplete mid-sentence.
+    // the menu hides — we don\'t autocomplete mid-sentence.
     if (!v.startsWith('/') || v.includes('\n')) { hide(); return; }
     const query = v.trim();
     const groupItems = _exactCommandGroupItems(all, query);
@@ -277,7 +277,7 @@ export function initSlashAutocomplete(textarea) {
       selectedIdx = (selectedIdx - 1 + items.length) % items.length;
       _render(popup, items, selectedIdx, textarea.value);
     } else if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-      // Tab always inserts. Enter inserts only when the user hasn't already
+      // Tab always inserts. Enter inserts only when the user hasn\'t already
       // typed a full command + args — i.e. the popup is still in completion
       // mode, not in "ready to submit a typed-out command" mode.
       const v = textarea.value.trim();

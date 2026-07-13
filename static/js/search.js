@@ -10,7 +10,7 @@ let _loaded = false;
 
 export function init(apiBase) {
   API_BASE = apiBase;
-  // Fetch provider on init so it's ready when chat needs it
+  // Fetch provider on init so it\'s ready when chat needs it
   _fetchProvider();
 }
 
@@ -30,7 +30,7 @@ export function getCurrentProvider() {
 const _labels = {
   searxng: 'SearXNG', brave: 'Brave', duckduckgo: 'DuckDuckGo',
   google_pse: 'Google', tavily: 'Tavily', serper: 'Serper',
-  disabled: '搜索（已禁用）',
+  disabled: '搜索 (已禁用)',
 };
 
 export function getProviderLabel() {

@@ -163,93 +163,93 @@ function _inferBaseRepo(text) {
 export const ERROR_PATTERNS = [
   {
     pattern: /No available memory for the cache blocks|Available KV cache memory:.*-/i,
-    message: '加载模型后无剩余 GPU 内存用于 KV 缓存。',
+    message: 'No GPU memory left for KV cache after loading model.',
     fixes: [
-      { label: '使用 GPU 内存 0.95 重试', action: (panel) => _serveAutoRetryReplace(panel, '--gpu-memory-utilization', '0.95') },
-      { label: '使用上下文 2048 重试', action: (panel) => _serveAutoRetryReplace(panel, '--max-model-len', '2048') },
-      { label: '使用更多 GPU (TP=8) 重试', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '8') },
+      { label: 'Retry with GPU mem 0.95', action: (panel) => _serveAutoRetryReplace(panel, '--gpu-memory-utilization', '0.95') },
+      { label: 'Retry with context 2048', action: (panel) => _serveAutoRetryReplace(panel, '--max-model-len', '2048') },
+      { label: 'Retry with more GPUs (TP=8)', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '8') },
     ],
   },
   {
     pattern: /warming up sampler|max_num_seqs.*gpu_memory_utilization/i,
-    message: '预热期间 OOM。请降低 GPU 内存或最大并发数。',
+    message: 'OOM during warmup. Lower GPU memory or max sequences.',
     fixes: [
-      { label: '使用 GPU 内存 0.80 重试', action: (panel) => _serveAutoRetryReplace(panel, '--gpu-memory-utilization', '0.80') },
-      { label: '使用 --max-num-seqs 64 重试', action: (panel) => _serveAutoRetry(panel, '--max-num-seqs 64') },
-      { label: '使用 --max-num-seqs 32 重试', action: (panel) => _serveAutoRetry(panel, '--max-num-seqs 32') },
+      { label: 'Retry with GPU mem 0.80', action: (panel) => _serveAutoRetryReplace(panel, '--gpu-memory-utilization', '0.80') },
+      { label: 'Retry with --max-num-seqs 64', action: (panel) => _serveAutoRetry(panel, '--max-num-seqs 64') },
+      { label: 'Retry with --max-num-seqs 32', action: (panel) => _serveAutoRetry(panel, '--max-num-seqs 32') },
     ],
   },
   {
     pattern: /CUDA out of memory|torch\.cuda\.OutOfMemoryError|CUDA error: out of memory/i,
-    message: 'GPU 内存耗尽。尝试更多 GPU（更高的 TP）或降低上下文。',
+    message: 'GPU ran out of memory. Try more GPUs (higher TP) or lower context.',
     fixes: [
-      { label: '使用 TP=2 重试', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '2') },
-      { label: '使用 TP=4 重试', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '4') },
+      { label: 'Retry with TP=2', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '2') },
+      { label: 'Retry with TP=4', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '4') },
       { label: 'Retry with GPU mem 0.80', action: (panel) => _serveAutoRetryReplace(panel, '--gpu-memory-utilization', '0.80') },
-      { label: '使用上下文 4096 重试', action: (panel) => _serveAutoRetryReplace(panel, '--max-model-len', '4096') },
-      { label: '使用 --enforce-eager 重试', action: (panel) => _serveAutoRetry(panel, '--enforce-eager') },
+      { label: 'Retry with context 4096', action: (panel) => _serveAutoRetryReplace(panel, '--max-model-len', '4096') },
+      { label: 'Retry with --enforce-eager', action: (panel) => _serveAutoRetry(panel, '--enforce-eager') },
     ],
   },
   {
     pattern: /not divisible by weight quantization|quantization block/i,
-    message: 'FP8 MoE 量化与此张量并行分割不兼容。',
-    suggestion: '建议操作: 使用较低的张量并行大小重试，如 TP=4 或 TP=2。如果仍然失败，请使用非 FP8/GGUF 版本的模型。',
+    message: 'FP8 MoE quantization is incompatible with this tensor-parallel split.',
+    suggestion: 'Suggested action: retry with a lower tensor-parallel size, such as TP=4 or TP=2. If it still fails, use a non-FP8/GGUF version of the model.',
     fixes: [
       { label: 'Retry with TP=4', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '4') },
       { label: 'Retry with TP=2', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '2') },
-      { label: '编辑服务', action: (panel) => _openServeEditFromDiagnosis(panel) },
+      { label: 'Edit serve', action: (panel) => _openServeEditFromDiagnosis(panel) },
     ],
   },
   {
     pattern: /There is no module or parameter named ['"]lm_head\.input_scale['"]|lm_head\.input_scale|weight_scale_2/i,
-    message: '当前运行时无法加载此 ModelOpt LM-head 量化检查点。',
-    suggestion: '建议操作: 通过提供此 CLI 的环境（包管理器、venv、Docker 镜像或源码检出）升级 vLLM，或选择兼容的检查点。',
+    message: 'vLLM cannot load this ModelOpt LM-head quantized checkpoint with the current runtime.',
+    suggestion: 'Suggested action: upgrade vLLM through the environment that provides this CLI (package manager, venv, Docker image, or source checkout), or choose a compatible checkpoint.',
     fixes: [
-      { label: '打开依赖', action: () => _openCookbookDependencies('vllm') },
+      { label: 'Open Dependencies', action: () => _openCookbookDependencies('vllm') },
       {
-        label: '复制升级提示',
-        action: () => _copyText('升级提供所选 vllm CLI 的 vLLM 环境，或使用兼容的检查点。不要假设 Odysseus 拥有 PATH/系统/源码/Docker 安装的控制权。'),
+        label: 'Copy upgrade hint',
+        action: () => _copyText('Upgrade the vLLM environment that provides the selected vllm CLI, or use a compatible checkpoint. Do not assume Odysseus owns PATH/system/source/Docker installs.'),
       },
     ],
   },
   {
     pattern: /not divisib|must be divisible|attention heads.*divisible/i,
-    message: '张量并行大小与模型维度不兼容。',
+    message: 'Tensor parallel size incompatible with model dimensions.',
     fixes: [
-      { label: '使用 TP=1 重试', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '1') },
+      { label: 'Retry with TP=1', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '1') },
       { label: 'Retry with TP=2', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '2') },
       { label: 'Retry with TP=4', action: (panel) => _serveAutoRetryReplace(panel, '--tensor-parallel-size', '4') },
     ],
   },
   {
     pattern: /Too large swap space|swap space.*total CPU memory/i,
-    message: '交换空间超出可用 CPU 内存。',
+    message: 'Swap space too large for available CPU memory.',
     fixes: [
-      { label: '不使用 swap 重试', action: (panel) => _serveAutoRetryRemove(panel, '--swap-space') },
-      { label: '使用 swap 1 重试', action: (panel) => _serveAutoRetryReplace(panel, '--swap-space', '1') },
+      { label: 'Retry without swap', action: (panel) => _serveAutoRetryRemove(panel, '--swap-space') },
+      { label: 'Retry with swap 1', action: (panel) => _serveAutoRetryReplace(panel, '--swap-space', '1') },
     ],
   },
   {
     pattern: /swap space|not enough.*memory.*cpu|Cannot allocate memory/i,
-    message: 'CPU RAM 或交换空间不足。',
+    message: 'Not enough CPU RAM or swap space.',
     fixes: [
       { label: 'Retry without swap', action: (panel) => _serveAutoRetryRemove(panel, '--swap-space') },
-      { label: '将最大上下文降低到 4096', action: (panel) => _setPanelField(panel, 'ctx', '4096') },
+      { label: 'Lower max context to 4096', action: (panel) => _setPanelField(panel, 'ctx', '4096') },
     ],
   },
   {
     pattern: /unrecognized arguments:\s*--swap-space/i,
-    message: '--swap-space 已在较新 vLLM 版本中移除。请从命令中删除。',
+    message: '--swap-space was removed in newer vLLM versions. Remove it from the command.',
     fixes: [
       { label: 'Retry without swap', action: (panel) => _serveAutoRetryRemove(panel, '--swap-space') },
     ],
   },
   {
     pattern: /Address already in use|bind.*address.*in use/i,
-    message: '端口已被占用。可能有其他服务器正在运行。',
+    message: 'Port is already in use. Another server may be running.',
     fixes: [
-      { label: '终止现有 vLLM', action: (panel) => _runQuickCmd(panel, 'pkill -f vllm') },
-      { label: '使用端口 8001', action: (panel) => _setPanelField(panel, 'port', '8001') },
+      { label: 'Kill existing vLLM', action: (panel) => _runQuickCmd(panel, 'pkill -f vllm') },
+      { label: 'Use port 8001', action: (panel) => _setPanelField(panel, 'port', '8001') },
     ],
   },
   {
@@ -467,7 +467,7 @@ export const ERROR_PATTERNS = [
   // run line fails) — pattern order is first-match-wins, so without
   // these specific entries the user gets the misleading "install
   // llama-cpp-python[server]" suggestion when the actual blocker is a
-  // missing OS-package toolchain that pip can't ship.
+  // missing OS-package toolchain that pip can\'t ship.
   {
     pattern: /cmake: command not found|cmake.*not found.*Could not/i,
     message: 'cmake is required to compile llama.cpp from source, but it is not installed on this server.',
@@ -567,7 +567,7 @@ export const ERROR_PATTERNS = [
   },
   {
     // FlashInfer JIT-compiles attention kernels for the host GPU on first
-    // use. If the system /usr/bin/nvcc is older than CUDA 11.8 it can't
+    // use. If the system /usr/bin/nvcc is older than CUDA 11.8 it can\'t
     // target sm_89/sm_90 (Ada/Hopper), and the engine workers die before
     // they can report a useful traceback. Two quick paths out: pick a
     // non-flashinfer attention backend, or set CUDACXX to a newer nvcc
@@ -619,7 +619,7 @@ export const ERROR_PATTERNS = [
     match: (text) => {
       const TAIL = text.slice(-6000);
       // A serve script can run a fallback build and then start serving fine —
-      // don't flag a stale build error once the server is up.
+      // don\'t flag a stale build error once the server is up.
       if (/Application startup complete|"(?:GET|POST)\s+\/v1\/[^"]+ HTTP\/[\d.]+"\s*2\d\d|Uvicorn running on|server is listening on https?:\/\//i.test(TAIL)) return false;
       return /Failed to build\b|subprocess-exited-with-error|Could not build wheels|metadata-generation-failed/i.test(TAIL);
     },
@@ -630,7 +630,7 @@ export const ERROR_PATTERNS = [
   {
     // vLLM-specific traceback: only offer the kill-processes recovery when the
     // output is actually about vLLM. Tail-only + healthy-server suppression so
-    // a one-shot startup traceback doesn't stick on the panel forever while
+    // a one-shot startup traceback doesn\'t stick on the panel forever while
     // the server happily serves /v1/models.
     match: (text) => {
       const TAIL = text.slice(-4096);
@@ -716,7 +716,7 @@ export function _showDiagnosis(panel, diagnosis, sourceText) {
   panel._diagCollapsed = false;
 
   // Top-right toolbar: Copy bundle + × dismiss. Restored after user feedback
-  // — without them there's no way to quietly close a stale diagnosis or grab
+  // — without them there\'s no way to quietly close a stale diagnosis or grab
   // the full error+context for a forum/discord paste.
   const toolbar = document.createElement('div');
   toolbar.className = 'cookbook-diag-toolbar';

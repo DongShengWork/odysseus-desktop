@@ -227,7 +227,7 @@ export function _isBloatedSig(htmlFragment) {
 // Try folding using a per-sender cached signature (built by the
 // `learn_sender_signatures` action). When the cached text is found near
 // the end of `html`, slice there and wrap the tail in a details fold.
-// Returns the wrapped HTML or null when the hint doesn't apply.
+// Returns the wrapped HTML or null when the hint doesn\'t apply.
 export function _tryFoldHintSig(html, hintSig) {
   if (!html || !hintSig || typeof hintSig !== 'string') return null;
   if (hintSig.length < 20) return null;
@@ -275,7 +275,7 @@ export function _tryFoldHintSig(html, hintSig) {
   const sigSection = html.slice(htmlStart);
   if (!_isBloatedSig(sigSection)) return null;
   return before + '<details class="email-sig-fold">'
-    + _foldSummary('签名', _SIG_ICON)
+    + _foldSummary('Signature', _SIG_ICON)
     + sigSection + '</details>';
 }
 
@@ -292,7 +292,7 @@ export function _foldSignature(html, hintSig) {
   const wrap = (before, marker, rest) => {
     if (!_isBloatedSig(rest)) return html;
     return before + (marker || '') + '<details class="email-sig-fold">'
-      + _foldSummary('签名', _SIG_ICON) + rest + '</details>';
+      + _foldSummary('Signature', _SIG_ICON) + rest + '</details>';
   };
 
   let m = html.match(/<div[^>]*class=["'][^"']*\bgmail_signature\b[^"']*["'][\s\S]*$/i);

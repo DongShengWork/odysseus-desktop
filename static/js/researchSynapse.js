@@ -7,12 +7,12 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const PHASE_LABEL = {
-  probing:   '正在验证模型',
-  planning:  '正在规划策略',
-  searching: '正在搜索',
-  reading:   '正在阅读来源',
-  analyzing: '正在分析发现',
-  writing:   '正在撰写报告',
+  probing:   '验证模型中',
+  planning:  '规划策略中',
+  searching: '搜索中',
+  reading:   '阅读来源中',
+  analyzing: '分析发现中',
+  writing:   '撰写报告中',
   error:     '错误',
   done:      '完成',
 };
@@ -35,7 +35,7 @@ export default function createResearchSynapse(container, opts = {}) {
       </svg>
     </div>
     <div class="rs-meta">
-      <span class="rs-status">正在启动…</span>
+      <span class="rs-status">启动中…</span>
       <span class="rs-sep">·</span>
       <span class="rs-round">第 <b>0</b> 轮</span>
       <span class="rs-sep">·</span>
@@ -65,7 +65,7 @@ export default function createResearchSynapse(container, opts = {}) {
   rootLabel.setAttribute('y', cy + 28);
   rootLabel.setAttribute('text-anchor', 'middle');
   rootLabel.setAttribute('class', 'rs-label');
-  rootLabel.textContent = _trunc(opts.query || '查询', 28);
+  rootLabel.textContent = _trunc(opts.query || 'query', 28);
   nodesG.appendChild(rootLabel);
 
   const subs = []; // { x, y, count }
@@ -91,7 +91,7 @@ export default function createResearchSynapse(container, opts = {}) {
 
   function _addSub(label) {
     if (subs.length >= 10) return; // cap visual clutter
-    // Spread subs around a circle; reserve slight offset so first sub doesn't
+    // Spread subs around a circle; reserve slight offset so first sub doesn\'t
     // sit directly above the root label.
     const slot = subs.length;
     const totalSlots = Math.max(6, subs.length + 1);
@@ -173,9 +173,9 @@ export default function createResearchSynapse(container, opts = {}) {
       if (completed) return;
       const label = PHASE_LABEL[phase] || phase || '';
       let txt = label;
-      if (phase === 'searching' && extra.queries) txt += ` · ${extra.queries} 次查询`;
-      else if (phase === 'reading' && extra.title) txt = `正在阅读：${_trunc(extra.title, 32)}`;
-      else if (phase === 'analyzing' && extra.total_findings) txt += ` · ${extra.total_findings} 条发现`;
+      if (phase === 'searching' && extra.queries) txt += ` · ${extra.queries} 个查询`;
+      else if (phase === 'reading' && extra.title) txt = `阅读: ${_trunc(extra.title, 32)}`;
+      else if (phase === 'analyzing' && extra.total_findings) txt += ` · ${extra.total_findings} 个发现`;
       statusE.textContent = txt;
       // Visual cue per phase
       if (phase === 'error') wrap.classList.add('rs-error');
@@ -188,7 +188,7 @@ export default function createResearchSynapse(container, opts = {}) {
       if (round > lastRound) {
         // Add one sub-question node per new round we see
         for (let i = lastRound; i < round && subs.length < 10; i++) {
-          _addSub(opts.label || `第 ${i + 1} 轮`);
+          _addSub(opts.label || `R${i + 1}`);
         }
         lastRound = round;
         roundE.textContent = round;
@@ -201,7 +201,7 @@ export default function createResearchSynapse(container, opts = {}) {
       if (typeof total !== 'number' || total <= sourceCount) return;
       const delta = Math.min(total - sourceCount, 6); // animate at most 6 at a time
       for (let i = 0; i < delta; i++) {
-        // Stagger leaves slightly so they don't all pop on the same frame
+        // Stagger leaves slightly so they don\'t all pop on the same frame
         setTimeout(_addLeaf, i * 110);
       }
       sourceCount = total;
@@ -213,7 +213,7 @@ export default function createResearchSynapse(container, opts = {}) {
       if (completed) return;
       completed = true;
       wrap.classList.add('rs-complete');
-      statusE.textContent = '完成';
+      statusE.textContent = '已完成';
       if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     },
 

@@ -24,18 +24,18 @@ export function transformPopupHTML() {
     </div>
     <div class="ge-transform-popup-body">
       <div class="ge-transform-field">
-        <label>W</label>
+        <label>宽</label>
         <input type="number" class="ge-transform-popup-input" id="ge-transform-w" step="1" />
         <span class="ge-transform-spin" data-spin-for="ge-transform-w">
-          <button type="button" data-spin="down" tabindex="-1" aria-label="减少宽度">−</button>
+          <button type="button" data-spin="down" tabindex="-1" aria-label="减小宽度">−</button>
           <button type="button" data-spin="up" tabindex="-1" aria-label="增加宽度">+</button>
         </span>
       </div>
       <div class="ge-transform-field">
-        <label>H</label>
+        <label>高</label>
         <input type="number" class="ge-transform-popup-input" id="ge-transform-h" step="1" />
         <span class="ge-transform-spin" data-spin-for="ge-transform-h">
-          <button type="button" data-spin="down" tabindex="-1" aria-label="减少高度">−</button>
+          <button type="button" data-spin="down" tabindex="-1" aria-label="减小高度">−</button>
           <button type="button" data-spin="up" tabindex="-1" aria-label="增加高度">+</button>
         </span>
       </div>
@@ -51,7 +51,7 @@ export function transformPopupHTML() {
       <button type="button" class="ge-btn ge-btn-sm" id="ge-transform-cancel-btn">取消</button>
       <button type="button" class="ge-btn ge-btn-sm ge-btn-primary" id="ge-transform-apply">应用</button>
     </div>
-    <p class="ge-transform-popup-hint">在 W / H 前面输入 <strong>-</strong> 表示翻转。</p>
+    <p class="ge-transform-popup-hint">在宽/高前输入 <strong>-</strong> 可翻转。</p>
   `;
 }
 

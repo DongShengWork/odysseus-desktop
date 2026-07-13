@@ -50,7 +50,7 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
         state.cloneSourceY = coords.y;
         state.cloneSourceLayerId = (layer && layer.id) || state.activeLayerId;
         state.cloneSourceSnapshot = null; // captured at first stroke
-        showToast('已设置克隆采样源');
+        showToast('Clone source set');
         return;
       }
       if (state.cloneSourceX === null || state.cloneSourceY === null) {
@@ -63,7 +63,7 @@ export function createCloneTool({ activeLayer, saveState, strokeTo, showToast })
       saveState('Clone stroke');
       // Snapshot the source layer's pixels at stroke-start so the
       // brush samples clean source pixels even after it has painted
-      // over them. Otherwise we'd cascade-clone the same ring.
+      // over them. Otherwise we\'d cascade-clone the same ring.
       const srcLayer = state.layers.find(l => l.id === state.cloneSourceLayerId) || layer;
       const snap = document.createElement('canvas');
       snap.width = srcLayer.canvas.width;

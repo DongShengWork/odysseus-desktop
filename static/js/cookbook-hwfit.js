@@ -31,7 +31,7 @@ import {
 } from './cookbook.js';
 import uiModule from './ui.js';
 import spinnerModule from './spinner.js';
-import { _loadTasks, _tmuxGracefulKill } from './cookbookRunning.js';
+import { _loadTasks, _tmuxGracefulKill, _nextAvailablePort, _taskPort } from './cookbookRunning.js';
 import { openCookbookDependencies } from './cookbook-diagnosis.js';
 
 // Map a serve-backend code (vllm / sglang / llamacpp) → the package name
@@ -40,11 +40,11 @@ import { openCookbookDependencies } from './cookbook-diagnosis.js';
 const _BACKEND_PKG = { vllm: 'vllm', sglang: 'sglang', llamacpp: 'llama_cpp' };
 
 // Pre-launch: ask the deps API whether the chosen backend is present on
-// the target server. Returns true if it's good to go, false if we should
+// the target server. Returns true if it\'s good to go, false if we should
 // block and route the user into Dependencies.
 async function _ensureBackendInstalled(runBackend, host, port, envPath, modelName) {
   const pkgName = _BACKEND_PKG[runBackend];
-  if (!pkgName) return true; // unknown backend — don't block
+  if (!pkgName) return true; // unknown backend — don\'t block
   try {
     const params = new URLSearchParams();
     if (host) {
@@ -57,7 +57,7 @@ async function _ensureBackendInstalled(runBackend, host, port, envPath, modelNam
     const pkg = (d.packages || []).find(p => p.name === pkgName);
     if (pkg && pkg.installed) return true;
   } catch (_) {
-    // If we can't tell, don't block — the server's own serve route will
+    // If we can\'t tell, don\'t block — the server\'s own serve route will
     // surface a clearer error anyway.
     return true;
   }
@@ -76,14 +76,15 @@ export let _hwfitCache = null;
 export let _hwfitDebounce = null;
 export let _cachedModelIds = null; // repo IDs already downloaded
 // Bumped on every _hwfitFetch; a slow scan (remote SSH probe can take ~10s)
-// checks this before rendering so a stale response can't clobber a newer one
+// checks this before rendering so a stale response can\'t clobber a newer one
 // after the user has switched servers.
 let _hwfitFetchToken = 0;
 let _dismissedHwChips = new Set();
+let _hwfitAutoScanStarted = new Set();
 // Permanently removed (X-clicked) chips. Separate from _dismissedHwChips
 // so the ranker treats "off" and "removed" the same (both ignore the
 // hardware) but the UI keeps "off" chips visible to toggle back on,
-// while "removed" ones don't render at all until next rescan.
+// while "removed" ones don\'t render at all until next rescan.
 let _removedHwChips = new Set();
 
 export let _gpuToggleTotal = 0; // real GPU count from first scan, never overridden
@@ -114,7 +115,7 @@ function _downloadSourceRepo(model, backend) {
 // (possibly different) server, WITHOUT clearing the markup now — clearing it made
 // the buttons flicker out and back in. The old buttons stay visible until the
 // fresh scan returns and swaps them in place. Lives here (not cookbook.js) because
-// _gpuToggleTotal is a module-local binding that can't be reassigned by importers.
+// _gpuToggleTotal is a module-local binding that can\'t be reassigned by importers.
 export function _resetGpuToggleState(clearDismissed = true) {
   if (clearDismissed) {
     _dismissedHwChips = new Set();
@@ -143,7 +144,7 @@ function _shortGpuName(name) {
 
 // Powers of two up to the pool size, plus the exact pool size — these are the
 // only safe vLLM --tensor-parallel-size values (TP must divide the GPU count and
-// the model's attention heads). Never offer a count we can't actually serve.
+// the model\'s attention heads). Never offer a count we can\'t actually serve.
 function _validTpCounts(poolSize) {
   const out = [1, 2, 4, 8, 16].filter(n => n <= poolSize);
   if (poolSize > 0 && !out.includes(poolSize)) out.push(poolSize);
@@ -168,7 +169,7 @@ export function _renderGpuToggles(system) {
   // Update on every scan that returns a positive total — previously this
    // only set on the first scan, so switching servers (e.g. local 1-GPU
    // first, then a 4-GPU remote) left the Run-panel GPU buttons stuck on
-   // the original count. Zero/missing totals still don't clobber a known
+   // the original count. Zero/missing totals still don\'t clobber a known
    // good value (avoids flicker during an in-flight re-probe).
   if (total > 0) _gpuToggleTotal = total;
 
@@ -204,7 +205,7 @@ export function _renderGpuToggles(system) {
   // mixed-resource boxes ("tightest" sorted by RAM instead of GPU).
   //
   // On boxes where total RAM > total VRAM, default to RAM (count=0) instead
-  // — RAM is the dominant pool so it's the better starting filter.
+  // — RAM is the dominant pool so it\'s the better starting filter.
   if (container._activeCount === undefined) {
     const ramGb = Number(system.total_ram_gb) || 0;
     const vramGb = Number(system.gpu_vram_gb) || 0;
@@ -241,8 +242,7 @@ export function _renderGpuToggles(system) {
       container._activeCount = undefined;   // default to the new pool's max
       delete container.dataset.rendered;    // force a count-button rebuild
       _renderGpuToggles(system);
-      _hwfitCache = null;
-      _hwfitFetch();
+      _hwfitFetch(false, { keepPrevious: true, forceRevalidate: true });
     });
   }
 
@@ -260,7 +260,7 @@ export function _renderGpuToggles(system) {
         btn.classList.add('active');
         container._activeCount = count;
         // Auto-suggest a quant based on hardware selection — but ONLY when the
-        // user has already picked a specific quant. When they're on "All"
+        // user has already picked a specific quant. When they\'re on "All"
         // (value === ""), leave them on All: toggling a GPU shouldn't silently
         // yank them out of the All view they wanted to see.
         const quantSel = document.getElementById('hwfit-quant');
@@ -274,14 +274,13 @@ export function _renderGpuToggles(system) {
           }
         }
       }
-      _hwfitCache = null;
-      _hwfitFetch();
+      _hwfitFetch(false, { keepPrevious: true, forceRevalidate: true });
     });
   }
 }
 
 // --- Scan persistence (survives page reloads) ----------------------------
-// The backend caches hardware detection per host (~30 min) but that's lost on a
+// The backend caches hardware detection per host (~30 min) but that\'s lost on a
 // service restart, and a reload still shows a spinner while it re-fetches. Cache
 // the last successful /models result per param-signature in localStorage so a
 // reload paints instantly, then we refresh in the background and swap.
@@ -297,7 +296,7 @@ const _SCAN_CACHE_TTL = 6 * 3600 * 1000; // 6 h — hardware rarely changes
 // next to the slider re-renders to "8k" / "16k" / … / "Max".
 function _ctxLabel(value) {
   const n = Number(value) || 0;
-  if (!n) return '最大';
+  if (!n) return 'Max';
   return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
 }
 
@@ -435,6 +434,27 @@ function _readScanCache(sig) {
   return null;
 }
 
+function _readNearestScanCache(sig) {
+  try {
+    const wanted = JSON.parse(sig || '{}');
+    const all = JSON.parse(localStorage.getItem(_SCAN_CACHE_KEY) || '{}');
+    let best = null;
+    for (const [key, entry] of Object.entries(all)) {
+      if (!entry || !entry.data || (Date.now() - (entry.ts || 0)) >= _SCAN_CACHE_TTL) continue;
+      let parsed = null;
+      try { parsed = JSON.parse(key); } catch { continue; }
+      if (!parsed) continue;
+      if ((parsed.h || '') !== (wanted.h || '')) continue;
+      if ((parsed.hk || '') !== (wanted.hk || '')) continue;
+      if (JSON.stringify(parsed.m || {}) !== JSON.stringify(wanted.m || {})) continue;
+      if (JSON.stringify(parsed.d || []) !== JSON.stringify(wanted.d || [])) continue;
+      if (!best || (entry.ts || 0) > (best.ts || 0)) best = entry;
+    }
+    return best?.data || null;
+  } catch {}
+  return null;
+}
+
 function _writeScanCache(sig, data) {
   try {
     const all = JSON.parse(localStorage.getItem(_SCAN_CACHE_KEY) || '{}');
@@ -468,7 +488,7 @@ function _hwfitShowError(list, host, detail) {
   if (rb) rb.addEventListener('click', () => { _resetGpuToggleState(); _hwfitFetch(true); });
 }
 
-// Client-side "Engine" filter (llama.cpp / vLLM / SGLang / Ollama). Empty =
+// Client-side "Engine" filter (llama.cpp / vLLM / SGLang / Ollama / Diffusers). Empty =
 // show all. Uses the same _detectBackend() the serve commands use, so what you
 // filter to is exactly what would be launched. Pure view filter — no refetch
 // needed. Ollama rows are merged into the main list (see _ensureOllamaLib +
@@ -561,8 +581,11 @@ function _ollamaToHwfitRows(libModels, vramAvail, ramAvail) {
   return out;
 }
 
-export async function _hwfitFetch(fresh = false) {
+export async function _hwfitFetch(fresh = false, opts = {}) {
   const _tk = ++_hwfitFetchToken;
+  const allowNetwork = fresh || opts.allowNetwork !== false;
+  const keepPrevious = !!opts.keepPrevious;
+  const forceRevalidate = !!opts.forceRevalidate;
   const useCase = document.getElementById('hwfit-usecase')?.value || '';
   const search = document.getElementById('hwfit-search')?.value?.trim() || '';
   const remoteHost = _envState.remoteHost || '';
@@ -573,10 +596,14 @@ export async function _hwfitFetch(fresh = false) {
   if (hasManualOrDismissed) fresh = true;
   // Instant paint from the persisted cache (skipped on a forced Rescan), so a
   // reload shows the last result with no spinner. We still fetch fresh below and
-  // swap it in. If there's no cache hit, fall back to the spinner.
+  // swap it in. If there\'s no cache hit, fall back to the spinner.
   const _sig = _scanSig();
-  const _cached = fresh ? null : _readScanCache(_sig);
+  let _cached = fresh ? null : _readScanCache(_sig);
+  if (!_cached && !fresh && (!allowNetwork || keepPrevious)) {
+    _cached = _readNearestScanCache(_sig);
+  }
   const wp = spinnerModule.createWhirlpool(18);
+  const _paintedFromCache = !!_cached;
   if (_cached) {
     // Tag the restored cache with its host too (scan-sig keys cache per
     // host, so a hit here is always for the current remoteHost).
@@ -587,28 +614,64 @@ export async function _hwfitFetch(fresh = false) {
     }
     _hwfitRenderList(list, _applyEngineFilter(_cached.models));
   } else {
-    // Show spinner while scanning — stack the spinner above a text label
-    // (the .hwfit-loading class is a centered flex ROW, so force column here).
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'hwfit-loading';
-    loadingDiv.style.flexDirection = 'column';
-    loadingDiv.style.gap = '6px';
-    loadingDiv.appendChild(wp.element);
-    // Text label like the other cookbook tabs: "Loading…", then if the scan runs
-    // long (remote SSH hardware probe), switch to "Scanning hardware…".
-    const loadingLbl = document.createElement('div');
-    loadingLbl.textContent = '加载中…';
-    loadingLbl.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;';
-    loadingDiv.appendChild(loadingLbl);
-    setTimeout(() => { if (loadingLbl.isConnected) loadingLbl.textContent = '正在扫描硬件…'; }, 2000);
-    list.innerHTML = '';
-    list.appendChild(loadingDiv);
-    _hwfitCache = null;   // no instant paint — clear until the fetch returns
+    const canKeepPrevious = keepPrevious && _hwfitCache && Array.isArray(_hwfitCache.models);
+    if (canKeepPrevious) {
+      try { wp.destroy(); } catch {}
+    } else if (!allowNetwork) {
+      _hwfitCache = null;
+      _hwfitRenderHw(hw, null);
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'hwfit-loading';
+      loadingDiv.style.cssText = 'flex-direction:column;gap:6px;text-align:center;';
+      loadingDiv.appendChild(wp.element);
+      const loadingTitle = document.createElement('div');
+      loadingTitle.textContent = 'No cached scan yet';
+      loadingTitle.style.cssText = 'font-size:12px;opacity:0.7;';
+      const loadingLbl = document.createElement('div');
+      loadingLbl.textContent = 'Scanning hardware…';
+      loadingLbl.style.cssText = 'font-size:11px;opacity:0.55;max-width:420px;line-height:1.4;';
+      loadingDiv.appendChild(loadingTitle);
+      loadingDiv.appendChild(loadingLbl);
+      list.innerHTML = '';
+      list.appendChild(loadingDiv);
+      if (!_hwfitAutoScanStarted.has(_sig)) {
+        _hwfitAutoScanStarted.add(_sig);
+        setTimeout(() => {
+          if (_tk === _hwfitFetchToken) {
+            _resetGpuToggleState();
+            _hwfitFetch(true, { autoFromEmpty: true });
+          }
+        }, 60);
+      }
+      return;
+    }
+    if (!canKeepPrevious) {
+      // Show spinner while scanning — stack the spinner above a text label
+      // (the .hwfit-loading class is a centered flex ROW, so force column here).
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'hwfit-loading';
+      loadingDiv.style.flexDirection = 'column';
+      loadingDiv.style.gap = '6px';
+      loadingDiv.appendChild(wp.element);
+      // Text label like the other cookbook tabs: "Loading…", then if the scan runs
+      // long (remote SSH hardware probe), switch to "Scanning hardware…".
+      const loadingLbl = document.createElement('div');
+      loadingLbl.textContent = 'Loading…';
+      loadingLbl.style.cssText = 'text-align:center;opacity:0.5;font-size:11px;';
+      loadingDiv.appendChild(loadingLbl);
+      setTimeout(() => { if (loadingLbl.isConnected) loadingLbl.textContent = 'Scanning hardware…'; }, 2000);
+      list.innerHTML = '';
+      list.appendChild(loadingDiv);
+      _hwfitCache = null;   // no instant paint — clear until the fetch returns
+    }
+  }
+  if (!allowNetwork) {
+    try { wp.destroy(); } catch {}
+    return;
   }
   // Only fetch cached model IDs when server changes, not on every search/sort
   const remoteKey = _currentServerValue();
   if (!_cachedModelIds || _lastCacheHost() !== remoteKey) {
-    _setLastCacheHost(remoteKey);
     const _cacheSrv = _serverByVal(_envState.remoteServerKey || remoteHost);
     const _cachePort = _cacheSrv?.port || '';
     const _cacheParams = new URLSearchParams();
@@ -620,9 +683,11 @@ export async function _hwfitFetch(fresh = false) {
     fetch(`/api/model/cached?${_cacheParams}`, { credentials: 'same-origin' })
       .then(r => r.json())
       .then(d => {
+        if (d && d.error) throw new Error(d.error);
         // Exclude stalled (download-shell) entries — a 12 KB README-only
         // folder shouldn't count as "downloaded" in the Scan/Download list.
         _cachedModelIds = new Set((d.models || []).filter(m => m.status !== 'stalled').map(m => m.repo_id));
+        _setLastCacheHost(remoteKey);
         // Re-mark rows if already rendered
         list.querySelectorAll('.hwfit-row[data-model]').forEach(row => {
           const name = row.dataset.model;
@@ -633,7 +698,14 @@ export async function _hwfitFetch(fresh = false) {
             }
           }
         });
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn('Cached model marker scan failed:', err);
+        _setLastCacheHost('');
+      });
+  }
+  if (_paintedFromCache && !forceRevalidate) {
+    try { wp.destroy(); } catch {}
+    return;
   }
   try {
     const sortBy = document.getElementById('hwfit-sort')?.value || 'newest';
@@ -682,7 +754,7 @@ export async function _hwfitFetch(fresh = false) {
     const endpoint = isImageMode ? `/api/hwfit/image-models?${params}` : `/api/hwfit/models?${params}`;
     const res = await fetch(endpoint);
     // A newer scan started while this one was in flight (user switched servers
-    // mid-probe) — drop this stale response so it can't clobber the new one.
+    // mid-probe) — drop this stale response so it can\'t clobber the new one.
     if (_tk !== _hwfitFetchToken) { try { wp.destroy(); } catch {} return; }
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -730,14 +802,14 @@ export async function _hwfitFetch(fresh = false) {
     }
     wp.destroy();
     if (data.error) {
-      // Keep the instantly-painted cache if we had one — don't replace good data
+      // Keep the instantly-painted cache if we had one — don\'t replace good data
       // with an error on a transient probe failure (stale-while-revalidate).
       if (!_cached) { _hwfitShowError(list, remoteHost, data.error); if (hw) hw.innerHTML = ''; }
       return;
     }
     // Merge Ollama library rows into the main list so they appear with the
     // same Fit/Param/Quant/VRAM/Mode columns as HF results and respond to the
-    // Engine filter. Skipped in image-gen mode (Ollama doesn't serve diffusers).
+    // Engine filter. Skipped in image-gen mode (Ollama doesn\'t serve diffusers).
     if (!isImageMode) {
       const _vramAvail = data.system?.gpu_vram_gb || 0;
       const _ramAvail = data.system?.total_ram_gb || 0;
@@ -764,7 +836,7 @@ export async function _hwfitFetch(fresh = false) {
       _envState.platform = data.system.platform;
     }
     // Sort client-side by the active column so the highest↔lowest toggle is
-    // deterministic (the previous array .reverse() didn't reliably flip).
+    // deterministic (the previous array .reverse() didn\'t reliably flip).
     // 1st click on a column = highest first; clicking it again = lowest first.
     if (!isImageMode) {
       const sortSel = document.getElementById('hwfit-sort');
@@ -857,6 +929,8 @@ function _renderHwVisibilityWarning(sys) {
   box.querySelector('[data-hw-action="manual"]')?.addEventListener('click', () => {
     const panel = document.getElementById('hwfit-manual-panel');
     if (panel) panel.classList.remove('hidden');
+    const manualBtn = document.getElementById('hwfit-hw-manual-btn');
+    if (manualBtn) manualBtn.textContent = 'CANCEL';
     document.getElementById('hwfit-hw-manual-btn')?.scrollIntoView?.({
       behavior: 'smooth',
       block: 'center',
@@ -872,7 +946,7 @@ function _renderHwVisibilityWarning(sys) {
   box.querySelector('[data-hw-action="copy"]')?.addEventListener('click', () => {
     // Keep diagnostics copy/paste friendly for GitHub issues and Docker support.
     const text = [
-      'Odysseus 图谱硬件诊断',
+      'Odysseus Cookbook hardware diagnostics',
       `probe_scope=${sys?.probe_scope || ''}`,
       `containerized=${sys?.containerized === true}`,
       `backend=${sys?.backend || ''}`,
@@ -884,7 +958,7 @@ function _renderHwVisibilityWarning(sys) {
       `cpu_cores=${sys?.cpu_cores || ''}`,
       `cpu_name=${sys?.cpu_name || ''}`,
       '',
-      '有用检查：',
+      'Useful checks:',
       'docker compose exec odysseus nvidia-smi -L',
       'docker compose exec odysseus cat /proc/meminfo | head',
       'docker compose exec odysseus python -c "from services.hwfit.hardware import detect_system; import json; print(json.dumps(detect_system(fresh=True), indent=2))"',
@@ -909,7 +983,7 @@ export function _hwfitRenderHw(el, sys) {
   // separate × button (fully remove from view + treat as dismissed for
   // ranking). The body's "off" state is just visually dimmed — the
   // chip stays visible so you can flip it back on without re-scanning.
-  const chip = (key, label, title = '点击关闭（X 隐藏）') => {
+  const chip = (key, label, title = 'Click to toggle off (X to hide)') => {
     if (_removedHwChips.has(key)) return '';
     const dim = _dismissedHwChips.has(key) ? ' hwfit-hw-chip-off' : '';
     return (
@@ -924,12 +998,12 @@ export function _hwfitRenderHw(el, sys) {
     // Mixed-GPU boxes (#711): `${gpuCount}x ${gpu_name}` uses gpus[0].name for
     // every card, so a 4090+3060 reads as "2x RTX 4090". Use gpu_groups (the
     // backend already groups identical cards) to render each pool separately
-    // and put the per-card index+VRAM into the tooltip so it's actually
+    // and put the per-card index+VRAM into the tooltip so it\'s actually
     // useful for picking CUDA_VISIBLE_DEVICES.
     const groups = Array.isArray(sys.gpu_groups) ? sys.gpu_groups : [];
     // Shorten vendor prefixes so a mixed-GPU label fits in the chip row
     // without overflowing. Single-GPU label still shows the full name
-    // (that's what users are used to seeing). Tooltip carries the full
+    // (that\'s what users are used to seeing). Tooltip carries the full
     // unmodified names regardless, so no information is lost.
     const _shortGpuName = (n) => String(n || '')
       .replace(/^NVIDIA\s+GeForce\s+/i, '')
@@ -964,7 +1038,7 @@ export function _hwfitRenderHw(el, sys) {
           );
         })();
   } else {
-    gpuChip = chip('gpu', '无 GPU');
+    gpuChip = chip('gpu', 'No GPU');
   }
   const vram = sys.gpu_vram_gb ? `${sys.gpu_vram_gb.toFixed(1)} GB VRAM` : '';
   const ram = `${sys.available_ram_gb?.toFixed(1) || '?'} / ${sys.total_ram_gb?.toFixed(1) || '?'} GB RAM`;
@@ -986,7 +1060,7 @@ export function _hwfitRenderHw(el, sys) {
   // Body click → toggle "off" (dimmed, still visible). Membership of
   // _dismissedHwChips is what the ranker reads, so both add+remove
   // here also flips the model list. The manual chip is excluded —
-  // dimming "manual" has no ranking effect (the key isn't checked),
+  // dimming "manual" has no ranking effect (the key isn\'t checked),
   // so click-to-toggle there would feel broken. Use × to clear it.
   el.querySelectorAll('.hwfit-hw-chip-toggle').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1014,13 +1088,15 @@ export function _hwfitRenderHw(el, sys) {
       const key = btn.dataset.hwChip;
       if (!key) return;
       // The manual-hardware chip needs special teardown: clear the
-      // saved manual state so the chip doesn't re-render on the next
+      // saved manual state so the chip doesn\'t re-render on the next
       // fetch from localStorage. Routes through clearManual() which
       // also collapses the edit panel.
       if (key === 'manual') {
         _saveManualHwState(null);
         btn.closest('.hwfit-hw-chip-row')?.remove();
         document.getElementById('hwfit-manual-panel')?.classList.add('hidden');
+        const manualBtn = document.getElementById('hwfit-hw-manual-btn');
+        if (manualBtn) manualBtn.textContent = 'EDIT';
         _resetGpuToggleState();
         _hwfitCache = null;
         _hwfitFetch(true);
@@ -1041,16 +1117,20 @@ function _wireManualHardwareControls(el) {
   const btn = document.getElementById('hwfit-hw-manual-btn');
   const panel = document.getElementById('hwfit-manual-panel');
   if (!btn || !panel) return;
+  const syncManualButton = () => {
+    btn.textContent = panel.classList.contains('hidden') ? 'EDIT' : 'CANCEL';
+  };
   const clearManual = () => {
     _saveManualHwState(null);
     el.querySelector('.hwfit-hw-chip-manual')?.remove();
     panel.classList.add('hidden');
+    syncManualButton();
     _resetGpuToggleState();
     _hwfitCache = null;
     _hwfitFetch(true);
   };
   const manual = _manualHwState();
-  btn.textContent = '编辑';
+  syncManualButton();
   if (manual) {
     panel.querySelector('.hwfit-manual-mode').value = manual.mode || 'gpu';
     panel.querySelector('.hwfit-manual-backend').value = manual.backend || 'cuda';
@@ -1066,11 +1146,13 @@ function _wireManualHardwareControls(el) {
     btn._hwfitManualBound = true;
     btn.addEventListener('click', () => {
       panel.classList.toggle('hidden');
+      syncManualButton();
       syncMode();
     });
   }
   el.querySelector('.hwfit-hw-chip-toggle[data-hw-chip="manual"]')?.addEventListener('click', () => {
     panel.classList.remove('hidden');
+    syncManualButton();
     syncMode();
   });
   if (!panel._hwfitManualBound) {
@@ -1087,12 +1169,14 @@ function _wireManualHardwareControls(el) {
       _resetGpuToggleState();
       _hwfitCache = null;
       panel.classList.add('hidden');
+      syncManualButton();
       _hwfitRenderHw(el, _manualDisplaySystem(window._hwfitSystemCache, manual));
       _hwfitFetch(true);
     });
     panel.querySelector('.hwfit-hw-manual-clear')?.addEventListener('click', clearManual);
   }
   syncMode();
+  syncManualButton();
 }
 
 export const _fitColors = { perfect: 'var(--green, #50fa7b)', good: 'var(--yellow, #f1fa8c)', marginal: 'var(--orange, #ffb86c)', too_tight: 'var(--red, #ff5555)' };
@@ -1112,22 +1196,22 @@ function _modeLabel(model) {
 }
 
 export const _hwfitColumns = [
-  { key: 'fit', label: '适配',    cls: 'hwfit-fit' },
-  { key: 'newest', label: '模型 (最新)',  cls: 'hwfit-name' },
-  { key: 'params',label: '参数量', cls: 'hwfit-c-params' },
-  { key: null,    label: '量化',  cls: 'hwfit-c-quant' },
+  { key: 'fit', label: 'Fit',    cls: 'hwfit-fit' },
+  { key: 'newest', label: 'Model (latest)',  cls: 'hwfit-name' },
+  { key: 'params',label: 'Param', cls: 'hwfit-c-params' },
+  { key: null,    label: 'Quant',  cls: 'hwfit-c-quant' },
   { key: 'vram',  label: 'VRAM',   cls: 'hwfit-c-vram' },
-  { key: 'context',label: '上下文',   cls: 'hwfit-c-ctx' },
-  { key: 'speed', label: '速度',  cls: 'hwfit-c-speed' },
-  { key: 'score', label: '评分',  cls: 'hwfit-c-score' },
-  { key: null,    label: '模式',   cls: 'hwfit-c-mode' },
+  { key: 'context',label: 'Ctx',   cls: 'hwfit-c-ctx' },
+  { key: 'speed', label: 'Speed',  cls: 'hwfit-c-speed' },
+  { key: 'score', label: 'Score',  cls: 'hwfit-c-score' },
+  { key: null,    label: 'Mode',   cls: 'hwfit-c-mode' },
 ];
 
 export function _hwfitRenderList(el, models) {
   if (!el) return;
   models = models || [];
   if (!models.length) {
-    // Disambiguate WHY the list is empty so capable servers don't read as "too weak":
+    // Disambiguate WHY the list is empty so capable servers don\'t read as "too weak":
     // active filters vs. a likely under-reported probe vs. genuinely low hardware.
     const sys = _hwfitCache?.system;
     const hasHw = sys && ((sys.gpu_vram_gb || 0) > 0 || (sys.total_ram_gb || 0) > 8);
@@ -1136,9 +1220,9 @@ export function _hwfitRenderList(el, models) {
       || document.getElementById('hwfit-quant')?.value
       || document.getElementById('hwfit-engine')?.value);
     let msg;
-    if (hasFilters) msg = '没有模型匹配这些筛选条件 — 尝试清除搜索、用例、量化或引擎。';
-    else if (hasHw) msg = '无合适模型 — 硬件探测可能低估了。尝试重新扫描。';
-    else msg = '没有适配您硬件的模型';
+    if (hasFilters) msg = 'No models match these filters — try clearing the search, use-case, quant, or engine.';
+    else if (hasHw) msg = 'No models fit — the hardware probe may have under-reported. Try Rescan.';
+    else msg = 'No models fit your hardware';
     el.innerHTML = `<div class="hwfit-loading">${msg}</div>`;
     return;
   }
@@ -1146,7 +1230,7 @@ export function _hwfitRenderList(el, models) {
   const currentSort = sortSel?.value || 'newest';
   const isReversed = sortSel?.dataset.reverse === '1';
   // Active budget for the Fit column label \u2014 make it obvious whether the
-  // ranking is against GPU or RAM so "tightest" can't be ambiguous on a
+  // ranking is against GPU or RAM so "tightest" can\'t be ambiguous on a
   // mixed-resource box.
   const tc = document.getElementById('hwfit-gpu-toggles');
   const _budget = (tc && typeof tc._activeCount === 'number')
@@ -1173,11 +1257,11 @@ export function _hwfitRenderList(el, models) {
       // the toggle row already shows which budget is active.)
     }
     // The Model column's "(newest)" / "(oldest)" suffix flips with the sort
-    // direction so the user can see at a glance which way they're sorted.
+    // direction so the user can see at a glance which way they\'re sorted.
     if (col.key === 'newest' && col.key === currentSort) {
-      label = isReversed ? '模型 (最早)' : '模型 (最新)';
+      label = isReversed ? 'Model (oldest)' : 'Model (latest)';
     } else if (col.key === 'newest') {
-      label = '模型 (最新)';
+      label = 'Model (latest)';
     }
     html += `<span class="hwfit-col ${col.cls}${sortable}${active}"${dataAttr}>${label}${arrow}</span>`;
   }
@@ -1198,7 +1282,7 @@ export function _hwfitRenderList(el, models) {
     const dlDot = (_cachedModelIds && (_cachedModelIds.has(m.name) || [..._cachedModelIds].some(id => id === m.name?.split('/').pop()))) ? '<span class="hwfit-dl-dot" title="Downloaded">\u25CF</span>' : '';
     html += `<div class="hwfit-row" data-model="${esc(m.name)}">`;
     html += `<span class="hwfit-col hwfit-fit" style="color:${fitColor}">${esc(fitLabel)}</span>`;
-    // Append quant to the title when it's not already in the repo name. The
+    // Append quant to the title when it\'s not already in the repo name. The
     // suffix strips quant-parts the name already contains — e.g. for
     // QuantTrio/MiniMax-M2-AWQ + quant=AWQ-4bit we just show "(4bit)", not
     // "(AWQ-4bit)". DeepSeek-V4-Flash + FP4-MoE-Mixed keeps the full tag
@@ -1219,7 +1303,7 @@ export function _hwfitRenderList(el, models) {
     html += `<span class="hwfit-col hwfit-name">${modelLogo(m.name)}${esc(_short)}${_quantSuffix}${moeBadge}${imgBadge}${dlDot}</span>`;
     html += `<span class="hwfit-col hwfit-c-params">${esc(pcount)}</span>`;
     // Truncate the Quant cell to 9 chars + ellipsis so long tags like
-    // "FP4-MoE-Mixed" don't push neighboring columns. Full tag stays in title.
+    // "FP4-MoE-Mixed" don\'t push neighboring columns. Full tag stays in title.
     const _qRaw = m.quant || '?';
     const _qShort = _qRaw.length > 9 ? _qRaw.slice(0, 9) + '…' : _qRaw;
     html += `<span class="hwfit-col hwfit-c-quant" title="${esc(_qRaw)}">${esc(_qShort)}</span>`;
@@ -1241,7 +1325,7 @@ export function _hwfitRenderList(el, models) {
       const modelData = (_hwfitCache?.models || []).find(m => m.name === name);
       if (!modelData) return;
       if (modelData._isOllama) {
-        // Force-open the Download card if it's been collapsed — otherwise
+        // Force-open the Download card if it\'s been collapsed — otherwise
         // filling the (hidden) input silently swallows the click.
         const dlBody = document.getElementById('cookbook-download-card-body');
         const dlArrow = document.getElementById('cookbook-download-card-arrow');
@@ -1268,12 +1352,12 @@ export function _hwfitRenderList(el, models) {
   el.querySelectorAll('.hwfit-header .hwfit-sortable').forEach(col => {
     col.addEventListener('click', (e) => {
       // The little dot inside the Fit header is its own toggle (fit-only
-      // filter), don't let it fall through to a sort click.
+      // filter), don\'t let it fall through to a sort click.
       if (e.target.closest('[data-fit-dot]')) {
         const on = !e.target.classList.contains('active');
         try { localStorage.setItem('hwfit_fit_only_v1', on ? '1' : '0'); } catch {}
         // Un-toggling the fit filter (off → showing too-tight rows again) is
-        // typically because the user wants to see the LARGE models they can't
+        // typically because the user wants to see the LARGE models they can\'t
         // run yet — re-sort by VRAM descending so the biggest surface first.
         if (!on) {
           const sortSel = document.getElementById('hwfit-sort');
@@ -1337,7 +1421,7 @@ function _syncHostFromScanDropdown() {
 // "0.10.0" or null when the model has no known floor. Hardcoded for now —
 // when the vLLM-recipes integration lands we can pull this from the upstream
 // recipe page instead. Keep this conservative: a null return means "any
-// installed version passes", so we don't false-positive launches.
+// installed version passes", so we don\'t false-positive launches.
 function _minBackendVersion(modelName, backend) {
   const n = (modelName || '').toLowerCase();
   if (backend === 'vllm') {
@@ -1371,7 +1455,7 @@ function _cmpSemver(a, b) {
   return 0;
 }
 
-// Map the detected GPU + the model's quant to SGLang's URL-hash params so
+// Map the detected GPU + the model\'s quant to SGLang's URL-hash params so
 // the cookbook page lands on the right preset. SGLang supports:
 //   hw      = b200 | b300 | gb200 | gb300 | mi300x | mi325x | mi350x | mi355x | h200
 //   quant   = mxfp8 | bf16
@@ -1437,7 +1521,7 @@ export function _expandModelRow(row, modelData) {
   if (modelData.is_image_gen) {
     html += `<div style="font-size:10px;opacity:0.5;margin-top:4px;">${esc((modelData.capabilities || []).join(' \u00B7 ') || '')}${modelData.description ? ' \u2014 ' + esc(modelData.description) : ''}</div>`;
   } else if (_requiresAcceleratorBackend(modelData)) {
-    // Only show the "needs CUDA/ROCm" note when the host doesn't already have
+    // Only show the "needs CUDA/ROCm" note when the host doesn\'t already have
     // one. With a visible CUDA/ROCm accelerator the note is noise — the user
     // can already serve the model and reading the warning on every row makes
     // the panel feel like everything's broken.
@@ -1472,11 +1556,11 @@ export function _expandModelRow(row, modelData) {
     quickRunBtn.addEventListener('click', async () => {
       const _qrHost = _syncHostFromScanDropdown();
 
-      // Don't serve a model that isn't downloaded yet. vLLM/SGLang would
+      // Don\'t serve a model that isn\'t downloaded yet. vLLM/SGLang would
       // background-pull at launch, so the serve task shows up as "running" in
       // the Running tab while nothing is actually served (and llama.cpp just
       // errors "No GGUF found"). The Configure button and the Serve tab already
-      // gate on the cached-model list — mirror that here. When the model isn't
+      // gate on the cached-model list — mirror that here. When the model isn\'t
       // present, honor the button's "Download" half by kicking off the download
       // instead, then the user can Run again to serve once it finishes.
       const _short = modelData.name.split('/').pop();
@@ -1485,7 +1569,7 @@ export function _expandModelRow(row, modelData) {
         || [..._cachedModelIds].some(id => id === modelData.name || id.endsWith('/' + _short))
       );
       if (_cachedModelIds && !_downloaded) {
-        uiModule.showToast('模型尚未下载 — 正在启动下载。下载完成后再次运行即可服务。');
+        uiModule.showToast('Model not downloaded yet — starting download. Run again to serve once it finishes.');
         if (backend === 'ollama') {
           _runPanelCmd(panel, _buildDownloadCmd(modelData, backend), { timeout: 0 });
         } else {
@@ -1493,36 +1577,34 @@ export function _expandModelRow(row, modelData) {
         }
         return;
       }
+      // Detect backend and port now — the pre-launch guard below needs them.
+      const _qrBackendDetect = _detectBackend(modelData);
+      const _qrRunBackend = _qrBackendDetect.backend || 'vllm';
+      const _qrPort = _nextAvailablePort();
 
-      // ─── Pre-launch: stop the model already serving on this host ───────
-      // Two servers can't share port 8000. Without this, the new launch
-      // silently collided and the user saw no feedback. We surface the
-      // conflict and offer to kill the running one first as the default
-      // action (it's almost always what the user wants).
+      // ─── Pre-launch: stop colliding serves on the same port ───────
+      // Different ports coexist fine (e.g. vLLM on 8000 + Qwen VL on
+      // 8001). Only block when the new model\'s port genuinely collides
+      // with a running serve. (Issue #4507)
       try {
         const _qrHostStr = _envState.remoteHost || '';
-        const _activeServes = _loadTasks().filter(t =>
+        const _allServes = _loadTasks().filter(t =>
           t && t.type === 'serve'
           && (t.remoteHost || '') === _qrHostStr
           && (t.status === 'running' || t.status === 'ready' || t._serveReady)
         );
-        if (_activeServes.length) {
-          const _names = _activeServes.map(t => t.payload?.repo_id || t.repo || t.name || '?').filter(Boolean);
+        const _clashing = _allServes.filter(t => _taskPort(t) === _qrPort);
+        if (_clashing.length) {
+          const _names = _clashing.map(t => t.payload?.repo_id || t.repo || t.name || '?').filter(Boolean);
           const _ok = await window.styledConfirm?.(
-            `${_names.length} model${_names.length === 1 ? '' : 's'} already serving on ${_qrHostStr || 'local'} (${_names.join(', ')}). Port 8000 will collide. Stop the running model and launch this one?`,
-            { confirmText: '停止并启动', cancelText: '取消' }
+            `${_clashing.length} model${_clashing.length === 1 ? '' : 's'} on port ${_qrPort} (${_names.join(', ')}). Stop it and launch this one?`,
+            { confirmText: 'Stop & launch', cancelText: 'Cancel' }
           );
           if (!_ok) return;
-          // Mark + kill each running serve, then wait briefly for the
-          // tmux session to actually go down before we kick off the new
-          // launch. Otherwise vLLM still races against the dying socket.
           quickRunBtn.disabled = true;
-          quickRunBtn.textContent = '停止中…';
-          for (const t of _activeServes) {
+          quickRunBtn.textContent = 'Stopping…';
+          for (const t of _clashing) {
             try {
-              // Use that task's own Stop button if it's rendered (handles
-              // endpoint cleanup, Ollama unload, fade-out). Falls back to
-              // a direct tmux kill if the Active tab isn't in the DOM yet.
               const _taskEl = document.querySelector(`.cookbook-task[data-task-id="${t.sessionId}"]`);
               const _stopBtn = _taskEl?.querySelector('.cookbook-task-action-stop');
               if (_stopBtn) {
@@ -1537,10 +1619,11 @@ export function _expandModelRow(row, modelData) {
               }
             } catch (_killErr) { /* best-effort */ }
           }
-          // Give the OS a beat to release port 8000.
           await new Promise(r => setTimeout(r, 2500));
         }
       } catch (_e) { /* best-effort */ }
+
+      // -- Launch ───────────────────────────────────────────────────
 
       // ─── Pre-launch driver check ─────────────────────────────────────
       // vLLM/SGLang need a working CUDA/ROCm driver. nvidia-smi failures
@@ -1550,16 +1633,14 @@ export function _expandModelRow(row, modelData) {
       // user watches `pip install vllm` finish, then sees a cryptic CUDA
       // error 10 minutes later. (llama.cpp / Ollama have CPU fallbacks
       // so they skip this gate.)
-      const _qrBackendDetect = _detectBackend(modelData);
-      const _qrRunBackend = _qrBackendDetect.backend || 'vllm';
       if (_qrRunBackend === 'vllm' || _qrRunBackend === 'sglang') {
         const _sys = _hwfitCache?.system || {};
         if (_sys.gpu_error) {
-          uiModule.showError(`Can't launch: GPU driver error — ${_sys.gpu_error}. Reinstall or repair the NVIDIA driver, then re-scan.`);
+          uiModule.showError(`Can\'t launch: GPU driver error — ${_sys.gpu_error}. Reinstall or repair the NVIDIA driver, then re-scan.`);
           return;
         }
         if (!_sys.has_gpu || !(_sys.gpu_count > 0)) {
-          uiModule.showError(`Can't launch: no GPU detected by nvidia-smi. ${_qrRunBackend === 'vllm' ? 'vLLM' : 'SGLang'} needs a working CUDA or ROCm device.`);
+          uiModule.showError(`Can\'t launch: no GPU detected by nvidia-smi. ${_qrRunBackend === 'vllm' ? 'vLLM' : 'SGLang'} needs a working CUDA or ROCm device.`);
           return;
         }
       }
@@ -1598,7 +1679,7 @@ export function _expandModelRow(row, modelData) {
               const _hint = _qrRunBackend === 'vllm'
                 ? 'uv pip install -U vllm --torch-backend auto'
                 : "pip install -U 'sglang[all]'";
-              uiModule.showError(`Can't launch: ${_pkg} isn't installed${_qrHostStr ? ' on ' + _qrHostStr : ''}. Install it first:\n${_hint}`);
+              uiModule.showError(`Can\'t launch: ${_pkg} isn\'t installed${_qrHostStr ? ' on ' + _qrHostStr : ''}. Install it first:\n${_hint}`);
               return;
             }
             // Version-floor check. _minBackendVersion returns null when this
@@ -1612,7 +1693,7 @@ export function _expandModelRow(row, modelData) {
               const _hint = _qrRunBackend === 'vllm'
                 ? 'uv pip install -U vllm --torch-backend auto'
                 : "pip install -U 'sglang[all]'";
-              uiModule.showError(`Can't launch: ${modelData.name} needs ${_pkg} ≥ ${_minVer}, but ${_curVer} is installed${_qrHostStr ? ' on ' + _qrHostStr : ''}. Upgrade:\n${_hint}`);
+              uiModule.showError(`Can\'t launch: ${modelData.name} needs ${_pkg} ≥ ${_minVer}, but ${_curVer} is installed${_qrHostStr ? ' on ' + _qrHostStr : ''}. Upgrade:\n${_hint}`);
               return;
             }
           }
@@ -1622,7 +1703,7 @@ export function _expandModelRow(row, modelData) {
       }
 
       quickRunBtn.disabled = true;
-      quickRunBtn.textContent = '启动中...';
+      quickRunBtn.textContent = 'Starting...';
 
       // Smart defaults based on hardware and model
       const system = _hwfitCache?.system || {};
@@ -1641,7 +1722,7 @@ export function _expandModelRow(row, modelData) {
       let tp = _tpOpts[_tpOpts.length - 1] || 1;
       for (const n of _tpOpts) { if (n * gpuMem >= modelVram) { tp = n; break; } }
 
-      // Pin to exactly this pool's first `tp` GPUs so vLLM can't reach across into
+      // Pin to exactly this pool's first `tp` GPUs so vLLM can\'t reach across into
       // a mismatched pool. Respect a manual GPU pin (_envState.gpus) if the user set one.
       let cudaDevices = '';
       if (grp && Array.isArray(grp.indices)) cudaDevices = grp.indices.slice(0, tp).join(',');
@@ -1658,7 +1739,7 @@ export function _expandModelRow(row, modelData) {
 
       const host = _envState.remoteHost || '';
       const hostIp = host.includes('@') ? host.split('@').pop() : host;
-      const port = '8000';
+      const port = _qrPort;
       const detected = _detectBackend(modelData);
       const runBackend = detected.backend || 'vllm';
 
@@ -1673,7 +1754,7 @@ export function _expandModelRow(row, modelData) {
       } else if (runBackend === 'llamacpp') {
         const dir = `"$HOME/.cache/huggingface/hub/models--${modelData.name.replace(/\//g, '--')}/snapshots"`;
         const ggufPath = `$({ find ${dir} -name '*-00001-of-*.gguf' 2>/dev/null | sort; find ${dir} -name '*.gguf' 2>/dev/null | sort; } | head -1)`;
-        cmd = `llama-server --model "${ggufPath}" --host 0.0.0.0 --port 8080 -ngl 99 -c ${maxCtx} --flash-attn auto`;
+        cmd = `llama-server --model "${ggufPath}" --host 0.0.0.0 --port ${port} -ngl 99 -c ${maxCtx} --flash-attn auto`;
       } else {
         cmd = `vllm serve ${modelData.name} --host 0.0.0.0 --port ${port}`;
         cmd += ` --tensor-parallel-size ${tp}`;
@@ -1699,7 +1780,7 @@ export function _expandModelRow(row, modelData) {
       // validation (422), which is why Run silently did nothing.
       const _srv = _serverByVal(_envState.remoteServerKey || host);
 
-      // Pre-flight: if the backend isn't installed on the target server,
+      // Pre-flight: if the backend isn\'t installed on the target server,
       // route the user into Dependencies → recipe panel for that backend
       // instead of launching into an obvious "command not found" failure.
       const _ok = await _ensureBackendInstalled(
@@ -1711,7 +1792,7 @@ export function _expandModelRow(row, modelData) {
       );
       if (!_ok) {
         quickRunBtn.disabled = false;
-        quickRunBtn.textContent = '运行';
+        quickRunBtn.textContent = 'Run';
         return;
       }
 
@@ -1737,22 +1818,22 @@ export function _expandModelRow(row, modelData) {
           const shortName = modelData.name.split('/').pop();
           _addTask(data.session_id, shortName, 'serve', { _cmd: cmd, model: modelData.name, backend: runBackend, remote_host: host });
           _renderRunningTab();
-          uiModule.showToast(`正在启动 ${shortName}...`);
+          uiModule.showToast(`Launching ${shortName}...`);
           // Switch to Running tab
           const runTab = document.querySelector('.cookbook-tab[data-backend="Running"]');
           if (runTab) runTab.click();
         } else {
-          uiModule.showError('启动失败: ' + (data.error || ''));
+          uiModule.showError('Launch failed: ' + (data.error || ''));
         }
       } catch (e) {
-        uiModule.showError('启动失败: ' + e.message);
+        uiModule.showError('Launch failed: ' + e.message);
       }
       quickRunBtn.disabled = false;
-      quickRunBtn.textContent = '运行';
+      quickRunBtn.textContent = 'Run';
     });
   }
 
-  // Wire configure button — open the model's Serve panel.
+  // Wire configure button — open the model\'s Serve panel.
   const configBtn = panel.querySelector('.hwfit-serve-expand-btn');
   if (configBtn) {
     configBtn.addEventListener('click', async () => {
@@ -1767,20 +1848,97 @@ export function _expandModelRow(row, modelData) {
         || [..._cachedModelIds].some(id => id === repo || id.endsWith('/' + short))
       );
       if (_cachedModelIds && !downloaded) {
-        uiModule.showToast('请先下载模型，然后从服务标签页配置');
+        uiModule.showToast('Download the model first, then configure from Serve tab');
         return;
       }
       // Downloaded (or cache state unknown) — open the Serve panel, which switches
-      // to the Serve tab, fetches the cached list, and expands this model's card.
+      // to the Serve tab, fetches the cached list, and expands this model\'s card.
       try {
         const { openServePanelForRepo } = await import('./cookbookServe.js');
         await openServePanelForRepo(repo);
       } catch (e) {
-        uiModule.showToast('无法打开服务面板: ' + (e && e.message ? e.message : e));
+        uiModule.showToast('Could not open Serve: ' + (e && e.message ? e.message : e));
       }
     });
   }
 
+}
+
+const _HWFIT_ENGINE_GLYPHS = {
+  '': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="8" cy="6" r="2" fill="currentColor" stroke="none"></circle><circle cx="16" cy="12" r="2" fill="currentColor" stroke="none"></circle><circle cx="10" cy="18" r="2" fill="currentColor" stroke="none"></circle></svg>',
+  vllm: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4l7 16 7-16"></path><path d="M14 4l4 9 3-9"></path></svg>',
+  sglang: '<span aria-hidden="true" style="display:block;width:14px;height:14px;background:currentColor;-webkit-mask:url(/static/icons/sglang-mark.png) center/contain no-repeat;mask:url(/static/icons/sglang-mark.png) center/contain no-repeat;"></span>',
+  llamacpp: '<svg width="14" height="14" viewBox="0 0 600 600" fill="none" aria-hidden="true"><path d="M600 392L504.249 558L504.137 557.929C487.252 584.069 458.193 600 426.864 600H120L240 392H600Z" fill="currentColor"></path><path d="M240 392H0L199.602 46.0254C216.032 17.5463 246.411 0 279.29 0H466.154L240 392Z" fill="currentColor"></path></svg>',
+  ollama: '<span aria-hidden="true" style="display:block;width:14px;height:14px;background:currentColor;-webkit-mask:url(/static/icons/ollama-mark-crop.png) center/contain no-repeat;mask:url(/static/icons/ollama-mark-crop.png) center/contain no-repeat;"></span>',
+  diffusers: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"></path></svg>',
+};
+
+function _hwfitEngineGlyph(value) {
+  return _HWFIT_ENGINE_GLYPHS[value] || _HWFIT_ENGINE_GLYPHS[''];
+}
+
+function _bindHwfitEnginePicker(engine) {
+  const wrap = engine?.closest('.hwfit-engine-wrap');
+  const btn = wrap?.querySelector('[data-hwfit-engine-btn]');
+  const menu = wrap?.querySelector('[data-hwfit-engine-menu]');
+  const icon = wrap?.querySelector('[data-hwfit-engine-icon]');
+  const label = wrap?.querySelector('[data-hwfit-engine-label]');
+  if (!engine || !wrap || !btn || !menu || wrap.dataset.enginePickerBound) return;
+  wrap.dataset.enginePickerBound = '1';
+
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  const currentLabel = () => {
+    const opt = Array.from(engine.options).find((o) => o.value === engine.value);
+    return opt?.textContent || 'Engine';
+  };
+  const syncButton = () => {
+    if (label) label.textContent = currentLabel();
+    if (icon) icon.innerHTML = _hwfitEngineGlyph(engine.value);
+    menu.querySelectorAll('[data-hwfit-engine-value]').forEach((item) => {
+      const active = item.dataset.hwfitEngineValue === engine.value;
+      item.classList.toggle('active', active);
+      item.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  };
+  const renderMenu = () => {
+    menu.innerHTML = Array.from(engine.options).map((opt) => (
+      `<button type="button" role="option" class="hwfit-engine-item" data-hwfit-engine-value="${opt.value}">`
+      + `<span class="hwfit-engine-item-icon" aria-hidden="true">${_hwfitEngineGlyph(opt.value)}</span>`
+      + `<span class="hwfit-engine-item-label">${opt.textContent}</span>`
+      + '</button>'
+    )).join('');
+    menu.querySelectorAll('[data-hwfit-engine-value]').forEach((item) => {
+      item.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const next = item.dataset.hwfitEngineValue || '';
+        if (engine.value !== next) {
+          engine.value = next;
+          engine.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        syncButton();
+        setOpen(false);
+      });
+    });
+    syncButton();
+  };
+
+  btn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    setOpen(menu.hidden);
+  });
+  engine.addEventListener('change', syncButton);
+  document.addEventListener('click', (ev) => {
+    if (!wrap.contains(ev.target)) setOpen(false);
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') setOpen(false);
+  });
+  renderMenu();
 }
 
 export function _hwfitInit() {
@@ -1798,6 +1956,7 @@ export function _hwfitInit() {
   // Engine filter is a pure client-side view filter over the already-fetched
   // list (HF + Ollama merged), so just re-render from cache.
   const engine = document.getElementById('hwfit-engine');
+  if (engine) _bindHwfitEnginePicker(engine);
   if (engine) engine.addEventListener('change', () => {
     const list = document.getElementById('hwfit-list');
     if (list && _hwfitCache && Array.isArray(_hwfitCache.models)) {
@@ -1951,23 +2110,24 @@ export function _hwfitInit() {
     if (!dot) return;
     if (!host) {
       dot.className = 'cookbook-srv-status';
-      dot.title = '输入 user@host 以测试';
+      dot.title = 'Enter user@host to test';
       setMsg('');
       return;
     }
     dot.className = 'cookbook-srv-status testing';
-    dot.title = '正在测试 SSH…';
-    setMsg('正在测试 SSH...');
-    const pf = port && port !== '22' ? `-p ${port} ` : '';
-    const cmd = `ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new ${pf}${host} "echo ok"`;
+    dot.title = 'Testing SSH…';
+    setMsg('Testing SSH...');
     const t0 = Date.now();
     try {
-      const res = await fetch('/api/shell/exec', {
+      const res = await fetch('/api/cookbook/test-ssh', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd, timeout: 8 }),
+        body: JSON.stringify({ host, ssh_port: port || undefined }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+      }
       const ms = Date.now() - t0;
       const out = (data.stdout || '').trim();
       if (data.exit_code === 0 && out.startsWith('ok')) {
@@ -1976,7 +2136,7 @@ export function _hwfitInit() {
         setMsg(`Connected · ${ms} ms`, 'var(--green,#50fa7b)');
       } else {
         dot.className = 'cookbook-srv-status fail';
-        const err = (data.stderr || data.stdout || `exit ${data.exit_code}`).toString().trim().slice(0, 240);
+        const err = (data.stderr || data.stdout || (data.exit_code == null ? 'no exit code' : `exit ${data.exit_code}`)).toString().trim().slice(0, 240);
         dot.title = `SSH failed: ${err}`;
         setMsg(`Failed · ${err}`, 'var(--red,#e06c75)');
       }
@@ -2010,7 +2170,7 @@ export function _hwfitInit() {
       credentials: 'same-origin',
     });
     const data = await res.json();
-    if (generate && !data.ok) throw new Error(data.error || '生成 SSH 密钥失败');
+    if (generate && !data.ok) throw new Error(data.error || 'Failed to generate SSH key');
     return (data.public_key || '').trim();
   }
 
@@ -2023,29 +2183,29 @@ export function _hwfitInit() {
     const host = entry.querySelector('.cookbook-srv-host')?.value?.trim() || '';
     const port = entry.querySelector('.cookbook-srv-port')?.value?.trim() || '';
     if (!host || !host.includes('@')) {
-      cmdBox.value = '请先以 user@host 格式输入服务器。';
+      cmdBox.value = 'Enter the server as user@host first.';
       if (copyBtn) copyBtn.disabled = true;
       return;
     }
     if (!/^[A-Za-z0-9._~-]+@[A-Za-z0-9._:-]+$/.test(host) || (port && !/^\d{1,5}$/.test(port))) {
-      cmdBox.value = '请使用普通 SSH 目标，如 user@host 和可选的数字端口。';
+      cmdBox.value = 'Use a plain SSH target like user@host and an optional numeric port.';
       if (copyBtn) copyBtn.disabled = true;
       return;
     }
     if (genBtn) {
       genBtn.disabled = true;
-      genBtn.textContent = generate ? '生成中...' : '加载中...';
+      genBtn.textContent = generate ? 'Generating...' : 'Loading...';
     }
     try {
       let publicKey = await _fetchCookbookSshKey(generate);
       if (!publicKey && !generate) publicKey = await _fetchCookbookSshKey(true);
       cmdBox.value = _serverKeyCommand(host, port, publicKey);
       if (copyBtn) copyBtn.disabled = false;
-      if (genBtn) genBtn.textContent = '密钥已就绪';
+      if (genBtn) genBtn.textContent = 'Key ready';
     } catch (e) {
       cmdBox.value = e.message || String(e);
       if (copyBtn) copyBtn.disabled = true;
-      if (genBtn) genBtn.textContent = '生成密钥';
+      if (genBtn) genBtn.textContent = 'Generate key';
     } finally {
       if (genBtn) genBtn.disabled = false;
     }
@@ -2065,7 +2225,7 @@ export function _hwfitInit() {
     if (!entry.querySelector('.cookbook-srv-status')) {
       const dot = document.createElement('span');
       dot.className = 'cookbook-srv-status';
-      dot.title = '点击测试 SSH';
+      dot.title = 'Click to test SSH';
       dot.addEventListener('click', (e) => { e.stopPropagation(); _testServerConnection(entry); });
       if (titleEl) titleEl.insertBefore(dot, titleEl.firstChild);
       else if (row) row.insertBefore(dot, row.firstChild);
@@ -2074,7 +2234,7 @@ export function _hwfitInit() {
       const _hostEl = entry.querySelector('.cookbook-srv-host');
       if (_hostEl && (_hostEl.readOnly || _hostEl.disabled)) {
         dot.className = 'cookbook-srv-status ok';
-        dot.title = '本地（本机）';
+        dot.title = 'Local (this machine)';
       }
     }
     const checkBtn = entry.querySelector('.cookbook-server-check-btn');
@@ -2093,18 +2253,18 @@ export function _hwfitInit() {
       _defBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const key = _defBtn.dataset.srvKey || '';
-        // Toggle off if it's already the default; otherwise make it the default.
+        // Toggle off if it\'s already the default; otherwise make it the default.
         _envState.defaultServer = (_envState.defaultServer === key) ? '' : key;
         _persistEnvState();
         document.querySelectorAll('.cookbook-srv-default').forEach(b => {
           const on = !!_envState.defaultServer && b.dataset.srvKey === _envState.defaultServer;
           b.classList.toggle('active', on);
-          // Keep the "default" label after the icon (don't overwrite it).
-          b.innerHTML = (on ? _MODELDIR_CHECK_ON : _MODELDIR_CHECK_OFF) + '<span class="cookbook-srv-default-label">默认</span>';
-          b.title = on ? '默认服务器 — 图谱由此打开' : '将此设为默认服务器';
+          // Keep the "default" label after the icon (don\'t overwrite it).
+          b.innerHTML = (on ? _MODELDIR_CHECK_ON : _MODELDIR_CHECK_OFF) + '<span class="cookbook-srv-default-label">default</span>';
+          b.title = on ? 'Default server — Cookbook opens here' : 'Make this the default server';
         });
         // Apply immediately so the dropdowns reflect it without reopening
-        // (inline — _applyServerSelection lives in cookbook.js and isn't imported here).
+        // (inline — _applyServerSelection lives in cookbook.js and isn\'t imported here).
         const _dk = _envState.defaultServer;
         if (_dk) {
           if (_dk === 'local') { _envState.remoteHost = ''; _envState.remoteServerKey = ''; _envState.env = 'none'; _envState.envPath = ''; _envState.platform = ''; }
@@ -2162,17 +2322,14 @@ export function _hwfitInit() {
         }
       });
     });
-    // Auto-test when host or port blur
+    // Manual connectivity test after editing host or port. Existing saved
+    // servers are not auto-tested on panel open; unreachable hosts can stall the
+    // Cookbook UI and make opening the panel feel blocked.
     entry.querySelectorAll('.cookbook-srv-host, .cookbook-srv-port').forEach(el => {
       el.addEventListener('blur', () => _testServerConnection(entry));
     });
-    // Initial test for pre-filled rows (existing servers on tab load)
-    if (entry.querySelector('.cookbook-srv-host')?.value?.trim() && !entry.dataset.tested) {
-      entry.dataset.tested = '1';
-      _testServerConnection(entry);
-    }
-    // Cancel button on a brand-new server entry: discard it (no confirm — it's
-    // unsaved) and re-sync so the dropped blank server doesn't linger.
+    // Cancel button on a brand-new server entry: discard it (no confirm — it\'s
+    // unsaved) and re-sync so the dropped blank server doesn\'t linger.
     const cancelBtn = entry.querySelector('.cookbook-server-cancel-btn');
     if (cancelBtn && !cancelBtn.dataset.bound) {
       cancelBtn.dataset.bound = '1';
@@ -2201,7 +2358,7 @@ export function _hwfitInit() {
           }));
         } catch (_) {}
         saveBtn.classList.add('saved');
-        saveBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#50fa7b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>已保存';
+        saveBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#50fa7b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>Saved';
       });
     }
     const rmBtn = entry.querySelector('.cookbook-server-rm');
@@ -2228,7 +2385,7 @@ export function _hwfitInit() {
       _hwfitFetch();
     });
     // Setup is owned by cookbook.js's delegated handler (Settings behavior:
-    // select server + open the Dependencies tab). Don't bind the inline-install
+    // select server + open the Dependencies tab). Don\'t bind the inline-install
     // handler here too, or one click would do two conflicting things.
     const setupBtn = null;
     if (setupBtn) {
@@ -2238,7 +2395,7 @@ export function _hwfitInit() {
         if (!host) return;
         setupBtn.disabled = true;
         const origText = setupBtn.textContent;
-        setupBtn.textContent = '安装中...';
+        setupBtn.textContent = 'Installing...';
         try {
           const res = await fetch('/api/cookbook/setup', {
             method: 'POST', credentials: 'same-origin',
@@ -2247,7 +2404,7 @@ export function _hwfitInit() {
           });
           const data = await res.json();
           if (data.ok) {
-            setupBtn.textContent = '\u2713 完成';
+            setupBtn.textContent = '\u2713 Done';
             setupBtn.style.color = '#50fa7b';
             uiModule.showToast(`Setup complete (${data.platform})`);
             // Store detected platform on the server entry
@@ -2273,7 +2430,7 @@ export function _hwfitInit() {
                   const tag = document.createElement('span');
                   tag.className = 'cookbook-modeldir-tag';
                   tag.dataset.dirIdx = existing.length;
-                  tag.innerHTML = `${uiModule.esc(termuxDir)} <span class="cookbook-modeldir-rm" title="移除">\u2715</span>`;
+                  tag.innerHTML = `${uiModule.esc(termuxDir)} <span class="cookbook-modeldir-rm" title="Remove">\u2715</span>`;
                   tag.querySelector('.cookbook-modeldir-rm').addEventListener('click', () => { tag.remove(); _syncServers(); });
                   const addBtn = container.querySelector('.cookbook-modeldir-add');
                   if (addBtn) container.insertBefore(tag, addBtn);
@@ -2283,12 +2440,12 @@ export function _hwfitInit() {
               }
             }
           } else {
-            setupBtn.textContent = '失败';
+            setupBtn.textContent = 'Failed';
             setupBtn.style.color = 'var(--red)';
-            uiModule.showError(data.error || data.output || '设置失败');
+            uiModule.showError(data.error || data.output || 'Setup failed');
           }
         } catch (e) {
-          setupBtn.textContent = '错误';
+          setupBtn.textContent = 'Error';
           setupBtn.style.color = 'var(--red)';
           uiModule.showError(e.message);
         }
@@ -2302,7 +2459,7 @@ export function _hwfitInit() {
       if (!raw) return;
       const dir = raw.replaceAll('\u2715', '').replaceAll('\u2716', '').trim();
       if (!dir) return;
-      // Don't add duplicates
+      // Don\'t add duplicates
       const existing = [...entry.querySelectorAll('.cookbook-modeldir-tag')].some(t => (t.dataset.dir || t.textContent.trim()) === dir);
       if (existing) return;
       const container = entry.querySelector('.cookbook-modeldirs');
@@ -2310,7 +2467,7 @@ export function _hwfitInit() {
       tag.className = 'cookbook-modeldir-tag';
       tag.dataset.dirIdx = container.querySelectorAll('.cookbook-modeldir-tag').length;
       tag.dataset.dir = dir;
-      tag.innerHTML = `<span class="cookbook-modeldir-dl" title="此处下载" data-dl-dir="${uiModule.esc(dir)}">${_MODELDIR_CHECK_OFF}</span> ${uiModule.esc(dir)} <span class="cookbook-modeldir-rm" title="移除">\u2716</span>`;
+      tag.innerHTML = `<span class="cookbook-modeldir-dl" title="Send downloads here" data-dl-dir="${uiModule.esc(dir)}">${_MODELDIR_CHECK_OFF}</span> ${uiModule.esc(dir)} <span class="cookbook-modeldir-rm" title="Remove">\u2716</span>`;
       tag.querySelector('.cookbook-modeldir-rm').addEventListener('click', () => { tag.remove(); _syncServers(); });
       _wireModelDirTarget(entry, tag.querySelector('.cookbook-modeldir-dl'));
       container.insertBefore(tag, addDirBtn);
@@ -2320,11 +2477,11 @@ export function _hwfitInit() {
       rm.addEventListener('click', () => { rm.closest('.cookbook-modeldir-tag').remove(); _syncServers(); });
     });
     // Download-target toggles: clicking one makes that dir the sole target for
-    // this server (or the default HF cache if it's the default dir).
+    // this server (or the default HF cache if it\'s the default dir).
     entry.querySelectorAll('.cookbook-modeldir-dl').forEach(dl => _wireModelDirTarget(entry, dl));
   }
 
-  // Mark a model-dir tag as this server's download target (exclusive), then
+  // Mark a model-dir tag as this server\'s download target (exclusive), then
   // persist. Clicking ANYWHERE on the tag (not just the check) selects it \u2014
   // except the remove \u2716, which has its own handler.
   function _wireModelDirTarget(entry, dlEl) {
@@ -2406,7 +2563,7 @@ export function _hwfitInit() {
         sel.value = _currentServerValue();
       });
       _hwfitCache = null;
-      // Reset GPU-toggle state (no flicker) so the new server's hardware re-renders.
+      // Reset GPU-toggle state (no flicker) so the new server\'s hardware re-renders.
       _resetGpuToggleState();
       _hwfitFetch();
     });

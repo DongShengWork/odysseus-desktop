@@ -3,7 +3,7 @@
  *
  *   1. `is-using` class while a slider is being dragged (eraser-rows
  *      expand to a wider track when in use). Cleared 0.5s after
- *      pointerup so a quick click doesn't snap back instantly.
+ *      pointerup so a quick click doesn\'t snap back instantly.
  *   2. Floating value bubble above the thumb during drag.
  *      Desktop: only the layer-opacity slider gets a bubble (the
  *      eraser-row sliders already show a value chip on the right).
@@ -52,7 +52,7 @@ export function wireSliderUx({ registerDocClickAway }) {
   function bubblePos(slider, cursorX) {
     // Bubble is fixed-positioned on document.body so it escapes any
     // overflow:hidden / overflow:auto on the row's ancestors. The
-    // bubble's X is CLAMPED to the slider's track so it can't follow
+    // bubble's X is CLAMPED to the slider's track so it can\'t follow
     // a finger that drags way past either end.
     const sliderRect = slider.getBoundingClientRect();
     const minX = sliderRect.left + 8;
@@ -92,7 +92,7 @@ export function wireSliderUx({ registerDocClickAway }) {
     showSliderBubble(slider, e);
     // Compensate for the leftward-expanding eraser sliders so the
     // thumb lands at the cursor's X on the new (wider) track. Layer-
-    // opacity doesn't shift left when it grows, so it uses the
+    // opacity doesn\'t shift left when it grows, so it uses the
     // browser default.
     if (slider.matches('.ge-eraser-row input[type="range"]')) {
       const rect = slider.getBoundingClientRect();

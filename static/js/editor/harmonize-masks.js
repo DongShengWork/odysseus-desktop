@@ -32,6 +32,7 @@
  * @returns {HTMLCanvasElement|null}
  */
 export function layerUnionAlpha(w, h, layers) {
+  if (!Array.isArray(layers)) return null;
   const visible = layers.filter(l => l.visible);
   if (visible.length < 2) return null;
   const bgId = visible[0].id;
@@ -67,7 +68,7 @@ export function layerUnionAlpha(w, h, layers) {
 /**
  * Build a feathered seam mask along the alpha edges of all non-base
  * visible layers. Returns base64-encoded PNG (no `data:` prefix), or
- * null if there's nothing to harmonize.
+ * null if there\'s nothing to harmonize.
  */
 export function seamMask(w, h, layers, featherPx = 12) {
   const bin = layerUnionAlpha(w, h, layers);

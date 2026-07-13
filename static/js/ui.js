@@ -340,19 +340,12 @@ export function showToast(msg, durationOrOpts) {
     stack.style.cssText = 'display:inline-flex;flex-direction:column;align-items:center;gap:1px;margin-left:10px;line-height:1;';
 
     const btn = document.createElement('button');
-    // If the caller supplied an SVG icon, prepend it. We trust the icon string
-    // (only set internally) — never accept caller-controlled HTML otherwise.
     if (actionIcon) {
       btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;">${actionIcon}<span></span></span>`;
       btn.querySelector('span span').textContent = actionLabel;
     } else {
       btn.textContent = actionLabel;
     }
-    // The toast itself is `pointer-events: none` so it doesn't block clicks
-    // beneath it. With an action button we need to flip both the toast AND
-    // the button so the user can actually click Undo. The flag is reset on
-    // the next plain showToast / showError call (those overwrite textContent
-    // which strips the button + we clear inline style at the top below).
     btn.style.cssText = 'padding:2px 10px;border:1px solid var(--fg);border-radius:4px;background:none;color:var(--fg);cursor:pointer;font-size:12px;pointer-events:auto;display:inline-flex;align-items:center;';
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -362,8 +355,6 @@ export function showToast(msg, durationOrOpts) {
     });
     stack.appendChild(btn);
 
-    // Keyboard-shortcut hints (Ctrl+Z / ⌘Z) are meaningless on touch devices —
-    // skip them on mobile so the toast just shows the Undo button.
     if (actionHint && window.innerWidth > 768) {
       const hint = document.createElement('span');
       hint.textContent = actionHint;
@@ -372,31 +363,27 @@ export function showToast(msg, durationOrOpts) {
     }
 
     toastEl.appendChild(stack);
-
-    // Small × to dismiss the toast without taking the action. Useful when
-    // the user already acted (or just doesn't want the banner sitting there).
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', '忽略');
-    closeBtn.title = '忽略';
-    closeBtn.textContent = '×';
-    closeBtn.style.cssText = 'margin-left:8px;padding:0;width:20px;height:20px;line-height:1;border:none;background:none;color:var(--fg);opacity:0.55;cursor:pointer;font-size:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;pointer-events:auto;';
-    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.opacity = '1'; });
-    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.opacity = '0.55'; });
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      clearTimeout(toastEl._hideTimer);
-      toastEl.classList.add('exiting');
-      toastEl.classList.remove('show');
-    });
-    toastEl.appendChild(closeBtn);
-
     toastEl.style.pointerEvents = 'auto';
   } else {
-    // No action — restore the default non-blocking behavior.
     toastEl.style.pointerEvents = '';
   }
+
+  // Close button for all toasts — dismiss without waiting for timeout.
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'toast-close-btn';
+  closeBtn.setAttribute('aria-label', '关闭');
+  closeBtn.title = '关闭';
+  closeBtn.textContent = '×';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    clearTimeout(toastEl._hideTimer);
+    toastEl.classList.add('exiting');
+    toastEl.classList.remove('show');
+    toastEl.style.pointerEvents = '';
+  });
+  toastEl.appendChild(closeBtn);
 
   // Pin to top-right via CSS — clear any legacy inline overrides so the
   // slide-in-from-right / slide-out-to-left transition can run cleanly.
@@ -412,8 +399,8 @@ export function showToast(msg, durationOrOpts) {
     toastEl.classList.add('exiting');
     toastEl.classList.remove('show');
     // Reset pointer-events so an action-toast (which sets it to 'auto'
-    // for its clickable button) doesn't leave the toast intercepting
-    // clicks after it's slid away. Was previously only cleared on the
+    // for its clickable button) doesn\'t leave the toast intercepting
+    // clicks after it\'s slid away. Was previously only cleared on the
     // NEXT plain toast, so a lingering action-toast could appear to
     // "lock" interaction near the top-right.
     toastEl.style.pointerEvents = '';
@@ -428,22 +415,43 @@ export function showError(msg) {
     toastEl = document.getElementById('toast');
   }
   _wireToastSwipe(toastEl);
-  toastEl.textContent = msg;
+  toastEl.textContent = '';
   toastEl.classList.add('error');
   toastEl.style.left = '';
   toastEl.style.transform = '';
   toastEl.classList.remove('exiting');
   toastEl.classList.add('show');
   clearTimeout(toastEl._hideTimer);
+
+  const textSpan = document.createElement('span');
+  textSpan.textContent = msg;
+  toastEl.appendChild(textSpan);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'toast-close-btn';
+  closeBtn.setAttribute('aria-label', '关闭');
+  closeBtn.title = '关闭';
+  closeBtn.textContent = '×';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    clearTimeout(toastEl._hideTimer);
+    toastEl.classList.add('exiting');
+    toastEl.classList.remove('show');
+    toastEl.style.pointerEvents = '';
+  });
+  toastEl.appendChild(closeBtn);
+
   toastEl._hideTimer = setTimeout(() => {
     toastEl.classList.add('exiting');
     toastEl.classList.remove('show');
-  }, 3000);
+  }, 6000);
 }
 
 /**
  * Smooth-scroll chat history to bottom using rAF lerp.
- * Throttled during streaming so it doesn't fight user scrolling.
+ * Throttled during streaming so it doesn\'t fight user scrolling.
  */
 let _scrollThrottleTimer = null;
 export function scrollHistory() {
@@ -469,7 +477,7 @@ function _smoothScrollStep() {
   const current = box.scrollTop;
   const diff = target - current;
 
-  // If user scrolled up significantly, don't force them down
+  // If user scrolled up significantly, don\'t force them down
   if (diff > 300) {
     _scrollRafId = null;
     return;
@@ -581,7 +589,7 @@ export function styledConfirm(message, { confirmText = '确认', cancelText = '�
       overlay.className = 'modal';
       overlay.innerHTML =
         '<div class="modal-content styled-confirm-box" role="dialog" aria-modal="true" aria-labelledby="styled-confirm-title" aria-describedby="styled-confirm-msg">' +
-          '<div class="modal-header"><h4 id="styled-confirm-title">Confirm</h4></div>' +
+          '<div class="modal-header"><h4 id="styled-confirm-title">确认</h4></div>' +
           '<div class="modal-body"><p id="styled-confirm-msg"></p></div>' +
           '<div class="modal-footer">' +
             '<button id="styled-confirm-cancel"></button>' +
@@ -631,7 +639,7 @@ export function styledConfirm(message, { confirmText = '确认', cancelText = '�
         e.stopImmediatePropagation();
         cleanup(false);
       } else if (e.key === 'Tab') {
-        // Trap focus inside the dialog so Tab can't wander to the page behind.
+        // Trap focus inside the dialog so Tab can\'t wander to the page behind.
         e.preventDefault();
         const f = [cancelBtn, okBtn];
         const i = f.indexOf(document.activeElement);
@@ -794,7 +802,7 @@ function _initScrollDismiss() {
       document.querySelectorAll('.ctx-popup').forEach(dismissOrRemove);
     }, { passive: true });
   } else {
-    // Retry once if element doesn't exist yet
+    // Retry once if element doesn\'t exist yet
     setTimeout(_initScrollDismiss, 500);
   }
 }
@@ -851,7 +859,7 @@ const uiModule = {
 export default uiModule;
 
 // Expose the styled confirm globally so any module can replace the native
-// browser confirm() with the themed dialog — even files that don't import
+// browser confirm() with the themed dialog — even files that don\'t import
 // uiModule. Usage: `if (!await window.styledConfirm(msg, { danger:true })) return;`
 if (typeof window !== 'undefined') {
   window.styledConfirm = styledConfirm;
@@ -895,11 +903,11 @@ if ('ontouchstart' in window) {
   let _startY = 0, _startX = 0;
   let _lastY = 0, _lastT = 0;
   let _velocity = 0;
-  let _dragging = false;    // true once we've committed to a vertical drag
+  let _dragging = false;    // true once we\'ve committed to a vertical drag
   let _cancelled = false;   // true if horizontal movement detected
 
   // Close any floating dropdowns/menus that hang off body via position:fixed.
-  // Called when a swipe-dismiss gesture starts so the menu doesn't orphan over
+  // Called when a swipe-dismiss gesture starts so the menu doesn\'t orphan over
   // the page after the sheet slides away.
   function _closeFloatingDropdownsForSwipe() {
     document.querySelectorAll(
@@ -924,7 +932,7 @@ if ('ontouchstart' in window) {
     if (e.target.closest('.gallery-editor, .gallery-editor-container')) return;
     // Internal vertical drag handles (e.g. the calendar's cal-splitter that
     // resizes the day-detail pane) consume vertical touches themselves. If
-    // we don't bail here, the swipe-dismiss path also tracks the touch and
+    // we don\'t bail here, the swipe-dismiss path also tracks the touch and
     // slides the whole modal down as the user drags the handle. The
     // [data-no-swipe-dismiss] hook lets other components opt out the same
     // way without having to hard-code their selector here.
@@ -937,7 +945,7 @@ if ('ontouchstart' in window) {
     const touch = e.touches[0];
     const contentRect = content.getBoundingClientRect();
     const isGrabZone = (touch.clientY - contentRect.top) < 48;
-    // Also allow swipe-dismiss from anywhere on the sheet when it's already
+    // Also allow swipe-dismiss from anywhere on the sheet when it\'s already
     // scrolled to the top — feels natural and matches iOS bottom-sheet UX.
     const isAtScrollTop = content.scrollTop <= 0;
 
@@ -995,7 +1003,7 @@ if ('ontouchstart' in window) {
           _cancelled = true;
           return;
         }
-        // If swiping down but content isn't at the top, let native scroll
+        // If swiping down but content isn\'t at the top, let native scroll
         if (dy > 0 && _swipeTarget.scrollTop > 0) {
           _swipeTarget.style.transform = '';
           _swipeTarget = null;
@@ -1006,7 +1014,7 @@ if ('ontouchstart' in window) {
         _swipeTarget.style.transition = 'none';
         _swipeTarget.style.willChange = 'transform';
         // A swipe is starting — close any floating menus/dropdowns so they
-        // don't orphan over the page once the sheet slides away. Covers the
+        // don\'t orphan over the page once the sheet slides away. Covers the
         // email reader More menu, cookbook serve kebab + saved-configs, and
         // anything else hanging off body via _anchor.
         _closeFloatingDropdownsForSwipe();
@@ -1148,7 +1156,7 @@ if ('ontouchstart' in window || window.innerWidth <= 768) {
     const isText = tag === 'INPUT' || tag === 'TEXTAREA' ||
                    (tag === 'DIV' && el.isContentEditable);
     if (!isText) return;
-    // Inputs of type button/checkbox/radio/range/etc. don't summon a keyboard
+    // Inputs of type button/checkbox/radio/range/etc. don\'t summon a keyboard
     if (tag === 'INPUT') {
       const t = (el.type || 'text').toLowerCase();
       if (['button','submit','reset','checkbox','radio','range','color','file','image'].includes(t)) return;
@@ -1198,7 +1206,7 @@ if (!window._odyEscExpandGuard) {
     if (!m?.classList?.contains('modal') || !_isVisible(m)) return;
     // Re-entry guard: setting style.zIndex itself fires the observer that
     // calls us back. Skip if this element is already pinned to the top
-    // (matches the current counter) so we don't spin into an infinite loop.
+    // (matches the current counter) so we don\'t spin into an infinite loop.
     const cur = parseInt(getComputedStyle(m).zIndex, 10) || 0;
     if (cur === _zCounter && cur > topToolWindowZ({ exclude: m })) return;
     const z = nextToolWindowZ({

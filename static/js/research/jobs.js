@@ -27,16 +27,20 @@ function _markDismissed(ids) {
 }
 
 let _activePollInterval = null;
+let _activePollInFlight = false;
+let _librarySyncInFlight = false;
+let _lastLibrarySyncAt = 0;
+const _LIBRARY_SYNC_MIN_MS = 120000;
 
 export function init(apiBase) {
   _apiBase = apiBase;
-  _reconnectActive();
+  _reconnectActive({ includeLibrary: true, forceLibrary: true });
   // Poll for active sessions periodically so research started elsewhere
   // (e.g. by the agent via trigger_research) gets adopted into the
   // sidebar — _reconnectActive only ran once at load before, so
   // agent-started jobs never appeared until a page reload.
   if (_activePollInterval) clearInterval(_activePollInterval);
-  _activePollInterval = setInterval(() => { _reconnectActive(); }, 12000);
+  _activePollInterval = setInterval(() => { _reconnectActive(); }, 20000);
 }
 
 // Allow an immediate adopt when the chat stream signals a new research
@@ -46,7 +50,13 @@ export function adoptSession(sessionId) {
   _reconnectActive();
 }
 
-async function _reconnectActive() {
+export function refreshLibrary(options = {}) {
+  return _syncLibrary(options);
+}
+
+async function _reconnectActive(options = {}) {
+  if (_activePollInFlight) return;
+  _activePollInFlight = true;
   try {
     // Reconnect to running tasks
     const res = await fetch(`${_apiBase}/api/research/active`, { credentials: 'same-origin' });
@@ -68,7 +78,20 @@ async function _reconnectActive() {
       }
     }
 
-    // Load recent completed research from disk
+    if (options.includeLibrary) await _syncLibrary({ force: !!options.forceLibrary });
+    _notify();
+  } catch {
+  } finally {
+    _activePollInFlight = false;
+  }
+}
+
+async function _syncLibrary(options = {}) {
+  const now = Date.now();
+  if (_librarySyncInFlight) return;
+  if (!options.force && now - _lastLibrarySyncAt < _LIBRARY_SYNC_MIN_MS) return;
+  _librarySyncInFlight = true;
+  try {
     const libRes = await fetch(`${_apiBase}/api/research/library?sort=recent&limit=20`, { credentials: 'same-origin' });
     if (libRes.ok) {
       const libData = await libRes.json();
@@ -76,13 +99,34 @@ async function _reconnectActive() {
       for (const item of (libData.research || [])) {
         if (item.status !== 'done') continue;
         if (dismissed.has(item.id)) continue;
-        if (_jobs.some(j => j.id === item.id)) continue;
         const elapsed = item.duration ? _parseDuration(item.duration) : 0;
+        const existing = _jobs.find(j => j.id === item.id);
+        if (existing) {
+          let changed = false;
+          const updates = {
+            query: item.query || existing.query,
+            status: 'done',
+            elapsed: elapsed || existing.elapsed || 0,
+            sourceCount: item.source_count || existing.sourceCount || 0,
+            thumbnail: item.thumbnail || existing.thumbnail || '',
+            category: item.category || existing.category || '',
+            _fromLibrary: true,
+          };
+          for (const [key, value] of Object.entries(updates)) {
+            if (existing[key] !== value) {
+              existing[key] = value;
+              changed = true;
+            }
+          }
+          if (changed) _notify();
+          continue;
+        }
         _jobs.push({
           id: item.id, query: item.query, status: 'done',
           progress: {}, startedAt: (item.started_at || 0) * 1000,
           elapsed, result: null, sources: null, findings: null,
           sourceCount: item.source_count || 0,
+          thumbnail: item.thumbnail || '',
           category: item.category || '',
           errorMsg: null, avgDuration: null, modelName: null,
           settings: { max_rounds: item.rounds || 8 },
@@ -90,9 +134,12 @@ async function _reconnectActive() {
         });
       }
     }
-
+    _lastLibrarySyncAt = Date.now();
     _notify();
   } catch {}
+  finally {
+    _librarySyncInFlight = false;
+  }
 }
 
 function _parseDuration(s) {
@@ -169,7 +216,7 @@ export function removeJob(id) {
   const idx = _jobs.findIndex(j => j.id === id);
   if (idx >= 0) {
     const job = _jobs[idx];
-    // Persist dismissal so it doesn't reappear from the library on reload.
+    // Persist dismissal so it doesn\'t reappear from the library on reload.
     if (job.status === 'done') _markDismissed([id]);
     _jobs.splice(idx, 1);
   }
@@ -177,7 +224,7 @@ export function removeJob(id) {
 }
 
 export function clearAll() {
-  // Mark all completed jobs as dismissed so they don't reappear on reload.
+  // Mark all completed jobs as dismissed so they don\'t reappear on reload.
   const doneIds = _jobs.filter(j => j.status === 'done').map(j => j.id);
   if (doneIds.length) _markDismissed(doneIds);
   for (const job of _jobs) {
@@ -195,16 +242,16 @@ export function formatElapsed(ms) {
 }
 
 export function formatPhase(progress, maxRounds) {
-  if (!progress || !progress.phase) return '正在启动...';
+  if (!progress || !progress.phase) return 'Starting...';
   const p = progress;
-  const rn = p.round ? (maxRounds ? `第 ${p.round}/${maxRounds} 轮：` : `第 ${p.round} 轮：`) : '';
+  const rn = p.round ? (maxRounds ? `Round ${p.round}/${maxRounds}: ` : `Round ${p.round}: `) : '';
   switch (p.phase) {
-    case 'probing': return '正在探测模型...';
-    case 'planning': return '正在规划研究策略...';
-    case 'searching': return `${rn}正在搜索（${p.queries || 0} 次查询）`;
-    case 'reading': return `${rn}正在阅读 ${p.total_sources || 0} 个来源`;
-    case 'analyzing': return `${rn}正在分析 ${p.total_findings || 0} 条发现`;
-    case 'writing': return `正在撰写报告 — ${p.total_sources || 0} 个来源`;
+    case 'probing': return 'Probing model...';
+    case 'planning': return 'Planning research strategy...';
+    case 'searching': return `${rn}Searching (${p.queries || 0} queries)`;
+    case 'reading': return `${rn}Reading ${p.total_sources || 0} sources`;
+    case 'analyzing': return `${rn}Analyzing ${p.total_findings || 0} findings`;
+    case 'writing': return `Writing report -- ${p.total_sources || 0} sources`;
     default: return p.phase;
   }
 }
@@ -307,7 +354,7 @@ function _finishJob(job, status) {
   job.elapsed = Date.now() - (job.startedAt || Date.now());
   if (status === 'done') {
     if ('Notification' in window && Notification.permission === 'granted') {
-      try { new Notification('研究完成', { body: job.query.slice(0, 80) }); } catch {}
+      try { new Notification('Research Complete', { body: job.query.slice(0, 80) }); } catch {}
     }
     if (_onCompleteCb) _onCompleteCb(job);
   }

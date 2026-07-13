@@ -3,6 +3,7 @@
 
 import uiModule from './ui.js';
 import markdownModule from './markdown.js';
+import { svgifyEmoji } from './markdown.js';
 import { addAITTSButton } from './tts-ai.js';
 import { providerLogo, providerLabel } from './providers.js';
 import settingsModule from './settings.js';
@@ -80,7 +81,7 @@ function _formatSize(bytes) {
 // Build the `.attach-cards` element for a message's attachment list. Shared by
 // addMessage and updateMessageAttachments so a live (optimistic) user bubble
 // can be re-rendered with real upload ids once the upload resolves.
-function buildAttachCards(attachments) {
+export function buildAttachCards(attachments) {
   const attachWrap = document.createElement('div');
   attachWrap.className = 'attach-cards';
   for (const att of attachments) {
@@ -89,7 +90,7 @@ function buildAttachCards(attachments) {
       // Image preview. Shown for both uploaded (att.id present) and still-
       // uploading attachments. A shimmering skeleton + whirlpool fills the
       // space until either the upload resolves (no id yet) or the thumbnail
-      // image finishes loading, so the photo doesn't pop in abruptly.
+      // image finishes loading, so the photo doesn\'t pop in abruptly.
       const imgWrap = document.createElement('div');
       imgWrap.className = 'attach-image-preview';
       imgWrap.style.cursor = att.id ? 'zoom-in' : 'default';
@@ -109,7 +110,7 @@ function buildAttachCards(attachments) {
         skel = document.createElement('div');
         skel.className = 'attach-image-skeleton';
         // Match the photo's aspect ratio when the backend knew it at upload
-        // time, so the skeleton doesn't sit at a 4:3 default and then snap to
+        // time, so the skeleton doesn\'t sit at a 4:3 default and then snap to
         // a portrait shape when the image arrives.
         if (att.width && att.height) {
           skel.style.aspectRatio = att.width + ' / ' + att.height;
@@ -128,7 +129,7 @@ function buildAttachCards(attachments) {
         const img = document.createElement('img');
         // Small cached thumbnail — the preview is tiny, no need to pull the
         // full-resolution photo. Click still opens the full image.
-        img.alt = att.name || 'Image';
+        img.alt = att.name || '图像';
         img.loading = 'lazy';
         img.style.cssText = 'max-width:300px;max-height:200px;border-radius:6px;display:' + (att.previewUrl ? 'block' : 'none') + ';';
         let _revealed = false;
@@ -149,7 +150,7 @@ function buildAttachCards(attachments) {
         // Failsafe: if neither load nor error fires within 8s, reveal anyway.
         // The timer is cleared on reveal AND when updateMessageAttachments
         // replaces the card (which scrubs the img / skel from the DOM), so
-        // repeated re-renders don't accumulate stranded timers.
+        // repeated re-renders don\'t accumulate stranded timers.
         if (!att.previewUrl) _revealTimer = setTimeout(_reveal, 8000);
         imgWrap.appendChild(img);
 
@@ -161,7 +162,7 @@ function buildAttachCards(attachments) {
           const ocrBtn = document.createElement('button');
           ocrBtn.type = 'button';
           ocrBtn.className = 'attach-ocr-btn';
-          ocrBtn.title = '查看/编辑识别文本';
+          ocrBtn.title = '查看/编辑 OCR 文字';
           ocrBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg><span class="attach-ocr-label">描述</span>';
           ocrBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -174,7 +175,7 @@ function buildAttachCards(attachments) {
       if (att.vision_model) {
         const visionLabel = document.createElement('div');
         visionLabel.className = 'attach-vision-model';
-        visionLabel.textContent = '视觉模型: ' + String(att.vision_model).split('/').pop();
+        visionLabel.textContent = '视觉: ' + String(att.vision_model).split('/').pop();
         imgWrap.appendChild(visionLabel);
       }
       if (att.name) {
@@ -236,7 +237,7 @@ function _openImageLightbox(att) {
   if (!att?.id) return;
   const overlay = document.createElement('div');
   overlay.className = 'attach-lightbox';
-  // Show the cached thumb immediately so the overlay doesn't sit blank
+  // Show the cached thumb immediately so the overlay doesn\'t sit blank
   // while a 25MB original streams in. The full image swaps in once loaded;
   // if the full load fails (404 / network), we keep the thumb + show an
   // error label rather than a blank overlay forever.
@@ -249,7 +250,7 @@ function _openImageLightbox(att) {
   full.addEventListener('error', () => {
     const err = document.createElement('div');
     err.className = 'attach-lightbox-err';
-    err.textContent = '无法加载全分辨率图片。';
+    err.textContent = '加载全分辨率图像失败。';
     overlay.appendChild(err);
   });
   full.src = `/api/upload/${att.id}`;
@@ -262,7 +263,7 @@ function _openImageLightbox(att) {
   };
   // If the overlay is removed via any path other than our close handler
   // (session switch, parent re-render, external cleanup), still drop the
-  // document-level keydown listener so it doesn't leak.
+  // document-level keydown listener so it doesn\'t leak.
   let _overlayObs = null;
   try {
     _overlayObs = new MutationObserver(() => {
@@ -280,7 +281,7 @@ function _openImageLightbox(att) {
 
 // Vision/OCR editor modal — opened from the corner "Aa" button on a chat photo
 // thumbnail. Lets the user view and correct the text the vision model fed to
-// the LLM (e.g. when OCR misreads a word). Persists to the server's vision
+// the LLM (e.g. when OCR misreads a word). Persists to the server\'s vision
 // cache (PUT /api/upload/{id}/vision), so any subsequent message that
 // references the same file picks up the corrected text.
 let _visionEditorEl = null;
@@ -301,11 +302,11 @@ function _openVisionEditor(att, userMsgEl) {
   title.className = 'vision-editor-title';
   // Eye icon matches the one in Settings → Vision so users recognise where
   // this text originates.
-  title.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>视觉文本</span>';
+  title.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>视觉文字</span>';
   panel.appendChild(title);
   const desc = document.createElement('div');
   desc.className = 'vision-editor-desc';
-  desc.textContent = '编辑文本并保存，新的对话将使用更新后的上下文。重新生成或继续皆可。';
+  desc.textContent = '编辑文字并保存，新对话将使用新的上下文。可重新生成或继续对话。';
   panel.appendChild(desc);
   const ta = document.createElement('textarea');
   ta.className = 'vision-editor-text';
@@ -344,7 +345,7 @@ function _openVisionEditor(att, userMsgEl) {
     } catch (e) {
       saveBtn.disabled = false;
       saveBtn.innerHTML = '<span class="vision-btn-label">保存</span>';
-      if (uiModule?.showError) uiModule.showError('无法保存识别文本');
+      if (uiModule?.showError) uiModule.showError('保存 OCR 文字失败');
     }
   });
   // Regenerate-message: save the edited text, close, then trigger a resend of
@@ -369,7 +370,7 @@ function _openVisionEditor(att, userMsgEl) {
     } catch (e) {
       regenBtn.disabled = false;
       saveBtn.disabled = false;
-      if (uiModule?.showError) uiModule.showError('无法保存识别文本');
+      if (uiModule?.showError) uiModule.showError('保存 OCR 文字失败');
     }
   });
   actions.appendChild(closeBtn);
@@ -397,7 +398,7 @@ function _openVisionEditor(att, userMsgEl) {
     })
     .catch(() => {
       ta.value = '';
-      ta.placeholder = '无法加载识别文本 — 请键入修改并保存。';
+      ta.placeholder = 'Could not load OCR text — type your correction and save.';
       ta.disabled = false;
       saveBtn.disabled = false;
       regenBtn.disabled = !userMsgEl;
@@ -406,8 +407,64 @@ function _openVisionEditor(att, userMsgEl) {
 
 // Tool call syntax patterns to strip from displayed text
 const TOOL_CALL_RE = /\[TOOL_CALL\][\s\S]*?\[\/TOOL_CALL\]/gi;
-// Only strip fenced tool-call blocks that look like structured invocations, not regular code examples
-const EXEC_FENCE_RE = /```(?:web_search|read_file|write_file|create_document|edit_document|update_document)\s*\n[\s\S]*?```/gi;
+// Strip fenced tool-call blocks that look like structured invocations, not
+// regular code examples. The tool tags are NOT hard-coded here — they are the
+// backend's authoritative TOOL_TAGS set, fetched once from GET /api/tools and
+// built into EXEC_FENCE_RE at load. TOOL_TAGS (src/agent_tools/__init__.py) is
+// thus the single source: the live-strip list can never drift from the backend
+// or miss a future tool (#3993). bash/python are carved out on purpose — they
+// are languages a user may legitimately have asked the model to show, not tool
+// invocations.
+//
+// Until the fetch resolves, EXEC_FENCE_RE stays null and exec fences aren\'t
+// stripped — normally a sub-second window before the first stream. If the fetch
+// fails it stays null for the rest of the session (logged below), so live exec
+// fences won\'t be stripped until reload. Either way the backend already strips
+// persisted history (src/tool_parsing.py builds the same regex from TOOL_TAGS),
+// so a reload always renders clean.
+let EXEC_FENCE_RE = null;
+const EXEC_FENCE_NON_TOOL = new Set(['bash', 'python']);
+
+function escapeRegex(source) {
+  return String(source).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripExecutedFence(match, tag, inline, body) {
+  const inlineArgs = (inline || '').trim();
+  if (!inlineArgs) return '';
+  const bodyText = (body || '').trim();
+  const content = bodyText ? `${inlineArgs}\n${bodyText}` : inlineArgs;
+  try {
+    JSON.parse(content);
+  } catch {
+    return match;
+  }
+  return '';
+}
+
+async function loadExecFenceRegex() {
+  try {
+    const res = await fetch('/api/tools', { credentials: 'same-origin' });
+    const data = await res.json();
+    const tags = (data.tools || [])
+      .map((t) => t.id)
+      .filter((id) => id && !EXEC_FENCE_NON_TOOL.has(id));
+    if (tags.length) {
+      EXEC_FENCE_RE = new RegExp(
+        '```(' + tags.map(escapeRegex).join('|') + ')(?![\\w-])' +
+        '[ \\t]*([\\[{][^\\n]*?)?[ \\t]*(?=\\r?\\n|```)' +
+        '\\r?\\n?([\\s\\S]*?)```',
+        'gi'
+      );
+    }
+  } catch (err) {
+    // Surface the failure rather than swallowing it: EXEC_FENCE_RE stays null,
+    // so this session won\'t strip live exec fences until reload (persisted path
+    // stays clean regardless).
+    console.warn('chatRenderer: /api/tools fetch failed; live exec-fence stripping disabled until reload', err);
+  }
+}
+loadExecFenceRegex();
 // XML-style tool calls: <minimax:tool_call>, <tool_call>, <function_call>, bare <invoke>
 const XML_TOOL_CALL_RE = /<(?:[\w]+:)?(?:tool_call|function_call)>[\s\S]*?<\/(?:[\w]+:)?(?:tool_call|function_call)>/gi;
 const XML_INVOKE_RE = /<invoke\s+name=['"][^'"]*['"]>[\s\S]*?<\/invoke>/gi;
@@ -636,35 +693,35 @@ export function applyModelColor(roleEl, modelName) {
       let html = '<div style="font-weight:600;margin-bottom:6px;color:var(--fg);display:flex;align-items:center;gap:6px;">';
       if (logoHtml) html += '<span class="role-provider-logo" style="opacity:0.7">' + logoHtml + '</span>';
       html += uiModule.esc(short) + '</div>';
-      html += '<div><span class="ctx-label">模型</span> ' + uiModule.esc(modelName.split('/').pop()) + '</div>';
+      html += '<div><span class="ctx-label">Model</span> ' + uiModule.esc(modelName.split('/').pop()) + '</div>';
       // Provider = the serving endpoint, distinct from the model vendor/logo
       // (e.g. the same model via OpenRouter vs Copilot vs Anthropic direct).
       const _epUrl = (window.sessionModule && window.sessionModule.getCurrentEndpointUrl)
         ? window.sessionModule.getCurrentEndpointUrl() : null;
       const _provLabel = providerLabel(_epUrl);
-      if (_provLabel) html += '<div><span class="ctx-label">提供商</span> ' + uiModule.esc(_provLabel) + '</div>';
+      if (_provLabel) html += '<div><span class="ctx-label">Provider</span> ' + uiModule.esc(_provLabel) + '</div>';
       // Show static context initially, then fetch real from server
       const _realCtx = window._realContextLengths && window._realContextLengths[modelName];
       if (_realCtx) {
-        html += '<div><span class="ctx-label">上下文</span> ' + _fmtCtx(_realCtx) + ' token';
-        if (info && info.ctx && info.ctx !== _realCtx) html += ' <span style="opacity:0.35">(规格: ' + _fmtCtx(info.ctx) + ')</span>';
+        html += '<div><span class="ctx-label">Context</span> ' + _fmtCtx(_realCtx) + ' tokens';
+        if (info && info.ctx && info.ctx !== _realCtx) html += ' <span style="opacity:0.35">(spec: ' + _fmtCtx(info.ctx) + ')</span>';
         html += '</div>';
       } else if (info && info.ctx) {
-        html += '<div><span class="ctx-label">上下文</span> <span id="_ctx-val">' + _fmtCtx(info.ctx) + ' token</span></div>';
+        html += '<div><span class="ctx-label">Context</span> <span id="_ctx-val">' + _fmtCtx(info.ctx) + ' tokens</span></div>';
       }
       // Fetch real context from server async
       if (!_realCtx && window.sessionModule) {
         const _sid = window.sessionModule.getCurrentSessionId();
         if (_sid) {
           fetch('/api/session/' + _sid + '/context_info').then(r => r.ok ? r.json() : null).then(d => {
-              if (d && d.context_length) {
+            if (d && d.context_length) {
               if (!window._realContextLengths) window._realContextLengths = {};
               window._realContextLengths[modelName] = d.context_length;
               const el = document.getElementById('_ctx-val');
               if (el) {
-                el.innerHTML = _fmtCtx(d.context_length) + ' token';
+                el.innerHTML = _fmtCtx(d.context_length) + ' tokens';
                 if (info && info.ctx && info.ctx !== d.context_length) {
-                  el.innerHTML += ' <span style="opacity:0.35">(规格: ' + _fmtCtx(info.ctx) + ')</span>';
+                  el.innerHTML += ' <span style="opacity:0.35">(spec: ' + _fmtCtx(info.ctx) + ')</span>';
                 }
               }
             }
@@ -677,13 +734,13 @@ export function applyModelColor(roleEl, modelName) {
         const _preset = _pid ? window.presetsModule.getPreset(_pid) : null;
         const _mt = _preset?.max_tokens;
         if (_mt && _mt > 0 && _mt <= 8192) {
-          html += '<div><span class="ctx-label">最大 token</span> ' + _mt.toLocaleString() + ' <span style="opacity:0.4">(已配置)</span></div>';
+          html += '<div><span class="ctx-label">Max tokens</span> ' + _mt.toLocaleString() + ' <span style="opacity:0.4">(configured)</span></div>';
         }
       }
       if (isCostTrackedEndpoint(_epUrl)) {
-        if (info && info.input != null) html += '<div><span class="ctx-label">输入</span> $' + info.input.toFixed(2) + ' / 百万</div>';
-        if (info && info.output != null) html += '<div><span class="ctx-label">输出</span> $' + info.output.toFixed(2) + ' / 百万</div>';
-        if (!info) html += '<div style="opacity:0.4;font-size:0.85em;margin-top:4px;">暂无定价数据</div>';
+        if (info && info.input != null) html += '<div><span class="ctx-label">Input</span> $' + info.input.toFixed(2) + ' / 1M</div>';
+        if (info && info.output != null) html += '<div><span class="ctx-label">Output</span> $' + info.output.toFixed(2) + ' / 1M</div>';
+        if (!info) html += '<div style="opacity:0.4;font-size:0.85em;margin-top:4px;">No pricing data available</div>';
       }
       popup.innerHTML = html;
       const rect = roleEl.getBoundingClientRect();
@@ -712,7 +769,7 @@ export function getModelCost(modelName, inputTokens, outputTokens) {
  * pricing table matches on a name substring, so a local `qwen2.5-coder`
  * would otherwise be charged like cloud `qwen2.5`. When the serving host is
  * loopback, a private LAN range, Tailscale CGNAT (100.64–100.127.x), a
- * `.local` name, or the app's own host, the model is local → free.
+ * `.local` name, or the app\'s own host, the model is local → free.
  * Unknown / missing endpoint also counts as local (bias to not over-bill).
  */
 export function isLocalEndpoint(url) {
@@ -852,7 +909,7 @@ export function roleTimestamp(when) {
  */
 export function stripToolBlocks(text) {
   let cleaned = text.replace(TOOL_CALL_RE, '');
-  cleaned = cleaned.replace(EXEC_FENCE_RE, '');
+  if (EXEC_FENCE_RE) cleaned = cleaned.replace(EXEC_FENCE_RE, stripExecutedFence);
   cleaned = cleaned.replace(DSML_TOOL_RE, '');
   cleaned = cleaned.replace(DSML_STRAY_RE, '');
   cleaned = cleaned.replace(XML_TOOL_CALL_RE, '');
@@ -883,7 +940,7 @@ export function buildSourcesBox(sources, type, expanded) {
   var esc = uiModule.esc;
   var id = 'sources-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
   var count = sources.length;
-  var label = type === 'research' ? '研究来源' : '网页来源';
+  var label = type === 'research' ? '研究来源' : '网络来源';
   var lines = '';
   for (var i = 0; i < count; i++) {
     var s = sources[i];
@@ -926,7 +983,7 @@ export function buildRagSourcesBox(sources) {
       + (pct ? ' <span class="rag-similarity">' + pct + '</span>' : '')
       + '<div class="rag-snippet">' + esc(s.snippet || '') + '</div></div>';
   }
-  return '<details class="rag-sources"><summary>来源 (' + sources.length + ' 个文档)</summary>' + items + '</details>';
+  return '<details class="rag-sources"><summary>Sources (' + sources.length + ' documents)</summary>' + items + '</details>';
 }
 
 /**
@@ -961,7 +1018,7 @@ export function buildFindingsBox(findings, expanded) {
   var expandedClass = expanded ? ' expanded' : '';
   return '<div class="sources-section">'
     + '<div class="sources-header" data-sources-id="' + id + '" onclick="window.toggleSources(\'' + id + '\')">'
-    + '<div class="sources-header-left">' + FINDINGS_ICON + '<span>' + count + ' 原始收集资料</span></div>'
+    + '<div class="sources-header-left">' + FINDINGS_ICON + '<span>' + count + ' Raw collected findings</span></div>'
     + '<span class="sources-toggle" id="' + id + '-toggle" data-arrow="' + arrow + '"></span>'
     + '</div>'
     + '<div class="sources-content' + expandedClass + '" id="' + id + '">'
@@ -981,7 +1038,7 @@ function _appendContinuePrompt(container) {
   wrap.innerHTML =
     '<div class="continue-research-hint">'
     + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>'
-    + '<span>想要深入了解？再次激活研究并输入后续问题以继续此研究。</span>'
+    + '<span>Dig deeper? Activate Research again and type a follow-up question to continue this research.</span>'
     + '</div>';
   container.appendChild(wrap);
 }
@@ -995,7 +1052,7 @@ function _appendReportButton(container, sessionId) {
   var btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'view-report-btn';
-  btn.innerHTML = REPORT_ICON + ' 打开可视化报告';
+  btn.innerHTML = REPORT_ICON + ' Open Visual Report';
 
   var reportUrl = apiBase + '/api/research/report/' + sessionId;
   btn.addEventListener('click', function() {
@@ -1006,12 +1063,12 @@ function _appendReportButton(container, sessionId) {
   var chatBtn = document.createElement('button');
   chatBtn.type = 'button';
   chatBtn.className = 'view-report-btn chat-about-btn';
-  chatBtn.innerHTML = CHAT_ABOUT_ICON + ' 讨论';
+  chatBtn.innerHTML = CHAT_ABOUT_ICON + ' Discuss';
   chatBtn.addEventListener('click', async function() {
     if (chatBtn.disabled) return;
     var origLabel = chatBtn.innerHTML;
     chatBtn.disabled = true;
-    chatBtn.innerHTML = CHAT_ABOUT_ICON + ' 创建中…';
+    chatBtn.innerHTML = CHAT_ABOUT_ICON + ' Creating…';
     try {
       var res = await fetch(apiBase + '/api/research/spinoff/' + sessionId, { method: 'POST' });
       if (!res.ok) {
@@ -1028,9 +1085,9 @@ function _appendReportButton(container, sessionId) {
       chatBtn.disabled = false;
       chatBtn.innerHTML = origLabel;
       if (window.uiModule && uiModule.showError) {
-        uiModule.showError('无法发起后续对话: ' + e.message);
+        uiModule.showError('Could not start follow-up chat: ' + e.message);
       } else {
-        alert('无法发起后续对话: ' + e.message);
+        alert('Could not start follow-up chat: ' + e.message);
       }
     }
   });
@@ -1067,6 +1124,17 @@ document.addEventListener('click', function(e) {
     el = el.parentElement || el.parentNode;
   }
 }, true);
+
+function resolveDocumentPlaceholderLinks(text, metadata) {
+  if (!text || !metadata || !Array.isArray(metadata.tool_events)) return text;
+  const docEvents = metadata.tool_events.filter(ev => ev && ev.doc_id);
+  if (!docEvents.length) return text;
+  return String(text).replace(/#document-(\d+)\b/g, (match, num) => {
+    const idx = Number(num) - 1;
+    const ev = Number.isInteger(idx) && idx >= 0 ? docEvents[idx] : null;
+    return ev && ev.doc_id ? `#document-${ev.doc_id}` : match;
+  });
+}
 
 // Jump-to-entity anchors — the agent emits links like
 //   [New Chat](#session-89effa28)
@@ -1160,15 +1228,15 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
 
   const safeImageUrl = safeDisplayImageSrc(imageUrl);
   if (!safeImageUrl) {
-    body.textContent = '[图片不可用]';
+    body.textContent = '[图像不可用]';
     wrap.appendChild(body);
     return wrap;
   }
 
   const img = document.createElement('img');
   img.className = 'generated-image';
-  img.alt = prompt || '生成的图片';
-  img.title = prompt || '生成的图片';
+  img.alt = prompt || '生成的图像';
+  img.title = prompt || '生成的图像';
   img.src = safeImageUrl;
   img.addEventListener('click', () => { window.open(safeImageUrl, '_blank', 'noopener,noreferrer'); });
   body.appendChild(img);
@@ -1204,7 +1272,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   const dlBtn = document.createElement('button');
   dlBtn.className = 'footer-copy-btn';
   dlBtn.type = 'button';
-  dlBtn.title = '下载图片';
+  dlBtn.title = '下载图像';
   dlBtn.textContent = '\u2913';
   dlBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1227,7 +1295,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   const editBtn = document.createElement('button');
   editBtn.className = 'footer-copy-btn';
   editBtn.type = 'button';
-  editBtn.title = '在图片编辑器中编辑';
+  editBtn.title = '在图像编辑器中打开';
   editBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
   editBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1250,7 +1318,7 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
       if (albumsContainer) albumsContainer.style.display = 'none';
       const editorContainer = document.getElementById('gallery-editor-container');
       if (editorContainer) editorContainer.style.display = 'flex';
-      const label = (prompt || '').trim().slice(0, 60) || '生成的图片';
+      const label = (prompt || '').trim().slice(0, 60) || '生成的图像';
       editorMod.openEditor(imageUrl, null, null, label);
     } catch (err) {
       console.error('[chat] open in editor failed', err);
@@ -1261,18 +1329,18 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
   const delBtn = document.createElement('button');
   delBtn.className = 'footer-copy-btn footer-delete-btn';
   delBtn.type = 'button';
-  delBtn.title = '删除图片';
+  delBtn.title = '删除图像';
   delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';
   delBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
-    const ok = await uiModule.styledConfirm('删除此图片？', {
+    const ok = await uiModule.styledConfirm('删除此图像？', {
       confirmText: '删除',
       cancelText: '取消',
       danger: true,
     });
     if (!ok) return;
     // If we have a gallery id, delete server-side; otherwise just remove
-    // the bubble from chat (e.g. external DALL-E url that wasn't saved).
+    // the bubble from chat (e.g. external DALL-E url that wasn\'t saved).
     if (imageId) {
       try {
         const res = await fetch(`/api/gallery/${encodeURIComponent(imageId)}`, {
@@ -1398,7 +1466,7 @@ export function createMsgFooter(msgElement) {
       e.stopPropagation();
       if (window.chatModule?.regenerateFrom) window.chatModule.regenerateFrom(msgElement);
     }},
-    { id: 'shorten', icon: '\u2702', title: '重写为简短版本', cls: 'msg-action-btn', handler(e) {
+    { id: 'shorten', icon: '\u2702', title: '改写为更短', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.rewriteWith) window.chatModule.rewriteWith(msgElement, 'Rewrite your last response to be shorter and more concise. Keep the key information but cut the fluff.');
     }},
@@ -1406,7 +1474,7 @@ export function createMsgFooter(msgElement) {
       e.stopPropagation();
       if (window.chatModule?.rewriteWith) window.chatModule.rewriteWith(msgElement, 'Explain your last response in simpler terms. Use plain language and short sentences.');
     }},
-    { id: 'fork', icon: '\u2ADD', title: '分支对话', cls: 'msg-action-btn', handler(e) {
+    { id: 'fork', icon: '\u2ADD', title: '分叉对话', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.forkFrom) window.chatModule.forkFrom(msgElement);
     }},
@@ -1506,8 +1574,8 @@ export function createMsgFooter(msgElement) {
     const pinnedCount = mems.filter(m => m.type === 'pinned').length;
     const recalledCount = mems.filter(m => m.type === 'recalled').length;
     const parts = [];
-    if (pinnedCount) parts.push(`${pinnedCount} 条固定`);
-    if (recalledCount) parts.push(`${recalledCount} 条召回`);
+    if (pinnedCount) parts.push(`${pinnedCount} pinned`);
+    if (recalledCount) parts.push(`${recalledCount} recalled`);
     pill.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.8-3.5 6-.3.2-.5.5-.5.9V18h-6v-2.1c0-.4-.2-.7-.5-.9C6.3 13.8 5 11.5 5 9a7 7 0 0 1 7-7z"/><path d="M9 18h6v1a3 3 0 0 1-6 0v-1z"/><path d="M12 2v7"/><path d="M8.5 6.5L12 9l3.5-2.5"/></svg><span class="memory-used-pill-text">${parts.join(', ')}</span>`;
     pill.title = mems.map(m => `[${m.type}] ${m.text}`).join('\n');
 
@@ -1561,7 +1629,7 @@ export function createMsgFooter(msgElement) {
       if (parseFloat(detail.style.left) < 8) detail.style.left = '8px';
       detail.style.visibility = '';
       pill._openDetail = detail;
-      // Close on outside click or Escape (pill click toggles, so it's inside).
+      // Close on outside click or Escape (pill click toggles, so it\'s inside).
       closeDetail = bindMenuDismiss(detail, () => { detail.remove(); pill._openDetail = null; }, (ev) => !detail.contains(ev.target) && ev.target !== pill);    });
 
     footer.appendChild(pill);
@@ -1609,7 +1677,7 @@ export function createUserMsgFooter(msgElement) {
       btn.innerHTML = CHECK_ICON;
       setTimeout(() => { btn.innerHTML = COPY_ICON; }, 1500);
     }},
-    { id: 'resend', icon: '\u21BB', title: '重新发送', cls: 'msg-action-btn', handler(e) {
+    { id: 'resend', icon: '\u21BB', title: '重新发送消息', cls: 'msg-action-btn', handler(e) {
       e.stopPropagation();
       if (window.chatModule?.resendUserMessage) window.chatModule.resendUserMessage(msgElement);
     }},
@@ -1689,8 +1757,9 @@ export function createUserMsgFooter(msgElement) {
  * Display performance metrics for a message.
  */
 export function displayMetrics(messageElement, metrics) {
-  const existingMetrics = messageElement.querySelector('.response-metrics');
-  if (existingMetrics) existingMetrics.remove();
+  messageElement
+    .querySelectorAll('.response-metrics, .metrics-divider, .ctx-divider, .ctx-ring')
+    .forEach((el) => el.remove());
 
   const metricsContainer = document.createElement('span');
   metricsContainer.className = 'response-metrics';
@@ -1705,7 +1774,7 @@ export function displayMetrics(messageElement, metrics) {
   const cost = _billableCost(model, inputTokens, outputTokens);
 
   // Nothing useful to show — bail out (only if ALL metrics are missing)
-  if (!responseTime && !outputTokens && tps == null && !ctxPct) return;
+  if (!responseTime && !inputTokens && !outputTokens && tps == null && !ctxPct) return;
 
   // Accumulate session cost (only on fresh metrics, not history reload)
   if (!metrics._fromHistory) {
@@ -1728,14 +1797,17 @@ export function displayMetrics(messageElement, metrics) {
       ? `${outputTokens} tok · ${costStr0}`
       : outputTokens
         ? `${outputTokens} tok · ${responseTime != null ? responseTime + 's' : ''}`
-        : responseTime != null
-          ? `${responseTime}s`
-          : '';
+        : inputTokens
+          ? `${inputTokens} in${responseTime != null ? ' · ' + responseTime + 's' : ''}`
+          : responseTime != null
+            ? `${responseTime}s`
+            : '';
   if (!metricsLabel) return;
   metricsContainer.textContent = metricsLabel;
   metricsContainer.style.cursor = 'pointer';
   metricsContainer.title = '点击查看详情';
   const metricsDivider = document.createElement('span');
+  metricsDivider.className = 'metrics-divider';
   metricsDivider.textContent = ' | ';
   metricsDivider.style.color = 'var(--color-muted-alt)';
   metricsDivider.style.pointerEvents = 'none';
@@ -1744,7 +1816,7 @@ export function displayMetrics(messageElement, metrics) {
     document.querySelectorAll('.ctx-popup').forEach(p => { if (typeof p._dismiss === 'function') p._dismiss(); else p.remove(); });
 
     const costStr = cost !== null ? `$${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(3)}` : '';
-    const costRows = costStr ? `<div><span class="ctx-label">Cost</span> ${costStr}</div>` : '';
+    const costRows = costStr ? `<div><span class="ctx-label">费用</span> ${costStr}</div>` : '';
     const speedStr = tps != null && tps !== 'undefined' ? `${tps} tok/s` : 'n/a';
     const totalTok = inputTokens + outputTokens;
     const ctxColor = ctxPct >= 85 ? 'var(--red, #e06c75)' : ctxPct >= 70 ? '#ff9900' : 'var(--color-muted-alt, #6b7280)';
@@ -1759,7 +1831,7 @@ export function displayMetrics(messageElement, metrics) {
     let sessionCostStr = '';
     const sc = getSessionCost();
     if (costStr && sc > 0) {
-      sessionCostStr = `<div><span class="ctx-label">Session</span> $${sc < 0.01 ? sc.toFixed(4) : sc.toFixed(3)}</div>`;
+      sessionCostStr = `<div><span class="ctx-label">会话</span> $${sc < 0.01 ? sc.toFixed(4) : sc.toFixed(3)}</div>`;
     }
 
     const popup = document.createElement('div');
@@ -1767,9 +1839,9 @@ export function displayMetrics(messageElement, metrics) {
     popup.innerHTML = `
       <div style="font-weight:600;margin-bottom:6px;color:var(--fg);">消息统计</div>
       <div><span class="ctx-label">模型</span> ${model.split('/').pop()}</div>
-      <div><span class="ctx-label">输入</span> ${inputTokens.toLocaleString()} token${isReal ? '' : '~'}</div>
-      <div><span class="ctx-label">输出</span> ${outputTokens.toLocaleString()} token${isReal ? '' : '~'}</div>
-      <div><span class="ctx-label">总计</span> ${totalTok.toLocaleString()} token</div>
+      <div><span class="ctx-label">输入</span> ${inputTokens.toLocaleString()} tokens${isReal ? '' : '~'}</div>
+      <div><span class="ctx-label">输出</span> ${outputTokens.toLocaleString()} tokens${isReal ? '' : '~'}</div>
+      <div><span class="ctx-label">总计</span> ${totalTok.toLocaleString()} tokens</div>
       <div><span class="ctx-label">速度</span> ${speedStr}</div>
       <div><span class="ctx-label">耗时</span> ${responseTime}s</div>
       ${prepTime != null ? `<div><span class="ctx-label">准备</span> ${prepTime}s</div>` : ''}
@@ -1777,13 +1849,13 @@ export function displayMetrics(messageElement, metrics) {
       ${costRows}
       ${sessionCostStr}
       ${prepDetails ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:0.85em;opacity:0.8;">
-        <div style="font-weight:600;margin-bottom:4px;color:var(--fg);">智能体准备</div>
+        <div style="font-weight:600;margin-bottom:4px;color:var(--fg);">代理准备</div>
         ${prepDetails}
       </div>` : ''}
       ${ctxPct !== undefined && ctxPct > 0 ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">
         <span class="ctx-label">上下文</span> <span style="color:${ctxColor};font-weight:600;">${ctxPct}%</span> 已使用
       </div>` : ''}
-      ${isReal ? '' : '<div style="margin-top:4px;font-size:0.8em;opacity:0.4;">~ 估算的 token 数量</div>'}
+      ${isReal ? '' : '<div style="margin-top:4px;font-size:0.8em;opacity:0.4;">~ 预估 token 数</div>'}
     `;
 
     const rect = metricsContainer.getBoundingClientRect();
@@ -1821,7 +1893,7 @@ export function displayMetrics(messageElement, metrics) {
     const ctxColor = ctxPct >= 85 ? 'var(--red, #e06c75)' : ctxPct >= 70 ? '#ff9900' : 'var(--green, #98c379)';
     ctxRing = document.createElement('span');
     ctxRing.className = 'ctx-ring';
-    ctxRing.title = `${ctxPct}% 上下文已使用 — 点击查看详情`;
+    ctxRing.title = `${ctxPct}% context used — click for details`;
     ctxRing.style.cursor = 'pointer';
     ctxRing.style.setProperty('--ctx-color', ctxColor);
     ctxRing.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14">
@@ -1853,10 +1925,10 @@ export function displayMetrics(messageElement, metrics) {
         </div>
         <div style="margin-top:8px;font-size:0.8rem;">
           <div><span class="ctx-label">模型</span> ${modelShort}</div>
-          <div><span class="ctx-label">使用率</span> <span style="color:${ctxColor};font-weight:600;">${ctxPct}%</span></div>
-          <div><span class="ctx-label">窗口</span> ${fmtNum(totalCtx)} token</div>
+          <div><span class="ctx-label">用量</span> <span style="color:${ctxColor};font-weight:600;">${ctxPct}%</span></div>
+          <div><span class="ctx-label">窗口</span> ${fmtNum(totalCtx)} tokens</div>
         </div>
-        ${ctxPct >= 70 ? `<button class="ctx-compact-btn" title="摘要旧消息以释放上下文">压缩上下文</button>` : ''}
+        ${ctxPct >= 70 ? `<button class="ctx-compact-btn" title="总结较早消息以释放上下文空间">压缩上下文</button>` : ''}
       `;
 
       const compactBtn = popup.querySelector('.ctx-compact-btn');
@@ -1913,7 +1985,7 @@ export function displayMetrics(messageElement, metrics) {
                 }
               }, 200);
             } else {
-              let detail = '压缩失败。请稍后再试。';
+              let detail = '压缩失败。请稍后重试。';
               try {
                 const err = await res.json();
                 if (err.detail) detail = err.detail;
@@ -1948,6 +2020,13 @@ export function displayMetrics(messageElement, metrics) {
   }
 
   let footer = messageElement.querySelector('.msg-footer');
+  if (!footer) {
+    footer = createMsgFooter(messageElement);
+    if (messageElement.classList?.contains('agent-thread')) {
+      footer.classList.add('agent-thread-footer');
+    }
+    messageElement.appendChild(footer);
+  }
   if (footer) {
     const actions = footer.querySelector('.msg-actions');
     if (actions) {
@@ -1974,6 +2053,142 @@ export function displayMetrics(messageElement, metrics) {
   if (uiModule) uiModule.scrollHistory();
 }
 
+/** Remove any unanswered multiple-choice cards currently in the chat. */
+export function removeAskUserCards(root) {
+  const scope = root || document.getElementById('chat-history') || document;
+  scope.querySelectorAll('.ask-user-card').forEach((node) => node.remove());
+}
+
+/**
+ * Render an ask_user payload as a durable choice card.
+ *
+ * This lives in the history renderer rather than the streaming loop so the
+ * same UI can be used both for a live SSE event and for a persisted tool event
+ * after a session reload.
+ */
+export function renderAskUserCard(payload, options) {
+  const aq = payload || {};
+  const opts = Array.isArray(aq.options) ? aq.options : [];
+  const chatBox = document.getElementById('chat-history');
+  if (!chatBox || !aq.question || opts.length < 2) return null;
+
+  const renderOptions = options || {};
+  removeAskUserCards(chatBox);
+
+  const card = document.createElement('div');
+  card.className = 'ask-user-card';
+  card.setAttribute('role', 'group');
+  card.tabIndex = -1;
+  const multi = !!aq.multi;
+  const emojiText = (value) => svgifyEmoji(uiModule.esc(String(value)));
+
+  const head = document.createElement('div');
+  head.className = 'ask-user-head';
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'modal-close ask-user-close';
+  closeBtn.setAttribute('aria-label', '关闭问题');
+  closeBtn.textContent = '×';
+  closeBtn.addEventListener('click', () => {
+    card.remove();
+    const input = uiModule.el('message');
+    if (input) input.focus();
+  });
+  head.appendChild(closeBtn);
+  card.appendChild(head);
+
+  const question = document.createElement('div');
+  question.className = 'ask-user-question';
+  question.id = `ask-user-q-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
+  question.innerHTML = emojiText(aq.question);
+  card.appendChild(question);
+  card.setAttribute('aria-labelledby', question.id);
+
+  const list = document.createElement('div');
+  list.className = 'ask-user-options';
+  card.appendChild(list);
+
+  const send = (text) => {
+    if (!text) return;
+    card.remove();
+    const input = uiModule.el('message');
+    if (input) input.value = text;
+    const sendButton = document.querySelector('.send-btn');
+    if (sendButton) sendButton.click();
+  };
+
+  opts.forEach((opt) => {
+    const label = (opt && opt.label) ? String(opt.label) : String(opt || '');
+    if (!label) return;
+    const description = (opt && opt.description) ? String(opt.description) : '';
+    const row = document.createElement(multi ? 'label' : 'button');
+    row.className = 'ask-user-option';
+    if (multi) {
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = label;
+      row.appendChild(checkbox);
+    }
+    const labelText = document.createElement('span');
+    labelText.className = 'ask-user-option-label';
+    labelText.innerHTML = emojiText(label);
+    row.appendChild(labelText);
+    if (description) {
+      const descriptionText = document.createElement('span');
+      descriptionText.className = 'ask-user-option-desc';
+      descriptionText.innerHTML = emojiText(description);
+      row.appendChild(descriptionText);
+    }
+    if (!multi) {
+      row.type = 'button';
+      row.addEventListener('click', () => send(label));
+    }
+    list.appendChild(row);
+  });
+
+  const other = document.createElement('div');
+  other.className = 'ask-user-other';
+  const otherInput = document.createElement('input');
+  otherInput.type = 'text';
+  otherInput.className = 'styled-prompt-input ask-user-other-input';
+  otherInput.placeholder = multi ? '其他（已添加到选择）…' : '其他…（输入自定义答案）';
+  otherInput.setAttribute('aria-label', multi ? '添加自定义选项' : '输入自定义答案');
+  const otherSend = document.createElement('button');
+  otherSend.type = 'button';
+  otherSend.className = 'confirm-btn confirm-btn-primary ask-user-other-send';
+  otherSend.setAttribute('aria-label', '发送答案');
+  otherSend.textContent = multi ? '发送选择' : '发送';
+  const submit = () => {
+    const freeText = otherInput.value.trim();
+    if (multi) {
+      const picked = Array.from(card.querySelectorAll('.ask-user-option input:checked')).map((input) => input.value);
+      if (freeText) picked.push(freeText);
+      if (picked.length) send(picked.join(', '));
+    } else if (freeText) {
+      send(freeText);
+    }
+  };
+  otherSend.addEventListener('click', submit);
+  otherInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      submit();
+    }
+  });
+  other.appendChild(otherInput);
+  other.appendChild(otherSend);
+  card.appendChild(other);
+
+  chatBox.appendChild(card);
+  if (renderOptions.scroll !== false) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  if (renderOptions.focus !== false) {
+    try { card.focus(); } catch (_) {}
+  }
+  return card;
+}
+
 /**
  * Add a message to the chat history.
  */
@@ -1983,6 +2198,11 @@ export function addMessage(role, content, modelName, metadata) {
     const box = document.getElementById('chat-history');
     if (!box) { console.error('Chat history element not found'); return; }
 
+    // Loading a later user message means any earlier ask_user card was
+    // answered.  This also removes the live card as soon as a manual reply is
+    // appended, even when the user did not click one of its buttons.
+    if (role === 'user') removeAskUserCards(box);
+
     var esc = uiModule.esc;
     const textRaw = Array.isArray(content) ? markdownModule.renderContent(content) : content;
 
@@ -1990,6 +2210,7 @@ export function addMessage(role, content, modelName, metadata) {
     if (role === 'assistant' && metadata && metadata.tool_events && metadata.tool_events.length > 0) {
       const roundTexts = metadata.round_texts || [];
       const toolEvents = metadata.tool_events;
+      let pendingAskUser = null;
       let lastWrap = null;
       let firstMsgAi = null;
       let lastMsgAi = null;
@@ -2005,7 +2226,7 @@ export function addMessage(role, content, modelName, metadata) {
 
       for (let r = 0; r < maxRound; r++) {
         const roundNum = r + 1;
-        const txt = (roundTexts[r] || '').trim();
+        const txt = resolveDocumentPlaceholderLinks((roundTexts[r] || '').trim(), metadata);
 
         if (txt) {
           const wrap = document.createElement('div');
@@ -2061,19 +2282,20 @@ export function addMessage(role, content, modelName, metadata) {
           } else {
             threadWrap = document.createElement('div');
             threadWrap.className = 'agent-thread';
-            // Extend line up if there's a chat bubble above
+            // Extend line up if there\'s a chat bubble above
             if (txt) threadWrap.classList.add('has-top');
             box.appendChild(threadWrap);
           }
           for (const ev of roundTools) {
+            if (ev.ask_user) pendingAskUser = ev.ask_user;
             const ok = (ev.exit_code === 0 || ev.exit_code == null);
             let outHtml = '';
             if (ev.output && ev.output.trim()) {
-              outHtml = `<details class="agent-tool-output"><summary>输出</summary><pre>${esc(ev.output)}</pre></details>`;
+              outHtml = `<details class="agent-tool-output"><summary>Output</summary><pre>${esc(ev.output)}</pre></details>`;
             }
             const screenshotSrc = safeToolScreenshotSrc(ev.screenshot);
             if (screenshotSrc) {
-              outHtml += `<details class="agent-tool-output"><summary>截图</summary><img src="${esc(screenshotSrc)}" style="max-width:100%;border-radius:6px;margin-top:6px;border:1px solid var(--border)" /></details>`;
+              outHtml += `<details class="agent-tool-output"><summary>Screenshot</summary><img src="${esc(screenshotSrc)}" style="max-width:100%;border-radius:6px;margin-top:6px;border:1px solid var(--border)" /></details>`;
             }
             // File-write/edit diff (persisted in the tool event) \u2014 re-render it
             // so it survives reload, matching the live stream.
@@ -2101,7 +2323,7 @@ export function addMessage(role, content, modelName, metadata) {
             node.className = 'agent-thread-node' + (ok ? '' : ' error');
             // Hide the raw JSON command when a diff says it better (same as live).
             const evCmdHtml = (ev.command && !(ev.diff && ev.diff.text)) ? `<pre class="agent-thread-cmd">${esc(ev.command)}</pre>` : '';
-            node.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(ev.tool)}</span><span class="agent-thread-status">${ok ? '完成' : '失败'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${evCmdHtml}${outHtml}${evDiffHtml}</div>`;
+            node.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(ev.tool)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${evCmdHtml}${outHtml}${evDiffHtml}</div>`;
             // Click handling is delegated globally \u2014 see chat.js init.
             threadWrap.appendChild(node);
           }
@@ -2129,6 +2351,12 @@ export function addMessage(role, content, modelName, metadata) {
         box.querySelectorAll('pre code:not(.hljs)').forEach(b => window.hljs.highlightElement(b));
       }
       if (markdownModule.renderMermaid) markdownModule.renderMermaid(box);
+      if (pendingAskUser) {
+        // Session history is rendered oldest-to-newest.  A later user message
+        // removes this card; if there is none, the pending choice survives a
+        // refresh.  Avoid stealing focus while the history is loading.
+        renderAskUserCard(pendingAskUser, { focus: false, scroll: false });
+      }
       return lastWrap;
     }
 
@@ -2143,14 +2371,14 @@ export function addMessage(role, content, modelName, metadata) {
     let _isWakeCheck = !!(metadata?.wake_check_in || metadata?.hidden_from_user_view);
     if (!_isWakeCheck && typeof textRaw === 'string') {
       // Also catch historical messages persisted as "[Task] Self-check: <sid>"
-      // (older wake tasks that didn't set wake_check_in metadata).
+      // (older wake tasks that didn\'t set wake_check_in metadata).
       if (/^\s*\[Task\]\s+Self-check:/i.test(textRaw)) {
         _isWakeCheck = true;
       }
     }
     if (_isWakeCheck) {
       // Supervisor self-check messages are an internal control signal —
-      // skip rendering entirely so they don't show up in the conversation.
+      // skip rendering entirely so they don\'t show up in the conversation.
       return null;
     }
 
@@ -2164,7 +2392,7 @@ export function addMessage(role, content, modelName, metadata) {
     const isCompacted = metadata?.compacted;
     const replyModels = replyModelPair(modelName, metadata);
     const resolvedModel = replyModels.actualModel || replyModels.requestedModel;
-    var _roleText = role === 'user' ? '我' : (isSlash || isCompacted) ? 'Odysseus' : modelRouteLabel(replyModels.requestedModel, resolvedModel);
+    var _roleText = role === 'user' ? '你' : (isSlash || isCompacted) ? 'Odysseus' : modelRouteLabel(replyModels.requestedModel, resolvedModel);
     if (role === 'assistant' && (metadata?.research || metadata?.research_clarification)) {
       _roleText += ' (研究)';
     }
@@ -2186,6 +2414,9 @@ export function addMessage(role, content, modelName, metadata) {
     b.className = 'body';
 
     let text = markdownModule.squashOutsideCode(stripToolBlocks(textRaw || ''));
+    if (role === 'assistant') {
+      text = resolveDocumentPlaceholderLinks(text, metadata);
+    }
 
     // For user messages, pull out vision-model image descriptions ([Image: name]\n
     // <multi-line desc>) into a collapsible "image description" section. Done for
@@ -2240,7 +2471,7 @@ export function addMessage(role, content, modelName, metadata) {
     }
 
     // The vision/OCR caption is stripped from the displayed text above (so the
-    // bubble doesn't show the raw model output) but no longer rendered as an
+    // bubble doesn\'t show the raw model output) but no longer rendered as an
     // inline collapsible — the user can still view/edit it via the "Caption"
     // button on the photo thumbnail. _visionBlocks is intentionally left unused
     // so the parsing-and-strip side-effect on `text` still happens.
@@ -2267,7 +2498,7 @@ export function addMessage(role, content, modelName, metadata) {
         // Extract instruction text (after "Instruction: ")
         const instrMatch = b.textContent.match(/Instruction:\s*([\s\S]*)$/);
         const instrText = instrMatch ? instrMatch[1].trim() : '';
-        b.innerHTML = '<span class="doc-edit-tag">文档编辑: ' + lineRef + '</span> ' + markdownModule.processWithThinking(instrText);
+        b.innerHTML = '<span class="doc-edit-tag">Doc edit: ' + lineRef + '</span> ' + markdownModule.processWithThinking(instrText);
       }
 
       // Render attachment cards
@@ -2287,10 +2518,10 @@ export function addMessage(role, content, modelName, metadata) {
       // Differentiate between "stopped mid-stream" (had content, can continue)
       // and "cancelled before any content" — the latter has no Continue affordance.
       stoppedLabel.textContent = metadata.cancelled
-        ? '[用户取消]'
+        ? '[已被用户取消]'
         : '[消息已中断]';
       stoppedIndicator.appendChild(stoppedLabel);
-      // Continue button only makes sense when there's partial content to
+      // Continue button only makes sense when there\'s partial content to
       // resume from \u2014 skip it for fully-cancelled (empty) turns.
       if (!metadata.cancelled) {
         const continueBtn = document.createElement('button');
@@ -2438,7 +2669,7 @@ export function addMessage(role, content, modelName, metadata) {
     return wrap;
   } catch (error) {
     console.error('Error in addMessage:', error);
-    if (uiModule) uiModule.showError('添加消息失败: ' + error.message);
+    if (uiModule) uiModule.showError('Failed to add message: ' + error.message);
   }
 }
 
@@ -2461,6 +2692,8 @@ const chatRenderer = {
   copyMessageText,
   safeToolScreenshotSrc,
   safeDisplayImageSrc,
+  removeAskUserCards,
+  renderAskUserCard,
   buildSourcesBox,
   buildFindingsBox,
   appendReportButton,
@@ -2470,6 +2703,7 @@ const chatRenderer = {
   createMsgFooter,
   displayMetrics,
   addMessage,
+  buildAttachCards,
   updateMessageAttachments,
 };
 

@@ -5,6 +5,7 @@
 import uiModule from './ui.js';
 import spinnerModule from './spinner.js';
 import * as Modals from './modalManager.js';
+import { topPortalZ } from './toolWindowZOrder.js';
 import { makeWindowDraggable } from './windowDrag.js';
 import { attachColorPicker } from './colorPicker.js';
 import { bindMenuDismiss } from './escMenuStack.js';
@@ -12,7 +13,7 @@ import {
   WEEKDAYS, WEEKDAYS_SUN, MONTHS, MON_SHORT,
   CAL_PALETTE, CAL_COLORS, _CAL_CUSTOM_GRADIENT, _TYPE_PALETTE,
   _trashIcon, _moreIcon, _bellIcon,
-  _isCalBgImage, _calBgImageUrl, _calBgCss,
+  _isCalBgImage, _calBgImageUrl, _calBgCss, _cssUrlEscape,
   _calReadableTextColor,
   _ds, _addDays, _shiftDT, _tzOffset, _localDateOf,
 } from './calendar/utils.js';
@@ -136,7 +137,7 @@ async function _fetchEvents(start, end, force) {
       if (_open && hasCache) _render();
     })
     .catch(e => { console.error('Calendar: failed to fetch events', e); });
-  // If we have cache, don't block on fetch — return immediately so render is instant
+  // If we have cache, don\'t block on fetch — return immediately so render is instant
   if (hasCache) return;
   // No cache — must await the fetch
   await fetchPromise;
@@ -190,7 +191,7 @@ async function _fetchCalendars() {
     });
   } catch (e) { _calendars = []; _calendarsError = e.message || 'Connection failed'; }
 
-  // First open: fire a background CalDAV pull. We don't await — the
+  // First open: fire a background CalDAV pull. We don\'t await — the
   // initial render uses whatever's already cached locally, and the
   // sync's writes show up on the next paint after it resolves.
   if (!_caldavSyncedOnce) {
@@ -201,7 +202,7 @@ async function _fetchCalendars() {
 
 // Trigger a CalDAV pull. `interactive=true` waits for the result and
 // refreshes the UI; false fires-and-forgets (used on first open). Both
-// no-op silently if CalDAV isn't configured.
+// no-op silently if CalDAV isn\'t configured.
 async function _syncCaldav(interactive) {
   try {
     const res = await fetch(`${API_BASE}/api/calendar/sync`, {
@@ -266,7 +267,7 @@ async function _createEvent(data) {
   }).catch((e) => {
     delete _allEvents[tempUid];
     if (_open) _render();
-    if (window.uiModule) window.uiModule.showError('创建事件失败: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError('创建事件失败：' + (e?.message || 'unknown'));
   });
   return { uid: tempUid };
 }
@@ -295,12 +296,12 @@ async function _updateEvent(uid, data) {
     if (_preMergeBackup) _allEvents[uid] = _preMergeBackup;
     else delete _allEvents[uid];
     if (_open) _render();
-    if (window.uiModule) window.uiModule.showError('更新事件失败: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError('更新事件失败：' + (e?.message || 'unknown'));
   });
   return { ok: true };
 }
 
-async function _deleteEvent(uid) {
+async function _deleteEvent(uid, { scope = 'series' } = {}) {
   // Multiple "sibling" UIDs may need to vanish optimistically:
   //   1. The exact uid the user clicked.
   //   2. If the user clicked a RECURRING occurrence (uid contains "::"),
@@ -311,9 +312,12 @@ async function _deleteEvent(uid) {
   //      other days kept rendering until the next full refresh.
   //   3. If the user clicked the master, strip every "master::*"
   //      expansion (same prefix scan).
+  const deleteOccurrenceOnly = scope === 'occurrence' && uid.includes('::');
   const masterUid = uid.includes('::') ? uid.split('::')[0] : uid;
   const backups = {};
-  const _matches = (k) => k === uid || k === masterUid || k.startsWith(masterUid + '::');
+  const _matches = deleteOccurrenceOnly
+    ? (k) => k === uid
+    : (k) => k === uid || k === masterUid || k.startsWith(masterUid + '::');
 
   for (const k of Object.keys(_allEvents)) {
     if (_matches(k)) {
@@ -327,11 +331,12 @@ async function _deleteEvent(uid) {
   if (_open) _render();
   _updateBadge && _updateBadge();
   const isRecurring = uid.includes('::');
-  fetch(`${API_BASE}/api/calendar/events/${encodeURIComponent(uid)}`, {
+  const scopeParam = deleteOccurrenceOnly ? '?scope=occurrence' : '';
+  fetch(`${API_BASE}/api/calendar/events/${encodeURIComponent(uid)}${scopeParam}`, {
     method: 'DELETE', credentials: 'same-origin',
   }).then(r => {
-    // 404 = the event was already deleted by another session/device. That's
-    // exactly the state we want, so treat it as success — don't restore the
+    // 404 = the event was already deleted by another session/device. That\'s
+    // exactly the state we want, so treat it as success — don\'t restore the
     // row, otherwise the user can never clear stale cached events that were
     // deleted from desktop while mobile was open (and vice versa).
     if (!r.ok && r.status !== 404) throw new Error('HTTP ' + r.status);
@@ -347,7 +352,7 @@ async function _deleteEvent(uid) {
       _allEvents[k] = ev;
       if (Array.isArray(_events)) _events.push(ev);
     }
-    if (window.uiModule) window.uiModule.showError('删除事件失败: ' + (e?.message || 'unknown'));
+    if (window.uiModule) window.uiModule.showError('删除事件失败：' + (e?.message || 'unknown'));
     if (_open) _render();
   });
   return { ok: true };
@@ -413,8 +418,8 @@ function _calEventFg(ev) {
 // Returns '' for normal solid-color events.
 function _calItemBgStyle(ev) {
   if (!_isCalBgImage(ev.color)) return '';
-  const url = _calBgImageUrl(ev.color).replace(/'/g, "\\'").replace(/"/g, "%22");
-  return `background-image: linear-gradient(color-mix(in srgb, var(--bg) 70%, transparent), color-mix(in srgb, var(--bg) 70%, transparent)), url('${url}'); background-size: cover; background-position: center;`;
+  const url = _calBgImageUrl(ev.color);
+  return `background-image: linear-gradient(color-mix(in srgb, var(--bg) 70%, transparent), color-mix(in srgb, var(--bg) 70%, transparent)), url('${_cssUrlEscape(url)}'); background-size: cover; background-position: center;`;
 }
 
 function _todayCount() {
@@ -429,14 +434,77 @@ function _todayCount() {
   }).length;
 }
 
-// Per-event ⋮ menu: Remind me / Delete
+function _findEventByUid(uid) {
+  return _allEvents[uid] || _events.find(e => e && e.uid === uid) || null;
+}
+
+function _isRecurringEvent(ev) {
+  return !!(ev && (ev.is_recurrence || ev.uid?.includes('::') || ev.rrule));
+}
+
+function _chooseRecurringDeleteScope(ev) {
+  return new Promise(resolve => {
+    const name = ev?.summary ? `"${ev.summary}"` : 'this event';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.style.display = '';
+    overlay.innerHTML = `
+      <div class="modal-content styled-confirm-box" role="dialog" aria-modal="true" aria-labelledby="cal-delete-choice-title">
+        <div class="modal-header"><h4 id="cal-delete-choice-title">删除重复事件</h4></div>
+        <div class="modal-body"><p>确定删除 ${_e(name)}？</p></div>
+        <div class="modal-footer" style="gap:8px;flex-wrap:wrap;">
+          <button class="confirm-btn confirm-btn-secondary" data-choice="cancel">取消</button>
+          <button class="confirm-btn confirm-btn-danger" data-choice="occurrence">仅此事件</button>
+          <button class="confirm-btn confirm-btn-danger" data-choice="series">所有重复事件</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = (value) => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close(null);
+      }
+    };
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) return close(null);
+      const btn = e.target.closest('[data-choice]');
+      if (!btn) return;
+      const choice = btn.dataset.choice;
+      close(choice === 'cancel' ? null : choice);
+    });
+    document.addEventListener('keydown', onKey);
+    overlay.querySelector('[data-choice="occurrence"]')?.focus();
+  });
+}
+
+async function _confirmAndDeleteEvent(ev) {
+  if (!ev) return;
+  const name = ev.summary ? `"${ev.summary}"` : 'this event';
+  let scope = 'series';
+  if (_isRecurringEvent(ev)) {
+    scope = await _chooseRecurringDeleteScope(ev);
+    if (!scope) return;
+  } else {
+    const ok = await uiModule.styledConfirm(`确定删除 ${name}？`, { confirmText: '删除', danger: true });
+    if (!ok) return;
+  }
+  try { await _deleteEvent(ev.uid, { scope }); setTimeout(() => _render(), 100); }
+  catch (_) { uiModule.showToast('删除失败'); }
+}
+
+// Per-event ⋮ menu: Edit / Delete
 function _wireQuickDelete(body) {
   body.querySelectorAll('.cal-event-more').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const uid = btn.dataset.uid;
       if (!uid) return;
-      const ev = _allEvents[uid];
+      const ev = _findEventByUid(uid);
       if (!ev) return;
       _showEventMoreMenu(ev, btn);
     });
@@ -470,7 +538,7 @@ function _showEventMoreMenu(ev, anchor) {
   dropdown.className = 'cal-event-dropdown';
   let closeMenu = () => dropdown.remove();
   const rect = anchor.getBoundingClientRect();
-  dropdown.style.cssText = `position:fixed;z-index:10001;min-width:180px;background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:4px;font-size:12px;top:${rect.bottom + 4}px;left:0px;visibility:hidden;`;
+  dropdown.style.cssText = `position:fixed;z-index:${topPortalZ()};min-width:180px;background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:4px;font-size:12px;top:${rect.bottom + 4}px;left:0px;visibility:hidden;`;
 
   const _item = (icon, label, onClick, danger) => {
     const it = document.createElement('div');
@@ -482,17 +550,14 @@ function _showEventMoreMenu(ev, anchor) {
 
   const _editIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 
-  dropdown.appendChild(_item(_editIcon, 'Edit', () => {
+  dropdown.appendChild(_item(_editIcon, '编辑', () => {
     closeMenu();
     _showEventForm(ev);
   }));
 
-  dropdown.appendChild(_item(_trashIcon, 'Delete', async () => {
+  dropdown.appendChild(_item(_trashIcon, '删除', async () => {
     closeMenu();
-    const name = ev.summary ? `"${ev.summary}"` : 'this event';
-    const ok = await uiModule.styledConfirm(`Delete ${name}?`, { confirmText: '删除', danger: true });
-    if (!ok) return;
-    try { await _deleteEvent(ev.uid); setTimeout(() => _render(), 100); } catch (_) {}
+    await _confirmAndDeleteEvent(ev);
   }, true));
 
   document.body.appendChild(dropdown);
@@ -538,7 +603,7 @@ async function _createEventReminder(ev, dueDate) {
     });
     if (!res.ok) throw new Error('Failed');
     const fmt = dueDate.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-    if (uiModule.showToast) uiModule.showToast(`提醒已设置： ${fmt}`);
+    if (uiModule.showToast) uiModule.showToast(`已设置提醒 ${fmt}`);
     try { window.notesModule?.refreshDueBadge?.({ force: true }); } catch {}
     if ('Notification' in window && Notification.permission === 'default') {
       try { Notification.requestPermission(); } catch {}
@@ -609,7 +674,7 @@ function _getModal() {
   _modal.innerHTML = `
     <div class="modal-content cal-modal-content">
       <div class="modal-header">
-        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>日历</h4>
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Calendar</h4>
         <button class="close-btn" id="cal-close">✖</button>
       </div>
       <div class="modal-body" id="cal-body"></div>
@@ -618,7 +683,7 @@ function _getModal() {
   _modal.querySelector('#cal-close').addEventListener('click', closeCalendar);
   _modal.addEventListener('click', (e) => { if (e.target === _modal) closeCalendar(); });
   // Make draggable — replaced ~50 lines of inline drag/dock plumbing with
-  // a single call to the shared helper. Calendar doesn't support fullscreen
+  // a single call to the shared helper. Calendar doesn\'t support fullscreen
   // snap so no fsClass / enter/exit callbacks here.
   {
     const content = _modal.querySelector('.modal-content');
@@ -655,7 +720,7 @@ function _initQuickAddHintCycle() {
 }
 
 // Stash the quick-add input's state (focus + caret + value) before a
-// re-render so background fetches don't kick the user out mid-type. Picked
+// re-render so background fetches don\'t kick the user out mid-type. Picked
 // up by _wireAll after the new DOM lands.
 let _qaPendingRestore = null;
 function _saveQuickAddState() {
@@ -669,7 +734,7 @@ function _saveQuickAddState() {
 }
 
 // True while the user is actively in the quick-add field. On mobile a
-// programmatic re-focus after a DOM rebuild can't reopen the soft keyboard, so
+// programmatic re-focus after a DOM rebuild can\'t reopen the soft keyboard, so
 // we must NOT swap the calendar body out from under an active quick-add — we
 // defer the render and flush it on blur instead.
 let _renderPending = false;
@@ -681,7 +746,7 @@ function _qaTyping() {
 
 // Update only the search-results portion of the day-detail panel, keeping
 // the search input element itself in the DOM so the on-screen keyboard
-// doesn't dismiss between keystrokes. Used by the search input's `input`
+// doesn\'t dismiss between keystrokes. Used by the search input's `input`
 // listener instead of a full _render().
 function _updateDaySearchResults() {
   const dayDetail = document.querySelector('.cal-day-detail');
@@ -717,7 +782,7 @@ function _updateDaySearchResults() {
 }
 
 // Step between calendar views by "zoom level" — pinch IN goes year→month→week,
-// pinch OUT goes the other way. Agenda is its own thing so it's excluded.
+// pinch OUT goes the other way. Agenda is its own thing so it\'s excluded.
 function _zoomView(direction) {
   const chain = ['year', 'month', 'week'];
   const idx = chain.indexOf(_view);
@@ -736,7 +801,7 @@ let _renderToken = 0;
 function _isStaleRender(t) { return t !== _renderToken; }
 
 function _render() {
-  // Don't rebuild the DOM while the user is typing in quick-add — defer it.
+  // Don\'t rebuild the DOM while the user is typing in quick-add — defer it.
   if (_qaTyping()) { _renderPending = true; return; }
   // Empty state: no calendars configured or connection failed
   if (!_calendars.length) {
@@ -745,7 +810,7 @@ function _render() {
   }
   _renderToken++;
   // Search now lives inside the day-detail panel and filters in place,
-  // so we don't replace the whole calendar body when a query is active.
+  // so we don\'t replace the whole calendar body when a query is active.
   // Force a selected day in month/week so the panel (and its search box)
   // is always available.
   if (_searchQuery && (_view === 'month' || _view === 'week') && !_selectedDay) {
@@ -771,16 +836,16 @@ function _renderEmpty() {
         <line x1="8" y1="2" x2="8" y2="6"/>
         <line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
-      <div class="cal-empty-title">${hasError ? '日历不可用' : '暂无日历'}</div>
-      <div class="cal-empty-msg">${hasError ? _e(_calendarsError) : '创建本地日历、导入 .ics 文件或通过 CalDAV 同步。'}</div>
+      <div class="cal-empty-title">${hasError ? 'Calendar unavailable' : 'No calendars yet'}</div>
+      <div class="cal-empty-msg">${hasError ? _e(_calendarsError) : 'Create a local calendar, import an .ics file, or sync via CalDAV.'}</div>
       ${hasError ? `
-        <button class="cal-btn cal-btn-primary" id="cal-goto-settings">打开设置</button>
+        <button class="cal-btn cal-btn-primary" id="cal-goto-settings">Open Settings</button>
       ` : `
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px;">
-          <button class="cal-btn cal-btn-primary" id="cal-empty-new">新建日历</button>
-          <button class="cal-btn" id="cal-empty-import">导入 .ics</button>
+          <button class="cal-btn cal-btn-primary" id="cal-empty-new">New calendar</button>
+          <button class="cal-btn" id="cal-empty-import">Import .ics</button>
         </div>
-        <div style="margin-top:10px;font-size:11px;opacity:0.55;">或 <a href="#" id="cal-empty-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">设置 CalDAV 同步</a>。</div>
+        <div style="margin-top:10px;font-size:11px;opacity:0.55;">Or <a href="#" id="cal-empty-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">set up CalDAV sync</a>.</div>
       `}
     </div>`;
   document.getElementById('cal-goto-settings')?.addEventListener('click', () => {
@@ -794,7 +859,7 @@ function _renderEmpty() {
   });
   // New / Import open the calendar settings panel; the panel already
   // has the "New calendar" button and the .ics file picker. Import
-  // triggers the file picker immediately so it's a one-click flow.
+  // triggers the file picker immediately so it\'s a one-click flow.
   document.getElementById('cal-empty-new')?.addEventListener('click', () => {
     _showCalSettings();
     setTimeout(() => document.getElementById('cal-settings-add')?.click(), 50);
@@ -850,9 +915,10 @@ function _headerHTML() {
     </div>
     <div class="cal-toolbar-right">
       <div class="cal-view-toggle">
-        ${(() => { const labels = { week: '周', month: '月', year: '年', agenda: '日程' }; return ['week', 'month', 'year', 'agenda'].map(v =>
-          `<button class="cal-view-btn${_view === v ? ' active' : ''}" data-view="${v}">${labels[v]}</button>`
-        ).join(''); })()}
+        ${['week', 'month', 'year', 'agenda'].map(v => {
+          const labels = { week: '周', month: '月', year: '年', agenda: '日程' };
+          return `<button class="cal-view-btn${_view === v ? ' active' : ''}" data-view="${v}">${labels[v]}</button>`;
+        }).join('')}
       </div>
       <button class="cal-nav" id="cal-settings" title="日历设置" style="position:relative;top:-3px;"><svg width="13" height="13" style="position:relative;top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.68 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <button class="cal-nav${window._calSyncing ? ' cal-syncing' : ''}${window._calSyncDone ? ' cal-sync-done' : ''}" id="cal-sync" title="从数据库刷新" style="position:relative;top:-3px;">${window._calSyncDone ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>'}</button>
@@ -893,14 +959,14 @@ function _filtersData() {
     if (!presentTypes.has(t)) continue;
     const off = (t === '!') ? false : _hiddenTypes.has(t);
     const active = (t === '!') && _onlyImportant;
-    const label = t === '!' ? '! 重要' : t;
+    const label = t === '!' ? '! important' : t;
     typeFilters += `<label class="cal-filter-item${off ? ' cal-filter-off' : ''}${active ? ' cal-filter-active' : ''}${t === '!' ? ' cal-filter-important' : ''}" data-type="${t}">
       <span class="cal-filter-dot" style="background:${_TYPE_PALETTE[t]}"></span>${label}</label>`;
   }
   if (hasUntagged) {
     const off = _hiddenTypes.has('__untagged__');
     typeFilters += `<label class="cal-filter-item${off ? ' cal-filter-off' : ''}" data-type="__untagged__">
-      <span class="cal-filter-dot" style="background:${_TYPE_PALETTE.untagged}"></span>未分类</label>`;
+      <span class="cal-filter-dot" style="background:${_TYPE_PALETTE.untagged}"></span>untagged</label>`;
   }
   return { calFilters, typeFilters };
 }
@@ -909,7 +975,7 @@ function _filtersToggleHTML() {
   // Inline toolbar button only. The chip row renders separately below.
   const { calFilters, typeFilters } = _filtersData();
   if (!calFilters && !typeFilters) return '';
-  return `<button class="cal-filter-toggle" id="cal-filter-toggle" title="${_filtersCollapsed ? '显示筛选' : '隐藏筛选'}">${_filtersCollapsed ? '+ 标签' : '− 标签'}</button>`;
+  return `<button class="cal-filter-toggle" id="cal-filter-toggle" title="${_filtersCollapsed ? 'Show filters' : 'Hide filters'}">${_filtersCollapsed ? '+ tags' : '− tags'}</button>`;
 }
 
 function _filtersRowHTML() {
@@ -1013,12 +1079,12 @@ async function _renderMonth() {
             <span class="cal-event-row-name">${_impMark}${_e(ev.summary)}</span>
           </div>`;
         }
-        if (singles.length > maxInline) h += `<div class="cal-event-more">+${singles.length - maxInline} 更多</div>`;
+        if (singles.length > maxInline) h += `<div class="cal-event-more">+${singles.length - maxInline} more</div>`;
       }
       h += '</div>';
     }
     // Multi-day overlay bars for this row. Stack each bar one slot below
-    // the previous so two events on the same row don't overlap.
+    // the previous so two events on the same row don\'t overlap.
     let barSlot = 0;
     for (const md of multiDay) {
       const mdStart = _localDateOf(md.dtstart);
@@ -1162,7 +1228,7 @@ function _wkEventTopHeight(ev, dayStr) {
   // day's grid origin. Clamp to visible window.
   // The dtstart/dtend strings are like "2026-05-11T09:00:00" (no tz), so
   // pull the time portion directly to avoid TZ math drift; falls back to
-  // Date math if the string isn't shaped as expected.
+  // Date math if the string isn\'t shaped as expected.
   const _toMin = (iso, fallbackDate) => {
     if (!iso) return null;
     const mins = _timeToMin(iso);
@@ -1212,8 +1278,8 @@ async function _renderWeek() {
   // (toolbar is already crowded — this empty 56-px corner is a free home).
   let railHtml = `<div class="cal-wk-rail">
     <div class="cal-wk-rail-spacer">
-      <button class="cal-wk-zoom" id="cal-wk-zoom-out" title="缩小" aria-label="缩小">−</button>
-      <button class="cal-wk-zoom" id="cal-wk-zoom-in" title="放大" aria-label="放大">+</button>
+      <button class="cal-wk-zoom" id="cal-wk-zoom-out" title="Zoom out (–)" aria-label="Zoom out">−</button>
+      <button class="cal-wk-zoom" id="cal-wk-zoom-in" title="Zoom in (+)" aria-label="Zoom in">+</button>
     </div>`;
   for (let h = WEEK_HOUR_START; h < WEEK_HOUR_END; h++) {
     railHtml += `<div class="cal-wk-rail-cell" style="height:${WEEK_HOUR_PX}px;"><span>${_wkFormatHourLabel(h)}</span></div>`;
@@ -1260,15 +1326,15 @@ async function _renderWeek() {
       // events keep the original tinted treatment.
       let bgDecl;
       if (_isCalBgImage(ev.color)) {
-        const _url = _calBgImageUrl(ev.color).replace(/'/g, "\\'").replace(/"/g, "%22");
-        bgDecl = `background-image: linear-gradient(color-mix(in srgb, var(--bg) 55%, transparent), color-mix(in srgb, var(--bg) 55%, transparent)), url('${_url}'); background-size: cover; background-position: center;`;
+        const _url = _calBgImageUrl(ev.color);
+        bgDecl = `background-image: linear-gradient(color-mix(in srgb, var(--bg) 55%, transparent), color-mix(in srgb, var(--bg) 55%, transparent)), url('${_cssUrlEscape(_url)}'); background-size: cover; background-position: center;`;
       } else {
         bgDecl = `background:color-mix(in srgb, ${_calColor(ev)} 18%, var(--bg));`;
       }
       colsHtml += `<div class="cal-wk-block" data-uid="${_e(ev.uid)}" style="top:${top}px;height:${height}px;border-left-color:${_calColor(ev)};${bgDecl}">`;
       colsHtml += `<div class="cal-wk-block-name">${_e(ev.summary)}</div>`;
       colsHtml += `<div class="cal-wk-block-time">${t}</div>`;
-      colsHtml += `<div class="cal-wk-block-resize" title="拖拽调整时长"></div>`;
+      colsHtml += `<div class="cal-wk-block-resize" title="Drag to resize"></div>`;
       colsHtml += `</div>`;
     }
     colsHtml += `</div></div>`;  // /cal-wk-grid /cal-wk-col
@@ -1286,7 +1352,7 @@ async function _renderWeek() {
 
   // Single click (tap) an event block → open edit form. A drag-to-move or
   // drag-to-resize sets `justResized` in its mouseup so the trailing click
-  // doesn't also open the form; the bottom-edge resize handle is ignored too.
+  // doesn\'t also open the form; the bottom-edge resize handle is ignored too.
   body.querySelectorAll('.cal-wk-block, .cal-wk-allday-event').forEach(el => {
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('cal-wk-block-resize')) return;
@@ -1348,7 +1414,7 @@ async function _renderWeek() {
         moved = true;
         // Pick the column under the cursor. If the cursor lands between
         // columns (gutter/border) or just outside the grid horizontally,
-        // snap to the nearest column instead of giving up — that's why
+        // snap to the nearest column instead of giving up — that\'s why
         // horizontal cross-day drag could feel stuck before.
         let cur = cols.find(c => {
           const r = c.getBoundingClientRect();
@@ -1410,7 +1476,7 @@ async function _renderWeek() {
         try {
           await _updateEvent(uid, { dtstart: newDtstart, dtend: newDtend });
           _render();
-          _showCalUndoToast('已移动事件', async () => {
+          _showCalUndoToast('Moved event', async () => {
             try {
               await _updateEvent(uid, { dtstart: prevDtstart, dtend: prevDtend });
               _render();
@@ -1468,7 +1534,7 @@ async function _renderWeek() {
         try {
           await _updateEvent(uid, { dtend: newDtend });
           _render();
-          _showCalUndoToast('已调整事件', async () => {
+          _showCalUndoToast('Resized event', async () => {
             try {
               await _updateEvent(uid, { dtend: prevDtend });
               _render();
@@ -1487,7 +1553,7 @@ async function _renderWeek() {
   // Drag-to-create on empty grid: mousedown on a cell, drag down, release.
   body.querySelectorAll('.cal-wk-grid').forEach(grid => {
     grid.addEventListener('mousedown', (e) => {
-      // Don't start a drag-create when the press lands on an existing event.
+      // Don\'t start a drag-create when the press lands on an existing event.
       if (e.target.closest('.cal-wk-block')) return;
       if (e.button !== 0) return;
       e.preventDefault();
@@ -1542,7 +1608,7 @@ async function _renderWeek() {
   document.getElementById('cal-wk-zoom-out')?.addEventListener('click', (e) => { e.stopPropagation(); _wkZoomBy(-12); });
 
   // Keyboard zoom (`+` / `-`), Ctrl/Cmd-wheel zoom — both only fire while
-  // we're in week view and no text input has focus.
+  // we\'re in week view and no text input has focus.
   if (!body._wkZoomKeysWired) {
     body._wkZoomKeysWired = true;
     document.addEventListener('keydown', (e) => {
@@ -1599,7 +1665,7 @@ async function _renderAgenda() {
     .sort((a, b) => a.dtstart < b.dtstart ? -1 : 1);
 
   let h = _headerHTML() + _filtersRowHTML() + '<div class="cal-agenda">';
-  // Group events by local date, then always surface today (when it's inside
+  // Group events by local date, then always surface today (when it\'s inside
   // the agenda window) even if it has no events, so the user can see "today".
   const byDate = new Map();
   for (const ev of visible) {
@@ -1615,11 +1681,11 @@ async function _renderAgenda() {
     // Empty-state mirrors the email panel: short message + a Settings ›
     // Integrations link to set up CalDAV, OR a quick "Create event" action.
     h += '<div class="cal-empty" style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">' +
-      '<span>无即将发生的事件</span>' +
+      '<span>No upcoming events</span>' +
       '<span style="opacity:0.7;font-size:11px;">' +
-        '<a href="#" data-cal-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">设置 &rsaquo; 集成</a>' +
+        '<a href="#" data-cal-open-settings="integrations" style="color:var(--accent,var(--red));text-decoration:underline;">Settings &rsaquo; Integrations</a>' +
         ' &middot; ' +
-        '<a href="#" data-cal-create-event="1" style="color:var(--accent,var(--red));text-decoration:underline;">创建事件</a>' +
+        '<a href="#" data-cal-create-event="1" style="color:var(--accent,var(--red));text-decoration:underline;">Create event</a>' +
       '</span>' +
     '</div>';
   } else {
@@ -1696,7 +1762,7 @@ async function _renderSearch() {
     .sort((a, b) => a.dtstart < b.dtstart ? -1 : 1);
 
   let h = _headerHTML() + _filtersRowHTML() + '<div class="cal-search-results">';
-  h += `<div class="cal-search-count">关于 "${_e(_searchQuery)}" 共 ${results.length} 条结果</div>`;
+  h += `<div class="cal-search-count">${results.length} 条结果 — "${_e(_searchQuery)}"</div>`;
   if (!results.length) {
     h += '<div class="cal-empty">无匹配事件</div>';
   } else {
@@ -1804,7 +1870,7 @@ function _dayDetailHTML(dateStr) {
     <svg class="cal-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
     <input type="search" class="cal-search-input cal-day-search" id="cal-search" placeholder="搜索所有事件…" value="${_e(_searchQuery)}" />
   </div>`;
-  let h = `<div class="cal-splitter" role="separator" aria-orientation="horizontal" tabindex="0" title="拖拽调整大小"><div class="cal-splitter-grip"></div></div>
+  let h = `<div class="cal-splitter" role="separator" aria-orientation="horizontal" tabindex="0" title="Drag to resize"><div class="cal-splitter-grip"></div></div>
     <div class="cal-day-detail">
     ${searchInput}
     <div class="cal-detail-header">
@@ -1813,7 +1879,7 @@ function _dayDetailHTML(dateStr) {
     </div>`;
   if (_searchQuery) {
     const q = _searchQuery.toLowerCase();
-    const results = _events
+    const results = Object.values(_allEvents || {})
       .filter(_eventVisible)
       .filter(e =>
         (e.summary || '').toLowerCase().includes(q) ||
@@ -1843,7 +1909,7 @@ function _dayDetailHTML(dateStr) {
     return h + '</div>';
   }
   const evs = _eventsForDay(dateStr);
-  if (!evs.length) h += '<div class="cal-empty">No events</div>';
+  if (!evs.length) h += '<div class="cal-empty">无事件</div>';
   else evs.forEach(ev => {
     const t = ev.all_day ? '全天' : _fmtTime(ev.dtstart) + ' – ' + _fmtTime(ev.dtend);
     const _bgStyle = _calItemBgStyle(ev);
@@ -1946,7 +2012,7 @@ function _wireAll(body) {
       // spinner's container mid-parse.
       _qaSubmitting = true;
       // Whirlpool spinner after the text — but only once parsing has run long
-      // enough to be worth showing (~250ms), so fast parses don't flash it.
+      // enough to be worth showing (~250ms), so fast parses don\'t flash it.
       let _qaSpin = null;
       let _qaSpinTimer = null;
       if (_qaStatus) {
@@ -1959,7 +2025,7 @@ function _wireAll(body) {
             _qaStatus.appendChild(_qaSpin.element);
           }, 250);
         } catch {
-          _qaSpinTimer = setTimeout(() => { if (_qaStatus) _qaStatus.textContent = '解析中…'; }, 250);
+          _qaSpinTimer = setTimeout(() => { if (_qaStatus) _qaStatus.textContent = 'parsing…'; }, 250);
         }
       }
       try {
@@ -1974,7 +2040,7 @@ function _wireAll(body) {
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
           if (_qaStatus) _qaStatus.textContent = '';
-          uiModule.showError('快速添加: ' + (data.error || data.detail || `HTTP ${res.status}`));
+          uiModule.showError('快速添加：' + (data.error || data.detail || `HTTP ${res.status}`));
           return;
         }
         // Open the bespoke event form, then push the parsed fields in.
@@ -2007,7 +2073,7 @@ function _wireAll(body) {
         // Reset for next quick add.
         _qaInput.value = '';
       } catch (e) {
-        uiModule.showError('快速添加失败: ' + e.message);
+        uiModule.showError('快速添加失败：' + e.message);
       } finally {
         _qaSubmitting = false;
         clearTimeout(_qaSpinTimer);
@@ -2049,7 +2115,7 @@ function _wireAll(body) {
 
   // Pinch zoom on the calendar body changes the view granularity:
   // year ⇆ month ⇆ week. Pinch IN zooms to a tighter view, pinch OUT
-  // zooms out. Fires once per gesture so a strong pinch doesn't skip
+  // zooms out. Fires once per gesture so a strong pinch doesn\'t skip
   // straight from year to week (the user gets one step at a time and
   // can release-and-pinch again).
   if (body && !body._pinchZoomWired) {
@@ -2076,7 +2142,7 @@ function _wireAll(body) {
 
   // Touch swipe ← → on the calendar body switches months/weeks/etc. Only
   // fires when the swipe is clearly horizontal so vertical scrolling inside
-  // long event lists isn't hijacked. Attached fresh on each render via
+  // long event lists isn\'t hijacked. Attached fresh on each render via
   // _wireAll → existing prev/next handlers do the actual navigation.
   if (body && !body._swipeWired) {
     body._swipeWired = true;
@@ -2143,7 +2209,7 @@ function _wireAll(body) {
     localStorage.removeItem(LS_KEY);
 
     // Compute the visible range and force-refetch — _render() kicks off
-    // a fetch internally but doesn't return a promise, so we await our
+    // a fetch internally but doesn\'t return a promise, so we await our
     // own one to actually serialize on the network.
     const _range = (_view === 'year')
       ? [`${_currentDate.getFullYear()}-01-01`, `${_currentDate.getFullYear() + 1}-01-01`]
@@ -2158,7 +2224,7 @@ function _wireAll(body) {
       window._calSyncing = false;
       // Flash a checkmark for ~900ms. Drive it through a flag the toolbar
       // template reads (not a one-off innerHTML on the button), so a stray
-      // _render() — the calendar re-renders mid-flow — can't wipe it. Same
+      // _render() — the calendar re-renders mid-flow — can\'t wipe it. Same
       // reason the spin is flag-driven.
       window._calSyncDone = true;
       _render();
@@ -2170,7 +2236,7 @@ function _wireAll(body) {
     }
   });
   // Brief spin on the "+" glyph before the new-event form opens. The
-  // glyph already rotates on hover (desktop). On mobile there's no
+  // glyph already rotates on hover (desktop). On mobile there\'s no
   // hover, so play the rotation on tap as a quick affordance.
   const _addClick = (e, openFn) => {
     if (window.innerWidth <= 768) {
@@ -2197,7 +2263,7 @@ function _wireAll(body) {
   };
   document.getElementById('cal-add')?.addEventListener('click', (e) => _addClick(e, () => { if (!_tryQuickAddFromButton()) _showEventForm(null, _selectedDay || _today()); }));
   // Solo "+" on the day-detail header: no spin (the small round button
-  // doesn't look good rotating in place — open the form immediately).
+  // doesn\'t look good rotating in place — open the form immediately).
   document.getElementById('cal-add-day')?.addEventListener('click', () => { if (!_tryQuickAddFromButton()) _showEventForm(null, _selectedDay); });
 
   // Mobile: relocate the toolbar's +New pill so it sits NEXT TO the
@@ -2262,7 +2328,7 @@ function _wireAll(body) {
     _view = b.dataset.view;
     _searchQuery = '';
     _selectedDay = null;
-    // Switching to Agenda always lands on today so you see "what's coming
+    // Switching to Agenda always lands on today so you see "what\'s coming
     // up" rather than wherever you happened to be browsing.
     if (_view === 'agenda') _currentDate = new Date();
     _render();
@@ -2292,7 +2358,7 @@ function _wireAll(body) {
       }
     } else if (type) {
       // "!" chip toggles a separate "only important" axis — clicking it
-      // doesn't solo-hide other categories the way a normal type chip does.
+      // doesn\'t solo-hide other categories the way a normal type chip does.
       if (type === '!') {
         _onlyImportant = !_onlyImportant;
         // Clear category hides so importance becomes the active filter.
@@ -2301,7 +2367,7 @@ function _wireAll(body) {
         const allTypes = Array.from(body.querySelectorAll('.cal-filter-item[data-type]'))
           .map(el => el.dataset.type)
           .filter(t => t !== '!');
-        // Engaging a category filter cancels "only important" so it doesn't
+        // Engaging a category filter cancels "only important" so it doesn\'t
         // silently keep filtering on top.
         _onlyImportant = false;
         if (e.shiftKey || e.ctrlKey || e.metaKey) {
@@ -2383,7 +2449,7 @@ function _wireAll(body) {
     });
     cell.addEventListener('dragleave', (e) => {
       // Only clear if the cursor really left this cell (dragleave fires when
-      // entering a child too — that's the flicker bug).
+      // entering a child too — that\'s the flicker bug).
       const target = _cellAtPoint(e.clientX, e.clientY);
       if (target !== cell) cell.classList.remove('cal-drag-over');
     });
@@ -2406,7 +2472,7 @@ function _wireAll(body) {
       _pushCalUndo({ label: 'move', run: () => _updateEvent(undoSnap.uid, { dtstart: undoSnap.dtstart, dtend: undoSnap.dtend || undefined }).then(_render) });
       await _updateEvent(ev.uid, { dtstart: _shiftDT(ev.dtstart, diff), dtend: ev.dtend ? _shiftDT(ev.dtend, diff) : undefined });
       _render();
-      uiModule.showToast?.('已移动', { duration: 4000, action: 'Undo', actionHint: 'Ctrl+Z', onAction: _popAndRunCalUndo });
+      uiModule.showToast?.('Moved', { duration: 4000, action: 'Undo', actionHint: 'Ctrl+Z', onAction: _popAndRunCalUndo });
     });
   });
 }
@@ -2455,12 +2521,12 @@ async function _showCalSettings() {
   overlay.innerHTML = `
     <div class="modal-content" style="width:420px;max-width:92vw;">
       <div class="modal-header">
-        <h4>日历设置</h4>
+        <h4>Calendar Settings</h4>
         <button class="close-btn" id="cal-settings-close">\u2716</button>
       </div>
       <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:16px;">
         <div>
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">你的日历</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Your calendars</div>
           <div id="cal-settings-list" style="display:flex;flex-direction:column;gap:4px;">
             ${cals.map(c => `
               <div class="cal-settings-row" data-id="${_e(c.href)}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:color-mix(in srgb, var(--fg) 4%, transparent);">
@@ -2476,19 +2542,19 @@ async function _showCalSettings() {
           </button>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">导入日历</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Import calendar</div>
           <div style="display:flex;gap:8px;align-items:center;">
             <label class="memory-toolbar-btn" style="cursor:pointer;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:5px;margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span style="position:relative;top:4px;">导入 .ics</span>
+              <span style="position:relative;top:4px;">Import .ics</span>
               <input type="file" accept=".ics,.ical" id="cal-import-file" style="display:none;" />
             </label>
             <span id="cal-import-status" style="font-size:11px;opacity:0.6;"></span>
           </div>
-          <div style="font-size:10px;opacity:0.4;margin-top:4px;">上传 .ics 文件以导入事件。Google 日历、Apple 日历和 Outlook 均可导出 .ics 文件。</div>
+          <div style="font-size:10px;opacity:0.4;margin-top:4px;">Upload a .ics file to import events. Google Calendar, Apple Calendar, and Outlook all export .ics files.</div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">导出日历</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Export calendar</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             ${cals.map(c => `
               <button class="memory-toolbar-btn cal-s-export-chip" data-id="${_e(c.href)}" title="Download ${_e(c.name)}.ics" style="cursor:pointer;">
@@ -2497,13 +2563,13 @@ async function _showCalSettings() {
               </button>
             `).join('')}
           </div>
-          <div style="font-size:10px;opacity:0.4;margin-top:4px;">将日历下载为 .ics 文件用于备份或导入到其他应用。</div>
+          <div style="font-size:10px;opacity:0.4;margin-top:4px;">Download a calendar as .ics for backup or to import into another app.</div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">每周起始日</div>
+          <div style="font-size:11px;opacity:0.5;margin-bottom:6px;">Week starts on</div>
           <div style="display:flex;gap:6px;">
-            <button id="cal-wstart-mon" type="button" style="font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:${!_weekStartSun ? 'color-mix(in srgb, var(--accent,var(--red)) 18%, var(--panel))' : 'var(--panel)'};color:var(--fg);cursor:pointer;transition:background 0.1s,border-color 0.1s;outline:none;">周一</button>
-            <button id="cal-wstart-sun" type="button" style="font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:${_weekStartSun ? 'color-mix(in srgb, var(--accent,var(--red)) 18%, var(--panel))' : 'var(--panel)'};color:var(--fg);cursor:pointer;transition:background 0.1s,border-color 0.1s;outline:none;">周日</button>
+            <button id="cal-wstart-mon" type="button" style="font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:${!_weekStartSun ? 'color-mix(in srgb, var(--accent,var(--red)) 18%, var(--panel))' : 'var(--panel)'};color:var(--fg);cursor:pointer;transition:background 0.1s,border-color 0.1s;outline:none;">Monday</button>
+            <button id="cal-wstart-sun" type="button" style="font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:${_weekStartSun ? 'color-mix(in srgb, var(--accent,var(--red)) 18%, var(--panel))' : 'var(--panel)'};color:var(--fg);cursor:pointer;transition:background 0.1s,border-color 0.1s;outline:none;">Sunday</button>
           </div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:12px;">
@@ -2511,11 +2577,11 @@ async function _showCalSettings() {
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <button class="memory-toolbar-btn" id="cal-settings-sync-now" style="cursor:pointer;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:relative;top:2px;margin-right:3px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              <span style="position:relative;top:1px;">立即同步</span>
+              <span style="position:relative;top:1px;">Sync now</span>
             </button>
             <span id="cal-settings-sync-status" style="font-size:11px;opacity:0.6;"></span>
           </div>
-          <div style="font-size:10px;opacity:0.4;margin-top:4px;">从 CalDAV 服务器拉取事件 server. To connect or change CalDAV credentials, open <a href="#" id="cal-settings-open-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">设置 → 集成</a>.</div>
+          <div style="font-size:10px;opacity:0.4;margin-top:4px;">Pulls events from your CalDAV server. To connect or change CalDAV credentials, open <a href="#" id="cal-settings-open-caldav" style="color:var(--accent, var(--red));text-decoration:none;font-weight:600;">Settings → Integrations</a>.</div>
         </div>
       </div>
     </div>
@@ -2563,7 +2629,7 @@ async function _showCalSettings() {
       _render();
       cleanup();
       _showCalSettings();
-      // Focus the new row's name field so it's ready to rename.
+      // Focus the new row's name field so it\'s ready to rename.
       setTimeout(() => {
         const rows = document.querySelectorAll('#cal-settings-list .cal-settings-row');
         const last = rows[rows.length - 1];
@@ -2589,7 +2655,7 @@ async function _showCalSettings() {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(async () => {
         await fetch(`${API_BASE}/api/calendar/calendars/${id}?name=${encodeURIComponent(nameInput.value)}&color=${encodeURIComponent(colorInput.value)}`, { method: 'PUT' });
-        if (uiModule?.showToast) uiModule.showToast(`Saved “${nameInput.value || 'calendar'}”`);
+        if (uiModule?.showToast) uiModule.showToast(`已保存 "${nameInput.value || '日历'}"`);
         // Update local calendar list
         const c = _calendars.find(c => c.href === id);
         if (c) { c.name = nameInput.value; c.color = colorInput.value; }
@@ -2607,12 +2673,12 @@ async function _showCalSettings() {
     };
     colorInput.addEventListener('input', save);
     nameInput.addEventListener('change', save);
-    // Upgrade the native color box into the app's themed color picker.
+    // Upgrade the native color box into the app\'s themed color picker.
     try { attachColorPicker(colorInput); } catch (_) {}
 
     delBtn.addEventListener('click', async () => {
       const name = nameInput.value;
-      if (!await window.styledConfirm(`删除日历 "${name}" 及其所有事件?`, { confirmText: '删除', danger: true })) return;
+      if (!await window.styledConfirm(`确定删除日历 "${name}" 及其所有事件？`, { confirmText: '删除', danger: true })) return;
       await fetch(`${API_BASE}/api/calendar/calendars/${id}`, { method: 'DELETE' });
       row.remove();
       _allEvents = {}; _fetchedRanges = []; localStorage.removeItem(LS_KEY);
@@ -2626,7 +2692,7 @@ async function _showCalSettings() {
     const file = e.target.files[0];
     if (!file) return;
     const status = overlay.querySelector('#cal-import-status');
-    status.textContent = '正在导入…';
+    status.textContent = 'Importing...';
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -2637,18 +2703,18 @@ async function _showCalSettings() {
       let data = null, raw = '';
       try { data = await res.clone().json(); } catch (_) { raw = await res.text().catch(() => ''); }
       if (res.ok && data && data.ok) {
-        status.textContent = `${data.imported} 个事件已导入 to "${data.calendar}"` + (data.skipped ? ` (${data.skipped} 已跳过)` : '');
+        status.textContent = `${data.imported} events imported to "${data.calendar}"` + (data.skipped ? ` (${data.skipped} skipped)` : '');
         _allEvents = {}; _fetchedRanges = []; localStorage.removeItem(LS_KEY);
         await _fetchCalendars();
         _render();
       } else {
         // FastAPI HTTPException → {detail}; some routes use {error}.
         const reason = (data && (data.detail || data.error)) || raw.slice(0, 200) || `HTTP ${res.status}`;
-        status.textContent = `导入失败: ${reason}`;
+        status.textContent = `Import failed: ${reason}`;
         console.error('Calendar import failed', res.status, data || raw);
       }
     } catch (err) {
-      status.textContent = `导入失败: ${err.message || err}`;
+      status.textContent = `Import failed: ${err.message || err}`;
       console.error('Calendar import threw', err);
     }
     e.target.value = '';
@@ -2667,15 +2733,15 @@ async function _showCalSettings() {
     const btn = e.currentTarget;
     const status = overlay.querySelector('#cal-settings-sync-status');
     btn.disabled = true;
-    status.textContent = '正在同步…';
+    status.textContent = 'Syncing…';
     const data = await _syncCaldav(true) || {};
     if (data.errors && data.errors.length) {
-      status.textContent = `同步失败: ${data.errors[0]}`;
+      status.textContent = `Sync failed: ${data.errors[0]}`;
     } else {
       const parts = [];
       if (data.events) parts.push(`${data.events} events`);
       if (data.deleted) parts.push(`${data.deleted} removed`);
-      status.textContent = parts.length ? `Synced — ${parts.join(', ')}` : '已同步 — 无变化';
+      status.textContent = parts.length ? `Synced — ${parts.join(', ')}` : 'Synced — no changes';
       _allEvents = {}; _fetchedRanges = [];
       try { localStorage.removeItem(LS_KEY); } catch (_) {}
       await _fetchCalendars();
@@ -2688,7 +2754,7 @@ async function _showCalSettings() {
     btn.disabled = false;
   });
 
-  // Integrations link — close this overlay and open 设置 → 集成.
+  // Integrations link — close this overlay and open Settings → Integrations.
   overlay.querySelector('#cal-settings-open-caldav')?.addEventListener('click', (e) => {
     e.preventDefault();
     cleanup();
@@ -2761,7 +2827,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     <button type="button" class="cal-form-mobile-cancel" id="cal-form-mobile-cancel" title="取消" aria-label="取消事件">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
-    <div class="cal-form-today" id="cal-form-today">Today is <span id="cal-form-today-text">${_clockDate(_today())} · ${_nowClock()}</span></div>
+    <div class="cal-form-today" id="cal-form-today">今天是 <span id="cal-form-today-text">${_clockDate(_today())} · ${_nowClock()}</span></div>
     <div class="cal-hero">
       <button type="button" class="cal-hero-time" id="cal-hero-time" title="更改时间">
         <span class="cal-hero-clock" id="cal-hero-clock">${_clockFace(ad ? '' : st)}</span>
@@ -2772,7 +2838,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
 
     <div class="cal-title-wrap">
       <input type="text" id="cal-f-sum" placeholder=" " value="${_e(existing?.summary || '')}" class="cal-input cal-hero-title" autocomplete="off" />
-      <span class="cal-title-hint" aria-hidden="true">${isEdit ? '事件标题' : 'What’s happening?'}<svg class="cal-title-enter-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg></span>
+      <span class="cal-title-hint" aria-hidden="true">${isEdit ? '事件标题' : '有什么安排？'}<svg class="cal-title-enter-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg></span>
     </div>
 
     <div class="cal-form-details" id="cal-form-details" aria-hidden="${_expandedAtStart ? 'false' : 'true'}">
@@ -2781,7 +2847,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         <span style="opacity:0.3">to</span>
         <input type="date" id="cal-f-date-end" value="${de}" class="cal-input" />
         <div class="cal-allday-ctrl">
-          <span class="cal-allday-label">全天</span>
+          <span class="cal-allday-label">All day</span>
           <label class="admin-switch cal-allday-switch"><input type="checkbox" id="cal-f-allday" ${ad ? 'checked' : ''} /><span class="admin-slider"></span></label>
         </div>
       </div>
@@ -2792,7 +2858,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       </div>
       <div class="cal-loc-row">
         <input type="text" id="cal-f-loc" placeholder="地点" value="${_e(existing?.location || '')}" class="cal-input" />
-        <a id="cal-f-loc-map" class="cal-loc-map" href="#" target="_blank" rel="noopener noreferrer" title="在地图中打开" aria-label="在地图中打开" tabindex="-1">
+        <a id="cal-f-loc-map" class="cal-loc-map" href="#" target="_blank" rel="noopener noreferrer" title="在地图中打开" aria-label="在 Apple 地图中打开" tabindex="-1">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         </a>
       </div>
@@ -2822,29 +2888,29 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
               <path d="M9 11l3 3L22 4"/>
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
-            <span>在任务中打开</span>
+            <span>Open in Tasks</span>
           </button>
-          <span style="font-size:11px;opacity:0.5;">已关联到 Cookbook 计划任务</span>
+          <span style="font-size:11px;opacity:0.5;">Linked to a Cookbook scheduled task</span>
         </div>`;
       })()}
       <div class="cal-form-row" style="align-items:center;gap:8px;">
         <label style="font-size:11px;display:flex;align-items:center;gap:4px;"><svg class="cal-remind-bell" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent, var(--red))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span style="opacity:0.5;">Reminder</span></label>
         <select id="cal-f-remind" class="cal-input" style="flex:1;">
-          <option value="" ${isEdit ? 'selected' : ''}>无提醒</option>
-          <option value="0">事件开始时</option>
-          <option value="5">5 分钟前</option>
-          <option value="10">10 分钟前</option>
-          <option value="15" ${!isEdit ? 'selected' : ''}>15 分钟前</option>
-          <option value="30">30 分钟前</option>
-          <option value="60">1 小时前</option>
+          <option value="" ${isEdit ? 'selected' : ''}>No reminder</option>
+          <option value="0">At event time</option>
+          <option value="5">5 minutes before</option>
+          <option value="10">10 minutes before</option>
+          <option value="15" ${!isEdit ? 'selected' : ''}>15 minutes before</option>
+          <option value="30">30 minutes before</option>
+          <option value="60">1 hour before</option>
           <option value="120">2 hours before</option>
-          <option value="1440">1 天前</option>
-          <option value="custom">自定义时间...</option>
+          <option value="1440">1 day before</option>
+          <option value="custom">Exact time...</option>
         </select>
         <input type="datetime-local" id="cal-f-remind-custom" class="cal-input" style="flex:1;display:none;" />
       </div>
       <div class="cal-form-row" style="align-items:center;gap:8px;">
-        <label style="font-size:11px;opacity:0.5;">颜色</label>
+        <label style="font-size:11px;opacity:0.5;">Color</label>
         <div class="note-color-picker" id="cal-f-colors">
           ${CAL_COLORS.map(c => {
             const cur = existing?.color || '';
@@ -2853,7 +2919,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
             let bg;
             if (isCustom) {
               const url = _calBgImageUrl(cur);
-              bg = url ? `center/cover no-repeat url('${url}')` : _CAL_CUSTOM_GRADIENT;
+              bg = url ? `center/cover no-repeat url('${_cssUrlEscape(url)}')` : _CAL_CUSTOM_GRADIENT;
             } else {
               bg = c.hex || 'var(--border)';
             }
@@ -2878,7 +2944,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   });
   // Open-task back-link button — dynamically imports the tasks module
   // so the linkage works even if the user is opening the calendar
-  // before they've touched the Tasks tab in this session.
+  // before they\'ve touched the Tasks tab in this session.
   document.getElementById('cal-f-open-task')?.addEventListener('click', async (e) => {
     e.preventDefault();
     const taskId = e.currentTarget?.dataset?.taskId || '';
@@ -2907,7 +2973,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       });
     });
   }
-  // Tint the calendar-picker select with the chosen calendar's colour so it's
+  // Tint the calendar-picker select with the chosen calendar's colour so it\'s
   // clear which calendar the event lands in.
   const _calSel = document.getElementById('cal-f-cal');
   if (_calSel) {
@@ -2928,7 +2994,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       // stays readable. Chrome accent falls back to the theme accent.
       const url = _calBgImageUrl(hex);
       _formCard.style.setProperty('--ev-color', 'var(--accent)');
-      _formCard.style.backgroundImage = `linear-gradient(color-mix(in srgb, var(--panel) 65%, transparent), color-mix(in srgb, var(--panel) 65%, transparent)), url('${url.replace(/'/g, "\\'")}')`;
+      _formCard.style.backgroundImage = `linear-gradient(color-mix(in srgb, var(--panel) 65%, transparent), color-mix(in srgb, var(--panel) 65%, transparent)), url('${_cssUrlEscape(url)}')`;
       _formCard.style.backgroundSize = 'cover';
       _formCard.style.backgroundPosition = 'center';
       _formCard.classList.add('cal-form-bg-image');
@@ -2950,7 +3016,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
         if (!url) return;
         const sentinel = 'bg:' + url;
         dot.dataset.color = sentinel;
-        dot.style.background = `center/cover no-repeat url('${url}')`;
+        dot.style.background = `center/cover no-repeat url('${_cssUrlEscape(url)}')`;
         document.querySelectorAll('#cal-f-colors .note-color-dot').forEach(d => d.classList.remove('active'));
         dot.classList.add('active');
         _applyFormTint(sentinel);
@@ -2967,7 +3033,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   // When the user changes the start time, shift the end time by the same
   // delta so the event keeps its original duration (or a 1-hour default if
   // start == end). Skipped if the user has already nudged the end input
-  // since opening the form — we don't want to clobber a deliberate edit.
+  // since opening the form — we don\'t want to clobber a deliberate edit.
   (function _wireStartShiftsEnd() {
     const startEl = document.getElementById('cal-f-start');
     const endEl = document.getElementById('cal-f-end');
@@ -3041,7 +3107,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     const customInput = document.getElementById('cal-f-remind-custom');
     if (e.target.value === 'custom') {
       customInput.style.display = '';
-      // Default to 1 小时前 event
+      // Default to 1 hour before event
       const dv = document.getElementById('cal-f-date')?.value || _today();
       const st = document.getElementById('cal-f-start')?.value || '09:00';
       const eventDt = new Date(`${dv}T${st}:00`);
@@ -3072,7 +3138,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     const dvEnd = document.getElementById('cal-f-date-end').value || dv;
     const isAD = document.getElementById('cal-f-allday').checked;
     // Title overrules: if the title states a time, apply it to the start
-    // (keeping the current duration) so the picker can't silently disagree.
+    // (keeping the current duration) so the picker can\'t silently disagree.
     if (!isAD) {
       const tt = _parseTitleTime(summary);
       const startEl = document.getElementById('cal-f-start');
@@ -3115,7 +3181,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
       all_day: isAD,
       description: document.getElementById('cal-f-desc').value,
       location: document.getElementById('cal-f-loc').value,
-      rrule: document.getElementById('cal-f-rrule').value || undefined,
+      rrule: document.getElementById('cal-f-rrule').value || '',
       calendar_href: document.getElementById('cal-f-cal')?.value || (_calendars[0]?.href || ''),
       color: colorVal || undefined,
     };
@@ -3141,11 +3207,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
     } catch (e) { uiModule.showToast('保存失败'); }
   });
   document.getElementById('cal-f-del')?.addEventListener('click', async () => {
-    const name = existing && existing.summary ? `"${existing.summary}"` : 'this event';
-    const ok = await uiModule.styledConfirm(`Delete ${name}?`, { confirmText: '删除', danger: true });
-    if (!ok) return;
-    try { await _deleteEvent(existing.uid); _render(); }
-    catch (e) { uiModule.showToast('删除失败'); }
+    await _confirmAndDeleteEvent(existing);
   });
   // ── Bespoke-form behavior ──────────────────────────────────────────
   const formEl = body.querySelector('.cal-form');
@@ -3159,7 +3221,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   };
 
   // Focusing the title input unfolds the details once (new events). Edit
-  // mode opens already expanded when there's any detail content to see.
+  // mode opens already expanded when there\'s any detail content to see.
   titleInput?.addEventListener('focus', () => setExpanded(true), { once: true });
 
   // Live time parse: typing a time like "11pm" or "15:30" into the title
@@ -3186,7 +3248,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   }
 
   // Location → Apple Maps. The pin button next to the input is enabled
-  // only when there's a non-empty location, and its href tracks the live
+  // only when there\'s a non-empty location, and its href tracks the live
   // input value. Apple's universal URL opens the native Maps app on
   // iOS/macOS and falls back to a web view on everything else.
   const locInput = document.getElementById('cal-f-loc');
@@ -3270,7 +3332,7 @@ function _showEventForm(existing, defaultDate, defaultEndDate) {
   document.getElementById('cal-f-date')?.addEventListener('change', _syncHero);
   _syncHero();
 
-  // New events: expand the details up front (don't rely on the title's focus
+  // New events: expand the details up front (don\'t rely on the title's focus
   // event — programmatic .focus() is often a no-op on mobile, which would leave
   // the form showing only the title + buttons), then focus the title.
   if (!isEdit) { setExpanded(true); titleInput?.focus(); }
@@ -3323,7 +3385,7 @@ function _clockDate(ds) {
 }
 function _nowClock() {
   // Live wall-clock string for the "Today is …" header. Locale-aware so
-  // 24-h users don't see AM/PM.
+  // 24-h users don\'t see AM/PM.
   return new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 function _fmtTime(s) {
@@ -3384,7 +3446,7 @@ function _locHTML(loc) {
   }
   // No URL — link the whole thing to OpenStreetMap.
   const mapUrl = 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(loc);
-  return `<a href="${mapUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="Open in OpenStreetMap">${_e(loc)}</a>`;
+  return `<a href="${mapUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="在 OpenStreetMap 中打开">${_e(loc)}</a>`;
 }
 
 // ── Open / Close ──
@@ -3392,7 +3454,7 @@ function _locHTML(loc) {
 let _wheelDebounce = 0;
 function _wheelNav(e) {
   if (!_open) return;
-  // Don't intercept scroll inside the day-detail panel or any other inner scroll area
+  // Don\'t intercept scroll inside the day-detail panel or any other inner scroll area
   if (e.target.closest('.cal-day-detail') || e.target.closest('.cal-form')) return;
   const body = document.getElementById('cal-body');
   if (!body) return;
@@ -3454,15 +3516,25 @@ function openCalendar() {
       // Layer Esc: close the topmost calendar surface first, only fall through
       // to closing the whole calendar when nothing else is on top.
       const settings = document.getElementById('cal-settings-panel');
-      if (settings) { settings.remove(); return; }
-      if (document.querySelector('.cal-form')) { _render(); return; }
+      if (settings) {
+        e.preventDefault();
+        e.stopPropagation();
+        settings.remove();
+        return;
+      }
+      if (document.querySelector('.cal-form')) {
+        e.preventDefault();
+        e.stopPropagation();
+        _render();
+        return;
+      }
       closeCalendar();
     }
     else if (e.key === 'ArrowLeft') document.getElementById('cal-prev')?.click();
     else if (e.key === 'ArrowRight') document.getElementById('cal-next')?.click();
     else if (e.key === 't' || e.key === 'T') document.getElementById('cal-today')?.click();
     // Cmd/Ctrl+Z is handled by the module-level `_calUndoBound` listener,
-    // which consumes the shared `_calUndoStack`. Don't duplicate here.
+    // which consumes the shared `_calUndoStack`. Don\'t duplicate here.
   };
   document.addEventListener('keydown', _escHandler);
   const body = document.getElementById('cal-body');
@@ -3484,14 +3556,25 @@ async function openCalendarTo(target) {
   if (!target) return;
   try {
     await _fetchCalendars();
+    const targetStr = String(target || '').trim();
+    if (targetStr.startsWith('search:')) {
+      _searchQuery = targetStr.slice('search:'.length).trim();
+      const now = new Date();
+      await _fetchEvents(`${now.getFullYear()}-01-01`, `${now.getFullYear() + 2}-01-01`);
+      _currentDate = now;
+      _selectedDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      _view = 'month';
+      _render();
+      return;
+    }
     // If target looks like an ISO date (YYYY-MM-DD...), go straight there.
     let dt = null;
-    const isoMatch = /^\d{4}-\d{2}-\d{2}/.test(String(target));
+    const isoMatch = /^\d{4}-\d{2}-\d{2}/.test(targetStr);
     if (isoMatch) {
-      dt = new Date(target);
+      dt = new Date(targetStr);
     } else {
       // Treat as an event uid — find it among loaded events.
-      const ev = (_events || []).find(e => e.uid === target || (e.uid || '').startsWith(target));
+      const ev = Object.values(_allEvents || {}).find(e => e.uid === targetStr || (e.uid || '').startsWith(targetStr));
       if (ev && ev.dtstart) dt = new Date(ev.dtstart);
       if (ev) _highlightEventUid = ev.uid;
     }
@@ -3559,7 +3642,7 @@ function _loadCache() {
     if (!data.ts || Date.now() - data.ts > LS_TTL) return false;
     if (data.calendars) _calendars = data.calendars;
     if (data.events) data.events.forEach(ev => { _allEvents[ev.uid] = ev; });
-    // Don't restore _fetchedRanges — always re-fetch from API to pick up
+    // Don\'t restore _fetchedRanges — always re-fetch from API to pick up
     // external changes (e.g. TimeTree sync adding events)
     return true;
   } catch (e) { return false; }
@@ -3618,7 +3701,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Same idea for window-level focus — covers desktop alt-tabbing back to a
-// browser that already had the tab visible (visibilitychange won't fire).
+// browser that already had the tab visible (visibilitychange won\'t fire).
 window.addEventListener('focus', () => {
   const now = Date.now();
   if (now - _lastVisRefetchAt < _VIS_REFETCH_MIN_MS) return;

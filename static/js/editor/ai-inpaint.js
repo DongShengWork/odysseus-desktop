@@ -53,12 +53,12 @@ export function wireInpaintButtons({
     // Pre-check: build the union mask the AI will receive and verify
     // at least one pixel is painted.
     const preMerged = buildMergedMaskCanvas();
-    if (!preMerged) { if (uiModule) uiModule.showToast('请先在要修复的区域上绘制蒙版'); return; }
+    if (!preMerged) { if (uiModule) uiModule.showToast('Draw the area you want to inpaint first'); return; }
     const pmCtx = preMerged.getContext('2d');
     const maskData = pmCtx.getImageData(0, 0, preMerged.width, preMerged.height).data;
     let hasMask = false;
     for (let i = 3; i < maskData.length; i += 4) { if (maskData[i] > 0) { hasMask = true; break; } }
-    if (!hasMask) { if (uiModule) uiModule.showToast('请先在要修复的区域上绘制蒙版'); return; }
+    if (!hasMask) { if (uiModule) uiModule.showToast('Draw the area you want to inpaint first'); return; }
     const btn = document.getElementById(btnId);
     const btnLabel = labelId ? document.getElementById(labelId) : null;
     btn.disabled = true;
@@ -187,7 +187,7 @@ export function wireInpaintButtons({
           state.activeLayerId = resultLayer.id;
           state.lastInpaintLayerId = resultLayer.id;
           // Hide every mask sub-layer that contributed to the
-          // generation so the red overlay doesn't cover the result —
+          // generation so the red overlay doesn\'t cover the result —
           // but KEEP the mask pixels intact, and reflect "hidden"
           // on each sub-row's eye icon.
           for (const ly of state.layers) {
@@ -197,7 +197,7 @@ export function wireInpaintButtons({
           composite();
           renderLayerPanel();
           // Reveal post-generation Feather + Edge Stroke sliders.
-          // Cap Edge Stroke at ±padPx so the slider can't ask for
+          // Cap Edge Stroke at ±padPx so the slider can\'t ask for
           // more AI buffer than we generated.
           const fRow = document.getElementById('ge-inpaint-postfeather-row');
           const fSlider = document.getElementById('ge-feather-slider');
@@ -223,19 +223,19 @@ export function wireInpaintButtons({
             eSlider.value = '0';
           }
           if (eLabel) eLabel.textContent = '0px';
-          if (uiModule) uiModule.showToast('修复完成 — 拖动边缘羽化/边缘描边以混合', 5000);
+          if (uiModule) uiModule.showToast('Inpaint complete — drag Edge feather / Edge stroke to blend', 5000);
         } catch (renderErr) {
           console.error('[inpaint] render error', renderErr);
-          if (uiModule) uiModule.showToast('修复渲染失败: ' + (renderErr.message || renderErr), 6000);
+          if (uiModule) uiModule.showToast('Inpaint render failed: ' + (renderErr.message || renderErr), 6000);
         }
       };
       resultImg.onerror = (e) => {
         console.error('[inpaint] base64 decode failed', e);
-        if (uiModule) uiModule.showToast('修复结果解码失败', 6000);
+        if (uiModule) uiModule.showToast('Inpaint result failed to decode', 6000);
       };
       resultImg.src = 'data:image/png;base64,' + data.image;
     } catch (e) {
-      if (uiModule) uiModule.showToast('修复失败: ' + e.message, 6000);
+      if (uiModule) uiModule.showToast('Inpaint failed: ' + e.message, 6000);
     } finally {
       btn.disabled = false;
       if (btnLabel) btnLabel.textContent = idleLabel;
@@ -249,13 +249,13 @@ export function wireInpaintButtons({
   // Generate.
   document.getElementById('ge-inpaint-run').addEventListener('click', async () => {
     const prompt = document.getElementById('ge-inpaint-prompt')?.value?.trim();
-    if (!prompt) { if (uiModule) uiModule.showToast('请输入修复提示词'); return; }
+    if (!prompt) { if (uiModule) uiModule.showToast('Enter a prompt for inpainting'); return; }
     const strength = (parseInt(document.getElementById('ge-strength-slider')?.value || '75')) / 100;
     await runInpaint({
       prompt, strength,
       btnId: 'ge-inpaint-run',
       labelId: 'ge-inpaint-run-label',
-      idleLabel: '生成', busyLabel: '生成中',
+      idleLabel: 'Generate', busyLabel: 'Generating',
     });
   });
 
@@ -275,7 +275,7 @@ export function wireInpaintButtons({
         : 'Remove the masked area. Fill seamlessly with the surrounding background, photorealistic, no objects, no people.';
       strength = (parseInt(document.getElementById('ge-strength-slider')?.value || '75')) / 100;
     } else {
-      // SDXL inpaint: describe the surroundings, not what's there.
+      // SDXL inpaint: describe the surroundings, not what\'s there.
       // Crank strength to ensure the model fully overwrites the
       // masked region — at low strength it would denoise toward
       // what was there.
@@ -286,7 +286,7 @@ export function wireInpaintButtons({
       prompt, strength,
       btnId: 'ge-inpaint-remove',
       labelId: 'ge-inpaint-remove-label',
-      idleLabel: '移除', busyLabel: '移除中',
+      idleLabel: 'Remove', busyLabel: 'Removing',
     });
   });
 
@@ -323,7 +323,7 @@ export function wireInpaintButtons({
       }
     }
     if (emptyCount === 0) {
-      if (uiModule) uiModule.showToast('画布已完全覆盖，没有空白区域可供扩画。');
+      if (uiModule) uiModule.showToast('No empty areas to outpaint — canvas is fully covered.');
       return;
     }
     mrCtx.putImageData(mrImg, 0, 0);
@@ -348,7 +348,7 @@ export function wireInpaintButtons({
     // 4) Temporarily replace the active mask sub-layer with the
     //    outpaint mask. Snapshot the previous so we can restore.
     const mask = ensureActiveMaskLayer();
-    if (!mask) { if (uiModule) uiModule.showToast('没有用于扩画的活跃图层'); return; }
+    if (!mask) { if (uiModule) uiModule.showToast('No active layer for outpaint'); return; }
     const savedMask = mask.ctx.getImageData(0, 0, mask.canvas.width, mask.canvas.height);
     mask.ctx.clearRect(0, 0, mask.canvas.width, mask.canvas.height);
     mask.ctx.drawImage(expanded, 0, 0);
@@ -361,7 +361,7 @@ export function wireInpaintButtons({
         prompt, strength,
         btnId: 'ge-inpaint-outpaint',
         labelId: 'ge-inpaint-outpaint-label',
-        idleLabel: '扩画', busyLabel: '扩画中',
+        idleLabel: 'Outpaint', busyLabel: 'Outpainting',
       });
     } finally {
       // Restore the user's previous mask drawing so subsequent

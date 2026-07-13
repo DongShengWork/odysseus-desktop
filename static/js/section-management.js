@@ -7,14 +7,14 @@
  * @param {Object} Storage - Storage module
  */
 export function initSectionCollapse(Storage) {
-  const _chevronHtml = '<button type="button" class="section-collapse-btn" title="折叠分区"><svg class="section-collapse-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>';
+  const _chevronHtml = '<button type="button" class="section-collapse-btn" title="Collapse section"><svg class="section-collapse-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>';
   const savedState = Storage.getJSON('section-collapsed') || {};
 
   document.querySelectorAll('.section .section-header-flex').forEach(header => {
     const section = header.closest('.section');
     if (!section || !section.id) return;
 
-    // Skip email section — it doesn't collapse (title opens popup instead)
+    // Skip email section — it doesn\'t collapse (title opens popup instead)
     if (section.id === 'email-section') return;
 
     // Add chevron (always visible — rotates when collapsed)
@@ -67,7 +67,7 @@ export function initSectionCollapse(Storage) {
         } else {
           Promise.allSettled(dominoOut.map(a => a.finished)).then(lockCollapsed);
           // Safety net: if an animation never settles (e.g. element removed),
-          // still lock in the collapse so the section can't get stuck open.
+          // still lock in the collapse so the section can\'t get stuck open.
           setTimeout(lockCollapsed, 600);
         }
       } else {

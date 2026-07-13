@@ -4,7 +4,7 @@
 // single exported object lets sibling modules (utils, signatureFold,
 // future render/menu/composer splits) read and write the same values
 // without each one importing 19 `let` bindings — which ES modules
-// don't allow from outside the defining module anyway.
+// don\'t allow from outside the defining module anyway.
 //
 // Writes look like `state._libOpen = true` everywhere; reads look like
 // `state._libOpen`. The names match the originals so the refactor is a
@@ -25,6 +25,7 @@ export const state = {
   _libFilter: 'all',             // all, unread, unanswered
   _libSort: 'recent',            // recent, unread, favorites
   _libHasAttachments: false,
+  _libShowTags: localStorage.getItem('odysseus.email.showTags') !== '0',
   _libLoading: false,
   _docModule: null,
   _onEmailClick: null,

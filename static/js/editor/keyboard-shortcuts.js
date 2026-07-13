@@ -1,7 +1,7 @@
 /**
  * Editor keyboard shortcuts — bound to `document` so shortcuts work
  * without first clicking into the canvas. Gated by `state.editorOpen`
- * so they don't leak into chat input when the editor is closed.
+ * so they don\'t leak into chat input when the editor is closed.
  *
  * Covers:
  *   ?              toggle the shortcuts cheatsheet
@@ -67,7 +67,7 @@ export function wireKeyboardShortcuts(deps) {
 
   document.addEventListener('keydown', (e) => {
     if (!state.editorOpen) return;
-    // `?` toggles the cheatsheet. Don't fire while typing in a text
+    // `?` toggles the cheatsheet. Don\'t fire while typing in a text
     // field — the user might be typing a prompt with a `?`.
     if (e.key === '?' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
       e.preventDefault();
@@ -113,7 +113,7 @@ export function wireKeyboardShortcuts(deps) {
       if (e.altKey && e.key === 't') { e.preventDefault(); startTransform(); }
       // Ctrl+Alt+I — invert current selection. Uses e.code so
       // Alt-modified key values (e.g. `ˆ` on Mac with Option+I)
-      // don't break the match.
+      // don\'t break the match.
       if (e.altKey && e.code === 'KeyI') {
         if (invertSelection()) {
           e.preventDefault();
@@ -155,7 +155,7 @@ export function wireKeyboardShortcuts(deps) {
             if (blob && navigator.clipboard?.write) {
               navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(() => {
                 uiModule.showToast(isCut ? '已剪切到剪贴板' : '已复制到剪贴板');
-              }).catch(() => uiModule.showToast(isCut ? '已剪切 (仅编辑器内)' : '已复制 (仅编辑器内)'));
+              }).catch(() => uiModule.showToast(isCut ? '已剪切（仅编辑器）' : '已复制（仅编辑器）'));
             }
           }, 'image/png');
           if (isCut) {
@@ -198,7 +198,7 @@ export function wireKeyboardShortcuts(deps) {
           if (blob && navigator.clipboard?.write) {
             navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(() => {
               uiModule.showToast(isCut ? '已剪切到剪贴板' : '已复制到剪贴板');
-            }).catch(() => uiModule.showToast(isCut ? '已剪切 (仅编辑器内)' : '已复制 (仅编辑器内)'));
+            }).catch(() => uiModule.showToast(isCut ? '已剪切（仅编辑器）' : '已复制（仅编辑器）'));
           }
         }, 'image/png');
         if (e.key === 'x') {

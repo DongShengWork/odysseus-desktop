@@ -22,7 +22,7 @@ import memoryModule from './js/memory.js';
 import voiceRecorderModule from './js/voiceRecorder.js';
 import censorModule from './js/censor.js';
 import galleryModule from './js/gallery.js';
-import tasksModule from './js/tasks.js';
+import tasksModule from './js/tasks.js?v=20260630tasksactivity';
 import calendarModule from './js/calendar.js';
 import notesModule from './js/notes.js';
 import adminModule from './js/admin.js';
@@ -36,10 +36,10 @@ import themeModule from './js/theme.js';
 // every other importer (cookbook-hwfit.js / cookbook-diagnosis.js) uses. A query
 // mismatch makes the browser load cookbook.js twice as separate modules (two
 // _envState objects), which broke server selection. Keep all cookbook imports
-// unversioned so this can't recur.
+// unversioned so this can\'t recur.
 import cookbookModule from './js/cookbook.js';
 import groupModule from './js/group.js';
-import * as researchPanelModule from './js/research/panel.js';
+import * as researchPanelModule from './js/research/panel.js?v=20260630researchthumb';
 import ttsModule from './js/tts-ai.js';
 import spinnerModule from './js/spinner.js';
 import { initKeyboardShortcuts } from './js/keyboard-shortcuts.js';
@@ -52,6 +52,71 @@ window.sessionModule = sessionModule;
 window.uiModule = uiModule;
 window.adminModule = adminModule;
 window.cookbookModule = cookbookModule;
+
+function initForegroundActivityHeartbeat() {
+  let lastSent = 0;
+  const minGapMs = 12000;
+  const send = (force = false) => {
+    if (document.visibilityState === 'hidden') return;
+    const now = Date.now();
+    if (!force && now - lastSent < minGapMs) return;
+    lastSent = now;
+    try {
+      if (navigator.sendBeacon) {
+        const body = new Blob(['{}'], { type: 'application/json' });
+        if (navigator.sendBeacon('/api/activity/heartbeat', body)) return;
+      }
+    } catch (_) {}
+    fetch('/api/activity/heartbeat', {
+      method: 'POST',
+      credentials: 'same-origin',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }).catch(() => {});
+  };
+  send(true);
+  window.addEventListener('focus', () => send(true));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') send(true);
+  });
+  ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(type => {
+    window.addEventListener(type, () => send(false), { passive: true, capture: true });
+  });
+  setInterval(() => send(false), 15000);
+}
+initForegroundActivityHeartbeat();
+
+function initRailHoverLabels() {
+  const labels = {
+    'rail-search-btn': '搜索',
+    'rail-new-session': '新建',
+    'rail-delete-session': '删除',
+    'rail-chats': '对话',
+    'rail-documents': '文档',
+    'rail-calendar': '日历',
+    'rail-compare': '对比',
+    'rail-cookbook': '工具书',
+    'rail-research': '研究',
+    'rail-email': '邮件',
+    'rail-gallery': '画廊',
+    'rail-archive': '资料库',
+    'rail-memory': '大脑',
+    'rail-notes': '笔记',
+    'rail-tasks': '任务',
+    'rail-theme': '主题',
+    'rail-settings': '设置',
+  };
+  document.querySelectorAll('#icon-rail .icon-rail-btn').forEach(btn => {
+    if (btn.querySelector('.rail-hover-label')) return;
+    const label = labels[btn.id] || btn.getAttribute('aria-label') || btn.getAttribute('title') || '';
+    if (!label) return;
+    const span = document.createElement('span');
+    span.className = 'rail-hover-label';
+    span.textContent = String(label).replace(/\s*\([^)]*\)\s*/g, '').trim();
+    btn.appendChild(span);
+  });
+}
 
 // Redirect to login on 401 from any fetch
 const _origFetch = window.fetch;
@@ -91,7 +156,7 @@ async function _createDirectChatFromPreferredModel() {
   if (!sessionModule) return false;
 
   const pending = sessionModule.getPendingChat && sessionModule.getPendingChat();
-  if (pending && pending.url && pending.modelId) {
+  if (pending && pending.url && pending.modelId && pending.endpointId) {
     sessionModule.createDirectChat(pending.url, pending.modelId, pending.endpointId);
     return true;
   }
@@ -99,7 +164,7 @@ async function _createDirectChatFromPreferredModel() {
   const sessions = sessionModule.getSessions();
   const currentId = sessionModule.getCurrentSessionId();
   const current = sessions.find(s => s.id === currentId);
-  if (current && current.endpoint_url && current.model) {
+  if (current && current.endpoint_url && current.model && current.endpoint_id) {
     sessionModule.createDirectChat(current.endpoint_url, current.model, current.endpoint_id);
     return true;
   }
@@ -157,7 +222,7 @@ function initializeEventListeners() {
   // Message count in the header — recount on any DOM change in
   // #chat-history and write "· N msgs" next to the title. Counts top-
   // level .msg elements (one per user/assistant turn); excludes the
-  // welcome screen since it isn't inside chat-history.
+  // welcome screen since it isn\'t inside chat-history.
   const _metaCountEl = el('current-meta-count');
   const _chatHistEl = el('chat-history');
   if (_metaCountEl && _chatHistEl) {
@@ -233,7 +298,7 @@ function initializeEventListeners() {
   // rows, section headers) count as "other actions" — dismiss popups when one
   // is clicked. Bubble phase so it runs after the control's own handler (the
   // window is already opening; we just clear stray popups). Popup triggers
-  // themselves aren't these selectors, so toggles aren't broken.
+  // themselves aren\'t these selectors, so toggles aren\'t broken.
   document.addEventListener('click', (e) => {
     if (e.target.closest('.icon-rail-btn, #sidebar .list-item, .section-header-flex')) {
       window.closeAllPopups();
@@ -247,7 +312,7 @@ function initializeEventListeners() {
       if (exportMenu.classList.contains('open')) {
         exportMenu.classList.remove('open');
       } else {
-        // Move menu to body so it's not affected by ancestor transforms
+        // Move menu to body so it\'s not affected by ancestor transforms
         if (exportMenu.parentElement !== document.body) document.body.appendChild(exportMenu);
         const rect = exportDlBtn.getBoundingClientRect();
         exportMenu.style.top = (rect.bottom + 4) + 'px';
@@ -315,12 +380,12 @@ function initializeEventListeners() {
           const tool = n.querySelector('.agent-thread-tool')?.textContent?.trim() || 'tool';
           const cmd = n.querySelector('.agent-thread-cmd')?.textContent?.trim() || '';
           const output = n.querySelector('.agent-tool-output pre')?.textContent?.trim() || '';
-          const status = n.classList.contains('error') ? '失败' : '完成';
+          const status = n.classList.contains('error') ? 'failed' : 'done';
           let line = `- ${tool} [${status}]`;
-          if (cmd) line += `\n  命令: ${cmd}`;
+          if (cmd) line += `\n  cmd: ${cmd}`;
           if (output) {
             const truncated = output.length > 2000 ? output.slice(0, 2000) + '…' : output;
-            line += `\n  输出: ${truncated}`;
+            line += `\n  out: ${truncated}`;
           }
           lines.push(line);
         }
@@ -337,9 +402,9 @@ function initializeEventListeners() {
       e.stopPropagation();
       exportMenu.classList.remove('open');
       const transcript = _serializeChatTranscript();
-      // A new/empty chat has nothing to copy — don't write an empty string and
+      // A new/empty chat has nothing to copy — don\'t write an empty string and
       // falsely report "Copied".
-      if (!transcript.trim()) { uiModule.showToast('暂无内容可复制'); return; }
+      if (!transcript.trim()) { uiModule.showToast('暂无可复制内容'); return; }
       await uiModule.copyToClipboard(transcript);
     });
   }
@@ -379,13 +444,13 @@ function initializeEventListeners() {
         const sessionId = sessionModule.getCurrentSessionId();
         const texts = _serializeChatTranscript();
         const meta = sessionModule.getSessions().find(s => s.id === sessionId);
-        const title = meta?.name || '未命名';
+        const title = meta?.name || '无标题';
         const res = await fetch(`${API_BASE}/api/document`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId, title, content: texts }),
         });
-        if (!res.ok) throw new Error('Failed');
+        if (!res.ok) throw new Error('失败');
         const doc = await res.json();
         if (documentModule) documentModule.loadDocument(doc.id);
         uiModule.showToast('已保存到文档');
@@ -403,7 +468,7 @@ function initializeEventListeners() {
       e.stopPropagation();
       exportMenu.classList.remove('open');
       let sid = sessionModule.getCurrentSessionId();
-      // A brand-new chat has no session id yet — still allow renaming if there's
+      // A brand-new chat has no session id yet — still allow renaming if there\'s
       // a pending chat (we materialize it on commit so the name sticks).
       const hasPending = sessionModule.hasPendingChat && sessionModule.hasPendingChat();
       if (!sid && !hasPending) return;
@@ -586,7 +651,7 @@ function initializeEventListeners() {
       // NOT fully close it — closePanel('down') registers the chip +
       // Modals.minimize so the doc is preserved and restorable.
       if (documentModule && documentModule.isPanelOpen()) {
-        // If there's a text selection in the document editor, let Escape clear that first
+        // If there\'s a text selection in the document editor, let Escape clear that first
         const docTextarea = document.getElementById('doc-editor-textarea');
         if (docTextarea && docTextarea.selectionStart !== docTextarea.selectionEnd) {
           return;
@@ -628,7 +693,7 @@ function initializeEventListeners() {
           content.classList.remove('modal-closing');
         }
       }, { once: true });
-      // Fallback in case animationend doesn't fire
+      // Fallback in case animationend doesn\'t fire
       setTimeout(() => {
         if (modal.parentElement && !modal.classList.contains('hidden')) {
           if (_dynamicModalIds.includes(modal.id)) modal.remove();
@@ -671,7 +736,7 @@ function initializeEventListeners() {
     // Close document panel if open
     if (documentModule && documentModule.closePanel) documentModule.closePanel();
     if (researchPanelModule && researchPanelModule.isOpen()) researchPanelModule.closePanel();
-    // Reset research overflow dot (but don't touch research state — caller manages that)
+    // Reset research overflow dot (but don\'t touch research state — caller manages that)
     const _overflowRes = el('overflow-research-btn');
     if (_overflowRes) _overflowRes.classList.remove('active');
     if (typeof updatePlusDot === 'function') updatePlusDot();
@@ -757,7 +822,7 @@ function initializeEventListeners() {
       }
       if (welcomeSub) {
         if (!welcomeSub.dataset.researchOrigText) welcomeSub.dataset.researchOrigText = welcomeSub.textContent;
-        welcomeSub.textContent = '深度多步骤研究，包含来源收集与综合分析。';
+        welcomeSub.textContent = '多步骤深度研究，收集和综合来源信息。';
       }
       if (tipEl) {
         if (!tipEl.dataset.researchOrigTip) tipEl.dataset.researchOrigTip = tipEl.textContent;
@@ -927,7 +992,7 @@ function initializeEventListeners() {
   const urlPath = window.location.pathname;
   // Current width of the always-visible icon rail. The rail is resizable
   // and hides on narrow viewports, so read it live each call rather than
-  // baking 48px in. Returns 0 when the rail isn't rendered.
+  // baking 48px in. Returns 0 when the rail isn\'t rendered.
   const _iconRailWidth = () => {
     const r = document.getElementById('icon-rail');
     if (!r) return 0;
@@ -957,7 +1022,7 @@ function initializeEventListeners() {
     try { window.syncRailSide && window.syncRailSide(); } catch (_) {}
   };
   // Paired restore: if the route opener collapsed the sidebar, re-expand
-  // it when the fullscreen view closes. Only restores if the user didn't
+  // it when the fullscreen view closes. Only restores if the user didn\'t
   // manually toggle in between (we clear the marker on manual hamburger
   // clicks via a MutationObserver on `.sidebar.hidden`).
   const _restoreSidebarIfRouteCollapsed = () => {
@@ -1024,7 +1089,7 @@ function initializeEventListeners() {
       const hdr = document.querySelector('#email-section .section-header-flex');
       if (hdr) hdr.click();
       // The modal is built synchronously inside openEmailLibrary, so a
-      // single frame later it's in the DOM and ready to be flagged.
+      // single frame later it\'s in the DOM and ready to be flagged.
       // Fullscreen leaves the icon-rail visible on the left so navigation
       // stays one click away (per #93). Width = viewport minus rail.
       // Just add the class — the CSS rule for .email-lib-fullscreen .modal-content
@@ -1064,7 +1129,7 @@ function initializeEventListeners() {
 
   // "+" on the Library row → create a new blank document and open it in the
   // editor (mirrors the email section's compose "+"). stopPropagation so it
-  // doesn't also fire the row's open-library click.
+  // doesn\'t also fire the row's open-library click.
   const libraryNewDocBtn = el('library-new-doc-btn');
   if (libraryNewDocBtn) {
     libraryNewDocBtn.addEventListener('click', async (e) => {
@@ -1206,7 +1271,7 @@ function initializeEventListeners() {
         } else {
           sessionModule.setSortMode(mode);
           sortDropdown.style.display = 'none';
-          uiModule.showToast('已排序：' + opt.textContent.trim().toLowerCase());
+          uiModule.showToast(`已排序：${opt.textContent.trim().toLowerCase()}`);
         }
         _syncSortChecks();
       });
@@ -1253,26 +1318,26 @@ function initializeEventListeners() {
             // No-AI path: just report what got cleaned. No "unfiled
             // remaining" prompt because we never tried to file anything.
             const cleaned = (data.deleted_empty || 0) + (data.deleted_throwaway || 0);
-            uiModule.showToast(cleaned ? `已清理 ${cleaned} 个空/无用对话` : '已整洁');
+            uiModule.showToast(cleaned ? `已清理 ${cleaned} 个空/临时对话` : '已经是干净的');
           } else {
             // Tidy now works in batches (15 most-recent unfiled per click)
             // so the user gets fast feedback and a manageable LLM call
-            // even with hundreds of chats. Tell them what's left.
+            // even with hundreds of chats. Tell them what\'s left.
             const remaining = data.unfiled_remaining || 0;
             let msg;
             if (data.updated > 0) {
-              msg = `已整理 ${data.updated} 个对话到 ${data.folders.length} 个文件夹`;
-              if (remaining > 0) msg += ` — 还剩 ${remaining} 个未整理，再次点击分组`;
+              msg = `已将 ${data.updated} 个对话归入 ${data.folders.length} 个文件夹`;
+              if (remaining > 0) msg += ` — 还剩 ${remaining} 个未归档，再次点击整理`;
             } else if (remaining > 0) {
-              msg = `${remaining} 个未整理对话 — 再次点击分组`;
+              msg = `${remaining} 个未归档对话 — 再次点击整理`;
             } else {
-              msg = '已全部整理';
+              msg = '全部已整理';
             }
             uiModule.showToast(msg);
           }
           if (sessionModule) await sessionModule.loadSessions();
         } else {
-          uiModule.showToast(data.reason || '无内容可整理');
+          uiModule.showToast(data.reason || '没有可排序的内容');
         }
       } catch (e) {
         uiModule.showError('自动排序：' + e.message);
@@ -1393,7 +1458,7 @@ function initializeEventListeners() {
       const newName = aiNameInput.value.trim();
       
       if (!newName) {
-        uiModule.showError('请输入 AI 名称');
+        uiModule.showError('请输入AI的名称');
         return;
       }
       
@@ -1406,12 +1471,12 @@ function initializeEventListeners() {
         
         const result = await response.json();
         if (result.success) {
-          uiModule.showToast(`AI 已重命名为 ${newName}`);
+          uiModule.showToast(`AI已重命名为 ${newName}`);
           renameAiModal.classList.add('hidden');
           aiNameInput.value = '';
         }
       } catch (e) {
-        uiModule.showError('重命名 AI 失败: ' + e.message);
+        uiModule.showError('重命名AI失败：' + e.message);
       }
     });
   }
@@ -1453,7 +1518,7 @@ function initializeEventListeners() {
       const newName = sessionNameInput.value.trim();
       
       if (!newName) {
-        uiModule.showError('请输入会话名称');
+        uiModule.showError('请输入对话名称');
         return;
       }
       
@@ -1466,7 +1531,7 @@ function initializeEventListeners() {
         
         const result = await response.json();
         if (response.ok) {
-          uiModule.showToast(`会话已重命名为 ${newName}`);
+          uiModule.showToast(`对话已重命名为 ${newName}`);
           renameSessionModal.classList.add('hidden');
           sessionNameInput.value = '';
           // Update the current session name in the UI
@@ -1474,15 +1539,15 @@ function initializeEventListeners() {
           if (meta) {
             meta.name = newName;
             const ver = window._appVersion ? ` v${window._appVersion}` : '';
-            el('current-meta').textContent = `会话: ${meta.name}${meta.model ? ' ' + meta.model.split('/').pop() : ''}${meta.rag ? ' [RAG]' : ''}${ver}`;
+            el('current-meta').textContent = `对话：${meta.name}${meta.model ? ' ' + meta.model.split('/').pop() : ''}${meta.rag ? ' [RAG]' : ''}${ver}`;
           }
           // Refresh the sessions list
         await sessionModule.loadSessions();
         } else {
-          throw new Error(result.detail || '重命名会话失败');
+          throw new Error(result.detail || '重命名对话失败');
         }
       } catch (e) {
-        uiModule.showError('重命名会话失败: ' + e.message);
+        uiModule.showError('重命名对话失败：' + e.message);
       }
     });
   }
@@ -1558,7 +1623,7 @@ function initializeEventListeners() {
   }
 
   const TOOL_TOGGLE_TOAST_LABELS = {
-    web: '网页搜索',
+    web: '网络搜索',
     bash: '命令行',
   };
 
@@ -1617,6 +1682,7 @@ function initializeEventListeners() {
       // Delay tool glow-up for a staggered effect
       setTimeout(() => applyModeToToggles(mode), 500);
     }
+    window.__odysseusSetChatMode = setMode;
     agentBtn.addEventListener('click', () => {
       // Agent mode turns off research if active
       const resChk = el('research-toggle');
@@ -1631,10 +1697,10 @@ function initializeEventListeners() {
   const SPLASH_COUNT_KEY = 'odysseus-tool-splash-counts';
   const SPLASH_MAX = 2;
   const _toolSplashes = {
-    web: { role: '网页搜索', text: '搜索网络获取相关信息并整合到回复中。结果会在 AI 回答前抓取并总结。' },
-    bash: { role: '命令行访问', text: '为 AI 提供沙箱化的命令行访问权限，可运行命令、安装包和执行脚本。请谨慎使用。' },
-    builder: { role: '工具构建器', text: '创建 AI 可使用的自定义迷你应用和工具。描述你的需求，AI 将构建一个可在多轮对话中复用的工具。' },
-    research: { role: '深度研究', text: '多轮网络搜索与来源分析。耗时较长但能生成全面、有据可查的答案。你的下一条消息将触发深度研究循环。' },
+    web: { role: '网络搜索', text: '在网络中搜索相关信息并纳入回复。结果会在AI回答前被获取和摘要。' },
+    bash: { role: '命令行访问', text: '让AI访问沙盒命令行以运行命令、安装包和执行脚本。请谨慎使用。' },
+    builder: { role: '工具构建器', text: '创建AI可以使用的自定义小程序和工具。描述你的需求，AI会为你构建一个可在对话中重复使用的工具。' },
+    research: { role: '深度研究', text: '多轮网络搜索并进行来源分析。耗时较长但能产出全面、有据可查的答案。你的下一条消息将触发深度研究周期。' },
   };
   function _showToolSplash(key) {
     const splash = _toolSplashes[key];
@@ -1692,17 +1758,36 @@ function initializeEventListeners() {
   try { workspaceModule.initWorkspace(); } catch (_) {}
 
   // Document editor toggle (special: uses module panel, not a checkbox)
+  function bringOpenDocumentToFrontOnMobile() {
+    if (window.innerWidth > 768) return false;
+    if (!documentModule || !documentModule.isPanelOpen || !documentModule.isPanelOpen()) return false;
+    if (!document.body.classList.contains('email-front')) return false;
+    document.body.classList.remove('email-front', 'email-doc-split-active');
+    document.documentElement.style.removeProperty('--email-doc-split-left-x');
+    document.documentElement.style.removeProperty('--email-doc-split-email-w');
+    document.documentElement.style.removeProperty('--email-doc-split-right-x');
+    const docPane = document.getElementById('doc-editor-pane');
+    if (docPane) docPane.style.setProperty('z-index', '10010', 'important');
+    const overflow = el('overflow-doc-btn');
+    if (overflow) overflow.classList.add('active');
+    const indicator = el('doc-indicator-btn');
+    if (indicator) indicator.classList.add('active');
+    const st = loadToggleState(); st.doc = true; saveToggleState(st);
+    return true;
+  }
+
   const overflowDocBtn = el('overflow-doc-btn');
   if (overflowDocBtn) {
     overflowDocBtn.addEventListener('click', async () => {
       if (!documentModule) return;
+      if (bringOpenDocumentToFrontOnMobile()) return;
       if (documentModule.isPanelOpen()) {
         documentModule.closePanel();
         overflowDocBtn.classList.remove('active');
         const st = loadToggleState(); st.doc = false; saveToggleState(st);
       } else {
         let sessionId = sessionModule.getCurrentSessionId();
-        // If there's a pending "New Chat", materialize it first
+        // If there\'s a pending "New Chat", materialize it first
         if (!sessionId && sessionModule.hasPendingChat && sessionModule.hasPendingChat()) {
           await sessionModule.materializePendingSession();
           sessionId = sessionModule.getCurrentSessionId();
@@ -1746,7 +1831,7 @@ function initializeEventListeners() {
   // Must be assigned at module level (not inside the function body) so the very
   // first external caller — group.js / sessions.js fire it before it has ever
   // run locally — finds it instead of silently no-op'ing (the "group indicator
-  // sometimes doesn't appear" bug).
+  // sometimes doesn\'t appear" bug).
   window._syncGroupIndicator = _syncGroupIndicator;
   // Init RAG state on load
   {
@@ -1774,11 +1859,11 @@ function initializeEventListeners() {
     let _refocusOnBlur = false;
     function _flagRefocus(e) {
       if (e.target.closest('textarea, input')) return;
-      // Don't refocus for attach — file picker needs full focus control
+      // Don\'t refocus for attach — file picker needs full focus control
       if (e.target.closest('#overflow-attach-btn')) return;
-      // Don't refocus for model picker button — focus should go to picker search input
+      // Don\'t refocus for model picker button — focus should go to picker search input
       if (e.target.closest('.model-picker-btn')) return;
-      // Don't refocus when tapping the +/chevron tools button — the user
+      // Don\'t refocus when tapping the +/chevron tools button — the user
       // is explicitly trying to dismiss the keyboard and open the tools
       // menu. Without this, the textarea blurs (keyboard down), then this
       // handler re-focuses it (keyboard bounces back up).
@@ -1819,7 +1904,7 @@ function initializeEventListeners() {
     const ownerWrap = menu.parentElement;
     const pickerWrap = el('model-picker-wrap');
     let _vvReposition = null;
-    // Pin the menu's bottom 8px above the chevron (viewport-relative, since it's
+    // Pin the menu's bottom 8px above the chevron (viewport-relative, since it\'s
     // portaled to <body>). Only cap height + show a scrollbar when the list is
     // genuinely taller than the room above the button.
     function positionMenu() {
@@ -1832,7 +1917,7 @@ function initializeEventListeners() {
       const avail = r.top - 16;        // room above the chevron
       const natural = menu.scrollHeight;
       const h = Math.min(natural, avail);
-      if (natural > avail) {           // only cap + scroll when it doesn't fit
+      if (natural > avail) {           // only cap + scroll when it doesn\'t fit
         menu.style.maxHeight = avail + 'px';
         menu.style.overflowY = 'auto';
       }
@@ -1857,7 +1942,7 @@ function initializeEventListeners() {
       menu.classList.remove('hidden');
       plusBtn.classList.add('expanded');
       document.body.appendChild(menu);  // escape the composer's container-type trap
-      // Hide pill bar label so it doesn't show through the menu
+      // Hide pill bar label so it doesn\'t show through the menu
       if (pickerWrap) pickerWrap.style.visibility = 'hidden';
       // Keep the textarea focused so the keyboard stays up if it was open (the
       // pointerdown handler above prevents the focus-steal). Still watch
@@ -1891,7 +1976,7 @@ function initializeEventListeners() {
       }, 400);
     }
     // Close menu when clicking any item inside it. preventDefault on pointerdown
-    // so tapping an item (e.g. Attach files) doesn't steal focus from the message
+    // so tapping an item (e.g. Attach files) doesn\'t steal focus from the message
     // box — keeps the mobile keyboard up.
     menu.querySelectorAll('.overflow-menu-item').forEach(item => {
       item.addEventListener('pointerdown', (e) => { e.preventDefault(); });
@@ -2101,7 +2186,7 @@ function initializeEventListeners() {
     const pickerWrap = el('model-picker-wrap');
     if (!inputTop || !pickerWrap) return;
 
-    const PLACEHOLDER_HIDE_WIDTH = 400;
+    const PLACEHOLDER_COMPACT_WIDTH = 400;
     const PICKER_HIDE_WIDTH = 220;
     const TOOLBAR_HIDE_WIDTH = 160;
     const textarea = el('message');
@@ -2114,9 +2199,10 @@ function initializeEventListeners() {
       const w = inputTop.clientWidth;
       // Hide model picker
       pickerWrap.classList.toggle('picker-auto-hidden', w < PICKER_HIDE_WIDTH);
-      // Hide placeholder text
+      // Keep a prompt inside the composer even when the picker crowds the row.
+      // A blank placeholder makes the mobile/compact empty state feel broken.
       if (textarea) {
-        textarea.setAttribute('placeholder', w < PLACEHOLDER_HIDE_WIDTH ? '' : '向 Odysseus 发送消息...');
+        textarea.setAttribute('placeholder', w < PLACEHOLDER_COMPACT_WIDTH ? '消息...' : '给Odysseus发消息...');
       }
       // Hide entire bottom toolbar (tools, mode toggle) — only send button remains
       if (inputBottom) {
@@ -2235,7 +2321,7 @@ function initializeEventListeners() {
         // Re-hide picker after everything settles
         const _mpw = el('model-picker-wrap');
         if (_mpw) _mpw.style.display = 'none';
-        uiModule.showToast(`群组对话已就绪 — ${picked.length} 个模型`);
+        uiModule.showToast(`群聊已就绪 — ${picked.length} 个模型`);
       } else {
         _syncGroupIndicator(false);
         groupModule.stopGroup();
@@ -2273,20 +2359,20 @@ function initializeEventListeners() {
   if (incognitoBtn) {
     incognitoBtn.addEventListener('mousedown', (e) => e.preventDefault());
     incognitoBtn.addEventListener('click', () => {
-      // Don't toggle mid-chat — incognito only changeable from welcome screen
+      // Don\'t toggle mid-chat — incognito only changeable from welcome screen
       const ws = el('welcome-screen');
       if (ws && ws.classList.contains('hidden')) return;
       const chk = el('incognito-toggle');
       chk.checked = !chk.checked;
       incognitoBtn.classList.toggle('active', chk.checked);
       const tipEl = el('welcome-tip');
-      incognitoBtn.title = chk.checked ? '禁用无痕模式' : '启用无痕模式 — 不保存记忆和历史记录';
+      incognitoBtn.title = chk.checked ? '关闭无名模式' : '开启无名模式 — 无记忆，不保存历史';
       const welcomeName = document.querySelector('.welcome-name');
       if (chk.checked) {
-        incognitoBtn.innerHTML = INCOGNITO_EYE_CLOSED + '<span class="incognito-label">无名氏</span>';
+        incognitoBtn.innerHTML = INCOGNITO_EYE_CLOSED + '<span class="incognito-label">无名</span>';
         if (welcomeName) {
           welcomeName.dataset.originalHtml = welcomeName.innerHTML;
-          welcomeName.innerHTML = '<svg class="welcome-boat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>无名氏';
+          welcomeName.innerHTML = '<svg class="welcome-boat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><line x1="8" y1="16" x2="16" y2="8"/><line x1="8" y1="8" x2="16" y2="16"/></svg>无名模式';
           // Restart the L→R clip-wipe reveal on the new label
           welcomeName.style.animation = 'none';
           welcomeName.offsetHeight;
@@ -2296,25 +2382,43 @@ function initializeEventListeners() {
         const welcomeSub = el('welcome-sub');
         if (welcomeSub) {
           if (!welcomeSub.dataset.originalText) welcomeSub.dataset.originalText = welcomeSub.textContent;
-          welcomeSub.textContent = "我是谁？我是无名氏。";
+          welcomeSub.textContent = "我是谁？我谁也不是。";
           welcomeSub.style.display = '';
         }
-        if (tipEl) { tipEl.dataset.originalTip = tipEl.textContent; tipEl.textContent = '临时会话 \u2014 不会保存且无记忆激活。'; tipEl.style.opacity = '0.5'; tipEl.style.marginTop = '8px'; }
+        if (tipEl) { tipEl.dataset.originalTip = tipEl.textContent; tipEl.textContent = '临时对话 — 不会保存，也不会激活记忆。'; tipEl.style.opacity = '0.5'; tipEl.style.marginTop = '8px'; }
         // Default to plain chat: disable tools visually, switch to chat mode.
-        // IMPORTANT: don't overwrite the user's persisted per-mode tool prefs
+        // IMPORTANT: don\'t overwrite the user's persisted per-mode tool prefs
         // (`web_agent`, `bash_agent`, `web_chat`, `bash_chat`). Nobody mode is
         // ephemeral — their agent-mode defaults must come back on toggle-off.
+        const beforeNobody = Storage.getJSON(Storage.KEYS.TOGGLES, {}) || {};
+        if (!beforeNobody.nobody_prev_mode) beforeNobody.nobody_prev_mode = beforeNobody.mode || 'agent';
+        Storage.setJSON(Storage.KEYS.TOGGLES, beforeNobody);
         const _offIds = ['web-toggle', 'bash-toggle', 'research-toggle'];
         _offIds.forEach(id => { const c = el(id); if (c) c.checked = false; });
         ['web-toggle-btn', 'bash-toggle-btn'].forEach(id => { const b = el(id); if (b) b.classList.remove('active'); });
-        const _ab = el('mode-agent-btn'), _cb = el('mode-chat-btn');
-        if (_ab) _ab.classList.remove('active');
-        if (_cb) _cb.classList.add('active');
+        if (typeof window.__odysseusSetChatMode === 'function') {
+          window.__odysseusSetChatMode('chat');
+        } else {
+          const _ab = el('mode-agent-btn'), _cb = el('mode-chat-btn');
+          if (_ab) {
+            _ab.classList.remove('active');
+            _ab.setAttribute('aria-pressed', 'false');
+          }
+          if (_cb) {
+            _cb.classList.add('active');
+            _cb.setAttribute('aria-pressed', 'true');
+          }
+          const _toggle = _ab?.closest('.mode-toggle') || _cb?.closest('.mode-toggle');
+          if (_toggle) _toggle.classList.add('mode-chat');
+          const ts = Storage.getJSON(Storage.KEYS.TOGGLES, {});
+          ts.mode = 'chat';
+          Storage.setJSON(Storage.KEYS.TOGGLES, ts);
+        }
         const ts = Storage.getJSON(Storage.KEYS.TOGGLES, {});
-        ts.research = false; ts.mode = 'chat';
+        ts.research = false;
         Storage.setJSON(Storage.KEYS.TOGGLES, ts);
       } else {
-        incognitoBtn.innerHTML = INCOGNITO_EYE_OPEN + '<span class="incognito-label">无名氏</span>';
+        incognitoBtn.innerHTML = INCOGNITO_EYE_OPEN + '<span class="incognito-label">无名</span>';
         if (welcomeName && welcomeName.dataset.originalHtml) {
           welcomeName.innerHTML = welcomeName.dataset.originalHtml;
           // Restart the L→R clip-wipe reveal on the restored label
@@ -2335,11 +2439,15 @@ function initializeEventListeners() {
         // Heal any previously-persisted false values from the old Nobody bug
         // so agent-mode defaults (web/bash ON) come back.
         const _ts = Storage.getJSON(Storage.KEYS.TOGGLES, {});
-        let _dirty = false;
+        const _restoreMode = _ts.nobody_prev_mode || 'agent';
+        delete _ts.nobody_prev_mode;
         ['web_agent', 'bash_agent', 'web_chat', 'bash_chat'].forEach(k => {
-          if (_ts[k] === false) { delete _ts[k]; _dirty = true; }
+          if (_ts[k] === false) delete _ts[k];
         });
-        if (_dirty) Storage.setJSON(Storage.KEYS.TOGGLES, _ts);
+        Storage.setJSON(Storage.KEYS.TOGGLES, _ts);
+        if (typeof window.__odysseusSetChatMode === 'function') {
+          window.__odysseusSetChatMode(_restoreMode === 'chat' ? 'chat' : 'agent');
+        }
         // Reapply the current mode's real defaults to the visible toggles
         const _curMode = (Storage.getJSON(Storage.KEYS.TOGGLES, {}) || {}).mode || 'chat';
         try { applyModeToToggles(_curMode); } catch (_) {}
@@ -2418,7 +2526,7 @@ function initializeEventListeners() {
   };
 
   // Keys hidden by default on first run (no localStorage yet)
-  const UI_VIS_DEFAULT_OFF = new Set(['models-section', 'rag-toggle-btn', 'text-emojis']);
+  const UI_VIS_DEFAULT_OFF = new Set(['models-section', 'rag-toggle-btn', 'text-emojis', 'chat-fullwidth']);
 
   // Keys that need admin to toggle off (reserved for future use)
   const UI_VIS_ADMIN_ONLY = new Set([]);
@@ -2451,6 +2559,8 @@ function initializeEventListeners() {
     applyTextEmojis(state['text-emojis'] === true);
     // Hide thinking sections toggle (show-thinking: checked=show, unchecked=hide)
     document.body.classList.toggle('hide-thinking', state['show-thinking'] === false);
+    // Fullwidth chat toggle (chat-fullwidth: checked=fullwidth, unchecked=big-padding
+    document.body.classList.toggle('fullwidth-chat', state['chat-fullwidth'] === true);
   }
 
   // Rearrange toggles in session/model sort dropdowns
@@ -2468,9 +2578,9 @@ function initializeEventListeners() {
       saveUIVis(state);
       applyUIVis(state);
       syncRearrangeChecks();
-      uiModule.showToast(!wasOn ? '重排已启用' : '重排已禁用');
+      uiModule.showToast(!wasOn ? '拖拽排序已开启' : '拖拽排序已关闭');
       // Close the dropdown the toggle lives in — the sort dropdown's own
-      // click-stopPropagation means it won't close on its own.
+      // click-stopPropagation means it won\'t close on its own.
       const dd = toggle.closest('[id$="-sort-dropdown"]');
       if (dd) dd.style.display = 'none';
     });
@@ -2478,7 +2588,7 @@ function initializeEventListeners() {
 
   // Esc exits rearrange mode (no matter where focus/mouse is) — matches the
   // global Esc-cancels-select pattern. Capture phase so a sort dropdown that
-  // happens to be open doesn't swallow it first.
+  // happens to be open doesn\'t swallow it first.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!document.body.classList.contains('rearrange-mode')) return;
@@ -2489,7 +2599,7 @@ function initializeEventListeners() {
     saveUIVis(state);
     applyUIVis(state);
     syncRearrangeChecks();
-    uiModule.showToast('重排已禁用');
+    uiModule.showToast('拖拽排序已关闭');
   }, true);
   // Sync checkmarks when dropdowns open
   const _sessionSortBtn = el('session-sort-btn');
@@ -2811,7 +2921,7 @@ function initializeEventListeners() {
 
       const entry = document.createElement('div');
       entry.className = 'modal-dock-item';
-      entry.title = `Restore ${modalTitle(modal)}`;
+      entry.title = `恢复 ${modalTitle(modal)}`;
 
       const label = document.createElement('span');
       label.className = 'modal-dock-label';
@@ -2841,7 +2951,7 @@ function initializeEventListeners() {
       if (modal.id && SKIP_IDS.has(modal.id)) return;
       // Modals managed by the new modalManager (Modals.register) get their own
       // .modal-minimize-btn and chips via the .minimized-dock-chip system.
-      // Skip them entirely so we don't double-up minimize buttons or chips.
+      // Skip them entirely so we don\'t double-up minimize buttons or chips.
       if (modal.id && /^email-reader-/.test(modal.id)) return;
       if (modal.id && window.Modals && window.Modals.isRegistered && window.Modals.isRegistered(modal.id)) return;
       const header = modal.querySelector('.modal-header');
@@ -2855,7 +2965,7 @@ function initializeEventListeners() {
       minBtn.type = 'button';
       minBtn.title = '最小化';
       minBtn.textContent = '_';
-      minBtn.addEventListener('mousedown', (e) => e.stopPropagation()); // don't start drag
+      minBtn.addEventListener('mousedown', (e) => e.stopPropagation()); // don\'t start drag
       minBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         minimizeModal(modal);
@@ -2927,7 +3037,7 @@ function initializeEventListeners() {
   // tab bar whose buttons are siblings and switch on click (Prompt, Library,
   // Brain, Theme) — we just click the prev/next tab so the existing switch
   // logic runs. Swipes that start on interactive controls (sliders, inputs,
-  // the chip dock) are ignored so they don't fight text selection / dragging.
+  // the chip dock) are ignored so they don\'t fight text selection / dragging.
   (function initTabSwipe() {
     if (window.innerWidth > 768) return;
     // [tab-bar selector, tab-button selector] for each tabbed window.
@@ -3090,8 +3200,8 @@ function initializeEventListeners() {
       if (!currentId) return;
       const sessions = sessionModule.getSessions();
       const current = sessions.find(s => s.id === currentId);
-      const name = current ? current.name : '此会话';
-      if (!await uiModule.styledConfirm(`删除 "${name}"？`, { confirmText: '删除', danger: true })) return;
+      const name = current ? current.name : '此对话';
+      if (!await uiModule.styledConfirm(`确定要删除"${name}"吗？`, { confirmText: '删除', danger: true })) return;
       try {
         // Find the next session below the current one before deleting
         const idx = sessions.findIndex(s => s.id === currentId);
@@ -3103,12 +3213,12 @@ function initializeEventListeners() {
           if (nextSession) {
             await sessionModule.selectSession(nextSession.id);
           }
-          uiModule.showToast('会话已删除');
+          uiModule.showToast('对话已删除');
         } else {
-          uiModule.showError('删除会话失败');
+          uiModule.showError('删除对话失败');
         }
       } catch (e) {
-        uiModule.showError('删除会话失败: ' + e);
+        uiModule.showError('删除对话失败：' + e);
       }
     });
   }
@@ -3340,8 +3450,15 @@ function initializeEventListeners() {
 function startOdysseusApp() {
   if (window.__odysseusAppStarted) return;
   window.__odysseusAppStarted = true;
+  const _bumpChatPriority = (ms = 10000) => {
+    try {
+      window.__odysseusChatBusyUntil = Math.max(window.__odysseusChatBusyUntil || 0, Date.now() + ms);
+    } catch (_) {}
+  };
+  _bumpChatPriority(10000);
   // Set CSS variables
   document.documentElement.style.setProperty('--line-height', '20px');
+  initRailHoverLabels();
 
   // Smooth keyboard open/close on mobile — keep chat scrolled to bottom
   if (window.visualViewport && 'ontouchstart' in window) {
@@ -3507,9 +3624,16 @@ function startOdysseusApp() {
   const chatForm = document.getElementById('chat-form');
   const originalSubmit = chatModule.handleChatSubmit;
   let _submitting = false;
+  const _messageInput = document.getElementById('message') || document.getElementById('message-input');
+  if (_messageInput) {
+    _messageInput.addEventListener('focus', () => _bumpChatPriority(15000));
+    _messageInput.addEventListener('input', () => _bumpChatPriority(15000));
+    _messageInput.addEventListener('pointerdown', () => _bumpChatPriority(15000), { passive: true });
+  }
 
   function handleSubmit(e) {
     if (e) e.preventDefault();
+    _bumpChatPriority(30000);
     // Debounce: prevent double-submit while a request is being initiated
     if (_submitting) return;
     _submitting = true;
@@ -3563,7 +3687,7 @@ function startOdysseusApp() {
 
   function _updateSendBtnIcon() {
     if (!sendBtn) return;
-    // Don't override if streaming (stop button) or recording
+    // Don\'t override if streaming (stop button) or recording
     if (sendBtn.dataset.mode === 'streaming' || sendBtn.dataset.mode === 'recording') return;
     const prevMode = sendBtn.dataset.mode || '';
     const hasText = messageInput && messageInput.value.trim().length > 0;
@@ -3572,7 +3696,7 @@ function startOdysseusApp() {
     if (!hasText && !hasFiles && _isSttEnabled()) {
       clearTimeout(sendBtn._collapseTimer);
       sendBtn.innerHTML = _micIcon;
-      sendBtn.title = '录制语音';
+      sendBtn.title = '录音';
       newMode = 'mic';
       sendBtn.classList.add('mic-mode');
       sendBtn.classList.remove('newchat-mode', 'newchat-expanded');
@@ -3581,11 +3705,11 @@ function startOdysseusApp() {
       // Group chat: always show send button, never newchat mode
       if (groupModule && groupModule.isActive()) {
         sendBtn.innerHTML = _sendIcon;
-        sendBtn.title = '发送到群组';
+        sendBtn.title = '发送到群聊';
         newMode = 'idle';
         sendBtn.classList.remove('mic-mode', 'newchat-mode', 'newchat-expanded');
       } else {
-      // Check if we're already on a fresh empty session (welcome screen visible)
+      // Check if we\'re already on a fresh empty session (welcome screen visible)
       const isEmptySession = document.getElementById('chat-container')?.classList.contains('welcome-active');
       if (isEmptySession) {
         // Already on new chat — show arrow in muted style (ready to type)
@@ -3596,7 +3720,7 @@ function startOdysseusApp() {
         sendBtn.classList.remove('mic-mode', 'newchat-expanded');
         clearTimeout(sendBtn._expandTimer);
       } else {
-        sendBtn.innerHTML = _newChatIcon + '<span class="send-btn-label">+ 新建</span>';
+        sendBtn.innerHTML = _newChatIcon + '<span class="send-btn-label">+ 新对话</span>';
         sendBtn.title = '新对话';
         newMode = 'newchat';
         sendBtn.classList.add('newchat-mode');
@@ -3680,7 +3804,7 @@ function startOdysseusApp() {
       // If input is empty and STT is enabled, start recording
       if (!hasText && !hasFiles && _isSttEnabled()) {
         sendBtn.innerHTML = _stopIcon;
-        sendBtn.title = '停止录制';
+        sendBtn.title = '停止录音';
         sendBtn.dataset.mode = 'recording';
         sendBtn.classList.add('recording');
         voiceRecorderModule.startRecording(
@@ -3831,7 +3955,7 @@ function startOdysseusApp() {
   // <iframe>. Iframes swallow drag-and-drop events: a file dropped on a pane is
   // handled by the iframe, not the parent, so the browser loads the file *inside
   // the pane* ("behind" the app) instead of attaching it. The chatContainer drop
-  // handler above never sees it because the event doesn't bubble out of the frame.
+  // handler above never sees it because the event doesn\'t bubble out of the frame.
   //
   // Fix: while a file drag is active in Compare, raise a single full-window shield
   // that sits above every pane/iframe and becomes the drop target. The drop then
@@ -3891,7 +4015,7 @@ function startOdysseusApp() {
     if (!files.length) return;
     fileHandlerModule.addFiles(files);
     fileHandlerModule.renderAttachStrip();
-    uiModule.showToast(`已添加 ${files.length} 个文件作为附件`);
+    uiModule.showToast(`已添加 ${files.length} 个文件到附件`);
   }, true);
 
   // Load initial data
@@ -3926,12 +4050,13 @@ function startOdysseusApp() {
   }
 
   // Non-critical: load in parallel, resolve silently
-  modelsModule.refreshModels(true).then(() => {
+  modelsModule.refreshModels(false).then(() => {
+    try { sessionModule.updateModelPicker(); } catch (_) {}
     const modelsBox = document.getElementById('models');
     const hasModels = modelsBox && modelsBox.querySelector('.models-row');
     if (!hasModels) {
       const tip = document.getElementById('welcome-tip');
-      if (tip) tip.textContent = '从侧边栏的设置中添加 AI 端点，或者将端点/API 密钥粘贴到对话中。';
+      if (tip) tip.textContent = '从侧边栏的设置中添加AI端点，或在对话中粘贴端点/API密钥。';
     }
   }).catch(() => {});
   modelsModule.refreshProviders();
@@ -4017,7 +4142,7 @@ function startOdysseusApp() {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       
-      // Only show visual feedback if we're not dragging over the active element
+      // Only show visual feedback if we\'re not dragging over the active element
       const activeId = e.dataTransfer.getData('text/plain');
       if (activeId && activeId !== section.id) {
         section.setAttribute('dnd-over', 'true');
@@ -4025,7 +4150,7 @@ function startOdysseusApp() {
     });
     
     section.addEventListener('dragleave', (e) => {
-      // Check if we're actually leaving the element
+      // Check if we\'re actually leaving the element
       const rect = section.getBoundingClientRect();
       if (e.clientY < rect.top || e.clientY > rect.bottom || 
           e.clientX < rect.left || e.clientX > rect.right) {

@@ -6,8 +6,10 @@ import uiModule from './ui.js';
 import markdownModule from './markdown.js';
 import * as spinnerModule from './spinner.js';
 import { makeWindowDraggable } from './windowDrag.js';
+import { topPortalZ } from './toolWindowZOrder.js';
 import { sortModelIds } from './modelSort.js';
 import { ordinalSuffix } from './util/ordinal.js';
+import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
 
 const API_BASE = window.location.origin;
 let _open = false;
@@ -19,7 +21,7 @@ let _viewingRuns = null; // task id when viewing run history
 let _clockInterval = null;
 let _taskFailurePending = false;
 
-const DAYS_OF_WEEK = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function _setTaskFailurePending(active) {
   _taskFailurePending = !!active;
@@ -167,7 +169,7 @@ async function _fetchOutputTargets() {
     const data = await res.json();
     _outputTargets = data.targets || [];
   } catch (e) {
-    _outputTargets = [{ value: 'session', label: '会话' }];
+    _outputTargets = [{ value: 'session', label: 'Session' }];
   }
   return _outputTargets;
 }
@@ -210,6 +212,94 @@ async function _saveUrgentEmailSettings(prompt) {
       urgent_email_prompt: prompt || '',
     }),
   });
+}
+
+const _EMAIL_ACCOUNT_ACTIONS = new Set([
+  'summarize_emails',
+  'draft_email_replies',
+  'email_auto_translate',
+  'extract_email_events',
+  'check_email_urgency',
+]);
+
+let _emailAccounts = null;
+async function _fetchEmailAccountsForTasks() {
+  if (_emailAccounts) return _emailAccounts;
+  try {
+    const res = await fetch(`${API_BASE}/api/email/accounts`, { credentials: 'same-origin' });
+    const data = await res.json();
+    _emailAccounts = Array.isArray(data.accounts) ? data.accounts : [];
+  } catch (e) {
+    _emailAccounts = [];
+  }
+  return _emailAccounts;
+}
+
+function _taskPromptConfig(prompt) {
+  const raw = (prompt || '').trim();
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (_) {
+    const cfg = {};
+    for (const line of raw.split(/\r?\n/)) {
+      const idx = line.indexOf('=');
+      if (idx <= 0) continue;
+      const key = line.slice(0, idx).trim();
+      const val = line.slice(idx + 1).trim();
+      if (key) cfg[key] = val;
+    }
+    return cfg;
+  }
+}
+
+function _parseTaskEmailOutputTarget(output) {
+  const raw = String(output || '').trim();
+  if (!raw) return { enabled: false, to: '', accountId: '' };
+  if (raw === 'email') return { enabled: true, to: '', accountId: '' };
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw)) return { enabled: true, to: raw, accountId: '' };
+  if (!raw.startsWith('email:')) return { enabled: false, to: '', accountId: '' };
+  let payload = raw.slice('email:'.length).trim();
+  let accountId = '';
+  const marker = '|account=';
+  const markerIdx = payload.indexOf(marker);
+  if (markerIdx >= 0) {
+    accountId = payload.slice(markerIdx + marker.length).trim();
+    payload = payload.slice(0, markerIdx).trim();
+  }
+  return {
+    enabled: true,
+    to: payload && payload !== 'self' ? payload : '',
+    accountId,
+  };
+}
+
+function _buildTaskEmailOutputTarget(to, accountId) {
+  const cleanTo = String(to || '').trim();
+  const cleanAccount = String(accountId || '').trim();
+  const base = `email:${cleanTo || 'self'}`;
+  return cleanAccount ? `${base}|account=${cleanAccount}` : (cleanTo ? base : 'email');
+}
+
+async function _renderEmailActionOptions(action, existing, extra) {
+  if (!_EMAIL_ACCOUNT_ACTIONS.has(action)) return;
+  const accounts = (await _fetchEmailAccountsForTasks()).filter(a => a && a.enabled !== false);
+  const cfg = _taskPromptConfig(existing?.prompt || '');
+  const current = String(cfg.account_id || cfg.email_account_id || '');
+  const options = [
+    `<option value="" ${current ? '' : 'selected'}>所有账户</option>`,
+    ...accounts.map(a => {
+      const id = String(a.id || '');
+      const label = a.name || a.from_address || a.imap_user || id.slice(0, 8);
+      const suffix = a.is_default ? '（默认）' : '';
+      return `<option value="${_escHtml(id)}" ${id === current ? 'selected' : ''}>${_escHtml(label + suffix)}</option>`;
+    }),
+  ].join('');
+  extra.insertAdjacentHTML('afterbegin', `
+    <label class="task-form-label">邮箱账户</label>
+    <select id="task-form-email-account" class="task-form-input">${options}</select>
+  `);
 }
 
 let _triggerEvents = null;
@@ -296,7 +386,7 @@ function _relativeTime(iso) {
 }
 
 // Absolute local time — unique per second. Used in run history so clustered
-// runs don't all read as "just now".
+// runs don\'t all read as "just now".
 function _absoluteTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -313,7 +403,7 @@ function _absoluteTime(iso) {
 }
 
 function _statusDot(status) {
-  const colors = { active: '#4caf50', paused: '#ff9800', completed: '#888', error: '#f44336' };
+  const colors = { active: '#4caf50', paused: '#ff9800', completed: '#888', error: '#f44336', failed: '#f44336' };
   const c = colors[status] || '#888';
   return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};box-shadow:0 0 6px ${c}, 0 0 3px ${c};flex-shrink:0;position:relative;top:4px;"></span>`;
 }
@@ -332,6 +422,7 @@ const _TASK_ICONS = {
   // Email
   summarize_emails:    '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
   draft_email_replies: '<polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
+  email_auto_translate:'<path d="M5 8h9"/><path d="M9 4v4"/><path d="M4 13c2.2-.2 4.2-1.1 5.5-2.8"/><path d="M10.5 13c-1.1-.6-2-1.5-2.7-2.8"/><path d="M14 20l4-9 4 9"/><path d="M15.4 17h5.2"/>',
   extract_email_events:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M7 14h5"/><path d="M7 18h8"/>',
   classify_events:    '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 15h.01M12 15h.01M16 15h.01"/>',
   learn_sender_signatures:'<path d="M20 6 9 17l-5-5"/><path d="M14 6h6v6"/>',
@@ -359,6 +450,7 @@ function _taskIcon(task) {
 const _MODEL_BACKED_ACTIONS = new Set([
   'summarize_emails',
   'draft_email_replies',
+  'email_auto_translate',
   'extract_email_events',
   'classify_events',
   'learn_sender_signatures',
@@ -373,7 +465,7 @@ function _taskAiMark(task) {
   const action = task?.action || '';
   const aiAction = _MODEL_BACKED_ACTIONS.has(action);
   if (!(kind === 'llm' || kind === 'research' || task?.model || task?.endpointUrl || aiAction)) return '';
-  return '<svg class="task-ai-mark" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-label="Uses model" title="Uses model"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>';
+  return '<svg class="task-ai-mark" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-label="使用模型" title="使用模型"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>';
 }
 
 // ---- Custom pickers ----
@@ -443,7 +535,7 @@ function _buildDatePicker(containerId, initialDate) {
   }
 
   // Month select
-  const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthSel = document.createElement('select');
   monthSel.className = 'task-form-input task-date-select';
   monthSel.id = containerId + '-month';
@@ -503,6 +595,7 @@ const _CATEGORY_MAP = {
   extract_email_events: 'Calendar',
   summarize_emails:           'Email',
   draft_email_replies:        'Email',
+  email_auto_translate:       'Email',
   learn_sender_signatures:    'Email',
   check_email_urgency:        'Email',
   daily_brief:                'Assistant',
@@ -549,7 +642,7 @@ function _taskEnterSelect() {
   _taskSelectMode = true; _taskSelected.clear();
   document.getElementById('tasks-bulk-bar')?.classList.remove('hidden');
   const _sb = document.getElementById('tasks-select-btn');
-  if (_sb) { _sb.classList.add('active'); _sb.textContent = '取消'; }
+  if (_sb) { _sb.classList.add('active'); _sb.textContent = 'Cancel'; }
   _taskUpdateBulkCount();
   _renderList();
 }
@@ -557,7 +650,7 @@ function _taskExitSelect() {
   _taskSelectMode = false; _taskSelected.clear();
   document.getElementById('tasks-bulk-bar')?.classList.add('hidden');
   const _sb = document.getElementById('tasks-select-btn');
-  if (_sb) { _sb.classList.remove('active'); _sb.textContent = '选择'; }
+  if (_sb) { _sb.classList.remove('active'); _sb.textContent = 'Select'; }
   const sa = document.getElementById('tasks-select-all'); if (sa) sa.checked = false;
   _renderList();
 }
@@ -570,7 +663,7 @@ function _taskToggleSelectAll() {
 }
 function _taskUpdateBulkCount() {
   const c = document.getElementById('tasks-selected-count');
-  if (c) c.textContent = `已选 ${_taskSelected.size} 项`;
+  if (c) c.textContent = `${_taskSelected.size} Selected`;
   const del = document.getElementById('tasks-bulk-delete');
   if (del) del.disabled = _taskSelected.size === 0;
 }
@@ -619,6 +712,7 @@ function _renderTaskChips() {
 const _TASK_CACHE_LABELS = {
   summarize_emails: 'email summaries',
   draft_email_replies: 'AI reply drafts',
+  email_auto_translate: 'email translations',
   extract_email_events: 'email calendar cache',
   learn_sender_signatures: 'sender signatures',
   check_email_urgency: 'email tags',
@@ -636,16 +730,16 @@ function _renderList() {
   const _tabCount = document.getElementById('tasks-tab-count');
   if (_tabCount) _tabCount.textContent = _tasks.length;
   const _headCount = document.getElementById('tasks-head-count');
-  if (_headCount) _headCount.textContent = _tasks.length ? `${_tasks.length} 个任务` : '';
+  if (_headCount) _headCount.textContent = _tasks.length ? `${_tasks.length} task${_tasks.length !== 1 ? 's' : ''}` : '';
 
   if (_tasks.length === 0) {
     // Differentiate "still loading" from "really empty" so the first paint
     // shows the app whirlpool (matching the document library) rather than a
     // misleading "No tasks yet" message before the fetch completes.
     if (!_tasksFetched) {
-      list.appendChild(spinnerModule.createLoadingRow('Loading…'));
+      list.appendChild(spinnerModule.createLoadingRow('加载中…'));
     } else {
-      list.innerHTML = '<div style="opacity:0.4;font-size:12px;text-align:center;padding:24px 0;">暂无任务。创建一个开始使用。</div>';
+      list.innerHTML = '<div style="opacity:0.4;font-size:12px;text-align:center;padding:24px 0;">暂无任务。创建一个开始使用吧。</div>';
     }
     return;
   }
@@ -674,7 +768,7 @@ function _renderList() {
     return (a.name || '').localeCompare(b.name || '');
   });
   if (visible.length === 0) {
-    list.innerHTML = '<div style="opacity:0.4;font-size:12px;text-align:center;padding:24px 0;">无匹配任务。</div>';
+    list.innerHTML = '<div style="opacity:0.4;font-size:12px;text-align:center;padding:24px 0;">没有匹配的任务。</div>';
     return;
   }
 
@@ -688,12 +782,12 @@ function _renderList() {
     const titleRow = document.createElement('div');
     titleRow.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;';
     const statusBadge = task.status === 'paused'
-      ? `<span class="task-status-badge task-state-badge task-paused-badge" data-task-status-action="resume" title="已暂停 - 点击恢复" style="position:relative;top:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="7 4 19 12 7 20 7 4"/></svg><span class="task-state-label">已暂停</span></span>`
+      ? `<button type="button" class="task-status-badge task-state-badge task-paused-badge" data-task-status-action="resume" title="已暂停 - 点击恢复" style="position:relative;top:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span class="task-state-label">已暂停</span></button>`
       : task.status === 'active'
-        ? `<span class="task-status-badge task-state-badge task-active-badge" data-task-status-action="pause" title="运行中 - 点击暂停" style="position:relative;top:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span class="task-state-label">运行中</span></span>`
+        ? `<button type="button" class="task-status-badge task-state-badge task-active-badge" data-task-status-action="pause" title="活动中 - 点击暂停" style="position:relative;top:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="7 4 19 12 7 20 7 4"/></svg><span class="task-state-label">活动中</span></button>`
         : '';
     const builtinBadge = task.is_builtin
-      ? `<span class="task-builtin-badge${task.is_modified ? ' modified' : ''}" title="${task.is_modified ? 'Built-in task — edited from its default' : '内置任务'}">built-in${task.is_modified ? ' · 已修改' : ''}</span>`
+      ? `<span class="task-builtin-badge${task.is_modified ? ' modified' : ''}" title="${task.is_modified ? '内置任务 — 已从默认值编辑' : '内置任务'}">内置${task.is_modified ? ' · 已编辑' : ''}</span>`
       : '';
     titleRow.innerHTML = `${_taskIcon(task)}<span class="memory-item-title">${_esc(task.name)}</span>${_taskAiMark(task)}${builtinBadge}<span style="flex:1;"></span>${statusBadge}`;
 
@@ -702,41 +796,30 @@ function _renderList() {
     actionsWrap.className = 'memory-item-actions';
     const menuBtn = document.createElement('button');
     menuBtn.className = 'memory-item-btn';
-    menuBtn.title = '操作';
+    menuBtn.title = 'Actions';
     menuBtn.style.position = 'relative';
     menuBtn.style.top = '4px';
     menuBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const items = [];
-      // Run now stays in the kebab too (alongside the new Run button on the
-      // card) for users coming from muscle-memory / mobile long-press.
-      if (task.status !== 'completed') items.push({ label: '立即运行', icon: '<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>', action: () => _doRunNow(task.id) });
-      items.push({ label: '编辑', icon: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>', action: () => _showForm(task) });
-      if (task.status === 'active') items.push({ label: '暂停', icon: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>', action: () => _doPause(task.id) });
-      else if (task.status === 'paused') items.push({ label: '恢复', icon: '<polygon points="5 3 19 12 5 21 5 3"/>', action: () => _doResume(task.id) });
-      items.push({ label: '历史', icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', action: () => _showRunHistory(task.id, task.name) });
+      // Run now stays in the kebab too for users coming from muscle-memory /
+      // mobile long-press. The expanded card also shows it next to Edit.
+      if (task.status !== 'completed') items.push({ label: 'Run now', icon: '<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>', action: () => _doRunNow(task.id) });
+      items.push({ label: 'Edit', icon: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>', action: () => _showForm(task) });
+      if (task.status === 'active') items.push({ label: 'Pause', icon: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>', action: () => _doPause(task.id) });
+      else if (task.status === 'paused') items.push({ label: 'Resume', icon: '<polygon points="5 3 19 12 5 21 5 3"/>', action: () => _doResume(task.id) });
+      items.push({ label: 'History', icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', action: () => _showRunHistory(task.id, task.name) });
       if (task.is_builtin && task.is_modified) {
-        items.push({ label: '恢复默认', icon: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>', action: () => _doRevert(task.id) });
+        items.push({ label: 'Revert to default', icon: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>', action: () => _doRevert(task.id) });
       }
       if (_taskClearCacheLabel(task)) {
-        items.push({ label: '清除缓存', icon: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/>', action: () => _doClearTaskCache(task.id, _taskClearCacheLabel(task)) });
+        items.push({ label: 'Clear cache', icon: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/>', action: () => _doClearTaskCache(task.id, _taskClearCacheLabel(task)) });
       }
-      items.push({ label: '删除', icon: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>', action: () => _doDelete(task.id), danger: true });
+      items.push({ label: 'Delete', icon: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>', action: () => _doDelete(task.id), danger: true });
       _showTaskDropdown(menuBtn, items);
     });
     actionsWrap.appendChild(menuBtn);
-    // Run now — promoted out of the kebab onto the card itself for one-click
-    // manual triggering. Hidden for completed tasks (same gate as before).
-    if (task.status !== 'completed') {
-      const runBtn = document.createElement('button');
-      runBtn.className = 'task-status-badge task-run-now-badge task-card-run-btn';
-      runBtn.title = '立即运行';
-      runBtn.style.cssText = 'position:relative;top:1px;margin-right:4px;';
-      runBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>运行</span>';
-      runBtn.addEventListener('click', (e) => { e.stopPropagation(); _doRunNow(task.id); });
-      actionsWrap.insertBefore(runBtn, menuBtn);
-    }
     titleRow.appendChild(actionsWrap);
 
     // Content area
@@ -767,9 +850,31 @@ function _renderList() {
     // Expandable detail (revealed on click) — like the library doc/chat cards:
     // extra meta + last-run result + description.
     const detail = document.createElement('div');
-    detail.style.cssText = 'display:none;margin-top:7px;padding:8px 0 2px;border-top:1px solid var(--border);';
+    detail.style.cssText = 'display:none;margin-top:7px;padding:8px 0 2px;border-top:1px solid var(--border);position:relative;';
+    const detailActions = document.createElement('div');
+    detailActions.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;margin-top:7px;';
+    if (task.status !== 'completed') {
+      const runBtn = document.createElement('button');
+      runBtn.className = 'memory-toolbar-btn task-detail-run-btn';
+      runBtn.title = 'Run now';
+      runBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Run';
+      runBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _doRunNow(task.id);
+      });
+      detailActions.appendChild(runBtn);
+    }
+    const editBtn = document.createElement('button');
+    editBtn.className = 'memory-toolbar-btn task-detail-edit-btn';
+    editBtn.title = 'Edit task';
+    editBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit';
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _showForm(task);
+    });
+    detailActions.appendChild(editBtn);
     const extra = [];
-    if (task.last_run) extra.push('上次: ' + _relativeTime(task.last_run));
+    if (task.last_run) extra.push('Last: ' + _relativeTime(task.last_run));
     if (task.output_target && task.output_target !== 'session') extra.push('→ ' + task.output_target.replace(/^mcp__/, '').replace(/__/g, ' › '));
     if (task.model) extra.push('model: ' + (task.model.split('/').pop() || task.model));
     if (extra.length) {
@@ -779,14 +884,14 @@ function _renderList() {
       detail.appendChild(ex);
     }
     if (task.last_run_status) {
-      const isErr = task.last_run_status === 'error';
+      const isErr = task.last_run_status === 'error' || task.last_run_status === 'failed';
       const color = isErr ? 'var(--red,#e06c75)' : 'var(--green,#50fa7b)';
       const result = (task.last_run_result || '').trim();
       const prev = result.length > 200 ? result.slice(0, 200) + '…' : result;
       const lr = document.createElement('div');
       lr.style.cssText = `font-size:11px;margin-bottom:6px;padding:4px 8px;border-left:2px solid ${color};background:color-mix(in srgb, ${color} 8%, transparent);border-radius:2px;line-height:1.4;cursor:pointer;`;
-      lr.innerHTML = `<span style="font-weight:600;color:${color};">${isErr ? '✗' : '✓'}</span> <span style="opacity:0.9;">${_esc(prev) || (isErr ? '失败（无详情）' : '成功（无输出）')}</span>`;
-      lr.title = '打开完整历史';
+      lr.innerHTML = `<span style="font-weight:600;color:${color};">${isErr ? '✗' : '✓'}</span> <span style="opacity:0.9;">${_esc(prev) || (isErr ? 'Failed (no detail)' : 'Success (no output)')}</span>`;
+      lr.title = 'Open full history';
       lr.addEventListener('click', (e) => { e.stopPropagation(); _showRunHistory(task.id, task.name); });
       detail.appendChild(lr);
     }
@@ -803,6 +908,7 @@ function _renderList() {
       }
       detail.appendChild(desc);
     }
+    detail.appendChild(detailActions);
     content.appendChild(detail);
 
     // Select-mode checkbox (mirrors the library's .memory-select-cb).
@@ -847,9 +953,9 @@ function _renderList() {
   // Domino-in cascade on the first render-with-cards after opening — same
   // staggered entrance the gallery / document library uses. We consume the
   // flag here OR in the early-return branches above so subsequent re-renders
-  // (search, filter, edit) don't replay it. Note: opening with 0 tasks AND
+  // (search, filter, edit) don\'t replay it. Note: opening with 0 tasks AND
   // hitting the early-return ALSO clears the flag, so creating a first task
-  // afterwards won't replay the cascade — keeps the entrance scoped to the
+  // afterwards won\'t replay the cascade — keeps the entrance scoped to the
   // very first render of the panel.
   if (_tasksCascadeNext && list.children.length) {
     list.classList.remove('tasks-just-opened');
@@ -898,11 +1004,20 @@ function _attachTaskLongPress(card, menuBtn) {
 }
 
 function _showTaskDropdown(anchor, items) {
-  // Remove any existing dropdown
-  document.querySelectorAll('.task-dropdown').forEach(d => d.remove());
+  const existing = document.querySelector('.task-dropdown');
+  if (existing && existing._anchor === anchor) {
+    if (typeof existing._dismiss === 'function') existing._dismiss();
+    else existing.remove();
+    return;
+  }
+  document.querySelectorAll('.task-dropdown').forEach(d => {
+    if (typeof d._dismiss === 'function') d._dismiss();
+    else dismissOrRemove(d);
+  });
   const dd = document.createElement('div');
   dd.className = 'task-dropdown';
-  dd.style.cssText = 'position:fixed;z-index:100000;background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.3);padding:4px;min-width:120px;';
+  dd._anchor = anchor;
+  dd.style.cssText = `position:fixed;z-index:${topPortalZ()};background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.3);padding:4px;min-width:120px;`;
   items.forEach(item => {
     const btn = document.createElement('button');
     btn.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:6px 10px;border:none;background:none;color:var(--fg);font-size:11px;font-family:inherit;cursor:pointer;border-radius:4px;transition:background 0.1s;';
@@ -914,10 +1029,14 @@ function _showTaskDropdown(anchor, items) {
     }
     btn.addEventListener('mouseenter', () => { btn.style.background = 'color-mix(in srgb, var(--fg) 8%, transparent)'; });
     btn.addEventListener('mouseleave', () => { btn.style.background = 'none'; });
-    btn.addEventListener('click', (e) => { e.stopPropagation(); dd.remove(); item.action(); });
+    btn.addEventListener('click', (e) => { e.stopPropagation(); close(); item.action(); });
     dd.appendChild(btn);
   });
   document.body.appendChild(dd);
+  // Sit above the currently-raised tool modal at any stack depth (#4720): the
+  // modal bring-to-front counter climbs unbounded, so a hardcoded z eventually
+  // loses. topPortalZ() derives the value from the live tool-window stack.
+  dd.style.zIndex = String(topPortalZ());
   const rect = anchor.getBoundingClientRect();
   let top = rect.bottom + 4;
   let left = rect.right - dd.offsetWidth;
@@ -926,25 +1045,25 @@ function _showTaskDropdown(anchor, items) {
   dd.style.top = top + 'px';
   dd.style.left = left + 'px';
   const openedAt = performance.now();
-  const close = (e) => {
+  const close = bindMenuDismiss(dd, () => { dd.remove(); }, (ev) => {
     // Ignore any clicks that occur within 250ms of the open (covers touch
     // "ghost click" duplicates that were firing right after pointerup and
-    // removing the dropdown before the user could see it).
-    if (performance.now() - openedAt < 250) return;
-    if (!dd.contains(e.target)) { dd.remove(); document.removeEventListener('click', close); }
+    // removing the dropdown before the user could see it) — treat as inside.
+    if (performance.now() - openedAt < 250) return false;
+    return !dd.contains(ev.target);
+  });
+  dd._dismiss = () => {
+    close();
   };
-  // requestAnimationFrame so the listener is registered AFTER the current
-  // pointer/click event cycle has finished bubbling.
-  requestAnimationFrame(() => document.addEventListener('click', close));
 }
 
 // ---- Presets ----
 
 const _TASK_PRESETS = [
-  { label: '按计划运行提示词',    desc: '按日、周等运行提示词',              taskType: 'llm',      triggerType: 'schedule' },
-  { label: '按事件运行提示词',       desc: '每 N 个会话或消息触发一次',         taskType: 'llm',      triggerType: 'event' },
-  { label: '按计划运行研究',  desc: '对某个主题进行深度研究',                 taskType: 'research', triggerType: 'schedule' },
-  { label: '按事件运行研究',     desc: '在应用事件后进行深度研究',           taskType: 'research', triggerType: 'event' },
+  { label: 'Prompt on schedule',    desc: 'Run a prompt daily, weekly, etc.',             taskType: 'llm',      triggerType: 'schedule' },
+  { label: 'Prompt on event',       desc: 'Trigger every N sessions or messages',         taskType: 'llm',      triggerType: 'event' },
+  { label: 'Research on schedule',  desc: 'Run deep research on a topic',                 taskType: 'research', triggerType: 'schedule' },
+  { label: 'Research on event',     desc: 'Run deep research after app events',           taskType: 'research', triggerType: 'event' },
   { label: 'Action on schedule',    desc: 'Run tidy/cleanup on a timer',                  taskType: 'action',   triggerType: 'schedule' },
   { label: 'Action on event',       desc: 'Run tidy/cleanup every N sessions or messages', taskType: 'action', triggerType: 'event' },
   { label: 'Webhook triggered',     desc: 'Trigger via external HTTP call',               taskType: 'llm',      triggerType: 'webhook' },
@@ -967,14 +1086,14 @@ function _showPresetPicker() {
   if (!body) return;
 
   let html = '<div class="admin-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">';
-  html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;"><h2 style="margin:0;padding:0;line-height:1;">添加任务</h2></div>';
-  html += '<p class="memory-desc" style="position:relative;top:4px;">用自然语言描述任务让 AI 起草，或从下方选择一种类型手动设置。</p>';
+  html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;"><h2 style="margin:0;padding:0;line-height:1;">新建任务</h2></div>';
+  html += '<p class="memory-desc" style="position:relative;top:4px;">描述一个任务让 AI 来起草，或选择下面的类型手动创建。</p>';
   // flex-wrap + min-width:0 on the input lets the row collapse cleanly
   // on narrow modal widths instead of pushing the AI button past the
   // right edge. margin-left:-4px nudges the compose row 4px into the
   // description bar above so the input lines up with it visually.
   html += '<div class="task-ai-compose" style="display:flex;gap:6px;margin:6px 0 10px -4px;flex-wrap:wrap;align-items:center;">'
-    + '<input type="text" id="task-ai-input" class="memory-search-input" style="flex:1 1 220px;min-width:0;" placeholder="Describe a task — e.g. &quot;every weekday 7am summarize my unread email&quot;" />'
+    + '<input type="text" id="task-ai-input" class="memory-search-input" style="flex:1 1 220px;min-width:0;" placeholder="描述一个任务 — 例如 &quot;每个工作日早上7点总结未读邮件&quot;" />'
     + '<button class="memory-toolbar-btn active" id="task-ai-btn" title="用 AI 起草任务" style="white-space:nowrap;height:28px;flex:0 0 auto;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px;"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>AI 起草</button>'
     + '</div>';
   html += '<div class="memory-list" style="max-height:none;flex:1;gap:0px;margin-top:2px;padding-right:8px;">';
@@ -1023,25 +1142,25 @@ function _showForm(existing, initTaskType, initTriggerType) {
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
         <h2 style="margin:0;padding:0;line-height:1;">${existing?.id ? '编辑任务' : '新建任务'}</h2>
       </div>
-      <p class="memory-desc">${existing?.id ? '更新此任务的计划、提示词和输出。' : '配置一个自动运行的提示词、研究或动作。'}</p>
+      <p class="memory-desc">${existing?.id ? '更新此任务的定时计划、提示词和输出。' : '配置一个自动运行的提示词、研究或操作。'}</p>
     <div class="task-form" style="flex:1;overflow-y:auto;min-height:0;">
       <label class="task-form-label">名称</label>
-      <input type="text" id="task-form-name" class="task-form-input" value="${_esc(existing?.name || '')}" placeholder="${existing ? '' : '留空将自动生成'}" />
+      <input type="text" id="task-form-name" class="task-form-input" value="${_esc(existing?.name || '')}" placeholder="${existing ? '' : '留空则自动生成'}" />
 
       <label class="task-form-label">类型</label>
       <div class="task-form-toggle" id="task-form-type-toggle">
         <button class="task-toggle-btn ${curTaskType === 'llm' ? 'active' : ''}" data-val="llm" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>提示词</button>
         <button class="task-toggle-btn ${curTaskType === 'research' ? 'active' : ''}" data-val="research" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>研究</button>
-        <button class="task-toggle-btn ${curTaskType === 'action' ? 'active' : ''}" data-val="action" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>动作</button>
+        <button class="task-toggle-btn ${curTaskType === 'action' ? 'active' : ''}" data-val="action" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>操作</button>
       </div>
 
       <div id="task-form-type-opts"></div>
 
       <label class="task-form-label">触发</label>
       <div class="task-form-toggle" id="task-form-trigger-toggle">
-        <button class="task-toggle-btn ${curTriggerType === 'schedule' ? 'active' : ''}" data-val="schedule" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>计划</button>
+        <button class="task-toggle-btn ${curTriggerType === 'schedule' ? 'active' : ''}" data-val="schedule" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>定时</button>
         <button class="task-toggle-btn ${curTriggerType === 'event' ? 'active' : ''}" data-val="event" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>事件</button>
-        <button class="task-toggle-btn ${curTriggerType === 'webhook' ? 'active' : ''}" data-val="webhook" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>网络钩子</button>
+        <button class="task-toggle-btn ${curTriggerType === 'webhook' ? 'active' : ''}" data-val="webhook" style="position:relative;top:-4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Webhook</button>
       </div>
 
       <div id="task-form-trigger-opts"></div>
@@ -1050,26 +1169,30 @@ function _showForm(existing, initTaskType, initTriggerType) {
       <select id="task-form-output" class="task-form-input">
         <option value="session">会话</option>
       </select>
+      <div id="task-form-output-extra"></div>
 
-      <label class="task-form-label">模型 <span style="opacity:0.5;font-weight:normal;font-size:10px;">(可选 — 覆盖会话默认值)</span></label>
+      <label class="task-form-label">模型 <span style="opacity:0.5;font-weight:normal;font-size:10px;">（可选 — 覆盖会话默认值）</span></label>
       <select id="task-form-model" class="task-form-input">
         <option value="">使用会话默认</option>
       </select>
 
-      <label class="task-form-label">链</label>
+      <label class="task-form-label">链式</label>
       <select id="task-form-chain" class="task-form-input">
         <option value="">无</option>
       </select>
 
-      <label class="task-form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-        <input type="checkbox" id="task-form-notif" ${existing && existing.notifications_enabled === false ? '' : 'checked'} style="margin:0;cursor:pointer;">
-        <span>通知</span>
-        <span style="opacity:0.55;font-weight:normal;font-size:10px;">— 取消勾选以静默此任务的完成通知（适用于频繁执行的定时任务）</span>
+      <label class="task-form-notif-toggle">
+        <input type="checkbox" id="task-form-notif" ${existing && existing.notifications_enabled === false ? '' : 'checked'}>
+        <span class="task-form-notif-switch" aria-hidden="true"></span>
+        <span class="task-form-notif-copy">
+          <span>通知</span>
+          <span>静默频繁定时任务的完成提醒。</span>
+        </span>
       </label>
 
       <div class="task-form-actions">
         <button id="task-form-cancel" class="memory-toolbar-btn"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>取消</button>
-        <button id="task-form-save" class="memory-toolbar-btn active"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>${existing?.id ? 'Save' : 'Create'}</button>
+        <button id="task-form-save" class="memory-toolbar-btn active"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>${existing?.id ? '保存' : '创建'}</button>
       </div>
     </div>
     </div>
@@ -1083,9 +1206,9 @@ function _showForm(existing, initTaskType, initTriggerType) {
   function renderTypeOpts() {
     typeOpts.innerHTML = '';
     if (taskType === 'llm' || taskType === 'research') {
-      const placeholder = taskType === 'research' ? '需要研究什么？' : 'AI 应该做什么？';
+      const placeholder = taskType === 'research' ? 'What should be researched?' : 'What should the AI do?';
       const _personaOpts = [
-        ['', '默认（无角色）'],
+        ['', 'Default (no persona)'],
         ['socrates', 'Socrates'],
         ['razor', 'Razor'],
         ['nietzsche', 'Nietzsche'],
@@ -1096,17 +1219,17 @@ function _showForm(existing, initTaskType, initTriggerType) {
       const _personaOptsHtml = _personaOpts.map(([v, label]) =>
         `<option value="${v}" ${v === _curPersona ? 'selected' : ''}>${label}</option>`).join('');
       typeOpts.innerHTML = `
-        <label class="task-form-label">${taskType === 'research' ? '研究问题' : '提示词'}</label>
+        <label class="task-form-label">${taskType === 'research' ? 'Research question' : 'Prompt'}</label>
         <textarea id="task-form-prompt" class="task-form-input task-form-textarea" rows="4" placeholder="${placeholder}">${existing?.prompt || ''}</textarea>
 
-        <label class="task-form-label">角色 <span style="opacity:0.5;font-weight:normal;font-size:10px;">(可选 — biases the output voice)</span></label>
+        <label class="task-form-label">Persona <span style="opacity:0.5;font-weight:normal;font-size:10px;">(optional — biases the output voice)</span></label>
         <select id="task-form-persona" class="task-form-input">${_personaOptsHtml}</select>
       `;
     } else {
       typeOpts.innerHTML = `
-        <label class="task-form-label">动作</label>
+        <label class="task-form-label">操作</label>
         <select id="task-form-action" class="task-form-input">
-          <option value="">Loading…</option>
+          <option value="">加载中…</option>
         </select>
         <div id="task-form-action-extra"></div>
       `;
@@ -1114,23 +1237,28 @@ function _showForm(existing, initTaskType, initTriggerType) {
         const sel = document.getElementById('task-form-action');
         const extra = document.getElementById('task-form-action-extra');
         if (!sel || !extra) return;
-        if (sel.value !== 'check_email_urgency') {
+        const action = sel.value;
+        if (!_EMAIL_ACCOUNT_ACTIONS.has(action)) {
           extra.innerHTML = '';
           return;
         }
-        extra.innerHTML = `
-          <label class="task-form-label">Email triage rules</label>
-          <textarea id="task-form-urgent-email-prompt" class="task-form-input task-form-textarea" rows="4" placeholder="What should count as urgent? e.g. deadlines, blockers, people waiting outside."></textarea>
-          <div class="memory-desc" style="font-size:11px;margin-top:4px;">Pause/resume and schedule are controlled by this task. It tags urgent, reply-soon, newsletter, marketing, and spam. Urgent/reply-soon emails use your reminder settings.</div>
-        `;
-        const settings = await _fetchUrgentEmailSettings();
-        const promptEl = document.getElementById('task-form-urgent-email-prompt');
-        if (promptEl && !promptEl.dataset.loaded) {
-          promptEl.value = settings.urgent_email_prompt || '';
-          promptEl.dataset.loaded = '1';
+        extra.innerHTML = '';
+        await _renderEmailActionOptions(action, existing, extra);
+        if (action === 'check_email_urgency') {
+          extra.insertAdjacentHTML('beforeend', `
+            <label class="task-form-label">邮件分类规则</label>
+            <textarea id="task-form-urgent-email-prompt" class="task-form-input task-form-textarea" rows="4" placeholder="什么算作紧急？例如截止日期、阻塞项、等待回复的人。"></textarea>
+            <div class="memory-desc" style="font-size:11px;margin-top:4px;">Pause/resume and schedule are controlled by this task. It tags work, personal, urgent, action-needed, finance, legal, travel, newsletter, marketing, spam, and related mail categories. Urgent/reply-soon emails use your reminder settings.</div>
+          `);
+          const settings = await _fetchUrgentEmailSettings();
+          const promptEl = document.getElementById('task-form-urgent-email-prompt');
+          if (promptEl && !promptEl.dataset.loaded) {
+            promptEl.value = settings.urgent_email_prompt || '';
+            promptEl.dataset.loaded = '1';
+          }
+          const notifEl = document.getElementById('task-form-notif');
+          if (notifEl && !existing?.id) notifEl.checked = false;
         }
-        const notifEl = document.getElementById('task-form-notif');
-        if (notifEl && !existing?.id) notifEl.checked = false;
       };
       _fetchActions().then(actions => {
         const sel = document.getElementById('task-form-action');
@@ -1169,10 +1297,10 @@ function _showForm(existing, initTaskType, initTriggerType) {
       triggerOpts.innerHTML = `
         <label class="task-form-label">频率</label>
         <select id="task-form-schedule" class="task-form-input">
-          <option value="daily" ${(!existing || existing.schedule === 'daily') ? 'selected' : ''}>Daily</option>
-          <option value="weekly" ${existing?.schedule === 'weekly' ? 'selected' : ''}>Weekly</option>
-          <option value="monthly" ${existing?.schedule === 'monthly' ? 'selected' : ''}>Monthly</option>
-          <option value="once" ${existing?.schedule === 'once' ? 'selected' : ''}>Once</option>
+          <option value="daily" ${(!existing || existing.schedule === 'daily') ? 'selected' : ''}>每天</option>
+          <option value="weekly" ${existing?.schedule === 'weekly' ? 'selected' : ''}>每周</option>
+          <option value="monthly" ${existing?.schedule === 'monthly' ? 'selected' : ''}>每月</option>
+          <option value="once" ${existing?.schedule === 'once' ? 'selected' : ''}>一次</option>
           <option value="cron" ${existing?.schedule === 'cron' ? 'selected' : ''}>Cron</option>
         </select>
         <div id="task-form-schedule-opts"></div>
@@ -1204,7 +1332,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
         if (sched === 'weekly') {
           const label = document.createElement('label');
           label.className = 'task-form-label';
-          label.textContent = '星期';
+          label.textContent = 'Day of week';
           schedOpts.appendChild(label);
           const sel = document.createElement('select');
           sel.id = 'task-form-day';
@@ -1220,7 +1348,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
         } else if (sched === 'monthly') {
           const label = document.createElement('label');
           label.className = 'task-form-label';
-          label.textContent = '日期（几号）';
+          label.textContent = 'Day of month';
           schedOpts.appendChild(label);
           const inp = document.createElement('input');
           inp.type = 'number';
@@ -1232,7 +1360,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
         } else if (sched === 'once') {
           const label = document.createElement('label');
           label.className = 'task-form-label';
-          label.textContent = '日期';
+          label.textContent = 'Date';
           schedOpts.appendChild(label);
           const dateWrap = document.createElement('div');
           dateWrap.className = 'task-date-picker';
@@ -1242,7 +1370,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
         } else if (sched === 'cron') {
           const label = document.createElement('label');
           label.className = 'task-form-label';
-          label.textContent = 'Cron 表达式';
+          label.textContent = 'Cron expression';
           schedOpts.appendChild(label);
           const inp = document.createElement('input');
           inp.type = 'text';
@@ -1253,7 +1381,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
           schedOpts.appendChild(inp);
           const hint = document.createElement('div');
           hint.style.cssText = 'font-size:10px;opacity:0.4;margin-top:2px;';
-          hint.textContent = '分钟 小时 日 月 星期 — 例如 "0 */2 * * *" = 每 2 小时';
+          hint.textContent = 'min hour day month weekday — e.g. "0 */2 * * *" = every 2 hours';
           schedOpts.appendChild(hint);
         }
       }
@@ -1264,9 +1392,9 @@ function _showForm(existing, initTaskType, initTriggerType) {
       triggerOpts.innerHTML = `
         <label class="task-form-label">事件</label>
         <select id="task-form-event" class="task-form-input">
-          <option value="">Loading…</option>
+          <option value="">加载中…</option>
         </select>
-        <label class="task-form-label">每 N 次触发</label>
+        <label class="task-form-label">每 N 次出现</label>
         <input type="number" id="task-form-trigger-count" class="task-form-input" min="1" max="1000" value="${existing?.trigger_count || 5}" />
       `;
       _fetchEvents().then(events => {
@@ -1285,7 +1413,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
       if (existing?.webhook_token) {
         const url = `${API_BASE}/api/tasks/${existing.id}/webhook/${existing.webhook_token}`;
         triggerOpts.innerHTML = `
-          <label class="task-form-label">网络钩子 URL</label>
+          <label class="task-form-label">Webhook URL</label>
           <div style="display:flex;gap:4px;align-items:center;">
             <input type="text" class="task-form-input" value="${url}" readonly style="flex:1;font-size:11px;opacity:0.8;" id="task-form-webhook-url" />
             <button class="task-btn" id="task-form-webhook-copy" style="white-space:nowrap;">Copy</button>
@@ -1297,7 +1425,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
           if (uiModule) uiModule.showToast('已复制');
         });
       } else {
-        triggerOpts.innerHTML = '<div style="font-size:11px;opacity:0.5;margin-top:4px;">Webhook URL 将在保存任务时生成。</div>';
+        triggerOpts.innerHTML = '<div style="font-size:11px;opacity:0.5;margin-top:4px;">Webhook URL will be generated when the task is saved.</div>';
       }
     }
   }
@@ -1312,28 +1440,70 @@ function _showForm(existing, initTaskType, initTriggerType) {
   renderTriggerOpts();
 
   // Populate output targets
+  const renderOutputExtra = async () => {
+    const outputSel = document.getElementById('task-form-output');
+    const extra = document.getElementById('task-form-output-extra');
+    if (!outputSel || !extra) return;
+    const currentTo = document.getElementById('task-form-output-email-to')?.value;
+    const currentAccountId = document.getElementById('task-form-output-email-account')?.value;
+    extra.innerHTML = '';
+    if (outputSel.value !== 'email') return;
+    const parsed = _parseTaskEmailOutputTarget(existing?.output_target || '');
+    if (currentTo != null) parsed.to = currentTo;
+    if (currentAccountId != null) parsed.accountId = currentAccountId;
+    const accounts = (await _fetchEmailAccountsForTasks()).filter(a => a && a.enabled !== false);
+    const options = [
+      `<option value="" ${parsed.accountId ? '' : 'selected'}>默认发送账户</option>`,
+      ...accounts.map(a => {
+        const id = String(a.id || '');
+        const label = a.name || a.from_address || a.imap_user || id.slice(0, 8);
+        const suffix = a.is_default ? '（默认）' : '';
+        return `<option value="${_escHtml(id)}" ${id === parsed.accountId ? 'selected' : ''}>${_escHtml(label + suffix)}</option>`;
+      }),
+    ].join('');
+    extra.innerHTML = `
+      <div class="task-form-output-email" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:6px;">
+        <label>
+          <span class="task-form-label" style="margin-top:0;">发件人</span>
+          <select id="task-form-output-email-account" class="task-form-input">${options}</select>
+        </label>
+        <label>
+          <span class="task-form-label" style="margin-top:0;">收件人</span>
+          <input id="task-form-output-email-to" class="task-form-input" type="email" value="${_escHtml(parsed.to)}" placeholder="我 / 选定的账户" />
+        </label>
+      </div>
+      <div class="memory-desc" style="font-size:10px;margin-top:3px;">Leave To blank to send to the selected account's own address.</div>
+    `;
+  };
+
   _fetchOutputTargets().then(targets => {
     const outputSel = document.getElementById('task-form-output');
     if (!outputSel || targets.length <= 1) return;
     outputSel.innerHTML = '';
+    const existingEmailOutput = _parseTaskEmailOutputTarget(existing?.output_target || '');
     let matchedOutput = false;
     for (const t of targets) {
       const opt = document.createElement('option');
       opt.value = t.value;
       opt.textContent = t.label;
-      if (existing?.output_target === t.value) {
+      if (existingEmailOutput.enabled && t.value === 'email') {
+        opt.selected = true;
+        matchedOutput = true;
+      } else if (!existingEmailOutput.enabled && existing?.output_target === t.value) {
         opt.selected = true;
         matchedOutput = true;
       }
       outputSel.appendChild(opt);
     }
-    if (existing?.output_target && !matchedOutput) {
+    if (existing?.output_target && !matchedOutput && !existingEmailOutput.enabled) {
       const opt = document.createElement('option');
       opt.value = existing.output_target;
       opt.textContent = existing.output_target.includes('@') ? `Email: ${existing.output_target}` : existing.output_target;
       opt.selected = true;
       outputSel.appendChild(opt);
     }
+    outputSel.addEventListener('change', renderOutputExtra);
+    renderOutputExtra();
   });
 
   // Populate model dropdown from /api/models. Value is "endpoint_url::model"
@@ -1362,8 +1532,8 @@ function _showForm(existing, initTaskType, initTriggerType) {
         }
         modelSel.appendChild(group);
       }
-      // Preserve a previously-set pairing even if /api/models doesn't list it
-      // anymore (e.g. endpoint disabled). Shows so the user knows it's set.
+      // Preserve a previously-set pairing even if /api/models doesn\'t list it
+      // anymore (e.g. endpoint disabled). Shows so the user knows it\'s set.
       if (curKey && modelSel.value !== curKey) {
         const opt = document.createElement('option');
         opt.value = curKey;
@@ -1394,7 +1564,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
 
   // Esc on the form goes back to the Add tab's preset picker (not the Tasks
   // tab — Cancel handles that). Capture-phase + stopImmediatePropagation so
-  // app.js's generic modal-dismiss doesn't close the whole Tasks window first.
+  // app.js's generic modal-dismiss doesn\'t close the whole Tasks window first.
   if (window._tasksFormEsc) document.removeEventListener('keydown', window._tasksFormEsc, true);
   window._tasksFormEsc = (e) => {
     if (e.key !== 'Escape') return;
@@ -1418,7 +1588,13 @@ function _showForm(existing, initTaskType, initTriggerType) {
   // Save
   document.getElementById('task-form-save').addEventListener('click', async () => {
     const nameEl = document.getElementById('task-form-name');
-    const outputTarget = document.getElementById('task-form-output')?.value || 'session';
+    const outputSelValue = document.getElementById('task-form-output')?.value || 'session';
+    let outputTarget = outputSelValue;
+    if (outputSelValue === 'email') {
+      const to = document.getElementById('task-form-output-email-to')?.value || '';
+      const accountId = document.getElementById('task-form-output-email-account')?.value || '';
+      outputTarget = _buildTaskEmailOutputTarget(to, accountId);
+    }
 
     const payload = {
       task_type: taskType,
@@ -1454,7 +1630,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
     if (taskType === 'llm' || taskType === 'research') {
       const prompt = document.getElementById('task-form-prompt')?.value?.trim();
       if (!prompt) {
-        if (uiModule) uiModule.showError('提示词为必填项');
+        if (uiModule) uiModule.showError('提示词不能为空');
         return;
       }
       payload.prompt = prompt;
@@ -1465,10 +1641,14 @@ function _showForm(existing, initTaskType, initTriggerType) {
       payload.character_id = '';
       const action = document.getElementById('task-form-action')?.value;
       if (!action) {
-        if (uiModule) uiModule.showError('请选择一个动作');
+        if (uiModule) uiModule.showError('请选择一个操作');
         return;
       }
       payload.action = action;
+      if (_EMAIL_ACCOUNT_ACTIONS.has(action)) {
+        const accountId = document.getElementById('task-form-email-account')?.value || '';
+        payload.prompt = accountId ? JSON.stringify({ account_id: accountId }) : '';
+      }
       if (action === 'check_email_urgency') {
         const urgentPrompt = document.getElementById('task-form-urgent-email-prompt')?.value || '';
         try {
@@ -1488,7 +1668,7 @@ function _showForm(existing, initTaskType, initTriggerType) {
       if (payload.schedule === 'cron') {
         const cronVal = document.getElementById('task-form-cron')?.value?.trim();
         if (!cronVal) {
-          if (uiModule) uiModule.showError('Cron 表达式为必填项');
+          if (uiModule) uiModule.showError('Cron 表达式不能为空');
           return;
         }
         payload.cron_expression = cronVal;
@@ -1546,21 +1726,21 @@ async function _showRunHistory(taskId, taskName) {
   if (!body) return;
 
   body.innerHTML = '';
-  body.appendChild(spinnerModule.createLoadingRow('Loading…'));
+  body.appendChild(spinnerModule.createLoadingRow('加载中…'));
 
   const runs = await _fetchRuns(taskId);
 
   let html = `<div class="task-history-header">
-    <button id="task-history-back" class="task-btn">← Back</button>
-    <span style="font-size:13px;opacity:0.7;">${_esc(taskName)} — Run history</span>
+    <button id="task-history-back" class="task-btn">← 返回</button>
+    <span style="font-size:13px;opacity:0.7;">${_esc(taskName)} — 运行记录</span>
   </div>`;
 
   if (runs.length === 0) {
-    html += '<div style="opacity:0.4;font-size:12px;text-align:center;padding:24px 0;">No runs yet.</div>';
+    html += '<div style="opacity:0.4;font-size:12px;text-align:center;padding:24px 0;">暂无运行记录。</div>';
   } else {
     html += '<div class="task-runs-list">';
     for (const run of runs) {
-      const statusClass = run.status === 'success' ? 'task-run-success' : run.status === 'error' ? 'task-run-error' : 'task-run-running';
+      const statusClass = run.status === 'success' ? 'task-run-success' : (run.status === 'error' || run.status === 'failed') ? 'task-run-error' : 'task-run-running';
       html += `<div class="task-run-item ${statusClass}">
         <div class="task-run-item-header">
           ${_statusDot(run.status === 'success' ? 'active' : run.status)}
@@ -1618,12 +1798,12 @@ async function _doResume(id) {
 async function _doRunNow(id, force = false) {
   try {
     await _runNow(id, force);
-    if (uiModule) uiModule.showToast(force ? '任务已并行触发' : '任务已触发');
+    if (uiModule) uiModule.showToast(force ? 'Task triggered in parallel' : 'Task triggered');
   } catch (e) {
     // Mirror the polling notification surface so the user sees the same kind
     // of feedback they get for finished/failed tasks — a real browser
     // Notification when permission is granted, toast fallback otherwise.
-    const msg = e.message || '触发任务失败';
+    const msg = e.message || 'Failed to trigger task';
     let fired = false;
     try {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -1637,8 +1817,8 @@ async function _doRunNow(id, force = false) {
 
 async function _doDelete(id) {
   const ok = uiModule?.styledConfirm
-    ? await uiModule.styledConfirm('Delete this task and all its run history?', { confirmText: 'Delete', danger: true })
-    : confirm('Delete this task and all its run history?');
+    ? await uiModule.styledConfirm('删除此任务及其所有运行记录？', { confirmText: '删除', danger: true })
+    : confirm('删除此任务及其所有运行记录？');
   if (!ok) return;
   try {
     await _deleteTask(id);
@@ -1651,13 +1831,13 @@ async function _doDelete(id) {
 
 async function _doRevert(id) {
   const ok = uiModule?.styledConfirm
-    ? await uiModule.styledConfirm('Revert this built-in task to its default schedule and settings?', { confirmText: 'Revert' })
-    : confirm('Revert this built-in task to its default?');
+    ? await uiModule.styledConfirm('将此内置任务恢复为默认的定时计划和设置？', { confirmText: '恢复' })
+    : confirm('将此内置任务恢复为默认？');
   if (!ok) return;
   try {
     const res = await fetch(`${API_BASE}/api/tasks/${id}/revert`, { method: 'POST', credentials: 'same-origin' });
-    if (!res.ok) throw new Error('Failed to revert task');
-    if (uiModule) uiModule.showToast('已恢复为默认');
+    if (!res.ok) throw new Error('恢复任务失败');
+    if (uiModule) uiModule.showToast('已恢复默认');
     await _fetchTasks();
     _renderMainView();
   } catch (e) { if (uiModule) uiModule.showError(e.message); }
@@ -1687,7 +1867,7 @@ async function _doToggleAll() {
   const hasActive = _tasks.some(t => t.status === 'active');
   const targets = _tasks.filter(t => t.status === (hasActive ? 'active' : 'paused'));
   if (targets.length === 0) {
-    if (uiModule) uiModule.showToast( '无任务可 ' + (hasActive ? 'pause' : 'resume'));
+    if (uiModule) uiModule.showToast('没有任务可' + (hasActive ? '暂停' : '恢复'));
     return;
   }
   const verb = hasActive ? 'Pause' : 'Resume';
@@ -1727,17 +1907,17 @@ function _syncPauseAllButton() {
   const hasActive = _tasks.some(t => t.status === 'active');
   const hasPaused = _tasks.some(t => t.status === 'paused');
   if (hasActive) {
-    btn.innerHTML = pauseIco + '全部暂停';
-    btn.title = '暂停所有运行中的任务';
+    btn.innerHTML = pauseIco + 'Pause all';
+    btn.title = 'Pause every active task';
     btn.style.opacity = '1';
     btn.disabled = false;
   } else if (hasPaused) {
-    btn.innerHTML = playIco + '全部恢复';
-    btn.title = '恢复所有已暂停的任务';
+    btn.innerHTML = playIco + 'Resume all';
+    btn.title = 'Resume every paused task';
     btn.style.opacity = '1';
     btn.disabled = false;
   } else {
-    btn.innerHTML = pauseIco + '全部暂停';
+    btn.innerHTML = pauseIco + 'Pause all';
     btn.style.opacity = '0.4';
     btn.disabled = true;
   }
@@ -1768,17 +1948,17 @@ async function _renderActivityView() {
   const body = modal?.querySelector('.modal-body');
   if (!body) return;
   body.innerHTML = `
-    <div class="admin-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+    <div class="admin-card tasks-activity-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
-        <h2 style="margin:0;padding:0;line-height:1;">Activity</h2>
-        <button class="memory-toolbar-btn" id="tasks-activity-refresh" title="Refresh" style="margin-left:auto;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></button>
+        <h2 style="margin:0;padding:0;line-height:1;">活动</h2>
+        <button class="memory-toolbar-btn" id="tasks-activity-refresh" title="刷新" style="margin-left:auto;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></button>
       </div>
-      <p class="memory-desc">Recent task runs across all scheduled tasks.</p>
+      <p class="memory-desc">所有定时任务的最近运行记录。</p>
       <div style="display:flex;align-items:center;gap:6px;margin:6px 0 8px;">
-        <input type="text" id="tasks-activity-search" placeholder="Filter activity…" class="memory-search-input" style="flex:1;" />
+        <input type="text" id="tasks-activity-search" placeholder="筛选活动…" class="memory-search-input" style="flex:1;" />
       </div>
       <div class="tasks-activity-filters" id="tasks-activity-chips" style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap;"></div>
-      <div id="tasks-activity-list" class="memory-list" style="flex:1;overflow:auto;font-size:13px;"></div>
+      <div id="tasks-activity-list" class="memory-list tasks-activity-list" style="flex:1;overflow:auto;font-size:13px;min-height:0;"></div>
     </div>
   `;
 
@@ -1793,13 +1973,13 @@ async function _renderActivityView() {
   const _entryCat = (e) => _categoryLabel(e.taskName);
   const _entryStatus = (e) =>
     (e.status === 'success' || _classifyResult(e.result) === 'ok') ? 'ok'
-    : (e.status === 'error' || _classifyResult(e.result) === 'error') ? 'error' : 'info';
+    : (e.status === 'error' || e.status === 'failed' || _classifyResult(e.result) === 'error') ? 'error' : 'info';
   const _isNotification = (e) => e.output_target === 'notification';
 
   const _matchesSolo = (e) => {
     // Notification rows are intentionally hidden from the default "All" view —
-    // they're surfaced via the dedicated "notifications" chip so the noisy
-    // alert stream doesn't drown the rest of the activity.
+    // they\'re surfaced via the dedicated "notifications" chip so the noisy
+    // alert stream doesn\'t drown the rest of the activity.
     if (!_solo) return !_isNotification(e);
     if (_solo === 'notifications') return _isNotification(e);
     if (_solo.startsWith('cat:')) return _entryCat(e) === _solo.slice(4);
@@ -1817,10 +1997,21 @@ async function _renderActivityView() {
       return true;
     });
     if (filtered.length === 0) {
-      list.innerHTML = '<div style="opacity:0.5;padding:12px;">无匹配活动。</div>';
+      list.innerHTML = '<div style="opacity:0.5;padding:12px;">没有匹配的活动。</div>';
       return;
     }
     list.innerHTML = _stackActivityEntries(filtered).map(_renderActivityEntry).join('');
+    if (_activityHasMore && !q) {
+      list.insertAdjacentHTML('beforeend', `
+        <button type="button" class="memory-toolbar-btn tasks-activity-load-more" id="tasks-activity-load-more" style="width:100%;justify-content:center;margin-top:6px;">
+          Load more
+        </button>
+      `);
+      list.querySelector('#tasks-activity-load-more')?.addEventListener('click', () => {
+        _activityLimit = Math.min(200, _activityLimit + 40);
+        _renderActivityView();
+      });
+    }
     _wireActivityRows(list);
   };
 
@@ -1837,7 +2028,7 @@ async function _renderActivityView() {
     }
     const hasErrors = _activityEntries.some(e => !_isNotification(e) && _entryStatus(e) === 'error');
     // Count notifications that would actually display under the chip — applies
-    // the active search query so the badge matches what you'd see, not a
+    // the active search query so the badge matches what you\'d see, not a
     // misleading total.
     const _q = _afQuery.trim().toLowerCase();
     const notifCount = _activityEntries.filter(e =>
@@ -1876,18 +2067,19 @@ async function _renderActivityView() {
     _buildChips();
     _applyFilter();
   } else if (_actList) {
-    _actList.appendChild(spinnerModule.createLoadingRow('Loading…'));
+    _actList.appendChild(spinnerModule.createLoadingRow('加载中…'));
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/tasks/runs/recent?limit=100`, { credentials: 'same-origin' });
+    const res = await fetch(`${API_BASE}/api/tasks/runs/recent?limit=${_activityLimit}&max_result_chars=6000`, { credentials: 'same-origin' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const runs = data.runs || [];
+    _activityHasMore = !!data.has_more && _activityLimit < 200;
     const list = document.getElementById('tasks-activity-list');
     if (!list) return;
     if (runs.length === 0) {
-      list.innerHTML = '<div style="opacity:0.5;padding:12px;">暂无活动。计划任务运行后将在此记录。</div>';
+      list.innerHTML = '<div style="opacity:0.5;padding:12px;">暂无活动。定时任务运行后将在此记录。</div>';
       return;
     }
     _activityEntries = runs.map(r => {
@@ -1920,15 +2112,18 @@ async function _renderActivityView() {
     _applyFilter();
   } catch (e) {
     const list = document.getElementById('tasks-activity-list');
-    if (list) list.innerHTML = `<div style="opacity:0.5;padding:12px;">加载活动失败: ${_escHtml(e.message || String(e))}</div>`;
+    if (list) list.innerHTML = `<div style="opacity:0.5;padding:12px;">加载活动失败：${_escHtml(e.message || String(e))}</div>`;
   }
 }
 
 let _activityEntries = [];
+let _activityLimit = 40;
+let _activityHasMore = false;
 
 function _stackActivityEntries(entries) {
   const out = [];
   const byKey = new Map();
+  const maxStack = 8;
   const hourBucket = (ts) => {
     const d = ts ? new Date(ts) : null;
     if (!d || Number.isNaN(d.getTime())) return '';
@@ -1956,7 +2151,12 @@ function _stackActivityEntries(entries) {
       /^Email\b/i.test(entry.taskName || '') ? hourBucket(entry.ts) : '',
     ].join('\u0001');
     const existing = byKey.get(key);
-    if (existing && entry.status !== 'running' && entry.status !== 'queued') {
+    if (
+      existing
+      && entry.status !== 'running'
+      && entry.status !== 'queued'
+      && (existing.repeatCount || 1) < maxStack
+    ) {
       existing.repeatCount = (existing.repeatCount || 1) + 1;
       continue;
     }
@@ -2007,7 +2207,7 @@ function _tickActivityTimers(root) {
 // Wire row interactions: expand toggle + "Open in chat".
 function _wireActivityRows(list) {
   // Replace the [data-spin-here] placeholders in running/queued rows with the
-  // app's whirlpool spinner element (createElement, with a stop hook so the
+  // app\'s whirlpool spinner element (createElement, with a stop hook so the
   // poll's next render clears them cleanly).
   list.querySelectorAll('[data-spin-here]').forEach(slot => {
     try {
@@ -2022,7 +2222,7 @@ function _wireActivityRows(list) {
     }
   });
   // Kick the live elapsed-timer interval (running rows only — queued has no
-  // counter). No-op when there's nothing to tick.
+  // counter). No-op when there\'s nothing to tick.
   _startActivityTimers(list);
   list.querySelectorAll('.task-log-row').forEach(row => {
     // Click anywhere on the row to toggle expand.
@@ -2091,12 +2291,12 @@ function _wireActivityRows(list) {
   });
 }
 
-// Open a task run's result in a fresh chat session so it's comfortable
+// Open a task run's result in a fresh chat session so it\'s comfortable
 // to read full-width and the user can ask follow-ups.
 async function _openResultInChat(entry) {
   try {
     // Pick an endpoint/model. Prefer the model the task actually ran on
-    // (if it's currently reachable), else fall back to the first online
+    // (if it\'s currently reachable), else fall back to the first online
     // endpoint. The user can switch models in the chat anyway.
     let url = '', model = '', epId = '';
     const items = (() => {
@@ -2123,7 +2323,7 @@ async function _openResultInChat(entry) {
       } catch (_) {}
     }
     if (!url) {
-      // Skip embedding/tts/whisper/moderation/image models — they can't chat,
+      // Skip embedding/tts/whisper/moderation/image models — they can\'t chat,
       // and an endpoint may list one first (e.g. text-embedding-ada-002).
       const _isChatModel = (m) => {
         const l = (m || '').toLowerCase();
@@ -2145,7 +2345,7 @@ async function _openResultInChat(entry) {
     if (model) fd.append('model', model);
     if (epId) fd.append('endpoint_id', epId);
     const res = await fetch(`${API_BASE}/api/session`, { method: 'POST', credentials: 'same-origin', body: fd });
-    if (!res.ok) { uiModule.showToast(`Couldn't create chat (HTTP ${res.status})`); return; }
+    if (!res.ok) { uiModule.showToast(`无法创建聊天 (HTTP ${res.status})`); return; }
     const sess = await res.json();
     const sid = sess.id || sess.session_id;
     if (!sid) { uiModule.showToast('聊天已创建但未返回会话 ID'); return; }
@@ -2155,7 +2355,7 @@ async function _openResultInChat(entry) {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [
-        { role: 'user', content: `Here is the latest run of my scheduled task "${entry.taskName}". Let's review it.` },
+        { role: 'user', content: `Here is the latest run of my scheduled task "${entry.taskName}". Let\'s review it.` },
         { role: 'assistant', content: entry.result || '(no output)' },
       ] }),
     });
@@ -2177,7 +2377,7 @@ function _classifyResult(text) {
   return 'info';
 }
 
-// Category → fixed hue. Anything that doesn't match a keyword gets a stable
+// Category → fixed hue. Anything that doesn\'t match a keyword gets a stable
 // hue derived from the task name's hash, so a recurring custom task keeps
 // the same color from one run to the next.
 const _CATEGORY_HUES = [
@@ -2227,7 +2427,7 @@ function _renderActivityEntry(entry) {
   // index, which would be wrong) — used by the Open-in-chat handler.
   const entryIdx = Number.isInteger(entry.sourceIdx) ? entry.sourceIdx : _activityEntries.indexOf(entry);
   const repeatBadge = entry.repeatCount > 1
-    ? `<span class="task-log-repeat" title="${entry.repeatCount} similar activity rows">+${entry.repeatCount - 1} repeats</span>`
+    ? `<span class="task-log-repeat" title="${entry.repeatCount} 条相似活动记录">+${entry.repeatCount - 1} 重复</span>`
     : '';
   const tsLabel = _relativeTime(entry.ts);
   const tsAbs = entry.ts ? new Date(entry.ts).toLocaleString() : '';
@@ -2237,7 +2437,7 @@ function _renderActivityEntry(entry) {
   let status;
   if (entry.status === 'queued' || entry.status === 'running' || entry.status === 'skipped' || entry.status === 'aborted') {
     status = entry.status;
-  } else if (entry.status === 'error') {
+  } else if (entry.status === 'error' || entry.status === 'failed') {
     status = 'error';
   } else if (entry.status === 'success') {
     status = 'ok';
@@ -2286,7 +2486,8 @@ function _renderActivityEntry(entry) {
   const promptHtml = entry.prompt
     ? `<details class="task-log-prompt"><summary>提示词</summary><pre>${_escHtml(entry.prompt)}</pre></details>`
     : '';
-  const hue = _categoryHue(entry.taskName, entry.kind);
+  const hue = status === 'error' ? 0 : _categoryHue(entry.taskName, entry.kind);
+  const rowStatusClass = ` task-log-row-${status}`;
   // CSS vars feed the colored title + accent stripe.
   const styleVars = `--cat-hue:${hue};`;
   const _runningPlaceholder = /^(Starting…|Starting\.\.\.|_Running…_|_Running\.\.\._|_Queued\b)/i.test((entry.result || '').trim());
@@ -2300,38 +2501,38 @@ function _renderActivityEntry(entry) {
   const _isChatWorthy = entry.kind === 'llm' || entry.kind === 'research';
   let actionBtn = '';
   if (hasResult && _isChatWorthy) {
-    actionBtn = `<button class="task-log-open-chat" type="button" title="Open this result in a chat to read full-width + ask follow-ups">
+    actionBtn = `<button class="task-log-open-chat" type="button" title="在聊天中打开此结果以全宽阅读 + 追问">
          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
          Open in chat
        </button>`;
     if (entry.kind === 'research' && entry.researchId) {
-      actionBtn += `<button class="task-log-open-report" type="button" title="Open the visual research report">
+      actionBtn += `<button class="task-log-open-report" type="button" title="打开可视化研究报告">
          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
          Visual report
        </button>`;
     }
   } else if (hasResult) {
-    actionBtn = `<button class="task-log-copy" type="button" title="Copy this log entry">
+    actionBtn = `<button class="task-log-copy" type="button" title="复制此日志条目">
          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
          Copy log
        </button>`;
   }
   const clearLabel = _taskClearCacheLabel(entry);
   if (hasResult && clearLabel && entry.taskId) {
-    actionBtn += `<button class="task-log-clear-cache" type="button" title="Clear cached ${_escHtml(clearLabel)} for this task">
+    actionBtn += `<button class="task-log-clear-cache" type="button" title="清除此任务的缓存 ${_escHtml(clearLabel)}">
          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>
          Clear cache
        </button>`;
   }
   if (hasResult && entry.taskId) {
-    actionBtn += `<button class="task-log-run-again" type="button" title="Run this task again">
+    actionBtn += `<button class="task-log-run-again" type="button" title="再次运行此任务">
          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
          Run again
        </button>`;
   }
   // Running rows replace the relative-time on the right with "Running NN" + a
   // live whirlpool spinner. Queued shows "Queued" the same way (no timer —
-  // hasn't actually started yet). The elapsed counter ticks every second via
+  // hasn\'t actually started yet). The elapsed counter ticks every second via
   // `_startActivityTimers` after the row is in the DOM.
   let rightHtml;
   if (_isRunning) {
@@ -2339,10 +2540,10 @@ function _renderActivityEntry(entry) {
     // Initial elapsed for the first paint; the 1s interval below keeps it live.
     const startMs = entry.ts ? new Date(entry.ts).getTime() : Date.now();
     const stale = !isQueued && (Date.now() - startMs) > 30 * 60 * 1000;
-    const label = isQueued ? '排队中' : stale ? '仍在运行' : '运行中';
+    const label = isQueued ? 'Queued' : stale ? 'Still running' : 'Running';
     const elapsedInit = isQueued ? '' : `<span class="task-log-running-elapsed" data-since="${startMs}">${_fmtElapsed(Date.now() - startMs)}</span>`;
-    const forceBtn = isQueued && entry.taskId ? `<button class="task-log-force-run" type="button" title="Start now in parallel, bypassing the queue"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Start now</span></button>` : '';
-    const stopBtn = entry.taskId ? `<button class="task-log-stop" type="button" title="Stop this task"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></button>` : '';
+    const forceBtn = isQueued && entry.taskId ? `<button class="task-log-force-run" type="button" title="立即开始，跳过队列"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>立即开始</span></button>` : '';
+    const stopBtn = entry.taskId ? `<button class="task-log-stop" type="button" title="停止此任务"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></button>` : '';
     rightHtml = `<span class="task-log-running-inline"><span class="task-log-running-label">${label}</span>${elapsedInit}<span data-spin-here="1"></span>${forceBtn}${stopBtn}</span>`;
   } else {
     rightHtml = `<span class="task-log-time" title="${_escHtml(tsAbs)}">${_escHtml(tsLabel)}</span>`;
@@ -2354,7 +2555,7 @@ function _renderActivityEntry(entry) {
   if (_isSkipped) {
     const reason = (entry.result || '').trim();
     return `
-      <div class="task-log-row is-skipped" data-kind="${_escHtml(entry.kind)}" data-entry-idx="${entryIdx}" style="${styleVars}">
+      <div class="task-log-row is-skipped${rowStatusClass}" data-kind="${_escHtml(entry.kind)}" data-entry-idx="${entryIdx}" style="${styleVars}">
         <div class="task-log-row-head">
           ${statusDot}
           <span class="task-log-task-icon">${_taskIcon({ action: entry.action, task_type: entry.kind })}</span>
@@ -2367,7 +2568,7 @@ function _renderActivityEntry(entry) {
     `;
   }
   return `
-    <div class="task-log-row${long ? ' is-long' : ''}${_isRunning ? ' is-running' : ''}" data-kind="${_escHtml(entry.kind)}" data-entry-idx="${entryIdx}" style="${styleVars}">
+    <div class="task-log-row${rowStatusClass}${long ? ' is-long' : ''}${_isRunning ? ' is-running' : ''}" data-kind="${_escHtml(entry.kind)}" data-entry-idx="${entryIdx}" style="${styleVars}">
       <div class="task-log-row-head">
         ${statusDot}
         <span class="task-log-task-icon">${_taskIcon({ action: entry.action, task_type: entry.kind })}</span>
@@ -2379,7 +2580,7 @@ function _renderActivityEntry(entry) {
       ${(_isRunning && !hasRunningProgress) ? '' : `<div class="task-log-row-body">${resultHtml}</div>`}
       ${promptHtml}
       <div class="task-log-row-actions">
-        ${long ? '<button class="task-log-row-toggle" type="button">Show more</button>' : '<span></span>'}
+        ${long ? '<button class="task-log-row-toggle" type="button">显示更多</button>' : '<span></span>'}
         ${actionBtn}
       </div>
     </div>
@@ -2423,7 +2624,7 @@ async function _aiDraftTask(inputEl, btnEl) {
     });
     const data = await res.json();
     if (!data.success || !data.draft) {
-      if (uiModule) uiModule.showError(data.message || '无法起草任务');
+      if (uiModule) uiModule.showError(data.message || 'Could not draft task');
       return;
     }
     const draft = data.draft;
@@ -2455,26 +2656,26 @@ function _renderMainView() {
   body.innerHTML = `
     <div class="admin-card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;top:-2px;">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
-        <h2 style="margin:0;padding:0;line-height:1;position:relative;top:-4px;">Ongoing Tasks <span id="tasks-head-count" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
-        <button class="memory-toolbar-btn" id="tasks-pause-all-btn" title="Pause all active tasks" style="margin-left:auto;">全部暂停</button>
+        <h2 style="margin:0;padding:0;line-height:1;position:relative;top:-4px;">进行中的任务 <span id="tasks-head-count" class="memory-count" style="font-size:0.6em;opacity:0.6;font-weight:normal"></span></h2>
+        <button class="memory-toolbar-btn" id="tasks-pause-all-btn" title="暂停所有活动任务" style="margin-left:auto;">全部暂停</button>
       </div>
-      <p class="memory-desc" style="position:relative;top:-4px;">Scheduled prompts and actions that run automatically. Results appear in a dedicated session.</p>
+      <p class="memory-desc" style="position:relative;top:-4px;">自动运行的定时提示和操作。结果显示在专用会话中。</p>
       <div class="memory-toolbar">
         <div class="memory-category-filters" style="display:flex;align-items:center;gap:6px;">
           <select class="memory-sort-select" id="tasks-sort" aria-label="排序任务" title="排序任务" style="position:relative;top:-4px;width:86px;font-size:11px;height:24px;">
-            <option value="recent">Recent</option>
+            <option value="recent">最近</option>
             <option value="name">A–Z</option>
-            <option value="status">Status</option>
+            <option value="status">状态</option>
           </select>
-          <button class="memory-toolbar-btn" id="tasks-select-btn" title="Select tasks" style="position:relative;top:-7px;">Select</button>
+          <button class="memory-toolbar-btn" id="tasks-select-btn" title="选择任务" style="position:relative;top:-7px;">选择</button>
         </div>
-        <input type="text" id="tasks-search" placeholder="Search tasks…" class="memory-search-input" value="${_esc(_taskSearch)}" style="position:relative;top:-4px;" />
+        <input type="text" id="tasks-search" placeholder="搜索任务…" class="memory-search-input" value="${_esc(_taskSearch)}" style="position:relative;top:-4px;" />
       </div>
       <div id="tasks-bulk-bar" class="memory-bulk-bar${_taskSelectMode ? '' : ' hidden'}" style="position:relative;top:-4px;">
         <label class="memory-bulk-check-all" style="position:relative;top:0px;"><input type="checkbox" id="tasks-select-all" /> 全选</label>
-        <span id="tasks-selected-count">0 Selected</span>
-        <button id="tasks-bulk-delete" class="memory-toolbar-btn danger" style="position:relative;top:-2px;" disabled><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>
-        <button id="tasks-bulk-cancel" class="memory-toolbar-btn" title="Cancel (Esc)" style="margin-left:4px;padding:3px 6px;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <span id="tasks-selected-count">0 已选择</span>
+        <button id="tasks-bulk-delete" class="memory-toolbar-btn danger" style="position:relative;top:-2px;" disabled><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>删除</button>
+        <button id="tasks-bulk-cancel" class="memory-toolbar-btn" title="取消 (Esc)" style="margin-left:4px;padding:3px 6px;position:relative;top:-2px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div id="tasks-filter-chips" class="tasks-activity-filters" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;position:relative;top:-4px;"></div>
       <div id="tasks-list" class="memory-list" style="flex:1;gap:4px;position:relative;top:-4px;"></div>
@@ -2511,6 +2712,7 @@ function _renderMainView() {
 // ---- Modal ----
 
 export function openTasks(focusId, opts) {
+  startNotificationPolling();
   const o = opts || {};
   const openActivityForFailure = _taskFailurePending && !focusId && o.filter === undefined;
   _setTaskFailurePending(false);
@@ -2536,22 +2738,22 @@ export function openTasks(focusId, opts) {
   modal.innerHTML = `
     <div class="modal-content tasks-modal-content">
       <div class="modal-header">
-        <h4 style="position:relative;top:-2px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3L2 6"/><path d="M22 6l-3-3"/></svg>Tasks</h4>
+        <h4 style="position:relative;top:-2px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3L2 6"/><path d="M22 6l-3-3"/></svg>任务</h4>
         <span style="flex:1"></span>
         <button class="close-btn" id="tasks-close">✖</button>
       </div>
       <div class="memory-tabs tasks-tabs" role="tablist">
         <button class="memory-tab tasks-tab active" data-tab="tasks" role="tab" aria-selected="true">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          Tasks <span id="tasks-tab-count" class="memory-count" style="font-size:0.8em;opacity:0.6;font-weight:normal;margin-left:4px">0</span>
+          任务 <span id="tasks-tab-count" class="memory-count" style="font-size:0.8em;opacity:0.6;font-weight:normal;margin-left:4px">0</span>
         </button>
         <button class="memory-tab tasks-tab" data-tab="activity" role="tab" aria-selected="false">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-          Activity
+          活动
         </button>
         <button class="memory-tab tasks-tab" data-tab="new" role="tab" aria-selected="false">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-          Add
+          新建
         </button>
       </div>
       <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;overflow:hidden;"></div>
@@ -2603,7 +2805,7 @@ export function openTasks(focusId, opts) {
         _renderMainView();
         return;
       }
-      // If we're on the "Add" tab inside the new-task form (preset already
+      // If we\'re on the "Add" tab inside the new-task form (preset already
       // picked), step back to the preset picker instead of closing the modal.
       // Detect by: Add tab active + the form's name input is mounted.
       const _modal = document.getElementById('tasks-modal');
@@ -2741,9 +2943,6 @@ function stopNotificationPolling() {
     _notifInterval = null;
   }
 }
-
-// Start polling on module load
-startNotificationPolling();
 
 const tasksModule = { openTasks, closeTasks, isTasksOpen, startNotificationPolling, stopNotificationPolling };
 export default tasksModule;

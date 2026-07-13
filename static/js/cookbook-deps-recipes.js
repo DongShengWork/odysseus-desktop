@@ -1,6 +1,6 @@
 // Per-backend × per-model install recipes for the Dependencies tab.
 //
-// Each entry says: when you're about to serve `model` on `backend`, here's
+// Each entry says: when you\'re about to serve `model` on `backend`, here\'s
 // the exact shell sequence to make the venv + install the right packages.
 // Entries are matched first-hit; put the more specific patterns ABOVE the
 // generic fallback for that backend.
@@ -11,7 +11,7 @@
 //
 // The renderer prepends a `source <venv>/bin/activate` for the pip variant
 // (env_prefix handles activation for Run). The docker variant skips the
-// activate line — `docker pull` doesn't need a venv.
+// activate line — `docker pull` doesn\'t need a venv.
 
 const _RECIPES = [
   // ── vllm ──────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ export const RECIPE_VARIANTS = ['pip', 'docker'];
 export const RECIPE_DEFAULT_VARIANT = 'pip';
 
 // Get the commands array for a recipe + variant. Falls back to pip when
-// the requested variant isn't defined for the recipe.
+// the requested variant isn\'t defined for the recipe.
 export function recipeCommands(recipe, variant) {
   if (!recipe) return [];
   const v = (recipe.variants || {})[variant] || (recipe.variants || {}).pip;
@@ -86,7 +86,7 @@ export function recipesForBackend(backend) {
 
 // Pick the best recipe for a backend + model id. Returns the catalog
 // fallback when nothing more specific matches, or null if the backend
-// isn't in the catalog at all.
+// isn\'t in the catalog at all.
 export function pickRecipe(backend, modelId) {
   const candidates = recipesForBackend(backend);
   if (!candidates.length) return null;

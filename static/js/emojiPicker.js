@@ -8,6 +8,8 @@
  * faces (😂, 👍, 😎) have no text form and are intentionally excluded.
  */
 
+import { topPortalZ } from './toolWindowZOrder.js';
+
 // Each entry: [char, label, svgPath OR svg]
 // SVG icons matching Lucide style (24x24 viewBox, 2 stroke)
 const I = (path) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -18,10 +20,10 @@ const VS15 = '\uFE0E';
 
 const EMOJI_GROUPS = [
   {
-    name: '表情与心形',
+    name: 'Faces & Hearts',
     // Only chars with a genuine monochrome (text) presentation. VS15 is appended
     // on insert (see _insertEmoji) so they render flat for the recipient too.
-    // Pure-emoji faces (grin/cry/sunglasses/thumbs) have no text form, so they're
+    // Pure-emoji faces (grin/cry/sunglasses/thumbs) have no text form, so they\'re
     // omitted — there is no way to send them non-colored as plain text.
     items: [
       ['☻', 'grin', I('<circle cx="12" cy="12" r="10"/><path d="M7 14 C 7 18, 17 18, 17 14 Z"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>')],
@@ -33,7 +35,7 @@ const EMOJI_GROUPS = [
     ],
   },
   {
-    name: '勾选与标记',
+    name: 'Checks & Marks',
     items: [
       ['✓', 'check', I('<polyline points="20 6 9 17 4 12"/>')],
       ['✗', 'cross', I('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>')],
@@ -50,7 +52,7 @@ const EMOJI_GROUPS = [
     ],
   },
   {
-    name: '箭头',
+    name: 'Arrows',
     items: [
       ['→', 'arrow-right', I('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>')],
       ['←', 'arrow-left', I('<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>')],
@@ -61,7 +63,7 @@ const EMOJI_GROUPS = [
     ],
   },
   {
-    name: '数学与标点',
+    name: 'Math & Punctuation',
     items: [
       ['±', 'plus-minus', I('<line x1="4" y1="10" x2="20" y2="10"/><line x1="12" y1="2" x2="12" y2="18"/><line x1="4" y1="20" x2="20" y2="20"/>')],
       ['×', 'multiply', I('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>')],
@@ -87,7 +89,7 @@ const EMOJI_GROUPS = [
     ],
   },
   {
-    name: '货币与杂项',
+    name: 'Currency & Misc',
     items: [
       ['€', 'euro', I('<text x="12" y="16" font-size="16" text-anchor="middle" fill="currentColor" stroke="none">€</text>')],
       ['£', 'pound', I('<text x="12" y="16" font-size="16" text-anchor="middle" fill="currentColor" stroke="none">£</text>')],
@@ -117,9 +119,9 @@ export function createEmojiButton(target) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'emoji-picker-btn';
-  btn.title = '插入图标';
+  btn.title = 'Insert icon';
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>';
-  // Don't steal focus from the editor on press — keeps the caret/selection so
+  // Don\'t steal focus from the editor on press — keeps the caret/selection so
   // the emoji lands where the user was typing.
   btn.addEventListener('mousedown', (e) => e.preventDefault());
   btn.addEventListener('click', (e) => {
@@ -158,7 +160,7 @@ function togglePicker(anchor, target) {
   _pickerEl.style.position = 'fixed';
   _pickerEl.style.top = (rect.bottom + 4) + 'px';
   _pickerEl.style.left = rect.left + 'px';
-  _pickerEl.style.zIndex = '10000';
+  _pickerEl.style.zIndex = String(topPortalZ());
 
   requestAnimationFrame(() => {
     const pr = _pickerEl.getBoundingClientRect();
@@ -214,7 +216,7 @@ function _buildPicker() {
 
   const search = document.createElement('input');
   search.type = 'text';
-  search.placeholder = '搜索…';
+  search.placeholder = 'Search…';
   search.className = 'emoji-picker-search';
   el.appendChild(search);
 
@@ -272,7 +274,7 @@ function _insertEmoji(char) {
   if (!_targetEl) return;
   // Force monochrome (text) presentation for the recipient by appending the
   // text variation selector U+FE0E. It only affects chars that *have* an emoji
-  // presentation (e.g. ♥ ▶ ❤ ↩ ☀); for plain ASCII it's pointless, so we skip
+  // presentation (e.g. ♥ ▶ ❤ ↩ ☀); for plain ASCII it\'s pointless, so we skip
   // those. This is why the inserted glyph is non-colored on the other end too,
   // not just in our own (already-SVG) picker UI.
   const cp = char.codePointAt(0);

@@ -101,7 +101,7 @@ export function motionBlur(snap, v, dst) {
   const dx = Math.cos(rad);
   const dy = Math.sin(rad);
   // Step count = roughly one sample per pixel of length, capped
-  // so very long blurs don't tank performance.
+  // so very long blurs don\'t tank performance.
   const steps = Math.max(4, Math.min(80, Math.round(v.length)));
   const acc = document.createElement('canvas');
   acc.width = w; acc.height = h;

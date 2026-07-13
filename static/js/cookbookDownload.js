@@ -110,7 +110,7 @@ function _missingGgufMessage(model) {
 }
 
 function _bashQuote(value) {
-  return "'" + String(value ?? '').replace(/'/g, "'\\''") + "'";
+  return "'" + String(value ?? '').replace(/'/g, "'\''") + "'";
 }
 
 function _missingGgufCommand(model) {
@@ -133,7 +133,7 @@ export function _buildDownloadCmd(model, backend) {
       const repo = ggufSource?.repo || model.name;
       const includePattern = backend === 'llamacpp' ? _ggufIncludePattern(model, ggufSource) : null;
       const includeArg = includePattern ? `, allow_patterns=["${includePattern.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]` : '';
-      // Reflect the server's download target in the preview (matches the real
+      // Reflect the server\'s download target in the preview (matches the real
       // download path built server-side). '' = default HF cache.
       const _dlDir = (_serverByVal?.(_envState.remoteServerKey || _envState.remoteHost || '') || {}).downloadDir || '';
       const _localDirArg = _dlDir ? `, local_dir=os.path.expanduser('${_dlDir.replace(/\/$/, '')}/${repo.split('/').pop()}')` : '';
@@ -299,8 +299,8 @@ export function _wirePanelEvents(panel, model, backend) {
     copyBtn.addEventListener('click', () => {
       const cmd = panel.querySelector('.hwfit-panel-cmd')?.textContent || '';
       _copyText(cmd).then(() => {
-        copyBtn.textContent = '已复制';
-        setTimeout(() => { copyBtn.textContent = '复制'; }, 1500);
+        copyBtn.textContent = 'Copied';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
       });
     });
   }
@@ -310,13 +310,13 @@ export function _wirePanelEvents(panel, model, backend) {
   if (saveBtn) {
     saveBtn.addEventListener('click', () => {
       const shortName = model.name.split('/').pop() || model.name;
-      const name = prompt('预设名称:', shortName);
+      const name = prompt('Preset name:', shortName);
       if (!name) return;
       const fields = _getPanelFields(panel);
       const presets = _loadPresets();
       presets.push({ name, model: model.name, backend, fields });
       _savePresets(presets);
-      uiModule.showToast('预设已保存');
+      uiModule.showToast('Preset saved');
     });
   }
 
@@ -554,7 +554,7 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
   // Also catch zombie "done" tasks — the cookbook may have lost track of a
   // download (server restart, stale state) while its tmux session is still
   // alive on the host. Probe it; if alive, flip back to running + treat as
-  // duplicate so we don't kick off a second concurrent download writing to
+  // duplicate so we don\'t kick off a second concurrent download writing to
   // the same target dir.
   const zombieCandidate = tasks.find(t => sameDownload(t)
     && ['done', 'error', 'crashed', 'stopped'].includes(t.status)
@@ -619,7 +619,7 @@ export async function _runModelDownload(panel, model, backend, hostOverride) {
       return;
     }
     _addTask(data.session_id, taskName, 'download', payload);
-    uiModule.showToast(`下载中 ${taskName}...`);
+    uiModule.showToast(`Downloading ${taskName}...`);
   } catch (e) {
     uiModule.showToast('Download failed: ' + e.message, 9000);
   }

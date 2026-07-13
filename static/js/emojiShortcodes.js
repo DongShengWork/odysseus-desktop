@@ -408,7 +408,7 @@ export const EMOJI_SHORTCODES = {
 
 // `:name:` where name is letters/digits/`_`/`+`/`-`. Length ≥1 so `:+1:` and
 // `:-1:` match. Global + case-insensitive for replace; a separate non-global
-// literal is used for the cheap presence check so there's no shared lastIndex
+// literal is used for the cheap presence check so there\'s no shared lastIndex
 // state to reset.
 const SHORTCODE_RE = /:([a-z0-9_+-]{1,40}):/gi;
 
@@ -439,7 +439,7 @@ function _boundedOnBothSides(str, start, end) {
 
 /**
  * Replace every known `:shortcode:` in `text` with its Unicode emoji. Unknown
- * shortcodes (`:definitely_not_emoji:`), colon runs that don't form a shortcode
+ * shortcodes (`:definitely_not_emoji:`), colon runs that don\'t form a shortcode
  * (`10:30:45`, `16:9`), and known shortcodes embedded mid-token (`1:100:2`) are
  * all left exactly as-is.
  */
@@ -449,7 +449,7 @@ export function replaceEmojiShortcodes(text) {
     const key = name.toLowerCase();
     if (!Object.prototype.hasOwnProperty.call(EMOJI_SHORTCODES, key)) return whole;
     // Only convert when the `:shortcode:` is a standalone token, not glued to a
-    // surrounding word/number (which would mean it's literal text, not an emoji).
+    // surrounding word/number (which would mean it\'s literal text, not an emoji).
     if (!_boundedOnBothSides(str, offset, offset + whole.length)) return whole;
     return EMOJI_SHORTCODES[key];
   });

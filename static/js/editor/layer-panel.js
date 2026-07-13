@@ -1,6 +1,6 @@
 /**
  * Layer panel renderer — rebuilds the right-side layer list from
- * `state.layers` every time it's called. The full row tree per layer:
+ * `state.layers` every time it\'s called. The full row tree per layer:
  *
  *   parent row
  *     [drag handle] [eye] [name] [opacity slider] [FX] [dup] [mask] [merge-down] [×]
@@ -70,7 +70,7 @@ export function createLayerPanelRenderer(deps) {
     const list = document.getElementById('ge-layers-list');
     if (!list) return;
     // Mobile bottom-sheet peek height — header + N rows, capped so a
-    // 20-layer document doesn't get a peek that eats the canvas.
+    // 20-layer document doesn\'t get a peek that eats the canvas.
     const panel = document.querySelector('.ge-right-panel');
     if (panel) {
       requestAnimationFrame(() => {
@@ -90,7 +90,7 @@ export function createLayerPanelRenderer(deps) {
     for (let i = state.layers.length - 1; i >= 0; i--) {
       const layer = state.layers[i];
       const item = document.createElement('div');
-      // Parent row is highlighted ONLY when it's actually the paint
+      // Parent row is highlighted ONLY when it\'s actually the paint
       // target — activated AND no mask sub-layer is currently active.
       const parentIsPaintTarget = layer.id === state.activeLayerId &&
         !(layer.masks && layer.activeMaskId && layer.masks.some(m => m.id === layer.activeMaskId));
@@ -128,14 +128,14 @@ export function createLayerPanelRenderer(deps) {
       // drag-init to this handle so row body clicks still activate.
       const handle = document.createElement('span');
       handle.className = 'ge-layer-drag';
-      handle.title = 'Drag to reorder';
+      handle.title = '拖动重新排序';
       handle.innerHTML = '<svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="2" r="1"/><circle cx="6" cy="2" r="1"/><circle cx="2" cy="7" r="1"/><circle cx="6" cy="7" r="1"/><circle cx="2" cy="12" r="1"/><circle cx="6" cy="12" r="1"/></svg>';
       item.appendChild(handle);
 
       const visBtn = document.createElement('button');
       visBtn.className = 'ge-layer-vis' + (layer.visible ? ' visible' : '');
       visBtn.innerHTML = layer.visible ? EYE_OPEN : EYE_OFF;
-      visBtn.title = layer.visible ? 'Hide layer' : 'Show layer';
+      visBtn.title = layer.visible ? '隐藏图层' : '显示图层';
       visBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         layer.visible = !layer.visible;
@@ -145,7 +145,7 @@ export function createLayerPanelRenderer(deps) {
 
       const nameEl = document.createElement('span');
       nameEl.className = 'ge-layer-name';
-      nameEl.textContent = layer.name + (isLayerEmpty(layer) ? ' (empty)' : '');
+      nameEl.textContent = layer.name + (isLayerEmpty(layer) ? '（空）' : '');
       nameEl.addEventListener('dblclick', () => {
         const input = document.createElement('input');
         input.type = 'text';
@@ -164,7 +164,7 @@ export function createLayerPanelRenderer(deps) {
       opSlider.max = '100';
       opSlider.value = String(Math.round(layer.opacity * 100));
       opSlider.className = 'ge-layer-opacity';
-      opSlider.title = 'Opacity';
+      opSlider.title = '不透明度';
       opSlider.addEventListener('input', (e) => {
         e.stopPropagation();
         layer.opacity = parseInt(e.target.value) / 100;
@@ -190,7 +190,7 @@ export function createLayerPanelRenderer(deps) {
       const fxBtn = document.createElement('button');
       fxBtn.className = 'ge-layer-btn ge-layer-fx-btn' + (layerHasAdjustments(layer) ? ' active' : '');
       fxBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor"/></svg>';
-      fxBtn.title = 'Adjust layer (Brightness, Contrast, Saturation, Hue, Levels, Color Balance)';
+      fxBtn.title = '调整图层（亮度、对比度、饱和度、色相、色阶、色彩平衡）';
       fxBtn.style.touchAction = 'manipulation';
       let lastFxPointerOpenAt = 0;
       let fxOpenTimer = null;
@@ -227,7 +227,7 @@ export function createLayerPanelRenderer(deps) {
       // active.
       const dupBtn = document.createElement('button');
       dupBtn.className = 'ge-layer-btn';
-      dupBtn.title = 'Duplicate layer';
+      dupBtn.title = '复制图层';
       dupBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
       dupBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -282,8 +282,8 @@ export function createLayerPanelRenderer(deps) {
         ((hasLassoSelInitial || hasWandSelInitial) ? ' from-selection' : '');
       maskBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12c4 0 4-4 8-4s4 4 8 4-4 4-8 4-4-4-8-4z" fill="currentColor"/></svg>';
       maskBtn.title = (hasLassoSelInitial || hasWandSelInitial)
-        ? 'Make mask from current selection'
-        : 'Add empty mask (paint with Brush)';
+        ? '从当前选区创建蒙版'
+        : '添加空蒙版（用画笔绘制）';
       maskBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         // Activate this layer first so the new mask attaches here.
@@ -331,7 +331,7 @@ export function createLayerPanelRenderer(deps) {
       if (i > 0) {
         const mergeDownBtn = document.createElement('button');
         mergeDownBtn.className = 'ge-layer-btn';
-        mergeDownBtn.title = 'Merge down into layer below';
+        mergeDownBtn.title = '向下合并到下方图层';
         mergeDownBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg>';
         mergeDownBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -351,13 +351,13 @@ export function createLayerPanelRenderer(deps) {
         const delBtn = document.createElement('button');
         delBtn.className = 'ge-layer-btn danger';
         delBtn.textContent = '×';
-        delBtn.title = layer.isBase ? 'Delete original layer (Ctrl+Z to undo)' : 'Delete layer';
+        delBtn.title = layer.isBase ? '删除原始图层（Ctrl+Z 撤销）' : '删除图层';
         delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           if (layer.isBase && uiModule?.styledConfirm) {
             const ok = await uiModule.styledConfirm(
-              'Delete the original photo layer? Ctrl+Z brings it back.',
-              { confirmText: 'Delete', cancelText: 'Cancel', danger: true }
+              '删除原始照片图层？Ctrl+Z 可恢复。',
+              { confirmText: '删除', cancelText: '取消', danger: true }
             );
             if (!ok) return;
           }
@@ -403,7 +403,7 @@ export function createLayerPanelRenderer(deps) {
           const sVis = document.createElement('button');
           sVis.className = 'ge-layer-vis' + (adj.visible ? ' visible' : '');
           sVis.innerHTML = adj.visible ? EYE_OPEN_SM : EYE_OFF_SM;
-          sVis.title = adj.visible ? 'Hide adjustment' : 'Show adjustment';
+          sVis.title = adj.visible ? '隐藏调整' : '显示调整';
           sVis.addEventListener('click', (e) => {
             e.stopPropagation();
             adj.visible = !adj.visible;
@@ -419,7 +419,7 @@ export function createLayerPanelRenderer(deps) {
           sOp.min = '0'; sOp.max = '100';
           sOp.value = Math.round(adj.opacity * 100);
           sOp.className = 'ge-layer-opacity';
-          sOp.title = 'Adjustment opacity';
+          sOp.title = '调整不透明度';
           sOp.addEventListener('input', () => {
             adj.opacity = parseInt(sOp.value, 10) / 100;
             layer._adjFinalKey = null;
@@ -429,7 +429,7 @@ export function createLayerPanelRenderer(deps) {
           sControls.className = 'ge-layer-controls';
           const mergeBtn = document.createElement('button');
           mergeBtn.className = 'ge-layer-btn';
-          mergeBtn.title = 'Merge into layer (bake)';
+          mergeBtn.title = '合并到图层（固化）';
           mergeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
           mergeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -447,7 +447,7 @@ export function createLayerPanelRenderer(deps) {
           const delBtn = document.createElement('button');
           delBtn.className = 'ge-layer-btn danger';
           delBtn.textContent = '×';
-          delBtn.title = 'Delete adjustment';
+          delBtn.title = '删除调整';
           delBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             saveState(`Delete ${adjLayerLabel(adj.type)}`);
@@ -490,7 +490,7 @@ export function createLayerPanelRenderer(deps) {
           const sVis = document.createElement('button');
           sVis.className = 'ge-layer-vis' + (mk.visible ? ' visible' : '');
           sVis.innerHTML = mk.visible ? EYE_OPEN_SM : EYE_OFF_SM;
-          sVis.title = mk.visible ? 'Hide mask' : 'Show mask';
+          sVis.title = mk.visible ? '隐藏蒙版' : '显示蒙版';
           sVis.addEventListener('click', (e) => {
             e.stopPropagation();
             mk.visible = !mk.visible;
@@ -501,7 +501,7 @@ export function createLayerPanelRenderer(deps) {
           sName.className = 'ge-layer-name ge-adj-sub-name';
           const maskIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12c4 0 4-4 8-4s4 4 8 4-4 4-8 4-4-4-8-4z" fill="currentColor"/></svg>';
           const mkName = String(mk.name || 'Mask').replace(/[<>&]/g, '');
-          const mkEmpty = isMaskCanvasEmpty(mk.canvas) ? ' <span style="opacity:0.55;">(empty)</span>' : '';
+          const mkEmpty = isMaskCanvasEmpty(mk.canvas) ? ' <span style="opacity:0.55;">（空）</span>' : '';
           sName.innerHTML = `<span class="ge-adj-sub-icon">${maskIcon}</span><span>${mkName}${mkEmpty}</span>`;
           const sControls = document.createElement('div');
           sControls.className = 'ge-layer-controls';
@@ -509,7 +509,7 @@ export function createLayerPanelRenderer(deps) {
           if (mi > 0) {
             const mergeBtn = document.createElement('button');
             mergeBtn.className = 'ge-layer-btn';
-            mergeBtn.title = 'Merge into mask above';
+            mergeBtn.title = '合并到上方蒙版';
             mergeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>';
             mergeBtn.addEventListener('click', (e) => {
               e.stopPropagation();
@@ -535,7 +535,7 @@ export function createLayerPanelRenderer(deps) {
           const delBtn = document.createElement('button');
           delBtn.className = 'ge-layer-btn danger';
           delBtn.textContent = '×';
-          delBtn.title = 'Delete mask';
+          delBtn.title = '删除蒙版';
           delBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             saveState(`Delete mask "${mk.name}"`);

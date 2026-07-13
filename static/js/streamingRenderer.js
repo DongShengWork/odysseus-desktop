@@ -11,7 +11,7 @@
 //     [ finalized block, frozen ][ finalized block, frozen ] <!--tail--> [ live tail ]
 //
 //   - Finalized blocks are rendered once and never touched again — so code-block
-//     hover buttons can't flicker and code is highlighted exactly once.
+//     hover buttons can\'t flicker and code is highlighted exactly once.
 //   - The live tail (the still-growing trailing block) is re-rendered each token,
 //     except an open code fence, which streams in append-mode (text appended to a
 //     stable <pre>, highlighted once when it closes).
@@ -182,7 +182,7 @@ export function createStreamRenderer(contentEl, { render, hljs } = {}) {
   // Stream finished: freeze whatever is left canonically and flatten away the
   // marker so the container holds exactly what a single full render would produce.
   // chat.js currently re-renders the finished message from source for its own
-  // reasons and so doesn't call this, but it completes the renderer's lifecycle and
+  // reasons and so doesn\'t call this, but it completes the renderer's lifecycle and
   // is exercised by the tests.
   function finalize() {
     if (degraded) return;

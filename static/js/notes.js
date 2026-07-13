@@ -10,7 +10,8 @@ import { attachColorPicker } from './colorPicker.js';
 import { makeWindowDraggable } from './windowDrag.js';
 import { snapModalToZone } from './tileManager.js';
 import { applyEdgeDock, clearDockSide } from './modalSnap.js';
-import { topToolWindowZ } from './toolWindowZOrder.js';
+import { topToolWindowZ, topPortalZ } from './toolWindowZOrder.js';
+import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
 
 const API_BASE = window.location.origin;
 let _open = false;
@@ -44,7 +45,7 @@ const REMINDER_GLOWED_KEY = 'odysseus-notes-reminder-glowed';
 const REMINDER_PENDING_HIGHLIGHT_KEY = 'odysseus-notes-reminder-pending-highlight';
 const REMINDER_ACTIVE_HIGHLIGHT_KEY = 'odysseus-notes-reminder-active-highlight';
 // Timestamp of the last time the user opened the notes panel — used to gate
-// the rail "fired" badge so old reminders don't re-fire on every page reload.
+// the rail "fired" badge so old reminders don\'t re-fire on every page reload.
 const REMINDER_DISMISSED_AT_KEY = 'odysseus-notes-reminder-dismissed-at';
 const NOTES_FIRST_OPEN_HINT_KEY = 'odysseus-notes-first-open-hint-v1';
 
@@ -88,8 +89,8 @@ function _showNotesFirstOpenHint(pane) {
   hint.id = 'notes-first-open-hint';
   hint.className = 'tour-hint';
   hint.innerHTML = `
-    <div class="tour-hint-text"><b>Notes</b> is your basic todo list, and also where reminders are managed.</div>
-    <button type="button" class="tour-hint-dismiss">OK</button>
+    <div class="tour-hint-text"><b>笔记</b>是您的基础待办清单，也是管理提醒的地方。</div>
+    <button type="button" class="tour-hint-dismiss">好的</button>
   `;
   document.body.appendChild(hint);
 
@@ -255,7 +256,7 @@ function _setReminderCardGlow(noteId, on = true) {
   });
 }
 // A note has an active reminder when its due time has passed and the user
-// hasn't archived or fully completed it. Used for both sorting (bumped above
+// hasn\'t archived or fully completed it. Used for both sorting (bumped above
 // the rest of the unpinned section) and the entry-glow flush.
 function _hasActiveReminder(n) {
   if (!n || n.archived || _isNoteFullyDone(n)) return false;
@@ -280,7 +281,7 @@ function _flushPendingHighlights() {
   const glowed = _loadGlowedReminders();
   const toGlow = new Set(queued);
   // For notes that are merely overdue at open time (no fresh firing event),
-  // only glow the ones we haven't already shown — otherwise reopening the
+  // only glow the ones we haven\'t already shown — otherwise reopening the
   // panel keeps lighting up old reminders forever.
   for (const n of _notes) {
     if (!_hasActiveReminder(n) || !_hasTimeComponent(n.due_date)) continue;
@@ -298,7 +299,7 @@ function _flushPendingHighlights() {
     glowed.add(id);
   }
   _saveGlowedReminders(glowed);
-  // Bring the first one into view so it can't get buried below the fold.
+  // Bring the first one into view so it can\'t get buried below the fold.
   if (firstCard) {
     requestAnimationFrame(() => {
       try { firstCard.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
@@ -471,8 +472,8 @@ function _attrEsc(s) {
     .replace(/>/g, '&gt;')
     .replace(/`/g, '&#96;');
 }
-// Image src guard — reject anything that isn't a relative path, http(s), or
-// raster data URL so an AI-saved note can't slip script-capable media into the
+// Image src guard — reject anything that isn\'t a relative path, http(s), or
+// raster data URL so an AI-saved note can\'t slip script-capable media into the
 // rendered <img>.
 function _safeImgSrc(s) {
   const v = (s || '').trim();
@@ -490,7 +491,7 @@ function _linkify(s) {
   const urlRe = /\b((?:https?:\/\/|www\.)[^\s<>"']+[^\s<>"'.,;:!?\]])/g;
   return escaped.replace(urlRe, (m) => {
     let url = m;
-    // Trim a trailing ')' that doesn't have a matching '(' inside the URL
+    // Trim a trailing ')' that doesn\'t have a matching '(' inside the URL
     if (url.endsWith(')') && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) {
       url = url.slice(0, -1);
     }
@@ -544,8 +545,8 @@ function _wireNotesSwipeDismiss(el, pane) {
     pane.style.willChange = '';
     const dy = lastY - startY;
     if (dy > DISMISS_THRESHOLD || (dy > 20 && velocity > VELOCITY_THRESHOLD)) {
-      // Slide fully off-screen, then minimise. Keep it translated down (don't
-      // reset) so it doesn't flash back before closePanel removes it.
+      // Slide fully off-screen, then minimise. Keep it translated down (don\'t
+      // reset) so it doesn\'t flash back before closePanel removes it.
       pane.style.transition = 'transform 0.2s cubic-bezier(0.2, 0, 0.4, 1)';
       pane.style.transform = 'translateY(100%)';
       setTimeout(() => closePanel('down'), 200);
@@ -682,7 +683,7 @@ function _isLastWeekdayOfMonth(d) {
   return test.getMonth() !== d.getMonth();
 }
 // Find the Nth occurrence of `weekday` in a given year/month. n=1..5.
-// If n=5 and there's no 5th occurrence, returns the 4th (so "5th Monday" still works).
+// If n=5 and there\'s no 5th occurrence, returns the 4th (so "5th Monday" still works).
 function _nthWeekdayOfMonth(year, month, weekday, n) {
   const first = new Date(year, month, 1);
   const offset = (weekday - first.getDay() + 7) % 7;
@@ -700,8 +701,8 @@ function _lastWeekdayOfMonth(year, month, weekday) {
 
 // Snap a chosen datetime forward to the next slot matching a normalized
 // recurrence pattern (preserving time-of-day, strictly in the future).
-// Anchors to the user's chosen date when it's in the future (so picking a
-// recurrence on a far-future date doesn't drag it back to today); otherwise
+// Anchors to the user's chosen date when it\'s in the future (so picking a
+// recurrence on a far-future date doesn\'t drag it back to today); otherwise
 // anchors to "now". Returns null for daily/yearly/none.
 function _snapToRepeat(currentDate, normRepeat) {
   const hh = currentDate.getHours();
@@ -912,7 +913,7 @@ function _checkReminders() {
         if (next) {
           note.due_date = next;
           _patchNote(note.id, { due_date: next }).catch(() => {});
-          // Don't add to fired — new due_date is in the future
+          // Don\'t add to fired — new due_date is in the future
           continue;
         }
       }
@@ -1049,7 +1050,7 @@ export function dismissFiredReminderDot() {
 function _updateRailBadge() {
   const fired = _countFiredReminders();
   // Rail (mini sidebar) — only show the count when reminders have ACTUALLY
-  // fired since the last dismissal (i.e. you haven't opened notes yet).
+  // fired since the last dismissal (i.e. you haven\'t opened notes yet).
   // Showing every overdue note forever made the badge feel permanent.
   const railBtn = document.getElementById('rail-notes');
   if (railBtn) {
@@ -1131,7 +1132,7 @@ export function openPanel() {
   document.body.classList.add('notes-view');
 
   // On mobile the notes panel takes the whole screen — auto-close the
-  // sidebar so the panel isn't cropped underneath it.
+  // sidebar so the panel isn\'t cropped underneath it.
   if (window.innerWidth <= 768) {
     const sb = document.getElementById('sidebar');
     if (sb) sb.classList.add('hidden');
@@ -1154,31 +1155,31 @@ export function openPanel() {
   pane.innerHTML = `
     <div class="notes-mobile-grabber" id="notes-mobile-grabber" aria-hidden="true"></div>
     <div class="notes-pane-header">
-      <h4 class="notes-pane-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2.5px;margin-right:6px"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h5"/><path d="M8 17.5 15.5 10l2.5 2.5L10.5 20H8z"/></svg>Notes</h4>
+      <h4 class="notes-pane-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2.5px;margin-right:6px"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h5"/><path d="M8 17.5 15.5 10l2.5 2.5L10.5 20H8z"/></svg>笔记</h4>
       <span style="flex:1"></span>
-      <button id="notes-archive-toggle" class="doc-action-icon-btn notes-header-text-btn" title="View archive" style="opacity:0.8;gap:5px;">
+      <button id="notes-archive-toggle" class="doc-action-icon-btn notes-header-text-btn" title="查看归档" style="opacity:0.8;gap:5px;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8"/><path d="M10 12h4"/></svg>
-        <span class="notes-header-btn-label">Archive</span>
+        <span class="notes-header-btn-label">归档</span>
       </button>
-      <button id="notes-view-toggle" class="doc-action-icon-btn notes-header-text-btn" title="Toggle view" style="opacity:0.8;gap:5px;">
+      <button id="notes-view-toggle" class="doc-action-icon-btn notes-header-text-btn" title="切换视图" style="opacity:0.8;gap:5px;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        <span class="notes-header-btn-label">Toggle</span>
+        <span class="notes-header-btn-label">切换</span>
       </button>
-      <button id="notes-minimize-btn" class="modal-minimize-btn" title="Minimize" aria-label="Minimize notes" style="position:relative;left:2px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="18" x2="18" y2="18"/></svg></button>
+      <button id="notes-minimize-btn" class="modal-minimize-btn" title="最小化" aria-label="最小化笔记" style="position:relative;left:2px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="18" x2="18" y2="18"/></svg></button>
     </div>
     <div class="notes-search-bar">
-      <input type="text" id="notes-search" class="memory-search-input" placeholder="Search notes…" autocomplete="off" />
-      <button id="notes-select-btn" class="notes-select-trigger" type="button">Select</button>
+      <input type="text" id="notes-search" class="memory-search-input" placeholder="搜索笔记…" autocomplete="off" />
+      <button id="notes-select-btn" class="notes-select-trigger" type="button">选择</button>
     </div>
     <div id="notes-bulk-bar" class="memory-bulk-bar hidden">
-      <label class="memory-bulk-check-all"><input type="checkbox" id="notes-select-all" /> All</label>
-      <span id="notes-selected-count">0 Selected</span>
+      <label class="memory-bulk-check-all"><input type="checkbox" id="notes-select-all" /> 全选</label>
+      <span id="notes-selected-count">0 已选择</span>
       <span style="flex:1"></span>
       <button id="notes-bulk-archive" class="memory-toolbar-btn" disabled>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8"/><path d="M10 12h4"/></svg>Archive
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8"/><path d="M10 12h4"/></svg>归档
       </button>
       <button id="notes-bulk-delete" class="memory-toolbar-btn danger" disabled>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>Delete
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>删除
       </button>
     </div>
     <div class="notes-pane-body"></div>
@@ -1186,7 +1187,7 @@ export function openPanel() {
 
   // On mobile open as a full-screen bottom sheet (slide up), not the desktop
   // side panel. Set inline so it wins over the base .notes-pane rule regardless
-  // of cascade specifics (the CSS @media override wasn't reliably applying,
+  // of cascade specifics (the CSS @media override wasn\'t reliably applying,
   // which left it as a side panel squeezing the chat).
   if (window.innerWidth <= 768) {
     pane.style.position = 'fixed';
@@ -1243,16 +1244,16 @@ export function openPanel() {
   // View toggle
   const archiveBtn = document.getElementById('notes-archive-toggle');
   if (archiveBtn) {
-    const ARCHIVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8"/><path d="M10 12h4"/></svg><span class="notes-header-btn-label">Archive</span>';
-    const CLOSE_ICON   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg><span class="notes-header-btn-label">Archive</span>';
+    const ARCHIVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8"/><path d="M10 12h4"/></svg><span class="notes-header-btn-label">归档</span>';
+    const CLOSE_ICON   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg><span class="notes-header-btn-label">归档</span>';
     const syncArchiveBtn = () => {
       archiveBtn.classList.toggle('active', _showingArchived);
-      archiveBtn.title = _showingArchived ? 'Exit archive' : 'View archive';
+      archiveBtn.title = _showingArchived ? '退出归档' : '查看归档';
       archiveBtn.style.opacity = _showingArchived ? '1' : '0.8';
       // Swap to an X while in archive view so it doubles as a close-back-
       // to-active-notes toggle.
       archiveBtn.innerHTML = _showingArchived ? CLOSE_ICON : ARCHIVE_ICON;
-      // Tint the whole pane so it's obvious you're not in the active list.
+      // Tint the whole pane so it\'s obvious you\'re not in the active list.
       pane.classList.toggle('notes-pane-archive', _showingArchived);
     };
     syncArchiveBtn();
@@ -1260,7 +1261,7 @@ export function openPanel() {
       _showingArchived = !_showingArchived;
       _selectedIds.clear();
       syncArchiveBtn();
-      // Brief fade so the body content swap doesn't snap — the bg-tint
+      // Brief fade so the body content swap doesn\'t snap — the bg-tint
       // change is already eased by CSS transitions on .notes-pane*.
       const _bodyEl = document.querySelector('#notes-pane .notes-pane-body');
       if (_bodyEl) {
@@ -1280,7 +1281,7 @@ export function openPanel() {
   const viewBtn = document.getElementById('notes-view-toggle');
   if (viewBtn) {
     pane.classList.toggle('notes-view-grid', _viewMode === 'grid');
-    // Label shows what you'll switch TO — "Grid" while in list, "List" while in grid.
+    // Label shows what you\'ll switch TO — "Grid" while in list, "List" while in grid.
     const _setViewLabel = () => {
       const lbl = viewBtn.querySelector('.notes-header-btn-label');
       if (lbl) lbl.textContent = _viewMode === 'grid' ? 'List' : 'Grid';
@@ -1301,7 +1302,7 @@ export function openPanel() {
   });
   // Esc cancels select mode. Notes uses a toggle "Select" button rather
   // than a *-bulk-cancel button, so the global Esc-cancel handler in
-  // keyboard-shortcuts.js can't reach it — handle it here. Capture phase
+  // keyboard-shortcuts.js can\'t reach it — handle it here. Capture phase
   // + stopPropagation so Esc cancels select instead of closing the panel.
   if (_notesSelectEscHandler) {
     document.removeEventListener('keydown', _notesSelectEscHandler, true);
@@ -1333,7 +1334,7 @@ export function openPanel() {
     const ids = [..._selectedIds];
     if (!ids.length) return;
     if (uiModule && uiModule.styledConfirm) {
-      const ok = await uiModule.styledConfirm(`Delete ${ids.length} note${ids.length === 1 ? '' : 's'}?`, { confirmText: 'Delete', danger: true });
+      const ok = await uiModule.styledConfirm(`确定删除 ${ids.length} 个笔记？`, { confirmText: '删除', danger: true });
       if (!ok) return;
     }
     await Promise.all(ids.map(id => _deleteNoteApi(id).catch(() => {})));
@@ -1344,10 +1345,10 @@ export function openPanel() {
   });
   // Escape: exit select mode first (if active), otherwise close the panel.
   // Skip when the user is editing a form field — those have their own
-  // ESC-to-cancel handlers and we don't want to nuke the whole panel
+  // ESC-to-cancel handlers and we don\'t want to nuke the whole panel
   // mid-edit.
   // Idempotent: remove any previous handler from a prior openPanel so
-  // re-opening doesn't stack multiple handlers.
+  // re-opening doesn\'t stack multiple handlers.
   if (_notesKeydownHandler) {
     document.removeEventListener('keydown', _notesKeydownHandler);
     _notesKeydownHandler = null;
@@ -1442,7 +1443,7 @@ function _exitSelectMode() {
   const btn = document.getElementById('notes-select-btn');
   const all = document.getElementById('notes-select-all');
   if (bar) bar.classList.add('hidden');
-  if (btn) { btn.classList.remove('active'); btn.textContent = '选择'; }
+  if (btn) { btn.classList.remove('active'); btn.textContent = 'Select'; }
   if (all) all.checked = false;
   _renderNotes();
 }
@@ -1457,7 +1458,7 @@ function _updateBulkBar() {
   if (archiveBtn) archiveBtn.disabled = count === 0;
   if (deleteBtn) deleteBtn.disabled = count === 0;
   if (allEl) allEl.checked = _notes.length > 0 && _notes.every(n => _selectedIds.has(n.id));
-  // Toggle select-mode class so todo dots don't react to hover
+  // Toggle select-mode class so todo dots don\'t react to hover
   const pane = document.getElementById('notes-pane');
   if (pane) pane.classList.toggle('notes-select-mode', count > 0);
 }
@@ -1483,17 +1484,17 @@ function _isPastReminder(n) {
 async function _clearPastReminders() {
   const targets = _notes.filter(n => !n.archived && _isPastReminder(n));
   if (!targets.length) {
-    uiModule.showToast?.('没有可清除的过往提醒');
+    uiModule.showToast?.('没有过去的提醒可清除');
     return;
   }
   const ok = uiModule?.styledConfirm
-    ? await uiModule.styledConfirm(`Delete ${targets.length} past reminder${targets.length === 1 ? '' : 's'}?`, { confirmText: 'Delete', danger: true })
-    : confirm(`Delete ${targets.length} past reminder${targets.length === 1 ? '' : 's'}?`);
+    ? await uiModule.styledConfirm(`确定删除 ${targets.length} 个过去的提醒？`, { confirmText: '删除', danger: true })
+    : confirm(`确定删除 ${targets.length} 个过去的提醒？`);
   if (!ok) return;
   await Promise.all(targets.map(n => _deleteNoteApi(n.id).catch(() => {})));
   await _fetchNotes();
   _renderNotes();
-  uiModule.showToast?.(`Cleared ${targets.length} past reminder${targets.length === 1 ? '' : 's'}`);
+  uiModule.showToast?.(`已清除 ${targets.length} 个过去的提醒`);
 }
 
 function _renderLabels(root = document) {
@@ -1512,17 +1513,17 @@ function _renderLabels(root = document) {
   const todayCount = _notes.filter(n => n.note_type === 'goal' && !n.archived && _nextGoalStep(n)).length;
   bar.style.display = '';
   const allActive = _activeLabel === null && _activeFilter === null;
-  let html = `<button class="notes-label-chip${allActive ? ' active' : ''}" data-action="all">全部</button>`;
-  html += `<button class="notes-label-chip${_activeFilter === 'default' ? ' active' : ''}" data-action="default" title="Show notes without tags">Default <span class="notes-label-chip-count">${defaultCount}</span></button>`;
+  let html = `<button class="notes-label-chip${allActive ? ' active' : ''}" data-action="all">All</button>`;
+  html += `<button class="notes-label-chip${_activeFilter === 'default' ? ' active' : ''}" data-action="default" title="显示无标签的笔记">默认 <span class="notes-label-chip-count">${defaultCount}</span></button>`;
   if (todayCount > 0) {
     const isOn = _activeFilter === 'today';
     const icon = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-    html += `<button class="notes-label-chip notes-label-chip-today${isOn ? ' active' : ''}" data-action="today" title="Next step from every goal">${icon}Today <span class="notes-label-chip-count">${todayCount}</span></button>`;
+    html += `<button class="notes-label-chip notes-label-chip-today${isOn ? ' active' : ''}" data-action="today" title="每个目标的下一步">${icon}今天 <span class="notes-label-chip-count">${todayCount}</span></button>`;
   }
   if (goalCount > 0) {
     const isOn = _activeFilter === 'goals';
     const icon = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:2px"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>';
-    html += `<button class="notes-label-chip notes-label-chip-goals${isOn ? ' active' : ''}" data-action="goals" title="Show only goals">${icon}Goals <span class="notes-label-chip-count">${goalCount}</span></button>`;
+    html += `<button class="notes-label-chip notes-label-chip-goals${isOn ? ' active' : ''}" data-action="goals" title="仅显示目标">${icon}目标 <span class="notes-label-chip-count">${goalCount}</span></button>`;
   }
   const isReminderOn = _activeFilter === 'reminders';
   const isReminderOff = _activeFilter === 'no-reminders';
@@ -1531,10 +1532,10 @@ function _renderLabels(root = document) {
     // bell-off icon
     ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
     : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
-  html += `<button class="${reminderCls}" data-action="reminders" title="${isReminderOn ? 'Showing only reminders — click to show all' : isReminderOff ? 'Hiding reminders — click to show only reminders' : 'Click to filter reminders'}">${reminderIcon}Reminders <span class="notes-label-chip-count">${reminderCount}</span></button>`;
+  html += `<button class="${reminderCls}" data-action="reminders" title="${isReminderOn ? '仅显示提醒 — 点击显示全部' : isReminderOff ? '隐藏提醒 — 点击仅显示提醒' : '点击筛选提醒'}">${reminderIcon}提醒 <span class="notes-label-chip-count">${reminderCount}</span></button>`;
   const showingReminders = _activeFilter === 'reminders';
   if (showingReminders && pastReminderCount > 0) {
-    html += `<button class="notes-label-chip notes-label-clear-past" data-action="clear-past-reminders" title="Delete reminders whose time has passed"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Clear past <span class="notes-label-chip-count">${pastReminderCount}</span></button>`;
+    html += `<button class="notes-label-chip notes-label-clear-past" data-action="clear-past-reminders" title="删除已过期的提醒"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>清除过期 <span class="notes-label-chip-count">${pastReminderCount}</span></button>`;
   }
   for (const lbl of sortedLabels) {
     html += `<button class="notes-label-chip${_activeLabel === lbl ? ' active' : ''}" data-label="${_esc(lbl)}">#${_esc(lbl)}</button>`;
@@ -1652,7 +1653,7 @@ export function closePanel(direction) {
     };
     pane.addEventListener('animationend', _cleanup, { once: true });
     // Belt-and-braces: if animation is skipped (reduced motion / detached
-    // tab) the listener won't fire; remove after the expected duration.
+    // tab) the listener won\'t fire; remove after the expected duration.
     setTimeout(_cleanup, 220);
   } else if (backdrop) {
     backdrop.remove();
@@ -1785,9 +1786,9 @@ function _renderNotes() {
         if (!next) continue;
         const progress = _goalProgress(note).trim();
         todayHtml += `<div class="notes-today-row" data-note-id="${note.id}">
-          <span class="note-check-dot" data-note-id="${note.id}" data-idx="${next.idx}" title="Mark step done"></span>
+          <span class="note-check-dot" data-note-id="${note.id}" data-idx="${next.idx}" title="标记步骤完成"></span>
           <div class="notes-today-text">
-            <div class="notes-today-title" data-action="edit" data-note-id="${note.id}">${_esc(note.title || '(untitled goal)')}</div>
+            <div class="notes-today-title" data-action="edit" data-note-id="${note.id}">${_esc(note.title || '(无标题目标)')}</div>
             <div class="notes-today-step">${_linkify(next.item.text || '')}</div>
           </div>
           <span class="notes-today-progress">${_esc(progress)}</span>
@@ -1816,7 +1817,7 @@ function _renderNotes() {
       }
       contentHtml += '<div class="note-checklist-preview">';
       // Show ALL items — the preview container is scrollable (CSS caps
-      // its max-height + overflow-y:auto), so there's no need to truncate.
+      // its max-height + overflow-y:auto), so there\'s no need to truncate.
       for (let i = 0; i < note.items.length; i++) {
         const item = note.items[i];
         const doneClass = item.done ? ' done' : '';
@@ -1829,12 +1830,15 @@ function _renderNotes() {
         const agentMenuTitle = item.agent_session_title || `Agent: ${(item.text || '').slice(0, 40)}`;
         const indent = Math.min(item.indent || 0, 3);
         contentHtml += `<div class="note-checkbox${doneClass}" data-note-id="${note.id}" data-idx="${i}" style="padding-left:${indent * 16}px">
-          <span class="note-check-dot" title="Mark done"></span>
+          <span class="note-check-dot" title="标记完成"></span>
           <span class="note-check-text">${_linkify(item.text)}</span>
           <button class="note-checkbox-agent${agentDoneClass}" data-note-id="${_attrEsc(note.id)}" data-idx="${i}"${agentSessionAttr} data-agent-title="${_attrEsc(agentMenuTitle)}" title="${_attrEsc(agentTitle)}">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>
           </button>
-          <button class="note-checkbox-rm" data-note-id="${note.id}" data-idx="${i}" title="Delete item">
+          <button class="note-checkbox-edit" data-note-id="${note.id}" data-idx="${i}" title="编辑项目">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="note-checkbox-rm" data-note-id="${note.id}" data-idx="${i}" title="删除项目">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>`;
@@ -1864,28 +1868,28 @@ function _renderNotes() {
     const goalClass = note.note_type === 'goal' ? ' note-card-goal' : '';
     const reminderGlowClass = activeReminderHighlights.has(note.id) && _hasActiveReminder(note) ? ' note-card-reminder-fired-sticky' : '';
     const goalPill = note.note_type === 'goal'
-      ? `<span class="note-goal-pill" title="AI-broken-down goal">
+      ? `<span class="note-goal-pill" title="AI 拆解的目标">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0L14.59 8.41L23 12L14.59 15.59L12 24L9.41 15.59L1 12L9.41 8.41Z"/></svg>
-          Goal${_goalProgress(note)}
+          目标${_goalProgress(note)}
         </span>`
       : '';
     html += `<div class="note-card${note.pinned ? ' note-card-pinned' : ''}${cc}${sel}${goalClass}${reminderGlowClass}${_selectMode ? ' note-card-selectmode' : ''}" draggable="${(_selectMode || _isNotesMobileMode()) ? 'false' : 'true'}" data-note-id="${note.id}"${cardStyle}>
       ${_selectMode ? `<input type="checkbox" class="memory-select-cb note-card-cb" data-note-id="${note.id}" ${_selectedIds.has(note.id) ? 'checked' : ''} />` : ''}
       ${goalPill}
-      <button class="note-card-pin${note.pinned ? ' active' : ''}" data-note-id="${note.id}" title="${note.pinned ? 'Unpin' : 'Pin'}">
+      <button class="note-card-pin${note.pinned ? ' active' : ''}" data-note-id="${note.id}" title="${note.pinned ? '取消置顶' : '置顶'}">
         <svg width="16" height="16" viewBox="0 0 24 28" fill="${note.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${note.pinned ? ' style="color:var(--accent,var(--red));"' : ''}><g transform="rotate(${note.pinned ? 0 : 45} 12 14)" style="transition:transform 0.2s ease;"><line x1="12" y1="17" x2="12" y2="27"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/></g></svg>
       </button>
       ${_showingArchived
-        ? `<button class="note-card-corner-trash" data-note-id="${note.id}" title="Delete forever" aria-label="Delete forever">
+        ? `<button class="note-card-corner-trash" data-note-id="${note.id}" title="永久删除" aria-label="永久删除">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
           </button>
-          <button class="note-card-corner-unarchive" data-note-id="${note.id}" title="Unarchive" aria-label="Unarchive note">
+          <button class="note-card-corner-unarchive" data-note-id="${note.id}" title="取消归档" aria-label="取消归档笔记">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-5-5 5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>
           </button>`
-        : `<button class="note-card-done" data-note-id="${note.id}" title="Mark done" aria-label="Mark done">
+        : `<button class="note-card-done" data-note-id="${note.id}" title="标记完成" aria-label="标记完成">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
-          ${_hasItems(note) ? `<button class="note-card-copy note-card-copy-corner" data-note-id="${note.id}" title="Copy all items" aria-label="Copy all items">
+          ${_hasItems(note) ? `<button class="note-card-copy note-card-copy-corner" data-note-id="${note.id}" title="复制所有项目" aria-label="复制所有项目">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           </button>` : ''}`}
       <div class="note-card-header">
@@ -1894,30 +1898,30 @@ function _renderNotes() {
       </div>
       ${_safeImgSrc(note.image_url) ? `<img class="note-card-image" src="${_esc(_safeImgSrc(note.image_url))}" alt="" draggable="false" />` : ''}
       ${contentHtml}
-      ${_hasItems(note) ? `<div class="note-cl-quickadd"><input type="text" class="note-cl-quickadd-input" placeholder="+ Add item" data-note-id="${note.id}" /></div>` : ''}
+      ${_hasItems(note) ? `<div class="note-cl-quickadd"><input type="text" class="note-cl-quickadd-input" placeholder="+ 添加项目" data-note-id="${note.id}" /></div>` : ''}
       ${reminderTagHtml}
-      ${noteTags.length ? `<div class="note-card-label">${noteTags.map(t => `<button type="button" class="note-card-label-chip" data-note-label-filter="${_esc(t)}" title="Filter #${_esc(t)}">#${_esc(t)}</button>`).join(' ')}</div>` : ''}
+      ${noteTags.length ? `<div class="note-card-label">${noteTags.map(t => `<button type="button" class="note-card-label-chip" data-note-label-filter="${_esc(t)}" title="筛选 #${_esc(t)}">#${_esc(t)}</button>`).join(' ')}</div>` : ''}
       <div class="note-card-actions">
         <div class="note-card-colors">${colorDots}</div>
         <span style="flex:1"></span>
         ${_showingArchived ? `
-        <button class="note-card-action note-card-delete" data-note-id="${note.id}" title="Delete permanently">
+        <button class="note-card-action note-card-delete" data-note-id="${note.id}" title="永久删除">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
         </button>
-        <button class="note-card-action note-card-unarchive" data-note-id="${note.id}" title="Unarchive">
+        <button class="note-card-action note-card-unarchive" data-note-id="${note.id}" title="取消归档">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/></svg>
         </button>` : `
         ${_hasItems(note) ? `
-        <button class="note-card-action note-card-copy" data-note-id="${note.id}" title="Copy all items">
+        <button class="note-card-action note-card-copy" data-note-id="${note.id}" title="复制所有项目">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>` : ''}
-        <button class="note-card-action note-card-archive" data-note-id="${note.id}" title="Save (archive)">
+        <button class="note-card-action note-card-archive" data-note-id="${note.id}" title="保存（归档）">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         </button>
-        <button class="note-card-action note-card-delete" data-note-id="${note.id}" title="Delete">
+        <button class="note-card-action note-card-delete" data-note-id="${note.id}" title="删除">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
-        <button class="note-card-action note-card-corner-menu" data-note-id="${note.id}" title="More" aria-label="More actions">
+        <button class="note-card-action note-card-corner-menu" data-note-id="${note.id}" title="更多" aria-label="更多操作">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
         </button>`}
       </div>
@@ -1997,7 +2001,7 @@ function _applyMasonry(body) {
   const recompute = (card) => {
     // scrollHeight returns the natural content height — card.getBoundingClientRect()
     // would return the grid cell height (collapsed to 4px until the span is set,
-    // which is the value we're trying to compute).
+    // which is the value we\'re trying to compute).
     const h = card.scrollHeight + (isMobileGrid ? 6 : 8);
     if (h <= 0) return;
     card.style.gridRowEnd = `span ${spanForHeight(h)}`;
@@ -2067,19 +2071,19 @@ function _renderQuickAdd(body) {
   const wrap = document.createElement('div');
   wrap.className = 'notes-quick-add';
   // 2-pill Note/Todo toggle mirrors the full form's type-seg (minus Draw —
-  // drawing happens in the expanded form). The pill that's active steers
+  // drawing happens in the expanded form). The pill that\'s active steers
   // both the placeholder and the type the form opens in.
   wrap.innerHTML = `
-    <div class="notes-quick-type-seg is-todo" role="group" aria-label="New item type">
-      <button type="button" class="notes-quick-type-pill" data-type="note" aria-label="Note" aria-pressed="false" title="Note">
+    <div class="notes-quick-type-seg is-todo" role="group" aria-label="新项目类型">
+      <button type="button" class="notes-quick-type-pill" data-type="note" aria-label="笔记" aria-pressed="false" title="笔记">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
       </button>
-      <button type="button" class="notes-quick-type-pill active" data-type="todo" aria-label="To-do" aria-pressed="true" title="To-do">
+      <button type="button" class="notes-quick-type-pill active" data-type="todo" aria-label="待办" aria-pressed="true" title="待办">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       </button>
     </div>
-    <input type="text" class="notes-quick-input" placeholder="Add a to-do…" />
-    <button class="notes-quick-icon" data-action="photo" title="Attach photo">
+    <input type="text" class="notes-quick-input" placeholder="添加待办…" />
+    <button class="notes-quick-icon" data-action="photo" title="附加照片">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
     </button>
   `;
@@ -2098,7 +2102,7 @@ function _renderQuickAdd(body) {
       p.classList.toggle('active', on);
       p.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
-    input.placeholder = t === 'note' ? 'Add a note…' : 'Add a to-do…';
+    input.placeholder = t === 'note' ? '添加笔记…' : '添加待办…';
   };
   seg.querySelectorAll('.notes-quick-type-pill').forEach(p => {
     p.addEventListener('click', (e) => {
@@ -2162,7 +2166,7 @@ function _bindCardEvents(body) {
     }
   };
   // Mobile: long-press anywhere on a note card → enter drag-to-reorder mode.
-  // Cancelled by movement (so it doesn't interfere with vertical scrolling)
+  // Cancelled by movement (so it doesn\'t interfere with vertical scrolling)
   // or by lifting the finger before the timer fires.
   if (_isNotesMobileMode()) {
     body.querySelectorAll('.note-card').forEach(card => _bindLongPressDrag(card));
@@ -2250,7 +2254,7 @@ function _bindCardEvents(body) {
         note.pinned = prevPinned;
         note.sort_order = prevSortOrder;
         _renderNotes();
-        uiModule.showError('固定失败');
+        uiModule.showError('置顶失败');
       });
     });
   });
@@ -2266,7 +2270,7 @@ function _bindCardEvents(body) {
       d.style.background = _dotBg(d.dataset.color, newColor);
     });
     try { await _patchNote(id, { color: newColor || null }); const note = _notes.find(n => n.id === id); if (note) note.color = newColor; }
-    catch { uiModule.showError('更新颜色失败'); }
+    catch { uiModule.showError('颜色更新失败'); }
   };
   body.querySelectorAll('.note-card-color-dot').forEach(dot => {
     dot.addEventListener('click', (e) => {
@@ -2336,7 +2340,7 @@ function _bindCardEvents(body) {
       const finish = () => {
         _renderNotes();
         _patchNote(id, { archived: true }).then(() => {
-          uiModule.showToast('已归档', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+          uiModule.showToast('已归档', { duration: 6000, action: '撤销', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
         }).catch(() => {
           _notes.splice(idx, 0, removed);
           _renderNotes();
@@ -2414,7 +2418,7 @@ function _bindCardEvents(body) {
         _pushUndo({ label: 'archive', run: undo });
         const _undoIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>';
         _patchNote(id, { archived: true }).then(() => {
-          uiModule.showToast('已归档', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+          uiModule.showToast('已归档', { duration: 6000, action: '撤销', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
         }).catch(() => {
           _notes.splice(curIdx, 0, removed);
           _renderNotes();
@@ -2490,8 +2494,8 @@ function _bindCardEvents(body) {
         ta.style.position = 'fixed'; ta.style.left = '-9999px';
         document.body.appendChild(ta);
         ta.select();
-        try { document.execCommand('copy'); uiModule.showToast?.('已复制'); }
-        catch { uiModule.showError?.('复制失败'); }
+        try { document.execCommand('copy'); uiModule.showToast?.('Copied'); }
+        catch { uiModule.showError?.('Copy failed'); }
         ta.remove();
       }
     });
@@ -2512,8 +2516,87 @@ function _bindCardEvents(body) {
       _patchNote(noteId, { items: note.items }).catch(() => {
         note.items.splice(idx, 0, removed);
         _renderNotes();
-        uiModule.showError('移除条目失败');
+        uiModule.showError('移除项目失败');
       });
+    });
+  });
+
+  function _startChecklistItemEdit(noteId, idx, span) {
+    if (span.isContentEditable) return;
+    const note = _notes.find(n => n.id === noteId);
+    if (!note || !Array.isArray(note.items) || !note.items[idx]) return;
+
+    span.textContent = note.items[idx].text || '';
+    span.contentEditable = "true";
+    span.spellcheck = false;
+    span.focus();
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(span);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    const save = () => {
+      if (!span.isContentEditable) return;
+      span.contentEditable = "false";
+      const newText = span.textContent.trim();
+      const oldText = (note.items[idx].text || '').trim();
+
+      if (newText === oldText) {
+        _renderNotes();
+        return;
+      }
+
+      const oldItem = note.items[idx];
+      if (!newText) {
+        note.items.splice(idx, 1);
+      } else {
+        note.items[idx].text = newText;
+      }
+
+      _patchNote(noteId, { items: note.items }).catch(() => {
+        if (!newText) note.items.splice(idx, 0, oldItem);
+        else note.items[idx].text = oldText;
+        _renderNotes();
+        uiModule.showError('更新项目失败');
+      });
+      _renderNotes();
+    };
+
+    const onKeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        save();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        span.contentEditable = "false";
+        _renderNotes();
+      }
+    };
+
+    span.addEventListener('blur', save, { once: true });
+    span.addEventListener('keydown', onKeydown);
+  }
+
+  // Edit a single checklist item (hover Edit button)
+  body.querySelectorAll('.note-checkbox-edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (_selectMode) return;
+      const noteId = btn.dataset.noteId;
+      const idx = parseInt(btn.dataset.idx);
+      const span = btn.parentElement.querySelector('.note-check-text');
+      if (span) _startChecklistItemEdit(noteId, idx, span);
+    });
+  });
+
+  // Prevent clicks from toggling the row while actively editing inline
+  body.querySelectorAll('.note-check-text').forEach(span => {
+    span.addEventListener('click', (e) => {
+      if (span.isContentEditable) {
+        e.stopPropagation();
+      }
     });
   });
 
@@ -2554,7 +2637,7 @@ function _bindCardEvents(body) {
       _patchNote(noteId, { items }).catch(() => {
         note.items = items.slice(0, -1);
         _renderNotes();
-        uiModule.showError('添加条目失败');
+        uiModule.showError('添加项目失败');
       });
     });
   });
@@ -2623,7 +2706,7 @@ function _bindCardEvents(body) {
     // in grid view (2-col) and when the pinned-section grid-column-start rule
     // shifts, several cards reflow at once. Capture every card's pre-swap rect,
     // do the DOM swap, then animate any that actually moved. The dragging card
-    // is excluded — it's already finger-tracked via translate3d.
+    // is excluded — it\'s already finger-tracked via translate3d.
     const cards = [...body.querySelectorAll('.note-card')].filter(c => c !== dragging);
     const prevRects = new Map(cards.map(c => [c, c.getBoundingClientRect()]));
     const draggingNext = dragging.nextSibling === target ? dragging : dragging.nextSibling;
@@ -2774,6 +2857,7 @@ function _collectFormDraft(form) {
   const d = {
     _ts: Date.now(),
     note_type: type,
+    color: form.dataset.noteColor || '',
     title: form.querySelector('.note-form-title')?.value || '',
     label: form.querySelector('.note-form-label')?.value || '',
     due_date: form.querySelector('.note-form-due')?.value || null,
@@ -2805,7 +2889,7 @@ function _wireDraftAutosave(form, id) {
 }
 
 // Commit whatever in-place editor is open (called when the panel closes
-// or another note is opened) so edits aren't lost when the user navigates
+// or another note is opened) so edits aren\'t lost when the user navigates
 // away without clicking Save. Empty notes are discarded instead of saved.
 function _commitOpenInPlaceEditor() {
   const form = document.querySelector('#notes-pane .note-form');
@@ -2819,7 +2903,7 @@ function _applyDraftToNote(note, id) {
   const d = _loadDraft(id);
   if (_isDraftEmpty(d)) return { note, restored: false };
   const merged = { ...(note || {}) };
-  ['note_type', 'title', 'label', 'due_date', 'repeat', 'content', 'items'].forEach(k => {
+  ['note_type', 'color', 'title', 'label', 'due_date', 'repeat', 'content', 'items'].forEach(k => {
     if (d[k] !== undefined) merged[k] = d[k];
   });
   return { note: merged, restored: true };
@@ -2835,22 +2919,23 @@ function _buildForm(note = null) {
 
   const form = document.createElement('div');
   form.className = 'note-form';
+  form.dataset.noteColor = color || '';
   if (color && !_isBgImage(color)) form.classList.add('note-color-' + color);
   if (_isBgImage(color)) form.setAttribute('style', _customColorStyle(color));
   let currentImageUrl = _safeImgSrc(note?.image_url || '');
   form.innerHTML = `
     <div class="note-form-header">
-      <input type="text" class="note-form-title" placeholder="Title" value="${_esc(note?.title || '')}" />
-      <button type="button" class="note-form-icon-btn note-form-remind-btn${note?.due_date ? ' has-date' : ''}" title="Remind me">
+      <input type="text" class="note-form-title" placeholder="标题" value="${_esc(note?.title || '')}" />
+      <button type="button" class="note-form-icon-btn note-form-remind-btn${note?.due_date ? ' has-date' : ''}" title="提醒我">
         <svg width="31" height="31" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       </button>
       <input type="hidden" class="note-form-due" value="${note?.due_date || ''}" />
       <input type="hidden" class="note-form-repeat" value="${note?.repeat || 'none'}" />
     </div>
-    ${currentImageUrl && type !== 'draw' ? `<div class="note-form-image-wrap"><img class="note-form-image" src="${_esc(currentImageUrl)}" draggable="false" /><button class="note-form-image-rm" title="Remove">&times;</button></div>` : ''}
+    ${currentImageUrl && type !== 'draw' ? `<div class="note-form-image-wrap"><img class="note-form-image" src="${_esc(currentImageUrl)}" draggable="false" /><button class="note-form-image-rm" title="移除">&times;</button></div>` : ''}
     <div class="note-form-body">
       ${type === 'note'
-        ? `<textarea class="note-form-content" placeholder="Take a note..." rows="4">${_esc(note?.content || '')}</textarea>`
+        ? `<textarea class="note-form-content" placeholder="记个笔记..." rows="4">${_esc(note?.content || '')}</textarea>`
         : type === 'draw'
         ? _buildDrawHtml()
         : type === 'goal'
@@ -2866,36 +2951,36 @@ function _buildForm(note = null) {
         </button>
         <button type="button" class="note-form-type-pill${type === 'todo' ? ' active' : ''}" data-type="todo">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          <span>Todo</span>
+          <span>待办</span>
         </button>
         <button type="button" class="note-form-type-pill${type === 'draw' ? ' active' : ''}" data-type="draw">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-          <span>Draw</span>
+          <span>画图</span>
         </button>
       </div>
-      <button class="note-form-photo-btn" title="Attach photo">
+      <button class="note-form-photo-btn" title="附加照片">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
       </button>
       <input type="file" class="note-form-photo-input" accept="image/*" capture="environment" style="display:none" />
       <div class="note-color-picker">
         ${COLORS.map(c => `<span class="note-color-dot${_dotIsActive(c.value, color) ? ' active' : ''}" data-color="${c.value}" style="background:${_dotBg(c.value, color)}" title="${c.name || 'default'}"></span>`).join('')}
       </div>
-      <input type="text" class="note-form-label" value="${_esc(note?.label || '')}" placeholder="#tag1 #tag2" title="Tag(s) — space-separated" />
+      <input type="text" class="note-form-label" value="${_esc(note?.label || '')}" placeholder="#tag1 #tag2" title="标签 — 空格分隔" />
       <div class="note-form-actions-group">
         ${isEdit ? `
-        <button type="button" class="note-form-text-btn note-form-archive-btn note-form-collapsible" title="Archive">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8"/><path d="M10 12h4"/></svg><span class="nft-label">Archive</span>
+        <button type="button" class="note-form-text-btn note-form-archive-btn note-form-collapsible" title="归档">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 002 2h12a2 2 0 002-2V8"/><path d="M10 12h4"/></svg><span class="nft-label">归档</span>
         </button>
-        <button type="button" class="note-form-text-btn note-form-delete-btn note-form-collapsible danger" title="Delete">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg><span class="nft-label">Delete</span>
+        <button type="button" class="note-form-text-btn note-form-delete-btn note-form-collapsible danger" title="删除">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg><span class="nft-label">删除</span>
         </button>
         ` : ''}
         <span class="note-form-actions-spacer"></span>
-        <button class="note-form-cancel note-form-text-btn note-form-collapsible" title="Cancel">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg><span class="nft-label">Cancel</span>
+        <button class="note-form-cancel note-form-text-btn note-form-collapsible" title="取消">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg><span class="nft-label">取消</span>
         </button>
-        <button class="note-form-save note-form-text-btn" title="${isEdit ? '更新' : 'Save'}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span class="nft-label">${isEdit ? '更新' : 'Save'}</span>
+        <button class="note-form-save note-form-text-btn" title="${isEdit ? '更新' : '保存'}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span class="nft-label">${isEdit ? '更新' : '保存'}</span>
         </button>
       </div>
     </div>
@@ -3038,6 +3123,7 @@ function _buildForm(note = null) {
   // Color dots — apply to entire form immediately
   const _applyFormColor = (newColor) => {
     currentColor = newColor || '';
+    form.dataset.noteColor = currentColor;
     const isBg = _isBgImage(currentColor);
     COLORS.forEach(c => { if (c.value && c.value !== 'custom') form.classList.remove('note-color-' + c.value); });
     if (currentColor && !isBg) form.classList.add('note-color-' + currentColor);
@@ -3047,6 +3133,7 @@ function _buildForm(note = null) {
       d.classList.toggle('active', _dotIsActive(d.dataset.color, currentColor));
       d.style.background = _dotBg(d.dataset.color, currentColor);
     });
+    form.dispatchEvent(new Event('change', { bubbles: true }));
   };
   form.querySelectorAll('.note-color-dot').forEach(dot => {
     dot.addEventListener('click', () => {
@@ -3074,7 +3161,7 @@ function _buildForm(note = null) {
   if (_contentTa) {
     const _grow = () => {
       _contentTa.style.height = 'auto';
-      // Inline form: cap at ~50vh so a huge note doesn't push the action
+      // Inline form: cap at ~50vh so a huge note doesn\'t push the action
       // buttons off-screen. Fullscreen mobile overlay: the body scrolls and
       // there are no inline buttons crowding, so allow nearly the full height
       // — capping at 50vh there clipped longer notes ("part disappears").
@@ -3103,10 +3190,10 @@ function _buildForm(note = null) {
     if (!v) { tagsEl.innerHTML = ''; return; }
     const label = _formatReminderTag(v);
     const repLabel = rep !== 'none' ? ` · ${_formatRepeatLabel(rep, new Date(v))}` : '';
-    tagsEl.innerHTML = `<button class="note-reminder-tag" type="button" title="Edit reminder">
+    tagsEl.innerHTML = `<button class="note-reminder-tag" type="button" title="编辑提醒">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span>${_esc(label)}${_esc(repLabel)}</span>
-      <span class="note-reminder-tag-x" title="Remove">×</span>
+      <span class="note-reminder-tag-x" title="移除">×</span>
     </button>`;
     tagsEl.querySelector('.note-reminder-tag').addEventListener('click', (e) => {
       if (e.target.classList.contains('note-reminder-tag-x')) {
@@ -3199,7 +3286,7 @@ function _buildForm(note = null) {
           html += '<div class="note-reminder-menu-divider"></div>';
           html += '<div class="note-reminder-menu-title">Repeat</div>';
           // None
-          html += `<button class="note-reminder-menu-item${norm === 'none' ? ' active' : ''}" data-action="set" data-val="none"><span>Doesn't repeat</span>${norm === 'none' ? '<span class="note-reminder-menu-check">✓</span>' : ''}</button>`;
+          html += `<button class="note-reminder-menu-item${norm === 'none' ? ' active' : ''}" data-action="set" data-val="none"><span>Doesn\'t repeat</span>${norm === 'none' ? '<span class="note-reminder-menu-check">✓</span>' : ''}</button>`;
           // Daily
           html += `<button class="note-reminder-menu-item${norm === 'daily' ? ' active' : ''}" data-action="set" data-val="daily"><span>Daily</span>${norm === 'daily' ? '<span class="note-reminder-menu-check">✓</span>' : ''}</button>`;
           // Weekly →
@@ -3360,7 +3447,7 @@ function _buildForm(note = null) {
 
   function _pickCustomDate() {
     // Replace the dropdown menu with a small inline picker
-    document.querySelectorAll('.note-reminder-menu').forEach(m => m.remove());
+    document.querySelectorAll('.note-reminder-menu').forEach(dismissOrRemove);
     const menu = document.createElement('div');
     menu.className = 'note-reminder-menu';
     const initial = dueInput.value || _toLocalDatetimeStr(_tomorrowDate());
@@ -3394,14 +3481,11 @@ function _buildForm(note = null) {
     if (typeof dInput.showPicker === 'function') {
       try { dInput.showPicker(); } catch {}
     }
+    const close = bindMenuDismiss(menu, () => { menu.remove(); });
     menu.querySelector('.note-reminder-menu-confirm').addEventListener('click', () => {
       if (dInput.value) _setReminder(dInput.value);
-      menu.remove();
+      close();
     });
-    setTimeout(() => {
-      const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); } };
-      document.addEventListener('click', close);
-    }, 0);
   }
 
   if (remindBtn) remindBtn.addEventListener('click', (e) => { e.stopPropagation(); _openReminderMenu(remindBtn, !!dueInput.value); });
@@ -3429,7 +3513,7 @@ function _buildForm(note = null) {
         form.querySelector('.note-form-image-wrap')?.remove();
         const wrap = document.createElement('div');
         wrap.className = 'note-form-image-wrap';
-        wrap.innerHTML = `<img class="note-form-image" draggable="false" /><button class="note-form-image-rm" title="Remove">&times;</button>`;
+        wrap.innerHTML = `<img class="note-form-image" draggable="false" /><button class="note-form-image-rm" title="移除">&times;</button>`;
         // Insert AFTER the whole header (a flex-row), not after the
         // title input itself — otherwise the image lands as a sibling
         // of the title inside the header and flex puts them side-by-side.
@@ -3560,7 +3644,7 @@ function _buildForm(note = null) {
     } else if (currentType === 'draw') {
       // Upload the canvas PNG before saving so image_url points to a
       // persistent file. We block the save until upload completes — drawings
-      // can't be re-rendered later without the URL.
+      // can\'t be re-rendered later without the URL.
       const canvas = form.querySelector('.note-form-canvas');
       const url = await _uploadCanvasAsPng(canvas);
       if (!url) { uiModule.showError('保存绘图失败'); return; }
@@ -3639,14 +3723,14 @@ function _buildForm(note = null) {
     const _saveLabelEl = _saveBtnEl0.querySelector('.nft-label');
     const _enterArchive = () => {
       _saveBtnEl0.classList.add('archive-mode');
-      if (_saveLabelEl) _saveLabelEl.textContent = '归档';
-      _saveBtnEl0.title = '归档';
+      if (_saveLabelEl) _saveLabelEl.textContent = 'Archive';
+      _saveBtnEl0.title = 'Archive';
     };
     const _enterUpdate = () => {
       if (!_saveBtnEl0.classList.contains('archive-mode')) return;
       _saveBtnEl0.classList.remove('archive-mode');
-      if (_saveLabelEl) _saveLabelEl.textContent = '更新';
-      _saveBtnEl0.title = '更新';
+      if (_saveLabelEl) _saveLabelEl.textContent = 'Update';
+      _saveBtnEl0.title = 'Update';
     };
     _enterArchive();
     form.addEventListener('input', _enterUpdate, true);
@@ -3669,7 +3753,7 @@ function _buildForm(note = null) {
     _pushUndo({ label: 'archive', run: undo });
     const _undoIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>';
     _patchNote(id, { archived: true }).then(() => {
-      uiModule.showToast('已归档', { duration: 6000, action: 'Undo', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
+      uiModule.showToast('已归档', { duration: 6000, action: '撤销', actionIcon: _undoIcon, onAction: undo, actionHint: 'Ctrl+Z' });
     }).catch(() => {
       _notes.splice(idx, 0, removed);
       _renderNotes();
@@ -3680,9 +3764,9 @@ function _buildForm(note = null) {
     if (!isEdit) return;
     const id = note.id;
     if (uiModule.styledConfirm) {
-      const ok = await uiModule.styledConfirm('Delete this note?', { confirmText: 'Delete', danger: true });
+      const ok = await uiModule.styledConfirm('删除此笔记？', { confirmText: '删除', danger: true });
       if (!ok) return;
-    } else if (!confirm('Delete this note?')) {
+    } else if (!confirm('删除此笔记？')) {
       return;
     }
     const idx = _notes.findIndex(n => n.id === id);
@@ -3703,7 +3787,7 @@ function _buildForm(note = null) {
 }
 
 // Legacy goal-typed notes still render through this branch so existing
-// data isn't lost. The "Goal" type is no longer exposed in the form picker
+// data isn\'t lost. The "Goal" type is no longer exposed in the form picker
 // or quick-add — these notes show with a description + manual checklist
 // editor, just like a regular todo with a body.
 function _buildGoalHtml(note, items) {
@@ -3720,7 +3804,7 @@ function _wireGoalForm(form, container) {
   if (!container) return;
   // _wireHashtag is a closure inside _buildForm — out of scope here. Inline
   // the same behavior (type "#foo " in the description → tag added to the
-  // form's label input) so editing a goal note doesn't ReferenceError.
+  // form's label input) so editing a goal note doesn\'t ReferenceError.
   const desc = container.querySelector('.note-form-goal-desc');
   const labelInput = form?.querySelector('.note-form-label');
   if (desc && labelInput) {
@@ -3753,15 +3837,15 @@ function _buildChecklistHtml(items) {
   for (const item of items) {
     const indent = Math.min(item.indent || 0, 3);
     html += `<div class="note-cl-row${item.done ? ' done' : ''}" draggable="true" data-item-id="${item.id || _uid()}" data-indent="${indent}" style="padding-left:${indent * 16}px">
-      <span class="note-cl-grip" title="Drag to reorder">⋮⋮</span>
+      <span class="note-cl-grip" title="拖拽排序">⋮⋮</span>
       <span class="note-cl-dot"></span>
-      <input type="text" class="note-cl-text" value="${_esc(item.text)}" placeholder="Item..." />
+      <input type="text" class="note-cl-text" value="${_esc(item.text)}" placeholder="项目..." />
       <button type="button" class="note-cl-rm">&times;</button>
     </div>`;
   }
   // `type="button"` matters on mobile — without it some browsers treat
   // bare <button> as form-submit and the click handler never fires inside
-  // certain containers. Also bumped tap target so fingers don't miss.
+  // certain containers. Also bumped tap target so fingers don\'t miss.
   html += `<button type="button" class="note-cl-add">+ Add</button></div>`;
   return html;
 }
@@ -3817,7 +3901,7 @@ function _wireRow(row, container) {
 function _wireChecklist(container) {
   if (!container) return;
   // Delegate the + Add click off the container so re-renders + mobile
-  // touch quirks don't leave the button dead. The previous direct
+  // touch quirks don\'t leave the button dead. The previous direct
   // `addEventListener` on the button silently broke on mobile when
   // _wireChecklist ran more than once (or before the button was in DOM).
   if (!container._addDelegated) {
@@ -3834,7 +3918,7 @@ function _wireChecklist(container) {
       row.draggable = true;
       row.dataset.itemId = _uid();
       row.dataset.indent = '0';
-      row.innerHTML = `<span class="note-cl-grip" title="Drag">⋮⋮</span><span class="note-cl-dot"></span><input type="text" class="note-cl-text" placeholder="Item..." /><button type="button" class="note-cl-rm">&times;</button>`;
+      row.innerHTML = `<span class="note-cl-grip" title="拖拽">⋮⋮</span><span class="note-cl-dot"></span><input type="text" class="note-cl-text" placeholder="项目..." /><button type="button" class="note-cl-rm">&times;</button>`;
       inputs.insertBefore(row, addBtn);
       row.querySelector('.note-cl-text').focus();
       _wireRow(row, container);
@@ -3892,28 +3976,28 @@ function _buildDrawHtml() {
     <div class="note-form-draw-wrap">
       <canvas class="note-form-canvas" width="600" height="320"></canvas>
       <div class="note-form-draw-toolbar">
-        <input type="color" class="note-form-draw-color" title="Stroke color" value="#222222" />
-        <label class="note-form-draw-tool note-form-draw-size-wrap" title="Stroke size">
+        <input type="color" class="note-form-draw-color" title="画笔颜色" value="#222222" />
+        <label class="note-form-draw-tool note-form-draw-size-wrap" title="画笔粗细">
           <input type="range" class="note-form-draw-size" min="1" max="24" value="3" />
         </label>
         <div class="note-form-draw-be" role="group">
-          <button type="button" class="note-form-draw-be-btn note-form-draw-brush active" data-mode="pen" title="Brush">
+          <button type="button" class="note-form-draw-be-btn note-form-draw-brush active" data-mode="pen" title="画笔">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04 0-1.67-1.34-3.02-3-3.02z"/></svg>
           </button>
-          <button type="button" class="note-form-draw-be-btn note-form-draw-eraser" data-mode="eraser" title="Eraser">
+          <button type="button" class="note-form-draw-be-btn note-form-draw-eraser" data-mode="eraser" title="橡皮擦">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
           </button>
         </div>
-        <button type="button" class="note-form-draw-text" title="Add text — click to cycle size">T<span class="note-form-draw-text-badge"></span></button>
-        <button type="button" class="note-form-draw-line" title="Line — click to cycle size">
+        <button type="button" class="note-form-draw-text" title="添加文字 — 点击切换大小">T<span class="note-form-draw-text-badge"></span></button>
+        <button type="button" class="note-form-draw-line" title="直线 — 点击切换粗细">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="4"/></svg>
           <span class="note-form-draw-shape-badge"></span>
         </button>
-        <button type="button" class="note-form-draw-circle" title="Circle — click to cycle size">
+        <button type="button" class="note-form-draw-circle" title="圆形 — 点击切换大小">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
           <span class="note-form-draw-shape-badge"></span>
         </button>
-        <button type="button" class="note-form-draw-undo" title="Undo">
+        <button type="button" class="note-form-draw-undo" title="撤销">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/></svg>
         </button>
       </div>
@@ -3934,7 +4018,7 @@ function _wireCanvas(container, initialImageUrl) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const cssW = canvas.width;
   const cssH = canvas.height;
-  // Fill the container up to the logical width (don't pin a hard 600px,
+  // Fill the container up to the logical width (don\'t pin a hard 600px,
   // which on a narrow phone forces the card wider than the viewport and
   // pushes the drawing outside the note). _pos() scales pointer coords by
   // the actual displayed width, so accuracy is preserved at any size.
@@ -4041,8 +4125,8 @@ function _wireCanvas(container, initialImageUrl) {
   };
   const _begin = (e) => {
     if (mode.startsWith('text-')) {
-      // Stop the event so the browser doesn't synthesize a follow-up click
-      // that would blur the input we're about to create.
+      // Stop the event so the browser doesn\'t synthesize a follow-up click
+      // that would blur the input we\'re about to create.
       e.preventDefault?.();
       e.stopPropagation?.();
       _openTextInput(e);
@@ -4067,7 +4151,7 @@ function _wireCanvas(container, initialImageUrl) {
   let _activeTextInput = null;
   const _openTextInput = (e) => {
     // Commit any prior pending input before starting a new one — otherwise
-    // the first click leaves an orphaned input the user thinks "didn't work".
+    // the first click leaves an orphaned input the user thinks "didn\'t work".
     if (_activeTextInput) { try { _activeTextInput.blur(); } catch {} }
     const r = canvas.getBoundingClientRect();
     const t = e.touches ? e.touches[0] : e;
@@ -4087,7 +4171,7 @@ function _wireCanvas(container, initialImageUrl) {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'note-form-draw-textinput';
-    input.placeholder = '输入后按 Enter';
+    input.placeholder = 'type then Enter';
     const color = colorInput?.value || '#222';
     const maxW = Math.max(120, Math.floor(r.width - px - 4));
     input.style.cssText = [
@@ -4311,7 +4395,7 @@ function _serializeNoteForCopy(note) {
 // toast. Shared by the corner-copy button click and the Ctrl/Cmd+C shortcut.
 // ── ⋯ corner menu (Copy + Agent) ───────────────────────────────────
 function _openNoteCornerMenu(btn) {
-  document.querySelectorAll('.note-corner-menu-dropdown').forEach(d => d.remove());
+  document.querySelectorAll('.note-corner-menu-dropdown').forEach(dismissOrRemove);
   const id = btn.dataset.noteId;
   const note = _notes.find(n => n.id === id);
   if (!note) return;
@@ -4332,20 +4416,15 @@ function _openNoteCornerMenu(btn) {
   const mw = 168;
   let left = Math.min(r.right - mw, window.innerWidth - mw - 8);
   left = Math.max(8, left);
-  // Drop down by default; flip up if there isn't room below (the button
+  // Drop down by default; flip up if there isn\'t room below (the button
   // sits at the card's bottom edge now).
   const mh = menu.offsetHeight || 96;
   const below = window.innerHeight - r.bottom;
   const top = (below < mh + 8 && r.top > mh + 8) ? (r.top - mh - 4) : (r.bottom + 4);
-  menu.style.cssText += `position:fixed;z-index:11000;top:${Math.round(top)}px;left:${Math.round(left)}px;`;
-  const close = (ev) => {
-    if (ev && menu.contains(ev.target)) return;
-    menu.remove();
-    document.removeEventListener('click', close, true);
-  };
-  setTimeout(() => document.addEventListener('click', close, true), 0);
-  menu.querySelector('[data-act="copy"]').addEventListener('click', () => { menu.remove(); _copyNote(id, btn); });
-  menu.querySelector('[data-act="agent"]').addEventListener('click', () => { menu.remove(); _agentSolveNote(id); });
+  menu.style.cssText += `position:fixed;z-index:${topPortalZ()};top:${Math.round(top)}px;left:${Math.round(left)}px;`;
+  const close = bindMenuDismiss(menu, () => { menu.remove(); });
+  menu.querySelector('[data-act="copy"]').addEventListener('click', () => { close(); _copyNote(id, btn); });
+  menu.querySelector('[data-act="agent"]').addEventListener('click', () => { close(); _agentSolveNote(id); });
 }
 
 function _positionNoteMenu(menu, btn, width = 196) {
@@ -4356,7 +4435,7 @@ function _positionNoteMenu(menu, btn, width = 196) {
   const mh = menu.offsetHeight || 112;
   const below = window.innerHeight - r.bottom;
   const top = (below < mh + 8 && r.top > mh + 8) ? (r.top - mh - 4) : (r.bottom + 4);
-  menu.style.cssText += `position:fixed;z-index:11000;top:${Math.round(top)}px;left:${Math.round(left)}px;min-width:${width}px;`;
+  menu.style.cssText += `position:fixed;z-index:${topPortalZ()};top:${Math.round(top)}px;left:${Math.round(left)}px;min-width:${width}px;`;
   const close = (ev) => {
     if (ev && menu.contains(ev.target)) return;
     menu.remove();
@@ -4417,10 +4496,10 @@ async function _agentSolveNote(id) {
   const note = _notes.find(n => n.id === id);
   if (!note) return;
   const prompt = _noteToAgentPrompt(note);
-  if (!prompt) { uiModule.showToast('无内容可处理 — 笔记为空'); return; }
+  if (!prompt) { uiModule.showToast('无需处理 — 笔记为空'); return; }
   try {
     const dc = await (await fetch(`${API_BASE}/api/default-chat`, { credentials: 'same-origin' })).json();
-    if (!dc.endpoint_url || !dc.model) { uiModule.showError('未配置默认对话模型'); return; }
+    if (!dc.endpoint_url || !dc.model) { uiModule.showError('未配置默认聊天模型'); return; }
 
     // 1. Create the session server-side (no UI switch). skip_validation
     //    avoids re-probing — the default-chat endpoint is already known good.
@@ -4432,7 +4511,7 @@ async function _agentSolveNote(id) {
     if (dc.endpoint_id) csFd.append('endpoint_id', dc.endpoint_id);
     csFd.append('skip_validation', 'true');
     const csRes = await fetch(`${API_BASE}/api/session`, { method: 'POST', credentials: 'same-origin', body: csFd });
-    if (!csRes.ok) { uiModule.showError('无法创建 Agent 会话'); return; }
+    if (!csRes.ok) { uiModule.showError('无法创建代理会话'); return; }
     const sess = await csRes.json();
     const sid = sess.id;
 
@@ -4462,9 +4541,9 @@ async function _agentSolveNote(id) {
       })
       .catch(() => {});
 
-    uiModule.showToast('Agent 正在后台工作 — 准备就绪时点击 Agent 标签');
+    uiModule.showToast('代理正在后台工作 — 准备好后点击代理标签');
   } catch (e) {
-    uiModule.showError('Agent 失败: ' + (e.message || e));
+    uiModule.showError('代理失败: ' + (e.message || e));
   }
 }
 
@@ -4479,7 +4558,7 @@ async function _agentSolveTodoItem(noteId, idx) {
   const item = note.items[idx];
   const itemText = (item && (item.text || '').trim()) || '';
   if (!itemText) {
-    uiModule.showToast('无内容可处理 — 项目为空');
+    uiModule.showToast('无需处理 — 项目为空');
     return;
   }
   const titleCtx = (note.title || '').trim();
@@ -4488,7 +4567,7 @@ async function _agentSolveTodoItem(noteId, idx) {
     : `Help me with this todo: ${itemText}\n\nThe source note is read-only. Do not edit, replace, or update it.`;
   try {
     const dc = await (await fetch(`${API_BASE}/api/default-chat`, { credentials: 'same-origin' })).json();
-    if (!dc.endpoint_url || !dc.model) { uiModule.showError('未配置默认对话模型'); return; }
+    if (!dc.endpoint_url || !dc.model) { uiModule.showError('未配置默认聊天模型'); return; }
 
     const label = itemText.slice(0, 40);
     const csFd = new FormData();
@@ -4498,7 +4577,7 @@ async function _agentSolveTodoItem(noteId, idx) {
     if (dc.endpoint_id) csFd.append('endpoint_id', dc.endpoint_id);
     csFd.append('skip_validation', 'true');
     const csRes = await fetch(`${API_BASE}/api/session`, { method: 'POST', credentials: 'same-origin', body: csFd });
-    if (!csRes.ok) { uiModule.showError('无法创建 Agent 会话'); return; }
+    if (!csRes.ok) { uiModule.showError('无法创建代理会话'); return; }
     const sess = await csRes.json();
     const sid = sess.id;
     const sessionTitle = 'Agent: ' + label;
@@ -4542,9 +4621,9 @@ async function _agentSolveTodoItem(noteId, idx) {
       })
       .catch(() => {});
 
-    uiModule.showToast('Agent 正在处理此项目 — 准备就绪时点击 Agent 标签');
+    uiModule.showToast('代理正在处理此项目 — 准备好后点击代理标签');
   } catch (e) {
-    uiModule.showError('Agent 失败: ' + (e.message || e));
+    uiModule.showError('代理失败: ' + (e.message || e));
   }
 }
 
@@ -4578,9 +4657,9 @@ async function _copyNote(noteId, btnEl) {
         btnEl._copyFlashing = false;
       }, 1200);
     }
-    uiModule.showToast?.('已复制');
+    uiModule.showToast?.('Copied');
   } else {
-    uiModule.showError?.('复制失败');
+    uiModule.showError?.('Copy failed');
   }
   return ok;
 }
@@ -4596,7 +4675,7 @@ function _editNote(id) {
   const { note: _n, restored } = _applyDraftToNote(note, id);
   const form = _buildForm(_n);
   card.replaceWith(form);
-  if (restored) uiModule.showToast('已恢复未保存的修改');
+  if (restored) uiModule.showToast('已恢复未保存的更改');
   // Pinned notes live in the first masonry column — the edit form has
   // column-span:all, which can leave the form rendered above the fold or
   // visually buried under neighboring pinned cards. Bring it into view
@@ -4619,7 +4698,7 @@ function _editNote(id) {
     catch { form.scrollIntoView(); }
   });
   // Pick the most useful field to focus. On phones especially, the user
-  // taps Edit to type — landing in the title when there's already a title
+  // taps Edit to type — landing in the title when there\'s already a title
   // (and likely a body to extend) loses momentum. Prefer the body textarea
   // for plain notes, the first checklist item for todos, fall back to title.
   const _focusBest = () => {
@@ -4643,8 +4722,8 @@ function _editNote(id) {
 
 async function _deleteNote(id) {
   const ok = uiModule?.styledConfirm
-    ? await uiModule.styledConfirm('Delete this note?', { confirmText: 'Delete', danger: true })
-    : confirm('Delete this note?');
+    ? await uiModule.styledConfirm('删除此笔记？', { confirmText: '删除', danger: true })
+    : confirm('删除此笔记？');
   if (!ok) return;
   try { await _deleteNoteApi(id); await _fetchNotes(); _renderNotes(); uiModule.showToast('已删除'); }
   catch (err) { uiModule.showError(err.message); }
@@ -4678,7 +4757,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
   overlay.className = 'note-fullscreen-overlay';
   overlay.innerHTML = `
     <div class="note-fullscreen-header">
-      <button type="button" class="note-fullscreen-back" title="Back">
+      <button type="button" class="note-fullscreen-back" title="返回">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
       <div class="note-fullscreen-actions"></div>
@@ -4691,7 +4770,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
   const { note: _n, restored } = _applyDraftToNote(note, id);
   const form = _buildForm(_n);
   body.appendChild(form);
-  if (restored) uiModule.showToast('已恢复未保存的修改');
+  if (restored) uiModule.showToast('已恢复未保存的更改');
   document.body.appendChild(overlay);
   _mobileFsOverlay = overlay;
 
@@ -4707,7 +4786,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
   requestAnimationFrame(() => overlay.classList.add('open'));
 
   // Wire the back button — saves whatever the form has and closes.
-  // mousedown preventDefault so it doesn't blur the input on first tap (which
+  // mousedown preventDefault so it doesn\'t blur the input on first tap (which
   // would eat the tap and require a second one).
   const _backBtn = overlay.querySelector('.note-fullscreen-back');
   _backBtn.addEventListener('mousedown', (e) => e.preventDefault());
@@ -4729,9 +4808,9 @@ function _openMobileFullscreenEdit(id, fromCard) {
       _closeMobileFullscreenEdit({ save: false });
     });
   }
-  // The built-in Save handler does the API call + refresh, but doesn't
+  // The built-in Save handler does the API call + refresh, but doesn\'t
   // dismiss our overlay. Augment it (do NOT replace — the original is
-  // async and we'd lose the API call) to schedule a close once the
+  // async and we\'d lose the API call) to schedule a close once the
   // save+render has had time to complete.
   const saveBtn = form.querySelector('.note-form-save');
   if (saveBtn) {
@@ -4751,14 +4830,20 @@ function _openMobileFullscreenEdit(id, fromCard) {
   form.querySelectorAll('.note-cl-row').forEach(_addRowReadMode);
 
   // Move Archive + Delete from the form's footer actions row up into
-  // the header bar (to the right of the back chevron) so they're
+  // the header bar (to the right of the back chevron) so they\'re
   // always reachable without scrolling and free up the footer for
   // Cancel/Save only. Handlers stay attached when nodes move.
   const headerActions = overlay.querySelector('.note-fullscreen-actions');
   const archiveBtn = form.querySelector('.note-form-archive-btn');
   const deleteBtn  = form.querySelector('.note-form-delete-btn');
-  if (headerActions && archiveBtn) headerActions.appendChild(archiveBtn);
-  if (headerActions && deleteBtn)  headerActions.appendChild(deleteBtn);
+  if (headerActions && archiveBtn) {
+    archiveBtn.classList.remove('note-form-collapsible');
+    headerActions.appendChild(archiveBtn);
+  }
+  if (headerActions && deleteBtn) {
+    deleteBtn.classList.remove('note-form-collapsible');
+    headerActions.appendChild(deleteBtn);
+  }
   // The built-in archive/delete handlers re-render the notes grid but
   // leave THIS overlay sitting in front of it — looks like nothing
   // happened. Add follow-up listeners that close the overlay so the
@@ -4798,7 +4883,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
     addRow.appendChild(photoBtn);
     // Tapping anywhere on the row (the empty gap, the dashed border,
     // the "+ Add" label) triggers add. The photo button keeps its own
-    // click target so attach-image isn't ambushed.
+    // click target so attach-image isn\'t ambushed.
     addRow.addEventListener('click', (e) => {
       if (e.target.closest('.note-form-photo-btn')) return;
       if (e.target === addBtn || addBtn.contains(e.target)) return;
@@ -4820,7 +4905,7 @@ function _openMobileFullscreenEdit(id, fromCard) {
       newRow.draggable = true;
       newRow.dataset.itemId = _uid();
       newRow.dataset.indent = '0';
-      newRow.innerHTML = '<span class="note-cl-grip" title="Drag">⋮⋮</span><span class="note-cl-dot"></span><input type="text" class="note-cl-text" placeholder="Item..." /><button type="button" class="note-cl-rm">&times;</button>';
+      newRow.innerHTML = '<span class="note-cl-grip" title="拖拽">⋮⋮</span><span class="note-cl-dot"></span><input type="text" class="note-cl-text" placeholder="项目..." /><button type="button" class="note-cl-rm">&times;</button>';
       inputs.insertBefore(newRow, addRow);
       _wireRow(newRow, inputs);
       // Touch reorder on the freshly-added row's grip.
@@ -4861,7 +4946,7 @@ function _closeMobileFullscreenEdit(opts = {}) {
   if (!_mobileFsOverlay) return;
   const overlay = _mobileFsOverlay;
   _mobileFsOverlay = null;
-  // If the form has a Save button, click it on close so edits aren't lost
+  // If the form has a Save button, click it on close so edits aren\'t lost
   // when the user uses the back arrow instead of an explicit Save.
   if (opts.save) {
     const saveBtn = overlay.querySelector('.note-form-save, [data-action="save"]');
@@ -4887,8 +4972,8 @@ function _bindLongPressDrag(card) {
   const HOLD_MS = 450;
 
   card.addEventListener('touchstart', (e) => {
-    // Don't fight scroll on touchpoints over real interactive children
-    // (in mobile-mode they're CSS-hidden anyway, but be defensive).
+    // Don\'t fight scroll on touchpoints over real interactive children
+    // (in mobile-mode they\'re CSS-hidden anyway, but be defensive).
     if (e.target.closest('button, input, a, .note-form')) return;
     if (e.touches.length !== 1) return;
     armed = true;
@@ -4939,7 +5024,7 @@ function _enterDragMode(initialCard, initialTouch) {
     document.addEventListener('touchcancel', _onDocTouchEnd, { passive: true });
     _docDragHandlersBound = true;
   }
-  // Auto-grab the card the user long-pressed — they're already holding
+  // Auto-grab the card the user long-pressed — they\'re already holding
   // their finger on it, so begin the drag straight away. Releasing
   // (touchend) commits the reorder AND exits drag mode in one motion.
   if (initialCard && initialTouch) {
@@ -4972,7 +5057,7 @@ function _setupDragForCard(card) {
 function _beginGrab(card, touch) {
   const rect = card.getBoundingClientRect();
   const prevStyle = card.getAttribute('style') || '';
-  // Placeholder fills the card's old slot so the grid layout doesn't reflow.
+  // Placeholder fills the card's old slot so the grid layout doesn\'t reflow.
   const placeholder = document.createElement('div');
   placeholder.className = 'note-card-placeholder';
   placeholder.style.width = rect.width + 'px';
@@ -5234,7 +5319,7 @@ async function _initReminders() {
 // Open the notes panel and scroll/flash the matching note card. Used
 // by chatRenderer.js when the user clicks a [View note](#note-<id>)
 // link the agent emits after a manage_notes create. Falls back to
-// just opening the panel when the card isn't found (panel still
+// just opening the panel when the card isn\'t found (panel still
 // loading, note in a different filter, etc.).
 async function openNote(noteId) {
   // If the panel is already open, openPanel() short-circuits and does

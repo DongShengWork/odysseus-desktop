@@ -4,7 +4,7 @@
 // across modules and unit-tested under node.
 
 // Accepts "#rgb", "#rrggbb" (with or without the leading '#'). Returns null
-// for anything that isn't a valid 3- or 6-digit hex color.
+// for anything that isn\'t a valid 3- or 6-digit hex color.
 export function hexToRgb(hex) {
   let h = String(hex || '').trim().replace(/^#/, '');
   if (h.length === 3) h = h.split('').map((c) => c + c).join('');

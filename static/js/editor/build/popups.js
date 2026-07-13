@@ -25,7 +25,7 @@ export function shortcutsPopupHTML() {
           <div><kbd>T</kbd> 变换</div>
           <div><kbd>B</kbd> 画笔</div>
           <div><kbd>E</kbd> 橡皮擦</div>
-          <div><kbd>K</kbd> 克隆印章 <span style="opacity:0.5">(Alt+点击 = 设置采样源)</span></div>
+          <div><kbd>K</kbd> 仿制印章 <span style="opacity:0.5">(Alt+点击 = 设置源点)</span></div>
           <div><kbd>L</kbd> 套索</div>
           <div><kbd>W</kbd> 魔棒</div>
           <div><kbd>M</kbd> 修复</div>
@@ -38,7 +38,7 @@ export function shortcutsPopupHTML() {
           <div><kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤销</div>
           <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 重做</div>
           <div><kbd>Ctrl</kbd>+<kbd>S</kbd> 保存</div>
-          <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> 保存到画廊</div>
+          <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> 保存到图库</div>
           <div><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>J</kbd> 新建图层</div>
           <div><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd> 自由变换</div>
           <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> 画布大小…</div>
@@ -46,7 +46,7 @@ export function shortcutsPopupHTML() {
         <div class="ge-shortcuts-col">
           <h5>选区</h5>
           <div><kbd>Ctrl</kbd>+<kbd>A</kbd> 全选</div>
-          <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> 取消选择</div>
+          <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> 取消选区</div>
           <div><kbd>Ctrl</kbd>+<kbd>C</kbd> 复制到图层</div>
           <div><kbd>Ctrl</kbd>+<kbd>X</kbd> 剪切套索</div>
           <div><kbd>Ctrl</kbd>+<kbd>D</kbd> 删除像素</div>
@@ -54,12 +54,12 @@ export function shortcutsPopupHTML() {
         </div>
         <div class="ge-shortcuts-col">
           <h5>画笔 / 蒙版</h5>
-          <div><kbd>[</kbd> 画笔大小 −</div>
-          <div><kbd>]</kbd> 画笔大小 +</div>
-          <div>拖动容差滑块 → 魔棒实时重调</div>
+          <div><kbd>[</kbd> 画笔缩小</div>
+          <div><kbd>]</kbd> 画笔放大</div>
+          <div>拖动容差滑块 → 实时更新魔棒选区</div>
         </div>
       </div>
-      <div style="margin-top:8px;font-size:10px;opacity:0.5;text-align:center;">按 <kbd>?</kbd> 或点击键盘图标切换显示。</div>
+      <div style="margin-top:8px;font-size:10px;opacity:0.5;text-align:center;">按 <kbd>?</kbd> 或点击键盘图标切换。</div>
     `;
 }
 

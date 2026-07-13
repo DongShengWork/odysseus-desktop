@@ -124,7 +124,7 @@ export function makeWindowResizable(content, options = {}) {
     if (active.l) { width = startRect.width - dx; left = startRect.left + dx; }
     if (active.t) { height = startRect.height - dy; top = startRect.top + dy; }
     // Min-size clamps — keep the opposite edge anchored when pulling from
-    // the left/top so the window doesn't jump.
+    // the left/top so the window doesn\'t jump.
     if (width < minW) { if (active.l) left = startRect.left + (startRect.width - minW); width = minW; }
     if (height < minH) { if (active.t) top = startRect.top + (startRect.height - minH); height = minH; }
     // Keep the window on-screen and never larger than the viewport.

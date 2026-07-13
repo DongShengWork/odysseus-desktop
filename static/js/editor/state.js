@@ -3,7 +3,7 @@
  * and its tool modules read and write directly.
  *
  * Migration: galleryEditor.js used to own ~110 module-scope `let`
- * declarations and capture them via closure. Tool modules can't import
+ * declarations and capture them via closure. Tool modules can\'t import
  * a `let` binding's mutations across module boundaries, so we move the
  * state into a single exported OBJECT whose properties are freely
  * mutated by anyone holding a reference. Read/write `state.transformW`
@@ -102,7 +102,7 @@ export const state = {
   cloneSourceSnapshot: null,
   cloneSourceLayerId: null,
   // Mobile: double-tap detection for "set source" since Alt-click
-  // isn't an option without a keyboard.
+  // isn\'t an option without a keyboard.
   cloneLastTapTime: 0,
   cloneLastTapX: 0,
   cloneLastTapY: 0,
@@ -212,8 +212,8 @@ export const state = {
   // camera photos over remote tunnels).
   originalExt: 'png',
   // True between openEditor / closeEditor — guards async callbacks
-  // that fire after the user closes the editor (don't draw onto a
-  // dead canvas, don't re-mount the spinner).
+  // that fire after the user closes the editor (don\'t draw onto a
+  // dead canvas, don\'t re-mount the spinner).
   editorOpen: false,
   // Document-level click-away handlers registered for the current
   // session. Tracked so closeEditor can detach them all cleanly.

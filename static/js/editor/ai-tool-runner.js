@@ -7,7 +7,7 @@
  * Handles all the orchestration around the request:
  *
  *  - Button busy state: swap label for "<verbing>…" + whirlpool
- *    spinner, lock width so the button doesn't visually jump.
+ *    spinner, lock width so the button doesn\'t visually jump.
  *  - Endpoint+model selection from the tool's own picker (or the
  *    global fallback) so the backend knows which model to invoke.
  *  - Response handling: decode the returned PNG, push it as a new
@@ -44,13 +44,13 @@ export function createApplyImageTool({
 }) {
   return async function applyImageTool(endpoint, extraPayload, layerName, btn, opts) {
     const origHTML = btn.innerHTML;
-    const origWidth = btn.offsetWidth;  // lock width so the button doesn't jump
+    const origWidth = btn.offsetWidth;  // lock width so the button doesn\'t jump
     btn.disabled = true;
     btn.classList.add('ge-btn-processing');
     btn.style.minWidth = origWidth + 'px';
     // Swap label for a "<verbing>…" text + whirlpool while the
     // request runs. Falls back to deriving a busy label from
-    // layerName when the caller didn't supply one.
+    // layerName when the caller didn\'t supply one.
     const busyLabel = (opts && opts.busyLabel) || deriveBusyLabel(layerName);
     btn.innerHTML = '';
     let btnSpinner = null;
@@ -101,9 +101,9 @@ export function createApplyImageTool({
         state.activeLayerId = layer.id;
         composite();
         renderLayerPanel();
-        if (uiModule) uiModule.showToast(layerName + ' 完成', 4500);
+        if (uiModule) uiModule.showToast(layerName + ' complete', 4500);
       };
-      img.onerror = () => { if (uiModule) uiModule.showToast('加载结果失败', 6000); };
+      img.onerror = () => { if (uiModule) uiModule.showToast('Failed to load result', 6000); };
       img.src = 'data:image/png;base64,' + data.image;
     } catch (e) {
       // Detect known failure modes and surface an action-toast.
@@ -111,7 +111,7 @@ export function createApplyImageTool({
       const needsImg2Img = (
         msg.includes('img2img') ||
         msg.includes('diffusion server') ||
-        msg.includes("doesn't expose")
+        msg.includes("doesn\'t expose")
       );
       let depMatch = null;
       for (const pkg of KNOWN_DEPS) {
@@ -121,19 +121,19 @@ export function createApplyImageTool({
       }
       if (uiModule) {
         if (depMatch && uiModule.showToast.length >= 2) {
-          uiModule.showToast(layerName + ' 失败: ' + depMatch + ' 未安装在该服务器上。', {
+          uiModule.showToast(layerName + ' failed: ' + depMatch + ' is not installed on the server.', {
             duration: 9000,
-            action: `安装 ${depMatch}`,
+            action: `Install ${depMatch}`,
             onAction: () => openCookbookForDependency(depMatch),
           });
         } else if (needsImg2Img && uiModule.showToast.length >= 2) {
-          uiModule.showToast(layerName + ' 失败: ' + e.message, {
+          uiModule.showToast(layerName + ' failed: ' + e.message, {
             duration: 9000,
-            action: '打开 Cookbook',
+            action: 'Open Cookbook',
             onAction: () => openCookbookForImg2img(),
           });
         } else {
-          uiModule.showToast(layerName + ' 失败: ' + e.message, 6000);
+          uiModule.showToast(layerName + ' failed: ' + e.message, 6000);
         }
       }
     } finally {

@@ -42,7 +42,7 @@ export function createTransformSession({
 }) {
   function startTransform() {
     const layer = activeLayer();
-    if (!layer || layer.locked) { uiModule.showToast('请选择未锁定的图层'); return; }
+    if (!layer || layer.locked) { uiModule.showToast('Select an unlocked layer'); return; }
     if (state.transformActive) { cancelTransform(); return; } // toggle off
     state.transformActive = true;
     state.transformLayer = layer;
@@ -80,7 +80,7 @@ export function createTransformSession({
 
   // Floating Transform popup — horizontal layout, draggable via its
   // header, anchored over the right panel (layers area) by default
-  // so it doesn't cover the canvas. Lets the user type exact W/H/Rot
+  // so it doesn\'t cover the canvas. Lets the user type exact W/H/Rot
   // and flip via negative values.
   function openTransformPopup() {
     closeTransformPopup();
@@ -323,7 +323,7 @@ export function createTransformSession({
     const cos = Math.abs(Math.cos(rotRad));
     const sin = Math.abs(Math.sin(rotRad));
     // Bounding box of the rotated W×H — canvas grows so corners
-    // don't clip.
+    // don\'t clip.
     const finalW = Math.max(1, Math.round(w * cos + h * sin));
     const finalH = Math.max(1, Math.round(w * sin + h * cos));
     const tmp = document.createElement('canvas');
@@ -360,7 +360,7 @@ export function createTransformSession({
     state.transformLayer = null;
     state.transformHandle = null;
     composite();
-    uiModule.showToast('变换已应用');
+    uiModule.showToast('Transform applied');
   }
 
   function cancelTransform() {
